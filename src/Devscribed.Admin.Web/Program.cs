@@ -24,6 +24,7 @@ builder.Services.AddScoped<LoginService>();
 builder.Services.AddScoped<ForgotPasswordService>();
 builder.Services.AddScoped<ResetPasswordService>();
 builder.Services.AddScoped<ChangeRoleService>();
+builder.Services.AddScoped<ManageMemberStatusService>();
 builder.Services.AddScoped<InviteMemberService>();
 builder.Services.AddScoped<AcceptInvitationService>();
 builder.Services.AddSingleton<InMemoryInvitationEmailSender>();
@@ -130,6 +131,42 @@ app.MapPut("/api/members/{id:guid}/role", async (Guid id, ChangeRoleApiRequest r
 
     var result = await changeRoleService.ChangeRoleAsync(
         callerAccountId, organizationId, new ChangeRoleRequest(id, newRole));
+
+    if (!result.Success)
+    {
+        var statusCode = result.Error == "forbidden"
+            ? StatusCodes.Status403Forbidden
+            : StatusCodes.Status400BadRequest;
+        return Results.Json(new { error = result.Error }, statusCode: statusCode);
+    }
+
+    return Results.Json(new { success = true });
+}).RequireAuthorization();
+
+app.MapPost("/api/members/{id:guid}/remove", async (Guid id, ManageMemberStatusService manageMemberStatusService, HttpContext http) =>
+{
+    var callerAccountId = Guid.Parse(http.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
+    var organizationId = OrganizationAuth.GetOrganizationId(http.User);
+
+    var result = await manageMemberStatusService.RemoveAsync(callerAccountId, organizationId, id);
+
+    if (!result.Success)
+    {
+        var statusCode = result.Error == "forbidden"
+            ? StatusCodes.Status403Forbidden
+            : StatusCodes.Status400BadRequest;
+        return Results.Json(new { error = result.Error }, statusCode: statusCode);
+    }
+
+    return Results.Json(new { success = true });
+}).RequireAuthorization();
+
+app.MapPost("/api/members/{id:guid}/restore", async (Guid id, ManageMemberStatusService manageMemberStatusService, HttpContext http) =>
+{
+    var callerAccountId = Guid.Parse(http.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
+    var organizationId = OrganizationAuth.GetOrganizationId(http.User);
+
+    var result = await manageMemberStatusService.RestoreAsync(callerAccountId, organizationId, id);
 
     if (!result.Success)
     {

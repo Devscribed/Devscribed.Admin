@@ -5,7 +5,8 @@
 }
 
 <div class="card">
-    <h1>@Model.OrganizationName</h1>
+    <h1>Active members</h1>
+    <p class="members-subtitle">@Model.OrganizationName</p>
 
     @if (Model.CanInvite)
     {
@@ -40,24 +41,103 @@
         </form>
     }
 
+    <div id="toast-member-removed" class="confirmation-message" data-testid="toast-member-removed"></div>
+    <div id="toast-member-restored" class="confirmation-message" data-testid="toast-member-restored"></div>
+    <div id="member-action-error" class="error-banner"></div>
+
+    <div class="members-toolbar">
+        <div class="field members-search">
+            <label for="members-search-input">Search</label>
+            <input id="members-search-input" type="search" data-testid="members-search-input" autocomplete="off" />
+        </div>
+
+        <label class="members-checkbox-label" for="show-removed-checkbox">
+            <input id="show-removed-checkbox" type="checkbox" data-testid="show-removed-checkbox" />
+            Show removed members
+        </label>
+    </div>
+
     <table data-testid="members-list">
         <thead>
             <tr>
                 <th>Name</th>
-                <th>Role</th>
+                @if (Model.CanManageMembers)
+                {
+                    <th>Actions</th>
+                }
             </tr>
         </thead>
-        <tbody>
+        <tbody id="members-list-body">
             @foreach (var member in Model.Members)
             {
-                <tr data-testid="member-row-@member.Id">
-                    <td>@member.FullName</td>
-                    <td><span class="role-badge" data-testid="member-role-badge-@member.Id">@member.Role</span></td>
+                <tr data-testid="member-row-@member.Id"
+                    data-member-id="@member.Id"
+                    data-name="@member.FullName"
+                    data-email="@member.Email"
+                    data-role="@member.Role"
+                    data-status="@member.Status">
+                    <td>
+                        <div class="member-name-cell">
+                            <span data-testid="member-name-@member.Id">@member.FullName</span>
+                            <span class="member-email">@member.Email</span>
+                            <div class="member-meta">
+                                <span class="role-badge" data-testid="member-role-badge-@member.Id">@member.Role</span>
+                                <span class="status-badge @(member.Status == "removed" ? string.Empty : "status-badge-hidden")"
+                                      data-testid="member-status-badge-@member.Id">
+                                    Removed
+                                </span>
+                            </div>
+                        </div>
+                    </td>
+                    @if (Model.CanManageMembers)
+                    {
+                        <td class="member-actions-cell">
+                            <div class="member-actions">
+                                <button type="button"
+                                        class="secondary-button member-actions-trigger"
+                                        data-testid="member-row-actions-@member.Id">
+                                    Actions
+                                </button>
+                                <div class="member-actions-menu">
+                                    <button type="button"
+                                            class="member-action-button @(member.Status == "active" ? string.Empty : "member-action-hidden")"
+                                            data-action="delete"
+                                            data-testid="member-action-delete"
+                                            @(member.DeleteGuardMessage is not null ? "disabled" : null)>
+                                        Delete
+                                    </button>
+                                    <button type="button"
+                                            class="member-action-button @(member.Status == "removed" ? string.Empty : "member-action-hidden")"
+                                            data-action="restore"
+                                            data-testid="member-action-restore">
+                                        Restore
+                                    </button>
+                                </div>
+                                @if (member.Role == "admin")
+                                {
+                                    <div class="member-guard-message @(member.DeleteGuardMessage is null ? "member-guard-hidden" : string.Empty)"
+                                         data-testid="delete-guard-message">
+                                        Organization must retain at least one admin.
+                                    </div>
+                                }
+                            </div>
+                        </td>
+                    }
                 </tr>
             }
         </tbody>
     </table>
+
+    <div id="members-empty-state" class="members-empty-state" data-testid="members-empty-state" hidden>No members found</div>
 </div>
+
+<dialog id="confirm-delete-dialog" data-testid="confirm-delete-dialog">
+    <p>Remove this member from the organization?</p>
+    <div class="dialog-actions">
+        <button type="button" id="cancel-delete-button" class="secondary-button" data-testid="cancel-delete-button">Cancel</button>
+        <button type="button" id="confirm-delete-button" data-testid="confirm-delete-button">Delete</button>
+    </div>
+</dialog>
 
 @section Scripts {
     <script src="~/js/members.js" asp-append-version="true"></script>

@@ -22,6 +22,12 @@ body {
   padding: 32px;
 }
 
+.members-subtitle {
+  margin-top: -8px;
+  margin-bottom: 24px;
+  color: #667085;
+}
+
 h1 {
   font-size: 1.5rem;
   margin-top: 0;
@@ -45,6 +51,10 @@ h1 {
   border: 1px solid #ccc;
   border-radius: 4px;
   font-size: 1rem;
+}
+
+.field input[type="checkbox"] {
+  width: auto;
 }
 
 .field select {
@@ -108,6 +118,27 @@ button[type="submit"]:disabled {
   margin-bottom: 24px;
 }
 
+.members-toolbar {
+  display: flex;
+  align-items: end;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.members-search {
+  flex: 1 1 260px;
+  margin-bottom: 0;
+}
+
+.members-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -118,6 +149,7 @@ th, td {
   text-align: left;
   padding: 10px 12px;
   border-bottom: 1px solid #eee;
+  vertical-align: top;
 }
 
 .form-links {
@@ -159,4 +191,109 @@ th, td {
   font-size: 0.8rem;
   font-weight: 600;
   text-transform: capitalize;
+}
+
+.member-name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.member-email {
+  color: #667085;
+  font-size: 0.9rem;
+}
+
+.member-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #fdecea;
+  color: #b3261e;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.status-badge-hidden {
+  display: none;
+}
+
+.member-actions-cell {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.member-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.member-actions-trigger {
+  margin-bottom: 0;
+}
+
+.member-actions-menu {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+}
+
+tr.member-actions-open .member-actions-menu {
+  display: flex;
+}
+
+.member-action-button {
+  width: auto;
+  padding: 8px 12px;
+  border: 1px solid #ccd3e0;
+  border-radius: 4px;
+  background: #fff;
+  color: #1a1a1a;
+  cursor: pointer;
+}
+
+.member-action-button:disabled {
+  color: #98a2b3;
+  cursor: not-allowed;
+}
+
+.member-action-hidden {
+  display: none;
+}
+
+.member-guard-message {
+  color: #b3261e;
+  font-size: 0.85rem;
+  max-width: 220px;
+}
+
+.member-guard-hidden {
+  display: none;
+}
+
+.members-empty-state {
+  margin-top: 16px;
+  color: #667085;
+}
+
+dialog {
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 20px;
+  max-width: 360px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
