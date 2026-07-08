@@ -1,0 +1,64 @@
+@page
+@model Devscribed.Admin.Web.Pages.MembersModel
+@{
+    ViewData["Title"] = "Members";
+}
+
+<div class="card">
+    <h1>@Model.OrganizationName</h1>
+
+    @if (Model.CanInvite)
+    {
+        <button type="button" id="invite-open-button" class="secondary-button" data-testid="invite-open-button">Invite member</button>
+        <div id="toast-invite-sent" class="confirmation-message" data-testid="toast-invite-sent"></div>
+        <div id="invite-error-message" class="error-banner" data-testid="invite-error-message"></div>
+
+        <form id="invite-form" class="inline-form" data-testid="invite-form" hidden novalidate>
+            <div class="field">
+                <label for="invite-email">Email</label>
+                <input id="invite-email" name="email" type="email" data-testid="invite-email-input" autocomplete="email" />
+            </div>
+
+            @if (Model.CanAssignRoles)
+            {
+                <div class="field">
+                    <label for="invite-role">Role</label>
+                    <select id="invite-role" name="role" data-testid="invite-role-select">
+                        <option value="User">User</option>
+                        <option value="Viewer">Viewer</option>
+                        <option value="Manager">Manager</option>
+                        <option value="Admin">Admin</option>
+                    </select>
+                </div>
+            }
+            else
+            {
+                <input type="hidden" name="role" value="User" />
+            }
+
+            <button type="submit" id="invite-submit-button" data-testid="invite-submit-button">Send invitation</button>
+        </form>
+    }
+
+    <table data-testid="members-list">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Role</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var member in Model.Members)
+            {
+                <tr data-testid="member-row-@member.Id">
+                    <td>@member.FullName</td>
+                    <td><span class="role-badge" data-testid="member-role-badge-@member.Id">@member.Role</span></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@section Scripts {
+    <script src="~/js/members.js" asp-append-version="true"></script>
+}

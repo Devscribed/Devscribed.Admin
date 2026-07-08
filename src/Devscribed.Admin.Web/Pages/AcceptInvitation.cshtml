@@ -1,0 +1,47 @@
+@page
+@model Devscribed.Admin.Web.Pages.AcceptInvitationModel
+@{
+    ViewData["Title"] = "Accept invitation";
+}
+
+<div class="card" data-testid="accept-invite-screen">
+    <h1>Accept invitation</h1>
+    <p>You have been invited to <strong data-testid="accept-invite-org-name">@Model.OrganizationName</strong>.</p>
+
+    @if (!string.IsNullOrWhiteSpace(Model.Error))
+    {
+        <div class="error-banner" data-testid="accept-invite-error">@Model.Error</div>
+    }
+    else
+    {
+        <div id="accept-invite-error" class="error-banner" data-testid="accept-invite-error"></div>
+
+        <form id="accept-invite-form" novalidate>
+            <input type="hidden" name="token" value="@Model.Token" />
+
+            @if (Model.RequiresAccountDetails)
+            {
+                <div class="field">
+                    <label for="accept-first-name">First name</label>
+                    <input id="accept-first-name" name="firstName" type="text" data-testid="accept-first-name-input" autocomplete="given-name" />
+                </div>
+
+                <div class="field">
+                    <label for="accept-last-name">Last name</label>
+                    <input id="accept-last-name" name="lastName" type="text" data-testid="accept-last-name-input" autocomplete="family-name" />
+                </div>
+
+                <div class="field">
+                    <label for="accept-password">Password</label>
+                    <input id="accept-password" name="password" type="password" data-testid="accept-password-input" autocomplete="new-password" />
+                </div>
+            }
+
+            <button type="submit" id="accept-submit-button" data-testid="accept-submit-button">Accept invitation</button>
+        </form>
+    }
+</div>
+
+@section Scripts {
+    <script src="~/js/accept-invitation.js" asp-append-version="true"></script>
+}

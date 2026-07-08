@@ -1,0 +1,34 @@
+@page
+@model Devscribed.Admin.Web.Pages.LoginModel
+@{
+    ViewData["Title"] = "Log in";
+}
+
+<div class="card">
+    <h1>Log in</h1>
+
+    <div id="login-error-message" class="error-banner" data-testid="login-error-message"></div>
+
+    <form id="login-form" data-testid="login-form" novalidate>
+        <div class="field">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" data-testid="login-email-input" autocomplete="email" />
+        </div>
+
+        <div class="field">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" data-testid="login-password-input" autocomplete="current-password" />
+        </div>
+
+        <button type="submit" id="login-submit-button" data-testid="login-submit-button">Log in</button>
+    </form>
+
+    <div class="form-links">
+        <a href="/ForgotPassword" data-testid="login-forgot-link">Forgot password?</a>
+        <a href="/">Create an organization</a>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/login.js" asp-append-version="true"></script>
+}

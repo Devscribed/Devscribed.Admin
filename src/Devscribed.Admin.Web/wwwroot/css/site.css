@@ -1,0 +1,162 @@
+:root {
+  color-scheme: light;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: #f6f7f9;
+  color: #1a1a1a;
+}
+
+.page {
+  max-width: 480px;
+  margin: 48px auto;
+  padding: 0 16px;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #e2e2e2;
+  border-radius: 8px;
+  padding: 32px;
+}
+
+h1 {
+  font-size: 1.5rem;
+  margin-top: 0;
+}
+
+.field {
+  margin-bottom: 16px;
+}
+
+.field label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 4px;
+  font-size: 0.9rem;
+}
+
+.field input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+.field select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1rem;
+  background: #fff;
+}
+
+.field-error {
+  color: #b3261e;
+  font-size: 0.85rem;
+  margin-top: 4px;
+  min-height: 1em;
+}
+
+.error-banner {
+  background: #fdecea;
+  color: #b3261e;
+  border: 1px solid #f5c6c2;
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+}
+
+.error-banner:empty {
+  display: none;
+}
+
+button[type="submit"] {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 4px;
+  background: #2b5cff;
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+button[type="submit"]:disabled {
+  background: #a9b6e6;
+  cursor: not-allowed;
+}
+
+.secondary-button {
+  width: auto;
+  padding: 8px 12px;
+  border: 1px solid #ccd3e0;
+  border-radius: 4px;
+  background: #fff;
+  color: #1a1a1a;
+  cursor: pointer;
+  margin-bottom: 16px;
+}
+
+.inline-form {
+  margin-bottom: 24px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+th, td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.form-links {
+  margin-top: 16px;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.form-links a {
+  color: #2b5cff;
+  text-decoration: none;
+  margin: 0 8px;
+}
+
+.form-links a:hover {
+  text-decoration: underline;
+}
+
+.confirmation-message {
+  color: #1a7f37;
+  background: #dafbe1;
+  border: 1px solid #aceebb;
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin-top: 16px;
+  font-size: 0.9rem;
+}
+
+.confirmation-message:empty {
+  display: none;
+}
+
+.role-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #eef1ff;
+  color: #2b39a3;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}

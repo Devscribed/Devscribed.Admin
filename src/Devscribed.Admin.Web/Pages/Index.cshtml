@@ -1,0 +1,53 @@
+@page
+@model Devscribed.Admin.Web.Pages.IndexModel
+@{
+    ViewData["Title"] = "Sign up";
+}
+
+<div class="card">
+    <h1>Create your organization</h1>
+
+    <div id="signup-error-banner" class="error-banner" data-testid="signup-error-banner"></div>
+
+    <form id="signup-form" data-testid="signup-form" novalidate>
+        <div class="field">
+            <label for="orgName">Organization name</label>
+            <input id="orgName" name="orgName" type="text" data-testid="signup-org-name-input" autocomplete="organization" />
+            <div class="field-error" data-testid="field-error-orgName"></div>
+        </div>
+
+        <div class="field">
+            <label for="firstName">First name</label>
+            <input id="firstName" name="firstName" type="text" data-testid="signup-first-name-input" autocomplete="given-name" />
+            <div class="field-error" data-testid="field-error-firstName"></div>
+        </div>
+
+        <div class="field">
+            <label for="lastName">Last name</label>
+            <input id="lastName" name="lastName" type="text" data-testid="signup-last-name-input" autocomplete="family-name" />
+            <div class="field-error" data-testid="field-error-lastName"></div>
+        </div>
+
+        <div class="field">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" data-testid="signup-email-input" autocomplete="email" />
+            <div class="field-error" data-testid="field-error-email"></div>
+        </div>
+
+        <div class="field">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" data-testid="signup-password-input" autocomplete="new-password" />
+            <div class="field-error" data-testid="field-error-password"></div>
+        </div>
+
+        <button type="submit" id="signup-submit-button" data-testid="signup-submit-button" disabled>Create organization</button>
+    </form>
+
+    <div class="form-links">
+        <a href="/Login">Already have an account? Log in</a>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/signup.js" asp-append-version="true"></script>
+}
