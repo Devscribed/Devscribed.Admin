@@ -1,0 +1,134 @@
+@page
+@model Devscribed.Admin.Web.Pages.AccountSettingsModel
+@{
+    ViewData["Title"] = "Account Settings";
+}
+
+<div class="card" data-testid="account-settings">
+    <a href="/Members" class="back-link">&larr; Back to members</a>
+    <h1>Account Settings</h1>
+
+    <div class="account-section">
+        <div class="account-actions">
+            <button type="button" class="secondary-button" id="change-email-open" data-testid="change-email-open-button">Change email</button>
+            <button type="button" class="secondary-button" id="change-password-open" data-testid="change-password-open-button">Change password</button>
+        </div>
+
+        <div id="change-email-form-container" class="account-form-container" style="display:none;">
+            <form id="change-email-form" data-testid="change-email-form">
+                <h2>Change email</h2>
+                <p class="account-current-value">Current email: <strong>@Model.Email</strong></p>
+                <div class="field">
+                    <label for="change-email-new">New email</label>
+                    <input id="change-email-new" type="email" data-testid="change-email-new-input" required />
+                </div>
+                <div id="change-email-error" class="error-banner" data-testid="change-email-error"></div>
+                <div id="change-email-confirmation" class="confirmation-message" data-testid="change-email-confirmation-message"></div>
+                <button type="submit" data-testid="change-email-submit-button">Send confirmation</button>
+            </form>
+        </div>
+
+        <div id="change-password-form-container" class="account-form-container" style="display:none;">
+            <form id="change-password-form" data-testid="change-password-form">
+                <h2>Change password</h2>
+                <div class="field">
+                    <label for="change-password-current">Current password</label>
+                    <input id="change-password-current" type="password" data-testid="change-password-current-input" required />
+                </div>
+                <div class="field">
+                    <label for="change-password-new">New password</label>
+                    <input id="change-password-new" type="password" data-testid="change-password-new-input" required />
+                </div>
+                <div class="field">
+                    <label for="change-password-confirm">Confirm new password</label>
+                    <input id="change-password-confirm" type="password" data-testid="change-password-confirm-input" required />
+                </div>
+                <div id="change-password-error" class="error-banner" data-testid="change-password-error"></div>
+                <div id="change-password-confirmation" class="confirmation-message"></div>
+                <button type="submit" data-testid="change-password-submit-button">Change password</button>
+            </form>
+        </div>
+    </div>
+
+    <hr class="account-divider" />
+
+    <div class="account-section">
+        <h2>Edit Information</h2>
+        <div class="field">
+            <label for="edit-first-name">First name</label>
+            <input id="edit-first-name" type="text" value="@Model.FirstName" data-testid="edit-first-name-input" required />
+            <div class="field-error" data-testid="field-error-firstName"></div>
+        </div>
+        <div class="field">
+            <label for="edit-last-name">Last name</label>
+            <input id="edit-last-name" type="text" value="@Model.LastName" data-testid="edit-last-name-input" required />
+            <div class="field-error" data-testid="field-error-lastName"></div>
+        </div>
+        <div class="field">
+            <label for="edit-phone-country">Phone number</label>
+            <div class="phone-input-group">
+                @{
+                    var phoneCountry = Model.PhoneCountryCode ?? "";
+                }
+                <select id="edit-phone-country" data-testid="edit-phone-country-select" data-initial="@phoneCountry">
+                    <option value="">—</option>
+                    <option value="US">🇺🇸 +1</option>
+                    <option value="GB">🇬🇧 +44</option>
+                    <option value="DE">🇩🇪 +49</option>
+                    <option value="FR">🇫🇷 +33</option>
+                    <option value="RU">🇷🇺 +7</option>
+                    <option value="UA">🇺🇦 +380</option>
+                    <option value="IL">🇮🇱 +972</option>
+                </select>
+                <input id="edit-phone-number" type="tel" placeholder="Phone number" value="@Model.PhoneNumber" data-testid="edit-phone-number-input" />
+            </div>
+            <div class="field-error" data-testid="field-error-phoneNumber"></div>
+        </div>
+        <div class="field">
+            <label for="edit-timezone">Time zone</label>
+            @{
+                var tz = Model.Timezone ?? "";
+            }
+            <select id="edit-timezone" data-testid="edit-timezone-select" data-initial="@tz">
+                <option value="">Select timezone</option>
+                <option value="Pacific/Honolulu">(GMT-10:00) Pacific/Honolulu</option>
+                <option value="America/Anchorage">(GMT-9:00) America/Anchorage</option>
+                <option value="America/Los_Angeles">(GMT-7:00) America/Los_Angeles</option>
+                <option value="America/Denver">(GMT-6:00) America/Denver</option>
+                <option value="America/Chicago">(GMT-5:00) America/Chicago</option>
+                <option value="America/New_York">(GMT-4:00) America/New_York</option>
+                <option value="America/Sao_Paulo">(GMT-3:00) America/Sao_Paulo</option>
+                <option value="Europe/London">(GMT+0:00) Europe/London</option>
+                <option value="Europe/Berlin">(GMT+1:00) Europe/Berlin</option>
+                <option value="Europe/Moscow">(GMT+3:00) Europe/Moscow</option>
+                <option value="Asia/Dubai">(GMT+4:00) Asia/Dubai</option>
+                <option value="Asia/Kolkata">(GMT+5:30) Asia/Kolkata</option>
+                <option value="Asia/Shanghai">(GMT+8:00) Asia/Shanghai</option>
+                <option value="Asia/Tokyo">(GMT+9:00) Asia/Tokyo</option>
+                <option value="Australia/Sydney">(GMT+10:00) Australia/Sydney</option>
+                <option value="Pacific/Auckland">(GMT+12:00) Pacific/Auckland</option>
+                <option value="Asia/Jerusalem">(GMT+3:00) Asia/Jerusalem</option>
+                <option value="Europe/Kyiv">(GMT+3:00) Europe/Kyiv</option>
+            </select>
+        </div>
+        <div class="field">
+            <label for="edit-first-day">First day of week</label>
+            @{
+                var fdow = Model.FirstDayOfWeek ?? "";
+            }
+            <select id="edit-first-day" data-testid="edit-first-day-select" data-initial="@fdow">
+                <option value="">Select</option>
+                <option value="Monday">Monday</option>
+                <option value="Sunday">Sunday</option>
+                <option value="Saturday">Saturday</option>
+            </select>
+        </div>
+        <div id="account-info-error" class="error-banner"></div>
+        <div id="toast-account-saved" class="confirmation-message" data-testid="toast-account-saved"></div>
+        <button type="button" id="account-save-button" data-testid="account-save-button">Save</button>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/account-settings.js" asp-append-version="true"></script>
+}

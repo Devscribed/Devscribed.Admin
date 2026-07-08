@@ -416,3 +416,78 @@ dialog {
 .member-name-cell a:hover {
   text-decoration: underline;
 }
+
+.account-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.account-form-container {
+  margin-bottom: 16px;
+}
+
+.account-form-container h2 {
+  font-size: 1.1rem;
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+
+.account-current-value {
+  font-size: 0.9rem;
+  color: #667085;
+  margin-bottom: 12px;
+}
+
+.account-divider {
+  border: none;
+  border-top: 1px solid #e2e2e2;
+  margin: 24px 0;
+}
+
+.account-section h2 {
+  font-size: 1.1rem;
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.phone-input-group {
+  display: flex;
+  gap: 8px;
+}
+
+.phone-input-group select {
+  width: 110px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1rem;
+  background: #fff;
+}
+
+.phone-input-group input {
+  flex: 1;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+#account-save-button {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 4px;
+  background: #2b5cff;
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+#account-save-button:disabled {
+  background: #a9b6e6;
+  cursor: not-allowed;
+}

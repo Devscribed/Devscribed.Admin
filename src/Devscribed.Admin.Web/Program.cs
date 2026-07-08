@@ -1,3 +1,4 @@
+using Devscribed.Admin.Application.AccountSettings;
 using Devscribed.Admin.Application.Auth;
 using Devscribed.Admin.Application.Invitations;
 using Devscribed.Admin.Application.Members;
@@ -28,6 +29,9 @@ builder.Services.AddScoped<ManageMemberStatusService>();
 builder.Services.AddScoped<UpdateJobTitleService>();
 builder.Services.AddScoped<InviteMemberService>();
 builder.Services.AddScoped<AcceptInvitationService>();
+builder.Services.AddScoped<UpdateAccountInfoService>();
+builder.Services.AddScoped<ChangeEmailService>();
+builder.Services.AddScoped<ChangePasswordService>();
 builder.Services.AddSingleton<InMemoryInvitationEmailSender>();
 builder.Services.AddSingleton<IInvitationEmailSender>(sp => sp.GetRequiredService<InMemoryInvitationEmailSender>());
 builder.Services.AddSingleton(TimeProvider.System);
@@ -240,6 +244,63 @@ app.MapPost("/api/invitations/accept", async (AcceptInvitationApiRequest request
     return Results.Json(new { redirectUrl = "/Members" });
 });
 
+app.MapPut("/api/account/info", async (UpdateAccountInfoApiRequest request, UpdateAccountInfoService service, HttpContext http) =>
+{
+    var accountId = Guid.Parse(http.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
+
+    var result = await service.UpdateAsync(
+        accountId,
+        request.FirstName,
+        request.LastName,
+        request.PhoneCountryCode,
+        request.PhoneNumber,
+        request.Timezone,
+        request.FirstDayOfWeek);
+
+    if (!result.Success)
+        return Results.Json(new { error = result.Error, field = result.Field }, statusCode: StatusCodes.Status400BadRequest);
+
+    return Results.Json(new { success = true });
+}).RequireAuthorization();
+
+app.MapPost("/api/account/change-email", async (ChangeEmailApiRequest request, ChangeEmailService service, HttpContext http) =>
+{
+    var accountId = Guid.Parse(http.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
+
+    var result = await service.RequestChangeAsync(accountId, request.NewEmail);
+
+    if (!result.Success)
+        return Results.Json(new { error = result.Error }, statusCode: StatusCodes.Status400BadRequest);
+
+    return Results.Json(new { success = true });
+}).RequireAuthorization();
+
+app.MapPost("/api/account/confirm-email", async (ConfirmEmailApiRequest request, ChangeEmailService service) =>
+{
+    var result = await service.ConfirmChangeAsync(request.Token);
+
+    if (!result.Success)
+        return Results.Json(new { error = result.Error }, statusCode: StatusCodes.Status400BadRequest);
+
+    return Results.Json(new { success = true });
+});
+
+app.MapPost("/api/account/change-password", async (ChangePasswordApiRequest request, ChangePasswordService service, HttpContext http) =>
+{
+    var accountId = Guid.Parse(http.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
+
+    var result = await service.ChangeAsync(
+        accountId,
+        request.CurrentPassword,
+        request.NewPassword,
+        request.ConfirmPassword);
+
+    if (!result.Success)
+        return Results.Json(new { error = result.Error }, statusCode: StatusCodes.Status400BadRequest);
+
+    return Results.Json(new { success = true });
+}).RequireAuthorization();
+
 app.MapPost("/api/logout", async (HttpContext http) =>
 {
     await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
@@ -257,5 +318,10 @@ public record ChangeRoleApiRequest(string Role);
 public record UpdateJobTitleApiRequest(string? JobTitle);
 public record InviteMemberApiRequest(string Email, string Role);
 public record AcceptInvitationApiRequest(string Token, string? FirstName, string? LastName, string? Password);
+
+public record UpdateAccountInfoApiRequest(string? FirstName, string? LastName, string? PhoneCountryCode, string? PhoneNumber, string? Timezone, string? FirstDayOfWeek);
+public record ChangeEmailApiRequest(string NewEmail);
+public record ConfirmEmailApiRequest(string Token);
+public record ChangePasswordApiRequest(string CurrentPassword, string NewPassword, string ConfirmPassword);
 
 public partial class Program;

@@ -10,6 +10,7 @@ public class AdminDbContext(DbContextOptions<AdminDbContext> options) : DbContex
     public DbSet<Membership> Memberships => Set<Membership>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<Invitation> Invitations => Set<Invitation>();
+    public DbSet<EmailChangeToken> EmailChangeTokens => Set<EmailChangeToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -20,7 +21,10 @@ public class AdminDbContext(DbContextOptions<AdminDbContext> options) : DbContex
             entity.HasIndex(a => a.Email).IsUnique();
             entity.Property(a => a.FirstName).IsRequired().HasMaxLength(100);
             entity.Property(a => a.LastName).IsRequired().HasMaxLength(100);
+            entity.Property(a => a.PhoneCountryCode).HasMaxLength(10);
+            entity.Property(a => a.PhoneNumber).HasMaxLength(30);
             entity.Property(a => a.Timezone).HasMaxLength(100);
+            entity.Property(a => a.FirstDayOfWeek).HasMaxLength(20);
         });
 
         modelBuilder.Entity<Organization>(entity =>
@@ -48,6 +52,18 @@ public class AdminDbContext(DbContextOptions<AdminDbContext> options) : DbContex
         modelBuilder.Entity<PasswordResetToken>(entity =>
         {
             entity.HasKey(t => t.Id);
+            entity.Property(t => t.Token).IsRequired().HasMaxLength(256);
+            entity.HasIndex(t => t.Token).IsUnique();
+            entity.HasOne(t => t.Account)
+                .WithMany()
+                .HasForeignKey(t => t.AccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EmailChangeToken>(entity =>
+        {
+            entity.HasKey(t => t.Id);
+            entity.Property(t => t.NewEmail).IsRequired().HasMaxLength(320);
             entity.Property(t => t.Token).IsRequired().HasMaxLength(256);
             entity.HasIndex(t => t.Token).IsUnique();
             entity.HasOne(t => t.Account)
