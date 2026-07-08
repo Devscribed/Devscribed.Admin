@@ -7,5 +7,6 @@ public enum Capability
     EditOwnSettings,
     InviteMembers,
     DeleteRestoreMembers,
-    ChangeRoles
+    ChangeRoles,
+    EditJobTitle
 }

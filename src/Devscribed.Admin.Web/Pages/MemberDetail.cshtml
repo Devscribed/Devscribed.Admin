@@ -1,0 +1,70 @@
+@page "{id:guid}"
+@model Devscribed.Admin.Web.Pages.MemberDetailModel
+@{
+    ViewData["Title"] = Model.MemberName;
+}
+
+<div class="card" data-testid="member-detail">
+    <a href="/Members" class="back-link" data-testid="member-detail-back-link">&larr; Back to members</a>
+
+    <div class="member-detail-header">
+        <div class="member-detail-avatar">@Model.MemberName.Substring(0, 1).ToUpperInvariant()</div>
+        <h1 data-testid="member-detail-name">@Model.MemberName</h1>
+        <p class="member-detail-joined" data-testid="member-detail-joined">Joined @Model.JoinedDate</p>
+        <p class="member-detail-info">
+            <span class="member-detail-icon">✉</span>
+            <span data-testid="member-detail-email">@Model.Email</span>
+        </p>
+        @if (Model.MemberTimezone is not null)
+        {
+            <p class="member-detail-info">
+                <span class="member-detail-icon">🕐</span>
+                <span data-testid="member-detail-timezone">@Model.MemberTimezone</span>
+            </p>
+        }
+        else
+        {
+            <p class="member-detail-info">
+                <span class="member-detail-icon">🕐</span>
+                <span data-testid="member-detail-timezone" class="member-detail-muted">Not set</span>
+            </p>
+        }
+    </div>
+
+    <div class="member-detail-tabs">
+        <button type="button" class="member-detail-tab member-detail-tab-active" data-testid="member-detail-tab-about">About</button>
+        <button type="button" class="member-detail-tab" data-testid="member-detail-tab-projects" disabled>Projects</button>
+        <button type="button" class="member-detail-tab" data-testid="member-detail-tab-roles" disabled>Roles</button>
+        <button type="button" class="member-detail-tab" data-testid="member-detail-tab-payments" disabled>Payments</button>
+    </div>
+
+    <div class="member-detail-about">
+        @if (Model.CanEditJobTitle)
+        {
+            <div class="field">
+                <label for="job-title-input">Job title</label>
+                <input id="job-title-input"
+                       type="text"
+                       maxlength="100"
+                       placeholder="Enter a job title"
+                       value="@Model.JobTitle"
+                       data-testid="job-title-input"
+                       data-membership-id="@Model.MembershipId" />
+            </div>
+            <div id="job-title-error" class="error-banner" data-testid="job-title-error"></div>
+            <div id="toast-member-saved" class="confirmation-message" data-testid="toast-member-saved"></div>
+            <button type="button" id="job-title-save-button" data-testid="job-title-save-button">Save changes</button>
+        }
+        else
+        {
+            <div class="field">
+                <label>Job title</label>
+                <p class="job-title-readonly" data-testid="job-title-readonly">@(string.IsNullOrEmpty(Model.JobTitle) ? "—" : Model.JobTitle)</p>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/member-detail.js" asp-append-version="true"></script>
+}

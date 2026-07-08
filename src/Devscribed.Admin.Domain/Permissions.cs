@@ -10,12 +10,14 @@ public static class Permissions
         (MembershipRole.Admin, Capability.InviteMembers),
         (MembershipRole.Admin, Capability.DeleteRestoreMembers),
         (MembershipRole.Admin, Capability.ChangeRoles),
+        (MembershipRole.Admin, Capability.EditJobTitle),
 
         (MembershipRole.Manager, Capability.ViewMembers),
         (MembershipRole.Manager, Capability.ViewMemberDetail),
         (MembershipRole.Manager, Capability.EditOwnSettings),
         (MembershipRole.Manager, Capability.InviteMembers),
         (MembershipRole.Manager, Capability.DeleteRestoreMembers),
+        (MembershipRole.Manager, Capability.EditJobTitle),
 
         (MembershipRole.User, Capability.ViewMembers),
         (MembershipRole.User, Capability.ViewMemberDetail),

@@ -297,3 +297,122 @@ dialog {
   justify-content: flex-end;
   gap: 12px;
 }
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 16px;
+  color: #2b5cff;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.member-detail-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.member-detail-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: #eef1ff;
+  color: #2b39a3;
+  font-size: 1.5rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 12px;
+}
+
+.member-detail-joined {
+  color: #667085;
+  font-size: 0.9rem;
+  margin-top: -8px;
+  margin-bottom: 12px;
+}
+
+.member-detail-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #1a1a1a;
+  font-size: 0.9rem;
+  margin: 4px 0;
+}
+
+.member-detail-icon {
+  font-size: 0.85rem;
+}
+
+.member-detail-muted {
+  color: #667085;
+}
+
+.member-detail-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #e2e2e2;
+  margin-bottom: 24px;
+}
+
+.member-detail-tab {
+  padding: 10px 16px;
+  border: none;
+  background: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #667085;
+  cursor: default;
+  border-bottom: 2px solid transparent;
+}
+
+.member-detail-tab-active {
+  color: #2b5cff;
+  border-bottom-color: #2b5cff;
+}
+
+.member-detail-tab:disabled {
+  color: #c0c5d0;
+  cursor: not-allowed;
+}
+
+.member-detail-about {
+  max-width: 400px;
+}
+
+.job-title-readonly {
+  color: #667085;
+  margin: 0;
+}
+
+#job-title-save-button {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 4px;
+  background: #2b5cff;
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+#job-title-save-button:disabled {
+  background: #a9b6e6;
+  cursor: not-allowed;
+}
+
+.member-name-cell a {
+  color: #2b5cff;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.member-name-cell a:hover {
+  text-decoration: underline;
+}

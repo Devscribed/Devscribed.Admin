@@ -8,6 +8,7 @@ public class Membership
     public required MembershipRole Role { get; set; }
     public required MembershipStatus Status { get; set; }
     public DateTimeOffset JoinedAt { get; init; } = DateTimeOffset.UtcNow;
+    public string? JobTitle { get; set; }
 
     public Account? Account { get; init; }
     public Organization? Organization { get; init; }

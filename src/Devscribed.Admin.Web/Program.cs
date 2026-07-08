@@ -25,6 +25,7 @@ builder.Services.AddScoped<ForgotPasswordService>();
 builder.Services.AddScoped<ResetPasswordService>();
 builder.Services.AddScoped<ChangeRoleService>();
 builder.Services.AddScoped<ManageMemberStatusService>();
+builder.Services.AddScoped<UpdateJobTitleService>();
 builder.Services.AddScoped<InviteMemberService>();
 builder.Services.AddScoped<AcceptInvitationService>();
 builder.Services.AddSingleton<InMemoryInvitationEmailSender>();
@@ -179,6 +180,25 @@ app.MapPost("/api/members/{id:guid}/restore", async (Guid id, ManageMemberStatus
     return Results.Json(new { success = true });
 }).RequireAuthorization();
 
+app.MapPut("/api/members/{id:guid}/job-title", async (Guid id, UpdateJobTitleApiRequest request, UpdateJobTitleService updateJobTitleService, HttpContext http) =>
+{
+    var callerAccountId = Guid.Parse(http.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
+    var organizationId = OrganizationAuth.GetOrganizationId(http.User);
+
+    var result = await updateJobTitleService.UpdateAsync(
+        callerAccountId, organizationId, id, request.JobTitle);
+
+    if (!result.Success)
+    {
+        var statusCode = result.Error == "forbidden"
+            ? StatusCodes.Status403Forbidden
+            : StatusCodes.Status400BadRequest;
+        return Results.Json(new { error = result.Error }, statusCode: statusCode);
+    }
+
+    return Results.Json(new { success = true });
+}).RequireAuthorization();
+
 app.MapPost("/api/invitations", async (InviteMemberApiRequest request, InviteMemberService inviteService, HttpContext http) =>
 {
     var callerAccountId = Guid.Parse(http.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
@@ -234,6 +254,7 @@ public record ForgotPasswordApiRequest(string Email);
 public record ResetPasswordApiRequest(string Token, string Password);
 
 public record ChangeRoleApiRequest(string Role);
+public record UpdateJobTitleApiRequest(string? JobTitle);
 public record InviteMemberApiRequest(string Email, string Role);
 public record AcceptInvitationApiRequest(string Token, string? FirstName, string? LastName, string? Password);
 

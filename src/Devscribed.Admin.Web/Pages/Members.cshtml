@@ -78,7 +78,7 @@
                     data-status="@member.Status">
                     <td>
                         <div class="member-name-cell">
-                            <span data-testid="member-name-@member.Id">@member.FullName</span>
+                            <a href="/MemberDetail/@member.Id" data-testid="member-name-@member.Id">@member.FullName</a>
                             <span class="member-email">@member.Email</span>
                             <div class="member-meta">
                                 <span class="role-badge" data-testid="member-role-badge-@member.Id">@member.Role</span>

@@ -20,6 +20,7 @@ public class AdminDbContext(DbContextOptions<AdminDbContext> options) : DbContex
             entity.HasIndex(a => a.Email).IsUnique();
             entity.Property(a => a.FirstName).IsRequired().HasMaxLength(100);
             entity.Property(a => a.LastName).IsRequired().HasMaxLength(100);
+            entity.Property(a => a.Timezone).HasMaxLength(100);
         });
 
         modelBuilder.Entity<Organization>(entity =>
@@ -39,6 +40,7 @@ public class AdminDbContext(DbContextOptions<AdminDbContext> options) : DbContex
                 .WithMany(o => o.Memberships)
                 .HasForeignKey(m => m.OrganizationId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.Property(m => m.JobTitle).HasMaxLength(100);
             // Single-organization-per-account model (see spec 01, requirement 7).
             entity.HasIndex(m => m.AccountId).IsUnique();
         });
