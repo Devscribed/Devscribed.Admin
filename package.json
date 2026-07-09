@@ -1,0 +1,45 @@
+{
+  "name": "devscribed-admin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Devscribed.Admin — user-management surface (monorepo)",
+  "engines": {
+    "node": ">=20 <21"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "e2e"
+  ],
+  "scripts": {
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f postgres",
+    "migration:run": "npm run migration:run --workspace apps/api",
+    "migration:revert": "npm run migration:revert --workspace apps/api",
+    "dev": "concurrently -n api,web -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm run start:dev --workspace apps/api",
+    "dev:web": "npm run dev --workspace apps/web",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "lint:all": "eslint .",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run test:unit && npm run test:int",
+    "test:unit": "npm run test --workspace packages/shared --workspace apps/api",
+    "test:int": "npm run test:int --workspace apps/api",
+    "test:e2e": "npm run test --workspace e2e",
+    "test:all": "npm run test:unit && npm run test:int && npm run test:e2e",
+    "verify": "npm run lint && npm run typecheck && npm run test:all"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "concurrently": "^9.0.1",
+    "eslint": "^9.13.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.11.0"
+  }
+}
