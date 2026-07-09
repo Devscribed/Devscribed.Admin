@@ -1,4 +1,13 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.dll
+*.exe
+*.pdb
+.vs/
 
 # --- Dependencies ---
 node_modules/
@@ -59,3 +68,17 @@ Desktop.ini
 
 # --- Secrets / certs ---
 *.pem
+
+# SQLite
+*.db
+*.db-shm
+*.db-wal
+
+# Playwright
+playwright/.cache/
+
+# misc
+.DS_Store
+*.pem
+.env*.local
+.env
