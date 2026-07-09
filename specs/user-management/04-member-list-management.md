@@ -2,7 +2,7 @@
 
 ## Summary
 
-The Members screen lists an organization's members and is the post-login landing page. `admin` and `manager` roles get a management view where they can search, reveal removed members, soft-delete a member, restore a previously removed member, and change a member's role via an inline role picker. `user` and `viewer` roles get the same list read-only, with no per-row actions. Members have exactly two states: `active` and `removed`. Deleting is a soft-delete (moves to `removed`, blocks login, revokes all sessions immediately); restoring returns a removed member directly to `active` without a new invitation, but resets the joined date and clears the job title. The last remaining `admin` cannot be removed, and no member can remove themselves.
+The Members screen lists an organization's members and is the post-login landing page. `admin` and `manager` roles get a management view where they can search, reveal removed members, soft-delete a member, and restore a previously removed member. `user` and `viewer` roles get the same list read-only, with no per-row actions. Members have exactly two states: `active` and `removed`. Deleting is a soft-delete (moves to `removed`, blocks login, revokes all sessions immediately); restoring returns a removed member directly to `active` without a new invitation, but resets the joined date and clears the job title. The last remaining `admin` cannot be removed, and no member can remove themselves. Role changes are **not** done on this screen — they happen on the member detail page (spec 05).
 
 ## Actors & Preconditions
 
@@ -18,61 +18,264 @@ The organization uses four roles: `admin`, `manager`, `user`, `viewer`. Every ac
 | View members list, search, filter removed | ✅ | ✅ | ✅ (read-only) | ✅ (read-only) |
 | Invite members | ✅ | ✅ | ❌ | ❌ |
 | Delete / Restore members | ✅ | ✅ | ❌ | ❌ |
-| Change role of `user`/`viewer` members | ✅ (to any role) | ✅ (to `manager`/`user`/`viewer` — no `admin`) | ❌ | ❌ |
-| Change role of `manager`/`admin` members | ✅ (to any role) | ❌ | ❌ | ❌ |
+
+> **Note:** Role-change capabilities are defined in spec 05 (Member Detail).
 
 ## Functional Requirements
 
 ### List & Search
 
-1. The screen lists members of the current organization. Each row shows the member's full name, role badge, and email. For `admin`/`manager` rows also include a per-row actions menu and a role picker control. Rows link to the member's detail view.
+1. The screen lists members of the current organization. Each row shows the member's full name, role badge, and email. For `admin`/`manager` rows also include a per-row actions menu. Rows link to the member's detail view (`/org/{orgId}/members/{memberId}`).
 2. **Default view:** only `active` members are shown, sorted by name ascending.
-3. **Search:** a single search box filters the list live (on each keystroke) by case-insensitive partial match against the member's full name **or** email. Clearing the box restores the unfiltered list. Search does not match against role or job title.
+3. **Search:** a single search box filters the list by case-insensitive partial match against the member's full name **or** email. The search is **server-side** — the client sends a query parameter to the API. Filtering is **debounced at 300 ms** (no API call until the user stops typing for 300 ms). Clearing the box restores the unfiltered list. Search does not match against role or job title.
 4. **"Show removed members" checkbox:** unchecked (default) shows `active` members only; checked shows `active` **and** `removed` members together in one list, with removed rows visually marked by a status badge. It is an additive reveal, not a replace-toggle.
 5. Search and the removed filter compose: with "Show removed" checked, the search term filters across the combined active+removed set (removed members are also searchable).
 
 ### Delete & Restore
 
-6. **Delete (soft-delete)** — available to `admin`/`manager` only, on `active` members other than themselves: sets the member's status to `removed`. A removed member can no longer log in, and all their active sessions are immediately revoked. The member disappears from the default view. A confirmation dialog precedes the delete.
-7. **Self-delete is blocked:** no member can remove themselves, regardless of role. The delete action is not available on the member's own row (hidden or disabled), and the API rejects the call if attempted directly.
-8. **Restore** — available to `admin`/`manager` only, on `removed` members (visible via the removed filter): sets status back to `active`, resets the joined date to the restoration time, and clears the job title. No new invitation is required, and the member's prior role is retained. There is no separate "disabled" state — only `active` and `removed`.
-9. **Zero-admin guard (delete):** deleting a member is rejected if it would leave the organization with zero `active` members holding the `admin` role. The delete control for the last admin is disabled with an explanatory message, and the API rejects the call if attempted directly. The guard is enforced atomically at the database/transaction level to prevent race conditions.
-
-### Role Change (inline on list rows)
-
-10. **Role picker on list rows:** `admin` sees a role picker on every member's row. `manager` sees a role picker only on `user` and `viewer` rows — no picker is shown on `admin` or `manager` rows since they have no authority over those members' roles.
-11. **Role assignment authority:**
-    - An `admin` may change any member's role to any value in the role enum (`admin`, `manager`, `user`, `viewer`).
-    - A `manager` may change `user` and `viewer` members to any non-admin role (`manager`/`user`/`viewer`). A `manager` cannot change the role of `admin` or `manager` members, and cannot promote anyone to `admin`.
-    - `user` and `viewer` cannot change anyone's role.
-12. **Zero-admin guard (role change):** the system must reject any role change that would leave the organization with zero `active` members holding the `admin` role. This applies to demoting the last admin. The role picker is disabled (with an explanatory tooltip) when using it would violate this guard. The guard is enforced atomically at the database/transaction level.
-13. **Role changes apply only to `active` members.** Changing the role of a `removed` member is rejected — the member must be restored first.
-14. A role change from the list row applies immediately on selection (no separate save action required).
+6. **Delete (soft-delete)** — available to `admin`/`manager` only, on `active` members other than themselves: sets the member's status to `removed`. A removed member can no longer log in, and all their active sessions are immediately revoked. The member disappears from the default view. A name-specific confirmation dialog precedes the delete.
+7. **Self-delete is blocked:** no member can remove themselves, regardless of role. The delete action is not shown in the member's own row actions menu, and the API rejects the call if attempted directly.
+8. **Restore** — available to `admin`/`manager` only, on `removed` members (visible via the removed filter): sets status back to `active`, resets the joined date to the restoration time, and clears the job title. No new invitation is required, and the member's prior role is retained. There is no separate "disabled" state — only `active` and `removed`. **No confirmation dialog** — restore happens immediately on click.
+9. **Zero-admin guard (delete):** deleting a member is rejected if it would leave the organization with zero `active` members holding the `admin` role. The delete action for the last admin is disabled with an explanatory tooltip, and the API rejects the call if attempted directly. The guard is enforced atomically at the database/transaction level to prevent race conditions.
 
 ### Read-only & Security
 
-15. **Read-only for user/viewer:** `user` and `viewer` see the list, search, and the removed filter, but no actions menu, no role picker, and no delete/restore controls. The delete/restore/role-change endpoints reject calls from these roles (HTTP 403).
-16. Permission checks are enforced on the server (API) for every gated action; hiding a control in the UI is a convenience, not the security boundary.
-17. **Concurrency:** last write wins for data updates. No optimistic concurrency / conflict detection.
+10. **Read-only for user/viewer:** `user` and `viewer` see the list, search, and the removed filter, but no actions menu and no delete/restore controls. The delete/restore endpoints reject calls from these roles (HTTP 403).
+11. Permission checks are enforced on the server (API) for every gated action; hiding a control in the UI is a convenience, not the security boundary.
+12. **Concurrency:** last write wins for data updates. No optimistic concurrency / conflict detection.
+
+## Screens
+
+### Members List — admin/manager view
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Active members                                             │
+│                                                             │
+│  [🔍 Search members...]          ☐ Show removed members     │
+│                                                             │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │ Name              │ Role     │ Email         │ Actions  ││
+│  ├───────────────────┼──────────┼───────────────┼──────────┤│
+│  │ Alex Kaminski     │ user     │ alex@co.com   │  ⋮      ││
+│  │ Pat Owner (you)   │ admin    │ pat@co.com    │          ││
+│  │ Sam Manager       │ manager  │ sam@co.com    │  ⋮      ││
+│  └─────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────┘
+```
+
+- Title: "Active members" (always, regardless of filter state).
+- Search input with placeholder "Search members...".
+- "Show removed members" checkbox (unchecked by default).
+- Table columns: Name, Role, Email, Actions. Actions column present only for `admin`/`manager`.
+- **Role column: static badge only** — no inline editing. Role changes happen on the member detail page (spec 05).
+- Actions column: "⋮" menu trigger per row.
+  - Active members (not self): menu contains "Delete".
+  - Own row: no actions menu shown (or menu without "Delete" — the delete action is simply not available).
+  - Removed members: menu contains "Restore" (no "Delete").
+  - Last admin: "Delete" is disabled with tooltip "Cannot remove the last admin".
+- Rows link to the member detail page.
+- Loading state: skeleton rows matching the table layout.
+
+### Members List — user/viewer view
+
+Same layout but:
+- No Actions column.
+- Search and "Show removed" filter still work.
+- Rows still link to the member detail page (read-only view there too).
+
+### Delete Confirmation Dialog
+
+```
+┌─────────────────────────────────────────────┐
+│  Remove member                              │
+│                                             │
+│  Are you sure you want to remove            │
+│  {member.fullName}? They will lose access   │
+│  immediately.                               │
+│                                             │
+│            [Cancel]    [Remove]             │
+└─────────────────────────────────────────────┘
+```
+
+- Title: "Remove member".
+- Body: "Are you sure you want to remove {member.fullName}? They will lose access immediately."
+- Cancel button: closes dialog, no action.
+- Remove button: destructive style (red), triggers the delete API call.
+
+## Flows
+
+### Main Flow: View Members List
+
+1. User navigates to `/org/{orgId}/members`.
+2. System fetches members from `GET /api/organizations/{orgId}/members` (default: active only).
+3. System renders skeleton rows while loading.
+4. System displays the member list table with name, role badge, email per row.
+5. For `admin`/`manager`: system renders the Actions column with per-row "⋮" menus.
+6. For `user`/`viewer`: system renders read-only list (no Actions column).
+
+### Flow: Navigate to Member Detail
+
+1. User clicks on a member row (anywhere except the actions menu).
+2. System navigates to `/org/{orgId}/members/{memberId}`.
+3. Member detail page loads (spec 05).
+
+### Flow: Search Members
+
+1. User types into the search input.
+2. After 300 ms debounce, system sends `GET /api/organizations/{orgId}/members?search={term}&showRemoved={bool}`.
+3. System replaces the list with matching results.
+4. If no results match, system shows "No members found" empty state.
+5. User clears the search input → system refetches without search param, restoring full list.
+
+### Flow: Toggle "Show Removed" Filter
+
+1. User checks/unchecks the "Show removed members" checkbox.
+2. System sends `GET /api/organizations/{orgId}/members?showRemoved={bool}&search={currentSearchTerm}`.
+3. When checked: removed members appear with a "Removed" status badge; active members show no badge.
+4. When unchecked: only active members shown.
+
+### Flow: Delete Member (admin/manager)
+
+1. User clicks "⋮" on an active member row (not own row) → dropdown opens.
+2. User clicks "Delete".
+3. System opens confirmation dialog: "Are you sure you want to remove {name}? They will lose access immediately."
+4. User clicks "Remove".
+5. System sends `DELETE /api/organizations/{orgId}/members/{memberId}`.
+6. On success: system closes the dialog, shows toast "Member removed", refetches the list.
+7. On error: system closes the dialog, shows error toast with the API error message.
+
+### Alt Flow: Delete Blocked — Self-Delete
+
+- At flow step 1: the "Delete" option is **not shown** in the actions menu for the caller's own row.
+- API guard: if `DELETE` is called with `memberId === callerId`, API returns `409 Conflict` with `{ error: "cannot_remove_self", message: "You cannot remove yourself from the organization" }`.
+
+### Alt Flow: Delete Blocked — Last Admin Guard
+
+- At flow step 1: if the target is the only active admin, the "Delete" option is **disabled** with tooltip "Cannot remove the last admin".
+- UI hint: the API response from `GET /members` includes an `isLastAdmin` flag per member to drive this.
+- API guard: if `DELETE` would leave zero admins, API returns `409 Conflict` with `{ error: "last_admin_guard", message: "Organization must retain at least one admin" }`.
+
+### Flow: Restore Member (admin/manager)
+
+1. User enables "Show removed members" checkbox.
+2. User clicks "⋮" on a removed member row → dropdown opens with "Restore" option (no "Delete").
+3. User clicks "Restore" (no confirmation dialog).
+4. System sends `POST /api/organizations/{orgId}/members/{memberId}/restore`.
+5. On success: system shows toast "Member restored", refetches the list.
+6. On error: system shows error toast.
+
+## API Contracts
+
+### GET /api/organizations/{orgId}/members
+
+Query params:
+- `search` (optional, string) — case-insensitive partial match on name or email.
+- `showRemoved` (optional, boolean, default `false`) — when `true`, include removed members.
+
+Response `200`:
+```json
+{
+  "members": [
+    {
+      "id": "uuid",
+      "fullName": "Alex Kaminski",
+      "email": "alex@acme.com",
+      "role": "user",
+      "status": "active",
+      "joinedAt": "2025-06-01T...",
+      "isLastAdmin": false,
+      "isSelf": false
+    }
+  ],
+  "callerRole": "admin"
+}
+```
+
+- `isLastAdmin`: true if this member is the sole active admin (drives delete disable state).
+- `isSelf`: true if this member is the authenticated caller (drives self-delete hide).
+- `callerRole`: the authenticated caller's role (drives whether Actions column is rendered).
+
+### DELETE /api/organizations/{orgId}/members/{memberId}
+
+Request: no body.
+
+Success `200`: `{ "success": true }`
+
+Errors:
+- `403 Forbidden`: caller is `user`/`viewer` — `{ error: "forbidden", message: "You do not have permission to remove members" }`.
+- `404 Not Found`: member not found in this org.
+- `409 Conflict` (self-delete): `{ error: "cannot_remove_self", message: "You cannot remove yourself from the organization" }`.
+- `409 Conflict` (last admin): `{ error: "last_admin_guard", message: "Organization must retain at least one admin" }`.
+- `409 Conflict` (already removed): `{ error: "already_removed", message: "Member is already removed" }`.
+
+Side effects on success:
+- Set membership status to `removed`.
+- Revoke all active sessions for this member.
+
+### POST /api/organizations/{orgId}/members/{memberId}/restore
+
+Request: no body.
+
+Success `200`: `{ "success": true }`
+
+Errors:
+- `403 Forbidden`: caller is `user`/`viewer` — `{ error: "forbidden", message: "You do not have permission to restore members" }`.
+- `404 Not Found`: member not found.
+- `409 Conflict`: `{ error: "not_removed", message: "Member is not in removed status" }`.
+
+Side effects on success:
+- Set status to `active`.
+- Reset `joinedAt` to current timestamp.
+- Clear `jobTitle` to null/empty.
+- Retain existing role.
+
+## Validation Rules
+
+1. **Search input**: no validation needed; special characters are safe because the server uses parameterized queries.
+2. **Delete target**: must be active, must not be self, must not be last admin.
+3. **Restore target**: must be in `removed` status.
+4. **Zero-admin guard**: enforced atomically via database transaction — count active admins, reject if change would make count = 0.
+
+## Error Messages
+
+| Context | Message |
+|---|---|
+| Delete — self | "You cannot remove yourself from the organization" |
+| Delete — last admin | "Organization must retain at least one admin" |
+| Delete — already removed | "Member is already removed" |
+| Delete — forbidden (user/viewer) | "You do not have permission to remove members" |
+| Restore — not removed | "Member is not in removed status" |
+| Restore — forbidden | "You do not have permission to restore members" |
+| Login as removed member | "Your account has been deactivated. Contact your administrator." |
+| Network error (any mutation) | "Something went wrong. Please try again." |
+| Search — no results | "No members found" (empty state) |
+| Delete confirmation body | "Are you sure you want to remove {name}? They will lose access immediately." |
+| Delete guard tooltip | "Cannot remove the last admin" |
+| Toast — member removed | "Member removed" |
+| Toast — member restored | "Member restored" |
 
 ## UI Notes
 
-- Header tab/title "Active members"; a "Show removed members" checkbox; a search input; a table with Name, Role, Email columns and an Actions column (Actions column present only for admin/manager).
-- Role picker is a dropdown on each row (for authorized roles). The picker options: `admin` sees all four roles; `manager` sees `manager`/`user`/`viewer`.
-- Each actions menu offers "Delete" for active rows (except the member's own row) and "Restore" for removed rows. A delete opens a confirmation dialog; success shows a toast.
+- Header title "Active members"; a "Show removed members" checkbox; a search input; a table with Name, Role, Email columns and an Actions column (Actions column present only for admin/manager).
+- Role column shows a static badge — no inline editing.
+- Each actions menu offers "Delete" for active rows (except the member's own row and the last admin) and "Restore" for removed rows. Delete opens a confirmation dialog; success shows a toast. Restore has no confirmation.
 - Removed rows carry a visible "Removed" status badge.
-- Empty states: no members match the search → "No members found"; removed filter on with no removed members → active list only.
+- Loading state: skeleton rows matching the table layout.
+- Empty states: no members match the search → "No members found".
+- Data refresh: refetch the full member list from the server after every mutation (delete/restore). No optimistic updates.
 - Required `data-testid` attributes:
   - `members-list`, `members-search-input`, `show-removed-checkbox`
   - `member-row-{id}`, `member-name-{id}`, `member-email-{id}`, `member-role-badge-{id}`, `member-status-badge-{id}`
-  - `member-role-select-{id}` — the role picker (admin sees on all members; manager sees on user/viewer members only)
   - `member-row-actions-{id}` (menu trigger), `member-action-delete`, `member-action-restore`
   - `confirm-delete-dialog`, `confirm-delete-button`, `cancel-delete-button`
   - `toast-member-removed`, `toast-member-restored`
-  - `members-empty-state`, `delete-guard-message`, `role-change-guard-message`
+  - `members-empty-state`, `delete-guard-message`
+  - `members-loading-skeleton`
 
 ## Out of Scope
 
+- **Role changes** — handled on the member detail page (spec 05).
 - Bulk selection / bulk delete.
 - Column sorting/pagination controls beyond default name sort (may be added later).
 - Editing member fields from the list (done on the detail screen).
@@ -130,33 +333,23 @@ The organization uses four roles: `admin`, `manager`, `user`, `viewer`. Every ac
 - **Level:** Unit
 - **Preconditions:** none.
 - **Steps:**
-  1. For each role in {admin, manager, user, viewer} and each capability in {view list, invite, delete/restore, change roles of user/viewer, change roles of manager/admin}, call the permission-lookup function.
+  1. For each role in {admin, manager, user, viewer} and each capability in {view list, invite, delete/restore}, call the permission-lookup function.
 - **Expected Result:**
   1. Every result matches the permission matrix exactly — in particular:
      - `can(admin, *) == true` for all capabilities.
      - `can(manager, "delete/restore") == true`.
-     - `can(manager, "change roles of user/viewer") == true`.
-     - `can(manager, "change roles of manager/admin") == false`.
      - `can(user, "delete/restore") == false`.
      - `can(viewer, "view list") == true`.
 
-### TC-04-UNIT-06: Manager role-change authority boundaries
+### TC-04-UNIT-06: Debounced search fires after 300 ms pause
 - **Level:** Unit
 - **Preconditions:** none.
 - **Steps:**
-  1. Check if manager can change `user` → `manager`.
-  2. Check if manager can change `user` → `viewer`.
-  3. Check if manager can change `viewer` → `user`.
-  4. Check if manager can change `user` → `admin`.
-  5. Check if manager can change `manager` → `user`.
-  6. Check if manager can change `admin` → `user`.
+  1. Simulate rapid typing of 5 characters over 100 ms total.
+  2. Wait 300 ms after the last keystroke.
 - **Expected Result:**
-  1. ✅ Allowed (user is in manager's scope, target is non-admin).
-  2. ✅ Allowed.
-  3. ✅ Allowed.
-  4. ❌ Rejected (cannot promote to admin).
-  5. ❌ Rejected (manager is not in manager's scope).
-  6. ❌ Rejected (admin is not in manager's scope).
+  1. No API call is made during the typing burst.
+  2. Exactly one API call fires after the 300 ms debounce window.
 
 ### TC-04-INT-01: List visibility per role
 - **Level:** Integration
@@ -165,7 +358,7 @@ The organization uses four roles: `admin`, `manager`, `user`, `viewer`. Every ac
   1. Fetch the members list as each role.
 - **Expected Result:**
   1. All four roles receive the member list with name, role, and email for each member.
-  2. The response for `admin`/`manager` indicates actions are permitted; for `user`/`viewer` it indicates read-only (no action affordances).
+  2. The response `callerRole` field matches the requesting user's role.
 
 ### TC-04-INT-02: Delete is a soft-delete that blocks login and revokes sessions
 - **Level:** Integration
@@ -197,7 +390,7 @@ The organization uses four roles: `admin`, `manager`, `user`, `viewer`. Every ac
 - **Steps:**
   1. Call the delete endpoint targeting A.
 - **Expected Result:**
-  1. Rejected (HTTP 4xx) with the "organization must retain at least one admin" error; A remains `active` admin.
+  1. Rejected (HTTP 409) with `{ error: "last_admin_guard" }` and the "organization must retain at least one admin" message; A remains `active` admin.
 
 ### TC-04-INT-05: user/viewer cannot delete or restore
 - **Level:** Integration
@@ -214,7 +407,7 @@ The organization uses four roles: `admin`, `manager`, `user`, `viewer`. Every ac
 - **Steps:**
   1. As A1, call the delete endpoint targeting A1 (self).
 - **Expected Result:**
-  1. Rejected (HTTP 4xx) with a "cannot remove yourself" error; A1 remains active.
+  1. Rejected (HTTP 409) with `{ error: "cannot_remove_self" }`; A1 remains active.
 
 ### TC-04-INT-07: Self-delete blocked — manager
 - **Level:** Integration
@@ -222,7 +415,7 @@ The organization uses four roles: `admin`, `manager`, `user`, `viewer`. Every ac
 - **Steps:**
   1. As M, call the delete endpoint targeting M (self).
 - **Expected Result:**
-  1. Rejected (HTTP 4xx) with a "cannot remove yourself" error; M remains active.
+  1. Rejected (HTTP 409) with `{ error: "cannot_remove_self" }`; M remains active.
 
 ### TC-04-INT-08: Removing a member revokes their active sessions
 - **Level:** Integration
@@ -243,91 +436,40 @@ The organization uses four roles: `admin`, `manager`, `user`, `viewer`. Every ac
   1. At most one request succeeds; the other is rejected by the zero-admin guard.
   2. The organization retains at least one `active` admin.
 
-### TC-04-INT-10: Only admin may change admin/manager roles
+### TC-04-INT-10: Server-side search with query parameters
 - **Level:** Integration
-- **Preconditions:** org with an `admin` (A), a `manager` (M), and a `user` (U); a target member T with role `user`.
+- **Preconditions:** org with members "Alex Kaminski" `<alex@acme.com>` and "Pat Owner" `<pat@acme.com>`.
 - **Steps:**
-  1. As M, call the role-change endpoint to set T's role to `manager`.
-  2. As U, call the role-change endpoint to set T's role to `manager`.
-  3. As A, call the role-change endpoint to set T's role to `manager`.
+  1. `GET /api/organizations/{orgId}/members?search=alex`.
+  2. `GET /api/organizations/{orgId}/members?search=zzz`.
 - **Expected Result:**
-  1. Step 1 succeeds; T's role is now `manager` (manager can change user → non-admin).
-  2. Step 2 rejected (HTTP 403); T unchanged.
-  3. Step 3 succeeds; T's role remains `manager`.
+  1. Returns only "Alex Kaminski".
+  2. Returns an empty list.
 
-### TC-04-INT-11: Last admin cannot be demoted (zero-admin guard)
+### TC-04-INT-11: showRemoved query parameter includes removed members
 - **Level:** Integration
-- **Preconditions:** org has exactly one `admin` (the caller) and ≥1 non-admin member.
+- **Preconditions:** org with 2 active and 1 removed member.
 - **Steps:**
-  1. Call the role-change endpoint as the sole admin, setting the caller's own role to `manager`.
+  1. `GET /api/organizations/{orgId}/members` (default).
+  2. `GET /api/organizations/{orgId}/members?showRemoved=true`.
 - **Expected Result:**
-  1. Request rejected with a validation error (HTTP 4xx) whose code/message indicates "organization must retain at least one admin".
-  2. The persisted role is unchanged (`admin`).
+  1. Returns 2 members (active only).
+  2. Returns 3 members (active + removed).
 
-### TC-04-INT-12: Demoting a non-last admin is allowed
-- **Level:** Integration
-- **Preconditions:** org has two admins A1 and A2.
-- **Steps:**
-  1. As A1, change A2's role to `manager`.
-- **Expected Result:**
-  1. Succeeds; A2 is now `manager`; A1 remains the sole `admin`.
-
-### TC-04-INT-13: Manager changes user's role to manager
-- **Level:** Integration
-- **Preconditions:** org with `admin` (A), `manager` (M), and `user` (U).
-- **Steps:**
-  1. As M, call the role-change endpoint to set U's role to `manager`.
-  2. Query U's membership.
-- **Expected Result:**
-  1. Succeeds (HTTP 2xx).
-  2. U's role is now `manager`.
-
-### TC-04-INT-14: Manager cannot change another manager's role
-- **Level:** Integration
-- **Preconditions:** org with `manager` M1 and `manager` M2.
-- **Steps:**
-  1. As M1, call the role-change endpoint to set M2's role to `user`.
-- **Expected Result:**
-  1. Rejected (HTTP 403); M2's role unchanged.
-
-### TC-04-INT-15: Manager cannot change admin's role
-- **Level:** Integration
-- **Preconditions:** org with `admin` A and `manager` M.
-- **Steps:**
-  1. As M, call the role-change endpoint to set A's role to `manager`.
-- **Expected Result:**
-  1. Rejected (HTTP 403); A's role unchanged.
-
-### TC-04-INT-16: Cannot change a removed member's role
-- **Level:** Integration
-- **Preconditions:** org with `admin` A; member R with status `removed` and role `user`.
-- **Steps:**
-  1. As A, call the role-change endpoint to set R's role to `manager`.
-- **Expected Result:**
-  1. Rejected (HTTP 4xx) with error indicating member must be restored first.
-  2. R's role unchanged.
-
-### TC-04-INT-17: Race condition — concurrent demotion of last two admins
-- **Level:** Integration
-- **Preconditions:** org has exactly two `admin` members, A1 and A2, and no other admins.
-- **Steps:**
-  1. Simultaneously (concurrent requests): A1 demotes A2 to `manager`, and A2 demotes A1 to `manager`.
-- **Expected Result:**
-  1. At most one request succeeds. The other is rejected by the zero-admin guard.
-  2. The organization retains at least one `admin` after both requests complete.
-
-### TC-04-E2E-01: Search-as-you-type narrows the list
+### TC-04-E2E-01: Search-as-you-type narrows the list (with debounce)
 - **Level:** E2E
 - **Preconditions:** logged in as `admin`; members include several names starting with "Al".
 - **Steps:**
   1. Open the Members list.
   2. Type "Al" into the search input.
-  3. Append "ex" to make "Alex".
-  4. Clear the search input.
+  3. Wait for debounce (300 ms) and list to update.
+  4. Append "ex" to make "Alex".
+  5. Wait for debounce and list to update.
+  6. Clear the search input.
 - **Expected Result:**
-  1. After step 2 only members matching "al" remain.
-  2. After step 3 only "Alex …" members remain.
-  3. After step 4 the full active list returns.
+  1. After step 3 only members matching "al" remain.
+  2. After step 5 only "Alex …" members remain.
+  3. After step 6 the full active list returns.
 - **Selectors:** `members-list`, `members-search-input`, `member-row-{id}`.
 
 ### TC-04-E2E-02: "Show removed" adds removed rows with a distinct badge
@@ -337,7 +479,7 @@ The organization uses four roles: `admin`, `manager`, `user`, `viewer`. Every ac
   1. Open the Members list (default active-only).
   2. Tick the "Show removed members" checkbox.
 - **Expected Result:**
-  1. After step 2 removed members appear alongside active ones, each removed row carrying a "Removed" status badge; active rows keep no badge.
+  1. After step 2 removed members appear alongside active ones, each removed row carrying a "Removed" status badge; active rows carry no badge.
 - **Selectors:** `members-list`, `show-removed-checkbox`, `member-row-{id}`, `member-status-badge-{id}`.
 
 ### TC-04-E2E-03: Admin deletes an active member, then restores them
@@ -348,15 +490,15 @@ The organization uses four roles: `admin`, `manager`, `user`, `viewer`. Every ac
   2. Type "Alex" into the search input.
   3. In the "Alex Kaminski" row, open the row actions menu.
   4. Click "Delete".
-  5. Confirm in the delete-confirmation dialog.
+  5. Confirm in the delete-confirmation dialog by clicking "Remove".
   6. Clear the search; tick the "Show removed members" checkbox.
   7. In the "Alex Kaminski" row, open the row actions menu and click "Restore".
 - **Expected Result:**
-  1. After step 2, only rows whose name/email contain "alex" (case-insensitive) remain.
+  1. After step 2 (and debounce), only rows whose name/email contain "alex" remain.
   2. After step 5, "Alex Kaminski" disappears from the active list and a "Member removed" toast appears.
   3. After step 6, "Alex Kaminski" reappears carrying a "Removed" status badge; their menu shows "Restore" (not "Delete").
-  4. After step 7, the badge clears; with "Show removed" unticked the member is back in the active list.
-- **Selectors:** `members-search-input`, `member-row-{id}`, `member-row-actions-{id}`, `member-action-delete`, `confirm-delete-dialog`, `confirm-delete-button`, `toast-member-removed`, `show-removed-checkbox`, `member-status-badge-{id}`, `member-action-restore`.
+  4. After step 7, a "Member restored" toast appears; the badge clears; with "Show removed" unticked the member is back in the active list.
+- **Selectors:** `members-search-input`, `member-row-{id}`, `member-row-actions-{id}`, `member-action-delete`, `confirm-delete-dialog`, `confirm-delete-button`, `toast-member-removed`, `show-removed-checkbox`, `member-status-badge-{id}`, `member-action-restore`, `toast-member-restored`.
 
 ### TC-04-E2E-04: user/viewer see the list but no actions menu
 - **Level:** E2E
@@ -364,11 +506,11 @@ The organization uses four roles: `admin`, `manager`, `user`, `viewer`. Every ac
 - **Steps:**
   1. Open the Members list.
   2. Use the search box to filter.
-  3. Inspect any row for an actions menu or role picker.
+  3. Inspect any row for an actions menu.
 - **Expected Result:**
   1. The list and search work.
-  2. No `member-row-actions-*` control exists on any row; no `member-role-select-*` control exists; no delete/restore affordance is present.
-- **Selectors:** `members-list`, `members-search-input`, `member-row-{id}`, `member-row-actions-{id}` (asserted absent), `member-role-select-{id}` (asserted absent).
+  2. No `member-row-actions-*` control exists on any row; no delete/restore affordance is present.
+- **Selectors:** `members-list`, `members-search-input`, `member-row-{id}`, `member-row-actions-{id}` (asserted absent).
 
 ### TC-04-E2E-05: Self-delete not available in the UI
 - **Level:** E2E
@@ -378,7 +520,7 @@ The organization uses four roles: `admin`, `manager`, `user`, `viewer`. Every ac
   2. Find the logged-in user's own row.
   3. Inspect the row actions menu (or lack thereof).
 - **Expected Result:**
-  1. The own row has no "Delete" option in the actions menu (either the menu is absent or the delete action is hidden/disabled).
+  1. The own row has no "Delete" option in the actions menu (either the menu is absent or the delete action is hidden).
 - **Selectors:** `member-row-{id}`, `member-row-actions-{id}`, `member-action-delete` (asserted absent on own row).
 
 ### TC-04-E2E-06: Member list shows name, role badge, and email columns
@@ -390,35 +532,31 @@ The organization uses four roles: `admin`, `manager`, `user`, `viewer`. Every ac
   1. Each row displays the member's full name, role badge, and email address.
 - **Selectors:** `members-list`, `member-row-{id}`, `member-name-{id}`, `member-role-badge-{id}`, `member-email-{id}`.
 
-### TC-04-E2E-07: Admin changes a member's role via list row picker
+### TC-04-E2E-07: Member row links to detail page
 - **Level:** E2E
-- **Preconditions:** logged in as `admin`; target member "Alex Kaminski" is currently `user`.
+- **Preconditions:** logged in as any role; org has members.
 - **Steps:**
   1. Open the Members list.
-  2. In Alex Kaminski's row, select `manager` from the role picker.
-  3. Reload the page.
+  2. Click on a member row.
 - **Expected Result:**
-  1. After step 2 the role badge updates to `manager`.
-  2. After reload the role badge still reads `manager`.
-- **Selectors:** `member-role-select-{id}`, `member-role-badge-{id}`.
+  1. Browser navigates to the member detail page (`/org/{orgId}/members/{memberId}`).
+- **Selectors:** `member-row-{id}`.
 
-### TC-04-E2E-08: Manager sees role picker for user/viewer but not for admin/manager members
+### TC-04-E2E-08: No role-change controls on list page
 - **Level:** E2E
-- **Preconditions:** logged in as `manager`; org has members with roles `admin`, `manager`, `user`, `viewer`.
+- **Preconditions:** logged in as `admin`.
 - **Steps:**
   1. Open the Members list.
-  2. Check for role-select controls on each member row.
+  2. Inspect all rows.
 - **Expected Result:**
-  1. Role-select controls appear only on `user` and `viewer` rows.
-  2. No role-select control on `admin` or `manager` rows.
-  3. The role picker for user/viewer members does NOT include `admin` as an option.
-- **Selectors:** `member-role-select-{id}` (present on user/viewer, absent on admin/manager), `member-role-badge-{id}`.
+  1. Role badges are visible but no `member-role-select-*` controls exist on any row.
+- **Selectors:** `member-role-badge-{id}`, `member-role-select-{id}` (asserted absent).
 
-### TC-04-E2E-09: Non-admin does not see role-change controls
+### TC-04-E2E-09: Skeleton loading state shown while fetching
 - **Level:** E2E
-- **Preconditions:** logged in as `user`; org has several members.
+- **Preconditions:** logged in as any role.
 - **Steps:**
-  1. Open the Members list.
+  1. Navigate to the Members list.
 - **Expected Result:**
-  1. Role badges are visible, but no role-select control is present anywhere.
-- **Selectors:** `members-list`, `member-role-badge-{id}`, `member-role-select-{id}` (asserted absent).
+  1. Skeleton rows are briefly visible before the member data loads.
+- **Selectors:** `members-loading-skeleton`.
