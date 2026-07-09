@@ -34,6 +34,9 @@ export default defineConfig({
       env: {
         USE_TEST_DB: 'true',
         API_PORT: String(API_PORT),
+        // Enable the mail sink so E2E can read reset links; point email links at the web app.
+        DEV_MAIL_SINK: 'true',
+        APP_BASE_URL: `http://localhost:${WEB_PORT}`,
       },
     },
     {

@@ -31,6 +31,14 @@ export class Account {
   @Column({ type: 'varchar', name: 'last_name', length: 200 })
   lastName: string;
 
+  /**
+   * Incremented to revoke all existing sessions for this account (spec 02,
+   * requirement 9). The session token carries the version it was issued at; the
+   * auth guard rejects tokens whose version no longer matches.
+   */
+  @Column({ type: 'int', name: 'token_version', default: 0 })
+  tokenVersion: number;
+
   @OneToMany(() => Membership, (membership) => membership.account)
   memberships: Membership[];
 

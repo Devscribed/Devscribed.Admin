@@ -68,8 +68,9 @@ Start the API (`http://localhost:4000/api`) and the web app (`http://localhost:3
 npm run dev
 ```
 
-Then open <http://localhost:3000> — the root redirects to `/signup`. Completing signup lands
-you in your new organization's Members list.
+Then open <http://localhost:3000> — the root redirects to `/login`. New here? Follow
+"Create an organization" to sign up; completing signup lands you in your organization's
+Members list.
 
 ## Testing
 
@@ -106,15 +107,26 @@ reset it between runs, so they never touch your dev data.
 | `npm run test:all`      | Unit + integration + E2E                      |
 | `npm run verify`        | Lint + typecheck + all tests                  |
 
-## Build progress
+## Spec progress
 
-- [x] **Step 1 — Monorepo scaffold** (workspaces, TypeScript/ESLint/Prettier config, Dockerized Postgres)
-- [x] **Step 2 — `packages/shared`** (enums, validators, membership factory + unit tests)
-- [x] **Step 3 — API foundation** (`apps/api`: TypeORM + Postgres, entities, initial migration)
-- [x] **Step 4 — Signup module** (atomic signup, bcrypt hashing, JWT session, members endpoint + integration tests)
-- [x] **Step 5 — Web app** (`apps/web`: Next.js signup page + minimal members page, API client, same-origin rewrite)
-- [x] **Step 6 — E2E** (`e2e`: Playwright boots API + web + test DB, TC-01-E2E-01 in a real browser)
-- [x] **Step 7 — Green build + run docs** (root `dev`/`test:all`/`verify` scripts, run instructions)
+Specs are implemented in dependency order (see the
+[implementation order](specs/user-management/README.md#reading--implementation-order)). Each is
+built and tested at the unit, integration, and E2E levels before moving on.
 
-**Spec 01 (Organization Creation) is complete** — implemented and tested at the unit, integration,
-and E2E levels. Next up: [spec 02 — Authentication & Login](specs/user-management/02-authentication-login.md).
+| #   | Spec                                                                           | Status         |
+| --- | ------------------------------------------------------------------------------ | -------------- |
+| 01  | [Organization Creation](specs/user-management/01-organization-creation.md)     | ✅ Complete    |
+| 02  | [Authentication & Login](specs/user-management/02-authentication-login.md)     | ✅ Complete    |
+| 03  | [Roles & Permissions](specs/user-management/03-roles-and-permissions.md)       | ⬜ Not started |
+| 04  | [User Invitation](specs/user-management/04-user-invitation.md)                 | ⬜ Not started |
+| 05  | [Member List & Management](specs/user-management/05-member-list-management.md) | ⬜ Not started |
+| 06  | [Member Detail: About](specs/user-management/06-member-detail-about.md)        | ⬜ Not started |
+| 07  | [Account Settings](specs/user-management/07-account-settings.md)               | ⬜ Not started |
+
+**Highlights so far**
+
+- **Spec 01** — self-serve signup: atomic account + organization + admin membership, bcrypt
+  hashing, JWT session, single-org-per-account guard.
+- **Spec 02** — login (enumeration-safe), forgot/reset password via a single-use 60-min token
+  (email captured by an in-memory mail sink), and session revocation via a per-account token
+  version. Screens: `/login`, `/forgot-password`, `/reset-password`.

@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { isValidEmail, validateOrgName, validatePassword } from '@devscribed/shared';
 import { ApiError, signup } from '../../lib/api';
@@ -215,6 +216,10 @@ export default function SignupPage() {
             {submitting ? 'Creating…' : 'Create organization'}
           </button>
         </form>
+
+        <div className="auth-links">
+          <Link href="/login">Already have an account? Sign in</Link>
+        </div>
       </div>
     </main>
   );

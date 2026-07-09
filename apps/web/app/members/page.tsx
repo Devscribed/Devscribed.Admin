@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ApiError, fetchMembers, type Member } from '../../lib/api';
+import { ApiError, fetchMembers, logout, type Member } from '../../lib/api';
 
 type State =
   | { status: 'loading' }
@@ -36,10 +36,23 @@ export default function MembersPage() {
     };
   }, [router]);
 
+  async function onLogout(): Promise<void> {
+    await logout();
+    router.replace('/login');
+  }
+
   return (
     <main className="page">
       <div className="page-header">
         <h1>Active members</h1>
+        <button
+          type="button"
+          className="btn-secondary"
+          data-testid="logout-button"
+          onClick={onLogout}
+        >
+          Log out
+        </button>
       </div>
 
       {state.status === 'loading' && <p className="muted">Loading members…</p>}

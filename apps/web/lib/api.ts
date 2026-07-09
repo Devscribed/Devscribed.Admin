@@ -50,6 +50,20 @@ async function parseBody(res: Response): Promise<ApiErrorBody & Record<string, u
   }
 }
 
+export interface AuthUser {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: AuthUser;
+  organization: { id: string; name: string };
+}
+
 /** Create the account, organization, and admin membership (spec 01). */
 export async function signup(payload: SignupPayload): Promise<void> {
   const res = await fetch(`${BASE}/auth/signup`, {
@@ -62,6 +76,56 @@ export async function signup(payload: SignupPayload): Promise<void> {
   if (!res.ok) {
     throw new ApiError(res.status, body);
   }
+}
+
+/** Authenticate with email + password (spec 02). */
+export async function login(email: string, password: string): Promise<AuthResponse> {
+  const res = await fetch(`${BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ email, password }),
+  });
+  const body = await parseBody(res);
+  if (!res.ok) {
+    throw new ApiError(res.status, body);
+  }
+  return body as unknown as AuthResponse;
+}
+
+/** Request a password-reset link. Always resolves neutrally (spec 02, req 7). */
+export async function forgotPassword(email: string): Promise<string> {
+  const res = await fetch(`${BASE}/auth/forgot-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ email }),
+  });
+  const body = await parseBody(res);
+  if (!res.ok) {
+    throw new ApiError(res.status, body);
+  }
+  return (body.message as string) ?? '';
+}
+
+/** Set a new password from a valid reset token (spec 02, reqs 8–9). */
+export async function resetPassword(token: string, password: string): Promise<string> {
+  const res = await fetch(`${BASE}/auth/reset-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ token, password }),
+  });
+  const body = await parseBody(res);
+  if (!res.ok) {
+    throw new ApiError(res.status, body);
+  }
+  return (body.message as string) ?? '';
+}
+
+/** Clear the current session. */
+export async function logout(): Promise<void> {
+  await fetch(`${BASE}/auth/logout`, { method: 'POST', credentials: 'include' });
 }
 
 /** List the active members of the current organization (spec 05, minimal). */

@@ -194,3 +194,44 @@ body {
 .muted {
   color: var(--muted);
 }
+
+.auth-links {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+  font-size: 13px;
+}
+
+.auth-links a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.auth-links a:hover {
+  text-decoration: underline;
+}
+
+.confirmation {
+  background: #edf7ee;
+  border: 1px solid #bfe3c4;
+  color: #256b2e;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+
+.btn-secondary {
+  padding: 7px 14px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background: #f4f5f7;
+}

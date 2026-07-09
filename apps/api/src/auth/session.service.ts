@@ -12,6 +12,8 @@ export interface SessionPayload {
   /** role within the current organization */
   role: Role;
   email: string;
+  /** account token version at issuance; the guard rejects stale versions (spec 02, req 9). */
+  ver: number;
 }
 
 /**
@@ -36,5 +38,10 @@ export class SessionService {
       maxAge: this.ttlSeconds * 1000,
     });
     return token;
+  }
+
+  /** Clear the session cookie (logout). */
+  clear(res: Response): void {
+    res.clearCookie(this.cookieName, { path: '/' });
   }
 }

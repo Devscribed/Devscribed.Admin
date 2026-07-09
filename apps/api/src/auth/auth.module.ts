@@ -4,6 +4,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Account } from '../entities/account.entity';
 import { Organization } from '../entities/organization.entity';
 import { Membership } from '../entities/membership.entity';
+import { PasswordResetToken } from '../entities/password-reset-token.entity';
+import { MailModule } from '../mail/mail.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { PasswordService } from './password.service';
@@ -12,7 +14,8 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Account, Organization, Membership]),
+    TypeOrmModule.forFeature([Account, Organization, Membership, PasswordResetToken]),
+    MailModule,
     JwtModule.registerAsync({
       useFactory: () => ({
         secret: process.env.JWT_SECRET ?? 'dev-only-change-me',
