@@ -59,7 +59,7 @@ The exact arrangement of these regions (side-by-side vs. stacked at different br
    1. **Re-validates** the selected slot against the hiring manager's calendar in real time to prevent double-booking. If the slot was taken in the meantime, it is removed and the candidate is asked to pick another (see §06 and `controls/time-slot-picker-control.md`).
    2. Creates an **invite in the booking calendar** (MS 365) for the selected date, time, and duration, including the candidate's details.
    3. Sends **calendar invite emails** to both the candidate and the hiring manager (see §05).
-   4. **Adds the candidate to the candidate database**, storing their details, the interview type/slot, the Note (if any), and the uploaded CV. The candidate database is described in a separate document (forthcoming); see Summary and the overview in `../01-overview.md`.
+   4. **Adds the candidate to the candidate database**, storing their details, the interview type/slot, the Note (if any), and the uploaded CV. The candidate database is described in `../03-interview-process/candidates-database-page.md`; see also Summary and the overview in `../01-overview.md`.
    5. Shows the **confirmation view** (see §07).
 3. The booking is **atomic**: if any required step fails (calendar invite creation, etc.), no partial booking is recorded and the candidate sees an error (see §06). A single successful booking must not create duplicate calendar invites or duplicate candidate records.
 
@@ -69,6 +69,7 @@ The exact arrangement of these regions (side-by-side vs. stacked at different br
 2. The invite reflects the selected date, time, and duration and can be added to the recipient's own calendar.
 3. The email contains the same candidate information provided on the page (first name, last name, email, and the Note if one was provided) and the interview type. The uploaded **CV is attached to the email**, and is also stored in the candidate database.
    - The candidate's email also includes a **link to the Manage Booking Page** (see `manage-booking-page.md`) so they can reschedule or cancel later.
+   - The hiring manager's email also includes a **link to the candidate's detail page in the Candidates Database** (see `../03-interview-process/candidate-detail-page.md`) so they can open the candidate — CV and Interview Notes — directly from the calendar invite.
 4. Times in the invite/email are consistent with the time zone the candidate booked in (see `controls/time-slot-picker-control.md` → Time Zone).
 
 ### 06. Validation & Errors
