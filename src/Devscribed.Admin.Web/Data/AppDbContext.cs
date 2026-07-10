@@ -11,6 +11,7 @@ public class AppDbContext : DbContext
     public DbSet<Organization> Organizations => Set<Organization>();
     public DbSet<Membership> Memberships => Set<Membership>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<Invitation> Invitations => Set<Invitation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -33,6 +34,7 @@ public class AppDbContext : DbContext
         {
             e.HasKey(m => m.Id);
             e.HasIndex(m => m.AccountId).IsUnique();
+            e.Property(m => m.JobTitle).HasMaxLength(100);
             e.HasOne(m => m.Account).WithOne(a => a.Membership).HasForeignKey<Membership>(m => m.AccountId);
             e.HasOne(m => m.Organization).WithMany(o => o.Memberships).HasForeignKey(m => m.OrganizationId);
         });
@@ -43,5 +45,38 @@ public class AppDbContext : DbContext
             e.HasIndex(t => t.TokenHash);
             e.HasOne(t => t.Account).WithMany().HasForeignKey(t => t.AccountId);
         });
+
+        modelBuilder.Entity<Invitation>(e =>
+        {
+            e.HasKey(i => i.Id);
+            e.Property(i => i.Email).HasMaxLength(254);
+            e.Property(i => i.Role).HasMaxLength(20);
+            e.Property(i => i.Status).HasMaxLength(20);
+            e.HasIndex(i => i.TokenHash).IsUnique();
+            e.HasIndex(i => new { i.Email, i.OrganizationId, i.Status });
+            e.HasOne(i => i.Organization).WithMany().HasForeignKey(i => i.OrganizationId);
+        });
+    }
+
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        var membershipsJustRemoved = ChangeTracker.Entries<Membership>()
+            .Where(entry => entry.State == EntityState.Modified
+                          && entry.Property(m => m.Status).CurrentValue == "removed"
+                          && entry.Property(m => m.Status).OriginalValue != "removed")
+            .Select(entry => entry.Entity.Id)
+            .ToList();
+
+        if (membershipsJustRemoved.Count > 0)
+        {
+            var invitationsToInvalidate = await Invitations
+                .Where(i => membershipsJustRemoved.Contains(i.InviterMembershipId) && i.Status == "pending")
+                .ToListAsync(cancellationToken);
+
+            foreach (var invitation in invitationsToInvalidate)
+                invitation.Status = "invalidated";
+        }
+
+        return await base.SaveChangesAsync(cancellationToken);
     }
 }

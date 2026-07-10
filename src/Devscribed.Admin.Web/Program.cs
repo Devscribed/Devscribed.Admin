@@ -22,6 +22,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddScoped<SignupService>();
 builder.Services.AddScoped<LoginService>();
 builder.Services.AddScoped<PasswordResetService>();
+builder.Services.AddScoped<InvitationService>();
 builder.Services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddSingleton<ITokenGenerator, TokenGenerator>();
 builder.Services.AddSingleton<IEmailSender, ConsoleEmailSender>();

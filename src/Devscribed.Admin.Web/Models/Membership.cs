@@ -8,6 +8,7 @@ public class Membership
     public string Role { get; set; } = "admin";
     public string Status { get; set; } = "active";
     public DateTime JoinedAt { get; set; }
+    public string? JobTitle { get; set; }
 
     public Account Account { get; set; } = null!;
     public Organization Organization { get; set; } = null!;

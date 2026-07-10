@@ -36,7 +36,9 @@ public class SignupController : ControllerBase
         {
             new(ClaimTypes.NameIdentifier, result.AccountId!.Value.ToString()),
             new(AppClaimTypes.OrganizationId, result.OrganizationId!.Value.ToString()),
+            new(AppClaimTypes.MembershipId, result.MembershipId!.Value.ToString()),
             new(ClaimTypes.Role, "admin"),
+            new(ClaimTypes.Email, result.Email),
             new(AppClaimTypes.SecurityStamp, result.SecurityStamp.ToString()),
         };
 

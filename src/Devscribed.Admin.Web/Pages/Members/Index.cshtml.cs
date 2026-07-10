@@ -18,12 +18,15 @@ public class IndexModel : PageModel
     }
 
     public List<MemberViewModel> Members { get; set; } = new();
+    public string CurrentRole { get; set; } = string.Empty;
 
     public async Task<IActionResult> OnGetAsync()
     {
         var orgIdClaim = User.FindFirstValue("OrganizationId");
         if (orgIdClaim == null || !Guid.TryParse(orgIdClaim, out var orgId))
             return RedirectToPage("/Login");
+
+        CurrentRole = User.FindFirstValue(System.Security.Claims.ClaimTypes.Role) ?? string.Empty;
 
         Members = await _db.Memberships
             .Where(m => m.OrganizationId == orgId)

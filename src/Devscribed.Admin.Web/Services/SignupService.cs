@@ -62,7 +62,7 @@ public class SignupService
         _db.Memberships.Add(membership);
         await _db.SaveChangesAsync();
 
-        return SignupResult.Success(account.Id, organization.Id, account.SecurityStamp);
+        return SignupResult.Success(account.Id, membership.Id, organization.Id, account.SecurityStamp, account.Email);
     }
 }
 
@@ -70,17 +70,21 @@ public class SignupResult
 {
     public bool Succeeded { get; init; }
     public Guid? AccountId { get; init; }
+    public Guid? MembershipId { get; init; }
     public Guid? OrganizationId { get; init; }
     public Guid SecurityStamp { get; init; }
+    public string Email { get; init; } = string.Empty;
     public Dictionary<string, string>? Errors { get; init; }
     public string? ErrorMessage { get; init; }
 
-    public static SignupResult Success(Guid accountId, Guid orgId, Guid securityStamp) => new()
+    public static SignupResult Success(Guid accountId, Guid membershipId, Guid orgId, Guid securityStamp, string email) => new()
     {
         Succeeded = true,
         AccountId = accountId,
+        MembershipId = membershipId,
         OrganizationId = orgId,
         SecurityStamp = securityStamp,
+        Email = email,
     };
 
     public static SignupResult ValidationFailure(Dictionary<string, string> errors) => new()

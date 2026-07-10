@@ -1,0 +1,58 @@
+@page "/accept-invite"
+@model Devscribed.Admin.Web.Pages.AcceptInviteModel
+@{
+    ViewData["Title"] = "Accept invitation";
+}
+
+<div class="auth-container">
+    <div class="auth-card" data-testid="accept-invite-screen">
+        <div id="accept-invite-error" data-testid="accept-invite-error" class="error-banner" style="display:none;"></div>
+
+        <div id="accept-invite-content" style="display:none;">
+            <h1 data-testid="accept-invite-org-name" id="accept-invite-org-name"></h1>
+            <p data-testid="accept-invite-role" id="accept-invite-role" class="auth-link"></p>
+
+            <p id="accept-invite-greeting" style="display:none;">Welcome back! Enter your password to confirm your identity.</p>
+
+            <form id="accept-invite-form" data-testid="accept-invite-form" novalidate>
+                <div class="form-group" id="accept-first-name-group" style="display:none;">
+                    <label for="accept-first-name">First name</label>
+                    <input type="text" id="accept-first-name" data-testid="accept-first-name-input" />
+                    <div class="field-error" id="field-error-firstName" data-testid="field-error-firstName"></div>
+                </div>
+
+                <div class="form-group" id="accept-last-name-group" style="display:none;">
+                    <label for="accept-last-name">Last name</label>
+                    <input type="text" id="accept-last-name" data-testid="accept-last-name-input" />
+                    <div class="field-error" id="field-error-lastName" data-testid="field-error-lastName"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="accept-password">Password</label>
+                    <div class="password-wrapper">
+                        <input type="password" id="accept-password" data-testid="accept-password-input" autocomplete="new-password" />
+                        <button type="button" id="accept-password-toggle" data-testid="accept-password-toggle" class="password-toggle">Show</button>
+                    </div>
+                    <div class="field-error" id="field-error-password" data-testid="field-error-password"></div>
+                </div>
+
+                <div id="accept-org-switch-warning" data-testid="accept-org-switch-warning" class="error-banner" style="display:none;"></div>
+
+                <div class="form-group checkbox-group" id="accept-org-switch-confirm-group" style="display:none;">
+                    <label>
+                        <input type="checkbox" id="accept-org-switch-confirm" data-testid="accept-org-switch-confirm" />
+                        I understand
+                    </label>
+                </div>
+
+                <button type="submit" id="accept-submit-button" data-testid="accept-submit-button" disabled>
+                    Accept invitation
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/accept-invite.js"></script>
+}

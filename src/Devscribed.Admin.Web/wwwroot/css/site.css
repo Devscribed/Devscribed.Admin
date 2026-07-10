@@ -172,3 +172,100 @@ button[type="submit"]:disabled {
     letter-spacing: .05em;
     color: #6b7280;
 }
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.page-header h1 {
+    margin-bottom: 0;
+}
+
+.page-header button {
+    width: auto;
+    padding: .625rem 1.25rem;
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: .9375rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.form-group select {
+    width: 100%;
+    padding: .5rem .75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: .9375rem;
+    background: #fff;
+}
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.4);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 1rem;
+    z-index: 100;
+}
+
+.modal-card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,.15);
+    padding: 1.5rem;
+    width: 100%;
+    max-width: 480px;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.modal-header h2 {
+    font-size: 1.25rem;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    color: #6b7280;
+}
+
+.toast {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    background: #1a1a1a;
+    color: #fff;
+    padding: .75rem 1.25rem;
+    border-radius: 6px;
+    font-size: .875rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,.2);
+    z-index: 200;
+}
+
+.checkbox-group label {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    font-size: .875rem;
+    font-weight: 400;
+}
+
+.checkbox-group input[type="checkbox"] {
+    width: auto;
+}

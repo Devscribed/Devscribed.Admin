@@ -4,4 +4,5 @@ public static class AppClaimTypes
 {
     public const string OrganizationId = "OrganizationId";
     public const string SecurityStamp = "SecurityStamp";
+    public const string MembershipId = "MembershipId";
 }

@@ -37,7 +37,8 @@ public class E2EServerFixture : IDisposable
     }
 
     public Devscribed.Admin.Web.Models.Account SeedAccount(
-        string email, string password, string firstName = "Pat", string lastName = "Owner", string status = "active")
+        string email, string password, string firstName = "Pat", string lastName = "Owner", string status = "active",
+        string orgName = "Existing Org", string role = "admin")
     {
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -55,7 +56,7 @@ public class E2EServerFixture : IDisposable
         var org = new Devscribed.Admin.Web.Models.Organization
         {
             Id = Guid.NewGuid(),
-            Name = "Existing Org",
+            Name = orgName,
             CreatedAt = DateTime.UtcNow,
         };
         var membership = new Devscribed.Admin.Web.Models.Membership
@@ -63,7 +64,7 @@ public class E2EServerFixture : IDisposable
             Id = Guid.NewGuid(),
             AccountId = account.Id,
             OrganizationId = org.Id,
-            Role = "admin",
+            Role = role,
             Status = status,
             JoinedAt = DateTime.UtcNow,
         };

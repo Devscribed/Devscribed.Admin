@@ -36,7 +36,7 @@ public class LoginService
         if (!_passwordHasher.Verify(request.Password, account.PasswordHash))
             return LoginResult.Failure("Invalid email or password");
 
-        return LoginResult.Success(account.Id, account.Membership.OrganizationId, account.Membership.Role, account.SecurityStamp);
+        return LoginResult.Success(account.Id, account.Membership.Id, account.Membership.OrganizationId, account.Membership.Role, account.SecurityStamp, account.Email);
     }
 }
 
@@ -44,18 +44,22 @@ public class LoginResult
 {
     public bool Succeeded { get; init; }
     public Guid AccountId { get; init; }
+    public Guid MembershipId { get; init; }
     public Guid OrganizationId { get; init; }
     public string Role { get; init; } = string.Empty;
     public Guid SecurityStamp { get; init; }
+    public string Email { get; init; } = string.Empty;
     public string? ErrorMessage { get; init; }
 
-    public static LoginResult Success(Guid accountId, Guid organizationId, string role, Guid securityStamp) => new()
+    public static LoginResult Success(Guid accountId, Guid membershipId, Guid organizationId, string role, Guid securityStamp, string email) => new()
     {
         Succeeded = true,
         AccountId = accountId,
+        MembershipId = membershipId,
         OrganizationId = organizationId,
         Role = role,
         SecurityStamp = securityStamp,
+        Email = email,
     };
 
     public static LoginResult Failure(string message) => new()
