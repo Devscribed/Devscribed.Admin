@@ -1,0 +1,25 @@
+/*
+ * Minimal, neutral base styles only. The booking pages are intentionally
+ * style-agnostic per the specs; visual design lands separately.
+ */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family:
+    system-ui,
+    -apple-system,
+    Segoe UI,
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+  line-height: 1.5;
+}

@@ -1,0 +1,34 @@
+{
+  "name": "@devscribed/booking",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Candidate-facing interview booking pages (Devscribed hiring process, step 1).",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@azure/identity": "^4.5.0",
+    "@microsoft/microsoft-graph-client": "^3.0.7",
+    "luxon": "^3.5.0",
+    "next": "^15.5.20",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "@microsoft/microsoft-graph-types": "^2.40.0",
+    "@types/luxon": "^3.4.2",
+    "@types/node": "^20.14.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "^15.5.20",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}
