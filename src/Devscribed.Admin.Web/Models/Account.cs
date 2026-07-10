@@ -8,6 +8,9 @@ public class Account
     public string FirstName { get; set; } = string.Empty;
     public string LastName { get; set; } = string.Empty;
     public string? Timezone { get; set; }
+    public string? PhoneCountryCode { get; set; }
+    public string? PhoneNumber { get; set; }
+    public string FirstDayOfWeek { get; set; } = "Monday";
     public DateTime CreatedAt { get; set; }
     public Guid SecurityStamp { get; set; } = Guid.NewGuid();
 

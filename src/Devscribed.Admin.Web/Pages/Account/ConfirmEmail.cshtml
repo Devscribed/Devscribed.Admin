@@ -1,0 +1,36 @@
+@page "/account/confirm-email"
+@model Devscribed.Admin.Web.Pages.Account.ConfirmEmailModel
+@{
+    ViewData["Title"] = "Confirm email";
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Confirm email - Devscribed Admin</title>
+    <link rel="stylesheet" href="~/css/site.css" />
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card" id="confirm-email-screen" data-testid="confirm-email-screen">
+            <h1>Confirm email</h1>
+
+            <div id="confirm-email-loading">Verifying your confirmation link...</div>
+
+            <div id="confirm-email-success-message" data-testid="confirm-email-success-message" style="display:none;">
+                Your email has been updated.
+            </div>
+
+            <div id="confirm-email-error" data-testid="confirm-email-error" class="error-banner" style="display:none;"></div>
+
+            <p class="auth-link" id="confirm-email-login-link-wrapper" style="display:none;">
+                <a href="/login" data-testid="confirm-email-login-link">Go to login</a>
+            </p>
+        </div>
+    </div>
+
+    <script src="~/js/confirm-email.js"></script>
+</body>
+</html>

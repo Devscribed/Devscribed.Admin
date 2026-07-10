@@ -12,6 +12,7 @@ public class AppDbContext : DbContext
     public DbSet<Membership> Memberships => Set<Membership>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<Invitation> Invitations => Set<Invitation>();
+    public DbSet<PendingEmailChange> PendingEmailChanges => Set<PendingEmailChange>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -22,6 +23,9 @@ public class AppDbContext : DbContext
             e.Property(a => a.Email).HasMaxLength(254);
             e.Property(a => a.FirstName).HasMaxLength(50);
             e.Property(a => a.LastName).HasMaxLength(50);
+            e.Property(a => a.PhoneCountryCode).HasMaxLength(5);
+            e.Property(a => a.PhoneNumber).HasMaxLength(20);
+            e.Property(a => a.FirstDayOfWeek).HasMaxLength(10);
         });
 
         modelBuilder.Entity<Organization>(e =>
@@ -55,6 +59,15 @@ public class AppDbContext : DbContext
             e.HasIndex(i => i.TokenHash).IsUnique();
             e.HasIndex(i => new { i.Email, i.OrganizationId, i.Status });
             e.HasOne(i => i.Organization).WithMany().HasForeignKey(i => i.OrganizationId);
+        });
+
+        modelBuilder.Entity<PendingEmailChange>(e =>
+        {
+            e.HasKey(p => p.Id);
+            e.Property(p => p.NewEmail).HasMaxLength(254);
+            e.HasIndex(p => p.TokenHash).IsUnique();
+            e.HasIndex(p => new { p.AccountId, p.IsInvalidated });
+            e.HasOne(p => p.Account).WithMany().HasForeignKey(p => p.AccountId);
         });
     }
 
