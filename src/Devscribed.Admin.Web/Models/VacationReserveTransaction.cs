@@ -4,6 +4,8 @@ public static class VacationTransactionTypes
 {
     public const string Credit = "credit";
     public const string Expiry = "expiry";
+    public const string Debit = "debit";
+    public const string Refund = "refund";
 }
 
 public class VacationReserveTransaction

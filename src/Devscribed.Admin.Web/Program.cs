@@ -30,6 +30,7 @@ builder.Services.AddScoped<ChangePasswordService>();
 builder.Services.AddScoped<VacationLedgerService>();
 builder.Services.AddScoped<VacationService>();
 builder.Services.AddScoped<VacationAccrualService>();
+builder.Services.AddScoped<VacationRequestService>();
 builder.Services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddSingleton<ITokenGenerator, TokenGenerator>();
 builder.Services.AddSingleton<IEmailSender, ConsoleEmailSender>();

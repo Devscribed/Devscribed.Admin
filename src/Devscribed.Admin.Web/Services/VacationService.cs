@@ -40,10 +40,17 @@ public class VacationService
         VacationBalanceDto? balanceDto = null;
         List<VacationTransactionDto>? transactionDtos = null;
 
+        var currentYear = DateTime.UtcNow.Year;
+        var requests = await _db.VacationRequests
+            .Where(r => r.MembershipId == targetMembershipId && (r.RequestedAt.Year == currentYear || r.StartDate.Year == currentYear))
+            .OrderByDescending(r => r.RequestedAt)
+            .ToListAsync();
+
         if (financials != null)
         {
-            var currentYear = DateTime.UtcNow.Year;
-            const int usedDays = 0; // spec 09 introduces approved requests
+            var usedDays = requests.Where(r => r.Status == VacationRequestStatuses.Approved && r.StartDate.Year == currentYear).Sum(r => r.WorkingDays);
+            var pendingDays = requests.Where(r => r.Status == VacationRequestStatuses.Pending && r.RequestedAt.Year == currentYear).Sum(r => r.WorkingDays);
+            var pendingHold = requests.Where(r => r.Status == VacationRequestStatuses.Pending && r.RequestedAt.Year == currentYear).Sum(r => r.DeductionAmount);
 
             var reserveBalance = await _db.VacationReserveTransactions
                 .Where(t => t.MembershipId == targetMembershipId && t.CreatedAt.Year == currentYear)
@@ -51,14 +58,14 @@ public class VacationService
 
             var dailySalary = VacationAccrualCalculator.CalculateDailySalary(financials.MonthlySalary);
             var availableDays = VacationAccrualCalculator.CalculateAvailableDays(
-                reserveBalance, dailySalary, financials.VacationDaysPerYear, usedDays);
+                reserveBalance, dailySalary, financials.VacationDaysPerYear, usedDays, pendingHold);
 
             balanceDto = new VacationBalanceDto
             {
                 ReserveBalance = isFullView ? reserveBalance : null,
                 AvailableDays = availableDays,
                 UsedDays = usedDays,
-                PendingDays = 0,
+                PendingDays = pendingDays,
                 TotalDaysPerYear = financials.VacationDaysPerYear,
             };
 
@@ -97,10 +104,26 @@ public class VacationService
                 }
                 : null,
             Balance = balanceDto,
+            Requests = requests.Select(r => new VacationRequestDto
+            {
+                Id = r.Id,
+                StartDate = r.StartDate,
+                EndDate = r.EndDate,
+                WorkingDays = r.WorkingDays,
+                DeductionAmount = r.DeductionAmount,
+                Status = r.Status,
+                RequestedAt = r.RequestedAt,
+                ReviewedAt = r.ReviewedAt,
+                ReviewedByAccountId = r.ReviewedByAccountId,
+                ReviewerComment = r.ReviewerComment,
+                CancelledAt = r.CancelledAt,
+                CancelledByAccountId = r.CancelledByAccountId,
+                IsOwnRequest = r.MembershipId == callerMembershipId,
+            }).ToList(),
             Transactions = transactionDtos,
             CanEdit = MemberPermissions.CanEditMemberFinancials(callerRole),
-            CanReviewRequests = false,
-            CanSubmitRequest = false,
+            CanReviewRequests = MemberPermissions.CanReviewVacationRequests(callerRole),
+            CanSubmitRequest = MemberPermissions.CanSubmitVacationRequest(callerRole) && isOwnMembership,
         };
 
         return VacationFetchResult.Ok(dto);
@@ -198,10 +221,28 @@ public class VacationTransactionDto
     public Guid? CreatedByAccountId { get; set; }
 }
 
+public class VacationRequestDto
+{
+    public Guid Id { get; set; }
+    public DateOnly StartDate { get; set; }
+    public DateOnly EndDate { get; set; }
+    public int WorkingDays { get; set; }
+    public decimal DeductionAmount { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public DateTime RequestedAt { get; set; }
+    public DateTime? ReviewedAt { get; set; }
+    public Guid? ReviewedByAccountId { get; set; }
+    public string? ReviewerComment { get; set; }
+    public DateTime? CancelledAt { get; set; }
+    public Guid? CancelledByAccountId { get; set; }
+    public bool IsOwnRequest { get; set; }
+}
+
 public class VacationDto
 {
     public VacationFinancialsDto? Financials { get; set; }
     public VacationBalanceDto? Balance { get; set; }
+    public List<VacationRequestDto> Requests { get; set; } = new();
     public List<VacationTransactionDto>? Transactions { get; set; }
     public bool CanEdit { get; set; }
     public bool CanReviewRequests { get; set; }

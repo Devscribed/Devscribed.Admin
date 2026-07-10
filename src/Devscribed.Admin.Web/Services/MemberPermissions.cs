@@ -1,3 +1,5 @@
+using Devscribed.Admin.Web.Models;
+
 namespace Devscribed.Admin.Web.Services;
 
 public static class MemberPermissions
@@ -57,6 +59,23 @@ public static class MemberPermissions
             "user" => isOwnMembership,
             _ => false,
         };
+
+    public static bool CanSubmitVacationRequest(string callerRole) =>
+        callerRole is "admin" or "manager" or "user";
+
+    public static bool CanReviewVacationRequests(string callerRole) =>
+        callerRole is "admin" or "manager";
+
+    public static bool CanCancelVacationRequest(string callerRole, bool isOwnMembership, string requestStatus)
+    {
+        if (callerRole is "admin" or "manager")
+            return requestStatus is VacationRequestStatuses.Pending or VacationRequestStatuses.Approved;
+
+        if (callerRole == "user" && isOwnMembership)
+            return requestStatus == VacationRequestStatuses.Pending;
+
+        return false;
+    }
 
     public static string[] GetAvailableRoles(string callerRole, string targetRole, string targetStatus)
     {

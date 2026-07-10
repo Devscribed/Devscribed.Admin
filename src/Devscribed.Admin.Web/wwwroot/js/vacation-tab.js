@@ -51,6 +51,277 @@
 
     const toastSaved = document.getElementById('toast-financials-saved');
     const toastError = document.getElementById('toast-member-detail-error');
+    const toastRequestSubmitted = document.getElementById('toast-request-submitted');
+    const toastRequestApproved = document.getElementById('toast-request-approved');
+    const toastRequestRejected = document.getElementById('toast-request-rejected');
+    const toastRequestCancelled = document.getElementById('toast-request-cancelled');
+
+    const requestBtn = document.getElementById('vacation-request-btn');
+    const requestsCard = document.getElementById('vacation-requests-card');
+    const requestsList = document.getElementById('vacation-requests-list');
+    const noRequests = document.getElementById('vacation-no-requests');
+
+    const requestModalOverlay = document.getElementById('vacation-request-modal-overlay');
+    const requestCloseButton = document.getElementById('vacation-request-close-button');
+    const requestCancelButton = document.getElementById('vacation-request-cancel-btn');
+    const requestForm = document.getElementById('vacation-request-form');
+    const startDateInput = document.getElementById('vacation-start-date-input');
+    const endDateInput = document.getElementById('vacation-end-date-input');
+    const workingDaysPreview = document.getElementById('vacation-working-days-preview');
+    const availableDaysPreview = document.getElementById('vacation-available-days-preview');
+    const requestSubmitBtn = document.getElementById('vacation-request-submit-btn');
+    const requestError = document.getElementById('vacation-request-error');
+    const requestFieldErrors = {
+        startDate: document.getElementById('field-error-startDate'),
+        endDate: document.getElementById('field-error-endDate'),
+    };
+
+    const rejectModalOverlay = document.getElementById('vacation-reject-modal-overlay');
+    const rejectCloseButton = document.getElementById('vacation-reject-close-button');
+    const rejectCancelButton = document.getElementById('vacation-reject-cancel-btn');
+    const rejectForm = document.getElementById('vacation-reject-form');
+    const rejectSummary = document.getElementById('vacation-reject-summary');
+    const rejectCommentInput = document.getElementById('vacation-reject-comment-input');
+    const rejectConfirmBtn = document.getElementById('vacation-reject-confirm-btn');
+    const rejectCommentError = document.getElementById('field-error-reviewerComment');
+
+    let lastData = null;
+    let rejectRequestId = null;
+
+    function countWeekdays(startStr, endStr) {
+        if (!startStr || !endStr) return 0;
+        const start = new Date(startStr + 'T00:00:00Z');
+        const end = new Date(endStr + 'T00:00:00Z');
+        if (end < start) return 0;
+        let count = 0;
+        for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+            const day = d.getUTCDay();
+            if (day !== 0 && day !== 6) count++;
+        }
+        return count;
+    }
+
+    function formatDateRange(startStr, endStr) {
+        const start = new Date(startStr + 'T00:00:00Z');
+        const end = new Date(endStr + 'T00:00:00Z');
+        const fmt = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+        return `${fmt(start)} – ${fmt(end)}`;
+    }
+
+    const statusBadges = {
+        pending: { label: '● Pending', className: 'status-pending' },
+        approved: { label: '✓ Approved', className: 'status-approved' },
+        rejected: { label: '✗ Rejected', className: 'status-rejected' },
+        cancelled: { label: '○ Cancelled', className: 'status-cancelled' },
+    };
+
+    function renderRequests(data) {
+        const requests = data.requests || [];
+        requestsCard.style.display = '';
+        requestsList.innerHTML = '';
+
+        if (requests.length === 0) {
+            noRequests.style.display = '';
+            return;
+        }
+        noRequests.style.display = 'none';
+
+        requests.forEach((r) => {
+            const row = document.createElement('div');
+            row.className = 'vacation-request-row';
+            row.dataset.testid = `vacation-request-row-${r.id}`;
+
+            const badge = statusBadges[r.status] || { label: r.status, className: '' };
+            const amountHtml = data.canReviewRequests ? `<span>$${Number(r.deductionAmount).toFixed(2)}</span>` : '';
+
+            let actionsHtml = '';
+            if (r.status === 'pending') {
+                if (data.canReviewRequests && !r.isOwnRequest) {
+                    actionsHtml += `<button type="button" data-testid="vacation-request-approve-${r.id}" data-action="approve" data-id="${r.id}">Approve</button>`;
+                    actionsHtml += `<button type="button" data-testid="vacation-request-reject-${r.id}" data-action="reject" data-id="${r.id}">Reject</button>`;
+                } else if (r.isOwnRequest) {
+                    actionsHtml += `<button type="button" data-testid="vacation-request-cancel-${r.id}" data-action="cancel-pending" data-id="${r.id}">Cancel</button>`;
+                } else if (data.canReviewRequests) {
+                    actionsHtml += `<button type="button" data-testid="vacation-request-cancel-${r.id}" data-action="cancel-pending" data-id="${r.id}">Cancel</button>`;
+                }
+            } else if (r.status === 'approved' && data.canReviewRequests) {
+                actionsHtml += `<button type="button" data-testid="vacation-request-cancel-${r.id}" data-action="cancel-approved" data-id="${r.id}">Cancel</button>`;
+            }
+
+            const commentHtml = (r.status === 'rejected' && r.reviewerComment)
+                ? `<div data-testid="vacation-request-reviewer-comment-${r.id}">"${r.reviewerComment}"</div>`
+                : '';
+
+            row.innerHTML = `
+                <div data-testid="vacation-request-dates-${r.id}">${formatDateRange(r.startDate, r.endDate)}</div>
+                <div data-testid="vacation-request-days-${r.id}">${r.workingDays} day(s)</div>
+                <div data-testid="vacation-request-status-${r.id}" class="${badge.className}">${badge.label}</div>
+                ${amountHtml}
+                <div class="vacation-request-actions">${actionsHtml}</div>
+                ${commentHtml}
+            `;
+            requestsList.appendChild(row);
+        });
+    }
+
+    requestsList.addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        const action = btn.dataset.action;
+        const id = btn.dataset.id;
+
+        if (action === 'approve') {
+            await reviewRequest(id, 'approved', null);
+        } else if (action === 'reject') {
+            openRejectModal(id);
+        } else if (action === 'cancel-pending') {
+            if (confirm('Cancel this vacation request?')) await cancelRequest(id);
+        } else if (action === 'cancel-approved') {
+            if (confirm('Cancel this approved vacation? The reserve will be refunded.')) await cancelRequest(id);
+        }
+    });
+
+    async function reviewRequest(id, decision, comment) {
+        try {
+            const res = await fetch(`/api/organizations/${orgId}/members/${memberId}/vacation/requests/${id}/review`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ decision, comment }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                showToast(decision === 'approved' ? toastRequestApproved : toastRequestRejected);
+                await load();
+                return true;
+            } else {
+                showToast(toastError, data.message || 'Something went wrong. Please try again.');
+                return false;
+            }
+        } catch {
+            showToast(toastError, 'Something went wrong. Please try again.');
+            return false;
+        }
+    }
+
+    async function cancelRequest(id) {
+        try {
+            const res = await fetch(`/api/organizations/${orgId}/members/${memberId}/vacation/requests/${id}/cancel`, { method: 'PUT' });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                showToast(toastRequestCancelled, data.refunded ? 'Request cancelled and reserve refunded' : 'Request cancelled');
+                await load();
+            } else {
+                showToast(toastError, data.message || 'Something went wrong. Please try again.');
+            }
+        } catch {
+            showToast(toastError, 'Something went wrong. Please try again.');
+        }
+    }
+
+    function openRequestModal() {
+        requestError.textContent = '';
+        requestFieldErrors.startDate.textContent = '';
+        requestFieldErrors.endDate.textContent = '';
+        requestForm.reset();
+        workingDaysPreview.textContent = '0';
+        availableDaysPreview.textContent = lastData && lastData.balance ? lastData.balance.availableDays : '0';
+        requestModalOverlay.style.display = '';
+    }
+
+    function closeRequestModal() {
+        requestModalOverlay.style.display = 'none';
+    }
+
+    requestBtn.addEventListener('click', openRequestModal);
+    requestCloseButton.addEventListener('click', closeRequestModal);
+    requestCancelButton.addEventListener('click', closeRequestModal);
+
+    function updateWorkingDaysPreview() {
+        workingDaysPreview.textContent = countWeekdays(startDateInput.value, endDateInput.value);
+    }
+    startDateInput.addEventListener('input', updateWorkingDaysPreview);
+    endDateInput.addEventListener('input', updateWorkingDaysPreview);
+
+    requestForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        requestError.textContent = '';
+        requestFieldErrors.startDate.textContent = '';
+        requestFieldErrors.endDate.textContent = '';
+
+        if (!startDateInput.value) {
+            requestFieldErrors.startDate.textContent = 'Start date must be today or later';
+            return;
+        }
+        if (!endDateInput.value) {
+            requestFieldErrors.endDate.textContent = 'End date must be on or after start date';
+            return;
+        }
+        if (startDateInput.value.slice(0, 4) !== endDateInput.value.slice(0, 4)) {
+            requestError.textContent = 'Start and end dates must be within the same calendar year';
+            return;
+        }
+
+        requestSubmitBtn.disabled = true;
+        const originalText = requestSubmitBtn.textContent;
+        requestSubmitBtn.textContent = 'Submitting...';
+
+        try {
+            const res = await fetch(`/api/organizations/${orgId}/members/${memberId}/vacation/requests`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ startDate: startDateInput.value, endDate: endDateInput.value }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.status === 201) {
+                closeRequestModal();
+                showToast(toastRequestSubmitted);
+                await load();
+            } else if (data.errors) {
+                Object.entries(data.errors).forEach(([field, message]) => {
+                    if (requestFieldErrors[field]) requestFieldErrors[field].textContent = message;
+                });
+            } else {
+                requestError.textContent = data.message || 'Something went wrong. Please try again.';
+            }
+        } catch {
+            requestError.textContent = 'Something went wrong. Please try again.';
+        } finally {
+            requestSubmitBtn.disabled = false;
+            requestSubmitBtn.textContent = originalText;
+        }
+    });
+
+    function openRejectModal(id) {
+        rejectRequestId = id;
+        rejectCommentError.textContent = '';
+        rejectForm.reset();
+        const req = (lastData.requests || []).find((r) => r.id === id);
+        rejectSummary.textContent = req ? `Rejecting: ${formatDateRange(req.startDate, req.endDate)} (${req.workingDays} day(s))` : '';
+        rejectModalOverlay.style.display = '';
+    }
+
+    function closeRejectModal() {
+        rejectModalOverlay.style.display = 'none';
+        rejectRequestId = null;
+    }
+
+    rejectCloseButton.addEventListener('click', closeRejectModal);
+    rejectCancelButton.addEventListener('click', closeRejectModal);
+
+    rejectForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        rejectCommentError.textContent = '';
+
+        if (rejectCommentInput.value.length > 500) {
+            rejectCommentError.textContent = 'Comment must be at most 500 characters';
+            return;
+        }
+
+        rejectConfirmBtn.disabled = true;
+        const ok = await reviewRequest(rejectRequestId, 'rejected', rejectCommentInput.value || null);
+        rejectConfirmBtn.disabled = false;
+        if (ok) closeRejectModal();
+    });
 
     let loaded = false;
 
@@ -179,12 +450,14 @@
 
     function render(data) {
         lastFinancials = data.financials;
+        lastData = data;
         const canEdit = data.canEdit;
 
         if (!data.balance) {
             emptyState.style.display = '';
             defaultState.style.display = 'none';
             financialsCard.style.display = 'none';
+            requestBtn.style.display = 'none';
             if (canEdit) {
                 emptyMessage.textContent = 'Vacation tracking has not been set up for this member yet.';
                 setupBtn.style.display = '';
@@ -221,6 +494,16 @@
             }
 
             renderTransactions(data.transactions, data.financials ? data.financials.currency : '');
+            renderRequests(data);
+
+            if (data.canSubmitRequest) {
+                requestBtn.style.display = '';
+                const noDays = data.balance.availableDays <= 0;
+                requestBtn.disabled = noDays;
+                requestBtn.title = noDays ? 'No vacation days available' : '';
+            } else {
+                requestBtn.style.display = 'none';
+            }
         }
 
         skeleton.style.display = 'none';

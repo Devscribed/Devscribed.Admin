@@ -1,3 +1,4 @@
+using Devscribed.Admin.Web.Models;
 using Devscribed.Admin.Web.Security;
 using Devscribed.Admin.Web.Services;
 using Devscribed.Admin.Web.Validation;
@@ -13,10 +14,12 @@ namespace Devscribed.Admin.Web.Controllers.Api;
 public class VacationController : ControllerBase
 {
     private readonly VacationService _vacationService;
+    private readonly VacationRequestService _vacationRequestService;
 
-    public VacationController(VacationService vacationService)
+    public VacationController(VacationService vacationService, VacationRequestService vacationRequestService)
     {
         _vacationService = vacationService;
+        _vacationRequestService = vacationRequestService;
     }
 
     [HttpGet]
@@ -47,6 +50,22 @@ public class VacationController : ControllerBase
                     pendingDays = result.Dto.Balance.PendingDays,
                     totalDaysPerYear = result.Dto.Balance.TotalDaysPerYear,
                 },
+                requests = result.Dto.Requests.Select(r => new
+                {
+                    id = r.Id,
+                    startDate = r.StartDate,
+                    endDate = r.EndDate,
+                    workingDays = r.WorkingDays,
+                    deductionAmount = r.DeductionAmount,
+                    status = r.Status,
+                    requestedAt = r.RequestedAt,
+                    reviewedAt = r.ReviewedAt,
+                    reviewedBy = (string?)null,
+                    reviewerComment = r.ReviewerComment,
+                    cancelledAt = r.CancelledAt,
+                    cancelledBy = (string?)null,
+                    isOwnRequest = r.IsOwnRequest,
+                }),
                 transactions = result.Dto.Transactions?.Select(t => new
                 {
                     id = t.Id,
@@ -77,6 +96,79 @@ public class VacationController : ControllerBase
 
         var result = await _vacationService.UpdateFinancialsAsync(orgId, memberId, callerAccountId, callerRole, request);
         return MapResult(result);
+    }
+
+    [HttpPost("requests")]
+    public async Task<IActionResult> SubmitRequest(Guid orgId, Guid memberId, [FromBody] SubmitVacationRequest request)
+    {
+        if (!TryGetCallerContext(orgId, out _, out var callerMembershipId, out var callerRole, out var errorResult))
+            return errorResult!;
+
+        if (request.StartDate == null || request.EndDate == null)
+        {
+            var errors = new Dictionary<string, string>();
+            if (request.StartDate == null) errors["startDate"] = "Start date must be today or later";
+            if (request.EndDate == null) errors["endDate"] = "End date must be on or after start date";
+            return BadRequest(new { errors });
+        }
+
+        var result = await _vacationRequestService.SubmitRequestAsync(
+            orgId, memberId, callerMembershipId, callerRole, request.StartDate.Value, request.EndDate.Value);
+
+        return result.Outcome switch
+        {
+            VacationRequestActionOutcome.Created => StatusCode(201, new
+            {
+                id = result.Request!.Id,
+                workingDays = result.Request.WorkingDays,
+                deductionAmount = result.Request.DeductionAmount,
+                status = result.Request.Status,
+            }),
+            VacationRequestActionOutcome.NotFound => NotFound(new { error = "not_found", message = "Member not found" }),
+            VacationRequestActionOutcome.Forbidden => StatusCode(403, new { error = result.ErrorCode ?? "forbidden", message = result.ErrorMessage }),
+            VacationRequestActionOutcome.BadRequest => BadRequest(new { error = result.ErrorCode, message = result.ErrorMessage }),
+            VacationRequestActionOutcome.FieldValidation => BadRequest(new { errors = result.FieldErrors }),
+            _ => StatusCode(500),
+        };
+    }
+
+    [HttpPut("requests/{requestId}/review")]
+    public async Task<IActionResult> ReviewRequest(Guid orgId, Guid memberId, Guid requestId, [FromBody] ReviewVacationRequest request)
+    {
+        if (!TryGetCallerContext(orgId, out var callerAccountId, out var callerMembershipId, out var callerRole, out var errorResult))
+            return errorResult!;
+
+        var result = await _vacationRequestService.ReviewRequestAsync(
+            orgId, memberId, requestId, callerMembershipId, callerAccountId, callerRole, request.Decision ?? string.Empty, request.Comment);
+
+        return result.Outcome switch
+        {
+            VacationRequestActionOutcome.Reviewed => Ok(new { success = true, status = result.Status }),
+            VacationRequestActionOutcome.NotFound => NotFound(new { error = "not_found", message = "Request not found" }),
+            VacationRequestActionOutcome.Forbidden => StatusCode(403, new { error = result.ErrorCode ?? "forbidden", message = result.ErrorMessage }),
+            VacationRequestActionOutcome.BadRequest => BadRequest(new { error = result.ErrorCode, message = result.ErrorMessage }),
+            VacationRequestActionOutcome.FieldValidation => BadRequest(new { errors = result.FieldErrors }),
+            _ => StatusCode(500),
+        };
+    }
+
+    [HttpPut("requests/{requestId}/cancel")]
+    public async Task<IActionResult> CancelRequest(Guid orgId, Guid memberId, Guid requestId)
+    {
+        if (!TryGetCallerContext(orgId, out var callerAccountId, out var callerMembershipId, out var callerRole, out var errorResult))
+            return errorResult!;
+
+        var result = await _vacationRequestService.CancelRequestAsync(
+            orgId, memberId, requestId, callerMembershipId, callerAccountId, callerRole);
+
+        return result.Outcome switch
+        {
+            VacationRequestActionOutcome.Cancelled => Ok(new { success = true, refunded = result.Refunded, refundAmount = result.RefundAmount }),
+            VacationRequestActionOutcome.NotFound => NotFound(new { error = "not_found", message = "Request not found" }),
+            VacationRequestActionOutcome.Forbidden => StatusCode(403, new { error = result.ErrorCode ?? "forbidden", message = result.ErrorMessage }),
+            VacationRequestActionOutcome.BadRequest => BadRequest(new { error = result.ErrorCode, message = result.ErrorMessage }),
+            _ => StatusCode(500),
+        };
     }
 
     private bool TryGetCallerContext(Guid orgId, out Guid callerAccountId, out Guid callerMembershipId, out string callerRole, out IActionResult? errorResult)

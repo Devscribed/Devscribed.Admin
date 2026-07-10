@@ -24,12 +24,12 @@ public static class VacationAccrualCalculator
         return monthlySalary * 12m / WorkingDaysPerYear;
     }
 
-    public static int CalculateAvailableDays(decimal reserveBalance, decimal dailySalary, int vacationDaysPerYear, int usedDays)
+    public static int CalculateAvailableDays(decimal reserveBalance, decimal dailySalary, int vacationDaysPerYear, int usedDays, decimal pendingHold = 0m)
     {
         if (dailySalary <= 0)
             return 0;
 
-        var fromBalance = (int)Math.Floor(reserveBalance / dailySalary);
+        var fromBalance = (int)Math.Floor((reserveBalance - pendingHold) / dailySalary);
         var cap = vacationDaysPerYear - usedDays;
         var days = Math.Min(fromBalance, cap);
         return Math.Max(days, 0);
