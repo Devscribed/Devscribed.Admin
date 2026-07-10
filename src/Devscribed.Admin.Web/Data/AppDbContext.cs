@@ -15,6 +15,7 @@ public class AppDbContext : DbContext
     public DbSet<PendingEmailChange> PendingEmailChanges => Set<PendingEmailChange>();
     public DbSet<MemberFinancials> MemberFinancials => Set<MemberFinancials>();
     public DbSet<MemberFinancialsSnapshot> MemberFinancialsSnapshots => Set<MemberFinancialsSnapshot>();
+    public DbSet<VacationReserveTransaction> VacationReserveTransactions => Set<VacationReserveTransaction>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -82,6 +83,16 @@ public class AppDbContext : DbContext
             e.Property(s => s.ClientHourlyRate).HasPrecision(8, 2);
             e.Property(s => s.VacationReservePercent).HasPrecision(5, 2);
             e.Property(s => s.Currency).HasMaxLength(3);
+        });
+
+        modelBuilder.Entity<VacationReserveTransaction>(e =>
+        {
+            e.HasKey(t => t.Id);
+            e.Property(t => t.Type).HasMaxLength(20);
+            e.Property(t => t.Amount).HasPrecision(12, 2);
+            e.Property(t => t.Description).HasMaxLength(200);
+            e.HasIndex(t => new { t.MembershipId, t.Type, t.BillingPeriodYear, t.BillingPeriodMonth });
+            e.HasOne(t => t.Membership).WithMany().HasForeignKey(t => t.MembershipId);
         });
 
         modelBuilder.Entity<PendingEmailChange>(e =>
