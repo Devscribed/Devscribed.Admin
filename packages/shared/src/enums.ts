@@ -18,6 +18,17 @@ export enum MembershipStatus {
   Removed = 'removed',
 }
 
+/**
+ * Invitation lifecycle states (spec 03 — User Invitation).
+ * `pending` → acceptable; `used` → accepted; `invalidated` → superseded by a
+ * re-invite or the inviter was removed.
+ */
+export enum InvitationStatus {
+  Pending = 'pending',
+  Used = 'used',
+  Invalidated = 'invalidated',
+}
+
 /** All role values, in declaration order. */
 export const ROLES: readonly Role[] = Object.values(Role);
 

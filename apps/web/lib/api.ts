@@ -42,6 +42,26 @@ export interface Member {
 export interface MembersResponse {
   members: Member[];
   canManage: boolean;
+  currentUserRole: string;
+}
+
+export interface InvitationInfo {
+  organizationName: string;
+  email: string;
+  role: string;
+  accountExists: boolean;
+  orgSwitch: boolean;
+  oldOrganizationName: string | null;
+  lastAdmin: boolean;
+}
+
+export interface AcceptInvitationPayload {
+  token: string;
+  password: string;
+  firstName?: string;
+  lastName?: string;
+  timezone?: string;
+  orgSwitchConfirmed?: boolean;
 }
 
 async function parseBody(res: Response): Promise<ApiErrorBody & Record<string, unknown>> {
@@ -154,4 +174,45 @@ export async function fetchMembers(): Promise<MembersResponse> {
     throw new ApiError(res.status, body);
   }
   return body as unknown as MembersResponse;
+}
+
+/** Create and send an invitation (spec 03; admin/manager only). */
+export async function createInvitation(email: string, role: string): Promise<void> {
+  const res = await fetch(`${BASE}/invitations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ email, role }),
+  });
+  const body = await parseBody(res);
+  if (!res.ok) {
+    throw new ApiError(res.status, body);
+  }
+}
+
+/** Validate an invitation token for the accept screen (spec 03; public). */
+export async function validateInvitation(token: string): Promise<InvitationInfo> {
+  const res = await fetch(`${BASE}/invitations/${encodeURIComponent(token)}/validate`, {
+    credentials: 'include',
+  });
+  const body = await parseBody(res);
+  if (!res.ok) {
+    throw new ApiError(res.status, body);
+  }
+  return body as unknown as InvitationInfo;
+}
+
+/** Accept an invitation (spec 03; public). Establishes a session on success. */
+export async function acceptInvitation(payload: AcceptInvitationPayload): Promise<string> {
+  const res = await fetch(`${BASE}/invitations/accept`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(payload),
+  });
+  const body = await parseBody(res);
+  if (!res.ok) {
+    throw new ApiError(res.status, body);
+  }
+  return (body.redirectTo as string) ?? '/members';
 }

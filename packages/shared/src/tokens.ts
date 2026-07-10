@@ -8,6 +8,10 @@
 export const RESET_TOKEN_TTL_MINUTES = 60;
 export const RESET_TOKEN_TTL_MS = RESET_TOKEN_TTL_MINUTES * 60 * 1000;
 
+/** Invitation token lifetime (spec 03, requirement 3): 7 days. */
+export const INVITE_TOKEN_TTL_DAYS = 7;
+export const INVITE_TOKEN_TTL_MS = INVITE_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000;
+
 /** The moment a token issued at `issuedAt` with the given TTL expires. */
 export function expiresAt(issuedAt: Date, ttlMs: number): Date {
   return new Date(issuedAt.getTime() + ttlMs);

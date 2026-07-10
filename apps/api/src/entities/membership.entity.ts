@@ -59,6 +59,13 @@ export class Membership {
   @Column({ type: 'timestamptz', name: 'joined_at' })
   joinedAt: Date;
 
+  /**
+   * Optional job title (specs 03 & 05). Cleared when a membership is restored via
+   * invitation acceptance.
+   */
+  @Column({ type: 'varchar', name: 'job_title', length: 100, nullable: true })
+  jobTitle: string | null;
+
   @CreateDateColumn({ type: 'timestamptz', name: 'created_at' })
   createdAt: Date;
 

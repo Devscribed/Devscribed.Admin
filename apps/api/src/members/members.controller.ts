@@ -14,6 +14,10 @@ export class MembersController {
   @Get()
   async list(@CurrentUser() user: SessionPayload): Promise<MembersListResponse> {
     const members = await this.members.listActiveForOrg(user.orgId);
-    return { members, canManage: this.members.canManage(user.role) };
+    return {
+      members,
+      canManage: this.members.canManage(user.role),
+      currentUserRole: user.role,
+    };
   }
 }

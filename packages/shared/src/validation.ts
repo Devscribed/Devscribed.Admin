@@ -5,6 +5,8 @@
  * messages mandated by spec 01.
  */
 
+import { isRole, Role } from './enums';
+
 /** Organization name max length (spec 01). */
 export const ORG_NAME_MAX_LENGTH = 100;
 
@@ -130,6 +132,61 @@ export function normalizeEmail(email: string): string {
 /** Whether a password and its confirmation match (spec 02, reset). */
 export function passwordsMatch(password: string, confirmation: string): boolean {
   return password === confirmation;
+}
+
+/** Whether two emails are the same account after normalization (spec 03, self-invite). */
+export function isSameEmail(a: string, b: string): boolean {
+  const normalized = normalizeEmail(a);
+  return normalized.length > 0 && normalized === normalizeEmail(b);
+}
+
+/** A validation result that returns the parsed role on success. */
+export type RoleValidation = { valid: true; value: Role } | { valid: false; error: string };
+
+/** Validate an invitation role (spec 03): required and a member of the role enum. */
+export function validateRole(role: string): RoleValidation {
+  const trimmed = (role ?? '').trim();
+  if (trimmed.length === 0) {
+    return { valid: false, error: 'Role is required' };
+  }
+  if (!isRole(trimmed)) {
+    return { valid: false, error: 'Invalid role' };
+  }
+  return { valid: true, value: trimmed };
+}
+
+/** Normalized invite payload after validation. */
+export interface NormalizedInvite {
+  email: string;
+  role: Role;
+}
+
+/**
+ * Validate an invite payload (spec 03, requirement 1). Returns either a map of
+ * field errors or the normalized data.
+ */
+export function validateInvite(
+  email: string,
+  role: string,
+): { errors: Record<string, string> } | { errors: null; data: NormalizedInvite } {
+  const emailResult = validateEmail(email);
+  const roleResult = validateRole(role);
+
+  if (!emailResult.valid || !roleResult.valid) {
+    const errors: Record<string, string> = {};
+    if (!emailResult.valid) {
+      errors.email = emailResult.error;
+    }
+    if (!roleResult.valid) {
+      errors.role = roleResult.error;
+    }
+    return { errors };
+  }
+
+  return {
+    errors: null,
+    data: { email: normalizeEmail(emailResult.value), role: roleResult.value },
+  };
 }
 
 /**

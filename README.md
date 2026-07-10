@@ -117,11 +117,10 @@ built and tested at the unit, integration, and E2E levels before moving on.
 | --- | ------------------------------------------------------------------------------ | -------------- |
 | 01  | [Organization Creation](specs/user-management/01-organization-creation.md)     | ✅ Complete    |
 | 02  | [Authentication & Login](specs/user-management/02-authentication-login.md)     | ✅ Complete    |
-| 03  | [Roles & Permissions](specs/user-management/03-roles-and-permissions.md)       | ⬜ Not started |
-| 04  | [User Invitation](specs/user-management/04-user-invitation.md)                 | ⬜ Not started |
-| 05  | [Member List & Management](specs/user-management/05-member-list-management.md) | ⬜ Not started |
-| 06  | [Member Detail: About](specs/user-management/06-member-detail-about.md)        | ⬜ Not started |
-| 07  | [Account Settings](specs/user-management/07-account-settings.md)               | ⬜ Not started |
+| 03  | [User Invitation](specs/user-management/03-user-invitation.md)                 | ✅ Complete    |
+| 04  | [Member List & Management](specs/user-management/04-member-list-management.md) | ⬜ Not started |
+| 05  | [Member Detail: About](specs/user-management/05-member-detail-about.md)        | ⬜ Not started |
+| 06  | [Account Settings](specs/user-management/06-account-settings.md)               | ⬜ Not started |
 
 **Highlights so far**
 
@@ -134,3 +133,11 @@ built and tested at the unit, integration, and E2E levels before moving on.
   server-side confirmation match, and session revocation via a per-account GUID security stamp.
   Screens: `/login`, `/forgot-password`, `/reset-password` (validated on load). Reconciled to the
   gold-standard revision.
+- **Spec 03** — invite by email + role (7-day tokenized link); accept as a new or existing account;
+  role-assignment authority, self-invite / already-a-member guards, re-invite supersession,
+  removed-member restore, and org-switch (hard-delete of old-org data with confirmation). Invite
+  modal on the members page + `/accept-invite` screen (validated on load).
+
+> **Note:** the gold-standard revision merged from `functional-specification-2` renumbered the specs
+> and folded the old standalone "Roles & Permissions" doc into specs 03–05; the table above reflects
+> the current numbering.

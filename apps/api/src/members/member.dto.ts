@@ -19,4 +19,6 @@ export interface MembersListResponse {
   members: MemberDto[];
   /** admin/manager may act on rows; user/viewer are read-only (spec 03). */
   canManage: boolean;
+  /** the caller's own role — used to scope the invite role picker (spec 03). */
+  currentUserRole: Role;
 }
