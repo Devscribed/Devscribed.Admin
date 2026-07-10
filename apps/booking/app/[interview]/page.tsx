@@ -1,12 +1,11 @@
 import { notFound } from "next/navigation";
 
-import { AvailabilityPicker } from "@/components/availability/AvailabilityPicker";
+import { BookingPage } from "@/components/booking/BookingPage";
 import { getInterviewTypeBySlug } from "@/lib/interview-types";
 
 /**
- * Public booking page for one interview type. Phase 3 renders the logo,
- * interview name, and the date/time picker; the candidate details form and
- * Book action are added in Phase 4.
+ * Public booking page for one interview type: logo, interview name, and the
+ * booking flow (date/time picker + candidate form + Book).
  */
 export default async function InterviewPage({
   params,
@@ -23,7 +22,7 @@ export default async function InterviewPage({
         Devscribed
       </div>
       <h1>{interviewType.name}</h1>
-      <AvailabilityPicker durationMinutes={interviewType.durationMinutes} />
+      <BookingPage interview={interviewType} />
     </main>
   );
 }
