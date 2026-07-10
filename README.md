@@ -129,6 +129,8 @@ built and tested at the unit, integration, and E2E levels before moving on.
   hashing, JWT session, single-org-per-account guard. Reconciled to the gold-standard revision:
   name/email/password length & format rules with exact error messages, browser-timezone capture,
   case-insensitive duplicate check, and a password show/hide toggle.
-- **Spec 02** — login (enumeration-safe), forgot/reset password via a single-use 60-min token
-  (email captured by an in-memory mail sink), and session revocation via a per-account token
-  version. Screens: `/login`, `/forgot-password`, `/reset-password`.
+- **Spec 02** — login (enumeration-safe; removed members get a distinct deactivation message),
+  forgot/reset password via a single-use 60-min token (email captured by an in-memory mail sink),
+  server-side confirmation match, and session revocation via a per-account GUID security stamp.
+  Screens: `/login`, `/forgot-password`, `/reset-password` (validated on load). Reconciled to the
+  gold-standard revision.

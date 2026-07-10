@@ -7,6 +7,7 @@ import { PasswordResetToken } from '../entities/password-reset-token.entity';
 import { InitialSchema1720137600000 } from './migrations/1720137600000-InitialSchema';
 import { AuthTokens1720224000000 } from './migrations/1720224000000-AuthTokens';
 import { AccountTimezone1720300000000 } from './migrations/1720300000000-AccountTimezone';
+import { SecurityStamp1720400000000 } from './migrations/1720400000000-SecurityStamp';
 
 /**
  * Build the TypeORM data-source options from environment variables. Used both by
@@ -32,7 +33,12 @@ export function buildDataSourceOptions(): DataSourceOptions {
     password: process.env.DATABASE_PASSWORD ?? 'devscribed',
     database,
     entities: [Account, Organization, Membership, PasswordResetToken],
-    migrations: [InitialSchema1720137600000, AuthTokens1720224000000, AccountTimezone1720300000000],
+    migrations: [
+      InitialSchema1720137600000,
+      AuthTokens1720224000000,
+      AccountTimezone1720300000000,
+      SecurityStamp1720400000000,
+    ],
     synchronize: false,
     logging: process.env.DB_LOGGING === 'true',
   };

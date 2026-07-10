@@ -36,6 +36,10 @@ export class PasswordResetToken {
   @Column({ type: 'timestamptz', name: 'used_at', nullable: true })
   usedAt: Date | null;
 
+  /** Set true when a newer token supersedes this one (spec 02, requirement 8). */
+  @Column({ type: 'boolean', name: 'is_invalidated', default: false })
+  isInvalidated: boolean;
+
   @CreateDateColumn({ type: 'timestamptz', name: 'created_at' })
   createdAt: Date;
 }

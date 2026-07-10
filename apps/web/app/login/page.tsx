@@ -26,7 +26,7 @@ export default function LoginPage() {
       router.push('/members');
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.body.message ?? 'invalid email or password');
+        setError(err.body.message ?? 'Invalid email or password');
       } else {
         setError('Something went wrong. Please try again.');
       }

@@ -12,8 +12,8 @@ export interface SessionPayload {
   /** role within the current organization */
   role: Role;
   email: string;
-  /** account token version at issuance; the guard rejects stale versions (spec 02, req 9). */
-  ver: number;
+  /** account security stamp at issuance; the guard rejects stale stamps (spec 02, req 12). */
+  stamp: string;
 }
 
 /**

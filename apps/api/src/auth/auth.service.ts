@@ -1,16 +1,13 @@
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, QueryFailedError, Repository } from 'typeorm';
+import { DataSource, IsNull, QueryFailedError, Repository } from 'typeorm';
+import { randomUUID } from 'node:crypto';
 import {
   createAdminMembershipInput,
   expiresAt,
   MembershipStatus,
   normalizeEmail,
+  passwordsMatch,
   RESET_TOKEN_TTL_MS,
   validatePassword,
 } from '@devscribed/shared';
@@ -33,6 +30,10 @@ export interface AuthContext {
   organization: Organization;
   membership: Membership;
 }
+
+const INVALID_CREDENTIALS = 'Invalid email or password';
+const DEACTIVATED = 'Your account has been deactivated, contact your administrator';
+const INVALID_RESET_LINK = 'This reset link is invalid or has expired';
 
 // Postgres unique-violation SQLSTATE.
 const UNIQUE_VIOLATION = '23505';
@@ -91,7 +92,7 @@ export class AuthService {
             firstName: data.firstName,
             lastName: data.lastName,
             timezone: data.timezone,
-            tokenVersion: 0,
+            securityStamp: randomUUID(),
           }),
         );
 
@@ -124,29 +125,41 @@ export class AuthService {
   }
 
   /**
-   * Authenticate with email + password (spec 02). All failure modes — unknown
-   * email, wrong password, or a non-active membership (removed member, req 6) —
-   * return the same generic error (req 4). A dummy hash comparison equalizes
+   * Authenticate with email + password (spec 02). Email lookup is
+   * case-insensitive. The `removed`-member check runs after finding the account
+   * but before verifying the password (req 6): a removed member gets a distinct
+   * deactivation message regardless of password. Unknown email / wrong password
+   * both return the same generic error (req 4); a dummy hash comparison equalizes
    * timing on the unknown-email path.
    */
   async login(dto: LoginDto): Promise<AuthContext> {
     const email = normalizeEmail(dto.email ?? '');
-    const account = await this.accounts.findOne({ where: { email } });
-    if (!account) {
-      await this.passwords.verify(dto.password ?? '', await this.dummyHash);
-      throw this.invalidCredentials();
+    const password = dto.password ?? '';
+    if (email.length === 0 || password.trim().length === 0) {
+      throw new BadRequestException('Email and password are required');
     }
 
-    const passwordOk = await this.passwords.verify(dto.password ?? '', account.passwordHash);
-    if (!passwordOk) {
+    const account = await this.accounts.findOne({ where: { email } });
+    if (!account) {
+      await this.passwords.verify(password, await this.dummyHash);
       throw this.invalidCredentials();
     }
 
     const membership = await this.memberships.findOne({
-      where: { accountId: account.id, status: MembershipStatus.Active },
+      where: { accountId: account.id },
       relations: { organization: true },
+      order: { createdAt: 'DESC' },
     });
-    if (!membership) {
+    if (membership && membership.status === MembershipStatus.Removed) {
+      throw this.deactivated();
+    }
+
+    const passwordOk = await this.passwords.verify(password, account.passwordHash);
+    if (!passwordOk) {
+      throw this.invalidCredentials();
+    }
+
+    if (!membership || membership.status !== MembershipStatus.Active) {
       throw this.invalidCredentials();
     }
 
@@ -154,16 +167,32 @@ export class AuthService {
   }
 
   /**
-   * Begin a password reset (spec 02, req 7). Always resolves; the caller returns
-   * a neutral response either way. If the email is registered, a single-use,
-   * 60-minute token is stored (hashed) and a reset link is emailed.
+   * Begin a password reset (spec 02, req 7). Rejects an empty email; otherwise
+   * always resolves so the caller returns a neutral response. A reset email is
+   * dispatched only for a registered, `active` member. Issuing a token
+   * invalidates the account's prior unused tokens (req 8).
    */
   async forgotPassword(dto: ForgotPasswordDto): Promise<void> {
     const email = normalizeEmail(dto.email ?? '');
+    if (email.length === 0) {
+      throw new BadRequestException('Email is required');
+    }
+
     const account = await this.accounts.findOne({ where: { email } });
     if (!account) {
       return;
     }
+
+    const membership = await this.memberships.findOne({ where: { accountId: account.id } });
+    if (!membership || membership.status !== MembershipStatus.Active) {
+      return; // neutral response, no email (req 7)
+    }
+
+    // Supersede any prior unused tokens for this account (req 8).
+    await this.resetTokens.update(
+      { accountId: account.id, usedAt: IsNull(), isInvalidated: false },
+      { isInvalidated: true },
+    );
 
     const rawToken = generateResetToken();
     const now = new Date();
@@ -173,6 +202,7 @@ export class AuthService {
         tokenHash: hashResetToken(rawToken),
         expiresAt: expiresAt(now, RESET_TOKEN_TTL_MS),
         usedAt: null,
+        isInvalidated: false,
       }),
     );
 
@@ -190,42 +220,62 @@ export class AuthService {
     });
   }
 
+  /** Whether a raw reset token is currently valid (unused, not invalidated, unexpired). */
+  async isResetTokenValid(rawToken: string): Promise<boolean> {
+    if (!rawToken) {
+      return false;
+    }
+    const record = await this.resetTokens.findOne({
+      where: { tokenHash: hashResetToken(rawToken) },
+    });
+    return this.tokenIsUsable(record);
+  }
+
   /**
-   * Complete a password reset (spec 02, reqs 8–9). Validates the token
-   * (single-use, unexpired) and the new password policy, updates the hash, marks
-   * the token used, and bumps `tokenVersion` to revoke all existing sessions.
+   * Complete a password reset (spec 02, reqs 9–11). Validates the token, the
+   * confirmation match, and the password policy — none of which consume the
+   * token — then updates the hash, marks the token used, and regenerates the
+   * security stamp to revoke all existing sessions.
    */
   async resetPassword(dto: ResetPasswordDto): Promise<void> {
+    const record = await this.resetTokens.findOne({
+      where: { tokenHash: hashResetToken(dto.token ?? '') },
+    });
+    if (!this.tokenIsUsable(record)) {
+      throw new BadRequestException(INVALID_RESET_LINK);
+    }
+
+    if (!passwordsMatch(dto.password ?? '', dto.passwordConfirmation ?? dto.password ?? '')) {
+      throw new BadRequestException('Passwords do not match');
+    }
+
     const policy = validatePassword(dto.password ?? '');
     if (!policy.valid) {
       throw new BadRequestException({ message: policy.error, errors: { password: policy.error } });
     }
 
-    const record = await this.resetTokens.findOne({
-      where: { tokenHash: hashResetToken(dto.token ?? '') },
-    });
-    if (!record) {
-      throw new BadRequestException('This reset link is invalid.');
-    }
-    if (record.usedAt) {
-      throw new BadRequestException('This reset link has already been used.');
-    }
-    if (record.expiresAt.getTime() <= Date.now()) {
-      throw new BadRequestException('This reset link has expired.');
-    }
-
     const passwordHash = await this.passwords.hash(dto.password);
     await this.dataSource.transaction(async (manager) => {
-      const account = await manager.findOneOrFail(Account, { where: { id: record.accountId } });
+      const account = await manager.findOneOrFail(Account, { where: { id: record!.accountId } });
       account.passwordHash = passwordHash;
-      account.tokenVersion += 1; // revoke all existing sessions (req 9)
+      account.securityStamp = randomUUID(); // revoke all existing sessions (req 12)
       await manager.save(account);
-      await manager.update(PasswordResetToken, { id: record.id }, { usedAt: new Date() });
+      await manager.update(PasswordResetToken, { id: record!.id }, { usedAt: new Date() });
     });
   }
 
-  private invalidCredentials(): UnauthorizedException {
-    return new UnauthorizedException('invalid email or password');
+  private tokenIsUsable(record: PasswordResetToken | null): boolean {
+    return (
+      !!record && !record.usedAt && !record.isInvalidated && record.expiresAt.getTime() > Date.now()
+    );
+  }
+
+  private invalidCredentials(): BadRequestException {
+    return new BadRequestException(INVALID_CREDENTIALS);
+  }
+
+  private deactivated(): BadRequestException {
+    return new BadRequestException(DEACTIVATED);
   }
 
   private emailInUse(): ConflictException {

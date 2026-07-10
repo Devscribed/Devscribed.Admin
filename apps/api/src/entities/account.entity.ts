@@ -39,12 +39,13 @@ export class Account {
   timezone: string | null;
 
   /**
-   * Incremented to revoke all existing sessions for this account (spec 02,
-   * requirement 9). The session token carries the version it was issued at; the
-   * auth guard rejects tokens whose version no longer matches.
+   * Random GUID revocation stamp (spec 02, requirement 12). Regenerated to
+   * revoke all existing sessions (password reset, member removal, password
+   * change). The session token carries the stamp it was issued with; the auth
+   * guard rejects tokens whose stamp no longer matches.
    */
-  @Column({ type: 'int', name: 'token_version', default: 0 })
-  tokenVersion: number;
+  @Column({ type: 'uuid', name: 'security_stamp' })
+  securityStamp: string;
 
   @OneToMany(() => Membership, (membership) => membership.account)
   memberships: Membership[];

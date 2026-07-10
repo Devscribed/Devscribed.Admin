@@ -18,8 +18,8 @@ type AuthedRequest = Request & {
  * verifying the JWT signature, it confirms against the database that:
  *  - the caller still holds an `active` membership in the token's organization
  *    (a `removed` member loses access — specs 02/05), and
- *  - the account's `tokenVersion` still matches the token's `ver` (a password
- *    reset revokes older sessions — spec 02, requirement 9).
+ *  - the account's `securityStamp` still matches the token's `stamp` (a password
+ *    reset regenerates the stamp, revoking older sessions — spec 02, req 12).
  *
  * Server-side enforcement is the security boundary (spec 03, requirement 7).
  */
@@ -59,7 +59,7 @@ export class JwtAuthGuard implements CanActivate {
       },
       relations: { account: true },
     });
-    if (!membership || membership.account.tokenVersion !== payload.ver) {
+    if (!membership || membership.account.securityStamp !== payload.stamp) {
       throw new UnauthorizedException();
     }
 

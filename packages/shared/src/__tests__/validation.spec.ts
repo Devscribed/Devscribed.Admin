@@ -1,6 +1,7 @@
 import {
   isValidEmail,
   normalizeEmail,
+  passwordsMatch,
   validateEmail,
   validateJobTitle,
   validateName,
@@ -167,6 +168,17 @@ describe('validateEmail — TC-01-UNIT-06: Email format and length validation', 
   it('isValidEmail remains a boolean helper', () => {
     expect(isValidEmail('good@acme.com')).toBe(true);
     expect(isValidEmail('bad@')).toBe(false);
+  });
+});
+
+describe('passwordsMatch — TC-02-UNIT-05: Password confirmation mismatch', () => {
+  it('passes when password and confirmation are equal', () => {
+    expect(passwordsMatch('NewPass1', 'NewPass1')).toBe(true);
+  });
+
+  it('fails when they differ', () => {
+    expect(passwordsMatch('NewPass1', 'NewPass2')).toBe(false);
+    expect(passwordsMatch('NewPass1', '')).toBe(false);
   });
 });
 

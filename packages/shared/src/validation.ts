@@ -127,6 +127,11 @@ export function normalizeEmail(email: string): string {
   return (email ?? '').trim().toLowerCase();
 }
 
+/** Whether a password and its confirmation match (spec 02, reset). */
+export function passwordsMatch(password: string, confirmation: string): boolean {
+  return password === confirmation;
+}
+
 /**
  * Validate a job title (spec 06, requirement 4): free text up to 100 chars,
  * may be empty (cleared). Returns the trimmed value on success.

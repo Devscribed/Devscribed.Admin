@@ -110,13 +110,29 @@ export async function forgotPassword(email: string): Promise<string> {
   return (body.message as string) ?? '';
 }
 
-/** Set a new password from a valid reset token (spec 02, reqs 8–9). */
-export async function resetPassword(token: string, password: string): Promise<string> {
+/** Whether a reset token is currently valid (checked on page load). */
+export async function validateResetToken(token: string): Promise<boolean> {
+  const res = await fetch(
+    `${BASE}/auth/reset-password/validate?token=${encodeURIComponent(token)}`,
+    {
+      credentials: 'include',
+    },
+  );
+  const body = await parseBody(res);
+  return res.ok && body.valid === true;
+}
+
+/** Set a new password from a valid reset token (spec 02, reqs 9–11). */
+export async function resetPassword(
+  token: string,
+  password: string,
+  passwordConfirmation: string,
+): Promise<string> {
   const res = await fetch(`${BASE}/auth/reset-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ token, password }),
+    body: JSON.stringify({ token, password, passwordConfirmation }),
   });
   const body = await parseBody(res);
   if (!res.ok) {

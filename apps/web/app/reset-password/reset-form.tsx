@@ -1,32 +1,48 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { validatePassword } from '@devscribed/shared';
-import { ApiError, resetPassword } from '../../lib/api';
+import { passwordsMatch, validatePassword } from '@devscribed/shared';
+import { ApiError, resetPassword, validateResetToken } from '../../lib/api';
+
+const INVALID_LINK = 'This reset link is invalid or has expired';
+
+type Status = 'validating' | 'invalid' | 'ready' | 'success';
 
 export default function ResetPasswordForm() {
   const token = useSearchParams().get('token') ?? '';
+  const [status, setStatus] = useState<Status>('validating');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [touched, setTouched] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const validationError = useMemo<string | null>(() => {
-    const policy = validatePassword(password);
-    if (!policy.valid) {
-      return policy.error;
+  useEffect(() => {
+    let active = true;
+    if (!token) {
+      setStatus('invalid');
+      return;
     }
-    if (confirm !== password) {
-      return 'Passwords do not match';
-    }
-    return null;
-  }, [password, confirm]);
+    validateResetToken(token).then((valid) => {
+      if (active) {
+        setStatus(valid ? 'ready' : 'invalid');
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [token]);
 
-  const canSubmit = token.length > 0 && validationError === null && !submitting;
+  const policyError = useMemo<string | null>(() => {
+    const policy = validatePassword(password);
+    return policy.valid ? null : policy.error;
+  }, [password]);
+
+  const mismatch = confirm.length > 0 && !passwordsMatch(password, confirm);
+  const canSubmit =
+    password.length > 0 && policyError === null && passwordsMatch(password, confirm) && !submitting;
 
   async function onSubmit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
@@ -35,41 +51,51 @@ export default function ResetPasswordForm() {
       return;
     }
     setSubmitting(true);
-    setError(null);
+    setSubmitError(null);
     try {
-      await resetPassword(token, password);
-      setDone(true);
+      await resetPassword(token, password, confirm);
+      setStatus('success');
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.body.message ?? 'This reset link is invalid.');
+        setSubmitError(err.body.message ?? INVALID_LINK);
       } else {
-        setError('Something went wrong. Please try again.');
+        setSubmitError('Something went wrong. Please try again.');
       }
       setSubmitting(false);
     }
   }
 
-  if (!token) {
+  if (status === 'validating') {
+    return <p className="muted">Validating reset link…</p>;
+  }
+
+  if (status === 'invalid') {
     return (
       <>
         <h1>Reset your password</h1>
         <div className="error-banner" role="alert" data-testid="reset-error-message">
-          This reset link is invalid.
+          {INVALID_LINK}
         </div>
         <div className="auth-links">
-          <Link href="/forgot-password">Request a new link</Link>
+          <Link href="/login" data-testid="reset-login-link">
+            Back to login
+          </Link>
         </div>
       </>
     );
   }
 
-  if (done) {
+  if (status === 'success') {
     return (
       <>
         <h1>Password updated</h1>
-        <div className="confirmation">Your password has been updated. Please sign in.</div>
+        <div className="confirmation" data-testid="reset-success-message">
+          Your password has been reset.
+        </div>
         <div className="auth-links">
-          <Link href="/login">Go to sign in</Link>
+          <Link href="/login" data-testid="reset-login-link">
+            Back to login
+          </Link>
         </div>
       </>
     );
@@ -79,9 +105,9 @@ export default function ResetPasswordForm() {
     <>
       <h1>Choose a new password</h1>
 
-      {error && (
+      {submitError && (
         <div className="error-banner" role="alert" data-testid="reset-error-message">
-          {error}
+          {submitError}
         </div>
       )}
 
@@ -97,6 +123,11 @@ export default function ResetPasswordForm() {
             onBlur={() => setTouched(true)}
             autoComplete="new-password"
           />
+          {touched && policyError && (
+            <div className="field-error" data-testid="field-error-password">
+              {policyError}
+            </div>
+          )}
         </div>
 
         <div className="field">
@@ -110,9 +141,9 @@ export default function ResetPasswordForm() {
             onBlur={() => setTouched(true)}
             autoComplete="new-password"
           />
-          {touched && validationError && (
-            <div className="field-error" data-testid="field-error-password">
-              {validationError}
+          {mismatch && (
+            <div className="field-error" data-testid="field-error-password-confirm">
+              Passwords do not match
             </div>
           )}
         </div>
@@ -123,7 +154,7 @@ export default function ResetPasswordForm() {
           data-testid="reset-submit-button"
           disabled={!canSubmit}
         >
-          {submitting ? 'Updating…' : 'Update password'}
+          {submitting ? 'Updating…' : 'Reset password'}
         </button>
       </form>
     </>

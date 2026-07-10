@@ -66,7 +66,9 @@ export default function ForgotPasswordPage() {
         )}
 
         <div className="auth-links">
-          <Link href="/login">Back to sign in</Link>
+          <Link href="/login" data-testid="forgot-back-link">
+            Back to login
+          </Link>
         </div>
       </div>
     </main>

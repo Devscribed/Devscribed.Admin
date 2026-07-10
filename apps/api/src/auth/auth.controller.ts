@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, Post, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Query, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { AuthContext, AuthService } from './auth.service';
 import { SessionService } from './session.service';
@@ -50,12 +50,18 @@ export class AuthController {
     return { message: NEUTRAL_FORGOT_MESSAGE };
   }
 
+  /** GET /api/auth/reset-password/validate?token=… — check a token before showing the form. */
+  @Get('reset-password/validate')
+  async validateResetToken(@Query('token') token?: string) {
+    return { valid: await this.auth.isResetTokenValid(token ?? '') };
+  }
+
   /** POST /api/auth/reset-password — set a new password from a valid token (spec 02). */
   @Post('reset-password')
   @HttpCode(200)
   async resetPassword(@Body() dto: ResetPasswordDto) {
     await this.auth.resetPassword(dto);
-    return { message: 'Your password has been updated. Please log in.' };
+    return { message: 'Your password has been reset' };
   }
 
   private establishSession(res: Response, { account, organization, membership }: AuthContext) {
@@ -64,7 +70,7 @@ export class AuthController {
       orgId: organization.id,
       role: membership.role,
       email: account.email,
-      ver: account.tokenVersion,
+      stamp: account.securityStamp,
     });
 
     return {
