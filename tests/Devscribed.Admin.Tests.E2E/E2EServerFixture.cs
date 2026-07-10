@@ -15,13 +15,15 @@ public class E2EServerFixture : IDisposable
 
     public string BaseUrl { get; }
 
+    private readonly InMemoryEmailSender _emailSender = new();
+
     public E2EServerFixture()
     {
         var port = GetFreePort();
         BaseUrl = $"http://localhost:{port}";
         var dbName = Guid.NewGuid().ToString();
 
-        _factory = new KestrelWebApplicationFactory(BaseUrl, dbName);
+        _factory = new KestrelWebApplicationFactory(BaseUrl, dbName, _emailSender);
 
         // Force the host to start by creating a client
         _factory.CreateClient();
@@ -31,6 +33,12 @@ public class E2EServerFixture : IDisposable
 
     public void SeedDuplicateUser()
     {
+        SeedAccount("owner@acme.com", "Password1", "Existing", "User");
+    }
+
+    public Devscribed.Admin.Web.Models.Account SeedAccount(
+        string email, string password, string firstName = "Pat", string lastName = "Owner", string status = "active")
+    {
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var hasher = scope.ServiceProvider.GetRequiredService<Devscribed.Admin.Web.Services.IPasswordHasher>();
@@ -38,10 +46,10 @@ public class E2EServerFixture : IDisposable
         var account = new Devscribed.Admin.Web.Models.Account
         {
             Id = Guid.NewGuid(),
-            Email = "owner@acme.com",
-            PasswordHash = hasher.Hash("Password1"),
-            FirstName = "Existing",
-            LastName = "User",
+            Email = email,
+            PasswordHash = hasher.Hash(password),
+            FirstName = firstName,
+            LastName = lastName,
             CreatedAt = DateTime.UtcNow,
         };
         var org = new Devscribed.Admin.Web.Models.Organization
@@ -56,14 +64,17 @@ public class E2EServerFixture : IDisposable
             AccountId = account.Id,
             OrganizationId = org.Id,
             Role = "admin",
-            Status = "active",
+            Status = status,
             JoinedAt = DateTime.UtcNow,
         };
         db.Accounts.Add(account);
         db.Organizations.Add(org);
         db.Memberships.Add(membership);
         db.SaveChanges();
+        return account;
     }
+
+    public IReadOnlyCollection<InMemoryEmailSender.SentEmail> SentEmails => _emailSender.Sent;
 
     public void Dispose()
     {
@@ -84,12 +95,14 @@ internal class KestrelWebApplicationFactory : WebApplicationFactory<Program>
 {
     private readonly string _baseUrl;
     private readonly string _dbName;
+    private readonly InMemoryEmailSender _emailSender;
     private IHost? _kestrelHost;
 
-    public KestrelWebApplicationFactory(string baseUrl, string dbName)
+    public KestrelWebApplicationFactory(string baseUrl, string dbName, InMemoryEmailSender emailSender)
     {
         _baseUrl = baseUrl;
         _dbName = dbName;
+        _emailSender = emailSender;
     }
 
     protected override IHost CreateHost(IHostBuilder builder)
@@ -121,6 +134,13 @@ internal class KestrelWebApplicationFactory : WebApplicationFactory<Program>
 
             services.AddDbContext<AppDbContext>(options =>
                 options.UseInMemoryDatabase(_dbName));
+
+            var emailDescriptors = services
+                .Where(d => d.ServiceType == typeof(Devscribed.Admin.Web.Services.IEmailSender))
+                .ToList();
+            foreach (var d in emailDescriptors) services.Remove(d);
+
+            services.AddSingleton<Devscribed.Admin.Web.Services.IEmailSender>(_emailSender);
         });
     }
 

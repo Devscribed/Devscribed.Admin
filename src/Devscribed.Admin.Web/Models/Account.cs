@@ -9,6 +9,7 @@ public class Account
     public string LastName { get; set; } = string.Empty;
     public string? Timezone { get; set; }
     public DateTime CreatedAt { get; set; }
+    public Guid SecurityStamp { get; set; } = Guid.NewGuid();
 
     public Membership? Membership { get; set; }
 }

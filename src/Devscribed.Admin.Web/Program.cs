@@ -1,7 +1,10 @@
 using Devscribed.Admin.Web.Data;
+using Devscribed.Admin.Web.Security;
 using Devscribed.Admin.Web.Services;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,7 +20,11 @@ builder.Services.AddDbContext<AppDbContext>(options =>
                       ?? "Data Source=devscribed.db"));
 
 builder.Services.AddScoped<SignupService>();
+builder.Services.AddScoped<LoginService>();
+builder.Services.AddScoped<PasswordResetService>();
 builder.Services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
+builder.Services.AddSingleton<ITokenGenerator, TokenGenerator>();
+builder.Services.AddSingleton<IEmailSender, ConsoleEmailSender>();
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
@@ -25,6 +32,32 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.LoginPath = "/login";
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Strict;
+
+        options.Events.OnValidatePrincipal = async context =>
+        {
+            var accountIdClaim = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+            var securityStampClaim = context.Principal?.FindFirstValue(AppClaimTypes.SecurityStamp);
+
+            if (accountIdClaim == null || !Guid.TryParse(accountIdClaim, out var accountId)
+                || securityStampClaim == null || !Guid.TryParse(securityStampClaim, out var securityStamp))
+            {
+                context.RejectPrincipal();
+                await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                return;
+            }
+
+            var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+            var currentStamp = await db.Accounts
+                .Where(a => a.Id == accountId)
+                .Select(a => (Guid?)a.SecurityStamp)
+                .SingleOrDefaultAsync();
+
+            if (currentStamp == null || currentStamp.Value != securityStamp)
+            {
+                context.RejectPrincipal();
+                await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            }
+        };
     });
 
 builder.Services.AddAuthorization();

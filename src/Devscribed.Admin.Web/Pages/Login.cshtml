@@ -8,7 +8,7 @@
     <div class="auth-card">
         <h1>Sign in</h1>
 
-        <div id="login-error-banner" data-testid="login-error-banner" class="error-banner" style="display:none;"></div>
+        <div id="login-error-message" data-testid="login-error-message" class="error-banner" style="display:none;"></div>
 
         <form id="login-form" data-testid="login-form" novalidate>
             <div class="form-group">
@@ -24,6 +24,10 @@
             <button type="submit" id="login-submit" data-testid="login-submit-button">
                 Sign in
             </button>
+
+            <p class="auth-link">
+                <a href="/forgot-password" data-testid="login-forgot-link">Forgot password?</a>
+            </p>
         </form>
 
         <p class="auth-link">

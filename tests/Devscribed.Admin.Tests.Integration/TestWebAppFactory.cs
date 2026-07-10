@@ -22,6 +22,14 @@ public class TestWebAppFactory : WebApplicationFactory<Program>
 
             services.AddDbContext<AppDbContext>(options =>
                 options.UseInMemoryDatabase(_dbName));
+
+            var emailDescriptors = services
+                .Where(d => d.ServiceType == typeof(Devscribed.Admin.Web.Services.IEmailSender))
+                .ToList();
+            foreach (var d in emailDescriptors) services.Remove(d);
+
+            services.AddSingleton<InMemoryEmailSender>();
+            services.AddSingleton<Devscribed.Admin.Web.Services.IEmailSender>(sp => sp.GetRequiredService<InMemoryEmailSender>());
         });
     }
 }

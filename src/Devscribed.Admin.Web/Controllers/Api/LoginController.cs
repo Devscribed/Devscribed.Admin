@@ -10,33 +10,28 @@ namespace Devscribed.Admin.Web.Controllers.Api;
 
 [ApiController]
 [Route("api/[controller]")]
-public class SignupController : ControllerBase
+public class LoginController : ControllerBase
 {
-    private readonly SignupService _signupService;
+    private readonly LoginService _loginService;
 
-    public SignupController(SignupService signupService)
+    public LoginController(LoginService loginService)
     {
-        _signupService = signupService;
+        _loginService = loginService;
     }
 
     [HttpPost]
-    public async Task<IActionResult> Post([FromBody] SignupRequest request)
+    public async Task<IActionResult> Post([FromBody] LoginRequest request)
     {
-        var result = await _signupService.SignupAsync(request);
+        var result = await _loginService.LoginAsync(request);
 
         if (!result.Succeeded)
-        {
-            if (result.Errors != null)
-                return BadRequest(new { errors = result.Errors });
-
             return BadRequest(new { message = result.ErrorMessage });
-        }
 
         var claims = new List<Claim>
         {
-            new(ClaimTypes.NameIdentifier, result.AccountId!.Value.ToString()),
-            new(AppClaimTypes.OrganizationId, result.OrganizationId!.Value.ToString()),
-            new(ClaimTypes.Role, "admin"),
+            new(ClaimTypes.NameIdentifier, result.AccountId.ToString()),
+            new(AppClaimTypes.OrganizationId, result.OrganizationId.ToString()),
+            new(ClaimTypes.Role, result.Role),
             new(AppClaimTypes.SecurityStamp, result.SecurityStamp.ToString()),
         };
 
@@ -45,6 +40,6 @@ public class SignupController : ControllerBase
             CookieAuthenticationDefaults.AuthenticationScheme,
             new ClaimsPrincipal(identity));
 
-        return Ok(new { accountId = result.AccountId, organizationId = result.OrganizationId });
+        return Ok(new { accountId = result.AccountId });
     }
 }
