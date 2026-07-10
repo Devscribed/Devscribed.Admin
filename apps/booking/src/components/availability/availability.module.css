@@ -1,0 +1,175 @@
+/*
+ * Structural styles only — layout, grid, and perceptible state distinctions.
+ * Colors/spacing are placeholders; visual design lands separately. States are
+ * exposed via data-* attributes so they can be restyled without touching JS.
+ */
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+@media (min-width: 720px) {
+  .pickerBody {
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+  }
+  .calendar {
+    flex: 0 0 auto;
+  }
+  .slots {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}
+
+/* Time zone */
+.timezone {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-width: 28rem;
+}
+
+/* Calendar */
+.calendar {
+  width: 20rem;
+  max-width: 100%;
+}
+
+.calendarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.navButton {
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  cursor: pointer;
+}
+
+.navButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.weekday {
+  text-align: center;
+  font-size: 0.75rem;
+  opacity: 0.7;
+  padding: 0.25rem 0;
+}
+
+.dayCell {
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.25rem;
+  border: 1px solid transparent;
+  background: none;
+  font: inherit;
+  border-radius: 4px;
+}
+
+.dayBlank {
+  aspect-ratio: 1 / 1;
+  min-height: 2.25rem;
+}
+
+.dayCell[data-state="available"] {
+  cursor: pointer;
+  border-color: currentColor;
+}
+
+.dayCell[data-state="unavailable"],
+.dayCell[data-state="past"],
+.dayCell[data-state="beyond"] {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.dayCell[data-today="true"] {
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.dayCell[data-selected="true"] {
+  outline: 3px solid currentColor;
+  outline-offset: -3px;
+  font-weight: 700;
+}
+
+.dayCell:focus-visible {
+  outline: 3px dashed currentColor;
+  outline-offset: 2px;
+}
+
+/* Slot list */
+.slots {
+  width: 100%;
+}
+
+.slotsHeader {
+  margin-bottom: 0.5rem;
+}
+
+.slotList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: 20rem;
+  overflow-y: auto;
+}
+
+.slotButton {
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  border: 1px solid currentColor;
+  background: none;
+  font: inherit;
+  border-radius: 4px;
+}
+
+.slotButton[data-selected="true"] {
+  outline: 3px solid currentColor;
+  outline-offset: -3px;
+  font-weight: 700;
+}
+
+.slotButton:focus-visible {
+  outline: 3px dashed currentColor;
+  outline-offset: 2px;
+}
+
+.stateMessage {
+  padding: 1rem 0;
+  opacity: 0.8;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
