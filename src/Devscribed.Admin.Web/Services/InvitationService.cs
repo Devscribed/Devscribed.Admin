@@ -203,7 +203,7 @@ public class InvitationService
         _db.Memberships.Add(membership);
         await _db.SaveChangesAsync();
 
-        return AcceptInvitationResult.Success(account.Id, invitation.OrganizationId, invitation.Role, account.SecurityStamp);
+        return AcceptInvitationResult.Success(account.Id, membership.Id, invitation.OrganizationId, invitation.Role, account.SecurityStamp, account.Email);
     }
 
     private async Task<AcceptInvitationResult> AcceptExistingAccountAsync(
@@ -213,6 +213,7 @@ public class InvitationService
             return AcceptInvitationResult.Failure("Incorrect password");
 
         var existingMembership = account.Membership;
+        Guid resultMembershipId;
 
         if (existingMembership != null && existingMembership.OrganizationId != invitation.OrganizationId)
         {
@@ -233,6 +234,7 @@ public class InvitationService
                 JoinedAt = now,
             };
             _db.Memberships.Add(newMembership);
+            resultMembershipId = newMembership.Id;
         }
         else if (existingMembership != null && existingMembership.OrganizationId == invitation.OrganizationId)
         {
@@ -240,6 +242,7 @@ public class InvitationService
             existingMembership.Status = "active";
             existingMembership.JoinedAt = now;
             existingMembership.JobTitle = null;
+            resultMembershipId = existingMembership.Id;
         }
         else
         {
@@ -253,6 +256,7 @@ public class InvitationService
                 JoinedAt = now,
             };
             _db.Memberships.Add(newMembership);
+            resultMembershipId = newMembership.Id;
         }
 
         invitation.Status = "used";
@@ -260,7 +264,7 @@ public class InvitationService
 
         await _db.SaveChangesAsync();
 
-        return AcceptInvitationResult.Success(account.Id, invitation.OrganizationId, invitation.Role, account.SecurityStamp);
+        return AcceptInvitationResult.Success(account.Id, resultMembershipId, invitation.OrganizationId, invitation.Role, account.SecurityStamp, account.Email);
     }
 
     private async Task<(bool OrgSwitch, string? OldOrgName, bool LastAdmin)> DetermineOrgSwitchAsync(Account? account, Guid invitedOrgId)
@@ -331,17 +335,21 @@ public class AcceptInvitationResult
     public string? OldOrganizationName { get; init; }
     public bool LastAdmin { get; init; }
     public Guid AccountId { get; init; }
+    public Guid MembershipId { get; init; }
     public Guid OrganizationId { get; init; }
     public string Role { get; init; } = string.Empty;
     public Guid SecurityStamp { get; init; }
+    public string Email { get; init; } = string.Empty;
 
-    public static AcceptInvitationResult Success(Guid accountId, Guid organizationId, string role, Guid securityStamp) => new()
+    public static AcceptInvitationResult Success(Guid accountId, Guid membershipId, Guid organizationId, string role, Guid securityStamp, string email) => new()
     {
         Succeeded = true,
         AccountId = accountId,
+        MembershipId = membershipId,
         OrganizationId = organizationId,
         Role = role,
         SecurityStamp = securityStamp,
+        Email = email,
     };
 
     public static AcceptInvitationResult Failure(string message) => new() { Succeeded = false, ErrorMessage = message };

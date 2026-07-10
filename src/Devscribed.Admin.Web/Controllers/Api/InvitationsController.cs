@@ -97,7 +97,9 @@ public class InvitationsController : ControllerBase
         {
             new(ClaimTypes.NameIdentifier, result.AccountId.ToString()),
             new(AppClaimTypes.OrganizationId, result.OrganizationId.ToString()),
+            new(AppClaimTypes.MembershipId, result.MembershipId.ToString()),
             new(ClaimTypes.Role, result.Role),
+            new(ClaimTypes.Email, result.Email),
             new(AppClaimTypes.SecurityStamp, result.SecurityStamp.ToString()),
         };
 

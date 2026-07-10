@@ -23,6 +23,7 @@ builder.Services.AddScoped<SignupService>();
 builder.Services.AddScoped<LoginService>();
 builder.Services.AddScoped<PasswordResetService>();
 builder.Services.AddScoped<InvitationService>();
+builder.Services.AddScoped<MembersService>();
 builder.Services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddSingleton<ITokenGenerator, TokenGenerator>();
 builder.Services.AddSingleton<IEmailSender, ConsoleEmailSender>();
