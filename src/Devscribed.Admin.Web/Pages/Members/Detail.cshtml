@@ -1,0 +1,72 @@
+@page "/org/{orgId:guid}/members/{memberId:guid}"
+@model Devscribed.Admin.Web.Pages.Members.DetailModel
+@{
+    ViewData["Title"] = "Member detail";
+}
+
+<div class="page-container member-detail-page">
+    <a href="/members" id="member-detail-back-link" data-testid="member-detail-back-link" class="back-link">&larr; Back to members</a>
+
+    <div id="member-detail-loading-skeleton" data-testid="member-detail-loading-skeleton" class="skeleton member-detail-skeleton">
+        <div class="skeleton-row" style="width:80px;height:80px;border-radius:50%;margin:0 auto 1rem;"></div>
+        <div class="skeleton-row" style="width:200px;margin:0 auto;"></div>
+        <div class="skeleton-row"></div>
+        <div class="skeleton-row"></div>
+    </div>
+
+    <div id="member-detail-not-found" data-testid="member-detail-not-found" style="display:none;">Member not found</div>
+
+    <div id="member-detail" data-testid="member-detail" class="member-detail-card" style="display:none;">
+        <div class="member-detail-header">
+            <div id="member-detail-avatar" data-testid="member-detail-avatar" class="avatar-circle"></div>
+            <h1 id="member-detail-name" data-testid="member-detail-name"></h1>
+            <div class="badges">
+                <span id="member-detail-role-badge" data-testid="member-detail-role-badge" class="role-badge"></span>
+                <span id="member-detail-status-badge" data-testid="member-detail-status-badge" class="status-badge removed" style="display:none;">Removed</span>
+            </div>
+            <div id="member-detail-joined" data-testid="member-detail-joined" class="meta-line"></div>
+            <div id="member-detail-email" data-testid="member-detail-email" class="meta-line"></div>
+            <div id="member-detail-timezone" data-testid="member-detail-timezone" class="meta-line"></div>
+        </div>
+
+        <div class="tab-bar">
+            <button type="button" id="member-detail-tab-about" data-testid="member-detail-tab-about" class="tab active">ABOUT</button>
+            <button type="button" id="member-detail-tab-vacation" data-testid="member-detail-tab-vacation" class="tab" disabled>Vacation</button>
+            <button type="button" id="member-detail-tab-projects" data-testid="member-detail-tab-projects" class="tab" disabled>Projects</button>
+            <button type="button" id="member-detail-tab-roles" data-testid="member-detail-tab-roles" class="tab" disabled>Roles</button>
+            <button type="button" id="member-detail-tab-payments" data-testid="member-detail-tab-payments" class="tab" disabled>Payments</button>
+        </div>
+
+        <div class="member-detail-form">
+            <div class="form-group" id="role-field-group" style="display:none;">
+                <label for="member-role-select">Role</label>
+                <select id="member-role-select" class="member-role-select"></select>
+                <div id="role-change-guard-message" data-testid="role-change-guard-message" class="field-error" style="display:none;">Organization must retain at least one admin</div>
+            </div>
+
+            <div class="form-group" id="job-title-field-group" style="display:none;">
+                <label for="job-title-input">Job title</label>
+                <input type="text" id="job-title-input" data-testid="job-title-input" maxlength="200" placeholder="Enter a job title" autocomplete="off" />
+                <div class="field-error" id="field-error-jobTitle" data-testid="field-error-jobTitle"></div>
+            </div>
+
+            <div class="form-group" id="job-title-readonly-group" style="display:none;">
+                <label>Job title</label>
+                <div id="job-title-readonly" data-testid="job-title-readonly"></div>
+            </div>
+
+            <button type="button" id="job-title-save-button" data-testid="job-title-save-button" style="display:none;">Save changes</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast-member-saved" data-testid="toast-member-saved" class="toast" style="display:none;">Changes saved</div>
+<div id="toast-member-detail-error" data-testid="toast-member-detail-error" class="toast" style="display:none;"></div>
+
+@section Scripts {
+    <script>
+        window.__memberDetailOrgId = "@Model.OrganizationId";
+        window.__memberDetailMemberId = "@Model.MemberId";
+    </script>
+    <script src="~/js/member-detail.js"></script>
+}

@@ -1,3 +1,4 @@
+using Devscribed.Admin.Web.Models;
 using Devscribed.Admin.Web.Security;
 using Devscribed.Admin.Web.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -43,6 +44,36 @@ public class MembersController : ControllerBase
         });
     }
 
+    [HttpGet("{memberId}")]
+    public async Task<IActionResult> GetDetail(Guid orgId, Guid memberId)
+    {
+        if (!TryGetCallerContext(orgId, out _, out var callerRole, out var errorResult))
+            return errorResult!;
+
+        var result = await _membersService.GetDetailAsync(orgId, memberId, callerRole);
+        if (result.Outcome == MemberDetailOutcome.NotFound)
+            return NotFound(new { error = "not_found", message = "Member not found" });
+
+        var dto = result.Dto!;
+        return Ok(new
+        {
+            id = dto.Id,
+            fullName = dto.FullName,
+            email = dto.Email,
+            role = dto.Role,
+            status = dto.Status,
+            joinedAt = dto.JoinedAt,
+            jobTitle = dto.JobTitle,
+            timezone = dto.Timezone,
+            avatarInitials = dto.AvatarInitials,
+            isLastAdmin = dto.IsLastAdmin,
+            canEditRole = dto.CanEditRole,
+            canEditJobTitle = dto.CanEditJobTitle,
+            availableRoles = dto.AvailableRoles,
+            callerRole = dto.CallerRole,
+        });
+    }
+
     [HttpDelete("{memberId}")]
     public async Task<IActionResult> Delete(Guid orgId, Guid memberId)
     {
@@ -50,6 +81,16 @@ public class MembersController : ControllerBase
             return errorResult!;
 
         var result = await _membersService.DeleteAsync(orgId, memberId, callerMembershipId, callerRole);
+        return MapResult(result);
+    }
+
+    [HttpPut("{memberId}")]
+    public async Task<IActionResult> UpdateDetail(Guid orgId, Guid memberId, [FromBody] UpdateMemberRequest request)
+    {
+        if (!TryGetCallerContext(orgId, out _, out var callerRole, out var errorResult))
+            return errorResult!;
+
+        var result = await _membersService.UpdateDetailAsync(orgId, memberId, callerRole, request.Role, request.JobTitle);
         return MapResult(result);
     }
 
@@ -98,8 +139,10 @@ public class MembersController : ControllerBase
         {
             MemberActionOutcome.Success => Ok(new { success = true }),
             MemberActionOutcome.NotFound => NotFound(),
-            MemberActionOutcome.Forbidden => StatusCode(403, new { error = "forbidden", message = result.ErrorMessage }),
+            MemberActionOutcome.Forbidden => StatusCode(403, new { error = result.ErrorCode ?? "forbidden", message = result.ErrorMessage }),
             MemberActionOutcome.Conflict => Conflict(new { error = result.ErrorCode, message = result.ErrorMessage }),
+            MemberActionOutcome.BadRequest => BadRequest(new { error = result.ErrorCode, message = result.ErrorMessage }),
+            MemberActionOutcome.FieldValidation => BadRequest(new { errors = result.FieldErrors }),
             _ => StatusCode(500),
         };
     }

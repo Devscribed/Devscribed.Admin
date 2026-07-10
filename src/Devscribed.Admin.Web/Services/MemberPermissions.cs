@@ -10,4 +10,48 @@ public static class MemberPermissions
 
     public static bool CanDeleteOrRestore(string role) =>
         role is "admin" or "manager";
+
+    public static readonly string[] AllRoles = { "admin", "manager", "user", "viewer" };
+    public static readonly string[] ManagerAssignableRoles = { "manager", "user", "viewer" };
+
+    /// <summary>
+    /// Whether the caller has authority over the target member's role at all
+    /// (independent of which new role is being assigned).
+    /// </summary>
+    public static bool CanEditRole(string callerRole, string targetRole, string targetStatus)
+    {
+        if (targetStatus != "active")
+            return false;
+
+        return callerRole switch
+        {
+            "admin" => true,
+            "manager" => targetRole is "user" or "viewer",
+            _ => false,
+        };
+    }
+
+    /// <summary>
+    /// Whether the caller is allowed to assign the given role value to anyone.
+    /// </summary>
+    public static bool CanAssignRole(string callerRole, string newRole)
+    {
+        return callerRole switch
+        {
+            "admin" => AllRoles.Contains(newRole),
+            "manager" => ManagerAssignableRoles.Contains(newRole),
+            _ => false,
+        };
+    }
+
+    public static bool CanEditJobTitle(string callerRole, string targetStatus) =>
+        targetStatus == "active" && callerRole is "admin" or "manager";
+
+    public static string[] GetAvailableRoles(string callerRole, string targetRole, string targetStatus)
+    {
+        if (!CanEditRole(callerRole, targetRole, targetStatus))
+            return Array.Empty<string>();
+
+        return callerRole == "admin" ? AllRoles : ManagerAssignableRoles;
+    }
 }
