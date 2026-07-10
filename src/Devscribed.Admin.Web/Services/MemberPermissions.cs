@@ -66,6 +66,9 @@ public static class MemberPermissions
     public static bool CanReviewVacationRequests(string callerRole) =>
         callerRole is "admin" or "manager";
 
+    public static bool CanViewRequests(string callerRole) =>
+        callerRole is "admin" or "manager";
+
     public static bool CanCancelVacationRequest(string callerRole, bool isOwnMembership, string requestStatus)
     {
         if (callerRole is "admin" or "manager")

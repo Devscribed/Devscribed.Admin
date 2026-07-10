@@ -34,4 +34,15 @@ public class MemberPermissionsDetailTests
     {
         Assert.Equal(expected, MemberPermissions.CanViewVacation(callerRole, isOwnMembership));
     }
+
+    // TC-10: Requests page visibility per role
+    [Theory]
+    [InlineData("admin", true)]
+    [InlineData("manager", true)]
+    [InlineData("user", false)]
+    [InlineData("viewer", false)]
+    public void Can_view_requests_matches_spec(string callerRole, bool expected)
+    {
+        Assert.Equal(expected, MemberPermissions.CanViewRequests(callerRole));
+    }
 }

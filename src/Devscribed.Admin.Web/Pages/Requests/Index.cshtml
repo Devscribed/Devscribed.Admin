@@ -1,0 +1,72 @@
+@page "/org/{orgId:guid}/requests"
+@model Devscribed.Admin.Web.Pages.Requests.IndexModel
+@{
+    ViewData["Title"] = "Requests";
+}
+
+<div class="app-shell">
+    @await Html.PartialAsync("_Sidebar", (Model.CurrentRole, Model.OrganizationId))
+
+    <div class="page-container requests-page" data-testid="requests-page">
+        <div class="page-header">
+            <h1>Requests</h1>
+        </div>
+
+        <div class="requests-toolbar">
+            <label for="requests-status-filter">Status</label>
+            <select id="requests-status-filter" data-testid="requests-status-filter">
+                <option value="pending" selected>Pending</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="cancelled">Cancelled</option>
+                <option value="all">All</option>
+            </select>
+        </div>
+
+        <div id="requests-loading-skeleton" data-testid="requests-loading-skeleton" class="skeleton">
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+        </div>
+
+        <div id="requests-empty-state" data-testid="requests-empty-state" style="display:none;"></div>
+
+        <div id="requests-list" class="requests-list" style="display:none;"></div>
+    </div>
+</div>
+
+<div id="toast-request-approved" data-testid="toast-request-approved" class="toast" style="display:none;">Request approved</div>
+<div id="toast-request-rejected" data-testid="toast-request-rejected" class="toast" style="display:none;">Request rejected</div>
+<div id="toast-request-cancelled" data-testid="toast-request-cancelled" class="toast" style="display:none;">Request cancelled</div>
+<div id="toast-requests-error" data-testid="toast-requests-error" class="toast" style="display:none;"></div>
+
+<div id="vacation-reject-modal-overlay" class="modal-overlay" style="display:none;">
+    <div class="modal-card" data-testid="vacation-reject-modal">
+        <div class="modal-header">
+            <h2>Reject Request</h2>
+            <button type="button" id="vacation-reject-close-button" class="modal-close" aria-label="Close">&times;</button>
+        </div>
+
+        <div id="vacation-reject-summary"></div>
+
+        <form id="vacation-reject-form" novalidate>
+            <div class="form-group">
+                <label for="vacation-reject-comment-input">Comment (optional)</label>
+                <textarea id="vacation-reject-comment-input" data-testid="vacation-reject-comment-input" maxlength="500"></textarea>
+                <div class="field-error" id="field-error-reviewerComment" data-testid="field-error-reviewerComment"></div>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" id="vacation-reject-cancel-btn" data-testid="vacation-reject-cancel-btn">Cancel</button>
+                <button type="submit" id="vacation-reject-confirm-btn" data-testid="vacation-reject-confirm-btn">Reject</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        window.__requestsOrgId = "@Model.OrganizationId";
+    </script>
+    <script src="~/js/requests-page.js"></script>
+}

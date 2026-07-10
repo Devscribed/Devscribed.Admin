@@ -1,0 +1,35 @@
+@model (string CurrentRole, Guid OrganizationId)
+@{
+    var canViewRequests = Devscribed.Admin.Web.Services.MemberPermissions.CanViewRequests(Model.CurrentRole);
+}
+<nav class="app-sidebar" data-testid="app-sidebar">
+    <a href="/members" class="sidebar-link">Members</a>
+    @if (canViewRequests)
+    {
+        <a href="/org/@Model.OrganizationId/requests" class="sidebar-link" data-testid="sidebar-requests-link">
+            Requests
+            <span id="sidebar-requests-badge" data-testid="sidebar-requests-badge" class="sidebar-badge" style="display:none;">0</span>
+        </a>
+    }
+</nav>
+@if (canViewRequests)
+{
+    <script>
+        (function () {
+            fetch(`/api/organizations/@Model.OrganizationId/requests?status=pending`)
+                .then((res) => res.ok ? res.json() : null)
+                .then((data) => {
+                    if (!data) return;
+                    const badgeEl = document.getElementById('sidebar-requests-badge');
+                    if (!badgeEl) return;
+                    if (data.pendingCount > 0) {
+                        badgeEl.textContent = String(data.pendingCount);
+                        badgeEl.style.display = '';
+                    } else {
+                        badgeEl.style.display = 'none';
+                    }
+                })
+                .catch(() => {});
+        })();
+    </script>
+}
