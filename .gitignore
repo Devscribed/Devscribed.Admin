@@ -77,6 +77,9 @@ Desktop.ini
 # Playwright
 playwright/.cache/
 
+# Claude Code local state / worktrees
+.claude/
+
 # misc
 .DS_Store
 *.pem

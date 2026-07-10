@@ -90,6 +90,7 @@ export class AuthService {
             passwordHash,
             firstName: data.firstName,
             lastName: data.lastName,
+            timezone: data.timezone,
             tokenVersion: 0,
           }),
         );
@@ -229,8 +230,8 @@ export class AuthService {
 
   private emailInUse(): ConflictException {
     return new ConflictException({
-      message: 'An account with this email already exists',
-      errors: { email: 'An account with this email already exists' },
+      message: 'This email is already registered',
+      errors: { email: 'This email is already registered' },
     });
   }
 }

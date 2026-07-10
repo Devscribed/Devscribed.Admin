@@ -23,6 +23,8 @@ export interface SignupPayload {
   lastName: string;
   email: string;
   password: string;
+  /** IANA timezone auto-detected from the browser (spec 01). */
+  timezone?: string;
 }
 
 export interface Member {

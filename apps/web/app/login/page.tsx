@@ -85,7 +85,9 @@ export default function LoginPage() {
           <Link href="/forgot-password" data-testid="login-forgot-link">
             Forgot password?
           </Link>
-          <Link href="/signup">Create an organization</Link>
+          <Link href="/signup" data-testid="login-signup-link">
+            Create an account
+          </Link>
         </div>
       </div>
     </main>

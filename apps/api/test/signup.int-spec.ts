@@ -78,12 +78,48 @@ describe('Signup (spec 01 — Organization Creation)', () => {
 
     // 1. Validation error indicating the email is already in use.
     expect(res.status).toBe(409);
-    expect(res.body.message).toMatch(/already exists/i);
+    expect(res.body.message).toBe('This email is already registered');
 
     // 2. No new organization and no new membership were created.
     expect(await dataSource.getRepository(Organization).count()).toBe(orgsBefore);
     expect(await dataSource.getRepository(Membership).count()).toBe(membershipsBefore);
     expect(await dataSource.getRepository(Organization).countBy({ name: 'Different Org' })).toBe(0);
+  });
+
+  it('TC-01-INT-03: duplicate email is case-insensitive', async () => {
+    await request(app.getHttpServer()).post('/api/auth/signup').send(VALID_SIGNUP);
+    const orgsBefore = await dataSource.getRepository(Organization).count();
+
+    for (const email of ['OWNER@ACME.COM', 'Owner@Acme.Com']) {
+      const res = await request(app.getHttpServer())
+        .post('/api/auth/signup')
+        .send({ ...VALID_SIGNUP, email });
+      expect(res.status).toBe(409);
+      expect(res.body.message).toBe('This email is already registered');
+    }
+
+    expect(await dataSource.getRepository(Account).count()).toBe(1);
+    expect(await dataSource.getRepository(Organization).count()).toBe(orgsBefore);
+  });
+
+  it('TC-01-INT-04: timezone is stored on signup', async () => {
+    const res = await request(app.getHttpServer())
+      .post('/api/auth/signup')
+      .send({ ...VALID_SIGNUP, timezone: 'America/New_York' });
+    expect(res.status).toBe(201);
+
+    const account = await dataSource.getRepository(Account).findOneByOrFail({
+      email: 'owner@acme.com',
+    });
+    expect(account.timezone).toBe('America/New_York');
+  });
+
+  it('defaults timezone to UTC when none is provided', async () => {
+    await request(app.getHttpServer()).post('/api/auth/signup').send(VALID_SIGNUP);
+    const account = await dataSource.getRepository(Account).findOneByOrFail({
+      email: 'owner@acme.com',
+    });
+    expect(account.timezone).toBe('UTC');
   });
 
   it('rejects an invalid payload with per-field errors (spec 01, requirements 2–4)', async () => {

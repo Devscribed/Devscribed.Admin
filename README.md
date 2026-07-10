@@ -126,7 +126,9 @@ built and tested at the unit, integration, and E2E levels before moving on.
 **Highlights so far**
 
 - **Spec 01** — self-serve signup: atomic account + organization + admin membership, bcrypt
-  hashing, JWT session, single-org-per-account guard.
+  hashing, JWT session, single-org-per-account guard. Reconciled to the gold-standard revision:
+  name/email/password length & format rules with exact error messages, browser-timezone capture,
+  case-insensitive duplicate check, and a password show/hide toggle.
 - **Spec 02** — login (enumeration-safe), forgot/reset password via a single-use 60-min token
   (email captured by an in-memory mail sink), and session revocation via a per-account token
   version. Screens: `/login`, `/forgot-password`, `/reset-password`.

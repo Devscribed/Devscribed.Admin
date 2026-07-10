@@ -32,6 +32,13 @@ export class Account {
   lastName: string;
 
   /**
+   * IANA timezone auto-detected from the browser at signup (spec 01). Source for
+   * how dates are displayed to this user elsewhere (specs 06/07).
+   */
+  @Column({ type: 'varchar', name: 'timezone', length: 64, nullable: true })
+  timezone: string | null;
+
+  /**
    * Incremented to revoke all existing sessions for this account (spec 02,
    * requirement 9). The session token carries the version it was issued at; the
    * auth guard rejects tokens whose version no longer matches.

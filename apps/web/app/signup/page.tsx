@@ -3,12 +3,12 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { isValidEmail, validateOrgName, validatePassword } from '@devscribed/shared';
+import { validateEmail, validateName, validateOrgName, validatePassword } from '@devscribed/shared';
 import { ApiError, signup } from '../../lib/api';
 
 type Field = 'orgName' | 'firstName' | 'lastName' | 'email' | 'password';
 
-const EMPTY = {
+const EMPTY: Record<Field, string> = {
   orgName: '',
   firstName: '',
   lastName: '',
@@ -16,7 +16,7 @@ const EMPTY = {
   password: '',
 };
 
-/** Client-side mirror of the server rules (shared validators, single source of truth). */
+/** Client-side mirror of the server rules (shared validators — identical messages). */
 function computeErrors(values: Record<Field, string>): Partial<Record<Field, string>> {
   const errors: Partial<Record<Field, string>> = {};
 
@@ -24,14 +24,17 @@ function computeErrors(values: Record<Field, string>): Partial<Record<Field, str
   if (!org.valid) {
     errors.orgName = org.error;
   }
-  if (values.firstName.trim().length === 0) {
-    errors.firstName = 'First name is required';
+  const first = validateName(values.firstName, 'First name');
+  if (!first.valid) {
+    errors.firstName = first.error;
   }
-  if (values.lastName.trim().length === 0) {
-    errors.lastName = 'Last name is required';
+  const last = validateName(values.lastName, 'Last name');
+  if (!last.valid) {
+    errors.lastName = last.error;
   }
-  if (!isValidEmail(values.email)) {
-    errors.email = 'Enter a valid email address';
+  const email = validateEmail(values.email);
+  if (!email.valid) {
+    errors.email = email.error;
   }
   const password = validatePassword(values.password);
   if (!password.valid) {
@@ -41,6 +44,14 @@ function computeErrors(values: Record<Field, string>): Partial<Record<Field, str
   return errors;
 }
 
+function detectTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
 export default function SignupPage() {
   const router = useRouter();
   const [values, setValues] = useState<Record<Field, string>>(EMPTY);
@@ -48,6 +59,7 @@ export default function SignupPage() {
   const [serverErrors, setServerErrors] = useState<Partial<Record<Field, string>>>({});
   const [banner, setBanner] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const clientErrors = useMemo(() => computeErrors(values), [values]);
   const isValid = Object.keys(clientErrors).length === 0;
@@ -58,6 +70,8 @@ export default function SignupPage() {
 
   function update(field: Field, value: string): void {
     setValues((prev) => ({ ...prev, [field]: value }));
+    // Editing any field clears a shown server error and the banner.
+    setBanner(null);
     setServerErrors((prev) => {
       if (!(field in prev)) {
         return prev;
@@ -74,13 +88,7 @@ export default function SignupPage() {
 
   async function onSubmit(event: React.FormEvent): Promise<void> {
     event.preventDefault();
-    setTouched({
-      orgName: true,
-      firstName: true,
-      lastName: true,
-      email: true,
-      password: true,
-    });
+    setTouched({ orgName: true, firstName: true, lastName: true, email: true, password: true });
     if (!isValid) {
       return;
     }
@@ -89,12 +97,12 @@ export default function SignupPage() {
     setBanner(null);
     setServerErrors({});
     try {
-      await signup(values);
+      await signup({ ...values, timezone: detectTimezone() });
       router.push('/members');
     } catch (err) {
       if (err instanceof ApiError) {
         setServerErrors((err.body.errors ?? {}) as Partial<Record<Field, string>>);
-        setBanner(err.body.message ?? 'Signup failed. Please try again.');
+        setBanner(err.body.message ?? 'Something went wrong. Please try again.');
       } else {
         setBanner('Something went wrong. Please try again.');
       }
@@ -124,6 +132,7 @@ export default function SignupPage() {
               value={values.orgName}
               onChange={(e) => update('orgName', e.target.value)}
               onBlur={() => markTouched('orgName')}
+              readOnly={submitting}
               autoComplete="organization"
             />
             {errorFor('orgName') && (
@@ -143,6 +152,7 @@ export default function SignupPage() {
                 value={values.firstName}
                 onChange={(e) => update('firstName', e.target.value)}
                 onBlur={() => markTouched('firstName')}
+                readOnly={submitting}
                 autoComplete="given-name"
               />
               {errorFor('firstName') && (
@@ -161,6 +171,7 @@ export default function SignupPage() {
                 value={values.lastName}
                 onChange={(e) => update('lastName', e.target.value)}
                 onBlur={() => markTouched('lastName')}
+                readOnly={submitting}
                 autoComplete="family-name"
               />
               {errorFor('lastName') && (
@@ -180,6 +191,7 @@ export default function SignupPage() {
               value={values.email}
               onChange={(e) => update('email', e.target.value)}
               onBlur={() => markTouched('email')}
+              readOnly={submitting}
               autoComplete="email"
             />
             {errorFor('email') && (
@@ -191,15 +203,27 @@ export default function SignupPage() {
 
           <div className="field">
             <label htmlFor="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              data-testid="signup-password-input"
-              value={values.password}
-              onChange={(e) => update('password', e.target.value)}
-              onBlur={() => markTouched('password')}
-              autoComplete="new-password"
-            />
+            <div className="password-field">
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                data-testid="signup-password-input"
+                value={values.password}
+                onChange={(e) => update('password', e.target.value)}
+                onBlur={() => markTouched('password')}
+                readOnly={submitting}
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                className="password-toggle"
+                data-testid="signup-password-toggle"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
             {errorFor('password') && (
               <div className="field-error" data-testid="field-error-password">
                 {errorFor('password')}
@@ -213,12 +237,14 @@ export default function SignupPage() {
             data-testid="signup-submit-button"
             disabled={!isValid || submitting}
           >
-            {submitting ? 'Creating…' : 'Create organization'}
+            {submitting ? 'Creating…' : 'Create account'}
           </button>
         </form>
 
         <div className="auth-links">
-          <Link href="/login">Already have an account? Sign in</Link>
+          <Link href="/login" data-testid="signup-login-link">
+            Already have an account? Sign in
+          </Link>
         </div>
       </div>
     </main>
