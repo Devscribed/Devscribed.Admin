@@ -70,7 +70,7 @@ public class MembersService
     }
 
     public async Task<MemberDetailFetchResult> GetDetailAsync(
-        Guid organizationId, Guid memberId, string callerRole)
+        Guid organizationId, Guid memberId, Guid callerMembershipId, string callerRole)
     {
         var target = await _db.Memberships
             .Include(m => m.Account)
@@ -98,6 +98,8 @@ public class MembersService
             CanEditJobTitle = MemberPermissions.CanEditJobTitle(callerRole, target.Status),
             AvailableRoles = MemberPermissions.GetAvailableRoles(callerRole, target.Role, target.Status),
             CallerRole = callerRole,
+            IsSelf = target.Id == callerMembershipId,
+            CanViewVacation = MemberPermissions.CanViewVacation(callerRole, target.Id == callerMembershipId),
         };
 
         return MemberDetailFetchResult.Ok(dto);
@@ -257,6 +259,8 @@ public class MemberDetailDto
     public bool CanEditJobTitle { get; set; }
     public string[] AvailableRoles { get; set; } = Array.Empty<string>();
     public string CallerRole { get; set; } = string.Empty;
+    public bool IsSelf { get; set; }
+    public bool CanViewVacation { get; set; }
 }
 
 public enum MemberDetailOutcome

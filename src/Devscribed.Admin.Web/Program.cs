@@ -27,6 +27,7 @@ builder.Services.AddScoped<MembersService>();
 builder.Services.AddScoped<AccountSettingsService>();
 builder.Services.AddScoped<EmailChangeService>();
 builder.Services.AddScoped<ChangePasswordService>();
+builder.Services.AddScoped<VacationService>();
 builder.Services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddSingleton<ITokenGenerator, TokenGenerator>();
 builder.Services.AddSingleton<IEmailSender, ConsoleEmailSender>();

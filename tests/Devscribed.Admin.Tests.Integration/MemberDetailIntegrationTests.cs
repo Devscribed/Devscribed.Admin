@@ -381,6 +381,29 @@ public class MemberDetailIntegrationTests : IClassFixture<TestWebAppFactory>
         Assert.Equal("member_removed", body!.RootElement.GetProperty("error").GetString());
     }
 
+    // TC-07: member detail response exposes canViewVacation + isSelf for tab enablement
+    [Fact]
+    public async Task Get_detail_exposes_can_view_vacation_and_is_self_flags()
+    {
+        var org = NewOrg("Acme Inc");
+        var (_, admin) = await SeedMemberAsync(org, "admin-vac@acme.com", "Passw0rd", role: "admin");
+        var (_, user) = await SeedMemberAsync(org, "user-vac@acme.com", "Passw0rd", role: "user");
+
+        var adminClient = await LoggedInClientAsync("admin-vac@acme.com", "Passw0rd");
+        var adminViewingUser = (await (await adminClient.GetAsync($"/api/organizations/{org.Id}/members/{user.Id}")).Content.ReadFromJsonAsync<JsonDocument>())!.RootElement;
+        Assert.True(adminViewingUser.GetProperty("canViewVacation").GetBoolean());
+        Assert.False(adminViewingUser.GetProperty("isSelf").GetBoolean());
+
+        var userClient = await LoggedInClientAsync("user-vac@acme.com", "Passw0rd");
+        var userViewingSelf = (await (await userClient.GetAsync($"/api/organizations/{org.Id}/members/{user.Id}")).Content.ReadFromJsonAsync<JsonDocument>())!.RootElement;
+        Assert.True(userViewingSelf.GetProperty("canViewVacation").GetBoolean());
+        Assert.True(userViewingSelf.GetProperty("isSelf").GetBoolean());
+
+        var userViewingAdmin = (await (await userClient.GetAsync($"/api/organizations/{org.Id}/members/{admin.Id}")).Content.ReadFromJsonAsync<JsonDocument>())!.RootElement;
+        Assert.False(userViewingAdmin.GetProperty("canViewVacation").GetBoolean());
+        Assert.False(userViewingAdmin.GetProperty("isSelf").GetBoolean());
+    }
+
     // TC-05-INT-15: Manager edits job title of admin member (role unchanged)
     [Fact]
     public async Task Manager_can_edit_job_title_of_admin_member_with_role_unchanged()

@@ -47,6 +47,17 @@ public static class MemberPermissions
     public static bool CanEditJobTitle(string callerRole, string targetStatus) =>
         targetStatus == "active" && callerRole is "admin" or "manager";
 
+    public static bool CanEditMemberFinancials(string callerRole) =>
+        callerRole is "admin" or "manager";
+
+    public static bool CanViewVacation(string callerRole, bool isOwnMembership) =>
+        callerRole switch
+        {
+            "admin" or "manager" => true,
+            "user" => isOwnMembership,
+            _ => false,
+        };
+
     public static string[] GetAvailableRoles(string callerRole, string targetRole, string targetStatus)
     {
         if (!CanEditRole(callerRole, targetRole, targetStatus))

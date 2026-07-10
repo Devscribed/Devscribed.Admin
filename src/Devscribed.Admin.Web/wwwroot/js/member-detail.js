@@ -30,7 +30,32 @@
     const toastSaved = document.getElementById('toast-member-saved');
     const toastError = document.getElementById('toast-member-detail-error');
 
+    const tabAbout = document.getElementById('member-detail-tab-about');
+    const tabVacation = document.getElementById('member-detail-tab-vacation');
+    const aboutPanel = document.getElementById('about-tab-panel');
+    const vacationPanel = document.getElementById('vacation-tab-panel');
+
     let currentData = null;
+
+    function showAboutTab() {
+        tabAbout.classList.add('active');
+        tabVacation.classList.remove('active');
+        aboutPanel.style.display = '';
+        vacationPanel.style.display = 'none';
+    }
+
+    function showVacationTab() {
+        tabAbout.classList.remove('active');
+        tabVacation.classList.add('active');
+        aboutPanel.style.display = 'none';
+        vacationPanel.style.display = '';
+        if (window.__loadVacationTab) window.__loadVacationTab();
+    }
+
+    tabAbout.addEventListener('click', showAboutTab);
+    tabVacation.addEventListener('click', () => {
+        if (!tabVacation.disabled) showVacationTab();
+    });
 
     function showToast(el, text) {
         if (text !== undefined) el.textContent = text;
@@ -109,6 +134,9 @@
         renderRoleOptions(data);
         renderJobTitle(data);
         renderSaveButtonVisibility(data);
+
+        tabVacation.disabled = !data.canViewVacation;
+        if (!data.canViewVacation && vacationPanel.style.display !== 'none') showAboutTab();
 
         skeleton.style.display = 'none';
         notFound.style.display = 'none';

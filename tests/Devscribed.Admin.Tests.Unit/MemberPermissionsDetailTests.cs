@@ -19,4 +19,19 @@ public class MemberPermissionsDetailTests
 
         Assert.Equal(expectedAllowed, canEditRole && canAssignRole);
     }
+
+    // TC-07: Vacation tab visibility per role
+    [Theory]
+    [InlineData("admin", false, true)]
+    [InlineData("admin", true, true)]
+    [InlineData("manager", false, true)]
+    [InlineData("manager", true, true)]
+    [InlineData("user", true, true)]
+    [InlineData("user", false, false)]
+    [InlineData("viewer", true, false)]
+    [InlineData("viewer", false, false)]
+    public void Can_view_vacation_matches_spec(string callerRole, bool isOwnMembership, bool expected)
+    {
+        Assert.Equal(expected, MemberPermissions.CanViewVacation(callerRole, isOwnMembership));
+    }
 }

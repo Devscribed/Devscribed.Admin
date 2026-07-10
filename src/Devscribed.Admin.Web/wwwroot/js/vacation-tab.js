@@ -1,0 +1,281 @@
+(function () {
+    const orgId = window.__memberDetailOrgId;
+    const memberId = window.__memberDetailMemberId;
+
+    const skeleton = document.getElementById('vacation-loading-skeleton');
+    const emptyState = document.getElementById('vacation-empty-state');
+    const emptyMessage = document.getElementById('vacation-empty-message');
+    const setupBtn = document.getElementById('vacation-setup-btn');
+    const defaultState = document.getElementById('vacation-default-state');
+
+    const financialsCard = document.getElementById('vacation-financials-card');
+    const salaryValue = document.getElementById('vacation-salary-value');
+    const rateValue = document.getElementById('vacation-rate-value');
+    const reserveValue = document.getElementById('vacation-reserve-value');
+    const daysValue = document.getElementById('vacation-days-value');
+    const editBtn = document.getElementById('vacation-financials-edit-btn');
+
+    const availableDaysEl = document.getElementById('vacation-available-days');
+    const usedDaysEl = document.getElementById('vacation-used-days');
+    const pendingDaysEl = document.getElementById('vacation-pending-days');
+    const balanceCaption = document.getElementById('vacation-balance-caption');
+    const reserveAmountRow = document.getElementById('vacation-reserve-amount-row');
+    const reserveAmountEl = document.getElementById('vacation-reserve-amount');
+
+    const modalOverlay = document.getElementById('vacation-financials-modal-overlay');
+    const closeButton = document.getElementById('vacation-financials-close-button');
+    const cancelButton = document.getElementById('vacation-financials-cancel-btn');
+    const form = document.getElementById('vacation-financials-form');
+    const salaryInput = document.getElementById('vacation-salary-input');
+    const rateInput = document.getElementById('vacation-rate-input');
+    const currencySelect = document.getElementById('vacation-currency-select');
+    const daysInput = document.getElementById('vacation-days-input');
+    const modeAuto = document.getElementById('vacation-reserve-mode-auto');
+    const modeManual = document.getElementById('vacation-reserve-mode-manual');
+    const percentInput = document.getElementById('vacation-reserve-percent-input');
+    const preview = document.getElementById('vacation-reserve-preview');
+    const saveBtn = document.getElementById('vacation-financials-save-btn');
+
+    const fieldErrors = {
+        monthlySalary: document.getElementById('field-error-monthlySalary'),
+        clientHourlyRate: document.getElementById('field-error-clientHourlyRate'),
+        vacationDaysPerYear: document.getElementById('field-error-vacationDaysPerYear'),
+        currency: document.getElementById('field-error-currency'),
+        vacationReservePercent: document.getElementById('field-error-vacationReservePercent'),
+    };
+
+    const toastSaved = document.getElementById('toast-financials-saved');
+    const toastError = document.getElementById('toast-member-detail-error');
+
+    let loaded = false;
+
+    function showToast(el, text) {
+        if (text !== undefined) el.textContent = text;
+        el.style.display = '';
+        setTimeout(() => { el.style.display = 'none'; }, 4000);
+    }
+
+    function clearFieldErrors() {
+        Object.values(fieldErrors).forEach((el) => { el.textContent = ''; });
+    }
+
+    function formatMoney(value, currency) {
+        return `${Number(value).toFixed(2)} ${currency}`;
+    }
+
+    function calculateReservePercent(monthlySalary, clientHourlyRate, vacationDaysPerYear) {
+        const dailySalary = (monthlySalary * 12) / 260;
+        const annualVacationCost = dailySalary * vacationDaysPerYear;
+        const expectedAnnualBilling = clientHourlyRate * 2080;
+        if (!expectedAnnualBilling) return 0;
+        return Math.round((annualVacationCost / expectedAnnualBilling) * 100 * 100) / 100;
+    }
+
+    function updatePreview() {
+        const salary = parseFloat(salaryInput.value);
+        const rate = parseFloat(rateInput.value);
+        const days = parseInt(daysInput.value, 10);
+
+        if (modeAuto.checked) {
+            percentInput.disabled = true;
+            if (!isNaN(salary) && !isNaN(rate) && !isNaN(days) && rate > 0) {
+                const pct = calculateReservePercent(salary, rate, days);
+                percentInput.value = pct.toFixed(2);
+                preview.textContent = `auto-calc preview: ${pct.toFixed(2)}%`;
+            } else {
+                preview.textContent = '';
+            }
+        } else {
+            percentInput.disabled = false;
+            preview.textContent = '';
+        }
+    }
+
+    [salaryInput, rateInput, daysInput].forEach((el) => el.addEventListener('input', updatePreview));
+    modeAuto.addEventListener('change', updatePreview);
+    modeManual.addEventListener('change', updatePreview);
+
+    function openModal(financials) {
+        clearFieldErrors();
+        form.reset();
+        if (financials) {
+            salaryInput.value = financials.monthlySalary;
+            rateInput.value = financials.clientHourlyRate;
+            currencySelect.value = financials.currency;
+            daysInput.value = financials.vacationDaysPerYear;
+            if (financials.isReservePercentManual) {
+                modeManual.checked = true;
+                percentInput.value = financials.vacationReservePercent;
+            } else {
+                modeAuto.checked = true;
+            }
+        } else {
+            daysInput.value = 20;
+            modeAuto.checked = true;
+        }
+        updatePreview();
+        modalOverlay.style.display = '';
+    }
+
+    function closeModal() {
+        modalOverlay.style.display = 'none';
+    }
+
+    closeButton.addEventListener('click', closeModal);
+    cancelButton.addEventListener('click', closeModal);
+    setupBtn.addEventListener('click', () => openModal(null));
+    editBtn.addEventListener('click', () => openModal(lastFinancials));
+
+    let lastFinancials = null;
+
+    function render(data) {
+        lastFinancials = data.financials;
+        const canEdit = data.canEdit;
+
+        if (!data.financials) {
+            emptyState.style.display = '';
+            defaultState.style.display = 'none';
+            financialsCard.style.display = 'none';
+            if (canEdit) {
+                emptyMessage.textContent = 'Vacation tracking has not been set up for this member yet.';
+                setupBtn.style.display = '';
+            } else {
+                emptyMessage.textContent = 'Vacation tracking has not been set up for your account yet. Please contact your manager.';
+                setupBtn.style.display = 'none';
+            }
+        } else {
+            emptyState.style.display = 'none';
+            defaultState.style.display = '';
+
+            if (canEdit) {
+                financialsCard.style.display = '';
+                salaryValue.textContent = formatMoney(data.financials.monthlySalary, data.financials.currency);
+                rateValue.textContent = formatMoney(data.financials.clientHourlyRate, data.financials.currency);
+                reserveValue.textContent = `${Number(data.financials.vacationReservePercent).toFixed(2)}% (${data.financials.isReservePercentManual ? 'manual' : 'auto'})`;
+                daysValue.textContent = data.financials.vacationDaysPerYear;
+            } else {
+                financialsCard.style.display = 'none';
+            }
+
+            availableDaysEl.textContent = data.balance.availableDays;
+            usedDaysEl.textContent = data.balance.usedDays;
+            pendingDaysEl.textContent = data.balance.pendingDays;
+
+            if (data.balance.reserveBalance !== null && data.balance.reserveBalance !== undefined) {
+                reserveAmountRow.style.display = '';
+                reserveAmountEl.textContent = formatMoney(data.balance.reserveBalance, data.financials ? data.financials.currency : '');
+                balanceCaption.textContent = '';
+            } else {
+                reserveAmountRow.style.display = 'none';
+                balanceCaption.textContent = `out of ${data.balance.totalDaysPerYear} per year`;
+            }
+        }
+
+        skeleton.style.display = 'none';
+    }
+
+    async function load() {
+        skeleton.style.display = '';
+        emptyState.style.display = 'none';
+        defaultState.style.display = 'none';
+
+        try {
+            const res = await fetch(`/api/organizations/${orgId}/members/${memberId}/vacation`);
+            if (!res.ok) throw new Error('request failed');
+            const data = await res.json();
+            render(data);
+        } catch {
+            skeleton.style.display = 'none';
+            showToast(toastError, 'Something went wrong. Please try again.');
+        }
+    }
+
+    function validateClientSide() {
+        clearFieldErrors();
+        let valid = true;
+
+        const salary = parseFloat(salaryInput.value);
+        if (isNaN(salary) || salary < 0.01 || salary > 999999.99) {
+            fieldErrors.monthlySalary.textContent = 'Monthly salary must be between 0.01 and 999,999.99';
+            valid = false;
+        }
+
+        const rate = parseFloat(rateInput.value);
+        if (isNaN(rate) || rate < 0.01 || rate > 9999.99) {
+            fieldErrors.clientHourlyRate.textContent = 'Client hourly rate must be between 0.01 and 9,999.99';
+            valid = false;
+        }
+
+        const days = parseInt(daysInput.value, 10);
+        if (isNaN(days) || days < 1 || days > 365) {
+            fieldErrors.vacationDaysPerYear.textContent = 'Vacation days per year must be between 1 and 365';
+            valid = false;
+        }
+
+        if (!currencySelect.value) {
+            fieldErrors.currency.textContent = 'Invalid currency code';
+            valid = false;
+        }
+
+        if (modeManual.checked) {
+            const pct = parseFloat(percentInput.value);
+            if (isNaN(pct) || pct < 0.01 || pct > 99.99) {
+                fieldErrors.vacationReservePercent.textContent = 'Reserve percentage must be between 0.01 and 99.99';
+                valid = false;
+            }
+        }
+
+        return valid;
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!validateClientSide()) return;
+
+        saveBtn.disabled = true;
+        const originalText = saveBtn.textContent;
+        saveBtn.textContent = 'Saving...';
+
+        const isManual = modeManual.checked;
+        const payload = {
+            monthlySalary: parseFloat(salaryInput.value),
+            clientHourlyRate: parseFloat(rateInput.value),
+            vacationDaysPerYear: parseInt(daysInput.value, 10),
+            currency: currencySelect.value,
+            isReservePercentManual: isManual,
+            vacationReservePercent: isManual ? parseFloat(percentInput.value) : null,
+        };
+
+        try {
+            const res = await fetch(`/api/organizations/${orgId}/members/${memberId}/vacation/financials`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                closeModal();
+                showToast(toastSaved);
+                await load();
+            } else if (data.errors) {
+                Object.entries(data.errors).forEach(([field, message]) => {
+                    if (fieldErrors[field]) fieldErrors[field].textContent = message;
+                });
+            } else {
+                showToast(toastError, data.message || 'Something went wrong. Please try again.');
+            }
+        } catch {
+            showToast(toastError, 'Something went wrong. Please try again.');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = originalText;
+        }
+    });
+
+    window.__loadVacationTab = function () {
+        if (!loaded) {
+            loaded = true;
+            load();
+        }
+    };
+})();

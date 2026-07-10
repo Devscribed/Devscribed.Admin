@@ -1,0 +1,115 @@
+using Devscribed.Admin.Web.Security;
+using Devscribed.Admin.Web.Services;
+using Devscribed.Admin.Web.Validation;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
+
+namespace Devscribed.Admin.Web.Controllers.Api;
+
+[ApiController]
+[Route("api/organizations/{orgId}/members/{memberId}/vacation")]
+[Authorize]
+public class VacationController : ControllerBase
+{
+    private readonly VacationService _vacationService;
+
+    public VacationController(VacationService vacationService)
+    {
+        _vacationService = vacationService;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Get(Guid orgId, Guid memberId)
+    {
+        if (!TryGetCallerContext(orgId, out _, out var callerMembershipId, out var callerRole, out var errorResult))
+            return errorResult!;
+
+        var result = await _vacationService.GetVacationAsync(orgId, memberId, callerMembershipId, callerRole);
+        return result.Outcome switch
+        {
+            VacationFetchOutcome.Success => Ok(new
+            {
+                financials = result.Dto!.Financials == null ? null : new
+                {
+                    monthlySalary = result.Dto.Financials.MonthlySalary,
+                    clientHourlyRate = result.Dto.Financials.ClientHourlyRate,
+                    vacationReservePercent = result.Dto.Financials.VacationReservePercent,
+                    isReservePercentManual = result.Dto.Financials.IsReservePercentManual,
+                    vacationDaysPerYear = result.Dto.Financials.VacationDaysPerYear,
+                    currency = result.Dto.Financials.Currency,
+                },
+                balance = result.Dto.Balance == null ? null : new
+                {
+                    reserveBalance = result.Dto.Balance.ReserveBalance,
+                    availableDays = result.Dto.Balance.AvailableDays,
+                    usedDays = result.Dto.Balance.UsedDays,
+                    pendingDays = result.Dto.Balance.PendingDays,
+                    totalDaysPerYear = result.Dto.Balance.TotalDaysPerYear,
+                },
+                canEdit = result.Dto.CanEdit,
+                canReviewRequests = result.Dto.CanReviewRequests,
+                canSubmitRequest = result.Dto.CanSubmitRequest,
+            }),
+            VacationFetchOutcome.NotFound => NotFound(new { error = "not_found", message = "Member not found" }),
+            VacationFetchOutcome.Forbidden => StatusCode(403, new { error = "forbidden", message = result.ErrorMessage }),
+            _ => StatusCode(500),
+        };
+    }
+
+    [HttpPut("financials")]
+    public async Task<IActionResult> UpdateFinancials(Guid orgId, Guid memberId, [FromBody] UpdateMemberFinancialsRequest request)
+    {
+        if (!TryGetCallerContext(orgId, out var callerAccountId, out _, out var callerRole, out var errorResult))
+            return errorResult!;
+
+        var result = await _vacationService.UpdateFinancialsAsync(orgId, memberId, callerAccountId, callerRole, request);
+        return MapResult(result);
+    }
+
+    private bool TryGetCallerContext(Guid orgId, out Guid callerAccountId, out Guid callerMembershipId, out string callerRole, out IActionResult? errorResult)
+    {
+        callerAccountId = Guid.Empty;
+        callerMembershipId = Guid.Empty;
+        callerRole = string.Empty;
+        errorResult = null;
+
+        var orgIdClaim = User.FindFirstValue(AppClaimTypes.OrganizationId);
+        var accountIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var membershipIdClaim = User.FindFirstValue(AppClaimTypes.MembershipId);
+        var role = User.FindFirstValue(ClaimTypes.Role);
+
+        if (orgIdClaim == null || !Guid.TryParse(orgIdClaim, out var callerOrgId)
+            || accountIdClaim == null || !Guid.TryParse(accountIdClaim, out var accountId)
+            || membershipIdClaim == null || !Guid.TryParse(membershipIdClaim, out var membershipId)
+            || role == null)
+        {
+            errorResult = Unauthorized();
+            return false;
+        }
+
+        if (callerOrgId != orgId)
+        {
+            errorResult = Forbid();
+            return false;
+        }
+
+        callerAccountId = accountId;
+        callerMembershipId = membershipId;
+        callerRole = role;
+        return true;
+    }
+
+    private IActionResult MapResult(MemberFinancialsActionResult result)
+    {
+        return result.Outcome switch
+        {
+            MemberFinancialsActionOutcome.Success => Ok(new { success = true, vacationReservePercent = result.VacationReservePercent }),
+            MemberFinancialsActionOutcome.NotFound => NotFound(new { error = "not_found", message = "Member not found" }),
+            MemberFinancialsActionOutcome.Forbidden => StatusCode(403, new { error = result.ErrorCode ?? "forbidden", message = result.ErrorMessage }),
+            MemberFinancialsActionOutcome.BadRequest => BadRequest(new { error = result.ErrorCode, message = result.ErrorMessage }),
+            MemberFinancialsActionOutcome.FieldValidation => BadRequest(new { errors = result.FieldErrors }),
+            _ => StatusCode(500),
+        };
+    }
+}

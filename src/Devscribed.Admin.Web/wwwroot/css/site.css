@@ -475,6 +475,78 @@ button.destructive {
     cursor: default;
 }
 
+.tab-bar .tab:not(:disabled) {
+    cursor: pointer;
+    color: #1a1a1a;
+}
+
+.vacation-tab-content {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.vacation-card {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+}
+
+.vacation-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: .75rem;
+}
+
+.vacation-card-header h2 {
+    font-size: 1rem;
+}
+
+.vacation-field-row {
+    display: flex;
+    justify-content: space-between;
+    padding: .375rem 0;
+    font-size: .9375rem;
+}
+
+.vacation-field-row .label {
+    color: #6b7280;
+}
+
+.vacation-empty-state {
+    text-align: center;
+    padding: 3rem 1.5rem;
+    border: 1px dashed #d1d5db;
+    border-radius: 8px;
+    color: #4b5563;
+}
+
+.vacation-balance-numbers {
+    display: flex;
+    gap: 1.5rem;
+    justify-content: center;
+    text-align: center;
+    margin-bottom: .75rem;
+}
+
+.vacation-balance-numbers .number {
+    font-size: 1.75rem;
+    font-weight: 600;
+}
+
+.vacation-balance-numbers .caption {
+    font-size: .8125rem;
+    color: #6b7280;
+}
+
+.reserve-mode-group {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: .5rem;
+}
+
 .member-detail-form .form-group select {
     width: 100%;
 }

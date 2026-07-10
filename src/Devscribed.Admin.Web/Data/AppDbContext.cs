@@ -13,6 +13,8 @@ public class AppDbContext : DbContext
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
     public DbSet<Invitation> Invitations => Set<Invitation>();
     public DbSet<PendingEmailChange> PendingEmailChanges => Set<PendingEmailChange>();
+    public DbSet<MemberFinancials> MemberFinancials => Set<MemberFinancials>();
+    public DbSet<MemberFinancialsSnapshot> MemberFinancialsSnapshots => Set<MemberFinancialsSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -59,6 +61,27 @@ public class AppDbContext : DbContext
             e.HasIndex(i => i.TokenHash).IsUnique();
             e.HasIndex(i => new { i.Email, i.OrganizationId, i.Status });
             e.HasOne(i => i.Organization).WithMany().HasForeignKey(i => i.OrganizationId);
+        });
+
+        modelBuilder.Entity<MemberFinancials>(e =>
+        {
+            e.HasKey(f => f.Id);
+            e.HasIndex(f => f.MembershipId).IsUnique();
+            e.Property(f => f.MonthlySalary).HasPrecision(10, 2);
+            e.Property(f => f.ClientHourlyRate).HasPrecision(8, 2);
+            e.Property(f => f.VacationReservePercent).HasPrecision(5, 2);
+            e.Property(f => f.Currency).HasMaxLength(3);
+            e.HasOne(f => f.Membership).WithOne().HasForeignKey<MemberFinancials>(f => f.MembershipId);
+        });
+
+        modelBuilder.Entity<MemberFinancialsSnapshot>(e =>
+        {
+            e.HasKey(s => s.Id);
+            e.HasIndex(s => new { s.MembershipId, s.EffectiveFrom });
+            e.Property(s => s.MonthlySalary).HasPrecision(10, 2);
+            e.Property(s => s.ClientHourlyRate).HasPrecision(8, 2);
+            e.Property(s => s.VacationReservePercent).HasPrecision(5, 2);
+            e.Property(s => s.Currency).HasMaxLength(3);
         });
 
         modelBuilder.Entity<PendingEmailChange>(e =>

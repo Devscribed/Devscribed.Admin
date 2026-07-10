@@ -47,10 +47,10 @@ public class MembersController : ControllerBase
     [HttpGet("{memberId}")]
     public async Task<IActionResult> GetDetail(Guid orgId, Guid memberId)
     {
-        if (!TryGetCallerContext(orgId, out _, out var callerRole, out var errorResult))
+        if (!TryGetCallerContext(orgId, out var callerMembershipId, out var callerRole, out var errorResult))
             return errorResult!;
 
-        var result = await _membersService.GetDetailAsync(orgId, memberId, callerRole);
+        var result = await _membersService.GetDetailAsync(orgId, memberId, callerMembershipId, callerRole);
         if (result.Outcome == MemberDetailOutcome.NotFound)
             return NotFound(new { error = "not_found", message = "Member not found" });
 
@@ -71,6 +71,8 @@ public class MembersController : ControllerBase
             canEditJobTitle = dto.CanEditJobTitle,
             availableRoles = dto.AvailableRoles,
             callerRole = dto.CallerRole,
+            isSelf = dto.IsSelf,
+            canViewVacation = dto.CanViewVacation,
         });
     }
 

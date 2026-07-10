@@ -37,7 +37,7 @@
             <button type="button" id="member-detail-tab-payments" data-testid="member-detail-tab-payments" class="tab" disabled>Payments</button>
         </div>
 
-        <div class="member-detail-form">
+        <div class="member-detail-form" id="about-tab-panel">
             <div class="form-group" id="role-field-group" style="display:none;">
                 <label for="member-role-select">Role</label>
                 <select id="member-role-select" class="member-role-select"></select>
@@ -57,11 +57,111 @@
 
             <button type="button" id="job-title-save-button" data-testid="job-title-save-button" style="display:none;">Save changes</button>
         </div>
+
+        <div id="vacation-tab-panel" class="vacation-tab-content" style="display:none;">
+            <div id="vacation-loading-skeleton" data-testid="vacation-loading-skeleton" class="skeleton" style="display:none;">
+                <div class="skeleton-row"></div>
+                <div class="skeleton-row"></div>
+                <div class="skeleton-row"></div>
+            </div>
+
+            <div id="vacation-empty-state" data-testid="vacation-empty-state" class="vacation-empty-state" style="display:none;">
+                <p id="vacation-empty-message"></p>
+                <button type="button" id="vacation-setup-btn" data-testid="vacation-setup-btn" style="display:none;">Set up financials</button>
+            </div>
+
+            <div id="vacation-default-state" style="display:none;">
+                <div id="vacation-financials-card" data-testid="vacation-financials-card" class="vacation-card" style="display:none;">
+                    <div class="vacation-card-header">
+                        <h2>Financial Settings</h2>
+                        <button type="button" id="vacation-financials-edit-btn" data-testid="vacation-financials-edit-btn">Edit</button>
+                    </div>
+                    <div class="vacation-field-row"><span class="label">Monthly salary</span><span id="vacation-salary-value"></span></div>
+                    <div class="vacation-field-row"><span class="label">Client hourly rate</span><span id="vacation-rate-value"></span></div>
+                    <div class="vacation-field-row"><span class="label">Reserve %</span><span id="vacation-reserve-value"></span></div>
+                    <div class="vacation-field-row"><span class="label">Days per year</span><span id="vacation-days-value"></span></div>
+                </div>
+
+                <div id="vacation-balance-card" data-testid="vacation-balance-card" class="vacation-card">
+                    <div class="vacation-card-header"><h2>Vacation Balance</h2></div>
+                    <div class="vacation-balance-numbers">
+                        <div><div id="vacation-available-days" data-testid="vacation-available-days" class="number">0</div><div class="caption">available</div></div>
+                        <div><div id="vacation-used-days" data-testid="vacation-used-days" class="number">0</div><div class="caption">used</div></div>
+                        <div><div id="vacation-pending-days" data-testid="vacation-pending-days" class="number">0</div><div class="caption">pending</div></div>
+                    </div>
+                    <div id="vacation-balance-caption" style="text-align:center;font-size:.8125rem;color:#6b7280;"></div>
+                    <div id="vacation-reserve-amount-row" style="text-align:center;margin-top:.5rem;">
+                        Reserve: <span id="vacation-reserve-amount" data-testid="vacation-reserve-amount"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
 <div id="toast-member-saved" data-testid="toast-member-saved" class="toast" style="display:none;">Changes saved</div>
 <div id="toast-member-detail-error" data-testid="toast-member-detail-error" class="toast" style="display:none;"></div>
+<div id="toast-financials-saved" data-testid="toast-financials-saved" class="toast" style="display:none;">Financial settings saved</div>
+
+<div id="vacation-financials-modal-overlay" class="modal-overlay" style="display:none;">
+    <div class="modal-card" data-testid="vacation-financials-modal">
+        <div class="modal-header">
+            <h2>Edit Financial Settings</h2>
+            <button type="button" id="vacation-financials-close-button" class="modal-close" aria-label="Close">&times;</button>
+        </div>
+
+        <form id="vacation-financials-form" novalidate>
+            <div class="form-group">
+                <label for="vacation-salary-input">Monthly salary</label>
+                <input type="number" step="0.01" id="vacation-salary-input" data-testid="vacation-salary-input" />
+                <div class="field-error" id="field-error-monthlySalary" data-testid="field-error-monthlySalary"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="vacation-rate-input">Client hourly rate</label>
+                <input type="number" step="0.01" id="vacation-rate-input" data-testid="vacation-rate-input" />
+                <div class="field-error" id="field-error-clientHourlyRate" data-testid="field-error-clientHourlyRate"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="vacation-currency-select">Currency</label>
+                <select id="vacation-currency-select" data-testid="vacation-currency-select">
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                    <option value="GBP">GBP</option>
+                    <option value="PLN">PLN</option>
+                    <option value="CHF">CHF</option>
+                    <option value="JPY">JPY</option>
+                    <option value="CAD">CAD</option>
+                    <option value="AUD">AUD</option>
+                </select>
+                <div class="field-error" id="field-error-currency" data-testid="field-error-currency"></div>
+            </div>
+
+            <div class="form-group">
+                <label for="vacation-days-input">Vacation days per year</label>
+                <input type="number" step="1" id="vacation-days-input" data-testid="vacation-days-input" value="20" />
+                <div class="field-error" id="field-error-vacationDaysPerYear" data-testid="field-error-vacationDaysPerYear"></div>
+            </div>
+
+            <div class="form-group">
+                <label>Reserve percentage</label>
+                <div class="reserve-mode-group">
+                    <label><input type="radio" name="reserve-mode" id="vacation-reserve-mode-auto" data-testid="vacation-reserve-mode-auto" value="auto" checked /> Auto-calculate</label>
+                    <label><input type="radio" name="reserve-mode" id="vacation-reserve-mode-manual" data-testid="vacation-reserve-mode-manual" value="manual" /> Set manually</label>
+                </div>
+                <input type="number" step="0.01" id="vacation-reserve-percent-input" data-testid="vacation-reserve-percent-input" disabled />
+                <div id="vacation-reserve-preview" data-testid="vacation-reserve-preview"></div>
+                <div class="field-error" id="field-error-vacationReservePercent" data-testid="field-error-vacationReservePercent"></div>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" id="vacation-financials-cancel-btn" data-testid="vacation-financials-cancel-btn">Cancel</button>
+                <button type="submit" id="vacation-financials-save-btn" data-testid="vacation-financials-save-btn">Save changes</button>
+            </div>
+        </form>
+    </div>
+</div>
 
 @section Scripts {
     <script>
@@ -69,4 +169,5 @@
         window.__memberDetailMemberId = "@Model.MemberId";
     </script>
     <script src="~/js/member-detail.js"></script>
+    <script src="~/js/vacation-tab.js"></script>
 }

@@ -223,7 +223,8 @@ public class MemberDetailE2ETests : PageTest
 
         await Expect(Page.GetByTestId("member-detail-tab-about")).ToBeVisibleAsync();
         await Expect(Page.GetByTestId("member-detail-tab-vacation")).ToBeVisibleAsync();
-        await Expect(Page.GetByTestId("member-detail-tab-vacation")).ToBeDisabledAsync();
+        // Vacation tab is enabled for admin/manager as of spec 07 (Member Financial Settings).
+        await Expect(Page.GetByTestId("member-detail-tab-vacation")).ToBeEnabledAsync();
         await Expect(Page.GetByTestId("member-detail-tab-projects")).ToBeDisabledAsync();
         await Expect(Page.GetByTestId("member-detail-tab-roles")).ToBeDisabledAsync();
         await Expect(Page.GetByTestId("member-detail-tab-payments")).ToBeDisabledAsync();
