@@ -1,3 +1,13 @@
+---
+id: "05"
+title: "Member Detail: About"
+routes: ["/org/{orgId}/members/{memberId}"]
+api: ["GET /api/organizations/{orgId}/members/{memberId}", "PUT /api/organizations/{orgId}/members/{memberId}"]
+entities: [Membership]
+tags: [member-detail, role-picker, job-title, zero-admin-guard, tab-bar, initials-avatar]
+depends-on: ["04"]
+---
+
 # 05 — Member Detail: About
 
 ## Summary
@@ -26,7 +36,7 @@ Selecting a member from the Members list opens that member's detail view. In thi
 
 1. The detail view is reached by selecting a member row in the Members list and shows a back-link returning to that list. Route: `/org/{orgId}/members/{memberId}`.
 2. **Read-only header** displays: the member's initials avatar, full name, role badge, "Joined" date (displayed in the viewer's timezone), email, and timezone. These fields are not editable on this screen.
-3. The **About** tab is the only active tab in this release. Other tab labels (Projects, Roles, Payments) are shown as disabled/non-functional visual placeholders.
+3. The **About** tab is active by default. The **Vacation** tab is active when `MemberFinancials` exist for the member and the caller has permission to view it (see spec 07). Other tab labels (Projects, Roles, Payments) are shown as disabled/non-functional visual placeholders.
 
 ### Avatar
 
@@ -73,8 +83,8 @@ Selecting a member from the Members list opens that member's detail view. In thi
 │                  ✉  alex@acme.com                           │
 │                  🕐 America/New_York                        │
 │                                                             │
-│  [ ABOUT ]   Projects   Roles   Payments                    │
-│    active    disabled   disabled  disabled                   │
+│  [ ABOUT ]   Vacation   Projects   Roles   Payments          │
+│    active    see spec07 disabled   disabled  disabled        │
 │                                                             │
 │  Role                                                       │
 │  [ user                          ▾ ]   (dropdown)           │
@@ -108,7 +118,7 @@ Selecting a member from the Members list opens that member's detail view. In thi
 │                  ✉  alex@acme.com                           │
 │                  🕐 America/New_York                        │
 │                                                             │
-│  [ ABOUT ]   Projects   Roles   Payments                    │
+│  [ ABOUT ]   Vacation   Projects   Roles   Payments          │
 │                                                             │
 │  Job title: Backend Engineer       (static text)            │
 │                                                             │
@@ -135,7 +145,7 @@ Selecting a member from the Members list opens that member's detail view. In thi
 │                  ✉  alex@acme.com                           │
 │                  🕐 America/New_York                        │
 │                                                             │
-│  [ ABOUT ]   Projects   Roles   Payments                    │
+│  [ ABOUT ]   Vacation   Projects   Roles   Payments          │
 │                                                             │
 │  Job title: Backend Engineer       (static text)            │
 │                                                             │
@@ -155,7 +165,7 @@ Selecting a member from the Members list opens that member's detail view. In thi
 3. System sends `GET /api/organizations/{orgId}/members/{memberId}`.
 4. System renders skeleton/loading state while waiting.
 5. System displays the member detail header: initials avatar, name, role badge, "Joined {date}" in viewer's timezone, email, timezone.
-6. System renders the About tab as active; Projects, Roles, Payments tabs as disabled.
+6. System renders the About tab as active; Vacation tab as active or disabled per spec 07 rules; Projects, Roles, Payments tabs as disabled.
 7. System renders the role picker (populated with options from API `availableRoles`, pre-selected with current role) and the job title input (pre-filled with current value, or empty with placeholder "Enter a job title").
 8. Admin selects a new role and/or edits the job title.
 9. Admin clicks "Save changes". The button disables with a loading indicator.
@@ -330,7 +340,7 @@ Server-side validation: all rules enforced regardless of UI state.
 - Back link at top: "Back to members" linking to `/org/{orgId}/members`.
 - Vertically stacked layout, centered, max-width approximately 600px.
 - Header section: centered initials avatar (colored circle), full name (bold), role badge, "Joined {date}" (in viewer's timezone), email with mail icon, timezone with clock icon.
-- Tab bar: ABOUT (active), Projects (disabled), Roles (disabled), Payments (disabled).
+- Tab bar: ABOUT (active), Vacation (active/disabled per spec 07), Projects (disabled), Roles (disabled), Payments (disabled).
 - Form section (below tabs): Role picker (if authorized), Job title input, Save changes button.
 - Toast notification for save confirmation.
 
@@ -395,7 +405,7 @@ Server-side validation: all rules enforced regardless of UI state.
 - `member-detail`, `member-detail-back-link`
 - `member-detail-avatar`
 - `member-detail-name`, `member-detail-role-badge`, `member-detail-joined`, `member-detail-email`, `member-detail-timezone`
-- `member-detail-tab-about`, `member-detail-tab-projects` (disabled), `member-detail-tab-roles` (disabled), `member-detail-tab-payments` (disabled)
+- `member-detail-tab-about`, `member-detail-tab-vacation` (see spec 07), `member-detail-tab-projects` (disabled), `member-detail-tab-roles` (disabled), `member-detail-tab-payments` (disabled)
 - `member-role-select-{id}` — the role picker on the detail page
 - `role-change-guard-message` — the "must retain at least one admin" explanation
 - `job-title-input`, `field-error-jobTitle`, `job-title-save-button`, `job-title-readonly` (read-only render)
@@ -404,7 +414,7 @@ Server-side validation: all rules enforced regardless of UI state.
 
 ## Out of Scope
 
-- Projects, Roles, and Payments tabs (future features).
+- Projects, Roles, and Payments tabs (future features). Vacation tab is covered in spec 07.
 - Editing header fields (name, email, timezone) from this screen — those are self-service in Account Settings (spec 06).
 - Self-service job title editing (job title is admin/manager-controlled only).
 - Avatar/photo upload (initials-based placeholder only in this release).
@@ -663,8 +673,8 @@ Server-side validation: all rules enforced regardless of UI state.
 - **Steps:**
   1. Observe the tab bar.
 - **Expected Result:**
-  1. The About tab is active. Projects, Roles, and Payments tab labels are visible but disabled/non-functional.
-- **Selectors:** `member-detail-tab-about`, `member-detail-tab-projects`, `member-detail-tab-roles`, `member-detail-tab-payments`.
+  1. The About tab is active. Vacation tab is active or disabled per spec 07. Projects, Roles, and Payments tab labels are visible but disabled/non-functional.
+- **Selectors:** `member-detail-tab-about`, `member-detail-tab-vacation`, `member-detail-tab-projects`, `member-detail-tab-roles`, `member-detail-tab-payments`.
 
 ### TC-05-E2E-07: Navigate to member detail and back
 - **Level:** E2E

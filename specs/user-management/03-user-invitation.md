@@ -1,3 +1,13 @@
+---
+id: "03"
+title: User Invitation
+routes: ["/accept-invite", "/members"]
+api: ["POST /api/invitations", "GET /api/invitations/{token}/validate", "POST /api/invitations/accept"]
+entities: [Invitation, JobTitle]
+tags: [invite, invitation, token, accept-invite, role-picker, onboarding, org-switch, supersede]
+depends-on: ["01", "02"]
+---
+
 # 03 — User Invitation
 
 ## Summary

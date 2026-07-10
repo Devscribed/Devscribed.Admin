@@ -1,3 +1,13 @@
+---
+id: "04"
+title: Member List & Management
+routes: ["/org/{orgId}/members"]
+api: ["GET /api/organizations/{orgId}/members", "DELETE /api/organizations/{orgId}/members/{memberId}", "POST /api/organizations/{orgId}/members/{memberId}/restore"]
+entities: [MembershipStatus]
+tags: [member-list, search, soft-delete, restore, remove-member, last-admin-guard, session-revocation]
+depends-on: ["01", "02", "03"]
+---
+
 # 04 — Member List & Management
 
 ## Summary

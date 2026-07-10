@@ -1,3 +1,13 @@
+---
+id: "01"
+title: Organization Creation
+routes: ["/signup"]
+api: ["POST /api/signup"]
+entities: [Account, Organization, Membership]
+tags: [signup, registration, org-creation, admin-role, password-policy, name-validation, email-validation]
+depends-on: []
+---
+
 # 01 — Organization Creation
 
 ## Summary

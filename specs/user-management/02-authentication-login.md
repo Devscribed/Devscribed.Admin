@@ -1,3 +1,13 @@
+---
+id: "02"
+title: Authentication & Login
+routes: ["/login", "/forgot-password", "/reset-password"]
+api: ["POST /api/login", "POST /api/forgot-password", "POST /api/reset-password"]
+entities: [PasswordResetToken, SecurityStamp]
+tags: [login, authentication, session, cookie, forgot-password, reset-password, SecurityStamp, session-revocation]
+depends-on: ["01"]
+---
+
 # 02 — Authentication & Login
 
 ## Summary

@@ -1,3 +1,13 @@
+---
+id: "06"
+title: Account Settings
+routes: ["/account/settings", "/account/confirm-email"]
+api: ["GET /api/account/settings", "PUT /api/account/settings", "POST /api/account/change-email", "POST /api/account/confirm-email", "POST /api/account/change-password"]
+entities: [PendingEmailChange]
+tags: [account-settings, change-email, change-password, profile, phone, timezone, first-day-of-week]
+depends-on: ["01", "02"]
+---
+
 # 06 — Account Settings (Personal)
 
 ## Summary
