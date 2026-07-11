@@ -29,7 +29,7 @@ public static class VacationAccrualCalculator
         if (dailySalary <= 0)
             return 0;
 
-        var fromBalance = (int)Math.Floor((reserveBalance - pendingHold) / dailySalary);
+        var fromBalance = (int)Math.Ceiling((reserveBalance - pendingHold) / dailySalary);
         var cap = vacationDaysPerYear - usedDays;
         var days = Math.Min(fromBalance, cap);
         return Math.Max(days, 0);
