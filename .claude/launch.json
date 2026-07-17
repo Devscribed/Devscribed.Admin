@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src/Devscribed.Admin.Web"],
+      "port": 5050,
+      "autoPort": true
+    }
+  ]
+}
