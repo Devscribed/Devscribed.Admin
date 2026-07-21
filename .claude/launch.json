@@ -2,11 +2,17 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "web",
+      "name": "api",
       "runtimeExecutable": "dotnet",
-      "runtimeArgs": ["run", "--project", "src/Devscribed.Admin.Web"],
-      "port": 5050,
-      "autoPort": true
+      "runtimeArgs": ["run", "--project", "src/Devscribed.Admin.Api"],
+      "port": 5050
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "frontend",
+      "port": 3000
     }
   ]
 }

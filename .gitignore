@@ -17,6 +17,15 @@ obj/
 # Playwright
 playwright/.cache/
 
+# Node / Next.js
+node_modules/
+.next/
+out/
+
+# Playwright
+test-results/
+playwright-report/
+
 # misc
 .DS_Store
 *.pem
