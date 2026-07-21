@@ -1,0 +1,48 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// Login credentials + the person behind them.
+model Account {
+  id           String   @id @default(uuid())
+  /// Always stored lowercase; uniqueness is therefore case-insensitive.
+  email        String   @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  /// IANA zone auto-detected from the browser at signup.
+  timezone     String?
+  createdAt    DateTime @default(now())
+
+  memberships Membership[]
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  memberships Membership[]
+}
+
+/// Links an account to its organization. One per account — single-org-per-user (FR-8).
+model Membership {
+  id             String   @id @default(uuid())
+  accountId      String   @unique
+  organizationId String
+  /// "admin" | "member" — org control is expressed purely through the admin role (FR-7).
+  role           String
+  /// "active" | "invited" | "deactivated"
+  status         String
+  joinedAt       DateTime @default(now())
+
+  account      Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
