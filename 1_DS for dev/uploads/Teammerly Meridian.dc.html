@@ -1,0 +1,1493 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  html,body{margin:0;padding:0;height:100%;}
+  #root{height:100%;}
+  *{box-sizing:border-box;}
+  a{color:inherit;text-decoration:none;}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:rgba(128,120,105,.35);border-radius:6px}
+  input::placeholder,textarea::placeholder{color:currentColor;opacity:.5}
+</style>
+</helmet>
+
+<div style="height:100vh;display:flex;overflow:hidden;font-family:'IBM Plex Sans',sans-serif;background:{{ t.bg }};color:{{ t.ink }};transition:background .25s,color .25s;">
+
+  <!-- ===== Sidebar ===== -->
+  <div style="width:252px;flex-shrink:0;border-right:1px solid {{ t.border }};background:{{ t.panel2 }};display:flex;flex-direction:column;transition:background .25s;">
+    <div style="height:68px;flex-shrink:0;display:flex;align-items:center;padding:0 22px;border-bottom:1px solid {{ t.border }};">
+      <span style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:21px;letter-spacing:-.5px;">Team<span style="color:{{ t.accent }};">merly</span><span style="display:inline-block;width:6px;height:6px;border-radius:2px;background:{{ t.amber }};margin-left:3px;vertical-align:middle;"></span></span>
+    </div>
+    <div style="flex-grow:1;padding:16px 14px;overflow-y:auto;">
+      <sc-for list="{{ nav }}" as="item" hint-placeholder-count="7">
+        <sc-if value="{{ item.isLink }}" hint-placeholder-val="{{ true }}">
+          <a href="#" onClick="{{ item.onClick }}" style="display:flex;align-items:center;font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:15px;color:{{ item.color }};background:{{ item.bg }};border:1px solid {{ item.border }};border-radius:10px;padding:10px 12px;margin-bottom:8px;cursor:pointer;transition:background .15s;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">
+            <span style="display:flex;margin-right:12px;color:{{ item.iconColor }};width:20px;">{{ item.icon }}</span>{{ item.title }}
+          </a>
+        </sc-if>
+        <sc-if value="{{ item.isMenu }}" hint-placeholder-val="{{ false }}">
+          <a href="#" onClick="{{ item.toggle }}" style="display:flex;align-items:center;font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:15px;color:{{ item.headerColor }};padding:10px 12px;margin-bottom:8px;border-radius:10px;cursor:pointer;transition:background .15s;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">
+            <span style="display:flex;margin-right:12px;color:{{ item.iconColor }};width:20px;">{{ item.icon }}</span>{{ item.title }}
+            <span style="margin-left:auto;display:flex;transform:rotate({{ item.arrowRot }});color:{{ t.faint }};transition:transform .2s;">{{ icArrow }}</span>
+          </a>
+          <sc-if value="{{ item.open }}" hint-placeholder-val="{{ false }}">
+            <div style="margin:2px 0 8px 22px;padding-left:12px;border-left:1px solid {{ t.divider }};">
+              <sc-for list="{{ item.subs }}" as="s" hint-placeholder-count="3">
+                <a href="#" onClick="{{ s.onClick }}" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-radius:8px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;font-weight:500;color:{{ s.color }};background:{{ s.bg }};margin-bottom:5px;cursor:pointer;transition:background .15s;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important"><span>{{ s.label }}</span><sc-if value="{{ s.hasBadge }}" hint-placeholder-val="{{ false }}"><span data-testid="requests-nav-badge" style="min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:{{ t.accent }};color:{{ t.onAccent }};font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;">{{ s.badgeCount }}</span></sc-if></a>
+              </sc-for>
+            </div>
+          </sc-if>
+        </sc-if>
+      </sc-for>
+    </div>
+    <div style="padding:16px 18px;border-top:1px solid {{ t.border }};font-family:'IBM Plex Sans',sans-serif;font-size:11px;color:{{ t.faint }};">Meridian · v3.0</div>
+  </div>
+
+  <!-- ===== Main column ===== -->
+  <div style="flex-grow:1;min-width:0;display:flex;flex-direction:column;">
+
+    <!-- Navbar -->
+    <div style="height:68px;flex-shrink:0;padding:0 24px;display:flex;align-items:center;border-bottom:1px solid {{ t.border }};background:{{ t.panel2 }};transition:background .25s;">
+      <a href="#" onClick="{{ openTracker }}" style="display:flex;align-items:center;justify-content:space-between;gap:8px;height:34px;border-radius:10px;border:1.5px solid {{ t.amberBorder }};background:{{ t.amberBg }};padding:0 13px;color:{{ t.amber }};font-family:'Space Grotesk',sans-serif;font-size:15px;cursor:pointer;transition:filter .2s;" style-hover="filter:brightness(1.05)">
+        <span style="display:flex;width:16px;">{{ icTimesheets }}</span>00:00:00<span style="display:flex;transform:rotate(90deg);color:{{ t.faint }};">{{ icArrow }}</span>
+      </a>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:18px;">
+        <div style="display:flex;align-items:center;background:{{ t.toggleBg }};border:1px solid {{ t.border }};border-radius:20px;padding:3px;">
+          <button onClick="{{ setLight }}" style="border:none;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:500;padding:5px 13px;border-radius:16px;background:{{ toggleLight.bg }};color:{{ toggleLight.color }};box-shadow:{{ toggleLight.shadow }};">Light</button>
+          <button onClick="{{ setDark }}" style="border:none;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:500;padding:5px 13px;border-radius:16px;background:{{ toggleDark.bg }};color:{{ toggleDark.color }};box-shadow:{{ toggleDark.shadow }};">Dark</button>
+        </div>
+        <a href="#" onClick="{{ goAccount }}" style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+          <span style="font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:14px;color:{{ t.ink }};">Alex Chen</span>
+          <span style="width:38px;height:38px;border-radius:50%;background:{{ t.accentSoft }};display:flex;align-items:center;justify-content:center;color:{{ t.accent }};">{{ icUser }}</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div style="flex-grow:1;overflow-y:auto;background:{{ t.bg }};padding:28px 32px 48px;transition:background .25s;position:relative;">
+
+      <sc-if value="{{ showPageHeader }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:22px;">
+        <div>
+          <h1 style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:27px;letter-spacing:-.6px;margin:0 0 5px;color:{{ t.ink }};">{{ pageTitle }}</h1>
+          <sc-if value="{{ hasSubtitle }}" hint-placeholder-val="{{ true }}"><div style="font-size:14px;color:{{ t.sub }};">{{ subtitle }}</div></sc-if>
+        </div>
+        <sc-if value="{{ isTimesheets }}" hint-placeholder-val="{{ true }}">
+          <button onClick="{{ openAdd }}" style="height:44px;padding:0 20px;border-radius:10px;border:none;background:{{ t.accent }};color:{{ t.onAccent }};font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;cursor:pointer;box-shadow:{{ t.glow }};transition:filter .2s,transform .1s;" style-hover="filter:brightness(1.08)" style-active="transform:translateY(1px)">Add time</button>
+        </sc-if>
+      </div>
+      </sc-if>
+
+      <!-- MEMBERS (spec 04) -->
+      <sc-if value="{{ isMembers }}" hint-placeholder-val="{{ false }}">
+        <sc-if value="{{ isMemberList }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px;">
+          <div style="position:relative;width:100%;max-width:320px;">
+            <span style="position:absolute;left:13px;top:50%;transform:translateY(-50%);display:flex;color:{{ t.faint }};">{{ icMagnify }}</span>
+            <input data-testid="members-search-input" value="{{ memberSearch }}" onChange="{{ setMemberSearch }}" placeholder="Search members..." style="width:100%;height:42px;border:1.5px solid {{ t.borderStrong }};border-radius:10px;padding:0 12px 0 36px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;background:{{ t.field }};color:{{ t.ink }};outline:none;transition:border-color .15s,box-shadow .15s;" style-focus="border-color:oklch(0.5 0.16 292) !important">
+          </div>
+          <label data-testid="show-removed-checkbox" onClick="{{ toggleShowRemoved }}" style="display:flex;align-items:center;gap:10px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.sub }};cursor:pointer;user-select:none;">
+            <span style="width:20px;height:20px;border-radius:6px;background:{{ showRemovedBg }};border:1.5px solid {{ showRemovedBorder }};display:inline-flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0;">{{ showRemovedCheck }}</span>Show removed members
+          </label>
+        </div>
+        <div data-testid="members-list" style="background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:14px;overflow:hidden;">
+          <div style="display:flex;height:50px;padding:0 20px;background:{{ t.header }};position:sticky;top:0;z-index:2;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:{{ t.muted }};">
+            <div style="flex:2;display:flex;align-items:center;">Name</div>
+            <div style="flex:1;display:flex;align-items:center;">Role</div>
+            <div style="flex:1.6;display:flex;align-items:center;">Email</div>
+            <sc-if value="{{ actionsColumn }}" hint-placeholder-val="{{ true }}"><div style="width:64px;flex-shrink:0;display:flex;align-items:center;justify-content:flex-end;">Actions</div></sc-if>
+          </div>
+          <sc-for list="{{ filteredMembers }}" as="m" hint-placeholder-count="4">
+            <div data-testid="member-row-{{ m.id }}" onClick="{{ m.onRow }}" style="display:flex;min-height:64px;padding:0 20px;align-items:center;border-top:1px solid {{ t.divider }};opacity:{{ m.rowOpacity }};filter:{{ m.rowFilter }};cursor:pointer;transition:background .12s;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">
+              <div style="flex:2;display:flex;align-items:center;gap:10px;min-width:0;">
+                <span style="width:32px;height:32px;flex-shrink:0;border-radius:50%;background:{{ t.accentSoft }};color:{{ t.accent }};display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12px;">{{ m.initials }}</span>
+                <span data-testid="member-name-{{ m.id }}" style="font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:15px;color:{{ t.ink }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ m.fullName }}{{ m.youLabel }}</span>
+                <sc-if value="{{ m.removed }}" hint-placeholder-val="{{ false }}"><span data-testid="member-status-badge-{{ m.id }}" style="flex-shrink:0;display:inline-flex;align-items:center;gap:6px;border-radius:20px;font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:12px;padding:3px 10px;background:{{ m.removedBadgeBg }};color:{{ m.removedBadgeInk }};"><span style="width:6px;height:6px;border-radius:50%;background:{{ m.removedBadgeDot }};"></span>Removed</span></sc-if>
+              </div>
+              <div style="flex:1;display:flex;align-items:center;"><span data-testid="member-role-badge-{{ m.id }}" style="display:inline-flex;align-items:center;border-radius:20px;font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:12px;letter-spacing:.3px;text-transform:capitalize;padding:4px 12px;background:{{ m.roleBg }};color:{{ m.roleColor }};">{{ m.role }}</span></div>
+              <div data-testid="member-email-{{ m.id }}" style="flex:1.6;font-size:14px;color:{{ t.sub }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ m.email }}</div>
+              <sc-if value="{{ actionsColumn }}" hint-placeholder-val="{{ true }}">
+                <div style="width:64px;flex-shrink:0;display:flex;justify-content:flex-end;position:relative;">
+                  <sc-if value="{{ m.showMenu }}" hint-placeholder-val="{{ false }}">
+                    <button data-testid="member-row-actions-{{ m.id }}" onClick="{{ m.onKebab }}" aria-label="Actions" style="width:32px;height:32px;border-radius:8px;border:none;background:transparent;color:{{ t.faint }};cursor:pointer;display:flex;align-items:center;justify-content:center;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">{{ icDots }}</button>
+                    <sc-if value="{{ m.kebabOpen }}" hint-placeholder-val="{{ false }}">
+                      <div onClick="{{ stop }}" style="position:absolute;right:0;top:100%;margin-top:4px;min-width:170px;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:10px;box-shadow:{{ t.shadow }};overflow:hidden;z-index:60;padding:4px 0;">
+                        <sc-for list="{{ m.kebabItems }}" as="it" hint-placeholder-count="1"><a href="#" title="{{ it.tooltip }}" onClick="{{ it.onClick }}" style="display:block;padding:9px 14px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ it.color }};cursor:{{ it.cursor }};" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">{{ it.label }}</a></sc-for>
+                      </div>
+                    </sc-if>
+                  </sc-if>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+          <sc-if value="{{ filteredEmpty }}" hint-placeholder-val="{{ false }}">
+            <div data-testid="members-empty-state" style="display:flex;align-items:center;justify-content:center;padding:48px;border-top:1px solid {{ t.divider }};font-family:'Space Grotesk',sans-serif;font-size:16px;color:{{ t.faint }};">No members found</div>
+          </sc-if>
+        </div>
+        </sc-if>
+
+        <!-- MEMBER DETAIL (spec 05) -->
+        <sc-if value="{{ isMemberDetail }}" hint-placeholder-val="{{ false }}">
+          <div data-testid="member-detail">
+            <a href="#" data-testid="member-detail-back-link" onClick="{{ detail.back }}" style="display:inline-flex;align-items:center;gap:8px;font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:14px;color:{{ t.sub }};text-decoration:none;margin-bottom:22px;cursor:pointer;" style-hover="color:oklch(0.5 0.16 292) !important"><span style="font-size:18px;line-height:1;">&#8592;</span>Back to members</a>
+            <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;">
+              <!-- Identity card -->
+              <div style="flex:0 0 340px;max-width:100%;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:14px;padding:26px 24px;">
+                <div style="display:flex;align-items:center;gap:16px;">
+                  <div data-testid="member-detail-avatar" style="width:64px;height:64px;flex-shrink:0;border-radius:50%;background:{{ detail.avaBg }};color:{{ detail.avaColor }};display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:23px;">{{ detail.initials }}</div>
+                  <div style="display:flex;flex-direction:column;gap:7px;min-width:0;">
+                    <div data-testid="member-detail-name" style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:20px;letter-spacing:-.4px;color:{{ t.ink }};">{{ detail.fullName }}</div>
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                      <span data-testid="member-detail-role-badge" style="display:inline-flex;align-items:center;border-radius:20px;font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:12px;text-transform:capitalize;padding:4px 12px;background:{{ detail.roleBadgeBg }};color:{{ detail.roleBadgeColor }};">{{ detail.roleLabel }}</span>
+                      <sc-if value="{{ detail.removed }}" hint-placeholder-val="{{ false }}"><span style="display:inline-flex;align-items:center;gap:6px;border-radius:20px;font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:12px;padding:4px 12px;background:{{ detail.removedBadgeBg }};color:{{ detail.removedBadgeInk }};"><span style="width:6px;height:6px;border-radius:50%;background:{{ detail.removedBadgeDot }};"></span>Removed</span></sc-if>
+                    </div>
+                  </div>
+                </div>
+                <div style="border-top:1px solid {{ t.divider }};margin-top:24px;padding-top:22px;display:flex;flex-direction:column;gap:22px;">
+                  <div><div style="font-family:'Space Grotesk',sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:3px;">Joined</div><div data-testid="member-detail-joined" style="font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.ink }};">{{ detail.joined }}</div></div>
+                  <div><div style="font-family:'Space Grotesk',sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:3px;">Email</div><div data-testid="member-detail-email" style="display:flex;align-items:center;gap:8px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.ink }};word-break:break-all;"><span style="display:flex;color:{{ t.faint }};flex-shrink:0;">{{ icMail }}</span>{{ detail.email }}</div></div>
+                  <div><div style="font-family:'Space Grotesk',sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:3px;">Timezone</div><div data-testid="member-detail-timezone" style="display:flex;align-items:center;gap:8px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.ink }};"><span style="display:flex;color:{{ t.faint }};flex-shrink:0;">{{ icClock }}</span>{{ detail.timezone }}</div></div>
+                </div>
+              </div>
+              <!-- Right column: tabs + panels -->
+              <div style="flex:1 1 0;min-width:240px;display:flex;flex-direction:column;gap:18px;">
+                <div style="display:flex;gap:26px;border-bottom:1.5px solid {{ t.divider }};">
+                  <sc-for list="{{ detail.tabs }}" as="tb" hint-placeholder-count="2">
+                    <a href="#" data-testid="{{ tb.testid }}" onClick="{{ tb.onClick }}" title="{{ tb.title }}" style="text-decoration:none;cursor:{{ tb.cursor }};">
+                      <span style="display:block;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;letter-spacing:.5px;text-transform:uppercase;color:{{ tb.color }};transition:color .15s;">{{ tb.label }}</span>
+                      <div style="margin-top:12px;margin-bottom:-1.5px;height:3px;border-radius:3px;background:{{ tb.underlineBg }};"></div>
+                    </a>
+                  </sc-for>
+                </div>
+                <sc-if value="{{ detail.tabAbout }}" hint-placeholder-val="{{ true }}">
+                  <div data-testid="member-detail-tab-about" style="background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:14px;padding:24px 26px 26px;">
+                    <div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:16px;letter-spacing:-.2px;color:{{ t.ink }};margin-bottom:20px;">Details</div>
+                <sc-if value="{{ detail.showForm }}" hint-placeholder-val="{{ true }}">
+                  <sc-if value="{{ detail.canEditRole }}" hint-placeholder-val="{{ false }}">
+                    <div style="margin-bottom:20px;position:relative;">
+                      <label style="display:block;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:6px;">Role</label>
+                      <div data-testid="member-role-select-{{ detail.id }}" onClick="{{ detail.roleSel.toggle }}" title="{{ detail.roleTooltip }}" style="display:flex;align-items:center;justify-content:space-between;height:46px;border:1.5px solid {{ detail.roleSel.borderColor }};border-radius:10px;padding:0 6px 0 12px;font-size:15px;color:{{ t.ink }};background:{{ t.field }};cursor:{{ detail.roleFieldCursor }};opacity:{{ detail.roleFieldOpacity }};text-transform:capitalize;transition:border-color .15s;"><span>{{ detail.roleSel.value }}</span><span style="padding:8px;color:{{ t.faint }};display:flex;">{{ icArrow }}</span></div>
+                      <sc-if value="{{ detail.roleSel.open }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;left:0;right:0;top:100%;margin-top:6px;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:10px;box-shadow:{{ t.shadow }};overflow:hidden;z-index:30;"><sc-for list="{{ detail.roleSel.options }}" as="o" hint-placeholder-count="4"><a href="#" onClick="{{ o.onClick }}" style="display:block;padding:10px 14px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;text-transform:capitalize;background:{{ o.bg }};color:{{ o.color }};" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">{{ o.name }}</a></sc-for></div></sc-if>
+                      <sc-if value="{{ detail.guard }}" hint-placeholder-val="{{ false }}"><div data-testid="role-change-guard-message" style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:8px 12px;border-radius:8px;background:oklch(0.96 0.04 74);border:1px solid oklch(0.82 0.09 74);font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:oklch(0.45 0.09 74);">{{ detail.guardMsg }}</div></sc-if>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ detail.canEditJobTitle }}" hint-placeholder-val="{{ true }}">
+                    <div style="margin-bottom:22px;">
+                      <label style="display:block;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:6px;">Job title</label>
+                      <input data-testid="job-title-input" value="{{ detail.jobValue }}" onChange="{{ detail.setDetailJob }}" placeholder="Enter a job title" style="width:100%;height:46px;border:1.5px solid {{ t.borderStrong }};border-radius:10px;padding:0 12px;font-size:15px;background:{{ t.field }};color:{{ t.ink }};outline:none;font-family:'IBM Plex Sans',sans-serif;transition:border-color .15s;" style-focus="border-color:oklch(0.5 0.16 292) !important">
+                      <sc-if value="{{ detail.hasJobErr }}" hint-placeholder-val="{{ false }}"><div data-testid="field-error-jobTitle" style="font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:{{ dangerColor }};margin-top:6px;">{{ detail.jobErr }}</div></sc-if>
+                    </div>
+                  </sc-if>
+                  <div style="display:flex;align-items:center;gap:14px;border-top:1px solid {{ t.divider }};padding-top:18px;">
+                    <button data-testid="job-title-save-button" onClick="{{ detail.save }}" style="height:44px;padding:0 22px;border-radius:10px;border:none;background:{{ t.accent }};color:{{ t.onAccent }};font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;cursor:{{ detail.saveCursor }};box-shadow:{{ t.glow }};opacity:{{ detail.saveOpacity }};transition:filter .2s;" style-hover="filter:brightness(1.08)">Save changes</button>
+                    <sc-if value="{{ detail.dirty }}" hint-placeholder-val="{{ false }}"><span style="font-family:'IBM Plex Sans',sans-serif;font-size:13px;color:{{ t.muted }};">Unsaved changes</span></sc-if>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ detail.showReadonly }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:16px;">
+                    <div><div style="font-family:'Space Grotesk',sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:4px;">Role</div><span style="display:inline-flex;align-items:center;border-radius:20px;font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:12px;text-transform:capitalize;padding:4px 12px;background:{{ detail.roleBadgeBg }};color:{{ detail.roleBadgeColor }};">{{ detail.roleLabel }}</span></div>
+                    <div><div style="font-family:'Space Grotesk',sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:4px;">Job title</div><div data-testid="job-title-readonly" style="font-family:'IBM Plex Sans',sans-serif;font-size:15px;color:{{ t.ink }};">{{ detail.jobDisplay }}</div></div>
+                  </div>
+                </sc-if>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ detail.tabVacation }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:18px;">
+                    <sc-if value="{{ detail.fin.showFinCard }}" hint-placeholder-val="{{ true }}">
+                      <div data-testid="vacation-financials-card" style="background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:14px;padding:24px 26px 26px;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;">
+                          <div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:16px;letter-spacing:-.2px;color:{{ t.ink }};">Financial settings</div>
+                          <sc-if value="{{ detail.fin.showEditBtn }}" hint-placeholder-val="{{ false }}"><a href="#" data-testid="vacation-financials-edit-btn" onClick="{{ detail.openFin }}" style="font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:13px;color:oklch(0.5 0.16 292);text-decoration:none;" style-hover="text-decoration:underline !important">Edit</a></sc-if>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px 24px;">
+                          <div><div style="font-family:'Space Grotesk',sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:4px;">Monthly salary</div><div style="font-family:'IBM Plex Sans',sans-serif;font-size:15px;color:{{ t.ink }};">{{ detail.fin.salaryText }}</div></div>
+                          <div><div style="font-family:'Space Grotesk',sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:4px;">Client hourly rate</div><div style="font-family:'IBM Plex Sans',sans-serif;font-size:15px;color:{{ t.ink }};">{{ detail.fin.rateText }}</div></div>
+                          <div><div style="font-family:'Space Grotesk',sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:4px;">Reserve %</div><div style="font-family:'IBM Plex Sans',sans-serif;font-size:15px;color:{{ t.ink }};">{{ detail.fin.percentText }}</div></div>
+                          <div><div style="font-family:'Space Grotesk',sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:4px;">Days per year</div><div style="font-family:'IBM Plex Sans',sans-serif;font-size:15px;color:{{ t.ink }};">{{ detail.fin.daysText }}</div></div>
+                        </div>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ detail.fin.showBalance }}" hint-placeholder-val="{{ false }}">
+                      <div data-testid="vacation-balance-card" style="background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:14px;padding:24px 26px 26px;">
+                        <div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:16px;letter-spacing:-.2px;color:{{ t.ink }};margin-bottom:20px;">Vacation balance</div>
+                        <div style="display:flex;gap:16px;flex-wrap:wrap;">
+                          <div style="flex:1 1 120px;background:{{ t.header }};border-radius:12px;padding:16px 18px;"><div style="font-family:'Space Grotesk',sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:6px;">Available</div><div data-testid="vacation-available-days" style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:26px;color:{{ t.ink }};">{{ detail.fin.availableDaysText }}</div><div style="font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:{{ t.muted }};">days</div></div>
+                          <div style="flex:1 1 120px;background:{{ t.header }};border-radius:12px;padding:16px 18px;"><div style="font-family:'Space Grotesk',sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:6px;">Used</div><div data-testid="vacation-used-days" style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:26px;color:{{ t.ink }};">{{ detail.fin.usedDaysText }}</div><div style="font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:{{ t.muted }};">days</div></div>
+                          <div style="flex:1 1 120px;background:{{ t.header }};border-radius:12px;padding:16px 18px;"><div style="font-family:'Space Grotesk',sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:6px;">Pending</div><div data-testid="vacation-pending-days" style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:26px;color:{{ t.ink }};">{{ detail.fin.pendingDaysText }}</div><div style="font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:{{ t.muted }};">days</div></div>
+                        </div>
+                        <sc-if value="{{ detail.fin.balanceShowMoney }}" hint-placeholder-val="{{ true }}"><div data-testid="vacation-reserve-amount" style="font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:14px;color:{{ t.sub }};margin-top:16px;">{{ detail.fin.reserveAmountText }}</div></sc-if>
+                        <sc-if value="{{ detail.fin.balanceShowDaysNote }}" hint-placeholder-val="{{ false }}"><div style="font-family:'IBM Plex Sans',sans-serif;font-size:13px;color:{{ t.muted }};margin-top:16px;">{{ detail.fin.totalDaysText }}</div></sc-if>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ detail.showRequestBtn }}" hint-placeholder-val="{{ false }}">
+                      <div><button data-testid="vacation-request-btn" onClick="{{ detail.openReqModal }}" title="{{ detail.reqBtnTip }}" style="height:44px;padding:0 22px;border-radius:10px;border:none;background:{{ t.accent }};color:{{ t.onAccent }};font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;cursor:{{ detail.reqBtnCursor }};opacity:{{ detail.reqBtnOpacity }};box-shadow:{{ t.glow }};">Request vacation</button></div>
+                    </sc-if>
+                    <sc-if value="{{ detail.showRequestsCard }}" hint-placeholder-val="{{ false }}">
+                      <div style="background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:14px;padding:24px 26px 26px;">
+                        <div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:16px;letter-spacing:-.2px;color:{{ t.ink }};margin-bottom:6px;">Vacation requests</div>
+                        <sc-if value="{{ detail.hasRequests }}" hint-placeholder-val="{{ true }}">
+                          <div data-testid="vacation-requests-list" style="display:flex;flex-direction:column;">
+                            <sc-for list="{{ detail.requests }}" as="r" hint-placeholder-count="3">
+                              <div data-testid="vacation-request-row-{{ r.id }}" style="display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:15px 0;border-top:1px solid {{ t.divider }};">
+                                <div style="flex:1 1 190px;min-width:0;">
+                                  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                                    <span data-testid="vacation-request-dates-{{ r.id }}" style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;color:{{ t.ink }};">{{ r.datesText }}</span>
+                                    <span data-testid="vacation-request-days-{{ r.id }}" style="font-family:'IBM Plex Sans',sans-serif;font-size:13px;color:{{ t.muted }};">{{ r.daysText }}</span>
+                                  </div>
+                                  <sc-if value="{{ r.showDed }}" hint-placeholder-val="{{ true }}"><div style="font-family:'IBM Plex Sans',sans-serif;font-size:13px;color:{{ t.sub }};margin-top:3px;">{{ r.dedText }}</div></sc-if>
+                                  <sc-if value="{{ r.hasComment }}" hint-placeholder-val="{{ false }}"><div data-testid="vacation-request-reviewer-comment-{{ r.id }}" style="font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-style:italic;color:{{ t.muted }};margin-top:5px;">{{ r.comment }}</div></sc-if>
+                                </div>
+                                <span data-testid="vacation-request-status-{{ r.id }}" style="display:inline-flex;align-items:center;gap:5px;border-radius:20px;font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:12px;padding:4px 11px;background:{{ r.statusBg }};color:{{ r.statusColor }};"><span>{{ r.statusIcon }}</span>{{ r.statusLabel }}</span>
+                                <div style="display:flex;gap:8px;">
+                                  <sc-if value="{{ r.showApprove }}" hint-placeholder-val="{{ false }}"><button data-testid="vacation-request-approve-{{ r.id }}" onClick="{{ r.onApprove }}" style="height:36px;padding:0 15px;border-radius:9px;border:none;background:{{ t.accent }};color:{{ t.onAccent }};font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;cursor:pointer;">Approve</button></sc-if>
+                                  <sc-if value="{{ r.showReject }}" hint-placeholder-val="{{ false }}"><button data-testid="vacation-request-reject-{{ r.id }}" onClick="{{ r.onReject }}" style="height:36px;padding:0 15px;border-radius:9px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ t.sub }};font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:13px;cursor:pointer;" style-hover="border-color:oklch(0.5 0.16 292) !important">Reject</button></sc-if>
+                                  <sc-if value="{{ r.showCancel }}" hint-placeholder-val="{{ false }}"><button data-testid="vacation-request-cancel-{{ r.id }}" onClick="{{ r.onCancel }}" style="height:36px;padding:0 15px;border-radius:9px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ t.sub }};font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:13px;cursor:pointer;" style-hover="border-color:oklch(0.5 0.16 292) !important">Cancel</button></sc-if>
+                                </div>
+                              </div>
+                            </sc-for>
+                          </div>
+                        </sc-if>
+                        <sc-if value="{{ detail.noRequests }}" hint-placeholder-val="{{ false }}"><div data-testid="vacation-no-requests" style="text-align:center;padding:22px 0 6px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.muted }};">No vacation requests yet.</div></sc-if>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ detail.fin.showTxTable }}" hint-placeholder-val="{{ false }}">
+                      <div style="background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:14px;padding:24px 26px 26px;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:18px;">
+                          <div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:16px;letter-spacing:-.2px;color:{{ t.ink }};">Reserve transactions</div>
+                          <sc-if value="{{ detail.fin.showAccrual }}" hint-placeholder-val="{{ false }}">
+                            <div style="display:flex;align-items:center;gap:8px;position:relative;">
+                              <div data-testid="accrual-month-select" onClick="{{ detail.fin.accrualSel.toggle }}" style="display:flex;align-items:center;justify-content:space-between;gap:8px;height:38px;min-width:150px;border:1.5px solid {{ detail.fin.accrualSel.borderColor }};border-radius:9px;padding:0 6px 0 12px;font-size:14px;color:{{ t.ink }};background:{{ t.field }};cursor:pointer;transition:border-color .15s;"><span>{{ detail.fin.accrualSel.value }}</span><span style="padding:6px;color:{{ t.faint }};display:flex;">{{ icArrow }}</span></div>
+                              <sc-if value="{{ detail.fin.accrualSel.open }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;left:0;top:100%;margin-top:6px;min-width:150px;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:10px;box-shadow:{{ t.shadow }};overflow:hidden;z-index:50;"><sc-for list="{{ detail.fin.accrualSel.options }}" as="o" hint-placeholder-count="6"><a href="#" onClick="{{ o.onClick }}" style="display:block;padding:9px 14px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;background:{{ o.bg }};color:{{ o.color }};" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">{{ o.name }}</a></sc-for></div></sc-if>
+                              <button data-testid="run-accrual-btn" onClick="{{ detail.fin.runAccrual }}" style="height:38px;padding:0 16px;border-radius:9px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ t.ink }};font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap;transition:border-color .15s;" style-hover="border-color:oklch(0.5 0.16 292) !important">Run accrual</button>
+                            </div>
+                          </sc-if>
+                        </div>
+                        <sc-if value="{{ detail.fin.hasTx }}" hint-placeholder-val="{{ true }}">
+                          <div data-testid="vacation-transactions-table">
+                            <div style="display:flex;padding:0 14px 10px;border-bottom:1px solid {{ t.divider }};font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};">
+                              <div style="width:76px;">Date</div><div style="width:120px;">Type</div><div style="width:120px;">Amount</div><div style="flex:1;">Description</div>
+                            </div>
+                            <sc-for list="{{ detail.fin.txRows }}" as="x" hint-placeholder-count="5">
+                              <div style="display:flex;align-items:center;padding:13px 14px;border-bottom:1px solid {{ t.divider }};font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.ink }};">
+                                <div style="width:76px;color:{{ t.sub }};">{{ x.date }}</div>
+                                <div style="width:120px;display:flex;align-items:center;gap:6px;"><span>{{ x.typeLabel }}</span><sc-if value="{{ x.isAuto }}" hint-placeholder-val="{{ true }}"><span style="font-size:11px;color:{{ t.faint }};">(auto)</span></sc-if></div>
+                                <div style="width:120px;font-family:'Space Grotesk',sans-serif;font-weight:600;color:{{ x.amountColor }};">{{ x.amountText }}</div>
+                                <div style="flex:1;color:{{ t.sub }};">{{ x.desc }} <span style="color:{{ t.faint }};font-size:12px;">&middot; {{ x.createdBy }}</span></div>
+                              </div>
+                            </sc-for>
+                          </div>
+                        </sc-if>
+                        <sc-if value="{{ detail.fin.noTx }}" hint-placeholder-val="{{ false }}">
+                          <div data-testid="vacation-no-transactions" style="text-align:center;padding:28px 0;font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.muted }};">No reserve transactions yet.</div>
+                        </sc-if>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ detail.fin.emptyManager }}" hint-placeholder-val="{{ false }}">
+                      <div data-testid="vacation-empty-state" style="background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:14px;padding:40px 26px;text-align:center;">
+                        <div style="font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.sub }};margin-bottom:18px;">Vacation tracking has not been set up for this member yet.</div>
+                        <sc-if value="{{ detail.fin.showSetupBtn }}" hint-placeholder-val="{{ true }}"><button data-testid="vacation-setup-btn" onClick="{{ detail.openFin }}" style="height:44px;padding:0 22px;border-radius:10px;border:none;background:{{ t.accent }};color:{{ t.onAccent }};font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;cursor:pointer;box-shadow:{{ t.glow }};">Set up financials</button></sc-if>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ detail.fin.emptyUser }}" hint-placeholder-val="{{ false }}">
+                      <div data-testid="vacation-empty-state" style="background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:14px;padding:40px 26px;text-align:center;">
+                        <div style="font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.sub }};">Vacation tracking has not been set up for your account yet. Please contact your manager.</div>
+                      </div>
+                    </sc-if>
+                  </div>
+                  <sc-if value="{{ detail.finModal.open }}" hint-placeholder-val="{{ false }}">
+                    <div onClick="{{ detail.finModal.close }}" style="position:fixed;inset:0;z-index:1002;background:rgba(20,16,10,.5);display:flex;align-items:center;justify-content:center;padding:20px;">
+                      <div onClick="{{ stop }}" data-testid="vacation-financials-modal" style="width:100%;max-width:520px;max-height:88vh;overflow:auto;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:16px;box-shadow:{{ t.shadow }};padding:28px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;"><span style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:19px;letter-spacing:-.3px;color:{{ t.ink }};">{{ detail.finModal.title }}</span><button onClick="{{ detail.finModal.close }}" style="border:none;background:transparent;color:{{ t.faint }};width:14px;height:14px;display:flex;cursor:pointer;padding:0;">{{ icClose }}</button></div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px 18px;">
+                          <div><label style="display:block;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:6px;">Monthly salary</label><input data-testid="vacation-salary-input" value="{{ detail.finModal.salary }}" onChange="{{ detail.finModal.setSalary }}" placeholder="3000.00" style="width:100%;height:44px;border:1.5px solid {{ t.borderStrong }};border-radius:10px;padding:0 12px;font-size:15px;background:{{ t.field }};color:{{ t.ink }};outline:none;font-family:'IBM Plex Sans',sans-serif;transition:border-color .15s;" style-focus="border-color:oklch(0.5 0.16 292) !important"><sc-if value="{{ detail.finModal.hasSalaryErr }}" hint-placeholder-val="{{ false }}"><div data-testid="field-error-monthlySalary" style="font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:{{ dangerColor }};margin-top:6px;">{{ detail.finModal.salaryErr }}</div></sc-if></div>
+                          <div><label style="display:block;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:6px;">Client hourly rate</label><input data-testid="vacation-rate-input" value="{{ detail.finModal.rate }}" onChange="{{ detail.finModal.setRate }}" placeholder="40.00" style="width:100%;height:44px;border:1.5px solid {{ t.borderStrong }};border-radius:10px;padding:0 12px;font-size:15px;background:{{ t.field }};color:{{ t.ink }};outline:none;font-family:'IBM Plex Sans',sans-serif;transition:border-color .15s;" style-focus="border-color:oklch(0.5 0.16 292) !important"><sc-if value="{{ detail.finModal.hasRateErr }}" hint-placeholder-val="{{ false }}"><div data-testid="field-error-clientHourlyRate" style="font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:{{ dangerColor }};margin-top:6px;">{{ detail.finModal.rateErr }}</div></sc-if></div>
+                          <div style="position:relative;"><label style="display:block;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:6px;">Currency</label><div data-testid="vacation-currency-select" onClick="{{ detail.finModal.curSel.toggle }}" style="display:flex;align-items:center;justify-content:space-between;height:44px;border:1.5px solid {{ detail.finModal.curSel.borderColor }};border-radius:10px;padding:0 6px 0 12px;font-size:15px;color:{{ t.ink }};background:{{ t.field }};cursor:pointer;transition:border-color .15s;"><span>{{ detail.finModal.curSel.value }}</span><span style="padding:8px;color:{{ t.faint }};display:flex;">{{ icArrow }}</span></div><sc-if value="{{ detail.finModal.curSel.open }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;left:0;right:0;top:100%;margin-top:6px;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:10px;box-shadow:{{ t.shadow }};overflow:hidden;z-index:30;"><sc-for list="{{ detail.finModal.curSel.options }}" as="o" hint-placeholder-count="3"><a href="#" onClick="{{ o.onClick }}" style="display:block;padding:10px 14px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;background:{{ o.bg }};color:{{ o.color }};" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">{{ o.name }}</a></sc-for></div></sc-if></div>
+                          <div><label style="display:block;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:6px;">Vacation days per year</label><input data-testid="vacation-days-input" value="{{ detail.finModal.days }}" onChange="{{ detail.finModal.setDays }}" placeholder="20" style="width:100%;height:44px;border:1.5px solid {{ t.borderStrong }};border-radius:10px;padding:0 12px;font-size:15px;background:{{ t.field }};color:{{ t.ink }};outline:none;font-family:'IBM Plex Sans',sans-serif;transition:border-color .15s;" style-focus="border-color:oklch(0.5 0.16 292) !important"><sc-if value="{{ detail.finModal.hasDaysErr }}" hint-placeholder-val="{{ false }}"><div data-testid="field-error-vacationDaysPerYear" style="font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:{{ dangerColor }};margin-top:6px;">{{ detail.finModal.daysErr }}</div></sc-if></div>
+                        </div>
+                        <div style="margin-top:20px;">
+                          <label style="display:block;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:8px;">Reserve percentage</label>
+                          <div style="display:inline-flex;align-items:center;background:{{ t.toggleBg }};border:1px solid {{ t.border }};border-radius:20px;padding:3px;">
+                            <button data-testid="vacation-reserve-mode-auto" onClick="{{ detail.finModal.setAuto }}" style="border:none;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:500;padding:7px 16px;border-radius:16px;background:{{ detail.finModal.autoSeg.bg }};color:{{ detail.finModal.autoSeg.color }};box-shadow:{{ detail.finModal.autoSeg.shadow }};">Auto-calculate</button>
+                            <button data-testid="vacation-reserve-mode-manual" onClick="{{ detail.finModal.setManual }}" style="border:none;cursor:pointer;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:500;padding:7px 16px;border-radius:16px;background:{{ detail.finModal.manualSeg.bg }};color:{{ detail.finModal.manualSeg.color }};box-shadow:{{ detail.finModal.manualSeg.shadow }};">Set manually</button>
+                          </div>
+                        </div>
+                        <sc-if value="{{ detail.finModal.modeAuto }}" hint-placeholder-val="{{ true }}"><div data-testid="vacation-reserve-preview" style="margin-top:14px;font-family:'IBM Plex Sans',sans-serif;font-size:13px;color:{{ t.sub }};">Auto-calc preview: <strong style="color:{{ t.ink }};">{{ detail.finModal.computedPctText }}</strong></div></sc-if>
+                        <sc-if value="{{ detail.finModal.modeManual }}" hint-placeholder-val="{{ false }}"><div style="margin-top:14px;max-width:220px;"><label style="display:block;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:6px;">Reserve percent</label><input data-testid="vacation-reserve-percent-input" value="{{ detail.finModal.percent }}" onChange="{{ detail.finModal.setPercent }}" placeholder="3.33" style="width:100%;height:44px;border:1.5px solid {{ t.borderStrong }};border-radius:10px;padding:0 12px;font-size:15px;background:{{ t.field }};color:{{ t.ink }};outline:none;font-family:'IBM Plex Sans',sans-serif;transition:border-color .15s;" style-focus="border-color:oklch(0.5 0.16 292) !important"><sc-if value="{{ detail.finModal.hasPctErr }}" hint-placeholder-val="{{ false }}"><div data-testid="field-error-vacationReservePercent" style="font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:{{ dangerColor }};margin-top:6px;">{{ detail.finModal.pctErr }}</div></sc-if></div></sc-if>
+                        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:26px;">
+                          <button data-testid="vacation-financials-cancel-btn" onClick="{{ detail.finModal.close }}" style="height:44px;padding:0 20px;border-radius:10px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ t.sub }};font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:15px;cursor:pointer;transition:background .15s;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">Cancel</button>
+                          <button data-testid="vacation-financials-save-btn" onClick="{{ detail.finModal.save }}" style="height:44px;padding:0 24px;border-radius:10px;border:none;background:{{ t.accent }};color:{{ t.onAccent }};font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;cursor:{{ detail.finModal.saveCursor }};opacity:{{ detail.finModal.saveOpacity }};box-shadow:{{ t.glow }};transition:filter .2s;" style-hover="filter:brightness(1.08)">Save changes</button>
+                        </div>
+                      </div>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ detail.reqModal.open }}" hint-placeholder-val="{{ false }}">
+                    <div onClick="{{ detail.reqModal.close }}" style="position:fixed;inset:0;z-index:1002;background:rgba(20,16,10,.5);display:flex;align-items:center;justify-content:center;padding:20px;">
+                      <div onClick="{{ stop }}" data-testid="vacation-request-modal" style="width:100%;max-width:440px;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:16px;box-shadow:{{ t.shadow }};padding:28px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;"><span style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:19px;letter-spacing:-.3px;color:{{ t.ink }};">Request vacation</span><button onClick="{{ detail.reqModal.close }}" style="border:none;background:transparent;color:{{ t.faint }};width:14px;height:14px;display:flex;cursor:pointer;padding:0;">{{ icClose }}</button></div>
+                        <div style="display:flex;flex-direction:column;gap:16px;">
+                          <div><label style="display:block;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:6px;">Start date</label><input type="date" data-testid="vacation-start-date-input" value="{{ detail.reqModal.start }}" min="{{ detail.reqModal.minDate }}" onChange="{{ detail.reqModal.setStart }}" style="width:100%;height:44px;border:1.5px solid {{ t.borderStrong }};border-radius:10px;padding:0 12px;font-size:15px;background:{{ t.field }};color:{{ t.ink }};outline:none;font-family:'IBM Plex Sans',sans-serif;transition:border-color .15s;" style-focus="border-color:oklch(0.5 0.16 292) !important"><sc-if value="{{ detail.reqModal.hasStartErr }}" hint-placeholder-val="{{ false }}"><div data-testid="field-error-startDate" style="font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:{{ dangerColor }};margin-top:6px;">{{ detail.reqModal.startErr }}</div></sc-if></div>
+                          <div><label style="display:block;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:6px;">End date</label><input type="date" data-testid="vacation-end-date-input" value="{{ detail.reqModal.end }}" min="{{ detail.reqModal.minDate }}" onChange="{{ detail.reqModal.setEnd }}" style="width:100%;height:44px;border:1.5px solid {{ t.borderStrong }};border-radius:10px;padding:0 12px;font-size:15px;background:{{ t.field }};color:{{ t.ink }};outline:none;font-family:'IBM Plex Sans',sans-serif;transition:border-color .15s;" style-focus="border-color:oklch(0.5 0.16 292) !important"><sc-if value="{{ detail.reqModal.hasEndErr }}" hint-placeholder-val="{{ false }}"><div data-testid="field-error-endDate" style="font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:{{ dangerColor }};margin-top:6px;">{{ detail.reqModal.endErr }}</div></sc-if></div>
+                          <div style="display:flex;justify-content:space-between;gap:12px;padding:14px 16px;border-radius:12px;background:{{ t.header }};"><span style="font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.sub }};">Working days</span><span data-testid="vacation-working-days-preview" style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;color:{{ t.ink }};">{{ detail.reqModal.workingDaysText }}</span></div>
+                          <div style="display:flex;justify-content:space-between;gap:12px;margin-top:-6px;"><span style="font-family:'IBM Plex Sans',sans-serif;font-size:13px;color:{{ t.muted }};">Available balance</span><span data-testid="vacation-available-days-preview" style="font-family:'IBM Plex Sans',sans-serif;font-size:13px;color:{{ t.muted }};">{{ detail.reqModal.availableText }}</span></div>
+                          <sc-if value="{{ detail.reqModal.hasGeneralErr }}" hint-placeholder-val="{{ false }}"><div data-testid="vacation-request-error" style="font-family:'IBM Plex Sans',sans-serif;font-size:13px;color:{{ dangerColor }};">{{ detail.reqModal.generalErr }}</div></sc-if>
+                        </div>
+                        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:24px;">
+                          <button data-testid="vacation-request-cancel-btn" onClick="{{ detail.reqModal.close }}" style="height:44px;padding:0 20px;border-radius:10px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ t.sub }};font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:15px;cursor:pointer;transition:background .15s;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">Cancel</button>
+                          <button data-testid="vacation-request-submit-btn" onClick="{{ detail.reqModal.submit }}" style="height:44px;padding:0 24px;border-radius:10px;border:none;background:{{ t.accent }};color:{{ t.onAccent }};font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;cursor:{{ detail.reqModal.submitCursor }};opacity:{{ detail.reqModal.submitOpacity }};box-shadow:{{ t.glow }};transition:filter .2s;" style-hover="filter:brightness(1.08)">Submit request</button>
+                        </div>
+                      </div>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ detail.rejectModal.open }}" hint-placeholder-val="{{ false }}">
+                    <div onClick="{{ detail.rejectModal.close }}" style="position:fixed;inset:0;z-index:1002;background:rgba(20,16,10,.5);display:flex;align-items:center;justify-content:center;padding:20px;">
+                      <div onClick="{{ stop }}" data-testid="vacation-reject-modal" style="width:100%;max-width:440px;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:16px;box-shadow:{{ t.shadow }};padding:28px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;"><span style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:19px;letter-spacing:-.3px;color:{{ t.ink }};">Reject request</span><button onClick="{{ detail.rejectModal.close }}" style="border:none;background:transparent;color:{{ t.faint }};width:14px;height:14px;display:flex;cursor:pointer;padding:0;">{{ icClose }}</button></div>
+                        <div style="font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.sub }};margin-bottom:4px;">Rejecting: <strong style="color:{{ t.ink }};">{{ detail.rejectModal.datesText }}</strong></div>
+                        <div style="font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.sub }};margin-bottom:18px;">Requested by: {{ detail.rejectModal.requester }}</div>
+                        <label style="display:block;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:6px;">Comment <span style="text-transform:none;letter-spacing:0;color:{{ t.faint }};">(optional)</span></label>
+                        <textarea data-testid="vacation-reject-comment-input" value="{{ detail.rejectModal.comment }}" onChange="{{ detail.rejectModal.setComment }}" rows="3" placeholder="Reason for rejection" style="width:100%;border:1.5px solid {{ t.borderStrong }};border-radius:10px;padding:10px 12px;font-size:14px;background:{{ t.field }};color:{{ t.ink }};outline:none;font-family:'IBM Plex Sans',sans-serif;resize:vertical;transition:border-color .15s;" style-focus="border-color:oklch(0.5 0.16 292) !important"></textarea>
+                        <sc-if value="{{ detail.rejectModal.hasErr }}" hint-placeholder-val="{{ false }}"><div data-testid="field-error-reviewerComment" style="font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:{{ dangerColor }};margin-top:6px;">{{ detail.rejectModal.err }}</div></sc-if>
+                        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:22px;">
+                          <button data-testid="vacation-reject-cancel-btn" onClick="{{ detail.rejectModal.close }}" style="height:44px;padding:0 20px;border-radius:10px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ t.sub }};font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:15px;cursor:pointer;transition:background .15s;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">Cancel</button>
+                          <button data-testid="vacation-reject-confirm-btn" onClick="{{ detail.rejectModal.confirm }}" style="height:44px;padding:0 24px;border-radius:10px;border:none;background:{{ dangerBtnBg }};color:#fff;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;cursor:pointer;opacity:{{ detail.rejectModal.confirmOpacity }};transition:filter .2s;" style-hover="filter:brightness(1.06)">Reject</button>
+                        </div>
+                      </div>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ detail.cancelReq.open }}" hint-placeholder-val="{{ false }}">
+                    <div onClick="{{ detail.cancelReq.close }}" style="position:fixed;inset:0;z-index:1002;background:rgba(20,16,10,.5);display:flex;align-items:center;justify-content:center;padding:20px;">
+                      <div onClick="{{ stop }}" data-testid="vacation-cancel-confirm" style="width:100%;max-width:400px;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:16px;box-shadow:{{ t.shadow }};padding:26px;">
+                        <div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:18px;letter-spacing:-.2px;color:{{ t.ink }};margin-bottom:10px;">{{ detail.cancelReq.title }}</div>
+                        <div style="font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.sub }};margin-bottom:22px;">{{ detail.cancelReq.body }}</div>
+                        <div style="display:flex;gap:10px;justify-content:flex-end;">
+                          <button onClick="{{ detail.cancelReq.close }}" style="height:44px;padding:0 20px;border-radius:10px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ t.sub }};font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:15px;cursor:pointer;transition:background .15s;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">Keep it</button>
+                          <button data-testid="vacation-cancel-confirm-btn" onClick="{{ detail.cancelReq.confirm }}" style="height:44px;padding:0 24px;border-radius:10px;border:none;background:{{ dangerBtnBg }};color:#fff;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;cursor:pointer;transition:filter .2s;" style-hover="filter:brightness(1.06)">Cancel request</button>
+                        </div>
+                      </div>
+                    </div>
+                  </sc-if>
+                </sc-if>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+      </sc-if>
+
+      <!-- REPORTS: TIME & ACTIVITY (source TimeAndActivity.tsx) -->
+      <sc-if value="{{ isTimeActivity }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;gap:26px;border-bottom:1.5px solid {{ t.divider }};margin-bottom:18px;">
+          <sc-for list="{{ report.tabs }}" as="tb" hint-placeholder-count="2">
+            <a href="#" onClick="{{ tb.onClick }}" style="text-decoration:none;cursor:pointer;">
+              <span style="display:block;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;letter-spacing:.5px;text-transform:uppercase;color:{{ tb.color }};transition:color .15s;">{{ tb.label }}</span>
+              <div style="margin-top:12px;margin-bottom:-1.5px;height:3px;border-radius:3px;background:{{ tb.underlineBg }};"></div>
+            </a>
+          </sc-for>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:22px;">
+          <div style="display:flex;align-items:center;gap:8px;height:44px;border:1.5px solid {{ t.borderStrong }};border-radius:10px;padding:0 14px;background:{{ t.field }};font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.ink }};"><span style="display:flex;color:{{ t.faint }};">{{ icClock }}</span>{{ report.dateRange }}</div>
+          <button onClick="{{ report.onApply }}" style="height:44px;padding:0 20px;border-radius:10px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ t.sub }};font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:15px;cursor:pointer;transition:background .15s;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">Apply</button>
+          <button onClick="{{ report.openFilters }}" style="margin-left:auto;height:44px;padding:0 20px;border-radius:10px;border:none;background:{{ t.accent }};color:{{ t.onAccent }};font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;cursor:pointer;box-shadow:{{ t.glow }};transition:filter .2s;" style-hover="filter:brightness(1.08)">Filters</button>
+        </div>
+
+        <sc-if value="{{ report.empty }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;justify-content:center;min-height:320px;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:14px;font-family:'Space Grotesk',sans-serif;font-size:16px;color:{{ t.faint }};text-align:center;">No reports matching your filter parameters.</div>
+        </sc-if>
+        <sc-if value="{{ report.notEmpty }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:22px;">
+            <sc-for list="{{ report.summary }}" as="s" hint-placeholder-count="4">
+              <div style="flex:1 1 150px;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:12px;padding:16px 18px;">
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:6px;">{{ s.label }}</div>
+                <div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:24px;letter-spacing:-.5px;color:{{ t.ink }};">{{ s.value }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+            <div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:20px;letter-spacing:-.4px;color:{{ t.ink }};">Acme Inc.</div>
+            <div style="font-family:'IBM Plex Sans',sans-serif;font-size:13px;color:{{ t.faint }};">America/New_York</div>
+            <button onClick="{{ report.exportReport }}" aria-label="Export report" style="margin-left:auto;display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-radius:10px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ t.sub }};font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:14px;cursor:pointer;transition:background .15s;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important"><span style="display:flex;">{{ icDownload }}</span>Export</button>
+            <div style="position:relative;">
+              <button onClick="{{ report.toggleCols }}" aria-label="Choose columns" style="width:40px;height:40px;border-radius:10px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ t.sub }};cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">{{ icGear }}</button>
+              <sc-if value="{{ report.colsOpen }}" hint-placeholder-val="{{ false }}">
+                <div onClick="{{ stop }}" style="position:absolute;right:0;top:100%;margin-top:6px;min-width:200px;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:10px;box-shadow:{{ t.shadow }};overflow:hidden;z-index:40;padding:5px 0;">
+                  <sc-for list="{{ report.colItems }}" as="c" hint-placeholder-count="6"><a href="#" onClick="{{ c.onToggle }}" style="display:flex;align-items:center;gap:10px;padding:9px 16px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ c.rowColor }};cursor:{{ c.cursor }};" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important"><span style="width:16px;display:flex;color:{{ c.checkColor }};">{{ icCheck }}</span>{{ c.title }}</a></sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:14px;">
+            <div style="display:flex;height:44px;padding:0 20px;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:{{ t.muted }};">
+              <sc-for list="{{ report.headers }}" as="h" hint-placeholder-count="4"><div style="flex:1;display:flex;align-items:center;padding-right:12px;">{{ h }}</div></sc-for>
+            </div>
+            <sc-for list="{{ report.groups }}" as="g" hint-placeholder-count="2">
+              <div style="background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:12px;overflow:hidden;">
+                <div style="padding:11px 20px;background:{{ t.header }};font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;color:{{ t.ink }};border-bottom:1px solid {{ t.divider }};">{{ g.title }}</div>
+                <div onClick="{{ g.onToggle }}" style="display:flex;min-height:48px;padding:0 20px;align-items:center;cursor:pointer;" style-hover="background:oklch(0.62 0.17 292 / 0.05) !important">
+                  <sc-for list="{{ g.totalCells }}" as="tc" hint-placeholder-count="4">
+                    <div style="flex:1;display:flex;align-items:center;gap:6px;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;color:{{ t.sub }};padding-right:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                      <sc-if value="{{ tc.label }}" hint-placeholder-val="{{ true }}">{{ tc.arrow }}<span>Total</span></sc-if>
+                      <sc-if value="{{ tc.plain }}" hint-placeholder-val="{{ false }}">{{ tc.value }}</sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+                <sc-if value="{{ g.notCollapsed }}" hint-placeholder-val="{{ true }}">
+                  <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="2">
+                    <div style="display:flex;min-height:50px;padding:0 20px;align-items:center;border-top:1px solid {{ t.divider }};">
+                      <sc-for list="{{ r.cells }}" as="cell" hint-placeholder-count="4"><div style="flex:1;font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.ink }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:12px;">{{ cell.value }}</div></sc-for>
+                    </div>
+                  </sc-for>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ report.filtersOpen }}" hint-placeholder-val="{{ false }}">
+          <div onClick="{{ report.closeFilters }}" style="position:fixed;inset:0;z-index:1001;background:rgba(20,16,10,.5);"></div>
+          <div style="position:fixed;top:0;right:0;bottom:0;width:340px;max-width:90vw;background:{{ t.panel }};border-left:1px solid {{ t.border }};box-shadow:{{ t.shadow }};z-index:1002;padding:26px;display:flex;flex-direction:column;gap:22px;overflow-y:auto;">
+            <div style="display:flex;align-items:center;justify-content:space-between;"><span style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:19px;color:{{ t.ink }};">Filters</span><button onClick="{{ report.closeFilters }}" style="border:none;background:transparent;color:{{ t.faint }};width:14px;height:14px;display:flex;cursor:pointer;padding:0;">{{ icClose }}</button></div>
+            <sc-for list="{{ report.filterGroups }}" as="fg" hint-placeholder-count="3">
+              <div>
+                <div style="font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:10px;">{{ fg.label }}</div>
+                <div style="display:flex;flex-direction:column;gap:10px;">
+                  <sc-for list="{{ fg.options }}" as="o" hint-placeholder-count="3"><div onClick="{{ o.onToggle }}" style="display:flex;align-items:center;gap:10px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.sub }};cursor:pointer;user-select:none;"><span style="width:20px;height:20px;border-radius:6px;background:{{ o.bg }};border:1.5px solid {{ o.border }};display:inline-flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0;">{{ o.check }}</span>{{ o.name }}</div></sc-for>
+                </div>
+              </div>
+            </sc-for>
+            <div onClick="{{ report.toggleSum }}" style="display:flex;align-items:center;gap:10px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.sub }};cursor:pointer;user-select:none;"><span style="width:20px;height:20px;border-radius:6px;background:{{ report.sumBg }};border:1.5px solid {{ report.sumBorder }};display:inline-flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0;">{{ report.sumCheck }}</span>Sum date ranges</div>
+            <button onClick="{{ report.clearFilters }}" style="height:44px;padding:0 20px;border-radius:10px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ t.sub }};font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:15px;cursor:pointer;transition:background .15s;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">Clear filters</button>
+          </div>
+        </sc-if>
+      </sc-if>
+
+      <!-- REQUESTS (spec 10) -->
+      <sc-if value="{{ isRequests }}" hint-placeholder-val="{{ false }}">
+        <sc-if value="{{ reqPage.noAccess }}" hint-placeholder-val="{{ false }}"><div data-testid="requests-no-access" style="display:flex;align-items:center;justify-content:center;min-height:280px;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:14px;font-family:'Space Grotesk',sans-serif;font-size:16px;color:{{ t.faint }};text-align:center;">You don&#39;t have access to organization requests.</div></sc-if>
+        <sc-if value="{{ reqPage.canView }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">
+          <sc-for list="{{ reqPage.filterTabs }}" as="f" hint-placeholder-count="5">
+            <a href="#" data-testid="requests-filter-{{ f.key }}" onClick="{{ f.onClick }}" style="display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 15px;border-radius:20px;border:1.5px solid {{ f.border }};background:{{ f.bg }};color:{{ f.color }};font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:13px;text-decoration:none;cursor:pointer;"><span>{{ f.label }}</span><span style="font-size:12px;opacity:.8;">{{ f.count }}</span></a>
+          </sc-for>
+        </div>
+        <sc-if value="{{ reqPage.hasRows }}" hint-placeholder-val="{{ true }}">
+          <div data-testid="requests-list" style="display:flex;flex-direction:column;gap:12px;">
+            <sc-for list="{{ reqPage.rows }}" as="r" hint-placeholder-count="4">
+              <div data-testid="request-card-{{ r.id }}" style="background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:14px;padding:20px 22px;">
+                <div style="display:flex;gap:14px;">
+                  <span style="width:40px;height:40px;flex-shrink:0;border-radius:50%;background:{{ r.avaBg }};color:{{ r.avaColor }};display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;">{{ r.initials }}</span>
+                  <div style="flex:1;min-width:0;">
+                    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+                      <a href="#" onClick="{{ r.openMember }}" style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:16px;color:{{ t.ink }};text-decoration:none;" style-hover="text-decoration:underline !important">{{ r.name }}</a>
+                      <span data-testid="request-status-{{ r.id }}" style="flex-shrink:0;display:inline-flex;align-items:center;gap:5px;border-radius:20px;font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:12px;padding:4px 11px;background:{{ r.statusBg }};color:{{ r.statusColor }};"><span>{{ r.statusIcon }}</span>{{ r.statusLabel }}</span>
+                    </div>
+                    <div style="font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.sub }};margin-top:3px;">{{ r.datesText }}</div>
+                    <div style="font-family:'IBM Plex Sans',sans-serif;font-size:13px;color:{{ t.muted }};margin-top:7px;">{{ r.daysText }}</div>
+                    <div style="font-family:'IBM Plex Sans',sans-serif;font-size:13px;color:{{ t.muted }};margin-top:2px;">{{ r.availText }}</div>
+                    <sc-if value="{{ r.showDed }}" hint-placeholder-val="{{ true }}"><div style="margin-top:11px;"><span data-testid="request-deduction-{{ r.id }}" style="display:inline-block;padding:5px 11px;border-radius:8px;background:{{ t.header }};font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;color:{{ t.ink }};">{{ r.dedText }}</span></div></sc-if>
+                    <sc-if value="{{ r.showComment }}" hint-placeholder-val="{{ false }}"><div style="margin-top:12px;font-family:'IBM Plex Sans',sans-serif;font-style:italic;font-size:13px;color:{{ t.sub }};">“{{ r.comment }}”</div></sc-if>
+                    <sc-if value="{{ r.showReviewLine }}" hint-placeholder-val="{{ false }}"><div style="margin-top:5px;font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:{{ t.muted }};">{{ r.reviewLine }}</div></sc-if>
+                    <sc-if value="{{ r.showActions }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex;gap:8px;margin-top:16px;">
+                        <sc-if value="{{ r.showApprove }}" hint-placeholder-val="{{ false }}"><button data-testid="request-approve-{{ r.id }}" onClick="{{ r.onApprove }}" style="height:38px;padding:0 18px;border-radius:9px;border:none;background:{{ t.accent }};color:{{ t.onAccent }};font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:13px;cursor:pointer;box-shadow:{{ t.glow }};transition:filter .2s;" style-hover="filter:brightness(1.08)">Approve</button></sc-if>
+                        <sc-if value="{{ r.showReject }}" hint-placeholder-val="{{ false }}"><button data-testid="request-reject-{{ r.id }}" onClick="{{ r.onReject }}" style="height:38px;padding:0 18px;border-radius:9px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ t.sub }};font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:13px;cursor:pointer;transition:background .15s;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">Reject</button></sc-if>
+                        <sc-if value="{{ r.showCancel }}" hint-placeholder-val="{{ false }}"><button data-testid="request-cancel-{{ r.id }}" onClick="{{ r.onCancel }}" style="height:38px;padding:0 18px;border-radius:9px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ t.sub }};font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:13px;cursor:pointer;transition:background .15s;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">Cancel</button></sc-if>
+                      </div>
+                    </sc-if>
+                  </div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ reqPage.noRows }}" hint-placeholder-val="{{ false }}"><div data-testid="requests-empty" style="display:flex;align-items:center;justify-content:center;min-height:280px;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:14px;font-family:'Space Grotesk',sans-serif;font-size:16px;color:{{ t.faint }};">{{ reqPage.emptyText }}</div></sc-if>
+        </sc-if>
+      </sc-if>
+
+      <!-- SHARED vacation reject / cancel dialogs (detail + requests page) -->
+      <sc-if value="{{ sReject.open }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ sReject.close }}" style="position:fixed;inset:0;z-index:1002;background:rgba(20,16,10,.5);display:flex;align-items:center;justify-content:center;padding:20px;">
+          <div onClick="{{ stop }}" data-testid="vacation-reject-modal" style="width:100%;max-width:440px;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:16px;box-shadow:{{ t.shadow }};padding:28px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;"><span style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:19px;letter-spacing:-.3px;color:{{ t.ink }};">Reject request</span><button onClick="{{ sReject.close }}" style="border:none;background:transparent;color:{{ t.faint }};width:14px;height:14px;display:flex;cursor:pointer;padding:0;">{{ icClose }}</button></div>
+            <div style="font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.sub }};margin-bottom:4px;">Rejecting: <strong style="color:{{ t.ink }};">{{ sReject.datesText }}</strong></div>
+            <div style="font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.sub }};margin-bottom:18px;">Requested by: {{ sReject.requester }}</div>
+            <label style="display:block;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:6px;">Comment <span style="text-transform:none;letter-spacing:0;color:{{ t.faint }};">(optional)</span></label>
+            <textarea data-testid="vacation-reject-comment-input" value="{{ sReject.comment }}" onChange="{{ sReject.setComment }}" rows="3" placeholder="Reason for rejection" style="width:100%;border:1.5px solid {{ t.borderStrong }};border-radius:10px;padding:10px 12px;font-size:14px;background:{{ t.field }};color:{{ t.ink }};outline:none;font-family:'IBM Plex Sans',sans-serif;resize:vertical;transition:border-color .15s;" style-focus="border-color:oklch(0.5 0.16 292) !important"></textarea>
+            <sc-if value="{{ sReject.hasErr }}" hint-placeholder-val="{{ false }}"><div data-testid="field-error-reviewerComment" style="font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:{{ dangerColor }};margin-top:6px;">{{ sReject.err }}</div></sc-if>
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:22px;">
+              <button data-testid="vacation-reject-cancel-btn" onClick="{{ sReject.close }}" style="height:44px;padding:0 20px;border-radius:10px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ t.sub }};font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:15px;cursor:pointer;transition:background .15s;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">Cancel</button>
+              <button data-testid="vacation-reject-confirm-btn" onClick="{{ sReject.confirm }}" style="height:44px;padding:0 24px;border-radius:10px;border:none;background:{{ dangerBtnBg }};color:#fff;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;cursor:pointer;opacity:{{ sReject.confirmOpacity }};transition:filter .2s;" style-hover="filter:brightness(1.06)">Reject</button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ sCancel.open }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ sCancel.close }}" style="position:fixed;inset:0;z-index:1002;background:rgba(20,16,10,.5);display:flex;align-items:center;justify-content:center;padding:20px;">
+          <div onClick="{{ stop }}" data-testid="vacation-cancel-confirm" style="width:100%;max-width:400px;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:16px;box-shadow:{{ t.shadow }};padding:26px;">
+            <div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:18px;letter-spacing:-.2px;color:{{ t.ink }};margin-bottom:10px;">{{ sCancel.title }}</div>
+            <div style="font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.sub }};margin-bottom:22px;">{{ sCancel.body }}</div>
+            <div style="display:flex;gap:10px;justify-content:flex-end;">
+              <button onClick="{{ sCancel.close }}" style="height:44px;padding:0 20px;border-radius:10px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ t.sub }};font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:15px;cursor:pointer;transition:background .15s;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">Keep it</button>
+              <button data-testid="vacation-cancel-confirm-btn" onClick="{{ sCancel.confirm }}" style="height:44px;padding:0 24px;border-radius:10px;border:none;background:{{ dangerBtnBg }};color:#fff;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;cursor:pointer;transition:filter .2s;" style-hover="filter:brightness(1.06)">Cancel request</button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- EMPTY STATE (no screen built in source for these sections) -->
+      <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;align-items:center;justify-content:center;min-height:380px;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:14px;">
+          <div style="font-family:'Space Grotesk',sans-serif;font-size:20px;letter-spacing:.6px;color:{{ t.faint }};text-align:center;">No data to display</div>
+        </div>
+      </sc-if>
+
+      <!-- TIMESHEETS (the one screen the source implements) -->
+      <sc-if value="{{ isTimesheets }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:18px;">
+          <div style="position:relative;width:210px;">
+            <label style="display:block;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:6px;">Time zone</label>
+            <div onClick="{{ selTz.toggle }}" style="display:flex;align-items:center;justify-content:space-between;height:44px;border:1.5px solid {{ selTz.borderColor }};border-radius:10px;padding:0 6px 0 12px;font-size:14px;color:{{ t.ink }};background:{{ t.field }};cursor:pointer;" style-hover="border-color:{{ t.accent }}"><span>{{ selTz.value }}</span><span style="padding:8px;color:{{ t.faint }};display:flex;">{{ icArrow }}</span></div>
+            <sc-if value="{{ selTz.open }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;left:0;right:0;top:100%;margin-top:6px;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:10px;box-shadow:{{ t.shadow }};overflow:hidden;z-index:50;"><sc-for list="{{ selTz.options }}" as="o" hint-placeholder-count="3"><a href="#" onClick="{{ o.onClick }}" style="display:block;padding:10px 14px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;background:{{ o.bg }};color:{{ o.color }};" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">{{ o.name }}</a></sc-for></div></sc-if>
+          </div>
+          <div style="position:relative;width:180px;">
+            <label style="display:block;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:6px;">Member</label>
+            <div onClick="{{ selMember.toggle }}" style="display:flex;align-items:center;justify-content:space-between;height:44px;border:1.5px solid {{ selMember.borderColor }};border-radius:10px;padding:0 6px 0 12px;font-size:14px;color:{{ t.ink }};background:{{ t.field }};cursor:pointer;" style-hover="border-color:{{ t.accent }}"><span>{{ selMember.value }}</span><span style="padding:8px;color:{{ t.faint }};display:flex;">{{ icArrow }}</span></div>
+            <sc-if value="{{ selMember.open }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;left:0;right:0;top:100%;margin-top:6px;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:10px;box-shadow:{{ t.shadow }};overflow:hidden;z-index:50;"><sc-for list="{{ selMember.options }}" as="o" hint-placeholder-count="3"><a href="#" onClick="{{ o.onClick }}" style="display:block;padding:10px 14px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;background:{{ o.bg }};color:{{ o.color }};" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">{{ o.name }}</a></sc-for></div></sc-if>
+          </div>
+        </div>
+        <div style="color:{{ t.sub }};font-size:14px;margin-bottom:18px;">Total time: <span style="color:{{ t.ink }};font-weight:600;font-family:'Space Grotesk',sans-serif;">42h 20m</span></div>
+        <div style="background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:14px;overflow:hidden;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px;flex-wrap:wrap;gap:12px;">
+            <div style="font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:600;letter-spacing:-.5px;color:{{ t.ink }};">{{ calTitle }}</div>
+            <div style="display:flex;align-items:center;gap:12px;">
+              <div style="display:flex;background:{{ t.toggleBg }};border:1px solid {{ t.border }};border-radius:20px;padding:3px;">
+                <button onClick="{{ segDay.onClick }}" style="border:none;cursor:pointer;padding:5px 13px;color:{{ segDay.color }};background:{{ segDay.bg }};box-shadow:{{ segDay.shadow }};font-size:12px;font-family:'Space Grotesk',sans-serif;font-weight:500;border-radius:16px;transition:background .15s;">day</button>
+                <button onClick="{{ segWeek.onClick }}" style="border:none;cursor:pointer;padding:5px 13px;color:{{ segWeek.color }};background:{{ segWeek.bg }};box-shadow:{{ segWeek.shadow }};font-size:12px;font-family:'Space Grotesk',sans-serif;font-weight:500;border-radius:16px;transition:background .15s;">week</button>
+                <button onClick="{{ segMonth.onClick }}" style="border:none;cursor:pointer;padding:5px 13px;color:{{ segMonth.color }};background:{{ segMonth.bg }};box-shadow:{{ segMonth.shadow }};font-size:12px;font-family:'Space Grotesk',sans-serif;font-weight:500;border-radius:16px;transition:background .15s;">month</button>
+              </div>
+              <button onClick="{{ goToday }}" style="height:32px;padding:0 14px;border-radius:9px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ t.sub }};font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:500;cursor:{{ todayCursor }};opacity:{{ todayOpacity }};" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">Today</button>
+              <div style="display:flex;gap:2px;">
+                <button onClick="{{ prevMonth }}" style="width:34px;height:32px;border-radius:9px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ t.sub }};cursor:pointer;display:flex;align-items:center;justify-content:center;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important"><span style="display:flex;transform:rotate(-90deg);">{{ icArrow }}</span></button>
+                <button onClick="{{ nextMonth }}" style="width:34px;height:32px;border-radius:9px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ t.sub }};cursor:pointer;display:flex;align-items:center;justify-content:center;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important"><span style="display:flex;transform:rotate(90deg);">{{ icArrow }}</span></button>
+              </div>
+            </div>
+          </div>
+
+          <sc-if value="{{ isMonth }}" hint-placeholder-val="{{ true }}">
+            <div style="display:grid;grid-template-columns:repeat(7,1fr);border-top:1px solid {{ t.divider }};">
+              <sc-for list="{{ weekdays }}" as="wd" hint-placeholder-count="7"><div style="height:40px;display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:{{ t.faint }};border-right:1px solid {{ t.divider }};border-bottom:1px solid {{ t.divider }};">{{ wd }}</div></sc-for>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(7,1fr);">
+              <sc-for list="{{ monthCells }}" as="cell" hint-placeholder-count="35">
+                <div style="min-height:92px;border-right:1px solid {{ t.divider }};border-bottom:1px solid {{ t.divider }};padding:4px;cursor:pointer;" onClick="{{ openAdd }}">
+                  <sc-if value="{{ cell.isToday }}" hint-placeholder-val="{{ false }}"><div style="display:flex;justify-content:flex-end;"><div style="width:22px;height:22px;border-radius:50%;background:{{ t.accent }};color:{{ t.onAccent }};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;font-family:'Space Grotesk',sans-serif;box-shadow:{{ t.todayGlow }};">{{ cell.day }}</div></div></sc-if>
+                  <sc-if value="{{ cell.notToday }}" hint-placeholder-val="{{ true }}"><div style="display:flex;justify-content:flex-end;padding:2px 4px;font-size:13px;font-weight:500;font-family:'Space Grotesk',sans-serif;color:{{ t.muted }};">{{ cell.day }}</div></sc-if>
+                  <sc-for list="{{ cell.events }}" as="ev" hint-placeholder-count="0"><div style="margin:2px 0;border-left:2.5px solid {{ ev.border }};background:{{ ev.bg }};border-radius:6px;padding:5px 8px;"><div style="font-size:9px;font-weight:500;color:{{ t.sub }};">{{ ev.t }}</div><div style="font-size:11px;font-weight:600;font-family:'Space Grotesk',sans-serif;color:{{ t.ink }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ ev.d }}</div></div></sc-for>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isWeek }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid;grid-template-columns:repeat(7,1fr);border-top:1px solid {{ t.divider }};">
+              <sc-for list="{{ weekData }}" as="wc" hint-placeholder-count="7">
+                <div style="border-right:1px solid {{ t.divider }};min-height:340px;cursor:pointer;" onClick="{{ openAdd }}">
+                  <div style="height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-bottom:1px solid {{ t.divider }};">
+                    <span style="font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:{{ t.faint }};">{{ wc.label }}</span>
+                    <sc-if value="{{ wc.isToday }}" hint-placeholder-val="{{ false }}"><span style="width:24px;height:24px;border-radius:50%;background:{{ t.accent }};color:{{ t.onAccent }};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;font-family:'Space Grotesk',sans-serif;box-shadow:{{ t.todayGlow }};">{{ wc.date }}</span></sc-if>
+                    <sc-if value="{{ wc.notToday }}" hint-placeholder-val="{{ true }}"><span style="font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;color:{{ t.ink }};">{{ wc.date }}</span></sc-if>
+                  </div>
+                  <div style="padding:6px;">
+                    <sc-for list="{{ wc.events }}" as="ev" hint-placeholder-count="0"><div style="margin:0 0 6px;border-left:2.5px solid {{ ev.border }};background:{{ ev.bg }};border-radius:6px;padding:6px 8px;"><div style="font-size:9px;font-weight:500;color:{{ t.sub }};">{{ ev.t }}</div><div style="font-size:11px;font-weight:600;font-family:'Space Grotesk',sans-serif;color:{{ t.ink }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ ev.d }}</div></div></sc-for>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isDay }}" hint-placeholder-val="{{ false }}">
+            <div style="border-top:1px solid {{ t.divider }};padding:24px;">
+              <sc-for list="{{ dayEvents }}" as="ev" hint-placeholder-count="2">
+                <div onClick="{{ ev.onOpen }}" style="display:flex;align-items:center;gap:18px;padding:16px;border:1px solid {{ t.divider }};border-left:3px solid {{ ev.border }};background:{{ ev.bg }};border-radius:10px;margin-bottom:12px;cursor:pointer;transition:border-color .12s,box-shadow .12s;" style-hover="border-color:oklch(0.6 0.18 292 / 0.6);box-shadow:0 2px 10px rgba(74,55,20,.10)">
+                  <div style="font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:600;color:{{ t.sub }};min-width:130px;">{{ ev.t }}</div>
+                  <div style="font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:600;color:{{ t.ink }};">{{ ev.d }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ anySelectOpen }}" hint-placeholder-val="{{ false }}"><div onClick="{{ closeSelects }}" style="position:fixed;inset:0;z-index:45;"></div></sc-if>
+
+    </div>
+  </div>
+
+  <!-- ===== Tracker ===== -->
+  <sc-if value="{{ trackerOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;top:88px;right:36px;width:360px;background:{{ t.panel }};border:1px solid {{ t.border }};box-shadow:{{ t.shadow }};border-radius:14px;z-index:9000;">
+      <button onClick="{{ closeTracker }}" style="position:absolute;top:14px;right:14px;border:none;background:transparent;color:{{ t.faint }};width:14px;height:14px;display:flex;cursor:pointer;padding:0;">{{ icClose }}</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:26px;background:{{ trackerHeaderBg }};border-top-left-radius:14px;border-top-right-radius:14px;">
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div onClick="{{ toggleActive }}" style="width:58px;height:58px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:{{ startCursor }};opacity:{{ startOpacity }};font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;background:{{ trackerBtnBg }};color:{{ trackerBtnInk }};box-shadow:{{ t.glow }};">{{ trackerLabel }}</div>
+          <div style="font-family:'Space Grotesk',sans-serif;font-size:18px;color:{{ trackerFg }};">{{ trackerProjectLabel }}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;">
+          <div style="font-family:'Space Grotesk',sans-serif;font-size:22px;color:{{ trackerFg }};">00:00:00</div>
+          <div style="font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:{{ t.muted }};">Today: 00:00:00</div>
+        </div>
+      </div>
+      <div style="padding:22px 26px 26px;position:relative;">
+        <label style="display:block;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:6px;">Project</label>
+        <div onClick="{{ toggleTrackerSel }}" style="display:flex;align-items:center;justify-content:space-between;height:46px;border:1.5px solid {{ trackerSelBorder }};border-radius:10px;padding:0 6px 0 12px;font-size:15px;color:{{ trackerSelColor }};background:{{ t.field }};cursor:pointer;" style-hover="border-color:{{ t.accent }}"><span>{{ trackerSelText }}</span><span style="padding:8px;color:{{ t.faint }};display:flex;">{{ icArrow }}</span></div>
+        <sc-if value="{{ trackerSelOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;left:26px;right:26px;top:100%;margin-top:-14px;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:10px;box-shadow:{{ t.shadow }};overflow:hidden;z-index:20;">
+            <sc-for list="{{ trackerOptions }}" as="opt" hint-placeholder-count="3">
+              <a href="#" onClick="{{ opt.onClick }}" style="display:block;padding:11px 14px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.ink }};" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">{{ opt.name }}</a>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ===== Add-time modal ===== -->
+  <sc-if value="{{ addOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeAdd }}" style="position:fixed;inset:0;z-index:1001;background:rgba(20,16,10,.55);display:flex;align-items:center;justify-content:center;">
+      <div onClick="{{ stop }}" style="width:100%;max-width:460px;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:16px;box-shadow:{{ t.shadow }};padding:26px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:22px;"><span style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:21px;letter-spacing:-.3px;color:{{ t.ink }};">{{ modalTitle }}</span><button onClick="{{ closeAdd }}" style="border:none;background:transparent;color:{{ t.faint }};width:14px;height:14px;display:flex;cursor:pointer;padding:0;">{{ icClose }}</button></div>
+        <div style="display:flex;flex-direction:column;gap:18px;">
+          <div style="font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.sub }};">Alex Chen</div>
+          <div style="position:relative;">
+            <label style="display:block;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:6px;">Project*</label>
+            <div onClick="{{ selModalProject.toggle }}" style="display:flex;align-items:center;justify-content:space-between;height:46px;border:1.5px solid {{ selModalProject.borderColor }};border-radius:10px;padding:0 6px 0 12px;font-size:15px;color:{{ t.ink }};background:{{ t.field }};cursor:pointer;" style-hover="border-color:{{ t.accent }}"><span>{{ selModalProject.value }}</span><span style="padding:8px;color:{{ t.faint }};display:flex;">{{ icArrow }}</span></div>
+            <sc-if value="{{ selModalProject.open }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;left:0;right:0;top:100%;margin-top:6px;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:10px;box-shadow:{{ t.shadow }};overflow:hidden;z-index:20;"><sc-for list="{{ selModalProject.options }}" as="o" hint-placeholder-count="3"><a href="#" onClick="{{ o.onClick }}" style="display:block;padding:10px 14px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;background:{{ o.bg }};color:{{ o.color }};" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">{{ o.name }}</a></sc-for></div></sc-if>
+          </div>
+          <div style="position:relative;width:200px;">
+            <label style="display:block;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:6px;">Date</label>
+            <div onClick="{{ datePicker.toggle }}" style="display:flex;align-items:center;justify-content:space-between;height:46px;border:1.5px solid {{ datePicker.borderColor }};border-radius:10px;padding:0 6px 0 12px;font-size:15px;color:{{ t.ink }};background:{{ t.field }};cursor:pointer;" style-hover="border-color:{{ t.accent }}"><span>{{ datePicker.value }}</span><span style="padding:8px;color:{{ t.faint }};display:flex;">{{ icArrow }}</span></div>
+            <sc-if value="{{ datePicker.open }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute;left:0;top:100%;margin-top:6px;width:288px;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:12px;box-shadow:{{ t.shadow }};padding:14px;z-index:30;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                  <button onClick="{{ datePicker.prev }}" aria-label="Previous month" style="width:28px;height:28px;border-radius:8px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ t.sub }};cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1;font-family:'Space Grotesk',sans-serif;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">‹</button>
+                  <span style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px;color:{{ t.ink }};">{{ datePicker.monthLabel }}</span>
+                  <button onClick="{{ datePicker.next }}" aria-label="Next month" style="width:28px;height:28px;border-radius:8px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ t.sub }};cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1;font-family:'Space Grotesk',sans-serif;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">›</button>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px;">
+                  <sc-for list="{{ datePicker.weekdays }}" as="w" hint-placeholder-count="7"><div style="text-align:center;font-family:'Space Grotesk',sans-serif;font-size:10px;font-weight:600;letter-spacing:.5px;color:{{ t.faint }};padding:2px 0;">{{ w }}</div></sc-for>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;">
+                  <sc-for list="{{ datePicker.cells }}" as="c" hint-placeholder-count="35">
+                    <sc-if value="{{ c.empty }}" hint-placeholder-val="{{ false }}"><div style="height:32px;"></div></sc-if>
+                    <sc-if value="{{ c.notEmpty }}" hint-placeholder-val="{{ true }}"><a href="#" onClick="{{ c.onClick }}" style="display:flex;align-items:center;justify-content:center;height:32px;border-radius:8px;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:500;background:{{ c.bg }};color:{{ c.color }};" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">{{ c.day }}</a></sc-if>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+          <div style="display:flex;gap:12px;">
+            <div style="flex:1;min-width:90px;position:relative;">
+              <label style="display:block;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:6px;">From</label>
+              <div onClick="{{ timeFrom.toggle }}" style="display:flex;align-items:center;justify-content:space-between;height:46px;border:1.5px solid {{ timeFrom.borderColor }};border-radius:10px;padding:0 6px 0 12px;font-size:15px;color:{{ t.ink }};background:{{ t.field }};cursor:pointer;font-family:'IBM Plex Sans',sans-serif;" style-hover="border-color:{{ t.accent }}"><span>{{ timeFrom.value }}</span><span style="padding:8px;color:{{ t.faint }};display:flex;">{{ icArrow }}</span></div>
+              <sc-if value="{{ timeFrom.open }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;left:0;right:0;top:100%;margin-top:6px;max-height:220px;overflow-y:auto;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:10px;box-shadow:{{ t.shadow }};z-index:30;"><sc-for list="{{ timeFrom.options }}" as="o" hint-placeholder-count="6"><a href="#" onClick="{{ o.onClick }}" style="display:block;padding:9px 14px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;background:{{ o.bg }};color:{{ o.color }};" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">{{ o.name }}</a></sc-for></div></sc-if>
+            </div>
+            <div style="flex:1;min-width:90px;position:relative;">
+              <label style="display:block;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:6px;">To</label>
+              <div onClick="{{ timeTo.toggle }}" style="display:flex;align-items:center;justify-content:space-between;height:46px;border:1.5px solid {{ timeTo.borderColor }};border-radius:10px;padding:0 6px 0 12px;font-size:15px;color:{{ t.ink }};background:{{ t.field }};cursor:pointer;font-family:'IBM Plex Sans',sans-serif;" style-hover="border-color:{{ t.accent }}"><span>{{ timeTo.value }}</span><span style="padding:8px;color:{{ t.faint }};display:flex;">{{ icArrow }}</span></div>
+              <sc-if value="{{ timeTo.open }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;left:0;right:0;top:100%;margin-top:6px;max-height:220px;overflow-y:auto;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:10px;box-shadow:{{ t.shadow }};z-index:30;"><sc-for list="{{ timeTo.options }}" as="o" hint-placeholder-count="6"><a href="#" onClick="{{ o.onClick }}" style="display:block;padding:9px 14px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;background:{{ o.bg }};color:{{ o.color }};" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">{{ o.name }}</a></sc-for></div></sc-if>
+            </div>
+          </div>
+          <div onClick="{{ toggleBillable }}" style="display:flex;align-items:center;font-family:'IBM Plex Sans',sans-serif;font-size:15px;color:{{ t.sub }};cursor:pointer;user-select:none;"><span style="width:20px;height:20px;border-radius:6px;background:{{ billableBg }};border:1.5px solid {{ billableBorder }};display:inline-flex;align-items:center;justify-content:center;margin-right:10px;color:#fff;">{{ billableCheck }}</span>Billable</div>
+          <div><label style="display:block;font-family:'Space Grotesk',sans-serif;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:{{ t.muted }};margin-bottom:6px;">Comments</label><textarea style="width:100%;height:84px;resize:none;border:1.5px solid {{ t.borderStrong }};border-radius:10px;padding:10px 12px;font-size:15px;background:{{ t.field }};color:{{ t.ink }};outline:none;font-family:'IBM Plex Sans',sans-serif;transition:border-color .15s,box-shadow .15s;" style-focus="border-color:oklch(0.5 0.16 292) !important"></textarea></div>
+          <div style="display:flex;gap:10px;justify-content:space-between;align-items:center;">
+            <sc-if value="{{ showModalDelete }}" hint-placeholder-val="{{ false }}"><button onClick="{{ openConfirm }}" aria-label="Delete" title="Delete" style="display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ dangerColor }};cursor:pointer;transition:background .15s,border-color .15s;" style-hover="background:{{ t.rowHover }};border-color:{{ dangerColor }}"><span style="display:flex;">{{ icTrash }}</span></button></sc-if>
+            <div style="display:flex;gap:10px;margin-left:auto;"><button onClick="{{ closeAdd }}" style="height:44px;padding:0 20px;border-radius:10px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ t.sub }};font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:15px;cursor:pointer;transition:background .15s;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">Cancel</button><button onClick="{{ closeAdd }}" style="height:44px;padding:0 24px;border-radius:10px;border:none;background:{{ t.accent }};color:{{ t.onAccent }};font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;cursor:pointer;box-shadow:{{ t.glow }};transition:filter .2s;" style-hover="filter:brightness(1.08)">{{ modalSubmitLabel }}</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ===== Confirm delete dialog ===== -->
+  <sc-if value="{{ confirmOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeConfirm }}" style="position:fixed;inset:0;z-index:1002;background:rgba(20,16,10,.55);display:flex;align-items:center;justify-content:center;">
+      <div onClick="{{ stop }}" style="width:100%;max-width:400px;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:16px;box-shadow:{{ t.shadow }};padding:26px;">
+        <div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:20px;letter-spacing:-.3px;color:{{ t.ink }};margin-bottom:8px;">Delete time entry?</div>
+        <div style="font-family:'IBM Plex Sans',sans-serif;font-size:14px;color:{{ t.sub }};margin-bottom:24px;">This can't be undone.</div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+          <button onClick="{{ closeConfirm }}" style="height:44px;padding:0 20px;border-radius:10px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ t.sub }};font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:15px;cursor:pointer;transition:background .15s;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">Cancel</button>
+          <button onClick="{{ confirmDelete }}" style="height:44px;padding:0 24px;border-radius:10px;border:none;background:{{ dangerBtnBg }};color:#fff;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;cursor:pointer;box-shadow:{{ dangerGlow }};transition:filter .2s;" style-hover="filter:brightness(1.08)">Delete</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ===== Remove member dialog (spec 04) ===== -->
+  <sc-if value="{{ deleteOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeDelete }}" style="position:fixed;inset:0;z-index:1002;background:rgba(20,16,10,.55);display:flex;align-items:center;justify-content:center;">
+      <div data-testid="confirm-delete-dialog" onClick="{{ stop }}" style="width:100%;max-width:420px;background:{{ t.panel }};border:1px solid {{ t.border }};border-radius:16px;box-shadow:{{ t.shadow }};padding:26px;">
+        <div style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:20px;letter-spacing:-.3px;color:{{ t.ink }};margin-bottom:10px;">Remove member</div>
+        <div style="font-family:'IBM Plex Sans',sans-serif;font-size:14px;line-height:1.55;color:{{ t.sub }};margin-bottom:24px;">Are you sure you want to remove {{ deleteName }}? They will lose access immediately.</div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+          <button data-testid="cancel-delete-button" onClick="{{ closeDelete }}" style="height:44px;padding:0 20px;border-radius:10px;border:1.5px solid {{ t.borderStrong }};background:transparent;color:{{ t.sub }};font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:15px;cursor:pointer;transition:background .15s;" style-hover="background:oklch(0.62 0.17 292 / 0.07) !important">Cancel</button>
+          <button data-testid="confirm-delete-button" onClick="{{ confirmDeleteMember }}" style="height:44px;padding:0 24px;border-radius:10px;border:none;background:{{ dangerBtnBg }};color:#fff;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px;cursor:pointer;box-shadow:{{ dangerGlow }};transition:filter .2s;" style-hover="filter:brightness(1.08)">Remove</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ===== Toast ===== -->
+  <sc-if value="{{ toastShow }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:1100;background:{{ t.ink }};color:{{ t.bg }};font-family:'Space Grotesk',sans-serif;font-weight:500;font-size:14px;padding:12px 20px;border-radius:10px;box-shadow:{{ t.shadow }};">{{ toastMsg }}</div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:&quot;100%&quot;},&quot;callerRole&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;admin&quot;,&quot;manager&quot;,&quot;user&quot;,&quot;viewer&quot;],&quot;default&quot;:&quot;admin&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Members — caller role&quot;}}">
+class Component extends DCLogic {
+  state = {
+    dark: false, page: 'Timesheets', openMenus: {},
+    trackerOpen: false, addOpen: false, trackerActive: false, trackerProject: null, trackerSelOpen: false,
+    openSelect: null, calView: 'month', monthOffset: 0, billable: true, confirmOpen: false,
+    memberSearch: '', memberQuery: '', showRemoved: false, openKebab: null, deleteTarget: null, editingEntry: null, pickerOffset: 0, toast: '',
+    detailMemberId: null, detailRole: '', detailJobTitle: '', detailTab: 'about',
+    vacReqModalOpen: false, vacReqForm: { start: '', end: '', touched: {}, submitted: false }, rejectReqId: null, rejectComment: '', cancelReqId: null, reqFilter: 'pending',
+    finModalOpen: false, finForm: { salary: '', rate: '', days: '20', mode: 'auto', percent: '', touched: {}, submitted: false },
+    financials: {
+      2: { monthlySalary: 5000, clientHourlyRate: 60, currency: 'USD', vacationDaysPerYear: 20, isReservePercentManual: false, vacationReservePercent: 3.70 },
+      3: { monthlySalary: 3000, clientHourlyRate: 40, currency: 'EUR', vacationDaysPerYear: 20, isReservePercentManual: true, vacationReservePercent: 5.00 },
+    },
+    vacTx: {
+      2: [
+        { id: 't2a', type: 'credit', amount: 384.80, month: 1, year: 2026, isAuto: true },
+        { id: 't2b', type: 'credit', amount: 384.80, month: 2, year: 2026, isAuto: true },
+        { id: 't2c', type: 'credit', amount: 384.80, month: 3, year: 2026, isAuto: true },
+        { id: 't2d', type: 'credit', amount: 384.80, month: 4, year: 2026, isAuto: true },
+        { id: 't2e', type: 'credit', amount: 384.80, month: 5, year: 2026, isAuto: true },
+        { id: 't2f', type: 'credit', amount: 384.80, month: 6, year: 2026, isAuto: true },
+        { id: 't2g', type: 'debit', amount: -692.31, month: 2, year: 2026, isAuto: false, requestId: 'pr2', description: 'Vacation Feb 2 – Feb 4' },
+      ],
+      3: [
+        { id: 't3a', type: 'credit', amount: 346.67, month: 1, year: 2026, isAuto: true },
+        { id: 't3b', type: 'credit', amount: 346.67, month: 2, year: 2026, isAuto: true },
+        { id: 't3c', type: 'credit', amount: 346.67, month: 3, year: 2026, isAuto: true },
+        { id: 't3d', type: 'credit', amount: 346.67, month: 4, year: 2026, isAuto: true },
+        { id: 't3e', type: 'credit', amount: 346.67, month: 5, year: 2026, isAuto: true },
+        { id: 't3f', type: 'credit', amount: 346.67, month: 6, year: 2026, isAuto: true },
+        { id: 't3g', type: 'debit', amount: -692.31, month: 3, year: 2026, isAuto: false, requestId: 'dr1', description: 'Vacation Mar 2 – Mar 6' },
+      ],
+    },
+    vacReq: {
+      2: [
+        { id: 'pr1', start: '2026-09-01', end: '2026-09-04', status: 'pending', requestedAt: '2026-07-10' },
+        { id: 'pr2', start: '2026-02-02', end: '2026-02-04', status: 'approved', reviewedBy: 'Dana Reed' },
+      ],
+      3: [
+        { id: 'dr1', start: '2026-03-02', end: '2026-03-06', status: 'approved', reviewedBy: 'Pat Owner' },
+        { id: 'dr2', start: '2026-08-03', end: '2026-08-05', status: 'pending', requestedAt: '2026-07-05' },
+        { id: 'dr3', start: '2026-01-05', end: '2026-01-09', status: 'rejected', reviewedBy: 'Pat Owner', comment: 'Team availability conflict' },
+      ],
+    },
+    reportTab: 'All', reportColsOpen: false, reportFiltersOpen: false, reportSum: false, reportSel: {}, reportCollapsed: {},
+    reportCols: { 'Project': true, 'Client': false, 'Member': true, 'Time': true, 'Billable Time': false, 'Non Billable Time': false, 'Billed Amount': false, 'Notes': false },
+    members: [
+      { id: 1, fullName: 'Alex Kaminski', email: 'alex@acme.com', role: 'user', status: 'active', jobTitle: 'Backend Engineer', timezone: 'America/New_York', joinedAt: '2025-06-01' },
+      { id: 2, fullName: 'Pat Owner', email: 'pat@acme.com', role: 'admin', status: 'active', self: true, jobTitle: 'Founder', timezone: 'America/Los_Angeles', joinedAt: '2025-01-15' },
+      { id: 3, fullName: 'Dana Reed', email: 'dana@acme.com', role: 'admin', status: 'active', jobTitle: 'Head of Ops', timezone: 'Europe/London', joinedAt: '2025-02-20' },
+      { id: 4, fullName: 'Sam Manager', email: 'sam@acme.com', role: 'manager', status: 'active', jobTitle: 'Team Lead', timezone: 'Europe/Berlin', joinedAt: '2025-03-10' },
+      { id: 5, fullName: 'Casey Lin', email: 'casey@acme.com', role: 'viewer', status: 'active', jobTitle: '', timezone: 'Asia/Tokyo', joinedAt: '2025-04-05' },
+      { id: 6, fullName: 'Jordan Blake', email: 'jordan@acme.com', role: 'user', status: 'removed', jobTitle: 'Designer', timezone: 'America/Chicago', joinedAt: '2025-05-01' },
+    ],
+    selVals: { timezone: 'Europe/London', member: 'Alex Chen', modalProject: 'Marketing site', modalDate: 'Mar 18, 2026', modalFrom: '09:00 AM', modalTo: '11:00 AM' },
+  };
+
+  svg(w, h, vb, d) { return React.createElement('svg', { width: w, height: h, viewBox: vb, fill: 'currentColor', xmlns: 'http://www.w3.org/2000/svg' }, React.createElement('path', { d })); }
+  stroke(w, h, vb, d) { return React.createElement('svg', { width: w, height: h, viewBox: vb, fill: 'none', stroke: 'currentColor', strokeWidth: 2.4, strokeLinecap: 'round', strokeLinejoin: 'round', xmlns: 'http://www.w3.org/2000/svg' }, React.createElement('path', { d })); }
+
+  tokens(dark) {
+    if (!dark) return {
+      bg: '#F7F3EC', panel: '#FFFFFF', panel2: '#FBF8F2', border: '#E4DBCC', borderStrong: '#DBCFB9', divider: '#EDE5D6',
+      ink: '#241F1A', sub: '#6E6558', muted: '#8a8072', faint: '#a89e8d',
+      accent: 'oklch(0.5 0.16 292)', accentSoft: 'oklch(0.96 0.025 292)', accentBorder: 'oklch(0.85 0.06 292)', onAccent: '#fff',
+      amber: 'oklch(0.55 0.12 74)', amberBg: 'oklch(0.96 0.04 74)', amberBorder: 'oklch(0.82 0.09 74)',
+      shadow: '0 2px 4px rgba(74,55,20,.05),0 20px 40px rgba(74,55,20,.07)', glow: '0 2px 0 oklch(0.4 0.15 292)',
+      rowHover: 'oklch(0.95 0.035 292)', field: '#fff', todayGlow: 'none', toggleBg: '#F0EADF', header: '#F5EFE4',
+    };
+    return {
+      bg: '#17140F', panel: '#211d16', panel2: '#1c1811', border: '#2f2920', borderStrong: '#3a342b', divider: '#2f2920',
+      ink: '#EDE7DB', sub: '#A69C8A', muted: '#8a8072', faint: '#6f6656',
+      accent: 'oklch(0.62 0.17 292)', accentSoft: 'oklch(0.62 0.17 292 / 0.18)', accentBorder: 'oklch(0.62 0.17 292 / 0.35)', onAccent: '#fff',
+      amber: 'oklch(0.82 0.13 74)', amberBg: 'oklch(0.8 0.14 74 / 0.1)', amberBorder: 'oklch(0.5 0.1 74)',
+      shadow: '0 20px 40px rgba(0,0,0,.35)', glow: '0 0 20px oklch(0.62 0.17 292 / 0.45)',
+      rowHover: 'oklch(0.62 0.17 292 / 0.16)', field: '#1e1a14', todayGlow: '0 0 12px oklch(0.62 0.17 292 / 0.7)', toggleBg: '#17140F', header: '#1c1811',
+    };
+  }
+
+  badge(status, dark) {
+    const L = {
+      active: { bg: 'oklch(0.95 0.04 160)', ink: 'oklch(0.45 0.1 160)', dot: 'oklch(0.58 0.11 160)' },
+      inactive: { bg: 'oklch(0.95 0.04 25)', ink: 'oklch(0.5 0.18 25)', dot: 'oklch(0.55 0.2 25)' },
+    };
+    const D = {
+      active: { bg: 'oklch(0.74 0.13 160 / 0.16)', ink: 'oklch(0.8 0.11 160)', dot: 'oklch(0.74 0.13 160)' },
+      inactive: { bg: 'oklch(0.65 0.19 25 / 0.16)', ink: 'oklch(0.75 0.14 25)', dot: 'oklch(0.65 0.19 25)' },
+    };
+    return (dark ? D : L)[status];
+  }
+
+  showToast(msg) { clearTimeout(this._toastT); this.setState({ toast: msg }); this._toastT = setTimeout(() => this.setState({ toast: '' }), 2600); }
+
+  timeList() { const out = []; for (let h = 0; h < 24; h++) for (const m of [0, 30]) { const ap = h < 12 ? 'AM' : 'PM'; let hh = h % 12; if (hh === 0) hh = 12; out.push(String(hh).padStart(2, '0') + ':' + (m === 0 ? '00' : '30') + ' ' + ap); } return out; }
+
+  mkSel(id, opts, t) {
+    const value = this.state.selVals[id];
+    const open = this.state.openSelect === id;
+    return {
+      value, open, borderColor: open ? t.accent : t.borderStrong,
+      toggle: (e) => { if (e) e.preventDefault(); this.setState({ openSelect: open ? null : id, trackerSelOpen: false }); },
+      options: opts.map((o) => ({
+        name: o, bg: o === value ? 'oklch(0.62 0.17 292 / 0.2)' : 'transparent', color: o === value ? t.accent : t.ink,
+        onClick: (e) => { if (e) e.preventDefault(); this.setState((p) => ({ openSelect: null, selVals: Object.assign({}, p.selVals, { [id]: o }) })); },
+      })),
+    };
+  }
+
+  renderVals() {
+    const P = {
+      timesheets: 'M13.15 14.275C13.2833 14.425 13.4583 14.5 13.675 14.5C13.8917 14.5 14.075 14.4167 14.225 14.25C14.3917 14.1 14.475 13.9125 14.475 13.6875C14.475 13.4625 14.4 13.275 14.25 13.125L10.825 9.7V5.4C10.825 5.2 10.7542 5.02917 10.6125 4.8875C10.4708 4.74583 10.2917 4.675 10.075 4.675C9.85833 4.675 9.67917 4.74583 9.5375 4.8875C9.39583 5.02917 9.325 5.20833 9.325 5.425V10C9.325 10.1 9.34167 10.1917 9.375 10.275C9.40833 10.3583 9.45833 10.4417 9.525 10.525L13.15 14.275ZM10 20C8.63333 20 7.34167 19.7375 6.125 19.2125C4.90833 18.6875 3.84583 17.9708 2.9375 17.0625C2.02917 16.1542 1.3125 15.0917 0.7875 13.875C0.2625 12.6583 0 11.3667 0 10C0 8.63333 0.2625 7.34167 0.7875 6.125C1.3125 4.90833 2.02917 3.84583 2.9375 2.9375C3.84583 2.02917 4.90833 1.3125 6.125 0.7875C7.34167 0.2625 8.63333 0 10 0C11.3667 0 12.6583 0.2625 13.875 0.7875C15.0917 1.3125 16.1542 2.02917 17.0625 2.9375C17.9708 3.84583 18.6875 4.90833 19.2125 6.125C19.7375 7.34167 20 8.63333 20 10C20 11.3667 19.7375 12.6583 19.2125 13.875C18.6875 15.0917 17.9708 16.1542 17.0625 17.0625C16.1542 17.9708 15.0917 18.6875 13.875 19.2125C12.6583 19.7375 11.3667 20 10 20Z',
+      projects: 'M4.725 15.75H11.275C11.4917 15.75 11.6708 15.6792 11.8125 15.5375C11.9542 15.3958 12.025 15.2167 12.025 15C12.025 14.7833 11.9542 14.6042 11.8125 14.4625C11.6708 14.3208 11.4917 14.25 11.275 14.25H4.725C4.50833 14.25 4.32917 14.3208 4.1875 14.4625C4.04583 14.6042 3.975 14.7833 3.975 15C3.975 15.2167 4.04583 15.3958 4.1875 15.5375C4.32917 15.6792 4.50833 15.75 4.725 15.75ZM4.725 11.5H11.275C11.4917 11.5 11.6708 11.4292 11.8125 11.2875C11.9542 11.1458 12.025 10.9667 12.025 10.75C12.025 10.5333 11.9542 10.3542 11.8125 10.2125C11.6708 10.0708 11.4917 10 11.275 10H4.725C4.50833 10 4.32917 10.0708 4.1875 10.2125C4.04583 10.3542 3.975 10.5333 3.975 10.75C3.975 10.9667 4.04583 11.1458 4.1875 11.2875C4.32917 11.4292 4.50833 11.5 4.725 11.5ZM1.5 20C1.1 20 0.75 19.85 0.45 19.55C0.15 19.25 0 18.9 0 18.5V1.5C0 1.1 0.15 0.75 0.45 0.45C0.75 0.15 1.1 0 1.5 0H9.9C10.1 0 10.2958 0.0416667 10.4875 0.125C10.6792 0.208333 10.8417 0.316667 10.975 0.45L15.55 5.025C15.6833 5.15833 15.7917 5.32083 15.875 5.5125C15.9583 5.70417 16 5.9 16 6.1V18.5C16 18.9 15.85 19.25 15.55 19.55C15.25 19.85 14.9 20 14.5 20H1.5ZM9.775 5.4C9.775 5.61667 9.84583 5.79583 9.9875 5.9375C10.1292 6.07917 10.3083 6.15 10.525 6.15H14.5L9.775 1.5V5.4Z',
+      people: 'M1.69995 16C1.48328 16 1.30412 15.9291 1.16245 15.7875C1.02078 15.6458 0.949951 15.4666 0.949951 15.25V13.65C0.949951 13.0666 1.09995 12.5375 1.39995 12.0625C1.69995 11.5875 2.11662 11.2333 2.64995 11C3.86662 10.4666 4.96245 10.0833 5.93745 9.84998C6.91245 9.61664 7.91662 9.49998 8.94995 9.49998C9.98328 9.49998 10.9833 9.61664 11.95 9.84998C12.9166 10.0833 14.0083 10.4666 15.225 11C15.7583 11.2333 16.1791 11.5875 16.4875 12.0625C16.7958 12.5375 16.95 13.0666 16.95 13.65V15.25C16.95 15.4666 16.8791 15.6458 16.7375 15.7875C16.5958 15.9291 16.4166 16 16.2 16H1.69995ZM17.9 16C18.0666 15.9666 18.1999 15.8791 18.2999 15.7375C18.4 15.5958 18.45 15.4166 18.45 15.2V13.65C18.45 12.6 18.1833 11.7375 17.65 11.0625C17.1166 10.3875 16.4166 9.84164 15.55 9.42498C16.7 9.55831 17.7833 9.75414 18.7999 10.0125C19.8166 10.2708 20.6416 10.5666 21.275 10.9C21.8249 11.2166 22.2583 11.6083 22.575 12.075C22.8916 12.5416 23.0499 13.0666 23.0499 13.65V15.25C23.0499 15.4666 22.9791 15.6458 22.8375 15.7875C22.6958 15.9291 22.5166 16 22.2999 16H17.9ZM8.94995 7.97498C7.84995 7.97498 6.94995 7.62498 6.24995 6.92498C5.54995 6.22498 5.19995 5.32498 5.19995 4.22498C5.19995 3.12498 5.54995 2.22498 6.24995 1.52498C6.94995 0.824976 7.84995 0.474976 8.94995 0.474976C10.05 0.474976 10.95 0.824976 11.65 1.52498C12.35 2.22498 12.7 3.12498 12.7 4.22498C12.7 5.32498 12.35 6.22498 11.65 6.92498C10.95 7.62498 10.05 7.97498 8.94995 7.97498ZM17.95 4.22498C17.95 5.32498 17.6 6.22498 16.9 6.92498C16.2 7.62498 15.3 7.97498 14.2 7.97498C14.0166 7.97498 13.8125 7.96248 13.5875 7.93748C13.3625 7.91248 13.1583 7.86664 12.975 7.79998C13.375 7.38331 13.6791 6.87081 13.8875 6.26248C14.0958 5.65414 14.2 4.97498 14.2 4.22498C14.2 3.47498 14.0958 2.81248 13.8875 2.23748C13.6791 1.66248 13.375 1.13331 12.975 0.649976C13.1583 0.599976 13.3625 0.558309 13.5875 0.524976C13.8125 0.491642 14.0166 0.474976 14.2 0.474976C15.3 0.474976 16.2 0.824976 16.9 1.52498C17.6 2.22498 17.95 3.12498 17.95 4.22498Z',
+      reports: 'M4.675 14.025H10.05C10.2667 14.025 10.4458 13.9542 10.5875 13.8125C10.7292 13.6708 10.8 13.4917 10.8 13.275C10.8 13.0583 10.7292 12.8792 10.5875 12.7375C10.4458 12.5958 10.2667 12.525 10.05 12.525H4.675C4.45833 12.525 4.27917 12.5958 4.1375 12.7375C3.99583 12.8792 3.925 13.0583 3.925 13.275C3.925 13.4917 3.99583 13.6708 4.1375 13.8125C4.27917 13.9542 4.45833 14.025 4.675 14.025ZM4.675 9.75H13.325C13.5417 9.75 13.7208 9.67917 13.8625 9.5375C14.0042 9.39583 14.075 9.21667 14.075 9C14.075 8.78333 14.0042 8.60417 13.8625 8.4625C13.7208 8.32083 13.5417 8.25 13.325 8.25H4.675C4.45833 8.25 4.27917 8.32083 4.1375 8.4625C3.99583 8.60417 3.925 8.78333 3.925 9C3.925 9.21667 3.99583 9.39583 4.1375 9.5375C4.27917 9.67917 4.45833 9.75 4.675 9.75ZM4.675 5.475H13.325C13.5417 5.475 13.7208 5.40417 13.8625 5.2625C14.0042 5.12083 14.075 4.94167 14.075 4.725C14.075 4.50833 14.0042 4.32917 13.8625 4.1875C13.7208 4.04583 13.5417 3.975 13.325 3.975H4.675C4.45833 3.975 4.27917 4.04583 4.1375 4.1875C3.99583 4.32917 3.925 4.50833 3.925 4.725C3.925 4.94167 3.99583 5.12083 4.1375 5.2625C4.27917 5.40417 4.45833 5.475 4.675 5.475ZM1.5 18C1.1 18 0.75 17.85 0.45 17.55C0.15 17.25 0 16.9 0 16.5V1.5C0 1.1 0.15 0.75 0.45 0.45C0.75 0.15 1.1 0 1.5 0H16.5C16.9 0 17.25 0.15 17.55 0.45C17.85 0.75 18 1.1 18 1.5V16.5C18 16.9 17.85 17.25 17.55 17.55C17.25 17.85 16.9 18 16.5 18H1.5Z',
+      timeoff: 'M9 12C8.71667 12 8.47917 11.9042 8.2875 11.7125C8.09583 11.5208 8 11.2833 8 11C8 10.7167 8.09583 10.4792 8.2875 10.2875C8.47917 10.0958 8.71667 10 9 10C9.28333 10 9.52083 10.0958 9.7125 10.2875C9.90417 10.4792 10 10.7167 10 11C10 11.2833 9.90417 11.5208 9.7125 11.7125C9.52083 11.9042 9.28333 12 9 12ZM5 12C4.71667 12 4.47917 11.9042 4.2875 11.7125C4.09583 11.5208 4 11.2833 4 11C4 10.7167 4.09583 10.4792 4.2875 10.2875C4.47917 10.0958 4.71667 10 5 10C5.28333 10 5.52083 10.0958 5.7125 10.2875C5.90417 10.4792 6 10.7167 6 11C6 11.2833 5.90417 11.5208 5.7125 11.7125C5.52083 11.9042 5.28333 12 5 12ZM13 12C12.7167 12 12.4792 11.9042 12.2875 11.7125C12.0958 11.5208 12 11.2833 12 11C12 10.7167 12.0958 10.4792 12.2875 10.2875C12.4792 10.0958 12.7167 10 13 10C13.2833 10 13.5208 10.0958 13.7125 10.2875C13.9042 10.4792 14 10.7167 14 11C14 11.2833 13.9042 11.5208 13.7125 11.7125C13.5208 11.9042 13.2833 12 13 12ZM1.5 20C1.1 20 0.75 19.85 0.45 19.55C0.15 19.25 0 18.9 0 18.5V3C0 2.6 0.15 2.25 0.45 1.95C0.75 1.65 1.1 1.5 1.5 1.5H3.125V0.8C3.125 0.566667 3.2 0.375 3.35 0.225C3.5 0.075 3.69167 0 3.925 0C4.15833 0 4.35417 0.075 4.5125 0.225C4.67083 0.375 4.75 0.566667 4.75 0.8V1.5H13.25V0.8C13.25 0.566667 13.325 0.375 13.475 0.225C13.625 0.075 13.8167 0 14.05 0C14.2833 0 14.4792 0.075 14.6375 0.225C14.7958 0.375 14.875 0.566667 14.875 0.8V1.5H16.5C16.9 1.5 17.25 1.65 17.55 1.95C17.85 2.25 18 2.6 18 3V18.5C18 18.9 17.85 19.25 17.55 19.55C17.25 19.85 16.9 20 16.5 20H1.5ZM1.5 18.5H16.5V7.75H1.5V18.5Z',
+      org: 'M1.5 20C1.1 20 0.75 19.85 0.45 19.55C0.15 19.25 0 18.9 0 18.5V3C0 2.6 0.15 2.25 0.45 1.95C0.75 1.65 1.1 1.5 1.5 1.5H3.125V0.8C3.125 0.566667 3.2 0.375 3.35 0.225C3.5 0.0749999 3.69167 0 3.925 0C4.15833 0 4.35417 0.0749999 4.5125 0.225C4.67083 0.375 4.75 0.566667 4.75 0.8V1.5H13.25V0.8C13.25 0.566667 13.325 0.375 13.475 0.225C13.625 0.0749999 13.8167 0 14.05 0C14.2833 0 14.4792 0.0749999 14.6375 0.225C14.7958 0.375 14.875 0.566667 14.875 0.8V1.5H16.5C16.9 1.5 17.25 1.65 17.55 1.95C17.85 2.25 18 2.6 18 3V18.5C18 18.9 17.85 19.25 17.55 19.55C17.25 19.85 16.9 20 16.5 20H1.5ZM1.5 18.5H16.5V7.75H1.5V18.5Z',
+      arrow: 'M5.99991 0.924943C5.89991 0.924943 5.80824 0.94161 5.72491 0.974943C5.64157 1.00828 5.55824 1.06661 5.47491 1.14994L0.524905 6.09994C0.391572 6.23328 0.329072 6.41244 0.337405 6.63744C0.345739 6.86244 0.416572 7.04161 0.549905 7.17494C0.716572 7.34161 0.895739 7.41244 1.08741 7.38744C1.27907 7.36244 1.44991 7.28328 1.59991 7.14994L5.99991 2.74994L10.3999 7.14994C10.5332 7.28328 10.7124 7.35828 10.9374 7.37494C11.1624 7.39161 11.3416 7.31661 11.4749 7.14994C11.6416 7.01661 11.7124 6.84161 11.6874 6.62494C11.6624 6.40828 11.5832 6.22494 11.4499 6.07494L6.5249 1.14994C6.44157 1.06661 6.35824 1.00828 6.2749 0.974943C6.19157 0.94161 6.09991 0.924943 5.99991 0.924943Z',
+      close: 'M7.0001 8.0501L1.7501 13.3001C1.6001 13.4501 1.4251 13.5251 1.2251 13.5251C1.0251 13.5251 0.850098 13.4501 0.700098 13.3001C0.550098 13.1501 0.475098 12.9751 0.475098 12.7751C0.475098 12.5751 0.550098 12.4001 0.700098 12.2501L5.9501 7.0001L0.700098 1.7501C0.550098 1.6001 0.475098 1.4251 0.475098 1.2251C0.475098 1.0251 0.550098 0.850098 0.700098 0.700098C0.850098 0.550098 1.0251 0.475098 1.2251 0.475098C1.4251 0.475098 1.6001 0.550098 1.7501 0.700098L7.0001 5.9501L12.2501 0.700098C12.4001 0.550098 12.5751 0.475098 12.7751 0.475098C12.9751 0.475098 13.1501 0.550098 13.3001 0.700098C13.4501 0.850098 13.5251 1.0251 13.5251 1.2251C13.5251 1.4251 13.4501 1.6001 13.3001 1.7501L8.0501 7.0001L13.3001 12.2501C13.4501 12.4001 13.5251 12.5751 13.5251 12.7751C13.5251 12.9751 13.4501 13.1501 13.3001 13.3001C13.1501 13.4501 12.9751 13.5251 12.7751 13.5251C12.5751 13.5251 12.4001 13.4501 12.2501 13.3001L7.0001 8.0501Z',
+      magnify: 'M13.35 13.3562C13.2566 13.4481 13.131 13.4998 13 13.5C12.8672 13.4994 12.7397 13.448 12.6437 13.3562L9.94372 10.65C8.80659 11.6051 7.34462 12.0844 5.86273 11.9878C4.38083 11.8912 2.99343 11.2263 1.98988 10.1316C0.986331 9.03698 0.444121 7.59717 0.476333 6.11248C0.508545 4.62779 1.11269 3.21286 2.16277 2.16277C3.21286 1.11269 4.62779 0.508545 6.11248 0.476333C7.59717 0.444121 9.03698 0.986331 10.1316 1.98988C11.2263 2.99343 11.8912 4.38083 11.9878 5.86273C12.0844 7.34462 11.6051 8.80659 10.65 9.94373L13.35 12.6437C13.3972 12.6903 13.4347 12.7457 13.4603 12.8069C13.486 12.868 13.4991 12.9337 13.4991 13C13.4991 13.0663 13.486 13.1319 13.4603 13.1931C13.4347 13.2542 13.3972 13.3097 13.35 13.3562ZM6.24997 11C7.18944 11 8.1078 10.7214 8.88893 10.1995C9.67007 9.67752 10.2789 8.93567 10.6384 8.06772C10.9979 7.19977 11.092 6.24471 10.9087 5.3233C10.7254 4.40189 10.273 3.55552 9.60873 2.89122C8.94443 2.22692 8.09806 1.77452 7.17665 1.59124C6.25524 1.40797 5.30018 1.50203 4.43223 1.86155C3.56428 2.22106 2.82243 2.82988 2.30049 3.61102C1.77856 4.39215 1.49997 5.31051 1.49997 6.24998C1.50163 7.50925 2.0026 8.71647 2.89304 9.60691C3.78348 10.4973 4.9907 10.9983 6.24997 11Z',
+      trash: 'M2.525 18C2.125 18 1.775 17.85 1.475 17.55C1.175 17.25 1.025 16.9 1.025 16.5V2.25H0.75C0.533333 2.25 0.354167 2.17917 0.2125 2.0375C0.0708334 1.89583 0 1.71667 0 1.5C0 1.28333 0.0708334 1.10417 0.2125 0.9625C0.354167 0.820833 0.533333 0.75 0.75 0.75H4.7C4.7 0.533333 4.77083 0.354167 4.9125 0.2125C5.05417 0.0708334 5.23333 0 5.45 0H10.55C10.7667 0 10.9458 0.0708334 11.0875 0.2125C11.2292 0.354167 11.3 0.533333 11.3 0.75H15.25C15.4667 0.75 15.6458 0.820833 15.7875 0.9625C15.9292 1.10417 16 1.28333 16 1.5C16 1.71667 15.9292 1.89583 15.7875 2.0375C15.6458 2.17917 15.4667 2.25 15.25 2.25H14.975V16.5C14.975 16.9 14.825 17.25 14.525 17.55C14.225 17.85 13.875 18 13.475 18H2.525ZM5.175 13.6C5.175 13.8167 5.24583 13.9958 5.3875 14.1375C5.52917 14.2792 5.70833 14.35 5.925 14.35C6.14167 14.35 6.32083 14.2792 6.4625 14.1375C6.60417 13.9958 6.675 13.8167 6.675 13.6V5.125C6.675 4.90833 6.60417 4.72917 6.4625 4.5875C6.32083 4.44583 6.14167 4.375 5.925 4.375C5.70833 4.375 5.52917 4.44583 5.3875 4.5875C5.24583 4.72917 5.175 4.90833 5.175 5.125V13.6ZM9.325 13.6C9.325 13.8167 9.39583 13.9958 9.5375 14.1375C9.67917 14.2792 9.85833 14.35 10.075 14.35C10.2917 14.35 10.4708 14.2792 10.6125 14.1375C10.7542 13.9958 10.825 13.8167 10.825 13.6V5.125C10.825 4.90833 10.7542 4.72917 10.6125 4.5875C10.4708 4.44583 10.2917 4.375 10.075 4.375C9.85833 4.375 9.67917 4.44583 9.5375 4.5875C9.39583 4.72917 9.325 4.90833 9.325 5.125V13.6Z',
+      user: 'M10.6855 33.6374C12.698 32.3916 14.6785 31.4413 16.6271 30.7864C18.5758 30.1315 20.7001 29.8041 23.0001 29.8041C25.3001 29.8041 27.4403 30.1315 29.4209 30.7864C31.4015 31.4413 33.382 32.3916 35.3626 33.6374C36.7681 31.9124 37.7584 30.1874 38.3334 28.4624C38.9084 26.7374 39.1959 24.9166 39.1959 22.9999C39.1959 18.3999 37.6466 14.5506 34.548 11.452C31.4494 8.35342 27.6001 6.80411 23.0001 6.80411C18.4001 6.80411 14.5508 8.35342 11.4521 11.452C8.35354 14.5506 6.80423 18.3999 6.80423 22.9999C6.80423 24.9166 7.09972 26.7374 7.69069 28.4624C8.28166 30.1874 9.27993 31.9124 10.6855 33.6374ZM23.0001 24.5333C21.1153 24.5333 19.5421 23.8944 18.2803 22.6166C17.0185 21.3388 16.3876 19.7576 16.3876 17.8729C16.3876 16.0201 17.0265 14.4548 18.3042 13.177C19.582 11.8992 21.1473 11.2604 23.0001 11.2604C24.8848 11.2604 26.4581 11.8992 27.7199 13.177C28.9817 14.4548 29.6126 16.0361 29.6126 17.9208C29.6126 19.7736 28.9737 21.3388 27.6959 22.6166C26.4181 23.8944 24.8528 24.5333 23.0001 24.5333ZM23.0001 42.4541C20.2848 42.4541 17.7452 41.943 15.3813 40.9208C13.0174 39.8986 10.957 38.501 9.20007 36.7281C7.44312 34.9552 6.06152 32.8947 5.05527 30.5468C4.04902 28.1989 3.5459 25.6833 3.5459 22.9999C3.5459 20.2847 4.05701 17.7531 5.07923 15.4052C6.10145 13.0572 7.49902 11.0048 9.27194 9.24786C11.0449 7.49092 13.1053 6.10133 15.4532 5.07911C17.8011 4.05689 20.3327 3.54578 23.048 3.54578C25.7313 3.54578 28.2469 4.05689 30.5949 5.07911C32.9428 6.10133 34.9952 7.49092 36.7521 9.24786C38.5091 11.0048 39.8987 13.0652 40.9209 15.4291C41.9431 17.793 42.4542 20.3166 42.4542 22.9999C42.4542 25.6833 41.9431 28.1989 40.9209 30.5468C39.8987 32.8947 38.5091 34.9552 36.7521 36.7281C34.9952 38.501 32.9348 39.8986 30.5709 40.9208C28.207 41.943 25.6834 42.4541 23.0001 42.4541Z',
+    };
+    const dark = this.state.dark;
+    const t = this.tokens(dark);
+    const page = this.state.page;
+    const callerRole = this.props.callerRole || 'admin';
+    const canManage = callerRole === 'admin' || callerRole === 'manager';
+    // ---- Org-wide vacation requests (spec 10) ----
+    const VYEAR2 = 2026, TODAY2 = '2026-07-20';
+    const MAB2 = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const pD = (s) => { const p = String(s).split('-'); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])); };
+    const wdB = (s, e) => { const sd = pD(s), ed = pD(e); if (ed < sd) return 0; let n = 0; const d = new Date(sd); while (d <= ed) { const g = d.getUTCDay(); if (g !== 0 && g !== 6) n++; d.setUTCDate(d.getUTCDate() + 1); } return n; };
+    const fR2 = (s, e) => { const sd = pD(s), ed = pD(e); return MAB2[sd.getUTCMonth()] + ' ' + sd.getUTCDate() + ' \u2013 ' + MAB2[ed.getUTCMonth()] + ' ' + ed.getUTCDate() + ', ' + ed.getUTCFullYear(); };
+    const curSym2 = { USD: '$', EUR: '\u20ac', GBP: '\u00a3' };
+    const money2 = (n, c) => (curSym2[c] || '$') + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const setStatusG = (all, mid, rid, patch) => Object.assign({}, all, { [mid]: (all[mid] || []).map((r) => r.id === rid ? Object.assign({}, r, patch) : r) });
+    const addG = (all, mid, it) => Object.assign({}, all, { [mid]: (all[mid] || []).concat([it]) });
+    const findReqG = (rid) => { const ids = Object.keys(this.state.vacReq); for (let i = 0; i < ids.length; i++) { const mid = +ids[i]; const r = (this.state.vacReq[mid] || []).find((x) => x.id === rid); if (r) return { mid, req: r }; } return null; };
+    const orgAllReq = [];
+    this.state.members.forEach((m) => { (this.state.vacReq[m.id] || []).forEach((r) => { if (pD(r.start).getUTCFullYear() === VYEAR2) orgAllReq.push({ m, r }); }); });
+    const pendingCount = orgAllReq.filter((x) => x.r.status === 'pending').length;
+
+    // Nav structure copied verbatim from source Sidebar.jsx (appLayout/Sidebar.tsx)
+    const NAV = [
+      { title: 'Timesheets', key: 'timesheets', type: 'link' },
+      { title: 'Project management', key: 'projects', type: 'menu', subs: ['ToDo / Teams', 'Projects / Teams', 'Clients'] },
+      { title: 'People', key: 'people', type: 'menu', subs: ['Members'] },
+      { title: 'Team overview', key: 'org', type: 'link' },
+      { title: 'Reports', key: 'reports', type: 'menu', subs: ['Time & activity', 'Amounts owed', 'Time offs', 'All reports'] },
+      { title: 'Time off', key: 'timeoff', type: 'menu', subs: ['Policies', 'Holidays', 'Requests'] },
+      { title: 'Organization', key: 'org', type: 'menu', subs: ['My organization', 'Subscription'] },
+    ];
+    const vb = (k) => k === 'people' ? '0 0 24 16' : k === 'projects' ? '0 0 16 20' : k === 'reports' ? '0 0 18 18' : (k === 'org' || k === 'timeoff') ? '0 0 18 20' : '0 0 20 20';
+    const setPage = (x) => (e) => { if (e) e.preventDefault(); this.setState({ page: x, openSelect: null }); };
+    const nav = NAV.map((m) => {
+      const icon = this.svg(19, 19, vb(m.key), P[m.key]);
+      if (m.type === 'link') {
+        const active = page === m.title;
+        return { isLink: true, isMenu: false, title: m.title, icon, onClick: setPage(m.title),
+          color: active ? t.accent : t.sub, iconColor: active ? t.accent : t.faint, bg: active ? t.accentSoft : 'transparent', border: active ? t.accentBorder : 'transparent' };
+      }
+      const open = !!this.state.openMenus[m.title];
+      const activeParent = m.subs.indexOf(page) !== -1;
+      return {
+        isLink: false, isMenu: true, title: m.title, icon, open, arrowRot: open ? '0deg' : '180deg',
+        headerColor: (open || activeParent) ? t.accent : t.sub, iconColor: (open || activeParent) ? t.accent : t.faint,
+        toggle: (e) => { if (e) e.preventDefault(); this.setState((p) => ({ openMenus: Object.assign({}, p.openMenus, { [m.title]: !p.openMenus[m.title] }) })); },
+        subs: m.subs.map((s) => { const sa = page === s; const showB = s === 'Requests' && canManage && pendingCount > 0; return { label: s, onClick: setPage(s), color: sa ? t.accent : t.sub, bg: sa ? t.accentSoft : 'transparent', hasBadge: showB, badgeCount: String(pendingCount) }; }),
+      };
+    });
+
+    const isTimesheets = page === 'Timesheets';
+    const isMembers = page === 'Members';
+    const dangerC = dark ? 'oklch(0.7 0.16 25)' : 'oklch(0.55 0.2 25)';
+
+    // ---- Members (spec 04: Member List & Management) ----
+    const roleStyles = dark ? {
+      admin: { bg: 'oklch(0.62 0.17 292 / 0.18)', color: 'oklch(0.82 0.12 292)' },
+      manager: { bg: 'oklch(0.8 0.14 74 / 0.16)', color: 'oklch(0.82 0.13 74)' },
+      user: { bg: '#2f2920', color: '#A69C8A' },
+      viewer: { bg: '#241f18', color: '#8a8072' },
+    } : {
+      admin: { bg: 'oklch(0.95 0.03 292)', color: 'oklch(0.45 0.16 292)' },
+      manager: { bg: 'oklch(0.95 0.05 74)', color: 'oklch(0.48 0.1 74)' },
+      user: { bg: '#F0EADF', color: '#6E6558' },
+      viewer: { bg: '#F5EFE4', color: '#8a8072' },
+    };
+    const rbadge = this.badge('inactive', dark);
+    const allMembers = this.state.members.map((m) => m.self ? Object.assign({}, m, { role: callerRole }) : m);
+    const activeAdmins = allMembers.filter((m) => m.status === 'active' && m.role === 'admin');
+    const askDelete = (m) => (e) => { if (e) { e.preventDefault(); e.stopPropagation(); } this.setState({ openKebab: null, deleteTarget: m }); };
+    const doRestore = (m) => (e) => { if (e) { e.preventDefault(); e.stopPropagation(); } this.showToast('Member restored'); this.setState((p) => ({ openKebab: null, members: p.members.map((x) => x.id === m.id ? Object.assign({}, x, { status: 'active', jobTitle: '' }) : x) })); };
+    const mq = this.state.memberQuery.toLowerCase();
+    const filteredMembers = allMembers
+      .filter((m) => (this.state.showRemoved || m.status === 'active'))
+      .filter((m) => !mq || m.fullName.toLowerCase().indexOf(mq) !== -1 || m.email.toLowerCase().indexOf(mq) !== -1)
+      .sort((a, b) => a.fullName.localeCompare(b.fullName))
+      .map((m) => {
+        const isSelf = !!m.self;
+        const removed = m.status === 'removed';
+        const isLastAdmin = !removed && m.role === 'admin' && activeAdmins.length === 1 && activeAdmins[0].id === m.id;
+        const rs = roleStyles[m.role] || roleStyles.user;
+        let items = [];
+        if (canManage && !isSelf) {
+          if (removed) items = [{ label: 'Restore', color: t.ink, cursor: 'pointer', tooltip: '', onClick: doRestore(m) }];
+          else if (isLastAdmin) items = [{ label: 'Delete', color: t.faint, cursor: 'not-allowed', tooltip: 'Cannot remove the last admin', onClick: (e) => { if (e) e.preventDefault(); } }];
+          else items = [{ label: 'Delete', color: dangerC, cursor: 'pointer', tooltip: '', onClick: askDelete(m) }];
+        }
+        return {
+          id: m.id, fullName: m.fullName, email: m.email, role: m.role,
+          youLabel: isSelf ? ' (you)' : '',
+          removed, roleBg: rs.bg, roleColor: rs.color,
+          removedBadgeBg: rbadge.bg, removedBadgeInk: rbadge.ink, removedBadgeDot: rbadge.dot,
+          rowOpacity: removed ? '0.6' : '1', rowFilter: removed ? 'grayscale(1)' : 'none',
+          initials: m.fullName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase(),
+          showMenu: canManage && !isSelf && items.length > 0,
+          kebabOpen: this.state.openKebab === m.id,
+          onKebab: (e) => { if (e) { e.preventDefault(); e.stopPropagation(); } this.setState((p) => ({ openKebab: p.openKebab === m.id ? null : m.id, openSelect: null })); },
+          onRow: (e) => { if (e) e.preventDefault(); this.setState((p) => ({ detailMemberId: m.id, detailTab: 'about', detailJobTitle: m.jobTitle || '', selVals: Object.assign({}, p.selVals, { detailRole: m.role }), openSelect: null, openKebab: null })); },
+          kebabItems: items,
+        };
+      });
+
+    // ---- Member detail (spec 05: About) ----
+    const detailMember = this.state.detailMemberId ? allMembers.find((m) => m.id === this.state.detailMemberId) : null;
+    let detail = null;
+    if (detailMember) {
+      const dm = detailMember;
+      const removed = dm.status === 'removed';
+      const dmLastAdmin = dm.role === 'admin' && activeAdmins.length === 1 && activeAdmins[0].id === dm.id;
+      let canEditRole = false, availableRoles = [];
+      if (!removed) {
+        if (callerRole === 'admin') { canEditRole = true; availableRoles = ['admin', 'manager', 'user', 'viewer']; }
+        else if (callerRole === 'manager' && (dm.role === 'user' || dm.role === 'viewer')) { canEditRole = true; availableRoles = ['manager', 'user', 'viewer']; }
+      }
+      const canEditJobTitle = !removed && canManage;
+      const guard = canEditRole && dm.role === 'admin' && dmLastAdmin;
+      const rs = roleStyles[dm.role] || roleStyles.user;
+      const hue = (dm.fullName.split('').reduce((a, c) => a + c.charCodeAt(0), 0) * 7) % 360;
+      const initials = dm.fullName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+      const joined = new Date(dm.joinedAt + 'T00:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+      const draftRole = this.state.selVals.detailRole || dm.role;
+      const roleSel = this.mkSel('detailRole', availableRoles, t);
+      if (guard) { roleSel.open = false; roleSel.toggle = (e) => { if (e) e.preventDefault(); }; }
+      const jobVal = this.state.detailJobTitle;
+      const jobErr = jobVal.length > 100 ? 'Job title must be at most 100 characters' : '';
+      const showForm = canEditRole || canEditJobTitle;
+      const dirty = (canEditRole && draftRole !== dm.role) || (canEditJobTitle && jobVal !== (dm.jobTitle || ''));
+      const saveDisabled = !!jobErr || !dirty;
+      // ---- Vacation tab (spec 07: member financial settings) ----
+      const curSym = { USD: '$', EUR: '€', GBP: '£' };
+      const fmtMoney = (n, cur) => (curSym[cur] || '$') + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      // auto reserve % = annualVacationCost / expectedAnnualBilling; 260 working days, 2080 billable hrs/yr
+      const autoPct = (salary, rate, days) => { const s = Number(salary), r = Number(rate), d = Number(days); if (!s || !r || !d) return 0; const daily = s * 12 / 260; return Math.round((daily * d) / (r * 2080) * 10000) / 100; };
+      const finRec = this.state.financials[dm.id] || null;
+      const isViewerRole = callerRole === 'viewer';
+      const isUserRole = callerRole === 'user';
+      const isOwn = !!dm.self;
+      const vacFull = canManage;                 // admin/manager: full financial data + edit
+      const vacDaysOnly = isUserRole && isOwn;   // user on own profile: balance days only
+      const vacTabDisabled = isViewerRole || (isUserRole && !isOwn);
+      const dTab = vacTabDisabled ? 'about' : this.state.detailTab;
+      const totalDays = finRec ? finRec.vacationDaysPerYear : 20;
+      // ---- spec 08: reserve ledger + balance + accrual ----
+      const VYEAR = 2026;
+      const MFULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      const MABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const cur = finRec ? finRec.currency : 'USD';
+      const memTx = this.state.vacTx[dm.id] || [];
+      const yearTx = memTx.filter((x) => x.year === VYEAR);
+      const reserveBalance = yearTx.reduce((s, x) => s + x.amount, 0);
+      const dailySalary = finRec ? finRec.monthlySalary * 12 / 260 : 0;
+      const TODAY = '2026-07-20';
+      const parseD = (s) => { const p = String(s).split('-'); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])); };
+      const workingDaysBetween = (s, e) => { const sd = parseD(s), ed = parseD(e); if (ed < sd) return 0; let n = 0; const d = new Date(sd); while (d <= ed) { const g = d.getUTCDay(); if (g !== 0 && g !== 6) n++; d.setUTCDate(d.getUTCDate() + 1); } return n; };
+      const fmtRange = (s, e) => { const sd = parseD(s), ed = parseD(e); return MABBR[sd.getUTCMonth()] + ' ' + sd.getUTCDate() + ' – ' + MABBR[ed.getUTCMonth()] + ' ' + ed.getUTCDate() + ', ' + ed.getUTCFullYear(); };
+      const setReqStatus = (all, mid, rid, patch) => Object.assign({}, all, { [mid]: (all[mid] || []).map((r) => r.id === rid ? Object.assign({}, r, patch) : r) });
+      const addItem = (all, mid, it) => Object.assign({}, all, { [mid]: (all[mid] || []).concat([it]) });
+      const memReq = this.state.vacReq[dm.id] || [];
+      const yearReq = memReq.filter((r) => parseD(r.start).getUTCFullYear() === VYEAR);
+      const reqWD = (r) => workingDaysBetween(r.start, r.end);
+      const reqDed = (r) => Math.round(reqWD(r) * dailySalary * 100) / 100;
+      const usedDays = yearReq.filter((r) => r.status === 'approved').reduce((s, r) => s + reqWD(r), 0);
+      const pendingDays = yearReq.filter((r) => r.status === 'pending').reduce((s, r) => s + reqWD(r), 0);
+      const pendingHold = yearReq.filter((r) => r.status === 'pending').reduce((s, r) => s + reqDed(r), 0);
+      const availRaw = dailySalary > 0 ? Math.floor((reserveBalance - pendingHold) / dailySalary) : 0;
+      const availableDays = finRec ? Math.max(0, Math.min(availRaw, finRec.vacationDaysPerYear - usedDays)) : 0;
+      const okG = dark ? 'oklch(0.74 0.14 155)' : 'oklch(0.46 0.13 155)';
+      const okR = dark ? 'oklch(0.72 0.17 25)' : 'oklch(0.55 0.19 25)';
+      const txRows = yearTx.slice().sort((a, b) => (b.year - a.year) || (b.month - a.month)).map((x) => ({
+        date: MABBR[x.month % 12] + ' 1', typeLabel: ({ credit: 'Credit', expiry: 'Expiry', debit: 'Debit', refund: 'Refund' }[x.type] || x.type), isAuto: !!x.isAuto,
+        amountText: (x.amount >= 0 ? '+' : '\u2212') + fmtMoney(Math.abs(x.amount), cur), amountColor: x.amount >= 0 ? okG : okR,
+        desc: x.description || (MFULL[x.month - 1] + ' ' + x.year + ' accrual'), createdBy: x.isAuto ? 'System' : (x.createdBy || 'System'),
+      }));
+      const accOpts = [];
+      for (let mm = 1; mm <= 6; mm++) accOpts.push(MFULL[mm - 1] + ' ' + VYEAR);
+      accOpts.reverse();
+      const accSel = this.mkSel('accrualMonth', accOpts, t);
+      if (!accSel.value) accSel.value = accOpts[0];
+      const finView = {
+        showFinCard: vacFull && !!finRec,
+        showEditBtn: vacFull && !!finRec && !removed,
+        emptyManager: vacFull && !finRec,
+        emptyUser: vacDaysOnly && !finRec,
+        showSetupBtn: vacFull && !finRec && !removed,
+        showBalance: (vacFull && !!finRec) || (vacDaysOnly && !!finRec),
+        balanceShowMoney: vacFull,
+        balanceShowDaysNote: vacDaysOnly,
+        availableDaysText: String(availableDays), usedDaysText: String(usedDays), pendingDaysText: String(pendingDays),
+        reserveAmountText: 'Reserve: ' + fmtMoney(reserveBalance, cur) + ' ' + cur,
+        totalDaysText: 'out of ' + totalDays + ' per year',
+        showTxTable: vacFull && !!finRec, hasTx: txRows.length > 0, noTx: txRows.length === 0, txRows: txRows,
+        showAccrual: vacFull && callerRole === 'admin' && !!finRec && !removed, accrualSel: accSel,
+      };
+      if (finRec) {
+        const pct = finRec.isReservePercentManual ? finRec.vacationReservePercent : autoPct(finRec.monthlySalary, finRec.clientHourlyRate, finRec.vacationDaysPerYear);
+        finView.salaryText = fmtMoney(finRec.monthlySalary, finRec.currency) + '  ' + finRec.currency;
+        finView.rateText = fmtMoney(finRec.clientHourlyRate, finRec.currency);
+        finView.percentText = pct.toFixed(2) + '% ' + (finRec.isReservePercentManual ? '(manual)' : '(auto)');
+        finView.daysText = String(finRec.vacationDaysPerYear);
+      }
+      finView.runAccrual = (e) => { if (e) e.preventDefault(); if (!finRec) return; const sel = this.state.selVals.accrualMonth || accOpts[0]; const parts = sel.split(' '); const mi = MFULL.indexOf(parts[0]) + 1; const yr = parseInt(parts[1], 10); const NOWM = 7, NOWY = 2026; if (yr > NOWY || (yr === NOWY && mi >= NOWM)) { this.showToast('Cannot run accrual for a future billing period'); return; } const list = this.state.vacTx[dm.id] || []; if (list.some((x) => x.type === 'credit' && x.month === mi && x.year === yr)) { this.showToast(sel + ': skipped \u2014 already accrued'); return; } const pct = finRec.isReservePercentManual ? finRec.vacationReservePercent : autoPct(finRec.monthlySalary, finRec.clientHourlyRate, finRec.vacationDaysPerYear); const amt = Math.round(finRec.clientHourlyRate * 2080 / 12 * pct / 100 * 100) / 100; const ntx = { id: 'mx' + Date.now(), type: 'credit', amount: amt, month: mi, year: yr, isAuto: false, createdBy: 'Manual run' }; this.showToast(sel + ' accrual: 1 credit created (+' + fmtMoney(amt, cur) + ')'); this.setState((p) => ({ vacTx: Object.assign({}, p.vacTx, { [dm.id]: (p.vacTx[dm.id] || []).concat([ntx]) }) })); };
+      const fmf = this.state.finForm;
+      const fmOpen = this.state.finModalOpen;
+      let finModalVM = { open: fmOpen };
+      if (fmOpen) {
+        const salaryNum = parseFloat(fmf.salary);
+        const rateNum = parseFloat(fmf.rate);
+        const daysNum = parseInt(fmf.days, 10);
+        const pctNum = parseFloat(fmf.percent);
+        const manual = fmf.mode === 'manual';
+        const tch = fmf.touched || {};
+        const sub = !!fmf.submitted;
+        const salaryErr = (fmf.salary === '' || isNaN(salaryNum) || salaryNum < 0.01 || salaryNum > 999999.99) ? 'Monthly salary must be between 0.01 and 999,999.99' : '';
+        const rateErr = (fmf.rate === '' || isNaN(rateNum) || rateNum < 0.01 || rateNum > 9999.99) ? 'Client hourly rate must be between 0.01 and 9,999.99' : '';
+        const daysErr = (fmf.days === '' || isNaN(daysNum) || daysNum < 1 || daysNum > 365) ? 'Vacation days per year must be between 1 and 365' : '';
+        const pctErr = (manual && (fmf.percent === '' || isNaN(pctNum) || pctNum < 0.01 || pctNum > 99.99)) ? 'Reserve percentage must be between 0.01 and 99.99' : '';
+        const cur = this.state.selVals.finCurrency || 'USD';
+        const computedPct = autoPct(salaryNum, rateNum, daysNum);
+        const curSel = this.mkSel('finCurrency', ['USD', 'EUR', 'GBP'], t);
+        const canSave = !salaryErr && !rateErr && !daysErr && !pctErr;
+        finModalVM = { open: true, title: finRec ? 'Edit financial settings' : 'Set up financial settings',
+          salary: fmf.salary, rate: fmf.rate, days: fmf.days, percent: fmf.percent,
+          modeAuto: !manual, modeManual: manual,
+          autoSeg: { bg: !manual ? (dark ? '#3a342b' : '#fff') : 'transparent', color: !manual ? t.ink : t.muted, shadow: !manual ? (dark ? '0 1px 3px rgba(0,0,0,.5)' : '0 1px 2px rgba(74,55,20,.14)') : 'none' },
+          manualSeg: { bg: manual ? (dark ? '#3a342b' : '#fff') : 'transparent', color: manual ? t.ink : t.muted, shadow: manual ? (dark ? '0 1px 3px rgba(0,0,0,.5)' : '0 1px 2px rgba(74,55,20,.14)') : 'none' },
+          curSel, computedPctText: computedPct.toFixed(2) + '%',
+          salaryErr, rateErr, daysErr, pctErr, hasSalaryErr: !!salaryErr && (tch.salary || sub), hasRateErr: !!rateErr && (tch.rate || sub), hasDaysErr: !!daysErr && (tch.days || sub), hasPctErr: !!pctErr && (tch.percent || sub),
+          saveDisabled: !canSave, saveOpacity: canSave ? '1' : '0.5', saveCursor: canSave ? 'pointer' : 'default',
+          setSalary: (e) => this.setState({ finForm: Object.assign({}, this.state.finForm, { salary: e.target.value, touched: Object.assign({}, this.state.finForm.touched, { salary: true }) }) }),
+          setRate: (e) => this.setState({ finForm: Object.assign({}, this.state.finForm, { rate: e.target.value, touched: Object.assign({}, this.state.finForm.touched, { rate: true }) }) }),
+          setDays: (e) => this.setState({ finForm: Object.assign({}, this.state.finForm, { days: e.target.value, touched: Object.assign({}, this.state.finForm.touched, { days: true }) }) }),
+          setPercent: (e) => this.setState({ finForm: Object.assign({}, this.state.finForm, { percent: e.target.value, touched: Object.assign({}, this.state.finForm.touched, { percent: true }) }) }),
+          setAuto: (e) => { if (e) e.preventDefault(); this.setState({ finForm: Object.assign({}, this.state.finForm, { mode: 'auto' }), openSelect: null }); },
+          setManual: (e) => { if (e) e.preventDefault(); this.setState({ finForm: Object.assign({}, this.state.finForm, { mode: 'manual' }), openSelect: null }); },
+          close: (e) => { if (e) e.preventDefault(); this.setState({ finModalOpen: false, openSelect: null }); },
+          save: (e) => { if (e) e.preventDefault(); if (!canSave) { this.setState({ finForm: Object.assign({}, this.state.finForm, { submitted: true }) }); return; } const rec = { monthlySalary: salaryNum, clientHourlyRate: rateNum, currency: cur, vacationDaysPerYear: daysNum, isReservePercentManual: manual, vacationReservePercent: manual ? pctNum : computedPct }; this.showToast('Financial settings saved'); this.setState((p) => ({ finModalOpen: false, openSelect: null, financials: Object.assign({}, p.financials, { [dm.id]: rec }) })); },
+        };
+      }
+      const stPending = { label: 'Pending', c: dark ? 'oklch(0.82 0.15 85)' : 'oklch(0.58 0.13 72)', bg: dark ? 'oklch(0.82 0.15 85 / 0.16)' : 'oklch(0.58 0.13 72 / 0.12)', icon: '●' };
+      const stApproved = { label: 'Approved', c: okG, bg: dark ? 'oklch(0.74 0.14 155 / 0.16)' : 'oklch(0.46 0.13 155 / 0.1)', icon: '✓' };
+      const stRejected = { label: 'Rejected', c: okR, bg: dark ? 'oklch(0.72 0.17 25 / 0.16)' : 'oklch(0.55 0.19 25 / 0.1)', icon: '✗' };
+      const stCancelled = { label: 'Cancelled', c: t.muted, bg: t.header, icon: '○' };
+      const stMap = { pending: stPending, approved: stApproved, rejected: stRejected, cancelled: stCancelled };
+      const canReview = canManage && !isOwn && !removed;
+      const canSubmitReq = !removed && !!finRec && isOwn && !isViewerRole;
+      const reqRows = yearReq.slice().sort((a, b) => parseD(b.start) - parseD(a.start)).map((r) => {
+        const wd = reqWD(r); const sm = stMap[r.status] || stPending;
+        const canApprove = r.status === 'pending' && canReview;
+        const showCancel = (r.status === 'pending' && isOwn) || (r.status === 'approved' && canManage);
+        return {
+          id: r.id, datesText: fmtRange(r.start, r.end), daysText: wd + (wd === 1 ? ' day' : ' days'),
+          statusLabel: sm.label, statusColor: sm.c, statusBg: sm.bg, statusIcon: sm.icon,
+          showDed: vacFull, dedText: fmtMoney(reqDed(r), cur),
+          showApprove: canApprove, showReject: canApprove, showCancel: showCancel,
+          hasComment: r.status === 'rejected' && !!r.comment, comment: r.comment ? '“' + r.comment + '”' : '',
+          onApprove: (e) => { if (e) e.preventDefault(); const mi = parseD(r.start).getUTCMonth() + 1; this.showToast('Request approved'); this.setState((p) => ({ vacReq: setReqStatus(p.vacReq, dm.id, r.id, { status: 'approved', reviewedBy: 'You' }), vacTx: addItem(p.vacTx, dm.id, { id: 'dx' + Date.now(), type: 'debit', amount: -reqDed(r), month: mi, year: VYEAR, isAuto: false, requestId: r.id, description: 'Vacation ' + fmtRange(r.start, r.end) }) })); },
+          onReject: (e) => { if (e) e.preventDefault(); this.setState({ rejectReqId: r.id, rejectComment: '' }); },
+          onCancel: (e) => { if (e) e.preventDefault(); this.setState({ cancelReqId: r.id }); },
+        };
+      });
+      const rqOpen = this.state.vacReqModalOpen;
+      let reqModalVM = { open: rqOpen };
+      if (rqOpen) {
+        const rform = this.state.vacReqForm; const st = rform.start; const en = rform.end; const tch = rform.touched || {}; const sub = !!rform.submitted;
+        let startErr = '', endErr = '', gErr = '';
+        if (!st) startErr = 'Start date is required'; else if (st < TODAY) startErr = 'Start date must be today or later';
+        if (!en) endErr = 'End date is required'; else if (st && en < st) endErr = 'End date must be on or after start date';
+        let wd = 0;
+        if (st && en && !startErr && !endErr) {
+          if (parseD(st).getUTCFullYear() !== parseD(en).getUTCFullYear()) gErr = 'Start and end dates must be within the same calendar year';
+          else { wd = workingDaysBetween(st, en);
+            const ov = yearReq.find((r) => r.status !== 'cancelled' && r.status !== 'rejected' && !(parseD(en) < parseD(r.start) || parseD(st) > parseD(r.end)));
+            if (ov) gErr = 'This request overlaps with an existing vacation request (' + ov.start + ' – ' + ov.end + ')';
+            else if (wd > availableDays) gErr = 'Insufficient vacation balance. You have ' + availableDays + ' day(s) available.';
+          }
+        }
+        const okSubmit = !!st && !!en && !startErr && !endErr && !gErr && wd > 0;
+        reqModalVM = { open: true, start: st, end: en, minDate: TODAY,
+          workingDaysText: String(wd), availableText: availableDays + (availableDays === 1 ? ' day' : ' days'),
+          hasStartErr: !!startErr && (tch.start || sub), startErr, hasEndErr: !!endErr && (tch.end || sub), endErr,
+          hasGeneralErr: !!gErr && (sub || (!!st && !!en)), generalErr: gErr,
+          submitDisabled: !okSubmit, submitOpacity: okSubmit ? '1' : '0.5', submitCursor: okSubmit ? 'pointer' : 'default',
+          setStart: (e) => this.setState({ vacReqForm: Object.assign({}, this.state.vacReqForm, { start: e.target.value, touched: Object.assign({}, this.state.vacReqForm.touched, { start: true }) }) }),
+          setEnd: (e) => this.setState({ vacReqForm: Object.assign({}, this.state.vacReqForm, { end: e.target.value, touched: Object.assign({}, this.state.vacReqForm.touched, { end: true }) }) }),
+          close: (e) => { if (e) e.preventDefault(); this.setState({ vacReqModalOpen: false }); },
+          submit: (e) => { if (e) e.preventDefault(); if (!okSubmit) { this.setState({ vacReqForm: Object.assign({}, this.state.vacReqForm, { submitted: true }) }); return; } this.showToast('Vacation request submitted'); this.setState((p) => ({ vacReqModalOpen: false, vacReq: addItem(p.vacReq, dm.id, { id: 'vr' + Date.now(), start: st, end: en, status: 'pending', requestedAt: TODAY }) })); },
+        };
+      }
+      detail = {
+        id: dm.id, fullName: dm.fullName, email: dm.email, timezone: dm.timezone, initials, joined, removed,
+        tabAbout: dTab === 'about', tabVacation: dTab === 'vacation',
+        tabs: [
+          { label: 'About', testid: 'member-detail-tab-about-btn', color: dTab === 'about' ? t.ink : t.muted, underlineBg: dTab === 'about' ? t.accent : 'transparent', cursor: 'pointer', title: '', onClick: (e) => { if (e) e.preventDefault(); this.setState({ detailTab: 'about', openSelect: null }); } },
+          { label: 'Vacation', testid: 'member-detail-tab-vacation', color: vacTabDisabled ? t.faint : (dTab === 'vacation' ? t.ink : t.muted), underlineBg: dTab === 'vacation' ? t.accent : 'transparent', cursor: vacTabDisabled ? 'not-allowed' : 'pointer', title: vacTabDisabled ? (isViewerRole ? 'Viewers have no access to vacation' : 'Only available on your own profile') : '', onClick: (e) => { if (e) e.preventDefault(); if (vacTabDisabled) return; this.setState({ detailTab: 'vacation', openSelect: null }); } },
+        ],
+        setAbout: (e) => { if (e) e.preventDefault(); this.setState({ detailTab: 'about', openSelect: null }); },
+        setVacation: (e) => { if (e) e.preventDefault(); if (vacTabDisabled) return; this.setState({ detailTab: 'vacation', openSelect: null }); },
+        fin: finView, finModal: finModalVM,
+        requests: reqRows, hasRequests: reqRows.length > 0, noRequests: reqRows.length === 0,
+        showRequestsCard: !vacTabDisabled && ((vacFull && !!finRec) || (vacDaysOnly && !!finRec) || reqRows.length > 0),
+        showRequestBtn: canSubmitReq,
+        reqBtnCursor: availableDays <= 0 ? 'not-allowed' : 'pointer', reqBtnOpacity: availableDays <= 0 ? '0.55' : '1', reqBtnTip: availableDays <= 0 ? 'No vacation days available' : '',
+        openReqModal: (e) => { if (e) e.preventDefault(); if (availableDays <= 0) return; this.setState({ vacReqModalOpen: true, vacReqForm: { start: '', end: '', touched: {}, submitted: false } }); },
+        reqModal: reqModalVM,
+        openFin: (e) => { if (e) e.preventDefault(); const f = this.state.financials[dm.id]; this.setState({ finModalOpen: true, openSelect: null, finForm: { salary: f ? String(f.monthlySalary) : '', rate: f ? String(f.clientHourlyRate) : '', days: f ? String(f.vacationDaysPerYear) : '20', mode: f ? (f.isReservePercentManual ? 'manual' : 'auto') : 'auto', percent: f && f.isReservePercentManual ? String(f.vacationReservePercent) : '', touched: {}, submitted: false }, selVals: Object.assign({}, this.state.selVals, { finCurrency: f ? f.currency : 'USD' }) }); },
+        avaBg: dark ? 'oklch(0.48 0.11 ' + hue + ')' : 'oklch(0.9 0.07 ' + hue + ')',
+        avaColor: dark ? 'oklch(0.95 0.03 ' + hue + ')' : 'oklch(0.42 0.14 ' + hue + ')',
+        roleBadgeBg: rs.bg, roleBadgeColor: rs.color, roleLabel: dm.role,
+        removedBadgeBg: rbadge.bg, removedBadgeInk: rbadge.ink, removedBadgeDot: rbadge.dot,
+        canEditRole, canEditJobTitle, guard, showForm, showReadonly: !showForm,
+        jobDisplay: dm.jobTitle ? dm.jobTitle : '—',
+        guardMsg: 'Organization must retain at least one admin',
+        roleTooltip: guard ? 'Organization must retain at least one admin' : '',
+        roleSel, roleFieldOpacity: guard ? '0.55' : '1', roleFieldCursor: guard ? 'not-allowed' : 'pointer',
+        jobValue: jobVal, jobErr, hasJobErr: !!jobErr,
+        dirty, saveDisabled, saveOpacity: saveDisabled ? '0.5' : '1', saveCursor: saveDisabled ? 'default' : 'pointer',
+        setDetailJob: (e) => this.setState({ detailJobTitle: e.target.value }),
+        back: (e) => { if (e) e.preventDefault(); this.setState({ detailMemberId: null, openSelect: null }); },
+        save: (e) => { if (e) e.preventDefault(); if (saveDisabled) return; this.showToast('Changes saved'); this.setState((p) => ({ members: p.members.map((x) => x.id === dm.id ? Object.assign({}, x, { jobTitle: this.state.detailJobTitle, role: canEditRole ? (this.state.selVals.detailRole || x.role) : x.role }) : x) })); },
+      };
+    }
+
+    // ---- Requests page (spec 10) ----
+    const isRequests = page === 'Requests';
+    const okG2 = dark ? 'oklch(0.74 0.14 155)' : 'oklch(0.46 0.13 155)';
+    const okR2 = dark ? 'oklch(0.72 0.17 25)' : 'oklch(0.55 0.19 25)';
+    const stG = {
+      pending: { label: 'Pending', c: dark ? 'oklch(0.82 0.15 85)' : 'oklch(0.58 0.13 72)', bg: dark ? 'oklch(0.82 0.15 85 / 0.16)' : 'oklch(0.58 0.13 72 / 0.12)', icon: '\u25cf' },
+      approved: { label: 'Approved', c: okG2, bg: dark ? 'oklch(0.74 0.14 155 / 0.16)' : 'oklch(0.46 0.13 155 / 0.1)', icon: '\u2713' },
+      rejected: { label: 'Rejected', c: okR2, bg: dark ? 'oklch(0.72 0.17 25 / 0.16)' : 'oklch(0.55 0.19 25 / 0.1)', icon: '\u2717' },
+      cancelled: { label: 'Cancelled', c: t.muted, bg: t.header, icon: '\u25cb' },
+    };
+    const memBalance = (mid) => { const fin = this.state.financials[mid]; if (!fin) return { avail: 0, daily: 0, cur: 'USD', hasFin: false }; const daily = fin.monthlySalary * 12 / 260; const tx = (this.state.vacTx[mid] || []).filter((x) => x.year === VYEAR2); const bal = tx.reduce((s, x) => s + x.amount, 0); const yreq = (this.state.vacReq[mid] || []).filter((r) => pD(r.start).getUTCFullYear() === VYEAR2); const used = yreq.filter((r) => r.status === 'approved').reduce((s, r) => s + wdB(r.start, r.end), 0); const hold = yreq.filter((r) => r.status === 'pending').reduce((s, r) => s + Math.round(wdB(r.start, r.end) * daily * 100) / 100, 0); const raw = daily > 0 ? Math.floor((bal - hold) / daily) : 0; return { avail: Math.max(0, Math.min(raw, fin.vacationDaysPerYear - used)), daily, cur: fin.currency, hasFin: true }; };
+    const rfilter = this.state.reqFilter;
+    const RF = [['all', 'All'], ['pending', 'Pending'], ['approved', 'Approved'], ['rejected', 'Rejected'], ['cancelled', 'Cancelled']];
+    const filterTabs = RF.map((f) => ({ key: f[0], label: f[1], count: f[0] === 'all' ? orgAllReq.length : orgAllReq.filter((x) => x.r.status === f[0]).length, color: rfilter === f[0] ? t.onAccent : t.sub, bg: rfilter === f[0] ? t.accent : 'transparent', border: rfilter === f[0] ? t.accent : t.borderStrong, onClick: (e) => { if (e) e.preventDefault(); this.setState({ reqFilter: f[0] }); } }));
+    let orgRows = orgAllReq.filter((x) => rfilter === 'all' ? true : x.r.status === rfilter);
+    orgRows.sort((a, b) => { const ap = a.r.status === 'pending' ? 0 : 1, bp = b.r.status === 'pending' ? 0 : 1; if (ap !== bp) return ap - bp; return ap === 0 ? pD(a.r.start) - pD(b.r.start) : pD(b.r.start) - pD(a.r.start); });
+    const reqRows2 = orgRows.map((row) => {
+      const m = row.m, r = row.r; const wd = wdB(r.start, r.end); const sm = stG[r.status] || stG.pending; const balc = memBalance(m.id);
+      const isOwnR = !!m.self; const canApprove = r.status === 'pending' && canManage && !isOwnR;
+      const showCancel = (r.status === 'pending' && isOwnR) || (r.status === 'approved' && canManage);
+      const ded = Math.round(wd * balc.daily * 100) / 100; const mi = pD(r.start).getUTCMonth() + 1;
+      const hue2 = (m.fullName.split('').reduce((a, c) => a + c.charCodeAt(0), 0) * 7) % 360;
+      return {
+        id: r.id, name: m.fullName, initials: m.fullName.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase(),
+        avaBg: dark ? 'oklch(0.48 0.11 ' + hue2 + ')' : 'oklch(0.9 0.07 ' + hue2 + ')', avaColor: dark ? 'oklch(0.95 0.03 ' + hue2 + ')' : 'oklch(0.42 0.14 ' + hue2 + ')',
+        datesText: fR2(r.start, r.end), daysText: wd + ' working days',
+        availText: balc.hasFin ? (balc.avail + ' days available') : 'No financials', showDed: balc.hasFin, dedText: money2(ded, balc.cur),
+        statusLabel: sm.label, statusColor: sm.c, statusBg: sm.bg, statusIcon: sm.icon,
+        showApprove: canApprove, showReject: canApprove, showCancel: showCancel, showActions: canApprove || showCancel,
+        showComment: r.status === 'rejected' && !!r.comment, comment: r.comment || '',
+        showReviewLine: r.status === 'rejected' || r.status === 'cancelled', reviewLine: r.status === 'rejected' ? ('Reviewed by ' + (r.reviewedBy || '—')) : (r.status === 'cancelled' ? ('Cancelled by ' + (r.cancelledBy || '—')) : ''),
+        openMember: (e) => { if (e) e.preventDefault(); this.setState({ page: 'Members', detailMemberId: m.id, detailTab: 'vacation', openSelect: null }); },
+        onApprove: (e) => { if (e) e.preventDefault(); this.showToast('Request approved'); this.setState((p) => ({ vacReq: setStatusG(p.vacReq, m.id, r.id, { status: 'approved', reviewedBy: 'You' }), vacTx: addG(p.vacTx, m.id, { id: 'dx' + Date.now(), type: 'debit', amount: -ded, month: mi, year: VYEAR2, isAuto: false, requestId: r.id, description: 'Vacation ' + fR2(r.start, r.end) }) })); },
+        onReject: (e) => { if (e) e.preventDefault(); this.setState({ rejectReqId: r.id, rejectComment: '' }); },
+        onCancel: (e) => { if (e) e.preventDefault(); this.setState({ cancelReqId: r.id }); },
+      };
+    });
+    const reqPage = { canView: canManage, noAccess: !canManage, filterTabs, rows: reqRows2, hasRows: reqRows2.length > 0, noRows: reqRows2.length === 0, emptyText: rfilter === 'pending' ? 'No pending requests.' : 'No requests to show.' };
+    const rjF = this.state.rejectReqId ? findReqG(this.state.rejectReqId) : null;
+    let sReject = { open: !!rjF };
+    if (rjF) { const mem = this.state.members.find((x) => x.id === rjF.mid); const cmt = this.state.rejectComment; const tooLong = cmt.length > 500;
+      sReject = { open: true, datesText: fR2(rjF.req.start, rjF.req.end) + ' (' + wdB(rjF.req.start, rjF.req.end) + ' days)', requester: mem ? mem.fullName : '', comment: cmt, hasErr: tooLong, err: 'Comment must be at most 500 characters', confirmOpacity: tooLong ? '0.5' : '1',
+        setComment: (e) => this.setState({ rejectComment: e.target.value }),
+        close: (e) => { if (e) e.preventDefault(); this.setState({ rejectReqId: null, rejectComment: '' }); },
+        confirm: (e) => { if (e) e.preventDefault(); if (tooLong) return; this.showToast('Request rejected'); this.setState((p) => ({ rejectReqId: null, rejectComment: '', vacReq: setStatusG(p.vacReq, rjF.mid, rjF.req.id, { status: 'rejected', reviewedBy: 'You', comment: cmt }) })); },
+      };
+    }
+    const cnF = this.state.cancelReqId ? findReqG(this.state.cancelReqId) : null;
+    let sCancel = { open: !!cnF };
+    if (cnF) { const wasApproved = cnF.req.status === 'approved'; const fin = this.state.financials[cnF.mid]; const daily = fin ? fin.monthlySalary * 12 / 260 : 0; const ded = Math.round(wdB(cnF.req.start, cnF.req.end) * daily * 100) / 100; const mi = pD(cnF.req.start).getUTCMonth() + 1;
+      sCancel = { open: true, title: wasApproved ? 'Cancel approved vacation?' : 'Cancel this vacation request?', body: wasApproved ? 'The reserve will be refunded.' : 'This will withdraw the pending request.',
+        close: (e) => { if (e) e.preventDefault(); this.setState({ cancelReqId: null }); },
+        confirm: (e) => { if (e) e.preventDefault(); if (wasApproved) { this.showToast('Request cancelled and reserve refunded'); this.setState((p) => ({ cancelReqId: null, vacReq: setStatusG(p.vacReq, cnF.mid, cnF.req.id, { status: 'cancelled', cancelledBy: 'You' }), vacTx: addG(p.vacTx, cnF.mid, { id: 'rf' + Date.now(), type: 'refund', amount: ded, month: mi, year: VYEAR2, isAuto: false, requestId: cnF.req.id, description: 'Refund ' + fR2(cnF.req.start, cnF.req.end) }) })); } else { this.showToast('Request cancelled'); this.setState((p) => ({ cancelReqId: null, vacReq: setStatusG(p.vacReq, cnF.mid, cnF.req.id, { status: 'cancelled', cancelledBy: 'You' }) })); } },
+      };
+    }
+
+    // ---- Reports: Time & activity (source TimeAndActivity.tsx) ----
+    const isTimeActivity = page === 'Time & activity';
+    const COLS = [
+      { title: 'Project', value: 'project', required: true }, { title: 'Client', value: 'client', required: false },
+      { title: 'Member', value: 'member', required: true }, { title: 'Time', value: 'time', required: true },
+      { title: 'Billable Time', value: 'billableTime', required: false }, { title: 'Non Billable Time', value: 'nonBillableTime', required: false },
+      { title: 'Billed Amount', value: 'billedAmount', required: false }, { title: 'Notes', value: 'notes', required: false },
+    ];
+    const rc = this.state.reportCols;
+    const activeCols = COLS.filter((c) => rc[c.title]);
+    const fmtUSD = (n) => (n == null ? '' : '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+    // Data model per source (ReportsGroupBody / ProjectReportsGroup): top-level group = a DAY (group.title) with a
+    // collapsible Total row; group.reports[] = per-project entries; each project's detailedReport[] = member/time rows
+    // (project & client shown only on the project's first row).
+    const rDates = [
+      { id: 'd1', title: 'Monday, Apr 1', total: { time: '11:30', billableTime: '10:00', nonBillableTime: '01:30', billedAmount: 1000 }, reports: [
+        { id: 'p1', project: 'Marketing site', client: 'Acme Co', detailedReport: [
+          { id: 'r1', member: 'Alex Kaminski', time: '05:00', billableTime: '04:00', nonBillableTime: '01:00', billedAmount: 400, notes: 'Landing page build' },
+          { id: 'r2', member: 'Sam Manager', time: '03:00', billableTime: '03:00', nonBillableTime: '00:00', billedAmount: 300, notes: 'Review & QA' },
+        ] },
+        { id: 'p2', project: 'Mobile app', client: 'Northwind', detailedReport: [
+          { id: 'r3', member: 'Casey Lin', time: '03:30', billableTime: '03:00', nonBillableTime: '00:30', billedAmount: 300, notes: 'Onboarding flow refinements' },
+        ] },
+      ] },
+      { id: 'd2', title: 'Tuesday, Apr 2', total: { time: '13:15', billableTime: '09:15', nonBillableTime: '04:00', billedAmount: 925 }, reports: [
+        { id: 'p3', project: 'Mobile app', client: 'Northwind', detailedReport: [
+          { id: 'r4', member: 'Casey Lin', time: '05:00', billableTime: '04:00', nonBillableTime: '01:00', billedAmount: 400, notes: '' },
+          { id: 'r5', member: 'Dana Reed', time: '04:15', billableTime: '02:15', nonBillableTime: '02:00', billedAmount: 225, notes: 'Bug triage session' },
+        ] },
+        { id: 'p4', project: 'Internal tools', client: 'Acme Co', detailedReport: [
+          { id: 'r6', member: 'Pat Owner', time: '04:00', billableTime: '03:00', nonBillableTime: '01:00', billedAmount: 300, notes: 'Admin config' },
+        ] },
+      ] },
+    ];
+    const isMyReport = this.state.reportTab === 'Me';
+    const curUser = 'Pat Owner';
+    const rGroups = rDates.map((g) => Object.assign({}, g, { reports: g.reports.map((p) => Object.assign({}, p, { detailedReport: isMyReport ? p.detailedReport.filter((r) => r.member === curUser) : p.detailedReport })).filter((p) => p.detailedReport.length) })).filter((g) => g.reports.length);
+    const rArrow = (collapsed) => React.createElement('svg', { width: 12, height: 12, viewBox: '0 0 24 24', fill: 'none', stroke: t.faint, strokeWidth: 2.5, style: { transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)', transition: 'transform .15s', flexShrink: 0 } }, React.createElement('path', { d: 'M6 9l6 6 6-6', strokeLinecap: 'round', strokeLinejoin: 'round' }));
+    const groupsVM = rGroups.map((g) => {
+      const collapsed = !!this.state.reportCollapsed[g.id];
+      const totalCells = activeCols.map((c, i) => {
+        if (i === 0) return { label: true, plain: false, value: '', arrow: rArrow(collapsed) };
+        let v = '';
+        if (c.value === 'time' || c.value === 'billableTime' || c.value === 'nonBillableTime') v = g.total[c.value] || '';
+        else if (c.value === 'billedAmount') v = fmtUSD(g.total.billedAmount);
+        return { label: false, plain: true, value: v };
+      });
+      const rows = [];
+      g.reports.forEach((p) => {
+        const norm = p.detailedReport.map((r) => Object.assign({ project: p.project, client: p.client }, r));
+        norm.forEach((r, ri) => {
+          const first = ri === 0;
+          const cells = activeCols.map((c) => {
+            let v;
+            if (c.value === 'project') v = first ? r.project : '';
+            else if (c.value === 'client') v = first ? (r.client || '') : '';
+            else if (c.value === 'billedAmount') v = fmtUSD(r.billedAmount);
+            else if (c.value === 'notes') v = r.notes ? (r.notes.length > 20 ? r.notes.slice(0, 20) + '…' : r.notes) : '';
+            else v = r[c.value];
+            return { value: (v == null ? '' : v) };
+          });
+          rows.push({ id: r.id, cells });
+        });
+      });
+      return { id: g.id, title: g.title, totalCells, rows, notCollapsed: !collapsed, onToggle: (e) => { if (e) e.preventDefault(); this.setState((prev) => ({ reportCollapsed: Object.assign({}, prev.reportCollapsed, { [g.id]: !prev.reportCollapsed[g.id] }) })); } };
+    });
+    const report = {
+      tabs: ['Me', 'All'].map((n) => { const a = this.state.reportTab === n; return { label: n, color: a ? t.ink : t.muted, underlineBg: a ? t.accent : 'transparent', onClick: (e) => { if (e) e.preventDefault(); this.setState({ reportTab: n }); } }; }),
+      dateRange: 'Apr 1 – Apr 7, 2026',
+      openFilters: (e) => { if (e) e.preventDefault(); this.setState({ reportFiltersOpen: true }); },
+      closeFilters: () => this.setState({ reportFiltersOpen: false }),
+      filtersOpen: this.state.reportFiltersOpen,
+      colsOpen: this.state.reportColsOpen,
+      toggleCols: (e) => { if (e) { e.preventDefault(); e.stopPropagation(); } this.setState({ reportColsOpen: !this.state.reportColsOpen }); },
+      colItems: COLS.map((c) => ({ title: c.title, required: c.required, selected: !!rc[c.title], checkColor: rc[c.title] ? t.accent : 'transparent', rowColor: c.required ? t.faint : t.ink, cursor: c.required ? 'not-allowed' : 'pointer', onToggle: (e) => { if (e) { e.preventDefault(); e.stopPropagation(); } if (c.required) return; this.setState((p) => ({ reportCols: Object.assign({}, p.reportCols, { [c.title]: !p.reportCols[c.title] }) })); } })),
+      summary: [ { label: 'Hours', value: '24:45' }, { label: 'Billable', value: '19:15' }, { label: 'Non-billable', value: '05:30' }, { label: 'Billed amount', value: '$1,925.00' } ],
+      headers: activeCols.map((c) => c.title),
+      colCount: activeCols.length,
+      groups: groupsVM,
+      empty: rGroups.length === 0, notEmpty: rGroups.length > 0,
+      filterGroups: [
+        { label: 'Clients', options: ['Acme Co', 'Northwind'] },
+        { label: 'Projects', options: ['Marketing site', 'Mobile app', 'Internal tools'] },
+      ].concat(isMyReport ? [] : [{ label: 'Members', options: ['Alex Kaminski', 'Sam Manager', 'Casey Lin', 'Dana Reed'] }]).map((fg) => ({ label: fg.label, options: fg.options.map((n) => { const sel = !!this.state.reportSel[n]; return { name: n, bg: sel ? t.accent : 'transparent', border: sel ? t.accent : t.borderStrong, check: sel ? this.stroke(13, 13, '0 0 24 24', 'M5 12.5l4.5 4.5L19 6.5') : '', onToggle: (e) => { if (e) e.preventDefault(); this.setState((p) => ({ reportSel: Object.assign({}, p.reportSel, { [n]: !p.reportSel[n] }) })); } }; }) })),
+      sum: this.state.reportSum, sumBg: this.state.reportSum ? t.accent : 'transparent', sumBorder: this.state.reportSum ? t.accent : t.borderStrong, sumCheck: this.state.reportSum ? this.stroke(13, 13, '0 0 24 24', 'M5 12.5l4.5 4.5L19 6.5') : '',
+      toggleSum: (e) => { if (e) e.preventDefault(); this.setState({ reportSum: !this.state.reportSum }); },
+      clearFilters: (e) => { if (e) e.preventDefault(); this.setState({ reportSel: {}, reportSum: false, reportFiltersOpen: false }); },
+      exportReport: (e) => { if (e) e.preventDefault(); this.showToast('Report export started'); },
+      onApply: (e) => { if (e) e.preventDefault(); this.showToast('Filters applied'); },
+    };
+
+    // calendar
+    const cmap = dark
+      ? { blue: ['oklch(0.68 0.17 292)', 'oklch(0.68 0.17 292 / 0.16)'], green: ['oklch(0.74 0.13 160)', 'oklch(0.74 0.13 160 / 0.15)'], purple: ['oklch(0.72 0.16 320)', 'oklch(0.72 0.16 320 / 0.15)'] }
+      : { blue: ['oklch(0.5 0.16 292)', 'oklch(0.965 0.02 292)'], green: ['oklch(0.58 0.11 160)', 'oklch(0.965 0.02 160)'], purple: ['oklch(0.55 0.15 320)', 'oklch(0.965 0.02 320)'] };
+    const mkEv = (k, tt, dd) => ({ border: cmap[k][0], bg: cmap[k][1], t: tt, d: dd });
+    const evSrc = {
+      3: [mkEv('blue', '09:00 – 11:00', 'Marketing site')], 5: [mkEv('green', '10:00 – 16:30', 'Mobile app')],
+      10: [mkEv('blue', '09:00 – 13:00', 'Marketing site')], 12: [mkEv('purple', '14:00 – 18:00', 'Internal tools')],
+      17: [mkEv('green', '09:30 – 17:30', 'Mobile app')], 18: [mkEv('blue', '09:00 – 17:00', 'Marketing site'), mkEv('purple', '18:00 – 19:00', 'Internal tools')],
+      24: [mkEv('green', '11:00 – 14:30', 'Mobile app')], 26: [mkEv('blue', '09:00 – 16:00', 'Marketing site')],
+    };
+    const mo = this.state.monthOffset;
+    const isCurrentMonth = mo === 0;
+    const d0 = new Date(2026, 2 + mo, 1);
+    const monthName = d0.toLocaleString('en-US', { month: 'long' });
+    const year = d0.getFullYear();
+    const lead = (d0.getDay() + 6) % 7;
+    const daysIn = new Date(2026, 2 + mo + 1, 0).getDate();
+    const monthCells = [];
+    for (let i = 0; i < lead; i++) monthCells.push({ day: '', isToday: false, notToday: false, events: [] });
+    for (let d = 1; d <= daysIn; d++) {
+      const isToday = isCurrentMonth && d === 18;
+      monthCells.push({ day: String(d), isToday, notToday: !isToday, events: isCurrentMonth ? (evSrc[d] || []) : [] });
+    }
+    while (monthCells.length % 7 !== 0) monthCells.push({ day: '', isToday: false, notToday: false, events: [] });
+    const wlabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const weekData = [16, 17, 18, 19, 20, 21, 22].map((d, i) => { const isToday = d === 18; return { label: wlabels[i], date: String(d), isToday, notToday: !isToday, events: evSrc[d] || [] }; });
+    const dayEvents = evSrc[18];
+    const calView = this.state.calView;
+    let calTitle = monthName + ' ' + year;
+    if (calView === 'week') calTitle = 'Mar 16 – 22, 2026';
+    else if (calView === 'day') calTitle = 'Wed, Mar 18, 2026';
+    const seg = (v) => { const a = calView === v; return { bg: a ? (dark ? '#3a342b' : '#fff') : 'transparent', color: a ? t.ink : t.muted, shadow: a ? (dark ? '0 1px 3px rgba(0,0,0,.5)' : '0 1px 2px rgba(74,55,20,.14)') : 'none', onClick: (e) => { if (e) e.preventDefault(); this.setState({ calView: v }); } }; };
+
+    const tp = this.state.trackerProject;
+    const active = this.state.trackerActive && !!tp;
+    const bill = this.state.billable;
+
+    const to12 = (s) => { let [h, m] = s.split(':').map(Number); const ap = h < 12 ? 'AM' : 'PM'; let hh = h % 12; if (hh === 0) hh = 12; return String(hh).padStart(2, '0') + ':' + (m === 0 ? '00' : '30') + ' ' + ap; };
+    const openEdit = (ev) => (e) => { if (e) e.preventDefault(); const parts = ev.t.split(' – '); this.setState((p) => ({ addOpen: true, editingEntry: ev, openSelect: null, selVals: Object.assign({}, p.selVals, { modalProject: ev.d, modalFrom: to12(parts[0]), modalTo: to12(parts[1]), modalDate: 'Mar 18, 2026' }) })); };
+    const TIMES = this.timeList();
+    const setTime = (id, v) => this.setState((p) => { const nv = Object.assign({}, p.selVals, { [id]: v }); const fiN = TIMES.indexOf(nv.modalFrom), tiN = TIMES.indexOf(nv.modalTo); if (tiN <= fiN) nv.modalTo = TIMES[Math.min(fiN + 1, TIMES.length - 1)]; return { openSelect: null, selVals: nv }; });
+    const mkTime = (id, opts) => { const val = this.state.selVals[id]; const open = this.state.openSelect === id; return { value: val, open, borderColor: open ? t.accent : t.borderStrong, toggle: (e) => { if (e) e.preventDefault(); this.setState({ openSelect: open ? null : id, trackerSelOpen: false }); }, options: opts.map((o) => ({ name: o, bg: o === val ? t.accentSoft : 'transparent', color: o === val ? t.accent : t.ink, onClick: (e) => { if (e) e.preventDefault(); setTime(id, o); } })) }; };
+    const fi = TIMES.indexOf(this.state.selVals.modalFrom);
+    const timeFrom = mkTime('modalFrom', TIMES);
+    const timeTo = mkTime('modalTo', TIMES.slice(fi + 1));
+    const pk = this.state.pickerOffset;
+    const pd0 = new Date(2026, 2 + pk, 1);
+    const pMonthShort = pd0.toLocaleString('en-US', { month: 'short' });
+    const pMonthLong = pd0.toLocaleString('en-US', { month: 'long' });
+    const pYear = pd0.getFullYear();
+    const plead = (pd0.getDay() + 6) % 7;
+    const pDays = new Date(2026, 2 + pk + 1, 0).getDate();
+    const selDate = this.state.selVals.modalDate;
+    const pCells = [];
+    for (let i = 0; i < plead; i++) pCells.push({ empty: true, notEmpty: false, day: '' });
+    for (let d = 1; d <= pDays; d++) { const label = pMonthShort + ' ' + d + ', ' + pYear; const isSel = label === selDate; pCells.push({ empty: false, notEmpty: true, day: String(d), isSel, bg: isSel ? t.accent : 'transparent', color: isSel ? t.onAccent : t.ink, onClick: (e) => { if (e) e.preventDefault(); this.setState((p) => ({ openSelect: null, selVals: Object.assign({}, p.selVals, { modalDate: label }) })); } }); }
+    const dpOpen = this.state.openSelect === 'modalDate';
+    const datePicker = { value: selDate, open: dpOpen, borderColor: dpOpen ? t.accent : t.borderStrong, toggle: (e) => { if (e) e.preventDefault(); this.setState({ openSelect: dpOpen ? null : 'modalDate', trackerSelOpen: false }); }, monthLabel: pMonthLong + ' ' + pYear, weekdays: ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'], cells: pCells, prev: (e) => { if (e) e.preventDefault(); this.setState((p) => ({ pickerOffset: p.pickerOffset - 1 })); }, next: (e) => { if (e) e.preventDefault(); this.setState((p) => ({ pickerOffset: p.pickerOffset + 1 })); } };
+
+    return {
+      modalTitle: this.state.editingEntry ? 'Edit time' : 'Add time',
+      modalSubmitLabel: this.state.editingEntry ? 'Save' : 'Add',
+      showModalDelete: !!this.state.editingEntry,
+      timeFrom, timeTo, datePicker,
+      t, page, hasSubtitle: isTimesheets, subtitle: 'Manage your work time here.',
+      icTimesheets: this.svg(16, 16, '0 0 20 20', P.timesheets),
+      icArrow: this.svg(12, 8, '0 0 12 8', P.arrow),
+      icClose: this.svg(13, 13, '0 0 14 14', P.close),
+      icUser: this.svg(24, 24, '0 0 46 46', P.user),
+      icMagnify: this.svg(15, 15, '0 0 14 14', P.magnify),
+      icDots: React.createElement('svg', { width: 4, height: 16, viewBox: '0 0 4 16', fill: 'currentColor' }, [React.createElement('circle', { key: 'a', cx: 2, cy: 2, r: 1.6 }), React.createElement('circle', { key: 'b', cx: 2, cy: 8, r: 1.6 }), React.createElement('circle', { key: 'c', cx: 2, cy: 14, r: 1.6 })]),
+      nav, isTimesheets, isMembers, isEmpty: !isTimesheets && !isMembers && !isTimeActivity && !isRequests,
+      isTimeActivity, report, isRequests, reqPage, sReject, sCancel,
+      icDownload: this.stroke(16, 16, '0 0 24 24', 'M12 3v12M7 10l5 5 5-5M5 20h14'),
+      icGear: this.stroke(16, 16, '0 0 24 24', 'M4 7h16M4 12h16M4 17h16'),
+      icCheck: this.stroke(13, 13, '0 0 24 24', 'M5 12.5l4.5 4.5L19 6.5'),
+      pageTitle: isMembers ? 'Active members' : (isTimeActivity ? 'Time & activity' : page),
+      showPageHeader: !detailMember,
+      isMemberList: isMembers && !detailMember, isMemberDetail: !!detailMember, detail,
+      icMail: this.stroke(16, 13, '0 0 24 20', 'M2 3h20v16H2zM2 4l10 8 10-8'),
+      icClock: this.svg(15, 15, '0 0 20 20', P.timesheets),
+      filteredMembers, filteredEmpty: filteredMembers.length === 0,
+      actionsColumn: canManage, callerRole,
+      memberSearch: this.state.memberSearch,
+      setMemberSearch: (e) => { const v = e.target.value; clearTimeout(this._deb); this.setState({ memberSearch: v }); this._deb = setTimeout(() => this.setState({ memberQuery: v }), 300); },
+      showRemoved: this.state.showRemoved,
+      toggleShowRemoved: (e) => { if (e) e.preventDefault(); this.setState({ showRemoved: !this.state.showRemoved, openKebab: null }); },
+      showRemovedBg: this.state.showRemoved ? t.accent : 'transparent',
+      showRemovedBorder: this.state.showRemoved ? t.accent : t.borderStrong,
+      showRemovedCheck: this.state.showRemoved ? this.stroke(13, 13, '0 0 24 24', 'M5 12.5l4.5 4.5L19 6.5') : '',
+      deleteOpen: !!this.state.deleteTarget, deleteName: this.state.deleteTarget ? this.state.deleteTarget.fullName : '',
+      closeDelete: () => this.setState({ deleteTarget: null }),
+      confirmDeleteMember: () => { const tgt = this.state.deleteTarget; if (!tgt) return; this.showToast('Member removed'); this.setState((p) => ({ deleteTarget: null, members: p.members.map((x) => x.id === tgt.id ? Object.assign({}, x, { status: 'removed' }) : x) })); },
+      toastMsg: this.state.toast, toastShow: !!this.state.toast,
+      // calendar
+      weekdays: wlabels, calTitle, isMonth: calView === 'month', isWeek: calView === 'week', isDay: calView === 'day',
+      monthCells, weekData, dayEvents: dayEvents.map((ev) => Object.assign({}, ev, { onOpen: openEdit(ev) })),
+      segDay: seg('day'), segWeek: seg('week'), segMonth: seg('month'),
+      todayCursor: isCurrentMonth ? 'not-allowed' : 'pointer', todayOpacity: isCurrentMonth ? '0.5' : '1',
+      goToday: (e) => { if (e) e.preventDefault(); this.setState({ monthOffset: 0 }); },
+      prevMonth: (e) => { if (e) e.preventDefault(); this.setState((p) => ({ monthOffset: p.monthOffset - 1, calView: 'month' })); },
+      nextMonth: (e) => { if (e) e.preventDefault(); this.setState((p) => ({ monthOffset: p.monthOffset + 1, calView: 'month' })); },
+      // selects
+      selTz: this.mkSel('timezone', ['Europe/London', 'America/New_York', 'Asia/Tokyo'], t),
+      selMember: this.mkSel('member', ['Alex Chen', 'Sam Lee', 'Jo Park'], t),
+      selModalProject: this.mkSel('modalProject', ['Marketing site', 'Mobile app', 'Internal tools'], t),
+      anySelectOpen: this.state.openSelect !== null || this.state.openKebab !== null,
+      closeSelects: () => this.setState({ openSelect: null, openKebab: null }),
+      // theme
+      setLight: () => this.setState({ dark: false }), setDark: () => this.setState({ dark: true }),
+      toggleLight: { bg: !dark ? '#fff' : 'transparent', color: !dark ? t.ink : t.muted, shadow: !dark ? '0 1px 2px rgba(74,55,20,.14)' : 'none' },
+      toggleDark: { bg: dark ? '#3a342b' : 'transparent', color: dark ? t.ink : t.muted, shadow: dark ? '0 1px 3px rgba(0,0,0,.5)' : 'none' },
+      // tracker + modal
+      trackerOpen: this.state.trackerOpen, addOpen: this.state.addOpen,
+      openTracker: (e) => { if (e) e.preventDefault(); this.setState({ trackerOpen: true }); },
+      closeTracker: () => this.setState({ trackerOpen: false, trackerSelOpen: false }),
+      toggleActive: () => { if (this.state.trackerProject) this.setState({ trackerActive: !this.state.trackerActive }); },
+      trackerProjectLabel: tp || '—',
+      startCursor: tp ? 'pointer' : 'not-allowed', startOpacity: tp ? '1' : '0.55',
+      trackerSelOpen: this.state.trackerSelOpen,
+      trackerSelText: tp || 'Select a project', trackerSelColor: tp ? t.ink : t.faint,
+      trackerSelBorder: this.state.trackerSelOpen ? t.accent : t.borderStrong,
+      toggleTrackerSel: (e) => { if (e) e.preventDefault(); this.setState({ trackerSelOpen: !this.state.trackerSelOpen, openSelect: null }); },
+      trackerOptions: ['Marketing site', 'Mobile app', 'Internal tools'].map((o) => ({ name: o, onClick: (e) => { if (e) e.preventDefault(); this.setState({ trackerProject: o, trackerSelOpen: false }); } })),
+      openAdd: (e) => { if (e) e.preventDefault(); this.setState({ addOpen: true, editingEntry: null, openSelect: null }); },
+      closeAdd: () => this.setState({ addOpen: false, editingEntry: null, openSelect: null }),
+      stop: (e) => { if (e) e.stopPropagation(); },
+      goAccount: (e) => { if (e) e.preventDefault(); this.setState({ page: 'Account' }); },
+      trackerHeaderBg: active ? t.amberBg : t.panel, trackerBtnBg: active ? t.amber : t.accent, trackerBtnInk: '#fff',
+      trackerLabel: active ? 'STOP' : 'START', trackerFg: active ? t.amber : t.ink,
+      toggleBillable: (e) => { if (e) e.preventDefault(); this.setState({ billable: !this.state.billable }); },
+      billableBg: bill ? t.accent : 'transparent', billableBorder: bill ? t.accent : t.borderStrong,
+      billableCheck: bill ? this.stroke(13, 13, '0 0 24 24', 'M5 12.5l4.5 4.5L19 6.5') : '',
+      icTrash: this.svg(15, 17, '0 0 16 18', P.trash),
+      dangerColor: dark ? 'oklch(0.7 0.16 25)' : 'oklch(0.55 0.2 25)',
+      dangerBtnBg: dark ? 'oklch(0.6 0.2 25)' : 'oklch(0.55 0.2 25)',
+      dangerGlow: dark ? '0 0 20px oklch(0.6 0.2 25 / 0.4)' : '0 2px 0 oklch(0.46 0.19 25)',
+      confirmOpen: this.state.confirmOpen,
+      openConfirm: (e) => { if (e) e.preventDefault(); this.setState({ confirmOpen: true, openSelect: null }); },
+      closeConfirm: () => this.setState({ confirmOpen: false }),
+      confirmDelete: () => this.setState({ confirmOpen: false, addOpen: false, editingEntry: null }),
+    };
+  }
+}
+</script>
+</body>
+</html>

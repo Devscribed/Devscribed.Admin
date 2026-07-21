@@ -1,0 +1,16 @@
+:root{
+  --radius-xs:6px;   /* checkbox glyph, tag chips */
+  --radius-sm:8px;   /* small icons, nested menu items */
+  --radius-md:10px;  /* fields & buttons (unified with lg) */
+  --radius-lg:10px;  /* fields large, primary buttons, dropdowns, nav items */
+  --radius-xl:12px;  /* smaller cards */
+  --radius-2xl:14px; /* main cards, modals */
+  --radius-3xl:18px; /* dark hero blocks */
+  --radius-pill:20px;/* badges, toggle track */
+  --radius-seg:16px; /* segmented-control inner pill */
+  --radius-full:9999px;
+
+  --border-hair:1px;
+  --border-crisp:1.5px;   /* the Meridian house border */
+  --border-tab:3px;       /* tab underline */
+}

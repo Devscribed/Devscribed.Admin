@@ -1,0 +1,79 @@
+@import 'src/styles/variables';
+@import 'src/styles/mixins';
+
+.wrapper {
+  display: inline-block;
+  border-radius: 50%;
+  position: relative;
+}
+
+.btn {
+  @include centeredFlex;
+  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  cursor: pointer;
+  border: 1.5px solid $appGrayLight;
+  background-color: #fff;
+  transition: background-color 0.2s;
+
+  svg {
+    width: 20px;
+    height: 20px;
+    fill: $appBlack;
+    transition: fill 0.2s;
+  }
+
+  &:hover {
+    opacity: 0.6;
+  }
+}
+
+.activeBtn {
+  opacity: 0.6;
+}
+
+.popover {
+  position: absolute;
+  right: 0;
+  top: 42px;
+  min-width: 160px;
+  padding: 5px 0;
+  background-color: #fff;
+  border-radius: 6px;
+  -webkit-box-shadow: 0 6px 12px rgb(0 0 0 / 18%);
+  box-shadow: 0 6px 12px rgb(0 0 0 / 18%);
+  z-index: 1000;
+
+  ul {
+    overflow: hidden;
+    li {
+      text-align: left;
+      white-space: nowrap;
+      margin: 0 5px;
+      cursor: pointer;
+      color: $appBlack;
+      padding: 8px 16px 8px 22px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      position: relative;
+
+      svg {
+        width: 16px;
+        height: 16px;
+        position: absolute;
+        left: 4px;
+      }
+
+      &:hover {
+        background: #f8f8f8;
+      }
+    }
+
+    .default {
+      cursor: not-allowed;
+      background: #f8f8f8;
+    }
+  }
+}
