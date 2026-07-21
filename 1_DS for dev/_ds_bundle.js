@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format":4,"namespace":"TeammerlyMeridianDesignSystem_063f40","components":[{"name":"Button","sourcePath":"components/actions/Button.jsx"},{"name":"Table","sourcePath":"components/data/Table.jsx"},{"name":"Badge","sourcePath":"components/feedback/Badge.jsx"},{"name":"InfoBanner","sourcePath":"components/feedback/InfoBanner.jsx"},{"name":"Checkbox","sourcePath":"components/forms/Checkbox.jsx"},{"name":"Input","sourcePath":"components/forms/Input.jsx"},{"name":"Radio","sourcePath":"components/forms/Radio.jsx"},{"name":"RadioGroup","sourcePath":"components/forms/Radio.jsx"},{"name":"SearchField","sourcePath":"components/forms/SearchField.jsx"},{"name":"Select","sourcePath":"components/forms/Select.jsx"},{"name":"NavItem","sourcePath":"components/navigation/NavItem.jsx"},{"name":"Tabs","sourcePath":"components/navigation/Tabs.jsx"},{"name":"Toggle","sourcePath":"components/navigation/Toggle.jsx"},{"name":"Card","sourcePath":"components/surfaces/Card.jsx"},{"name":"Modal","sourcePath":"components/surfaces/Modal.jsx"},{"name":"SectionLabel","sourcePath":"components/typography/SectionLabel.jsx"}],"sourceHashes":{"components/actions/Button.jsx":"9dfcaf102602","components/data/Table.jsx":"0ceb99ee3c62","components/feedback/Badge.jsx":"fd196613fabf","components/feedback/InfoBanner.jsx":"1a6fd57449af","components/forms/Checkbox.jsx":"da4073b1c070","components/forms/Input.jsx":"c708c25b6a46","components/forms/Radio.jsx":"57d1b71513f1","components/forms/SearchField.jsx":"c37bc9f13e21","components/forms/Select.jsx":"a6ad2bab040c","components/navigation/NavItem.jsx":"be9816ba9b09","components/navigation/Tabs.jsx":"28212277943a","components/navigation/Toggle.jsx":"a14a18a35252","components/surfaces/Card.jsx":"d38ffa714a4d","components/surfaces/Modal.jsx":"f2b9c6d5f915","components/typography/SectionLabel.jsx":"3990f244c1ac"},"inlinedExternals":[],"unexposedExports":[]} */
+/* @ds-bundle: {"format":4,"namespace":"TeammerlyMeridianDesignSystem_063f40","components":[{"name":"Button","sourcePath":"components/actions/Button.jsx"},{"name":"Table","sourcePath":"components/data/Table.jsx"},{"name":"Badge","sourcePath":"components/feedback/Badge.jsx"},{"name":"InfoBanner","sourcePath":"components/feedback/InfoBanner.jsx"},{"name":"Checkbox","sourcePath":"components/forms/Checkbox.jsx"},{"name":"Input","sourcePath":"components/forms/Input.jsx"},{"name":"Radio","sourcePath":"components/forms/Radio.jsx"},{"name":"RadioGroup","sourcePath":"components/forms/Radio.jsx"},{"name":"SearchField","sourcePath":"components/forms/SearchField.jsx"},{"name":"Select","sourcePath":"components/forms/Select.jsx"},{"name":"NavItem","sourcePath":"components/navigation/NavItem.jsx"},{"name":"Tabs","sourcePath":"components/navigation/Tabs.jsx"},{"name":"Toggle","sourcePath":"components/navigation/Toggle.jsx"},{"name":"Card","sourcePath":"components/surfaces/Card.jsx"},{"name":"Modal","sourcePath":"components/surfaces/Modal.jsx"},{"name":"SectionLabel","sourcePath":"components/typography/SectionLabel.jsx"},{"name":"IconButton","sourcePath":"components/actions/IconButton.jsx"},{"name":"Eye","sourcePath":"components/icons/Eye.jsx"},{"name":"EyeOff","sourcePath":"components/icons/Eye.jsx"},{"name":"AuthLayout","sourcePath":"components/surfaces/AuthLayout.jsx"}],"sourceHashes":{"components/data/Table.jsx":"0ceb99ee3c62","components/feedback/Badge.jsx":"fd196613fabf","components/feedback/InfoBanner.jsx":"1a6fd57449af","components/forms/Checkbox.jsx":"da4073b1c070","components/forms/Radio.jsx":"57d1b71513f1","components/forms/SearchField.jsx":"c37bc9f13e21","components/forms/Select.jsx":"a6ad2bab040c","components/navigation/NavItem.jsx":"be9816ba9b09","components/navigation/Tabs.jsx":"28212277943a","components/navigation/Toggle.jsx":"a14a18a35252","components/surfaces/Card.jsx":"d38ffa714a4d","components/surfaces/Modal.jsx":"f2b9c6d5f915","components/typography/SectionLabel.jsx":"3990f244c1ac"},"inlinedExternals":[],"unexposedExports":[]} */
 
 (() => {
 
@@ -69,10 +69,37 @@ const variants = {
     boxShadow: 'var(--lip-error)'
   }
 };
+const Spinner = () => /*#__PURE__*/React.createElement("svg", {
+  viewBox: "0 0 16 16",
+  width: 15,
+  height: 15,
+  fill: "none",
+  "aria-hidden": true
+}, /*#__PURE__*/React.createElement("circle", {
+  cx: "8",
+  cy: "8",
+  r: "6.25",
+  stroke: "currentColor",
+  strokeWidth: "2",
+  opacity: "0.3"
+}), /*#__PURE__*/React.createElement("path", {
+  d: "M8 1.75A6.25 6.25 0 0 1 14.25 8",
+  stroke: "currentColor",
+  strokeWidth: "2",
+  strokeLinecap: "round"
+}, /*#__PURE__*/React.createElement("animateTransform", {
+  attributeName: "transform",
+  type: "rotate",
+  from: "0 8 8",
+  to: "360 8 8",
+  dur: "0.7s",
+  repeatCount: "indefinite"
+})));
 function Button({
   variant = 'primary',
   size = 'md',
   disabled,
+  loading,
   glow,
   style,
   children,
@@ -84,17 +111,22 @@ function Button({
     ...variants[variant]
   };
   if (glow && variant === 'primary') s.boxShadow = 'var(--lip-accent),var(--glow-accent-dark)';
+  if (loading) {
+    s.boxShadow = 'none';
+    s.cursor = 'progress';
+  }
   if (disabled) {
     s.opacity = 0.55;
     s.cursor = 'not-allowed';
   }
   return /*#__PURE__*/React.createElement("button", _extends({}, rest, {
-    disabled: disabled,
+    disabled: disabled || loading,
+    "aria-busy": loading || undefined,
     style: {
       ...s,
       ...style
     }
-  }), children);
+  }), loading && /*#__PURE__*/React.createElement(Spinner, null), children);
 }
 Object.assign(__ds_scope, { Button });
 })(); } catch (e) { __ds_ns.__errors.push({ path: "components/actions/Button.jsx", error: String((e && e.message) || e) }); }
@@ -404,6 +436,7 @@ function Input({
   label,
   error,
   hint,
+  trailing,
   style,
   wrapperStyle,
   ...rest
@@ -427,7 +460,12 @@ function Input({
       color: error ? 'var(--error-500)' : 'var(--text-muted)',
       marginBottom: 6
     }
-  }, label), /*#__PURE__*/React.createElement("input", _extends({}, rest, {
+  }, label), /*#__PURE__*/React.createElement("div", {
+    style: {
+      position: 'relative',
+      display: 'flex'
+    }
+  }, /*#__PURE__*/React.createElement("input", _extends({}, rest, {
     onFocus: e => {
       setFocus(true);
       rest.onFocus && rest.onFocus(e);
@@ -441,7 +479,7 @@ function Input({
       width: '100%',
       border: `1.5px solid ${borderColor}`,
       borderRadius: 'var(--radius-lg)',
-      padding: '0 12px',
+      padding: trailing ? '0 44px 0 12px' : '0 12px',
       fontFamily: 'var(--font-text)',
       fontSize: 'var(--fs-15)',
       color: 'var(--text)',
@@ -453,7 +491,16 @@ function Input({
       opacity: rest.disabled ? 0.55 : 1,
       ...style
     }
-  })), (error || hint) && /*#__PURE__*/React.createElement("div", {
+  })), trailing && /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: 'absolute',
+      right: 6,
+      top: '50%',
+      transform: 'translateY(-50%)',
+      display: 'flex',
+      alignItems: 'center'
+    }
+  }, trailing)), (error || hint) && /*#__PURE__*/React.createElement("div", {
     style: {
       fontFamily: 'var(--font-text)',
       fontSize: 'var(--fs-12)',
@@ -1089,6 +1136,187 @@ function SectionLabel({
 Object.assign(__ds_scope, { SectionLabel });
 })(); } catch (e) { __ds_ns.__errors.push({ path: "components/typography/SectionLabel.jsx", error: String((e && e.message) || e) }); }
 
+// components/actions/IconButton.jsx
+try { (() => {
+function _extends() { return _extends = Object.assign ? Object.assign.bind() : function (n) { for (var e = 1; e < arguments.length; e++) { var t = arguments[e]; for (var r in t) ({}).hasOwnProperty.call(t, r) && (n[r] = t[r]); } return n; }, _extends.apply(null, arguments); }
+function IconButton({
+  label,
+  size = 34,
+  active,
+  disabled,
+  style,
+  children,
+  ...rest
+}) {
+  const [hover, setHover] = React.useState(false);
+  return /*#__PURE__*/React.createElement("button", _extends({}, rest, {
+    type: rest.type || 'button',
+    "aria-label": label,
+    disabled: disabled,
+    onMouseEnter: e => {
+      setHover(true);
+      rest.onMouseEnter && rest.onMouseEnter(e);
+    },
+    onMouseLeave: e => {
+      setHover(false);
+      rest.onMouseLeave && rest.onMouseLeave(e);
+    },
+    style: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: size,
+      height: size,
+      padding: 0,
+      border: '1.5px solid transparent',
+      borderRadius: 'var(--radius-sm)',
+      background: hover && !disabled ? 'var(--hover-bg-tint)' : 'transparent',
+      color: active ? 'var(--accent)' : 'var(--text-muted)',
+      cursor: disabled ? 'not-allowed' : 'pointer',
+      opacity: disabled ? 0.55 : 1,
+      transition: 'background var(--duration-base) var(--easing-standard),color var(--duration-base) var(--easing-standard)',
+      ...style
+    }
+  }), children);
+}
+Object.assign(__ds_scope, { IconButton });
+})(); } catch (e) { __ds_ns.__errors.push({ path: "components/actions/IconButton.jsx", error: String((e && e.message) || e) }); }
+
+// components/icons/Eye.jsx
+try { (() => {
+function _extends() { return _extends = Object.assign ? Object.assign.bind() : function (n) { for (var e = 1; e < arguments.length; e++) { var t = arguments[e]; for (var r in t) ({}).hasOwnProperty.call(t, r) && (n[r] = t[r]); } return n; }, _extends.apply(null, arguments); }
+function Eye({
+  size = 18,
+  style,
+  ...rest
+}) {
+  return /*#__PURE__*/React.createElement("svg", _extends({}, rest, {
+    viewBox: "0 0 20 20",
+    width: size,
+    height: size,
+    fill: "currentColor",
+    "aria-hidden": true,
+    style: style
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M10 4c-3.9 0-7.2 2.4-8.7 5.6a1 1 0 0 0 0 .8C2.8 13.6 6.1 16 10 16s7.2-2.4 8.7-5.6a1 1 0 0 0 0-.8C17.2 6.4 13.9 4 10 4Zm0 10.2c-3 0-5.6-1.8-6.9-4.2C4.4 7.6 7 5.8 10 5.8s5.6 1.8 6.9 4.2c-1.3 2.4-3.9 4.2-6.9 4.2Z"
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: "10",
+    cy: "10",
+    r: "2.6"
+  }));
+}
+function EyeOff({
+  size = 18,
+  style,
+  ...rest
+}) {
+  return /*#__PURE__*/React.createElement("svg", _extends({}, rest, {
+    viewBox: "0 0 20 20",
+    width: size,
+    height: size,
+    fill: "currentColor",
+    "aria-hidden": true,
+    style: style
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M10 4c-1.1 0-2.2.2-3.1.5l1.5 1.5c.5-.1 1.1-.2 1.6-.2 3 0 5.6 1.8 6.9 4.2-.6 1.1-1.5 2.1-2.5 2.8l1.3 1.3c1.4-1 2.5-2.4 3.2-3.7a1 1 0 0 0 0-.8C17.2 6.4 13.9 4 10 4Z"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M3.1 2.9 1.9 4.1l2.2 2.2c-1.1 1-2 2.2-2.6 3.3a1 1 0 0 0 0 .8C3 13.6 6.1 16 10 16c1.4 0 2.7-.3 3.9-.9l2.2 2.2 1.2-1.2L3.1 2.9Zm4.1 6.5 3.4 3.4a2.6 2.6 0 0 1-3.4-3.4Zm-1.3-1.3 1 1a4.4 4.4 0 0 0 5.9 5.9l.9.9c-.8.2-1.7.3-2.6.3-3 0-5.6-1.8-6.9-4.2.6-1.2 1.5-2.2 2.6-2.9Z"
+  }));
+}
+Object.assign(__ds_scope, { Eye, EyeOff });
+})(); } catch (e) { __ds_ns.__errors.push({ path: "components/icons/Eye.jsx", error: String((e && e.message) || e) }); }
+
+// components/surfaces/AuthLayout.jsx
+try { (() => {
+function _extends() { return _extends = Object.assign ? Object.assign.bind() : function (n) { for (var e = 1; e < arguments.length; e++) { var t = arguments[e]; for (var r in t) ({}).hasOwnProperty.call(t, r) && (n[r] = t[r]); } return n; }, _extends.apply(null, arguments); }
+const Wordmark = () => /*#__PURE__*/React.createElement("div", {
+  style: {
+    fontFamily: 'var(--font-display)',
+    fontWeight: 600,
+    fontSize: 'var(--fs-24)',
+    letterSpacing: '-.5px',
+    color: 'var(--text)'
+  }
+}, "Team", /*#__PURE__*/React.createElement("span", {
+  style: {
+    color: 'var(--accent)'
+  }
+}, "merly"), /*#__PURE__*/React.createElement("span", {
+  style: {
+    display: 'inline-block',
+    width: 7,
+    height: 7,
+    borderRadius: 2,
+    background: 'var(--amber-500)',
+    marginLeft: 3,
+    verticalAlign: 'middle'
+  }
+}));
+function AuthLayout({
+  title,
+  subtitle,
+  footer,
+  style,
+  children,
+  ...rest
+}) {
+  return /*#__PURE__*/React.createElement("div", _extends({}, rest, {
+    style: {
+      minHeight: '100vh',
+      width: '100%',
+      boxSizing: 'border-box',
+      background: 'var(--bg)',
+      padding: 'var(--sp-12) var(--sp-8)',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 'var(--sp-10)',
+      ...style
+    }
+  }), /*#__PURE__*/React.createElement(Wordmark, null), /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '100%',
+      maxWidth: 480,
+      boxSizing: 'border-box',
+      background: 'var(--bg-panel)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius-2xl)',
+      boxShadow: 'var(--shadow-card)',
+      padding: 'var(--sp-16)'
+    }
+  }, title && /*#__PURE__*/React.createElement("h1", {
+    style: {
+      margin: 0,
+      fontFamily: 'var(--font-display)',
+      fontWeight: 600,
+      fontSize: 'var(--fs-22)',
+      letterSpacing: '-.2px',
+      color: 'var(--text)'
+    }
+  }, title), subtitle && /*#__PURE__*/React.createElement("p", {
+    style: {
+      margin: '6px 0 0',
+      fontFamily: 'var(--font-text)',
+      fontSize: 'var(--fs-14)',
+      lineHeight: 'var(--lh-normal)',
+      color: 'var(--text-muted)'
+    }
+  }, subtitle), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: title || subtitle ? 'var(--sp-12)' : 0
+    }
+  }, children)), footer && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontFamily: 'var(--font-text)',
+      fontSize: 'var(--fs-14)',
+      color: 'var(--text-muted)'
+    }
+  }, footer));
+}
+Object.assign(__ds_scope, { AuthLayout });
+})(); } catch (e) { __ds_ns.__errors.push({ path: "components/surfaces/AuthLayout.jsx", error: String((e && e.message) || e) }); }
+
 __ds_ns.Button = __ds_scope.Button;
 
 __ds_ns.Table = __ds_scope.Table;
@@ -1120,5 +1348,13 @@ __ds_ns.Card = __ds_scope.Card;
 __ds_ns.Modal = __ds_scope.Modal;
 
 __ds_ns.SectionLabel = __ds_scope.SectionLabel;
+
+__ds_ns.IconButton = __ds_scope.IconButton;
+
+__ds_ns.Eye = __ds_scope.Eye;
+
+__ds_ns.EyeOff = __ds_scope.EyeOff;
+
+__ds_ns.AuthLayout = __ds_scope.AuthLayout;
 
 })();

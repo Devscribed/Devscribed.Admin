@@ -5,4 +5,5 @@ Text field with a micro-label, 46px height, 10px radius, and the signature 3px v
 ```jsx
 <Input label="Project name" placeholder="Marketing site" />
 <Input label="Rate" error="Required" defaultValue="" />
+<Input label="Password" type="password" trailing={<IconButton label="Show password"><Eye /></IconButton>} />
 ```

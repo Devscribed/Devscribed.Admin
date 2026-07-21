@@ -6,6 +6,7 @@ The Meridian action button. Use for CTAs, form submits, and dialog actions. `pri
 <Button variant="primary">Add time</Button>
 <Button variant="secondary">Cancel</Button>
 <Button variant="danger">Delete</Button>
+<Button variant="primary" loading>Create account</Button>
 ```
 
-Variants: `primary` · `secondary` · `ghost` · `danger`. Sizes: `sm` (36) · `md` (44, default) · `lg` (46). Pass `glow` for a dark-surface hero button.
+Variants: `primary` · `secondary` · `ghost` · `danger`. Sizes: `sm` (36) · `md` (44, default) · `lg` (46). Pass `glow` for a dark-surface hero button, `loading` while a submit is in flight — the lip drops, a spinner leads the label, and the click is blocked.

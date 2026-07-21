@@ -7,6 +7,8 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
   error?: string;
   /** Helper text — muted, replaced by `error` when set. */
   hint?: string;
+  /** Node pinned inside the trailing edge of the field — an `IconButton`, a unit, a chip. */
+  trailing?: React.ReactNode;
   wrapperStyle?: React.CSSProperties;
 }
 

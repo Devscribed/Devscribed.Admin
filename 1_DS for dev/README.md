@@ -60,12 +60,14 @@ Read `foundations/*.card.html` for the visible specimen cards. The rules:
 - `styles.css` — root entry; `@imports` the seven token files under `tokens/`.
 - `tokens/` — `fonts.css`, `colors.css`, `typography.css`, `spacing.css`, `radii.css`, `shadows.css`, `motion.css`.
 - `foundations/` — 15 specimen cards (Colors, Type, Spacing, Radii, Shadows, Motion, Hover, Wordmark). Every card links `../styles.css`.
+- `index.js` — the public entry point; import components from here, never from `components/**` internals.
 - `components/` — reusable primitives, grouped:
-  - `actions/` — `Button`
+  - `actions/` — `Button`, `IconButton`
   - `feedback/` — `Badge`, `InfoBanner`
   - `forms/` — `Input`, `Select`, `Checkbox`, `Radio` / `RadioGroup`, `SearchField`
+  - `icons/` — `Eye`, `EyeOff`
   - `navigation/` — `Tabs`, `Toggle`, `NavItem`
-  - `surfaces/` — `Card`, `Modal`
+  - `surfaces/` — `AuthLayout`, `Card`, `Modal`
   - `data/` — `Table`
   - `typography/` — `SectionLabel`
 - `templates/` — copy-paste-ready pages:
@@ -74,9 +76,14 @@ Read `foundations/*.card.html` for the visible specimen cards. The rules:
 - `SKILL.md` — cross-compatible Agent Skills manifest.
 - `thumbnail.html` — project tile.
 
+## The signed-out shell
+
+The Meridian source build covers the authenticated product only — it has no login, signup, or password screen. `AuthLayout` fills that hole: warm paper field, the text wordmark, one centred card at 480px max-width, nothing else. Signup, login, forgot-password, and reset-password all sit in it. There is no theme toggle on those routes; the signed-out surface follows the system preference.
+
 ## Intentional additions
 
 - `SectionLabel` and `SearchField` are not first-class components in the source but appear so many times that promoting them saves consumers from re-writing the same inline styles.
+- `AuthLayout`, `IconButton`, `Eye` / `EyeOff`, `Input trailing`, and `Button loading` were added for the signup screen (spec 01). `_ds_bundle.js` was hand-extended to match — a regeneration from Claude Design will need those sources re-imported.
 
 ## Caveats & substitutions
 

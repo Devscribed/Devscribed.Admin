@@ -7,6 +7,8 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   size?: 'sm' | 'md' | 'lg';
   /** Adds an outer glow — reserved for the primary CTA on dark surfaces. */
   glow?: boolean;
+  /** Shows a leading spinner, drops the lip, and blocks the click. Use for in-flight submits. */
+  loading?: boolean;
   disabled?: boolean;
   children?: React.ReactNode;
 }

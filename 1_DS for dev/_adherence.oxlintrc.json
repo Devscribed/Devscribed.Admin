@@ -20,6 +20,7 @@
               "components/data/**",
               "components/feedback/**",
               "components/forms/**",
+              "components/icons/**",
               "components/navigation/**",
               "components/surfaces/**",
               "components/typography/**"
@@ -52,8 +53,16 @@
         "message": "<Badge> tone must be one of 'active' | 'inactive' | 'warning' | 'info' | 'neutral'."
       },
       {
-        "selector": "JSXOpeningElement[name.name='Button'] > JSXAttribute > JSXIdentifier[name!=/^(?:variant|size|glow|disabled|children|key|ref|className|style|children)$/]",
-        "message": "<Button> doesn't accept that prop. Declared props: variant, size, glow, disabled, children."
+        "selector": "JSXOpeningElement[name.name='Button'] > JSXAttribute > JSXIdentifier[name!=/^(?:variant|size|glow|loading|disabled|children|key|ref|className|style|children)$/]",
+        "message": "<Button> doesn't accept that prop. Declared props: variant, size, glow, loading, disabled, children."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='IconButton'] > JSXAttribute > JSXIdentifier[name!=/^(?:label|size|active|disabled|children|key|ref|className|style|children)$/]",
+        "message": "<IconButton> doesn't accept that prop. Declared props: label, size, active, disabled, children."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='AuthLayout'] > JSXAttribute > JSXIdentifier[name!=/^(?:title|subtitle|footer|children|key|ref|className|style|children)$/]",
+        "message": "<AuthLayout> doesn't accept that prop. Declared props: title, subtitle, footer, children."
       },
       {
         "selector": "JSXOpeningElement[name.name='Button'] > JSXAttribute[name.name='variant'] > Literal[value!=/^(?:primary|secondary|ghost|danger)$/]",
@@ -80,8 +89,8 @@
         "message": "<InfoBanner> tone must be one of 'info' | 'warning' | 'error' | 'success'."
       },
       {
-        "selector": "JSXOpeningElement[name.name='Input'] > JSXAttribute > JSXIdentifier[name!=/^(?:label|error|hint|wrapperStyle|key|ref|className|style|children)$/]",
-        "message": "<Input> doesn't accept that prop. Declared props: label, error, hint, wrapperStyle."
+        "selector": "JSXOpeningElement[name.name='Input'] > JSXAttribute > JSXIdentifier[name!=/^(?:label|error|hint|trailing|wrapperStyle|key|ref|className|style|children)$/]",
+        "message": "<Input> doesn't accept that prop. Declared props: label, error, hint, trailing, wrapperStyle."
       },
       {
         "selector": "JSXOpeningElement[name.name='Modal'] > JSXAttribute > JSXIdentifier[name!=/^(?:open|title|onClose|actions|width|children|style|key|ref|className|style|children)$/]",
@@ -137,10 +146,22 @@
   ],
   "x-omelette": {
     "components": {
+      "AuthLayout": {
+        "replaces": []
+      },
       "Badge": {
         "replaces": []
       },
       "Button": {
+        "replaces": []
+      },
+      "Eye": {
+        "replaces": []
+      },
+      "EyeOff": {
+        "replaces": []
+      },
+      "IconButton": {
         "replaces": []
       },
       "Card": {
