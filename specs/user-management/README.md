@@ -4,18 +4,18 @@ Functional specifications for the user-management surface of Devscribed.Admin. E
 
 ## Spec Index
 
-| # | Spec | Tags |
-|---|------|------|
-| 01 | [Organization Creation](01-organization-creation.md) | signup, registration, org-creation, admin-role, password-policy |
-| 02 | [Authentication & Login](02-authentication-login.md) | login, session, forgot-password, reset-password, SecurityStamp |
-| 03 | [User Invitation](03-user-invitation.md) | invite, token, accept-invite, role-picker, onboarding, supersede |
-| 04 | [Member List & Management](04-member-list-management.md) | member-list, search, soft-delete, restore, last-admin-guard |
-| 05 | [Member Detail: About](05-member-detail-about.md) | member-detail, role-picker, job-title, zero-admin-guard, avatar |
-| 06 | [Account Settings](06-account-settings.md) | account-settings, change-email, change-password, profile, timezone |
-| 07 | [Member Financial Settings](07-vacation-accrual-management.md) | salary, hourly-rate, billing, reserve, auto-calculate, snapshot |
-| 08 | [Vacation Reserve & Auto-Accrual](08-vacation-reserve-auto-accrual.md) | vacation-reserve, auto-accrual, ledger, monthly-credit, year-end-expiry |
-| 09 | [Vacation Requests](09-vacation-requests.md) | vacation-request, submit, approve, reject, cancel, debit, refund |
-| 10 | [Organization Requests Page](10-organization-requests-page.md) | requests-page, sidebar, badge, status-filter, organization-wide |
+| # | Spec | Design | Tags |
+|---|------|--------|------|
+| 01 | [Organization Creation](01-organization-creation.md) | [design](01-organization-creation.design.md) · [mockup](01-organization-creation.mock.html) | signup, registration, org-creation, admin-role, password-policy |
+| 02 | [Authentication & Login](02-authentication-login.md) | — | login, session, forgot-password, reset-password, SecurityStamp |
+| 03 | [User Invitation](03-user-invitation.md) | — | invite, token, accept-invite, role-picker, onboarding, supersede |
+| 04 | [Member List & Management](04-member-list-management.md) | — | member-list, search, soft-delete, restore, last-admin-guard |
+| 05 | [Member Detail: About](05-member-detail-about.md) | — | member-detail, role-picker, job-title, zero-admin-guard, avatar |
+| 06 | [Account Settings](06-account-settings.md) | — | account-settings, change-email, change-password, profile, timezone |
+| 07 | [Member Financial Settings](07-vacation-accrual-management.md) | — | salary, hourly-rate, billing, reserve, auto-calculate, snapshot |
+| 08 | [Vacation Reserve & Auto-Accrual](08-vacation-reserve-auto-accrual.md) | — | vacation-reserve, auto-accrual, ledger, monthly-credit, year-end-expiry |
+| 09 | [Vacation Requests](09-vacation-requests.md) | — | vacation-request, submit, approve, reject, cancel, debit, refund |
+| 10 | [Organization Requests Page](10-organization-requests-page.md) | — | requests-page, sidebar, badge, status-filter, organization-wide |
 
 ## Shared Rules
 
@@ -29,6 +29,19 @@ Functional specifications for the user-management surface of Devscribed.Admin. E
 | Zero-admin guard (reject if 0 active admins remain) | 04, 05 | — |
 | Role enum: admin, manager, user, viewer | 01 | all |
 | Member status enum: active, removed | 04 | 05, 07-10 |
+| Submit CTA is never disabled for validation; clicking an invalid form shows every error and focuses the first invalid field | 01 | 03 (not yet applied) |
+
+## Design Layer
+
+Business specs own behaviour, API contracts, and validation messages. Visual and interaction detail lives in a paired `NN-name.design.md`, with a static `NN-name.mock.html` next to it as the visual acceptance target. Design specs reference the Teammerly Meridian design system in [`1_DS for dev/`](../../1_DS%20for%20dev/README.md) by component and token — they never restate a hex value or a pixel size.
+
+Rules that hold across every design spec:
+
+- **Light theme only** this release. Dark mode exists in the design system but is out of scope; no theme toggle ships yet.
+- **Copy ownership** — validation messages belong to the business spec; headings, subtitles, placeholders, hints, and micro-labels belong to the design spec. Neither restates the other.
+- **DS gaps** — anything missing from the design system is added to the design system, not improvised per screen, and recorded in that design spec's "DS gaps" table.
+
+Spec 03 still gates its submit buttons on validation and needs the shared CTA rule applied when it is next touched. Its "I understand" checkbox gate stays disabled-until-checked — that is a deliberate confirmation, not a validation.
 
 ## Cross-Spec Side Effects
 

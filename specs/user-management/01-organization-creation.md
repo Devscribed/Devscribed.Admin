@@ -24,11 +24,11 @@ Any new person can sign up for Devscribed.Admin and, as part of signing up, crea
 ### Main Flow: Visitor signs up and creates an organization
 
 1. Visitor navigates to `/signup` directly, or clicks the "Create an account" link on the login page (`/login`).
-2. System displays the signup form with all fields empty. The "Create account" submit button is disabled.
+2. System displays the signup form with all fields empty. The "Create account" submit button is enabled.
 3. Visitor fills in the fields: organization name, first name, last name, email, password. As the visitor leaves each field (blur), the system runs that field's client-side validation. If the value is invalid, the specific error message appears inline beneath the field immediately.
-4. Once all fields are non-empty and pass client-side validation, the submit button becomes enabled.
+4. No field errors remain.
 5. Visitor clicks "Create account".
-6. System re-validates all fields client-side. If any field is invalid, all relevant inline errors are shown and submission is blocked.
+6. System re-validates all fields client-side. If any field is invalid, all relevant inline errors are shown at once, keyboard focus moves to the first invalid field in top-to-bottom order, and submission is blocked.
 7. System sends the signup payload to the API. The submit button is disabled and a loading indicator is shown to prevent double-submission. The API validates the payload server-side, atomically creates the account, organization, and admin membership, stores the browser-detected timezone, and returns an authenticated session.
 8. System redirects the visitor (now authenticated) to the Members list screen. No success toast or intermediate confirmation is shown.
 
@@ -38,7 +38,7 @@ Any new person can sign up for Devscribed.Admin and, as part of signing up, crea
 
 ### Alternative Flow B: Inline validation failure on blur (branches from step 3)
 
-3a. When the visitor tabs or clicks out of a field with an invalid or empty value, the specific error message appears beneath that field in `field-error-{fieldName}`. The submit button remains disabled until all fields are valid.
+3a. When the visitor tabs or clicks out of a field with an invalid or empty value, the specific error message appears beneath that field in `field-error-{fieldName}`. The submit button stays enabled; submitting with an outstanding error re-runs validation and blocks the request.
 
 ### Alternative Flow C: Server error (branches from step 7)
 
@@ -85,7 +85,8 @@ Any new person can sign up for Devscribed.Admin and, as part of signing up, crea
     | Password | no letter | "Password must contain at least one letter" |
     | Password | no digit | "Password must contain at least one digit" |
 
-15. **Inline validation timing:** client-side validation fires on blur (when the visitor leaves a field) and again on form submission. Errors appear inline beneath the respective field via `field-error-{fieldName}`. Server-side errors (e.g., duplicate email) appear in the error banner (`signup-error-banner`). The error banner clears when the visitor modifies any field value after a server error is shown.
+15. **Submit availability:** the "Create account" button is never disabled for validation reasons. Clicking it with an invalid or empty form runs the full client-side validation, renders every applicable inline error at once, and moves keyboard focus to the first invalid field in top-to-bottom order (organization name → first name → last name → email → password). No request is sent. The button is disabled only while a submission is in flight, to prevent double-submit.
+16. **Inline validation timing:** client-side validation fires on blur (when the visitor leaves a field) and again on form submission. Errors appear inline beneath the respective field via `field-error-{fieldName}`. Server-side errors (e.g., duplicate email) appear in the error banner (`signup-error-banner`). The error banner clears when the visitor modifies any field value after a server error is shown.
 
 ## UI Description
 
@@ -111,17 +112,17 @@ Each field is a labeled text input with:
 - Hidden (masked) by default. Clicking the toggle reveals the password text (`type="text"`) and changes the icon to indicate "hide." Clicking again re-masks.
 
 **Submit button ("Create account"):**
-- Disabled until all required fields are non-empty and pass client-side validation.
+- Always enabled, regardless of field state. Clicking with an invalid form surfaces all inline errors and focuses the first invalid field.
 - Disabled during API submission (loading state) to prevent double-submit.
 
 ### States
 
 | State | Behavior |
 |---|---|
-| **Default** | All fields empty, no errors shown, submit button disabled. |
-| **Partially filled** | Some fields have values. Submit remains disabled until all fields are non-empty and client-side-valid. |
+| **Default** | All fields empty, no errors shown, submit button enabled. |
+| **Partially filled** | Some fields have values. Submit stays enabled; clicking it validates everything and blocks the request if anything fails. |
 | **Field error** | After blur on an invalid field, the specific error message appears beneath that field. The field shows a visual error indicator (e.g., red border). Correcting the value and blurring again clears the error. |
-| **All valid** | All fields pass client-side validation. Submit button becomes enabled. |
+| **Submit-blocked** | Submit was clicked with an invalid form: every applicable inline error is shown at once and focus sits in the first invalid field. No request was sent. |
 | **Loading** | After submit click, the submit button is disabled with a loading indicator. Form fields are read-only during submission. |
 | **Server error** | The error banner appears above the form with the server error message. Form fields retain their values. Submit button re-enables. The banner clears when the visitor edits any field. |
 | **Success** | Immediate redirect to the Members list screen. No toast or confirmation message is shown on the signup page. |
@@ -129,7 +130,7 @@ Each field is a labeled text input with:
 ### Interactions
 
 - **Blur on any field:** runs that field's client-side validation. If invalid, shows the field-specific error message in `field-error-{fieldName}`. If valid, clears any existing error for that field.
-- **Submit click:** re-runs all field validations. If any fail, shows all relevant inline errors and blocks submission. If all pass, sends the API request and enters the loading state.
+- **Submit click:** re-runs all field validations. If any fail, shows all relevant inline errors, moves focus to the first invalid field, and blocks submission. If all pass, sends the API request and enters the loading state.
 - **Password toggle click:** toggles the password input between `type="password"` (masked) and `type="text"` (visible). The icon changes to reflect the current state.
 - **Error banner dismissal:** the error banner clears automatically when the visitor modifies any field value after a server error.
 
@@ -347,11 +348,11 @@ Each field is a labeled text input with:
 - **Preconditions:** none.
 - **Steps:**
   1. Open the signup form.
-  2. Leave all fields empty and verify the submit button is disabled.
+  2. Leave all fields empty and verify the submit button is enabled.
   3. Enter org name "Acme", first name "Pat2" (invalid digit), last name "Owner", email "not-an-email", password "short".
   4. Tab through all fields to trigger blur validation.
 - **Expected Result:**
-  1. Submit button is disabled with empty fields.
+  1. Submit button is enabled with empty fields.
   2. `field-error-firstName` shows "First name may contain only letters, hyphens, apostrophes, and spaces".
   3. `field-error-email` shows "Enter a valid email address".
   4. `field-error-password` shows "Password must be at least 8 characters".
@@ -406,19 +407,19 @@ Each field is a labeled text input with:
   3. The submit button re-enables after the error.
 - **Selectors:** `signup-form`, `signup-org-name-input`, `signup-first-name-input`, `signup-last-name-input`, `signup-email-input`, `signup-password-input`, `signup-submit-button`, `signup-error-banner`.
 
-### TC-01-E2E-06: Submit button disabled until all fields valid
+### TC-01-E2E-06: Submitting an invalid form surfaces every error and focuses the first one
 - **Level:** E2E
 - **Preconditions:** none.
 - **Steps:**
-  1. Open the signup form. Verify submit button is disabled.
-  2. Fill only organization name with "Acme Inc". Verify submit is still disabled.
-  3. Fill all remaining fields with valid values. Verify submit becomes enabled.
-  4. Clear the email field. Verify submit becomes disabled again.
+  1. Open the signup form. Verify the submit button is enabled.
+  2. Click "Create account" with all fields empty.
+  3. Fill only organization name with "Acme Inc" and click "Create account" again.
+  4. Fill all remaining fields with valid values and clear the email field, then click "Create account".
 - **Expected Result:**
-  1. Submit disabled when all fields empty.
-  2. Submit disabled when only some fields filled.
-  3. Submit enabled when all fields valid.
-  4. Submit disabled again when a field is cleared.
+  1. Submit is enabled on an empty form.
+  2. After step 2 all five inline errors are shown ("Organization name is required", "First name is required", "Last name is required", "Email is required", "Password is required"), focus is in `signup-org-name-input`, and no request is sent.
+  3. After step 3 the organization-name error is gone, the other four remain, and focus is in `signup-first-name-input`.
+  4. After step 4 only `field-error-email` shows "Email is required", focus is in `signup-email-input`, and no request is sent.
 - **Selectors:** `signup-form`, `signup-org-name-input`, `signup-first-name-input`, `signup-last-name-input`, `signup-email-input`, `signup-password-input`, `signup-submit-button`.
 
 ### TC-01-E2E-07: Navigation from login page to signup
