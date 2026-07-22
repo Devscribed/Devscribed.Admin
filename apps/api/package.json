@@ -5,6 +5,7 @@
   "scripts": {
     "prisma:generate": "prisma generate",
     "db:push": "prisma db push --skip-generate",
+    "db:migrate": "node scripts/migrate.mjs",
     "predev": "npm run db:push",
     "dev": "nest start --watch",
     "build": "nest build",
@@ -13,10 +14,12 @@
   },
   "dependencies": {
     "@devscribed/validation": "*",
+    "@libsql/client": "^0.17.4",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/jwt": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
+    "@prisma/adapter-libsql": "^6.19.3",
     "@prisma/client": "^6.3.0",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",
