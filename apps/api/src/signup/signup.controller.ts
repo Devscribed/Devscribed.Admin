@@ -18,6 +18,7 @@ export class SignupController {
     this.sessions.issue(res, {
       accountId: result.accountId,
       organizationId: result.organizationId,
+      securityStamp: result.securityStamp,
     });
     return { account: result.account, organization: result.organization };
   }

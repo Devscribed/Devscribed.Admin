@@ -160,8 +160,82 @@ export function validateSignup(input: Partial<SignupInput>): SignupValidation {
   return { valid: firstInvalidField === null, errors, firstInvalidField, value };
 }
 
+/* ------------------------------------------------------------------ *
+ * Spec 02 — authentication, forgot-password, reset-password
+ * ------------------------------------------------------------------ */
+
+/**
+ * Messages the server returns for whole-request outcomes, as opposed to the
+ * per-field messages in MESSAGES. Verbatim from spec 02.
+ */
+export const AUTH_MESSAGES = {
+  /** Unknown email and wrong password share this one string (requirement 4). */
+  invalidCredentials: 'Invalid email or password',
+  /** Deliberately distinct — retrying cannot fix it (requirement 6). */
+  deactivated: 'Your account has been deactivated, contact your administrator',
+  credentialsRequired: 'Email and password are required',
+  emailRequired: 'Email is required',
+  /** Returned whether or not the address is registered (requirement 7). */
+  resetLinkSent: 'If an account exists, a reset link has been sent',
+  resetTokenInvalid: 'This reset link is invalid or has expired',
+  resetSuccess: 'Your password has been reset',
+  passwordMismatch: 'Passwords do not match',
+} as const;
+
+/**
+ * Login checks presence only. The signup policy must not apply: an account made
+ * before a policy change still has to sign in, and "your password is too short"
+ * would tell a stranger the account exists.
+ */
+export function validatePasswordPresent(input: string): FieldResult {
+  const value = input ?? '';
+  if (value.length === 0) return fail(MESSAGES.password.required);
+  return ok(value);
+}
+
+export type LoginField = 'email' | 'password';
+
+/** Top-to-bottom order on /login — drives focus on submit-blocked. */
+export const LOGIN_FIELD_ORDER: readonly LoginField[] = ['email', 'password'];
+
+export interface LoginInput {
+  email: string;
+  password: string;
+}
+
+export interface LoginValidation {
+  valid: boolean;
+  errors: Partial<Record<LoginField, string>>;
+  firstInvalidField: LoginField | null;
+  value: Record<LoginField, string>;
+}
+
+export function validateLogin(input: Partial<LoginInput>): LoginValidation {
+  const validators: Record<LoginField, (value: string) => FieldResult> = {
+    email: validateEmail,
+    password: validatePasswordPresent,
+  };
+
+  const errors: Partial<Record<LoginField, string>> = {};
+  const value = {} as Record<LoginField, string>;
+
+  for (const field of LOGIN_FIELD_ORDER) {
+    const result = validators[field](input[field] ?? '');
+    if (result.valid) {
+      value[field] = result.value;
+    } else {
+      errors[field] = result.error;
+      value[field] = input[field] ?? '';
+    }
+  }
+
+  const firstInvalidField = LOGIN_FIELD_ORDER.find((f) => errors[f]) ?? null;
+  return { valid: firstInvalidField === null, errors, firstInvalidField, value };
+}
+
 export type MembershipRole = 'admin' | 'member';
-export type MembershipStatus = 'active' | 'invited' | 'deactivated';
+/** `removed` is the soft-deleted state (specs 02 and 04). */
+export type MembershipStatus = 'active' | 'invited' | 'removed';
 
 export interface CreatorMembership {
   accountId: string;

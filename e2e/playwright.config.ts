@@ -19,6 +19,9 @@ export default defineConfig({
     {
       command: 'npm run dev --workspace @devscribed/api',
       cwd: '..',
+      // The sink transport keeps reset links readable from the tests; it is also what
+      // unlocks /api/test/mail, which stays 404 under any real transport.
+      env: { MAIL_TRANSPORT: 'memory' },
       port: 4000,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,

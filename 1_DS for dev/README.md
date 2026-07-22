@@ -63,7 +63,7 @@ Read `foundations/*.card.html` for the visible specimen cards. The rules:
 - `index.js` — the public entry point; import components from here, never from `components/**` internals.
 - `components/` — reusable primitives, grouped:
   - `actions/` — `Button`, `IconButton`
-  - `feedback/` — `Badge`, `InfoBanner`
+  - `feedback/` — `Badge`, `InfoBanner`, `Spinner`
   - `forms/` — `Input`, `Select`, `Checkbox`, `Radio` / `RadioGroup`, `SearchField`
   - `icons/` — `Eye`, `EyeOff`
   - `navigation/` — `Tabs`, `Toggle`, `NavItem`
@@ -84,6 +84,7 @@ The Meridian source build covers the authenticated product only — it has no lo
 
 - `SectionLabel` and `SearchField` are not first-class components in the source but appear so many times that promoting them saves consumers from re-writing the same inline styles.
 - `AuthLayout`, `IconButton`, `Eye` / `EyeOff`, `Input trailing`, and `Button loading` were added for the signup screen (spec 01). `_ds_bundle.js` was hand-extended to match — a regeneration from Claude Design will need those sources re-imported.
+- `Spinner` was extracted for the auth screens (spec 02). The SVG already existed as a private const inside `Button.jsx`; the reset-password screen needs the same arc at page scale, so it moved to `feedback/Spinner.jsx` and `Button` now imports it. Same markup, same 0.7s rotate — `Button loading` is unchanged.
 
 ## Caveats & substitutions
 

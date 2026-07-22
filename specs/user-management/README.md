@@ -7,7 +7,7 @@ Functional specifications for the user-management surface of Devscribed.Admin. E
 | # | Spec | Design | Tags |
 |---|------|--------|------|
 | 01 | [Organization Creation](01-organization-creation.md) | [design](01-organization-creation.design.md) · [mockup](01-organization-creation.mock.html) | signup, registration, org-creation, admin-role, password-policy |
-| 02 | [Authentication & Login](02-authentication-login.md) | — | login, session, forgot-password, reset-password, SecurityStamp |
+| 02 | [Authentication & Login](02-authentication-login.md) | [design](02-authentication-login.design.md) · [mockup](02-authentication-login.mock.html) | login, session, forgot-password, reset-password, SecurityStamp |
 | 03 | [User Invitation](03-user-invitation.md) | — | invite, token, accept-invite, role-picker, onboarding, supersede |
 | 04 | [Member List & Management](04-member-list-management.md) | — | member-list, search, soft-delete, restore, last-admin-guard |
 | 05 | [Member Detail: About](05-member-detail-about.md) | — | member-detail, role-picker, job-title, zero-admin-guard, avatar |
@@ -29,7 +29,8 @@ Functional specifications for the user-management surface of Devscribed.Admin. E
 | Zero-admin guard (reject if 0 active admins remain) | 04, 05 | — |
 | Role enum: admin, manager, user, viewer | 01 | all |
 | Member status enum: active, removed | 04 | 05, 07-10 |
-| Submit CTA is never disabled for validation; clicking an invalid form shows every error and focuses the first invalid field | 01 | 03 (not yet applied) |
+| Submit CTA is never disabled for validation; clicking an invalid form shows every error and focuses the first invalid field | 01 | 02 (applied), 03 (not yet applied) |
+| Signed-out shell: one `AuthLayout`, one 480px card, cross-account link outside the card in the footer | 02 | 01, 03 |
 
 ## Design Layer
 
@@ -40,8 +41,11 @@ Rules that hold across every design spec:
 - **Light theme only** this release. Dark mode exists in the design system but is out of scope; no theme toggle ships yet.
 - **Copy ownership** — validation messages belong to the business spec; headings, subtitles, placeholders, hints, and micro-labels belong to the design spec. Neither restates the other.
 - **DS gaps** — anything missing from the design system is added to the design system, not improvised per screen, and recorded in that design spec's "DS gaps" table.
+- **The signed-out set** — `/signup`, `/login`, `/forgot-password`, and `/reset-password` are one visual family. Same shell, same card chrome, same spacing tokens; the cross-account link always sits in `AuthLayout`'s footer, outside the card. Spec 02's design file defines the family; spec 01 conforms.
 
-Spec 03 still gates its submit buttons on validation and needs the shared CTA rule applied when it is next touched. Its "I understand" checkbox gate stays disabled-until-checked — that is a deliberate confirmation, not a validation.
+Spec 03 still gates its submit buttons on validation and needs the shared CTA rule applied when it is next touched. Its "I understand" checkbox gate stays disabled-until-checked — that is a deliberate confirmation, not a validation. Its accept-invite screen also belongs to the signed-out set and should adopt the shell rules above.
+
+`InfoBanner` hardcodes its four tone triplets as literal `oklch(...)` values rather than tokens. Spec 02 uses all four; promoting them to tokens is the outstanding design-system chore before spec 03 adds more banners.
 
 ## Cross-Spec Side Effects
 

@@ -89,6 +89,10 @@
         "message": "<InfoBanner> tone must be one of 'info' | 'warning' | 'error' | 'success'."
       },
       {
+        "selector": "JSXOpeningElement[name.name='Spinner'] > JSXAttribute > JSXIdentifier[name!=/^(?:size|key|ref|className|style|children)$/]",
+        "message": "<Spinner> doesn't accept that prop. Declared props: size."
+      },
+      {
         "selector": "JSXOpeningElement[name.name='Input'] > JSXAttribute > JSXIdentifier[name!=/^(?:label|error|hint|trailing|wrapperStyle|key|ref|className|style|children)$/]",
         "message": "<Input> doesn't accept that prop. Declared props: label, error, hint, trailing, wrapperStyle."
       },
@@ -189,6 +193,9 @@
         "replaces": []
       },
       "SectionLabel": {
+        "replaces": []
+      },
+      "Spinner": {
         "replaces": []
       },
       "Select": {

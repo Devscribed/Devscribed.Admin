@@ -10,6 +10,7 @@ const BCRYPT_ROUNDS = 12;
 export interface SignupResult {
   accountId: string;
   organizationId: string;
+  securityStamp: string;
   account: { id: string; email: string; firstName: string; lastName: string; timezone: string | null };
   organization: { id: string; name: string };
 }
@@ -50,6 +51,7 @@ export class SignupService {
         return {
           accountId: account.id,
           organizationId: organization.id,
+          securityStamp: account.securityStamp,
           account: {
             id: account.id,
             email: account.email,

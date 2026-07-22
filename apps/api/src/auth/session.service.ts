@@ -7,6 +7,11 @@ export const SESSION_COOKIE = 'ds_session';
 export interface SessionPayload {
   accountId: string;
   organizationId: string;
+  /**
+   * Snapshot of the account's stamp at sign-in. Re-checked against the database on
+   * every authenticated request, so revoking sessions is a single column write.
+   */
+  securityStamp: string;
 }
 
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -28,8 +33,11 @@ export class SessionService {
   verify(token: string | undefined): SessionPayload | null {
     if (!token) return null;
     try {
-      const { accountId, organizationId } = this.jwt.verify<SessionPayload>(token);
-      return { accountId, organizationId };
+      const { accountId, organizationId, securityStamp } =
+        this.jwt.verify<SessionPayload>(token);
+      // A cookie minted before the stamp existed has no business authenticating.
+      if (!securityStamp) return null;
+      return { accountId, organizationId, securityStamp };
     } catch {
       return null;
     }

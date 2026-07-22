@@ -2,7 +2,7 @@
 id: "02"
 title: Authentication & Login
 routes: ["/login", "/forgot-password", "/reset-password"]
-api: ["POST /api/login", "POST /api/forgot-password", "POST /api/reset-password"]
+api: ["POST /api/login", "POST /api/forgot-password", "GET /api/reset-password/validate", "POST /api/reset-password"]
 entities: [PasswordResetToken, SecurityStamp]
 tags: [login, authentication, session, cookie, forgot-password, reset-password, SecurityStamp, session-revocation]
 depends-on: ["01"]
@@ -24,9 +24,9 @@ Registered accounts sign in with email and password. Users who forget their pass
 ### Main Flow: User logs in
 
 1. User navigates to `/login` directly, or is redirected there by the auth middleware when accessing a protected page.
-2. System displays the login form with email and password fields empty. The submit button is enabled.
+2. System displays the login form with email and password fields empty. The submit button is enabled and stays enabled regardless of validation state.
 3. User enters their email and password and clicks "Sign in".
-4. System sends the credentials to `POST /api/login`. The submit button is disabled and a loading indicator is shown to prevent double-submission.
+4. Client-side validation passes. System sends the credentials to `POST /api/login`. The submit button is disabled and a loading indicator is shown to prevent double-submission.
 5. System authenticates the user, establishes a session cookie, and redirects to the Members list screen (`/members`).
 
 ### Alternative Flow A: Invalid credentials (branches from step 4)
@@ -36,6 +36,10 @@ Registered accounts sign in with email and password. Users who forget their pass
 ### Alternative Flow B: Deactivated account (branches from step 4)
 
 4b. The account exists but its membership status is `removed`. The error area shows "Your account has been deactivated, contact your administrator". The form fields retain their values and the submit button re-enables.
+
+### Alternative Flow A2: Client-side validation blocks submission (branches from step 3)
+
+3a. The email is empty or malformed, or the password is empty. Every applicable inline error renders at once beneath its field, focus moves to the first invalid field (email → password), and no request is sent. The submit button stays enabled.
 
 ### Alternative Flow C: Entry from signup page (branches from step 1)
 
@@ -56,7 +60,7 @@ Registered accounts sign in with email and password. Users who forget their pass
 ### Main Flow: User resets their password
 
 1. User opens the tokenized link from the reset email. The browser navigates to `/reset-password?token={token}`.
-2. System validates the token. If valid, the reset form is displayed with new-password and confirm-password fields.
+2. System validates the token via `GET /api/reset-password/validate?token={token}`, showing a checking indicator (`reset-checking`) while the call is in flight. If the token is valid, the reset form is displayed with new-password and confirm-password fields.
 3. User enters the new password in both fields and clicks "Reset password". The submit button is disabled during the API call.
 4. System sends the token and new password to `POST /api/reset-password`.
 5. System displays a success message (`reset-success-message`) and a "Back to login" link (`reset-login-link`). The password form is hidden.
@@ -64,7 +68,7 @@ Registered accounts sign in with email and password. Users who forget their pass
 
 ### Alternative Flow E: Invalid or expired token (branches from step 2)
 
-2a. The token is missing, malformed, unrecognized, expired, or already used. The error area (`reset-error-message`) shows "This reset link is invalid or has expired". The password fields and submit button are hidden; only the error and a "Back to login" link are shown.
+2a. The token is missing, malformed, unrecognized, expired, or already used. A missing or malformed token is rejected client-side without a request; anything else is reported by the validate call. The error area (`reset-error-message`) shows "This reset link is invalid or has expired". The password fields and submit button are hidden; only the error and a "Back to login" link are shown.
 
 ### Alternative Flow F: Password policy violation on reset (branches from step 4)
 
@@ -97,6 +101,14 @@ Registered accounts sign in with email and password. Users who forget their pass
 10. **Reset password:** with a valid token the user sets a new password (subject to the password policy). The new password and confirmation must match; if they do not, the form shows "Passwords do not match" beneath the confirm field and submission is blocked. On success the token is invalidated and all existing sessions for that account are revoked — the user must log in again with the new password.
 11. After a successful password reset the user must log in with the new password.
 12. **Session revocation** is implemented via a `SecurityStamp` (random GUID) stored on the `Account` model. The stamp is included in the session cookie claims and validated on each authenticated request (via `CookieAuthenticationEvents.OnValidatePrincipal`). Revoking all sessions means regenerating the stamp, which causes all outstanding cookies to fail validation. This mechanism is shared across specs 02 (password reset), 04 (member removal), and 06 (password change).
+13. **Token pre-validation:** `GET /api/reset-password/validate?token={token}` reports whether a reset token is currently usable, so `/reset-password` can show the invalid-link error before the user composes a password they will never get to submit. The check is strictly read-only — it never sets `UsedAt`, never sets `IsInvalidated`, and never mutates the token or the account in any way. A token remains fully usable after any number of validate calls. The endpoint reveals nothing about accounts, because the token itself is the secret; an unrecognized token and an expired one are indistinguishable in the response. Validity uses the same rule as requirement 9 (`IsInvalidated` false, `UsedAt` null, now before `ExpiresAt`).
+14. **Client-side validation** applies to all three screens and follows the same rules as spec 01, requirement 16:
+    - Validation fires on blur (when the user leaves a field) and again on submission.
+    - Errors render inline beneath the respective field via `field-error-{fieldName}`.
+    - **The submit button is never disabled for validation.** Submitting an invalid form renders every applicable error at once, moves focus to the first invalid field in top-to-bottom order, and sends no request. The button is disabled only while a request is in flight.
+    - Messages are identical to spec 01, requirement 14: "Email is required", "Enter a valid email address", "Password is required", plus the password-policy table in requirement 3 above.
+    - Fields validated per screen: `/login` — email (required, format), password (required). `/forgot-password` — email (required, format). `/reset-password` — new password (policy), confirm password (match).
+    - Server-side validation is unchanged and remains authoritative. The "Email and password are required" and "Email is required" responses become unreachable through the UI but stay part of the API contract — TC-02-INT-10 and TC-02-INT-11 exercise them directly.
 
 ## Data Model: Password Reset Token
 
@@ -133,6 +145,14 @@ The `PasswordResetToken` entity stores reset tokens:
 - **Success (200):** `{ "message": "If an account exists, a reset link has been sent" }` — always returned regardless of email existence.
 - **Error (400):** `{ "message": "Email is required" }` — empty or whitespace-only email.
 
+### `GET /api/reset-password/validate`
+
+- **Request:** `?token={urlSafeBase64Token}`
+- **Success (200):** `{ "valid": true }` — the token exists, is unused, is not invalidated, and has not expired. The token is **not** consumed.
+- **Success (200):** `{ "valid": false }` — token missing, malformed, unrecognized, expired, used, or invalidated. All six cases return the same body.
+
+Always returns HTTP 200; validity is carried in the body, not the status code, so a bad token is not an error condition to be logged or retried.
+
 ### `POST /api/reset-password`
 
 - **Request:** `{ "token": string, "password": string, "passwordConfirmation": string }`
@@ -143,42 +163,49 @@ The `PasswordResetToken` entity stores reset tokens:
 
 ## UI Description
 
+Visual and interaction detail — layout, tokens, component choices, headings, placeholders and hints — lives in [02-authentication-login.design.md](02-authentication-login.design.md). This section defines only the structure and behaviour the tests depend on.
+
+All three screens share one signed-out shell: a vertically stacked card, centered horizontally, with a max-width of approximately 480px, and a single cross-account link below the card.
+
 ### Login Screen (`/login`)
 
-- A vertically stacked form card, centered horizontally on the page, with a max-width of approximately 480px.
-- Fields in top-to-bottom order: Email, Password.
-- A "Sign in" submit button below the fields. The button is disabled and shows a loading indicator during API submission to prevent double-submission.
-- An error area above the form (`login-error-message`) for server-returned errors. This is a single element whose text content changes based on the error type (generic credentials error or deactivation message). The error clears when the user modifies any field value.
-- A "Forgot password?" link below the password field, navigating to `/forgot-password`.
-- A "Create an account" link below the submit button, navigating to `/signup`.
+- Fields in top-to-bottom order: Email, Password. The password field carries a reveal toggle (`login-password-toggle`) that switches the input between masked and plain text without altering the value or moving focus out of the field.
+- A "Sign in" submit button below the fields. It is enabled at all times except while a request is in flight, when it is disabled and shows a loading indicator to prevent double-submission.
+- Inline validation errors appear beneath their fields in `field-error-email` and `field-error-password`.
+- An error area above the fields (`login-error-message`) for server-returned errors. This is a single element whose text content changes based on the error type (generic credentials error or deactivation message). The error clears when the user modifies any field value.
+- A "Forgot password?" link (`login-forgot-link`) below the password field, navigating to `/forgot-password`.
+- A "Create an account" link (`login-signup-link`) below the card, navigating to `/signup`.
 
 ### Forgot-Password Screen (`/forgot-password`)
 
-- A vertically stacked form card, centered horizontally, with a max-width of approximately 480px.
-- A single email input field with a "Send reset link" submit button. The submit button is disabled during API submission to prevent duplicate requests.
-- After submission, the form is replaced by the neutral confirmation message (`forgot-confirmation-message`): "If an account exists, a reset link has been sent."
-- A "Back to login" link navigating to `/login`.
+- A single email input field with a "Send reset link" submit button. The button is disabled only during API submission, to prevent duplicate requests.
+- Inline validation errors appear beneath the field in `field-error-email`.
+- After a successful submission, the form is replaced by the neutral confirmation message (`forgot-confirmation-message`): "If an account exists, a reset link has been sent."
+- In the confirmation state, a "Use a different email" link (`forgot-retry-link`) restores the form with an empty field. This is a client-side reset only — it sends no request and issues no new token.
+- A "Back to login" link (`forgot-back-link`) below the card, navigating to `/login`.
 
 ### Reset-Password Screen (`/reset-password?token={token}`)
 
-- On page load, the system validates the token from the URL query parameter.
-- **Valid token state:** a form with new-password and confirm-password fields, and a "Reset password" submit button. The submit button is disabled during API submission. Password validation errors appear inline beneath the respective field using `field-error-password` and `field-error-password-confirm` (same pattern as spec 01). Token-related errors appear in the `reset-error-message` area.
-- **Invalid/expired token state:** the password fields and submit button are hidden. The error area (`reset-error-message`) shows "This reset link is invalid or has expired". A "Back to login" link is shown.
-- **Success state:** after a successful reset, the form is replaced by a success message (`reset-success-message`): "Your password has been reset." A "Back to login" link (`reset-login-link`) navigates to `/login`.
+The screen has four states. The "Back to login" link (`reset-login-link`) is present in all four.
+
+- **Checking state:** on page load the token is read from the URL query parameter and sent to `GET /api/reset-password/validate`. While the call is in flight, a checking indicator (`reset-checking`) is shown in place of the form. A missing or malformed token skips the request and goes straight to the invalid state.
+- **Valid token state:** a form with new-password and confirm-password fields, and a "Reset password" submit button. The new-password field carries a reveal toggle (`reset-password-toggle`); the confirm field deliberately does not, since a readable confirmation field defeats the purpose of confirming. The submit button is disabled only during API submission. Password validation errors appear inline beneath the respective field using `field-error-password` and `field-error-password-confirm` (same pattern as spec 01). Token-related errors appear in the `reset-error-message` area.
+- **Invalid/expired token state:** the password fields and submit button are hidden. The error area (`reset-error-message`) shows "This reset link is invalid or has expired". A token that expires between page load and submission drops the screen into this state from the POST response.
+- **Success state:** after a successful reset, the form is replaced by a success message (`reset-success-message`): "Your password has been reset."
 
 ### Required `data-testid` attributes
 
 Login screen:
-- `login-form`, `login-email-input`, `login-password-input`, `login-submit-button`, `login-error-message`, `login-forgot-link`, `login-signup-link`
+- `login-form`, `login-email-input`, `login-password-input`, `login-password-toggle`, `login-submit-button`, `login-error-message`, `login-forgot-link`, `login-signup-link`
 
 Forgot-password screen:
-- `forgot-form`, `forgot-email-input`, `forgot-submit-button`, `forgot-confirmation-message`, `forgot-back-link`
+- `forgot-form`, `forgot-email-input`, `forgot-submit-button`, `forgot-confirmation-message`, `forgot-retry-link`, `forgot-back-link`
 
 Reset-password screen:
-- `reset-form`, `reset-password-input`, `reset-password-confirm-input`, `reset-submit-button`, `reset-error-message`, `reset-success-message`, `reset-login-link`
+- `reset-checking`, `reset-form`, `reset-password-input`, `reset-password-toggle`, `reset-password-confirm-input`, `reset-submit-button`, `reset-error-message`, `reset-success-message`, `reset-login-link`
 
 Inline validation (shared pattern with spec 01):
-- `field-error-password`, `field-error-password-confirm`
+- `field-error-email`, `field-error-password`, `field-error-password-confirm`
 
 ## Out of Scope
 
@@ -402,6 +429,21 @@ Inline validation (shared pattern with spec 01):
   1. Rejected (HTTP 400) with "Passwords do not match".
   2. The token is NOT consumed.
 
+### TC-02-INT-14: Token validation endpoint is read-only
+- **Level:** Integration
+- **Preconditions:** account `pat@acme.com` is `active` with a valid, unused reset token T.
+- **Steps:**
+  1. Call `GET /api/reset-password/validate?token=T`.
+  2. Call `GET /api/reset-password/validate?token=T` twice more.
+  3. Reset the password using T via `POST /api/reset-password`.
+  4. Call `GET /api/reset-password/validate?token=T` again.
+  5. Call `GET /api/reset-password/validate` with an unrecognized token, an expired token, an invalidated token, a malformed token, and no token at all.
+- **Expected Result:**
+  1. Steps 1 and 2 return HTTP 200 `{ "valid": true }`; the token's `UsedAt` is still null and `IsInvalidated` is still false after all three calls.
+  2. Step 3 succeeds — repeated validation did not consume the token.
+  3. Step 4 returns `{ "valid": false }` (the token is now used).
+  4. All five cases in step 5 return HTTP 200 `{ "valid": false }` with identical bodies.
+
 ### TC-02-E2E-01: Login happy path
 - **Level:** E2E
 - **Preconditions:** active account `pat@acme.com` / `"Passw0rd"`.
@@ -430,19 +472,21 @@ Inline validation (shared pattern with spec 01):
 - **Steps:**
   1. From the login screen, click "Forgot password?".
   2. Enter `pat@acme.com` and submit.
-  3. Open the reset link delivered to the mailbox (test mail sink).
+  3. Open the reset link delivered to the mailbox (test mail sink) and wait for the checking indicator to resolve.
   4. Enter a new password `"NewPass1"` in both fields and submit.
   5. Click "Back to login" and sign in with `pat@acme.com` / `"NewPass1"`.
   6. Sign out and attempt to sign in with the old password `"Passw0rd"`.
 - **Expected Result:**
   1. After step 1 the forgot-password form is displayed.
-  2. After step 2 the neutral confirmation message is shown.
-  3. After step 4 a success message is shown with a "Back to login" link.
-  4. Step 5 succeeds.
-  5. Step 6 fails with "Invalid email or password".
-- **Selectors:** `login-forgot-link`, `forgot-form`, `forgot-email-input`, `forgot-submit-button`, `forgot-confirmation-message`, `reset-form`, `reset-password-input`, `reset-password-confirm-input`, `reset-submit-button`, `reset-success-message`, `reset-login-link`, `login-email-input`, `login-password-input`, `login-submit-button`, `login-error-message`.
+  2. After step 2 the forgot-password form is no longer present and the neutral confirmation message is shown.
+  3. After step 3 `reset-checking` resolves and `reset-form` becomes visible.
+  4. After step 4 a success message is shown with a "Back to login" link.
+  5. Step 5 succeeds.
+  6. Step 6 fails with "Invalid email or password".
+- **Selectors:** `login-forgot-link`, `forgot-form`, `forgot-email-input`, `forgot-submit-button`, `forgot-confirmation-message`, `reset-checking`, `reset-form`, `reset-password-input`, `reset-password-confirm-input`, `reset-submit-button`, `reset-success-message`, `reset-login-link`, `login-email-input`, `login-password-input`, `login-submit-button`, `login-error-message`.
 
 ### TC-02-E2E-04: Removed member login shows deactivation message
+- **Blocked:** nothing can produce a `removed` member until spec 04 ships the removal endpoint, so this case is skipped in the E2E suite with that reason recorded. The rule itself is covered at the API level by TC-02-INT-04 and TC-02-INT-04b; only the amber banner is unproven by an automated test. Un-skip when spec 04 lands.
 - **Level:** E2E
 - **Preconditions:** account `ex@acme.com` with correct password, whose membership status is `removed`.
 - **Steps:**
@@ -458,11 +502,15 @@ Inline validation (shared pattern with spec 01):
 - **Preconditions:** a reset token that has expired or been used.
 - **Steps:**
   1. Navigate to `/reset-password?token={expiredOrUsedToken}`.
+  2. Navigate to `/reset-password?token=not-a-real-token`.
+  3. Navigate to `/reset-password` with no `token` parameter.
 - **Expected Result:**
-  1. The error area shows "This reset link is invalid or has expired".
-  2. The password fields and submit button are not visible.
-  3. A "Back to login" link is shown.
-- **Selectors:** `reset-error-message`, `reset-login-link`.
+  1. In step 1 the checking indicator (`reset-checking`) appears while the validate call is in flight, then disappears.
+  2. The error area shows "This reset link is invalid or has expired".
+  3. The password fields and submit button are not visible.
+  4. A "Back to login" link is shown.
+  5. Steps 2 and 3 reach the same error state; step 3 does so without issuing a validate request.
+- **Selectors:** `reset-checking`, `reset-error-message`, `reset-login-link`, `reset-form`.
 
 ### TC-02-E2E-06: Reset password with confirmation mismatch
 - **Level:** E2E
@@ -473,5 +521,56 @@ Inline validation (shared pattern with spec 01):
   3. Attempt to submit.
 - **Expected Result:**
   1. An inline error appears: "Passwords do not match".
-  2. The form is not submitted.
-- **Selectors:** `reset-form`, `reset-password-input`, `reset-password-confirm-input`, `reset-submit-button`, `field-error-password-confirm`.
+  2. Only the confirm field is marked invalid; `field-error-password` is not shown.
+  3. The form is not submitted and the submit button remains enabled.
+- **Selectors:** `reset-form`, `reset-password-input`, `reset-password-confirm-input`, `reset-submit-button`, `field-error-password`, `field-error-password-confirm`.
+
+### TC-02-E2E-07: Login submit with an invalid form shows every error and focuses the first
+- **Level:** E2E
+- **Preconditions:** none.
+- **Steps:**
+  1. Open the login screen and confirm the submit button is enabled.
+  2. Click "Sign in" with both fields empty.
+  3. Enter `not-an-email` in the email field and `"Passw0rd"` in the password field, then click "Sign in".
+- **Expected Result:**
+  1. The submit button is enabled in step 1 and stays enabled throughout.
+  2. After step 2 both inline errors are shown ("Email is required", "Password is required"), focus is in `login-email-input`, and no request is sent.
+  3. After step 3 only `field-error-email` shows "Enter a valid email address", focus is in `login-email-input`, and no request is sent.
+- **Selectors:** `login-form`, `login-email-input`, `login-password-input`, `login-submit-button`, `field-error-email`, `field-error-password`.
+
+### TC-02-E2E-08: Forgot-password validates the email client-side
+- **Level:** E2E
+- **Preconditions:** none.
+- **Steps:**
+  1. Open `/forgot-password` and click "Send reset link" with the field empty.
+  2. Enter `pat@acme` and click "Send reset link".
+  3. Correct the email to `pat@acme.com` and submit.
+- **Expected Result:**
+  1. After step 1 `field-error-email` shows "Email is required" and no request is sent.
+  2. After step 2 `field-error-email` shows "Enter a valid email address" and no request is sent.
+  3. Step 3 submits and the neutral confirmation message replaces the form.
+- **Selectors:** `forgot-form`, `forgot-email-input`, `forgot-submit-button`, `field-error-email`, `forgot-confirmation-message`.
+
+### TC-02-E2E-09: Password reveal toggle
+- **Level:** E2E
+- **Preconditions:** none.
+- **Steps:**
+  1. Open the login screen and type `"Passw0rd"` into the password field.
+  2. Click `login-password-toggle`.
+  3. Click it again.
+- **Expected Result:**
+  1. The field starts as `type="password"` with `aria-pressed="false"` on the toggle.
+  2. After step 2 the field is `type="text"`, the value is unchanged, `aria-pressed` is `"true"`, and focus is still in the password field.
+  3. After step 3 the field is masked again with the value unchanged.
+- **Selectors:** `login-password-input`, `login-password-toggle`.
+
+### TC-02-E2E-10: Forgot-password re-entry restores the form
+- **Level:** E2E
+- **Preconditions:** none.
+- **Steps:**
+  1. Open `/forgot-password`, enter `typo@acme.com`, and submit.
+  2. Click "Use a different email".
+- **Expected Result:**
+  1. After step 1 the confirmation message is shown and the form is gone.
+  2. After step 2 the form is back with an empty, focused email field, the confirmation message is gone, and no additional request was sent.
+- **Selectors:** `forgot-form`, `forgot-email-input`, `forgot-submit-button`, `forgot-confirmation-message`, `forgot-retry-link`.

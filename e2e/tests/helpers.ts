@@ -44,15 +44,42 @@ export async function fillSignup(page: Page, values: SignupValues): Promise<void
   }
 }
 
+export const API = 'http://localhost:4000';
+
 /** Registers an account straight through the API — a precondition, not the thing under test. */
 export async function registerAccount(
   request: APIRequestContext,
   email: string,
+  password: string = VALID.password,
 ): Promise<void> {
-  const response = await request.post('http://localhost:4000/api/signup', {
-    data: { ...VALID, email, orgName: 'Existing Org', timezone: 'Europe/Berlin' },
+  const response = await request.post(`${API}/api/signup`, {
+    data: { ...VALID, email, password, orgName: 'Existing Org', timezone: 'Europe/Berlin' },
   });
   if (!response.ok()) {
     throw new Error(`Precondition failed: could not register ${email} (${response.status()})`);
   }
+}
+
+/**
+ * Reads the reset link out of the test mail sink — the closest a test can get to
+ * opening the email. Only answers while the API runs the sink transport.
+ */
+export async function latestResetToken(
+  request: APIRequestContext,
+  email: string,
+): Promise<string> {
+  const response = await request.get(`${API}/api/test/mail/latest`, { params: { email } });
+  if (!response.ok()) {
+    throw new Error(`No reset mail for ${email} (${response.status()})`);
+  }
+  return (await response.json()).token as string;
+}
+
+/** Fires the forgot-password request straight through the API, as a precondition. */
+export async function requestReset(
+  request: APIRequestContext,
+  email: string,
+): Promise<void> {
+  const response = await request.post(`${API}/api/forgot-password`, { data: { email } });
+  if (!response.ok()) throw new Error(`Reset request failed for ${email}`);
 }

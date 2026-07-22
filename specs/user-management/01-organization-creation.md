@@ -151,7 +151,7 @@ Each field is a labeled text input with:
 - `signup-password-toggle`
 - `signup-submit-button`
 - `signup-error-banner`
-- `signup-login-link`
+- `signup-login-link` — the "Sign in" link on `/signup`. The reverse link, on `/login`, is `login-signup-link` (spec 02).
 - `field-error-{fieldName}` (e.g. `field-error-email`, `field-error-orgName`, `field-error-firstName`, `field-error-lastName`, `field-error-password`)
 
 ## Out of Scope
@@ -432,4 +432,6 @@ Each field is a labeled text input with:
 - **Expected Result:**
   1. After clicking the link, the URL is `/signup`.
   2. The signup form (`signup-form`) is visible with all expected fields.
-- **Selectors:** `signup-login-link`, `signup-form`, `signup-org-name-input`, `signup-first-name-input`, `signup-last-name-input`, `signup-email-input`, `signup-password-input`, `signup-submit-button`.
+- **Selectors:** `login-signup-link`, `signup-form`, `signup-org-name-input`, `signup-first-name-input`, `signup-last-name-input`, `signup-email-input`, `signup-password-input`, `signup-submit-button`.
+
+> The "Create an account" link on `/login` carries `login-signup-link`, not `signup-login-link`. The `signup-` prefix means "on the signup screen", so the reverse link needed the reverse prefix; spec 02 named it correctly and this spec was corrected to match. `signup-login-link` still names the "Sign in" link on `/signup`.

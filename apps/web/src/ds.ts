@@ -26,6 +26,7 @@ export {
   SearchField,
   SectionLabel,
   Select,
+  Spinner,
   Table,
   Tabs,
   Toggle,

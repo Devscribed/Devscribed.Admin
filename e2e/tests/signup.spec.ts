@@ -157,7 +157,7 @@ test.describe('01 — Organization Creation', () => {
   // TC-01-E2E-07
   test('navigates from the login page to signup', async ({ page }) => {
     await page.goto('/login');
-    await page.getByTestId('signup-login-link').click();
+    await page.getByTestId('login-signup-link').click();
 
     await expect(page).toHaveURL(/\/signup$/);
     await expect(page.getByTestId('signup-form')).toBeVisible();

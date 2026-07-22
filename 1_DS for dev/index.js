@@ -8,6 +8,7 @@ export { Table } from './components/data/Table.jsx';
 
 export { Badge } from './components/feedback/Badge.jsx';
 export { InfoBanner } from './components/feedback/InfoBanner.jsx';
+export { Spinner } from './components/feedback/Spinner.jsx';
 
 export { Checkbox } from './components/forms/Checkbox.jsx';
 export { Input } from './components/forms/Input.jsx';

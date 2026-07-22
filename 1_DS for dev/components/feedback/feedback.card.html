@@ -11,7 +11,7 @@
 <script type="text/babel" data-presets="react">
 const NS = window.TeammerlyMeridianDesignSystem_063f40 || {};
 
-const { Badge, InfoBanner } = NS;
+const { Badge, InfoBanner, Spinner } = NS;
 ReactDOM.createRoot(document.getElementById('root')).render(
   <>
     <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
@@ -29,6 +29,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <InfoBanner tone="info">Your subscription renews on Apr 1.</InfoBanner>
     <InfoBanner tone="error">Payment method expires this month.</InfoBanner>
     <InfoBanner tone="warning">Only one admin — role change guarded.</InfoBanner>
+    <InfoBanner tone="success">Your password has been reset.</InfoBanner>
+    <div style={{display:'flex',alignItems:'center',gap:10,color:'var(--text-muted)',fontSize:'var(--fs-13)'}}>
+      <Spinner size={22} style={{color:'var(--accent)'}} />
+      Checking your reset link…
+    </div>
   </>
 );
 

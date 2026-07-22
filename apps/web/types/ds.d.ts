@@ -9,6 +9,7 @@ declare module '@ds' {
   export * from '@ds/components/data/Table';
   export * from '@ds/components/feedback/Badge';
   export * from '@ds/components/feedback/InfoBanner';
+  export * from '@ds/components/feedback/Spinner';
   export * from '@ds/components/forms/Checkbox';
   export * from '@ds/components/forms/Input';
   export * from '@ds/components/forms/Radio';

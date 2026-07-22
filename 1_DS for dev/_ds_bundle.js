@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format":4,"namespace":"TeammerlyMeridianDesignSystem_063f40","components":[{"name":"Button","sourcePath":"components/actions/Button.jsx"},{"name":"Table","sourcePath":"components/data/Table.jsx"},{"name":"Badge","sourcePath":"components/feedback/Badge.jsx"},{"name":"InfoBanner","sourcePath":"components/feedback/InfoBanner.jsx"},{"name":"Checkbox","sourcePath":"components/forms/Checkbox.jsx"},{"name":"Input","sourcePath":"components/forms/Input.jsx"},{"name":"Radio","sourcePath":"components/forms/Radio.jsx"},{"name":"RadioGroup","sourcePath":"components/forms/Radio.jsx"},{"name":"SearchField","sourcePath":"components/forms/SearchField.jsx"},{"name":"Select","sourcePath":"components/forms/Select.jsx"},{"name":"NavItem","sourcePath":"components/navigation/NavItem.jsx"},{"name":"Tabs","sourcePath":"components/navigation/Tabs.jsx"},{"name":"Toggle","sourcePath":"components/navigation/Toggle.jsx"},{"name":"Card","sourcePath":"components/surfaces/Card.jsx"},{"name":"Modal","sourcePath":"components/surfaces/Modal.jsx"},{"name":"SectionLabel","sourcePath":"components/typography/SectionLabel.jsx"},{"name":"IconButton","sourcePath":"components/actions/IconButton.jsx"},{"name":"Eye","sourcePath":"components/icons/Eye.jsx"},{"name":"EyeOff","sourcePath":"components/icons/Eye.jsx"},{"name":"AuthLayout","sourcePath":"components/surfaces/AuthLayout.jsx"}],"sourceHashes":{"components/data/Table.jsx":"0ceb99ee3c62","components/feedback/Badge.jsx":"fd196613fabf","components/feedback/InfoBanner.jsx":"1a6fd57449af","components/forms/Checkbox.jsx":"da4073b1c070","components/forms/Radio.jsx":"57d1b71513f1","components/forms/SearchField.jsx":"c37bc9f13e21","components/forms/Select.jsx":"a6ad2bab040c","components/navigation/NavItem.jsx":"be9816ba9b09","components/navigation/Tabs.jsx":"28212277943a","components/navigation/Toggle.jsx":"a14a18a35252","components/surfaces/Card.jsx":"d38ffa714a4d","components/surfaces/Modal.jsx":"f2b9c6d5f915","components/typography/SectionLabel.jsx":"3990f244c1ac"},"inlinedExternals":[],"unexposedExports":[]} */
+/* @ds-bundle: {"format":4,"namespace":"TeammerlyMeridianDesignSystem_063f40","components":[{"name":"Button","sourcePath":"components/actions/Button.jsx"},{"name":"Table","sourcePath":"components/data/Table.jsx"},{"name":"Badge","sourcePath":"components/feedback/Badge.jsx"},{"name":"InfoBanner","sourcePath":"components/feedback/InfoBanner.jsx"},{"name":"Checkbox","sourcePath":"components/forms/Checkbox.jsx"},{"name":"Input","sourcePath":"components/forms/Input.jsx"},{"name":"Radio","sourcePath":"components/forms/Radio.jsx"},{"name":"RadioGroup","sourcePath":"components/forms/Radio.jsx"},{"name":"SearchField","sourcePath":"components/forms/SearchField.jsx"},{"name":"Select","sourcePath":"components/forms/Select.jsx"},{"name":"NavItem","sourcePath":"components/navigation/NavItem.jsx"},{"name":"Tabs","sourcePath":"components/navigation/Tabs.jsx"},{"name":"Toggle","sourcePath":"components/navigation/Toggle.jsx"},{"name":"Card","sourcePath":"components/surfaces/Card.jsx"},{"name":"Modal","sourcePath":"components/surfaces/Modal.jsx"},{"name":"SectionLabel","sourcePath":"components/typography/SectionLabel.jsx"},{"name":"IconButton","sourcePath":"components/actions/IconButton.jsx"},{"name":"Eye","sourcePath":"components/icons/Eye.jsx"},{"name":"EyeOff","sourcePath":"components/icons/Eye.jsx"},{"name":"AuthLayout","sourcePath":"components/surfaces/AuthLayout.jsx"},{"name":"Spinner","sourcePath":"components/feedback/Spinner.jsx"}],"sourceHashes":{"components/data/Table.jsx":"0ceb99ee3c62","components/feedback/Badge.jsx":"fd196613fabf","components/feedback/InfoBanner.jsx":"1a6fd57449af","components/forms/Checkbox.jsx":"da4073b1c070","components/forms/Radio.jsx":"57d1b71513f1","components/forms/SearchField.jsx":"c37bc9f13e21","components/forms/Select.jsx":"a6ad2bab040c","components/navigation/NavItem.jsx":"be9816ba9b09","components/navigation/Tabs.jsx":"28212277943a","components/navigation/Toggle.jsx":"a14a18a35252","components/surfaces/Card.jsx":"d38ffa714a4d","components/surfaces/Modal.jsx":"f2b9c6d5f915","components/typography/SectionLabel.jsx":"3990f244c1ac"},"inlinedExternals":[],"unexposedExports":[]} */
 
 (() => {
 
@@ -8,9 +8,49 @@ const __ds_scope = {};
 
 (__ds_ns.__errors = __ds_ns.__errors || []);
 
+// components/feedback/Spinner.jsx
+try { (() => {
+function _extends() { return _extends = Object.assign ? Object.assign.bind() : function (n) { for (var e = 1; e < arguments.length; e++) { var t = arguments[e]; for (var r in t) ({}).hasOwnProperty.call(t, r) && (n[r] = t[r]); } return n; }, _extends.apply(null, arguments); }
+function Spinner({
+  size = 15,
+  style,
+  ...rest
+}) {
+  return /*#__PURE__*/React.createElement("svg", _extends({}, rest, {
+    viewBox: "0 0 16 16",
+    width: size,
+    height: size,
+    fill: "none",
+    "aria-hidden": true,
+    style: style
+  }), /*#__PURE__*/React.createElement("circle", {
+    cx: "8",
+    cy: "8",
+    r: "6.25",
+    stroke: "currentColor",
+    strokeWidth: "2",
+    opacity: "0.3"
+  }), /*#__PURE__*/React.createElement("path", {
+    d: "M8 1.75A6.25 6.25 0 0 1 14.25 8",
+    stroke: "currentColor",
+    strokeWidth: "2",
+    strokeLinecap: "round"
+  }, /*#__PURE__*/React.createElement("animateTransform", {
+    attributeName: "transform",
+    type: "rotate",
+    from: "0 8 8",
+    to: "360 8 8",
+    dur: "0.7s",
+    repeatCount: "indefinite"
+  })));
+}
+Object.assign(__ds_scope, { Spinner });
+})(); } catch (e) { __ds_ns.__errors.push({ path: "components/feedback/Spinner.jsx", error: String((e && e.message) || e) }); }
+
 // components/actions/Button.jsx
 try { (() => {
 function _extends() { return _extends = Object.assign ? Object.assign.bind() : function (n) { for (var e = 1; e < arguments.length; e++) { var t = arguments[e]; for (var r in t) ({}).hasOwnProperty.call(t, r) && (n[r] = t[r]); } return n; }, _extends.apply(null, arguments); }
+const { Spinner } = __ds_scope;
 const base = {
   display: 'inline-flex',
   alignItems: 'center',
@@ -69,32 +109,6 @@ const variants = {
     boxShadow: 'var(--lip-error)'
   }
 };
-const Spinner = () => /*#__PURE__*/React.createElement("svg", {
-  viewBox: "0 0 16 16",
-  width: 15,
-  height: 15,
-  fill: "none",
-  "aria-hidden": true
-}, /*#__PURE__*/React.createElement("circle", {
-  cx: "8",
-  cy: "8",
-  r: "6.25",
-  stroke: "currentColor",
-  strokeWidth: "2",
-  opacity: "0.3"
-}), /*#__PURE__*/React.createElement("path", {
-  d: "M8 1.75A6.25 6.25 0 0 1 14.25 8",
-  stroke: "currentColor",
-  strokeWidth: "2",
-  strokeLinecap: "round"
-}, /*#__PURE__*/React.createElement("animateTransform", {
-  attributeName: "transform",
-  type: "rotate",
-  from: "0 8 8",
-  to: "360 8 8",
-  dur: "0.7s",
-  repeatCount: "indefinite"
-})));
 function Button({
   variant = 'primary',
   size = 'md',
@@ -1356,5 +1370,7 @@ __ds_ns.Eye = __ds_scope.Eye;
 __ds_ns.EyeOff = __ds_scope.EyeOff;
 
 __ds_ns.AuthLayout = __ds_scope.AuthLayout;
+
+__ds_ns.Spinner = __ds_scope.Spinner;
 
 })();
