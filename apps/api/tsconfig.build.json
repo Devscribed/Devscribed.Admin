@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  // Keeps the test tree out of the build, which also keeps `src` the compilation root —
+  // without this the output lands in dist/src and the `start` script misses it.
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "test", "**/*.spec.ts"]
+}

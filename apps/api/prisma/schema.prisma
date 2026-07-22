@@ -1,0 +1,72 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// Login credentials + the person behind them.
+model Account {
+  id           String   @id @default(uuid())
+  /// Always stored lowercase; uniqueness is therefore case-insensitive.
+  email        String   @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  /// IANA zone auto-detected from the browser at signup.
+  timezone     String?
+  /// Session-revocation token. Carried in every session cookie and re-checked on each
+  /// authenticated request; regenerating it invalidates every outstanding cookie at
+  /// once (spec 02 requirement 12 — shared with specs 04 and 06).
+  securityStamp String  @default(uuid())
+  createdAt    DateTime @default(now())
+
+  memberships        Membership[]
+  passwordResetTokens PasswordResetToken[]
+}
+
+/// Single-use, time-limited password-reset grant (spec 02).
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  accountId String
+  /// SHA-256 of the raw token, hex-encoded. The raw token exists only in the email —
+  /// a database breach therefore yields nothing usable.
+  tokenHash String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  /// Set when the token is spent; null while unused.
+  usedAt    DateTime?
+  /// Set when a newer request supersedes this token (requirement 8).
+  isInvalidated Boolean @default(false)
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  memberships Membership[]
+}
+
+/// Links an account to its organization. One per account — single-org-per-user (FR-8).
+model Membership {
+  id             String   @id @default(uuid())
+  accountId      String   @unique
+  organizationId String
+  /// "admin" | "member" — org control is expressed purely through the admin role (FR-7).
+  role           String
+  /// "active" | "invited" | "removed" — `removed` is the soft-deleted state (specs 02, 04).
+  status         String
+  joinedAt       DateTime @default(now())
+
+  account      Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}

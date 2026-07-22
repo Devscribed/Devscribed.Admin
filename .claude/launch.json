@@ -2,11 +2,16 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace", "@devscribed/api"],
+      "port": 4000
+    },
+    {
       "name": "web",
-      "runtimeExecutable": "dotnet",
-      "runtimeArgs": ["run", "--project", "src/Devscribed.Admin.Web"],
-      "port": 5050,
-      "autoPort": true
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace", "@devscribed/web"],
+      "port": 3000
     }
   ]
 }

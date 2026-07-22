@@ -1,0 +1,9 @@
+/* Meridian pairs Space Grotesk (display + numerals) with IBM Plex Sans (text).
+   Loaded from Google Fonts; if you self-host, replace this file and drop the files under assets/fonts/. */
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
+
+:root{
+  --font-display:'Space Grotesk',ui-sans-serif,system-ui,sans-serif;
+  --font-text:'IBM Plex Sans',ui-sans-serif,system-ui,sans-serif;
+  --font-mono:ui-monospace,'SF Mono',Menlo,monospace;
+}

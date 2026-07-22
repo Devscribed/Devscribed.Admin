@@ -9,6 +9,13 @@ obj/
 *.pdb
 .vs/
 
+# Node
+node_modules/
+dist/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+
 # SQLite
 *.db
 *.db-shm
@@ -16,6 +23,8 @@ obj/
 
 # Playwright
 playwright/.cache/
+e2e/playwright-report/
+e2e/test-results/
 
 # misc
 .DS_Store
