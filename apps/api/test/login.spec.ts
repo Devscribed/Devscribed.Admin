@@ -52,22 +52,28 @@ describe('POST /api/login', () => {
 
     expect(response.status).toBe(200);
     const account = await prisma.account.findUnique({ where: { email: 'pat@acme.com' } });
-    expect(response.body).toEqual({ accountId: account!.id });
+    const membership = await prisma.membership.findUnique({ where: { accountId: account!.id } });
+    expect(response.body).toEqual({
+      accountId: account!.id,
+      organizationId: membership!.organizationId,
+    });
 
     const cookies = response.headers['set-cookie'] as unknown as string[];
     expect(cookies.join(';')).toContain(`${SESSION_COOKIE}=`);
     expect(cookies.join(';')).toContain('HttpOnly');
   });
 
-  // TC-02-INT-01: the session carries the user's organization, so /members works straight away.
+  // TC-02-INT-01: the session carries the user's organization, so the members list
+  // works straight away — and the response body says which organization that is.
   it('scopes the session to the account current organization', async () => {
     await signup();
 
-    const cookies = (await login({ email: 'pat@acme.com', password: 'Passw0rd' })).headers[
-      'set-cookie'
-    ] as unknown as string[];
+    const response = await login({ email: 'pat@acme.com', password: 'Passw0rd' });
+    const cookies = response.headers['set-cookie'] as unknown as string[];
 
-    const members = await request(app.getHttpServer()).get('/api/members').set('Cookie', cookies);
+    const members = await request(app.getHttpServer())
+      .get(`/api/organizations/${response.body.organizationId}/members`)
+      .set('Cookie', cookies);
 
     expect(members.status).toBe(200);
     expect(members.body).toHaveLength(1);

@@ -86,7 +86,10 @@ export function LoginForm() {
       });
 
       if (response.ok) {
-        router.push('/members');
+        // The session cookie is httpOnly, so the organization has to come back in the
+        // body for the client to know which /org/{id}/… route to land on.
+        const { organizationId } = await response.json();
+        router.push(`/org/${organizationId}/members`);
         router.refresh();
         return;
       }

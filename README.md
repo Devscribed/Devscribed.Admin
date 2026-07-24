@@ -18,8 +18,9 @@ Implementation of the user-management specs in [`specs/`](specs/). Spec 01 —
 
 ```
 packages/validation/  every signup rule and error message — one source shared by web and API
-apps/api/             NestJS: POST /api/signup, GET /api/me, GET /api/members
-apps/web/             Next.js: /signup, /login, /members
+apps/api/             NestJS: POST /api/signup, /api/login, /api/logout,
+                      GET /api/me, GET /api/organizations/{orgId}/members
+apps/web/             Next.js: /signup, /login, /org/{orgId}/members
 e2e/                  Playwright specs, one per TC-01-E2E-* case
 ```
 
@@ -167,6 +168,17 @@ npm run db:migrate --workspace @devscribed/api
 
 `-v` drops the volume, which is what makes `docker/postgres-init.sql` run again and
 recreate both databases.
+
+## The app shell
+
+Every signed-in route lives under `/org/{orgId}/` and renders inside one shell —
+sidebar, top bar, page header — built in `apps/web/src/layout/`. It is documented in
+[00-app-shell.design.md](specs/user-management/00-app-shell.design.md), which also
+records why the shell sits in the app rather than in the design system.
+
+The organization id in the URL is never a selector. `OrgScopeGuard`
+(`apps/api/src/auth/org-scope.guard.ts`) compares it against the session cookie and
+answers 404 on any disagreement; queries still scope by the session.
 
 ## Deployment
 

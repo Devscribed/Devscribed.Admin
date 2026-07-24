@@ -16,6 +16,8 @@ export class LoginController {
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     const { accountId, organizationId, securityStamp } = await this.loginService.login(dto);
     this.sessions.issue(res, { accountId, organizationId, securityStamp });
-    return { accountId };
+    // The organization is in the cookie too, but the cookie is httpOnly — the client
+    // needs it in the body to know which /org/{id}/… route to land on.
+    return { accountId, organizationId };
   }
 }

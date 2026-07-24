@@ -28,8 +28,9 @@ describe('SecurityStamp session revocation', () => {
       .post('/api/login')
       .send({ email: 'pat@acme.com', password: 'Passw0rd' });
 
+  // Any authenticated route proves the point; /api/me needs no organization in its URL.
   const members = (cookies: string[]) =>
-    request(app.getHttpServer()).get('/api/members').set('Cookie', cookies);
+    request(app.getHttpServer()).get('/api/me').set('Cookie', cookies);
 
   const cookiesOf = (response: request.Response) =>
     response.headers['set-cookie'] as unknown as string[];

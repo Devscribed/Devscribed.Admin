@@ -145,9 +145,11 @@ describe('POST /api/signup', () => {
 
   it('authenticates the creator, who then sees themselves as the sole admin', async () => {
     const agent = request.agent(app.getHttpServer());
-    await agent.post('/api/signup').send(validPayload).expect(201);
+    const created = await agent.post('/api/signup').send(validPayload).expect(201);
 
-    const members = await agent.get('/api/members').expect(200);
+    const members = await agent
+      .get(`/api/organizations/${created.body.organization.id}/members`)
+      .expect(200);
     expect(members.body).toHaveLength(1);
     expect(members.body[0]).toMatchObject({
       name: 'Pat Owner',
@@ -158,6 +160,13 @@ describe('POST /api/signup', () => {
   });
 
   it('refuses the members list without a session', async () => {
-    await request(app.getHttpServer()).get('/api/members').expect(401);
+    const created = await request(app.getHttpServer())
+      .post('/api/signup')
+      .send(validPayload)
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .get(`/api/organizations/${created.body.organization.id}/members`)
+      .expect(401);
   });
 });

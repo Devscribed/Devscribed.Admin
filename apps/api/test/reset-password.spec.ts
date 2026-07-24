@@ -226,8 +226,9 @@ describe('reset-password', () => {
     it('revokes every existing session', async () => {
       const first = (await login('Passw0rd')).headers['set-cookie'] as unknown as string[];
       const second = (await login('Passw0rd')).headers['set-cookie'] as unknown as string[];
+      // Any authenticated route proves the point; /api/me needs no organization in its URL.
       const members = (cookies: string[]) =>
-        request(app.getHttpServer()).get('/api/members').set('Cookie', cookies);
+        request(app.getHttpServer()).get('/api/me').set('Cookie', cookies);
       expect((await members(first)).status).toBe(200);
 
       const stampBefore = (await prisma.account.findUniqueOrThrow({ where: { email: EMAIL } }))

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { LoginController } from './auth/login.controller';
 import { LoginService } from './auth/login.service';
+import { LogoutController } from './auth/logout.controller';
 import {
   ForgotPasswordController,
   ResetPasswordController,
@@ -12,6 +13,7 @@ import { ConsoleMailService } from './mail/console-mail.service';
 import { InMemoryMailService } from './mail/in-memory-mail.service';
 import { MailService } from './mail/mail.service';
 import { TestMailController } from './mail/test-mail.controller';
+import { MeController } from './members/me.controller';
 import { MembersController } from './members/members.controller';
 import { PrismaService } from './prisma.service';
 import { SignupController } from './signup/signup.controller';
@@ -48,8 +50,10 @@ const mailProvider = {
   controllers: [
     SignupController,
     LoginController,
+    LogoutController,
     ForgotPasswordController,
     ResetPasswordController,
+    MeController,
     MembersController,
     TestMailController,
   ],
