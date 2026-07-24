@@ -64,15 +64,14 @@ npm run test:e2e    # browser flows — TC-01-E2E-01…07 (starts both dev serve
 
 Two Vercel projects from this one repository, plus a Neon database.
 
-| | Root directory | Notes |
-|---|---|---|
-| web | `apps/web` | needs `API_ORIGIN` pointing at the api project's URL |
-| api | `apps/api` | framework preset "Other"; `vercel.json` routes every path to `api/index.js` |
+| | Root directory | Framework preset | Notes |
+|---|---|---|---|
+| web | `apps/web` | Next.js | needs `API_ORIGIN` pointing at the api project's URL |
+| api | `apps/api` | NestJS | zero-config; no `vercel.json` |
 
-`apps/api/api/index.js` is the serverless entry point. It requires the **compiled**
-`dist/`, because Vercel bundles functions with esbuild and esbuild does not emit the
-decorator metadata Nest's DI depends on. The booted app is cached per instance, so only a
-cold start pays for it.
+The api project needs no deployment scaffolding of its own. Vercel detects `src/main.ts`
+by name, builds the whole application into a single function and runs it on Fluid
+compute, so `app.listen()` behaves the same there as it does locally.
 
 The browser only ever talks to the web domain: the front end calls relative `/api/*` and
 `next.config.mjs` rewrites those to `API_ORIGIN`. That keeps the session cookie

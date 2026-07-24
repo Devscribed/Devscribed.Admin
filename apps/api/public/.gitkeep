@@ -1,4 +1,0 @@
-Vercel refuses to finish a build that produces no output directory, even for a project
-that serves nothing static. This directory exists only to satisfy that check — the
-rewrite in vercel.json sends every path to the serverless function, so nothing here is
-ever reached.
