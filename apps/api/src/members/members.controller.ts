@@ -1,36 +1,22 @@
 import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { OrgScopeGuard } from '../auth/org-scope.guard';
 import type { AuthenticatedRequest } from '../auth/session.guard';
 import { SessionGuard } from '../auth/session.guard';
 import { PrismaService } from '../prisma.service';
 
-@Controller('api')
-@UseGuards(SessionGuard)
+/**
+ * Order matters: `SessionGuard` puts the session on the request, `OrgScopeGuard`
+ * compares the URL's `:orgId` against it.
+ */
+@Controller('api/organizations/:orgId')
+@UseGuards(SessionGuard, OrgScopeGuard)
 export class MembersController {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** The signed-in account plus its organization — what the app shell renders. */
-  @Get('me')
-  async me(@Req() req: AuthenticatedRequest) {
-    const membership = await this.prisma.membership.findUnique({
-      where: { accountId: req.session!.accountId },
-      include: { account: true, organization: true },
-    });
-    if (!membership) return null;
-    return {
-      account: {
-        id: membership.account.id,
-        email: membership.account.email,
-        firstName: membership.account.firstName,
-        lastName: membership.account.lastName,
-        timezone: membership.account.timezone,
-      },
-      organization: { id: membership.organization.id, name: membership.organization.name },
-      role: membership.role,
-    };
-  }
-
   @Get('members')
   async list(@Req() req: AuthenticatedRequest) {
+    // Scoped by the session, never by the path parameter — the guard has only
+    // established that the two agree.
     const memberships = await this.prisma.membership.findMany({
       where: { organizationId: req.session!.organizationId },
       include: { account: true },

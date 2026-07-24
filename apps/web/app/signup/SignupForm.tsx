@@ -119,7 +119,8 @@ export function SignupForm() {
       });
 
       if (response.ok) {
-        router.push('/members');
+        const { organization } = await response.json();
+        router.push(`/org/${organization.id}/members`);
         router.refresh();
         return;
       }

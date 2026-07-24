@@ -6,6 +6,7 @@ Functional specifications for the user-management surface of Devscribed.Admin. E
 
 | # | Spec | Design | Tags |
 |---|------|--------|------|
+| 00 | — (no business rules of its own) | [design](00-app-shell.design.md) | app-shell, sidebar, topbar, page-header, navigation, logout |
 | 01 | [Organization Creation](01-organization-creation.md) | [design](01-organization-creation.design.md) · [mockup](01-organization-creation.mock.html) | signup, registration, org-creation, admin-role, password-policy |
 | 02 | [Authentication & Login](02-authentication-login.md) | [design](02-authentication-login.design.md) · [mockup](02-authentication-login.mock.html) | login, session, forgot-password, reset-password, SecurityStamp |
 | 03 | [User Invitation](03-user-invitation.md) | — | invite, token, accept-invite, role-picker, onboarding, supersede |
@@ -41,6 +42,7 @@ Rules that hold across every design spec:
 - **Light theme only** this release. Dark mode exists in the design system but is out of scope; no theme toggle ships yet.
 - **Copy ownership** — validation messages belong to the business spec; headings, subtitles, placeholders, hints, and micro-labels belong to the design spec. Neither restates the other.
 - **DS gaps** — anything missing from the design system is added to the design system, not improvised per screen, and recorded in that design spec's "DS gaps" table.
+- **The signed-in shell** — every route under `/org/{orgId}/` renders inside one app shell (sidebar, top bar, page header), defined in [00-app-shell.design.md](00-app-shell.design.md). Screens own their content and their page-header copy; they never draw their own chrome, and they never restate a navigation rule.
 - **The signed-out set** — `/signup`, `/login`, `/forgot-password`, and `/reset-password` are one visual family. Same shell, same card chrome, same spacing tokens; the cross-account link always sits in `AuthLayout`'s footer, outside the card. Spec 02's design file defines the family; spec 01 conforms.
 
 Spec 03 still gates its submit buttons on validation and needs the shared CTA rule applied when it is next touched. Its "I understand" checkbox gate stays disabled-until-checked — that is a deliberate confirmation, not a validation. Its accept-invite screen also belongs to the signed-out set and should adopt the shell rules above.
