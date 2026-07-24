@@ -1,8 +1,8 @@
 name: Migrate database
 
 # Runs on every merge into main rather than only when prisma/migrations changes:
-# the runner is idempotent, so a no-op run costs one "nothing to apply" line, whereas a
-# path filter that guesses wrong leaves the schema behind the code.
+# `migrate deploy` is idempotent, so a no-op run costs one "No pending migrations" line,
+# whereas a path filter that guesses wrong leaves the schema behind the code.
 on:
   push:
     branches: [main]
@@ -26,8 +26,11 @@ jobs:
 
       - run: npm ci
 
-      - name: Apply migrations to Turso
+      - name: Apply migrations to Neon
         env:
-          DATABASE_URL: libsql://teammerly-zalyz.aws-eu-west-1.turso.io
-          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          # Neon's *direct* (unpooled) endpoint. Prisma Migrate takes advisory locks and
+          # runs DDL in transactions, neither of which survives pgbouncer, so this must
+          # not be the -pooler host the application uses.
+          DATABASE_URL: ${{ secrets.DIRECT_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.DIRECT_DATABASE_URL }}
         run: npm run db:migrate --workspace @devscribed/api

@@ -1,0 +1,6 @@
+# Nothing here is needed to serve a request; keeping it out shrinks the function bundle
+# and the cold start that comes with it. dist/ is generated during the build, so it is
+# unaffected by this file — see includeFiles in vercel.json.
+test
+jest.config.js
+.env

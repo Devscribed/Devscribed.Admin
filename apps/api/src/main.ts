@@ -1,15 +1,8 @@
-import 'reflect-metadata';
-import { NestFactory } from '@nestjs/core';
-import cookieParser from 'cookie-parser';
-import { AppModule } from './app.module';
+import { createApp } from './bootstrap';
 
+/** Long-running entry point: local `npm run dev` and the Playwright web server. */
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule);
-  app.use(cookieParser());
-  app.enableCors({
-    origin: process.env.WEB_ORIGIN || 'http://localhost:3000',
-    credentials: true,
-  });
+  const app = await createApp();
   await app.listen(Number(process.env.PORT) || 4000);
 }
 

@@ -1,18 +1,23 @@
 import { execSync } from 'child_process';
-import { existsSync, unlinkSync } from 'fs';
 import { join } from 'path';
+import { TEST_DATABASE_URL } from './database-url';
 
-/** A throwaway SQLite file per test run — every suite starts from an empty schema. */
+/**
+ * A schema reset per test run — every suite starts from an empty database.
+ *
+ * `migrate reset` drops and re-applies prisma/migrations rather than pushing the
+ * datamodel, so the tests exercise the very SQL production will receive. The suites run
+ * with --runInBand, so nothing else is touching this database meanwhile.
+ */
 export default function globalSetup(): void {
-  const dbPath = join(__dirname, '..', 'prisma', 'test.db');
-  for (const file of [dbPath, `${dbPath}-journal`]) {
-    if (existsSync(file)) unlinkSync(file);
-  }
-
-  // No --force-reset: the file above is already gone, so this only creates the schema.
-  execSync('npx prisma db push --skip-generate', {
+  execSync('npx prisma migrate reset --force --skip-seed --skip-generate', {
     cwd: join(__dirname, '..'),
-    env: { ...process.env, DATABASE_URL: `file:${dbPath}` },
+    env: {
+      ...process.env,
+      DATABASE_URL: TEST_DATABASE_URL,
+      // Nothing pools in front of a local Postgres, so migrations use the same URL.
+      DIRECT_URL: TEST_DATABASE_URL,
+    },
     stdio: 'inherit',
   });
 }

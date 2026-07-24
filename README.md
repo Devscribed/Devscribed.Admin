@@ -7,11 +7,11 @@ Implementation of the user-management specs in [`specs/`](specs/). Spec 01 —
 
 | Layer | Choice |
 |---|---|
-| API | NestJS 11, Prisma, SQLite |
+| API | NestJS 11, Prisma, PostgreSQL (Docker locally, Neon in production) |
 | Web | Next.js 15 (App Router), React 19 |
 | UI | Teammerly Meridian (`1_DS for dev/`), imported through `@ds` — no hardcoded colors or sizes |
 | Unit tests | Vitest |
-| Integration tests | Jest + Supertest against a throwaway SQLite file |
+| Integration tests | Jest + Supertest against a disposable Postgres database |
 | E2E | Playwright |
 
 ## Layout
@@ -31,10 +31,13 @@ message. The API re-runs it on every request — the client's copy is a convenie
 ```bash
 npm install
 cp apps/api/.env.example apps/api/.env
+docker compose up -d                        # Postgres on :5433, dev + test databases
 npm run build --workspace @devscribed/validation
-npm run prisma:generate --workspace @devscribed/api
-npm run db:push --workspace @devscribed/api
+npm run db:migrate --workspace @devscribed/api
 ```
+
+Port 5433 rather than 5432, so the container does not collide with a Postgres you may
+already be running.
 
 `SESSION_SECRET` in `.env` is a development placeholder — override it in every
 deployed environment.
@@ -56,6 +59,36 @@ npm run test:unit   # validation rules — TC-01-UNIT-01…07
 npm run test:int    # signup endpoint — TC-01-INT-01…04
 npm run test:e2e    # browser flows — TC-01-E2E-01…07 (starts both dev servers)
 ```
+
+## Deployment
+
+Two Vercel projects from this one repository, plus a Neon database.
+
+| | Root directory | Notes |
+|---|---|---|
+| web | `apps/web` | needs `API_ORIGIN` pointing at the api project's URL |
+| api | `apps/api` | framework preset "Other"; `vercel.json` routes every path to `api/index.js` |
+
+`apps/api/api/index.js` is the serverless entry point. It requires the **compiled**
+`dist/`, because Vercel bundles functions with esbuild and esbuild does not emit the
+decorator metadata Nest's DI depends on. The booted app is cached per instance, so only a
+cold start pays for it.
+
+The browser only ever talks to the web domain: the front end calls relative `/api/*` and
+`next.config.mjs` rewrites those to `API_ORIGIN`. That keeps the session cookie
+same-origin, which is why `sameSite: 'lax'` works and no CORS configuration is involved.
+
+API environment variables:
+
+| Variable | Value |
+|---|---|
+| `DATABASE_URL` | Neon **pooled** endpoint (`-pooler` host), `?sslmode=require&connection_limit=1&pgbouncer=true` |
+| `DIRECT_URL` | Neon direct endpoint — migrations only |
+| `SESSION_SECRET` | required; without it the app silently falls back to the development key |
+| `WEB_ORIGIN` | the web project's URL, used to build password-reset links |
+
+Migrations do not run at deploy time. `.github/workflows/migrate.yml` applies them with
+`prisma migrate deploy` on every merge to `main`, using the `DIRECT_DATABASE_URL` secret.
 
 ## Design-system notes
 
