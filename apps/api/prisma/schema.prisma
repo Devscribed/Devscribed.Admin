@@ -3,8 +3,12 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider = "postgresql"
+  // Neon's pooled endpoint in production, a plain local Postgres in dev and tests.
+  url       = env("DATABASE_URL")
+  // Migrations must bypass the pooler — pgbouncer cannot run the advisory locks and
+  // DDL transactions Prisma Migrate needs. Locally both point at the same server.
+  directUrl = env("DIRECT_URL")
 }
 
 /// Login credentials + the person behind them.
