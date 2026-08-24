@@ -1,7 +1,11 @@
 import {
   ENVELOPE_LIMITS,
   ENVELOPE_MESSAGES,
+  PROFILE_MESSAGES,
   canEditOrDelete,
+  canReadProfilePii,
+  findAutofillSource,
+  resolveAutofill,
   canVoid,
   effectiveStatus,
   hasCapability,
@@ -16,6 +20,7 @@ import {
   verifyChain,
 } from '@devscribed/validation';
 import type {
+  AutofillContext,
   ChainLink,
   EnvelopeStatus as EnvelopeStatusName,
   SignerRole,
@@ -75,6 +80,40 @@ import type {
  * map goes through `readFieldValues`, which strips it.
  */
 const EXPIRY_META_KEY = '$expiresInDays';
+
+/**
+ * Spec 03 needs two more facts to survive in the same map, for the same reason and by the
+ * same trick: which keys autofill populated (requirement 11) and which it had to shorten
+ * (requirement 10).
+ *
+ * They are stored rather than recomputed, and that is the whole point of requirement 8.
+ * Recomputing "was this autofilled" on read would mean resolving the sources again against
+ * the *current* profile — a live binding, which is exactly what snapshotting forbids. It
+ * would also be wrong the moment a sender corrects a value by hand: TC-03-INT-05 says an
+ * overwritten field still carries the marker, because the marker records what happened at
+ * creation, not what the value is now.
+ *
+ * `$` again, because `FIELD_KEY_PATTERN` requires a lowercase letter first — a template
+ * field can never collide with these, and `readFieldValues` already strips them.
+ */
+const AUTOFILLED_META_KEY = '$autofilled';
+const AUTOFILL_TRUNCATED_META_KEY = '$autofillTruncated';
+
+/** Both meta lists, read defensively: a JSON column is a claim about shape, not a proof. */
+export function readMetaKeyList(value: unknown, metaKey: string): string[] {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return [];
+  const stored = (value as Record<string, unknown>)[metaKey];
+  if (!Array.isArray(stored)) return [];
+  return stored.filter((entry): entry is string => typeof entry === 'string');
+}
+
+export function readAutofilledKeys(value: unknown): string[] {
+  return readMetaKeyList(value, AUTOFILLED_META_KEY);
+}
+
+export function readAutofillTruncatedKeys(value: unknown): string[] {
+  return readMetaKeyList(value, AUTOFILL_TRUNCATED_META_KEY);
+}
 
 export function readFieldValues(value: unknown): Record<string, string> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return {};
@@ -452,13 +491,47 @@ export class EnvelopesService {
       throw new BadRequestException({ message: title.error, errors: { title: title.error } });
     }
 
-    const subjectMembershipId = await this.resolveSubject(session, dto?.subjectMembershipId);
+    const subject = await this.resolveSubject(session, dto?.subjectMembershipId);
+    const subjectMembershipId = subject?.id ?? null;
 
-    // Requirement 4 — autofill is spec 03. The plumbing is here and empty: an envelope
-    // created today simply has nothing autofilled, and spec 03 fills this in without a
-    // change to the contract the client already reads.
-    const autofilled: string[] = [];
-    const fieldValues: Record<string, string> = {};
+    /* ------------------------------------------------------------------ *
+     * Spec 03 — autofill resolves **once**, here, and nowhere else.
+     *
+     * Requirement 6 puts resolution at envelope creation for every bound field
+     * regardless of `filledBy`, and requirement 8 snapshots the result into
+     * `Envelope.fieldValues`. There is deliberately no read-time counterpart: a later
+     * profile edit must not reach an existing envelope, draft or sent, so the *only*
+     * write of an autofilled value in this codebase is the `tx.envelope.create` below.
+     *
+     * Requirement 7 is why nothing here can throw. `resolveAutofill` returns a string for
+     * every bound field and the empty one for anything it cannot fill, so a null profile,
+     * an absent subject, and a removed subject all land in the same place: a draft with
+     * gaps, which the sender fills by hand.
+     * ------------------------------------------------------------------ */
+    const autofillContext = await this.autofillContext(session, subject);
+    const resolved = resolveAutofill(fields, autofillContext);
+    const fieldValues = resolved.values;
+    const autofilled = resolved.autofilled;
+
+    // Requirement 7 / the "Incomplete profile" alt flow: a bound field that resolved to
+    // nothing is a *gap*, and the fill form names it. Only when a subject was chosen —
+    // requirement 12 makes a subject-less envelope a deliberate choice, not an incomplete
+    // one, so reporting gaps there would nag about something nobody asked for.
+    const autofillGaps =
+      subject === null
+        ? []
+        : fields
+            .filter(
+              (field) =>
+                field.autofillSource !== null &&
+                findAutofillSource(field.autofillSource) !== undefined &&
+                (fieldValues[field.key] ?? '') === '',
+            )
+            .map((field) => ({
+              key: field.key,
+              label: field.label,
+              source: field.autofillSource,
+            }));
 
     const envelope = await this.prisma.$transaction(async (tx) => {
       const created = await tx.envelope.create({
@@ -467,7 +540,12 @@ export class EnvelopesService {
           templateVersionId: version.id,
           title: title.value,
           status: EnvelopeStatus.draft,
-          fieldValues: { ...fieldValues, [EXPIRY_META_KEY]: expiry.value } as Prisma.InputJsonValue,
+          fieldValues: {
+            ...fieldValues,
+            [EXPIRY_META_KEY]: expiry.value,
+            [AUTOFILLED_META_KEY]: autofilled,
+            [AUTOFILL_TRUNCATED_META_KEY]: resolved.truncated,
+          } as Prisma.InputJsonValue,
           subjectMembershipId,
           providerKey: this.signature.key,
           createdByAccountId: session.accountId,
@@ -499,7 +577,17 @@ export class EnvelopesService {
       title: envelope.title,
       status: envelope.status,
       fieldValues: readFieldValues(envelope.fieldValues),
+      subjectMembershipId,
+      // Requirement 13: resolution is unaffected by a removed subject, but the client is
+      // told, so the picker can show the advisory note the spec's "Subject removed" state
+      // describes rather than treating it as an error.
+      subjectRemoved: subject?.status === 'removed',
+      // Requirement 11 — the keys the fill form marks with ⟲.
       autofilled,
+      autofillGaps,
+      // Requirement 10 — shortened to fit, and said so. Silently truncating a contract
+      // clause is the outcome this flag exists to prevent.
+      autofillTruncated: resolved.truncated,
       signers: signers.map((signer) => ({
         id: signer.id,
         roleKey: signer.roleKey,
@@ -599,7 +687,18 @@ export class EnvelopesService {
         where: { id: envelope.id },
         data: {
           ...data,
-          fieldValues: { ...values, [EXPIRY_META_KEY]: expiresInDays } as Prisma.InputJsonValue,
+          fieldValues: {
+            ...values,
+            [EXPIRY_META_KEY]: expiresInDays,
+            // Carried through unchanged. `readFieldValues` strips every `$` key, so an
+            // edit that did not re-attach these would erase the autofill markers — and
+            // TC-03-INT-05 is explicit that overwriting an autofilled value by hand
+            // leaves the key marked, because the marker records what happened at
+            // creation. There is no path that recomputes them: that would be the live
+            // binding requirement 8 forbids.
+            [AUTOFILLED_META_KEY]: readAutofilledKeys(envelope.fieldValues),
+            [AUTOFILL_TRUNCATED_META_KEY]: readAutofillTruncatedKeys(envelope.fieldValues),
+          } as Prisma.InputJsonValue,
         },
       });
 
@@ -1068,6 +1167,26 @@ export class EnvelopesService {
     const values = readFieldValues(envelope.fieldValues);
     const canManage = await this.can(session, 'ManageEnvelopes');
 
+    // Read back from the snapshot, never re-resolved — see the note on the meta keys.
+    const autofilled = new Set(readAutofilledKeys(envelope.fieldValues));
+    const truncated = new Set(readAutofillTruncatedKeys(envelope.fieldValues));
+
+    /* ------------------------------------------------------------------ *
+     * Requirement 23, and the flag that is *not* a mask.
+     *
+     * `masked` below tells the fill form to render an input read-only with the note
+     * "Hidden — will be filled automatically" (the spec's manager alt flow). It does not
+     * change `value`, and that is the point of requirement 23: once resolved, the value
+     * is part of the contract and is shown in full to anyone who may view the envelope.
+     * A manager who cannot read a member's tax id can still create, read, send, and
+     * download the contract that carries it — masking the document would mean a contract
+     * that hides its own terms.
+     *
+     * So this is a *presentation* hint about where the value came from, computed from the
+     * source's `sensitive` flag and the caller's capability, and never from the value.
+     * ------------------------------------------------------------------ */
+    const canSeePii = await this.callerCanReadProfilePii(session, envelope.subjectMembershipId);
+
     const lastEmail = await this.prisma.envelopeEvent.findMany({
       where: {
         envelopeId: envelope.id,
@@ -1092,18 +1211,28 @@ export class EnvelopesService {
       },
       expiresInDays: readExpiryDays(envelope.fieldValues),
       subjectMembershipId: envelope.subjectMembershipId,
-      fields: fields.map((field) => ({
-        key: field.key,
-        label: field.label,
-        type: field.type,
-        required: field.required,
-        options: field.options,
-        maxLength: field.maxLength,
-        filledBy: field.filledBy,
-        value: values[field.key] ?? '',
-        // Spec 03 owns the flag; today nothing is autofilled, so it is honestly false.
-        autofilled: false,
-      })),
+      autofilled: [...autofilled],
+      autofillTruncated: [...truncated],
+      fields: fields.map((field) => {
+        const source =
+          field.autofillSource === null ? undefined : findAutofillSource(field.autofillSource);
+        return {
+          key: field.key,
+          label: field.label,
+          type: field.type,
+          required: field.required,
+          options: field.options,
+          maxLength: field.maxLength,
+          filledBy: field.filledBy,
+          // Requirement 23: the real, snapshotted value, for every caller who may read
+          // this envelope. Never masked — see the note above.
+          value: values[field.key] ?? '',
+          autofilled: autofilled.has(field.key),
+          autofillSource: field.autofillSource,
+          autofillTruncated: truncated.has(field.key),
+          masked: (source?.sensitive ?? false) && autofilled.has(field.key) && !canSeePii,
+        };
+      }),
       signers: envelope.signers.map((signer) => ({
         id: signer.id,
         roleKey: signer.roleKey,
@@ -1213,19 +1342,132 @@ export class EnvelopesService {
     });
   }
 
-  private async resolveSubject(
-    session: SessionPayload,
-    membershipId: string | null | undefined,
-  ): Promise<string | null> {
+  /**
+   * The subject membership, with everything autofill needs to read off it.
+   *
+   * **No status filter** — requirement 13: a contract may legitimately be issued for
+   * someone who has just left, so a `removed` membership resolves normally. Refusing it
+   * here would make the "Former members" group in the subject picker unusable.
+   *
+   * A supplied-but-unknown id is the spec's `400 subject_not_found` rather than a 404,
+   * because the request itself is well-formed and the client can act on the distinction:
+   * the member the picker offered has since been deleted. It is scoped by
+   * `session.organizationId`, so a foreign id is indistinguishable from a deleted one and
+   * the caller still learns nothing about another organization. Requirement 12's case —
+   * *no* subject at all — is not an error and never reaches the lookup.
+   */
+  private async resolveSubject(session: SessionPayload, membershipId: string | null | undefined) {
     if (!membershipId) return null;
     const membership = await this.prisma.membership.findFirst({
       where: { id: membershipId, organizationId: session.organizationId },
-      select: { id: true },
+      include: { account: true, profile: true },
     });
-    // A foreign membership id is a 404 for the same reason a foreign template is: the
-    // caller may not learn that it exists elsewhere.
-    if (!membership) throw new NotFoundException();
-    return membership.id;
+    if (!membership) {
+      throw new BadRequestException({
+        error: 'subject_not_found',
+        message: PROFILE_MESSAGES.subject.missing,
+      });
+    }
+    return membership;
+  }
+
+  /**
+   * Flattens the subject across `Account`, `Membership`, and `MemberProfile` into the
+   * shape the resolver wants.
+   *
+   * **Requirement 23 lives here, as an absence.** Nothing on this path masks anything —
+   * not `taxId`, not `dateOfBirth` — and the caller's own capabilities are never consulted
+   * when building the values. That is the counterpart to the profile screen's masking, and
+   * it is easy to get backwards: a value snapshotted into an envelope is part of the
+   * contract, so a manager who cannot read a member's passport number can still create a
+   * contract that carries it, and the document they are authorized to send renders the
+   * real value. Calling `maskProfileValue` here would put `***4567` into a signed
+   * agreement.
+   *
+   * `member.jobTitle` passes `null` because `Membership.jobTitle` **does not exist**: it is
+   * user-management spec 05's column, and this spec must not add it. The source stays in
+   * the catalogue and resolves to the empty string, which requirement 7 already makes
+   * legal — so a template bound to it today starts working the day spec 05 ships, with no
+   * template migration.
+   *
+   * The timezone is the *creating account's*, not the organization's, and that is a
+   * documented approximation: requirement 2 says `today` is the server date in the
+   * **organization** timezone, and `Organization` has no timezone column in this schema.
+   * The account's IANA zone (captured at signup) is the closest true thing available and
+   * is right for the overwhelmingly common case of a sender in the org's own zone; it
+   * falls back to UTC when absent. Adding `Organization.timezone` is a schema change this
+   * spec is explicitly not making.
+   */
+  private async autofillContext(
+    session: SessionPayload,
+    subject: Awaited<ReturnType<EnvelopesService['resolveSubject']>>,
+  ): Promise<AutofillContext> {
+    const [organization, creator] = await Promise.all([
+      this.prisma.organization.findUnique({
+        where: { id: session.organizationId },
+        select: { name: true },
+      }),
+      this.prisma.account.findUnique({
+        where: { id: session.accountId },
+        select: { timezone: true },
+      }),
+    ]);
+
+    return {
+      subject:
+        subject === null
+          ? null
+          : {
+              firstName: subject.account.firstName,
+              lastName: subject.account.lastName,
+              email: subject.account.email,
+              jobTitle: null,
+              joinedAt: subject.joinedAt,
+              addressLine: subject.profile?.addressLine ?? null,
+              city: subject.profile?.city ?? null,
+              postalCode: subject.profile?.postalCode ?? null,
+              country: subject.profile?.country ?? null,
+              taxId: subject.profile?.taxId ?? null,
+              dateOfBirth: subject.profile?.dateOfBirth ?? null,
+              idDocumentNumber: subject.profile?.idDocumentNumber ?? null,
+              bankDetails: subject.profile?.bankDetails ?? null,
+            },
+      organizationName: organization?.name ?? '',
+      timezone: creator?.timezone ?? null,
+    };
+  }
+
+  /**
+   * Whether this caller could have read the subject's sensitive profile values *on the
+   * profile screen*. Used only to decide the `masked` presentation hint above — never to
+   * decide what `value` contains, which requirement 23 settles for everyone alike.
+   *
+   * Runs through `canReadProfilePii(role, isSelf)` rather than `hasCapability` so a member
+   * looking at an envelope drawn from their own profile is not told their own date of
+   * birth is hidden from them.
+   */
+  private async callerCanReadProfilePii(
+    session: SessionPayload,
+    subjectMembershipId: string | null,
+  ): Promise<boolean> {
+    const [caller, subject] = await Promise.all([
+      this.prisma.membership.findFirst({
+        where: {
+          accountId: session.accountId,
+          organizationId: session.organizationId,
+          status: 'active',
+        },
+        select: { role: true },
+      }),
+      subjectMembershipId === null
+        ? Promise.resolve(null)
+        : this.prisma.membership.findUnique({
+            where: { id: subjectMembershipId },
+            select: { accountId: true },
+          }),
+    ]);
+
+    return canReadProfilePii(caller?.role ?? null, subject?.accountId === session.accountId);
   }
 
   private async can(

@@ -12,6 +12,7 @@ import {
   hasCapability,
   parsePlaceholders,
   sanitizeTemplateHtml,
+  validateAutofillSource,
   validateFieldKey,
   validateFieldLabel,
   validateFilledBy,
@@ -584,6 +585,23 @@ export class DocumentTemplatesService {
       if (!filledBy.valid) {
         if (filledBy.unknownRoleKey) unknownRoles.push(filledBy.unknownRoleKey);
         else errors[at('filledBy')] = filledBy.error;
+      }
+
+      /* ------------------------------------------------------------------ *
+       * Spec 03, validation rule 9: an autofill binding must name a catalogue key and
+       * be type-compatible with the field.
+       *
+       * Checked at *save* time and nowhere else. By the time an envelope resolves the
+       * binding it is stored data, and requirement 7 forbids failing a creation over it
+       * — `resolveAutofill` skips a stale binding silently. This is the one moment at
+       * which a mistake can still be corrected, so it is the one moment that refuses.
+       *
+       * Only when the type is known: a field whose type is already invalid would
+       * otherwise be told its perfectly good source "cannot fill an undefined field".
+       * ------------------------------------------------------------------ */
+      if (TEMPLATE_FIELD_TYPES.includes(type)) {
+        const source = validateAutofillSource(raw?.autofillSource, type);
+        if (!source.valid) errors[at('autofillSource')] = source.error;
       }
 
       if (key.valid && label.valid && TEMPLATE_FIELD_TYPES.includes(type)) {

@@ -1,7 +1,9 @@
 # Devscribed.Admin
 
-Implementation of the user-management specs in [`specs/`](specs/). Spec 01 —
-[Organization Creation](specs/user-management/01-organization-creation.md) — is complete.
+Implementation of the specs in [`specs/`](specs/). Complete today: user-management spec
+01 — [Organization Creation](specs/user-management/01-organization-creation.md) — and the
+whole [document builder](specs/documents/) area, specs 01 through 03: contract templates,
+two-party electronic signature, and autofill from the member profile.
 
 ## Stack
 
@@ -17,11 +19,12 @@ Implementation of the user-management specs in [`specs/`](specs/). Spec 01 —
 ## Layout
 
 ```
-packages/validation/  every signup rule and error message — one source shared by web and API
-apps/api/             NestJS: POST /api/signup, /api/login, /api/logout,
-                      GET /api/me, GET /api/organizations/{orgId}/members
-apps/web/             Next.js: /signup, /login, /org/{orgId}/members
-e2e/                  Playwright specs, one per TC-01-E2E-* case
+packages/validation/  every rule and error message — one source shared by web and API
+apps/api/             NestJS: auth, members, /document-templates, /envelopes,
+                      the public /api/sign surface, and /api/internal
+apps/web/             Next.js: /signup, /login, /org/{orgId}/…, and /sign/{token},
+                      the one route in the app that has no session
+e2e/                  Playwright specs, one file per spec area
 infra/terraform/      AWS for the documents area — one root module, dev and prod
 ```
 
@@ -140,14 +143,20 @@ reads it.
 ## Tests
 
 ```bash
-npm run test:unit   # validation rules — TC-01-UNIT-01…07
-npm run test:int    # signup endpoint — TC-01-INT-01…04, needs Postgres running
-npm run test:e2e    # browser flows — TC-01-E2E-01…07 (starts both dev servers)
+npm run test:unit   # pure rules: validation, sanitizer, hash chain, autofill
+npm run test:int    # every endpoint, against a disposable database — needs Postgres
+npm run test:e2e    # browser flows, including signing (starts both dev servers)
 ```
+
+Every test case in the specs has a test named after it, so `TC-02-INT-14` in
+`specs/documents/02-envelopes-and-signing.md` and the `describe` that proves it are one
+search apart. `.github/workflows/test.yml` runs all three tiers on every pull request.
 
 `test:int` resets `devscribed_test` before it starts, so a failed run never poisons the
 next one. `test:e2e` starts the two dev servers itself and reuses them if they are
-already up.
+already up — which is worth knowing, because a stale server left on port 3000 gets
+adopted silently. If a whole E2E run fails at the login screen, check what is actually
+answering there before looking anywhere else.
 
 ### When something is off
 

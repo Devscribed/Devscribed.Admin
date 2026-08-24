@@ -14,6 +14,8 @@ import { InternalModule } from './internal/internal.module';
 import { TestMailController } from './mail/test-mail.controller';
 import { SigningModule } from './signing/signing.module';
 import { MeController } from './members/me.controller';
+import { MemberProfileController } from './members/member-profile.controller';
+import { MemberProfileService } from './members/member-profile.service';
 import { MembersController } from './members/members.controller';
 import { SignupController } from './signup/signup.controller';
 import { SignupService } from './signup/signup.service';
@@ -54,9 +56,13 @@ import { TestRoleController } from './test-support/test-role.controller';
     ResetPasswordController,
     MeController,
     MembersController,
+    // Spec 03's contract details. Flat here rather than in `DocumentsModule`: the
+    // member profile is a member-management resource that the documents area reads,
+    // not a documents resource.
+    MemberProfileController,
     TestMailController,
     TestRoleController,
   ],
-  providers: [SignupService, LoginService, PasswordResetService],
+  providers: [SignupService, LoginService, PasswordResetService, MemberProfileService],
 })
 export class AppModule {}

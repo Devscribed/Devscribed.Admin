@@ -57,7 +57,11 @@ export type Capability =
   | 'ManageEnvelopes'
   | 'VoidEnvelope'
   | 'DownloadSignedDocument'
-  | 'ViewEnvelopeAudit';
+  | 'ViewEnvelopeAudit'
+  // Spec 03 — field autofill and the member profile behind it.
+  | 'ViewMemberProfile'
+  | 'ViewMemberProfilePii'
+  | 'EditMemberProfile';
 
 /**
  * Permission matrix from spec 01 and spec 02, "Roles & Permission Matrix".
@@ -80,6 +84,9 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     'VoidEnvelope',
     'DownloadSignedDocument',
     'ViewEnvelopeAudit',
+    'ViewMemberProfile',
+    'ViewMemberProfilePii',
+    'EditMemberProfile',
   ],
   manager: [
     'ViewDocumentTemplates',
@@ -88,7 +95,14 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     'VoidEnvelope',
     'DownloadSignedDocument',
     'ViewEnvelopeAudit',
+    // Spec 03's matrix gives a manager the masked view and nothing more: they must be
+    // able to create a contract for a member without being able to read that member's
+    // passport number, so `ViewMemberProfilePii` and `EditMemberProfile` stop here.
+    'ViewMemberProfile',
   ],
+  // `user` looks empty, but a member reading and editing *their own* contract details is
+  // authorized below by `canReadProfile` and friends, not from this table. See the note
+  // above those helpers for why "self" must never become a row here.
   user: [],
   viewer: [],
 };
@@ -101,4 +115,50 @@ export function hasCapability(role: string | null | undefined, capability: Capab
 /** Convenience for UI gating, which usually needs the whole set rather than one probe. */
 export function capabilitiesFor(role: string | null | undefined): readonly Capability[] {
   return ROLE_CAPABILITIES[normalizeRole(role)];
+}
+
+/* ------------------------------------------------------------------ *
+ * Spec 03 — member profile access, where role is only half the answer
+ *
+ * The spec's matrix has a column headed "user (own)" that grants a plain `user` all three
+ * profile capabilities. It is tempting to encode that as a fifth role called `self`, and
+ * that would be a mistake: `self` is not something `Membership.role` can ever contain, so
+ * a `self` row would be a value `normalizeRole()` can never produce and every call site
+ * would have to *decide* to pass it — which is exactly the decision that must not be
+ * hidden inside a lookup table.
+ *
+ * The two questions are genuinely different. `ROLE_CAPABILITIES` answers "what may this
+ * role do", a property of the role alone. "Is this my own record" is a property of the
+ * request — the caller's membership id compared with the one in the URL — and only the
+ * API (or the UI, which knows which member it is rendering) can answer it. Smuggling the
+ * second into the first would mean a table whose truth depends on unstated context, and
+ * an `ROLE_CAPABILITIES.user` that reads as "may read anyone's tax id".
+ *
+ * So the composition happens here, in the open: capability OR identity. Both surfaces
+ * call the same three helpers, so the rule cannot drift between the button the UI hides
+ * and the 403 the API returns.
+ *
+ * `isSelf` wins for every role, including `viewer`. The matrix spells the "own" column
+ * out only for `user` because that is the interesting case, but the principle behind it
+ * is about whose record it is, not about which role happens to be looking: nobody's own
+ * date of birth is a secret from them.
+ * ------------------------------------------------------------------ */
+
+/** Requirement 19 / the matrix row `ViewMemberProfile`: admin, manager, or the member. */
+export function canReadProfile(role: string | null | undefined, isSelf: boolean): boolean {
+  return isSelf || hasCapability(role, 'ViewMemberProfile');
+}
+
+/**
+ * Requirement 19: every read of a sensitive value is authorized by
+ * `ViewMemberProfilePii`. A member always sees their own tax id and date of birth in
+ * full — masking someone's data from themselves protects nobody.
+ */
+export function canReadProfilePii(role: string | null | undefined, isSelf: boolean): boolean {
+  return isSelf || hasCapability(role, 'ViewMemberProfilePii');
+}
+
+/** The matrix row `EditMemberProfile`: admin, or the member editing their own details. */
+export function canEditProfile(role: string | null | undefined, isSelf: boolean): boolean {
+  return isSelf || hasCapability(role, 'EditMemberProfile');
 }

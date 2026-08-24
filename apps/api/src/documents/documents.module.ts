@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AutofillController } from './autofill.controller';
 import { DocumentTemplatesController } from './document-templates.controller';
 import { DocumentTemplatesService } from './document-templates.service';
 import { EnvelopeCompletionService } from './envelope-completion';
@@ -23,7 +24,9 @@ import { EnvelopesService } from './envelopes.service';
  * queue.
  */
 @Module({
-  controllers: [DocumentTemplatesController, EnvelopesController],
+  // `AutofillController` is stateless — the catalogue is a constant in
+  // `@devscribed/validation` — so it has no provider of its own.
+  controllers: [DocumentTemplatesController, EnvelopesController, AutofillController],
   providers: [
     DocumentTemplatesService,
     EnvelopesService,

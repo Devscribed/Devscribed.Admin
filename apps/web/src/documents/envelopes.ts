@@ -55,6 +55,29 @@ export interface EnvelopeFieldDto {
   /** Not in the documented `fields` shape; honoured when the API sends it. */
   maxLength?: number | null;
   options?: string[] | null;
+  /**
+   * Spec 03. Neither of these is in the documented `GET .../envelopes/{id}` field shape,
+   * but the spec's own screens need both, so they are read when the API sends them and
+   * the screen degrades without them:
+   *
+   * - `autofillSource` names the catalogue key behind an autofilled value, which is what
+   *   the marker's tooltip prints ("⟲ today" vs "⟲ from profile"). Absent, the marker
+   *   still appears and just says "from profile".
+   * - `masked` marks a value the caller is not cleared to read (Alt Flow "Manager creates
+   *   a contract for a member whose PII they cannot read"; TC-03-INT-08 says the field is
+   *   "marked masked for G"). Absent, the field renders as an ordinary editable input.
+   */
+  autofillSource?: string | null;
+  masked?: boolean;
+  /** Requirement 10 — this value was shortened to fit `maxLength` and needs the warning. */
+  autofillTruncated?: boolean;
+}
+
+/** An `autofillGaps` entry — a bound field the subject's profile could not fill. */
+export interface AutofillGap {
+  key: string;
+  label: string;
+  source: string;
 }
 
 export interface EnvelopeSignerDto {
@@ -110,7 +133,12 @@ export interface CreateEnvelopeResponse {
   title: string;
   status: EnvelopeStatus;
   fieldValues: Record<string, string>;
+  /** Requirement 11 — the keys autofill populated, so the fill form can mark them. */
   autofilled: string[];
+  /** Requirement 7 / Alt Flow "Incomplete profile". Absent when there was no subject. */
+  autofillGaps?: AutofillGap[];
+  /** Requirement 10 — keys whose resolved value was shortened to fit `MaxLength`. */
+  autofillTruncated?: string[];
   signers: { id: string; roleKey: string; label: string; order: number; name: string; email: string }[];
 }
 

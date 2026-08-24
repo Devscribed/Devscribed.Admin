@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ENVELOPE_LIMITS,
   ENVELOPE_MESSAGES,
+  PROFILE_MESSAGES,
+  findAutofillSource,
   validateEnvelopeTitle,
   validateExpiryDays,
   validateSignerEmail,
@@ -15,6 +17,7 @@ import { apiRequest, failureMessage } from './api';
 import {
   envelopeUrl,
   ownerLabel,
+  type AutofillGap,
   type EnvelopeDetail,
   type EnvelopeFieldDto,
   type SendEnvelopeResponse,
@@ -32,6 +35,11 @@ export interface TemplateChoice {
 export interface MemberChoice {
   id: string;
   name: string;
+  /**
+   * Requirement 13 — a removed member may still legitimately be the subject of a
+   * contract, so they are listed, marked, and never the default.
+   */
+  isRemoved?: boolean;
 }
 
 interface SignerDraft {
@@ -65,6 +73,9 @@ export function FillForm({
   readOnly,
   onSaved,
   onSent,
+  autofilled,
+  autofillGaps,
+  autofillTruncated,
 }: {
   orgId: string;
   /** `null` until the envelope exists — the template select is the only live control. */
@@ -79,6 +90,14 @@ export function FillForm({
   readOnly: boolean;
   onSaved: (detail: EnvelopeDetail) => void;
   onSent: (response: SendEnvelopeResponse) => void;
+  /**
+   * The three autofill reports from `POST .../envelopes` (requirements 10-11). They only
+   * exist on the screen that created the envelope; the detail screen renders the same
+   * form without them and falls back to each field's own `autofilled` flag.
+   */
+  autofilled?: string[];
+  autofillGaps?: AutofillGap[];
+  autofillTruncated?: string[];
 }) {
   const toast = useToast();
 
@@ -125,6 +144,41 @@ export function FillForm({
     [detail],
   );
 
+  /**
+   * A key counts as autofilled if either source says so: the create response's list
+   * (requirement 11) or the field's own flag on a reloaded envelope. Marking survives an
+   * overwrite by design — TC-03-INT-05 keeps the key in `autofilled` after the sender
+   * edits the value, because the marker records where the value *came from*.
+   */
+  const autofilledKeys = useMemo(() => {
+    const keys = new Set(autofilled ?? []);
+    for (const field of detail?.fields ?? []) if (field.autofilled) keys.add(field.key);
+    return keys;
+  }, [autofilled, detail]);
+
+  /**
+   * Same two-source rule as `autofilledKeys`: the create response reports truncation for
+   * the envelope just made, and a reloaded envelope carries the flag on the field itself.
+   * Requirement 10's whole point is that the sender *sees* the shortening, and a reload
+   * must not be what makes the warning disappear.
+   */
+  const truncatedKeys = useMemo(() => {
+    const keys = new Set(autofillTruncated ?? []);
+    for (const field of detail?.fields ?? []) if (field.autofillTruncated) keys.add(field.key);
+    return keys;
+  }, [autofillTruncated, detail]);
+
+  /**
+   * Alt Flow "Manager creates a contract for a member whose PII they cannot read": the
+   * value is real server-side and renders into the sent document, but this caller may not
+   * read it. Such a field is read-only here, is never validated against a mask, and is
+   * dropped from the `PUT` body — writing a mask back would corrupt the contract.
+   */
+  const maskedKeys = useMemo(
+    () => new Set((detail?.fields ?? []).filter((field) => field.masked).map((f) => f.key)),
+    [detail],
+  );
+
   const ordered = [...signers].sort((a, b) => a.order - b.order);
   const sameEmail =
     ordered.length === 2 &&
@@ -144,6 +198,7 @@ export function FillForm({
     if (!expiryResult.valid) next.expiresInDays = expiryResult.error;
 
     for (const field of senderFields) {
+      if (maskedKeys.has(field.key)) continue; // not this caller's value to judge
       const raw = values[field.key] ?? '';
       if (raw.trim().length === 0) continue; // emptiness is only a send-time rule
       const message = validateFieldValue(field, raw);
@@ -170,6 +225,7 @@ export function FillForm({
 
     for (const field of senderFields) {
       if (!field.required) continue;
+      if (maskedKeys.has(field.key)) continue; // already filled server-side
       if ((values[field.key] ?? '').trim().length === 0) {
         next[field.key] = ENVELOPE_MESSAGES.field.required(field.label);
       }
@@ -207,7 +263,9 @@ export function FillForm({
       title: title.trim(),
       expiresInDays: expiry.valid ? expiry.value : ENVELOPE_LIMITS.expiryDaysDefault,
       fieldValues: Object.fromEntries(
-        senderFields.map((field) => [field.key, values[field.key] ?? '']),
+        senderFields
+          .filter((field) => !maskedKeys.has(field.key))
+          .map((field) => [field.key, values[field.key] ?? '']),
       ),
       signers: ordered.map((signer) => ({
         id: signer.id,
@@ -374,10 +432,25 @@ export function FillForm({
       : template.name,
   }));
 
+  /**
+   * Active members first, former ones after and suffixed. Meridian's `Select` has no
+   * `optgroup` and no disabled option, so the spec's "Former members" group is expressed
+   * as ordering plus a suffix rather than as a fake, unselectable header row — a header
+   * that could be clicked would be a dead control. "None" stays the default, which is
+   * what requirement 13's "not offered by default" asks for.
+   */
   const subjectOptions = [
     { value: '', label: 'None' },
-    ...members.map((member) => ({ value: member.id, label: member.name })),
+    ...members
+      .filter((member) => !member.isRemoved)
+      .map((member) => ({ value: member.id, label: member.name })),
+    ...members
+      .filter((member) => member.isRemoved)
+      .map((member) => ({ value: member.id, label: `${member.name} — former member` })),
   ];
+
+  const subject = members.find((member) => member.id === subjectId) ?? null;
+  const totalFields = detail?.fields.length ?? 0;
 
   const locked = detail !== null;
 
@@ -417,15 +490,45 @@ export function FillForm({
             )}
           </div>
 
-          <Select
-            label="Subject"
-            value={subjectId}
-            options={subjectOptions}
-            placeholder="None"
-            disabled={locked}
-            onChange={onSubjectChange}
-            data-testid="envelope-subject-select"
-          />
+          <div>
+            <Select
+              label="Subject"
+              value={subjectId}
+              options={subjectOptions}
+              placeholder="None"
+              disabled={locked}
+              onChange={onSubjectChange}
+              data-testid="envelope-subject-select"
+            />
+            {/* Requirement 12 — creating without a subject is a deliberate choice, and the
+                order matters because autofill runs at creation, which the template pick
+                triggers. Saying so here beats a form that quietly fills nothing. */}
+            {!locked && (
+              <p style={{ margin: '6px 0 0', fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}>
+                The member this contract is about. Pick them before the template — autofill
+                runs when the document is created. Leaving this as None is fine.
+              </p>
+            )}
+            {/* States table: "Subject removed — selecting one shows an advisory note,
+                not an error." Resolution works exactly the same for them. */}
+            {subject?.isRemoved && (
+              <div style={{ marginTop: 'var(--sp-5)' }}>
+                <InfoBanner tone="warning" data-testid="envelope-subject-removed-note">
+                  {subject.name} is a former member. Their details still fill this contract.
+                </InfoBanner>
+              </div>
+            )}
+            {/* Requirement 11 — how much of the document the subject actually filled.
+                Absent with no subject, which the States table asks for explicitly. */}
+            {detail && subjectId.length > 0 && (
+              <p
+                data-testid="envelope-autofill-summary"
+                style={{ margin: '8px 0 0', fontSize: 'var(--fs-13)', color: 'var(--text-sub)' }}
+              >
+                Fills {autofilledKeys.size} of {totalFields} fields from this member's profile
+              </p>
+            )}
+          </div>
 
           {creating && (
             <div style={{ display: 'flex', gap: 'var(--sp-4)', color: 'var(--accent)' }}>
@@ -485,26 +588,78 @@ export function FillForm({
             </p>
           )}
           <div style={{ display: 'grid', gap: 'var(--sp-7)' }}>
-            {senderFields.map((field) => (
-              <div key={field.key}>
-                <FieldInput
-                  field={field}
-                  value={values[field.key] ?? ''}
-                  disabled={readOnly}
-                  testId={`envelope-field-${field.key}`}
-                  error={errors[field.key] || undefined}
-                  onChange={(next) =>
-                    setValues((prev) => ({ ...prev, [field.key]: next }))
-                  }
-                  onBlur={() => {
-                    const message = validateFieldValue(field, values[field.key] ?? '');
-                    setErrors((prev) => ({ ...prev, [field.key]: message ?? '' }));
-                  }}
-                />
-                {field.autofilled && <AutofillHint field={field} />}
-              </div>
-            ))}
+            {senderFields.map((field) => {
+              const masked = maskedKeys.has(field.key);
+              return (
+                <div key={field.key}>
+                  <FieldInput
+                    field={field}
+                    value={values[field.key] ?? ''}
+                    disabled={readOnly || masked}
+                    testId={`envelope-field-${field.key}`}
+                    error={errors[field.key] || undefined}
+                    onChange={(next) => setValues((prev) => ({ ...prev, [field.key]: next }))}
+                    onBlur={() => {
+                      const message = validateFieldValue(field, values[field.key] ?? '');
+                      setErrors((prev) => ({ ...prev, [field.key]: message ?? '' }));
+                    }}
+                  />
+                  {masked ? (
+                    <span
+                      data-testid={`envelope-field-masked-${field.key}`}
+                      style={{
+                        display: 'inline-block',
+                        marginTop: 6,
+                        fontSize: 'var(--fs-12)',
+                        color: 'var(--text-muted)',
+                      }}
+                    >
+                      Hidden — will be filled automatically
+                    </span>
+                  ) : (
+                    autofilledKeys.has(field.key) && <AutofillMarker field={field} />
+                  )}
+                  {truncatedKeys.has(field.key) && (
+                    <span
+                      data-testid={`envelope-autofill-truncated-${field.key}`}
+                      style={{
+                        display: 'inline-block',
+                        marginTop: 6,
+                        fontSize: 'var(--fs-12)',
+                        color: 'var(--amber-700)',
+                      }}
+                    >
+                      {PROFILE_MESSAGES.autofill.truncated}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
+
+          {/* Alt Flow "Incomplete profile": gaps, never an error. The link opens in a new
+              tab so the half-filled draft on this screen is not lost. */}
+          {detail && subjectId.length > 0 && (autofillGaps?.length ?? 0) > 0 && (
+            <div style={{ marginTop: 'var(--sp-7)' }}>
+              <InfoBanner tone="warning" data-testid="envelope-autofill-gaps">
+                <span>
+                  {PROFILE_MESSAGES.autofill.gaps(
+                    autofillGaps!.length,
+                    joinLabels(autofillGaps!),
+                  )}{' '}
+                  <a
+                    data-testid="envelope-open-profile-link"
+                    href={`/org/${orgId}/members/${subjectId}?tab=contract-details`}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: 'var(--accent)', textDecoration: 'underline' }}
+                  >
+                    Open profile
+                  </a>
+                </span>
+              </InfoBanner>
+            </div>
+          )}
         </Card>
       )}
 
@@ -651,11 +806,24 @@ export function FillForm({
   );
 }
 
-/** Requirement 4 — an autofilled value is a starting point, so the hint never locks it. */
-function AutofillHint({ field }: { field: EnvelopeFieldDto }) {
+/**
+ * Spec 02 requirement 4 — an autofilled value is a starting point, not a lock, so this is
+ * a marker beside an ordinary editable input rather than anything that disables it.
+ *
+ * The tooltip names the source when the API sends `autofillSource`; the catalogue lookup
+ * is the package's, so the wording matches the picker the admin bound the field in.
+ */
+function AutofillMarker({ field }: { field: EnvelopeFieldDto }) {
+  const source = field.autofillSource ? findAutofillSource(field.autofillSource) : undefined;
+  const name = source?.label ?? null;
   return (
     <span
       data-testid={`envelope-field-autofill-${field.key}`}
+      title={
+        name
+          ? `Filled automatically from ${name}. Edit it freely — the document keeps what you send.`
+          : "Filled automatically from this member's profile. Edit it freely."
+      }
       style={{
         display: 'inline-block',
         marginTop: 6,
@@ -663,7 +831,19 @@ function AutofillHint({ field }: { field: EnvelopeFieldDto }) {
         color: 'var(--text-muted)',
       }}
     >
-      ⟲ from profile — edit freely
+      ⟲ {name ? `from ${name}` : 'from profile'} — edit freely
     </span>
   );
+}
+
+/**
+ * "Bank details or ID document" — the gap banner's list of what the profile lacks.
+ *
+ * The labels are printed verbatim rather than lower-cased: they are field labels an
+ * admin wrote, and "ID document" is not improved by becoming "id document".
+ */
+function joinLabels(gaps: AutofillGap[]): string {
+  const labels = gaps.map((gap) => gap.label);
+  if (labels.length <= 1) return labels[0] ?? '';
+  return `${labels.slice(0, -1).join(', ')} or ${labels[labels.length - 1]}`;
 }

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { APIRequestContext, Page } from '@playwright/test';
+import { request as apiContexts, type APIRequestContext, type Page } from '@playwright/test';
 
 /**
  * Signup is irreversible by design (no delete endpoint yet), so tests never reuse an
@@ -454,6 +454,248 @@ function databaseUrl(): string {
   const match = /^\s*DATABASE_URL\s*=\s*"?([^"\r\n]+)"?/m.exec(readFileSync(file, 'utf8'));
   if (!match) throw new Error(`No DATABASE_URL in ${file}`);
   return match[1];
+}
+
+/* ------------------------------------------------------------------ *
+ * Spec 03 — field autofill.
+ *
+ * Everything below is additive: the spec 01/02 helpers above are untouched, because the
+ * suites that use them are green and their fixtures are not this spec's to reshape.
+ * ------------------------------------------------------------------ */
+
+export interface OrganizationMemberSeed {
+  firstName: string;
+  lastName: string;
+  /** Defaults to a fresh address. */
+  email?: string;
+}
+
+export interface SeededMember {
+  membershipId: string;
+  accountId: string;
+  email: string;
+  /** `firstName lastName` — what `member.fullName` resolves to and what the UI prints. */
+  name: string;
+}
+
+/**
+ * Puts a **second person into an existing organization** — the precondition TC-03-E2E-05,
+ * -06 and -07 are impossible without, since each of them needs two members of one org
+ * looking at each other's contract details.
+ *
+ * Why this cannot be done through the product: there is no invite flow yet (see the note
+ * on `setMembershipRole`), so signup is the only way to mint an account — and signup
+ * always creates an organization of its own. `Membership.accountId` is `@unique` in
+ * `schema.prisma`, so an account cannot hold a second membership either. The one honest
+ * fixture left is therefore to register the account normally and then **move** the
+ * membership signup just created into the organization under test, which is what the
+ * invite flow will do in one step when user-management spec 04 lands. The organization
+ * signup made along the way is left behind unused; nothing reads it.
+ *
+ * Two details that are load-bearing rather than incidental:
+ *
+ *  - The signup runs in its **own** `APIRequestContext`. `POST /api/signup` issues a
+ *    session cookie, and running it in the caller's context would silently replace the
+ *    admin session that every precondition after this one depends on.
+ *  - The role is deliberately *not* set here. `POST /api/test/role` is this suite's one
+ *    way to say what a membership may do, and leaving it to the caller keeps every test's
+ *    role visible in the test itself rather than buried in a fixture.
+ */
+export async function addMemberToOrganization(
+  orgId: string,
+  seed: OrganizationMemberSeed,
+): Promise<SeededMember> {
+  const email = seed.email ?? uniqueEmail('member');
+
+  const context = await apiContexts.newContext();
+  let accountId: string;
+  try {
+    const response = await context.post(`${API}/api/signup`, {
+      data: {
+        ...VALID,
+        firstName: seed.firstName,
+        lastName: seed.lastName,
+        email,
+        orgName: `Holding org for ${email}`,
+        timezone: 'Europe/Berlin',
+      },
+    });
+    if (!response.ok()) {
+      throw new Error(
+        `Precondition failed: could not register ${email} (${response.status()} ${await response.text()})`,
+      );
+    }
+    accountId = (await response.json()).account.id as string;
+  } finally {
+    await context.dispose();
+  }
+
+  const { PrismaClient } = (await import('@prisma/client')) as {
+    PrismaClient: new (options: {
+      datasources: { db: { url: string } };
+    }) => {
+      membership: { update(args: unknown): Promise<{ id: string }> };
+      $disconnect(): Promise<void>;
+    };
+  };
+
+  const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl() } } });
+  try {
+    const membership = await prisma.membership.update({
+      // `accountId` is unique, which is also why the membership has to be moved rather
+      // than duplicated.
+      where: { accountId },
+      data: { organizationId: orgId, status: 'active' },
+    });
+    return {
+      membershipId: membership.id,
+      accountId,
+      email,
+      name: `${seed.firstName} ${seed.lastName}`,
+    };
+  } finally {
+    await prisma.$disconnect();
+  }
+}
+
+/** The eight contract-detail columns, as `PUT .../profile` takes them. */
+export interface MemberProfileSeed {
+  addressLine?: string | null;
+  city?: string | null;
+  postalCode?: string | null;
+  /** ISO 3166-1 alpha-2 (requirement 17). */
+  country?: string | null;
+  taxId?: string | null;
+  /** ISO `YYYY-MM-DD`. */
+  dateOfBirth?: string | null;
+  idDocumentNumber?: string | null;
+  bankDetails?: string | null;
+}
+
+/**
+ * Writes a member's contract details through the documented `PUT`, as a precondition.
+ * The caller must hold a session that `EditMemberProfile` covers — an admin of the
+ * organization, or the member themselves.
+ */
+export async function setMemberProfile(
+  request: APIRequestContext,
+  orgId: string,
+  memberId: string,
+  profile: MemberProfileSeed,
+): Promise<void> {
+  const response = await request.put(
+    `${API}/api/organizations/${orgId}/members/${memberId}/profile`,
+    { data: profile },
+  );
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not save the profile of ${memberId} ` +
+        `(${response.status()} ${await response.text()})`,
+    );
+  }
+}
+
+export interface AutofillSeedField {
+  key: string;
+  label: string;
+  type?: string;
+  required?: boolean;
+  filledBy?: string;
+  maxLength?: number | null;
+  /** A catalogue key (`member.taxId`, `today`, …) or `null` for an unbound field. */
+  autofillSource?: string | null;
+  order?: number;
+}
+
+export interface AutofillTemplateSeed {
+  name: string;
+  bodyHtml: string;
+  fields: AutofillSeedField[];
+  signerRoles?: Array<{ key: string; label: string; order: number }>;
+  publish?: boolean;
+}
+
+/**
+ * `createTemplate` with bound fields.
+ *
+ * A separate helper rather than an extra key on `TemplateSeed`, because `createTemplate`
+ * and its `SeedField` are spec 01/02's fixture: three green suites call them, and widening
+ * an export they share to carry a spec 03 concern is how a passing suite starts failing
+ * for reasons that have nothing to do with what it tests. The draft/publish shape below
+ * is deliberately identical to that helper's — the same lock read-back, for the same
+ * reason it gives.
+ */
+export async function createAutofillTemplate(
+  request: APIRequestContext,
+  orgId: string,
+  seed: AutofillTemplateSeed,
+): Promise<string> {
+  const base = `${API}/api/organizations/${orgId}/document-templates`;
+
+  const created = await request.post(base, { data: { name: seed.name, description: null } });
+  if (created.status() !== 201) {
+    throw new Error(`Precondition failed: could not create "${seed.name}" (${created.status()})`);
+  }
+  const { id } = await created.json();
+
+  const detail = await (await request.get(`${base}/${id}`)).json();
+
+  const draft = await request.put(`${base}/${id}/draft`, {
+    data: {
+      rowVersion: detail.draftVersion.rowVersion,
+      bodyHtml: seed.bodyHtml,
+      signerRoles: seed.signerRoles ?? [
+        { key: 'company', label: 'Company', order: 1 },
+        { key: 'contractor', label: 'Contractor', order: 2 },
+      ],
+      fields: seed.fields.map((field, index) => ({
+        key: field.key,
+        label: field.label,
+        type: field.type ?? 'text',
+        required: field.required ?? false,
+        options: null,
+        maxLength: field.maxLength ?? null,
+        filledBy: field.filledBy ?? 'sender',
+        autofillSource: field.autofillSource ?? null,
+        order: field.order ?? index + 1,
+      })),
+    },
+  });
+  if (!draft.ok()) {
+    throw new Error(
+      `Precondition failed: could not save the draft of "${seed.name}" ` +
+        `(${draft.status()} ${await draft.text()})`,
+    );
+  }
+
+  if (seed.publish) {
+    const published = await request.post(`${base}/${id}/publish`, { data: {} });
+    if (!published.ok()) {
+      throw new Error(
+        `Precondition failed: could not publish "${seed.name}" ` +
+          `(${published.status()} ${await published.text()})`,
+      );
+    }
+  }
+
+  return id;
+}
+
+/**
+ * The server's own idea of "today", in the organization's timezone — which is what
+ * `today` resolves to (requirement 2). Computed rather than hardcoded, and computed in
+ * the org zone rather than the runner's, so a suite run at 23:30 UTC in Berlin does not
+ * fail on a date that is genuinely correct.
+ */
+export function todayInZone(timezone = 'Europe/Berlin'): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
 /** Fires the forgot-password request straight through the API, as a precondition. */

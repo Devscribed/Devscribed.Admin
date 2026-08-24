@@ -1,19 +1,30 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useParams } from 'next/navigation';
+import { useMemo, useState, type FormEvent } from 'react';
 import {
   TEMPLATE_FIELD_TYPES,
   TEMPLATE_MESSAGES,
   clampMaxLength,
   defaultMaxLength,
+  isTypeCompatible,
+  validateAutofillSource,
   validateFieldKey,
   validateFieldLabel,
   validateSelectOptions,
+  type AutofillValueType,
   type TemplateFieldType,
 } from '@devscribed/validation';
 import { Button, Checkbox, Input, Modal, Select } from '@/ds';
 import { errorNode, focusByTestId } from '@/field-error';
+import { LockIcon } from '@/members/icons';
 import type { SignerRoleDto, TemplateFieldDto } from './api';
+import {
+  joinWords,
+  useAutofillSources,
+  valueTypeLabel,
+  type AutofillSourceDto,
+} from './autofill-sources';
 
 const TYPE_LABELS: Record<TemplateFieldType, string> = {
   text: 'Text',
@@ -61,8 +72,54 @@ export function FieldModal({
     initial?.maxLength != null ? String(initial.maxLength) : String(defaultMaxLength('text') ?? ''),
   );
   const [options, setOptions] = useState((initial?.options ?? []).join('\n'));
-  const [errors, setErrors] = useState<{ key?: string; label?: string; options?: string }>({});
+  const [errors, setErrors] = useState<{
+    key?: string;
+    label?: string;
+    options?: string;
+    autofill?: string;
+  }>({});
   const [copied, setCopied] = useState(false);
+
+  /**
+   * The modal is only ever opened from the template editor route, so the organization is
+   * already in the URL. Reading it here rather than threading a prop through the editor
+   * keeps this change inside the field modal, which is what spec 03 extends.
+   */
+  const { orgId } = useParams<{ orgId: string }>();
+  const catalogue = useAutofillSources(orgId);
+
+  /**
+   * Requirement 4 — the options are the *server's* catalogue, filtered by the package's
+   * compatibility rule against the type currently selected in this modal. Both halves
+   * matter: a hardcoded option list would break requirement 3, and a locally invented
+   * filter would be a second copy of a rule the API also enforces at save time.
+   */
+  const allSources: AutofillSourceDto[] = catalogue.status === 'ready' ? catalogue.sources : [];
+  const compatible = useMemo(
+    () => allSources.filter((source) => isTypeCompatible(type, source.valueType)),
+    [allSources, type],
+  );
+
+  /**
+   * The binding the author already had, when the type they just picked cannot carry it.
+   * Requirement: say so rather than silently dropping it — so the option stays in the
+   * list (removing it would render the control blank, which *looks* like a silent drop),
+   * the hint turns into the validator's own sentence, and saving is blocked until the
+   * author resolves it one way or the other.
+   */
+  const boundSource = allSources.find((source) => source.key === autofill);
+  const bindingBroken =
+    autofill.length > 0 &&
+    boundSource !== undefined &&
+    !isTypeCompatible(type, boundSource.valueType);
+
+  /** Which value types this field type rules out — the mockup's "(date — hidden)" note. */
+  const hiddenTypes = useMemo(() => {
+    const shown = new Set(compatible.map((source) => source.valueType));
+    return [...new Set(allSources.map((source) => source.valueType))].filter(
+      (valueType) => !shown.has(valueType),
+    );
+  }, [allSources, compatible]);
 
   function changeType(next: string): void {
     const nextType = next as TemplateFieldType;
@@ -81,8 +138,17 @@ export function FieldModal({
     const labelResult = validateFieldLabel(label);
     const optionsResult =
       type === 'select' ? validateSelectOptions(parseOptions(options)) : ({ valid: true } as const);
+    // Validation rule 9, run through the package's own validator so the sentence the
+    // author reads here is exactly the one the API would send back.
+    const autofillResult = validateAutofillSource(autofill, type);
 
-    if (!keyResult.valid || duplicate || !labelResult.valid || !optionsResult.valid) {
+    if (
+      !keyResult.valid ||
+      duplicate ||
+      !labelResult.valid ||
+      !optionsResult.valid ||
+      !autofillResult.valid
+    ) {
       setErrors({
         key: duplicate
           ? TEMPLATE_MESSAGES.fieldKey.duplicate
@@ -91,13 +157,16 @@ export function FieldModal({
             : keyResult.error,
         label: labelResult.valid ? undefined : labelResult.error,
         options: optionsResult.valid ? undefined : optionsResult.error,
+        autofill: autofillResult.valid ? undefined : autofillResult.error,
       });
       focusByTestId(
         !keyResult.valid || duplicate
           ? 'template-field-key-input'
           : !labelResult.valid
             ? 'template-field-label-input'
-            : 'template-field-options-input',
+            : !optionsResult.valid
+              ? 'template-field-options-input'
+              : 'template-field-autofill-select',
       );
       return;
     }
@@ -165,15 +234,43 @@ export function FieldModal({
             options={filledByOptions}
             onChange={setFilledBy}
           />
-          {/* Spec 03 owns the autofill catalogue; until it lands the only honest option
-              is "no autofill", and the control exists so the shape does not change later. */}
-          <Select
-            label="Autofill from"
-            value={autofill}
-            data-testid="template-field-autofill-select"
-            options={[{ value: '', label: '— none —' }]}
-            onChange={setAutofill}
-          />
+          <div>
+            <Select
+              label="Autofill from"
+              value={autofill}
+              data-testid="template-field-autofill-select"
+              /* "— none —" is the default and means manual entry. */
+              options={[
+                { value: '', label: '— none —' },
+                ...(bindingBroken && boundSource ? [sourceOption(boundSource)] : []),
+                ...compatible.map(sourceOption),
+              ]}
+              disabled={catalogue.status === 'loading'}
+              placeholder={catalogue.status === 'loading' ? 'Loading sources…' : '— none —'}
+              error={errors.autofill}
+              onChange={(next) => {
+                setAutofill(next);
+                setErrors((prev) => ({ ...prev, autofill: undefined }));
+              }}
+            />
+            <p
+              data-testid="template-field-autofill-hint"
+              style={{
+                margin: '6px 0 0',
+                fontSize: 'var(--fs-13)',
+                color: errors.autofill || bindingBroken ? 'var(--error-500)' : 'var(--text-muted)',
+              }}
+            >
+              {autofillHint({
+                catalogue: catalogue.status,
+                type,
+                hiddenTypes,
+                compatibleCount: compatible.length,
+                brokenSourceLabel: bindingBroken && boundSource ? boundSource.label : null,
+                error: errors.autofill,
+              })}
+            </p>
+          </div>
 
           <Checkbox
             checked={required}
@@ -281,4 +378,67 @@ export function FieldModal({
       </form>
     </Modal>
   );
+}
+
+/**
+ * `Member · Tax ID`, as the spec's mockup draws it. Meridian's `Select` has no
+ * `optgroup`, so the group travels in the label — which keeps the options in one flat,
+ * scannable list and still reads as grouped, because the server returns the catalogue
+ * already ordered by group.
+ */
+function sourceOption(source: AutofillSourceDto) {
+  return {
+    value: source.key,
+    label: (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ color: 'var(--text-muted)' }}>{source.group} ·</span>
+        <span>{source.label}</span>
+        {source.sensitive && (
+          <span
+            title="Sensitive — visible only to an admin and to the member"
+            style={{ display: 'inline-flex', color: 'var(--text-faint)' }}
+          >
+            <LockIcon size={11} />
+          </span>
+        )}
+      </span>
+    ),
+  };
+}
+
+/**
+ * One line under the control, carrying whichever of these is true. The order is
+ * severity: a save-blocking error or a broken binding first, then the mockup's "why is
+ * this list short" explanation, then the ordinary encouragement.
+ */
+function autofillHint({
+  catalogue,
+  type,
+  hiddenTypes,
+  compatibleCount,
+  brokenSourceLabel,
+  error,
+}: {
+  catalogue: 'loading' | 'ready' | 'failed';
+  type: TemplateFieldType;
+  hiddenTypes: AutofillValueType[];
+  compatibleCount: number;
+  brokenSourceLabel: string | null;
+  error?: string;
+}): string {
+  if (catalogue === 'loading') return 'Loading the autofill catalogue…';
+  if (catalogue === 'failed') {
+    return 'The autofill catalogue could not be loaded, so no source can be picked right now.';
+  }
+  if (error) return error;
+  if (brokenSourceLabel) {
+    return `“${brokenSourceLabel}” cannot fill a ${type} field. Pick another source, or choose “— none —”.`;
+  }
+  if (compatibleCount === 0) {
+    return `No autofill source can fill a ${type} field — this one is filled by hand.`;
+  }
+  if (hiddenTypes.length > 0) {
+    return `${joinWords(hiddenTypes.map(valueTypeLabel))} sources are hidden because this is a ${type} field.`;
+  }
+  return 'Leave as “— none —” for manual entry.';
 }

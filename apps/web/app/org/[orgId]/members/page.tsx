@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { use, useEffect, useState } from 'react';
 import { Badge, Card } from '@/ds';
 import { PageHeader } from '@/layout/PageHeader';
@@ -17,6 +18,9 @@ interface Member {
  * and can see they are the organization's sole active admin. Search, the removed
  * filter and the row actions belong to spec 04; the title becomes "Active members"
  * when that lands.
+ *
+ * Spec 03 makes each row a link: contract details live on a tab of the member detail
+ * screen, and a list with no way into it would leave that tab unreachable.
  *
  * The shell has already established the session, so this only fetches the list.
  */
@@ -48,8 +52,9 @@ export default function MembersPage({ params }: { params: Promise<{ orgId: strin
       <Card title="Members" padded={false}>
         <div data-testid="members-list">
           {members?.map((member) => (
-            <div
+            <Link
               key={member.id}
+              href={`/org/${orgId}/members/${member.id}`}
               data-testid={`member-row-${member.id}`}
               style={{
                 display: 'flex',
@@ -57,6 +62,8 @@ export default function MembersPage({ params }: { params: Promise<{ orgId: strin
                 gap: 'var(--sp-8)',
                 padding: '14px 20px',
                 borderTop: '1px solid var(--divider)',
+                textDecoration: 'none',
+                color: 'inherit',
               }}
             >
               <span style={{ flex: 2, fontSize: 'var(--fs-15)' }} data-testid="member-name">
@@ -79,7 +86,7 @@ export default function MembersPage({ params }: { params: Promise<{ orgId: strin
               <Badge tone={member.status === 'active' ? 'active' : 'inactive'}>
                 {member.status}
               </Badge>
-            </div>
+            </Link>
           ))}
           {members?.length === 0 && (
             <div style={{ padding: '20px', color: 'var(--text-muted)', fontSize: 'var(--fs-14)' }}>

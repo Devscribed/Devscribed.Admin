@@ -35,6 +35,7 @@ model Account {
   envelopesCreated        Envelope[]                @relation("EnvelopesCreated")
   envelopesVoided         Envelope[]                @relation("EnvelopesVoided")
   envelopeEventsActed     EnvelopeEvent[]           @relation("EnvelopeEventsActed")
+  memberProfilesUpdated   MemberProfile[]           @relation("MemberProfilesUpdated")
 }
 
 /// Single-use, time-limited password-reset grant (spec 02).
@@ -81,6 +82,7 @@ model Membership {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   envelopesAsSubject Envelope[]       @relation("EnvelopeSubject")
   signerRecords      EnvelopeSigner[] @relation("SignerMembership")
+  profile            MemberProfile?
 
   @@index([organizationId])
 }
@@ -370,4 +372,40 @@ model EnvelopeEvent {
   actor    Account?        @relation("EnvelopeEventsActed", fields: [actorAccountId], references: [id], onDelete: SetNull)
 
   @@index([envelopeId, occurredAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Documents area — spec 03, Field Autofill.
+//
+// The only new model the spec needs: `TemplateField.autofillSource` and
+// `Envelope.subjectMembershipId` already exist from specs 01 and 02.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The member data contracts are filled from. One-to-one with `Membership`, and
+/// every column is nullable: a profile is filled in over time, and an incomplete
+/// one must never block a document from being created (spec 03, alt flow
+/// "Incomplete profile").
+///
+/// Four of these columns are PII: `taxId`, `dateOfBirth`, `idDocumentNumber` and
+/// `bankDetails`. Reads are capability-gated, masked for callers without
+/// `ViewMemberProfilePii`, and excluded from logs and from the audit trail.
+/// Column-level encryption is a recorded, accepted gap — see the area README.
+model MemberProfile {
+  id               String    @id @default(uuid())
+  membershipId     String    @unique
+  addressLine      String?
+  city             String?
+  postalCode       String?
+  /// ISO 3166-1 alpha-2.
+  country          String?
+  taxId            String?
+  /// A date with no time component; stored at UTC midnight.
+  dateOfBirth      DateTime?
+  idDocumentNumber String?
+  bankDetails      String?
+  updatedAt        DateTime  @updatedAt
+  updatedByAccountId String?
+
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  updatedBy  Account?   @relation("MemberProfilesUpdated", fields: [updatedByAccountId], references: [id], onDelete: SetNull)
 }

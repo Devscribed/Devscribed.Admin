@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   ROLE_CAPABILITIES,
+  canEditProfile,
+  canReadProfile,
+  canReadProfilePii,
   capabilitiesFor,
   hasCapability,
   normalizeRole,
@@ -46,6 +49,9 @@ describe('ROLE_CAPABILITIES matrix', () => {
         'VoidEnvelope',
         'DownloadSignedDocument',
         'ViewEnvelopeAudit',
+        'ViewMemberProfile',
+        'ViewMemberProfilePii',
+        'EditMemberProfile',
       ],
       manager: [
         'ViewDocumentTemplates',
@@ -54,7 +60,10 @@ describe('ROLE_CAPABILITIES matrix', () => {
         'VoidEnvelope',
         'DownloadSignedDocument',
         'ViewEnvelopeAudit',
+        // Spec 03: the masked view and nothing more.
+        'ViewMemberProfile',
       ],
+      // Spec 03's "user (own)" column is not a row here — see `canReadProfile` below.
       user: [],
       viewer: [],
     });
@@ -96,6 +105,9 @@ describe('capabilitiesFor', () => {
       'VoidEnvelope',
       'DownloadSignedDocument',
       'ViewEnvelopeAudit',
+      'ViewMemberProfile',
+      'ViewMemberProfilePii',
+      'EditMemberProfile',
     ]);
     expect(capabilitiesFor('manager')).toEqual([
       'ViewDocumentTemplates',
@@ -104,6 +116,7 @@ describe('capabilitiesFor', () => {
       'VoidEnvelope',
       'DownloadSignedDocument',
       'ViewEnvelopeAudit',
+      'ViewMemberProfile',
     ]);
     expect(capabilitiesFor('member')).toEqual([]);
     expect(capabilitiesFor(null)).toEqual([]);
@@ -161,5 +174,121 @@ describe('TC-02-UNIT-06: Capability map', () => {
     expect(hasCapability('manager', 'ManageDocumentTemplates')).toBe(false);
     expect(hasCapability('manager', 'ViewDocumentTemplates')).toBe(true);
     expect(hasCapability('user', 'ViewDocumentTemplates')).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Spec 03 — member profile capabilities and the self helpers
+ *
+ * The spec's matrix has five columns: admin, manager, user (own), user (other), viewer.
+ * Only four of them are role columns. The "own" column is the identity question, which
+ * `canReadProfile` and friends answer by composing the table with `isSelf` — so every case
+ * below is exercised with `isSelf` both true and false.
+ * ------------------------------------------------------------------ */
+
+describe('spec 03 profile capabilities', () => {
+  const PROFILE_CAPABILITIES: readonly Capability[] = [
+    'ViewMemberProfile',
+    'ViewMemberProfilePii',
+    'EditMemberProfile',
+  ];
+
+  // From the matrix: admin gets all three, manager gets the masked view only, and both
+  // `user` and `viewer` get nothing at all from the role table.
+  const GRANTED: Record<string, readonly Capability[]> = {
+    admin: PROFILE_CAPABILITIES,
+    manager: ['ViewMemberProfile'],
+    user: [],
+    viewer: [],
+    // The legacy value the column stores today must behave exactly like `user`.
+    member: [],
+    superadmin: [],
+  };
+
+  for (const [role, granted] of Object.entries(GRANTED)) {
+    for (const capability of PROFILE_CAPABILITIES) {
+      const expected = granted.includes(capability);
+      it(`${role} ${expected ? 'has' : 'lacks'} ${capability}`, () => {
+        expect(hasCapability(role, capability)).toBe(expected);
+      });
+    }
+  }
+
+  for (const capability of PROFILE_CAPABILITIES) {
+    it(`null and undefined lack ${capability}`, () => {
+      expect(hasCapability(null, capability)).toBe(false);
+      expect(hasCapability(undefined, capability)).toBe(false);
+    });
+  }
+
+  it('does not disturb the spec 01 and 02 capabilities', () => {
+    expect(hasCapability('manager', 'ManageDocumentTemplates')).toBe(false);
+    expect(hasCapability('manager', 'ManageEnvelopes')).toBe(true);
+    expect(hasCapability('user', 'ViewEnvelopes')).toBe(false);
+  });
+
+  it('never invents a `self` role — the table only holds values the column can hold', () => {
+    expect(Object.keys(ROLE_CAPABILITIES)).toEqual(['admin', 'manager', 'user', 'viewer']);
+    expect(normalizeRole('self')).toBe('viewer');
+    expect(capabilitiesFor('self')).toEqual([]);
+  });
+});
+
+describe('canReadProfile / canReadProfilePii / canEditProfile', () => {
+  type Row = [string | null | undefined, boolean, boolean, boolean];
+
+  // role, canRead, canReadPii, canEdit — with isSelf false, i.e. looking at someone else.
+  const OTHERS: Row[] = [
+    ['admin', true, true, true],
+    ['manager', true, false, false],
+    ['user', false, false, false],
+    ['viewer', false, false, false],
+    ['member', false, false, false],
+    ['superadmin', false, false, false],
+    ['', false, false, false],
+    [null, false, false, false],
+    [undefined, false, false, false],
+  ];
+
+  for (const [role, read, pii, edit] of OTHERS) {
+    it(`${JSON.stringify(role)} viewing another member: read=${read} pii=${pii} edit=${edit}`, () => {
+      expect(canReadProfile(role, false)).toBe(read);
+      expect(canReadProfilePii(role, false)).toBe(pii);
+      expect(canEditProfile(role, false)).toBe(edit);
+    });
+  }
+
+  // Every role reading its own record. The matrix spells this out for `user`; the same
+  // principle covers the rest, because nobody's own date of birth is a secret from them.
+  for (const [role] of OTHERS) {
+    it(`${JSON.stringify(role)} viewing their own record has full access`, () => {
+      expect(canReadProfile(role, true)).toBe(true);
+      expect(canReadProfilePii(role, true)).toBe(true);
+      expect(canEditProfile(role, true)).toBe(true);
+    });
+  }
+
+  it('gives a plain user their own contract details and nobody else\'s (TC-03-E2E-06/07)', () => {
+    expect(canReadProfile('user', true)).toBe(true);
+    expect(canEditProfile('user', true)).toBe(true);
+    expect(canReadProfile('user', false)).toBe(false);
+    expect(canEditProfile('user', false)).toBe(false);
+  });
+
+  it('lets a manager create a contract for a member whose passport number they cannot read', () => {
+    // TC-03-INT-06 / TC-03-E2E-05: masked read, no edit, but envelopes stay available.
+    expect(canReadProfile('manager', false)).toBe(true);
+    expect(canReadProfilePii('manager', false)).toBe(false);
+    expect(canEditProfile('manager', false)).toBe(false);
+    expect(hasCapability('manager', 'ManageEnvelopes')).toBe(true);
+  });
+
+  it('composes the table with identity rather than hiding identity inside the table', () => {
+    // The helper must be exactly capability-OR-self: same answer as the two parts.
+    for (const role of ['admin', 'manager', 'user', 'viewer']) {
+      expect(canReadProfile(role, false)).toBe(hasCapability(role, 'ViewMemberProfile'));
+      expect(canReadProfilePii(role, false)).toBe(hasCapability(role, 'ViewMemberProfilePii'));
+      expect(canEditProfile(role, false)).toBe(hasCapability(role, 'EditMemberProfile'));
+    }
   });
 });
