@@ -1,8 +1,15 @@
 import { Controller, Get, NotFoundException, Query } from '@nestjs/common';
-import { InMemoryMailService } from './in-memory-mail.service';
+import { InMemoryMailService, RecordedMail } from './in-memory-mail.service';
 import { MAIL_MESSAGE_TYPES, MailMessageType, MailService } from './mail.service';
 
 /**
+ * LOCAL DEVELOPMENT AFFORDANCE — not part of the product.
+ *
+ * The `list` route below exists only because local mail goes to an in-memory sink, so a
+ * second signer's magic link has nowhere to be read. **A real mail transport retires it**:
+ * once messages land in an actual mailbox, this route and `/dev`'s outbox panel are dead
+ * weight and should be deleted with the sink.
+ *
  * Lets an E2E run read a link the way a recipient would, without a mailbox.
  *
  * This endpoint hands out live reset and signing tokens, so it is fenced twice: it only
@@ -12,6 +19,29 @@ import { MAIL_MESSAGE_TYPES, MailMessageType, MailService } from './mail.service
 @Controller('api/test/mail')
 export class TestMailController {
   constructor(private readonly mail: MailService) {}
+
+  /**
+   * The whole sink, newest first — what the `/dev` outbox renders.
+   *
+   * Deliberately a sibling of `latest` rather than a mode of it: `latest` 404s when it
+   * finds nothing, because a test asking for "the link" and getting none has failed. A
+   * list that is empty is not a failure, it is an outbox nobody has written to yet, so
+   * this route answers `[]`. Same two fences as `latest`, for the same reason — it hands
+   * out live signing and reset tokens.
+   */
+  @Get()
+  list(@Query('email') email?: string, @Query('type') type?: string) {
+    if (process.env.NODE_ENV === 'production' || !(this.mail instanceof InMemoryMailService)) {
+      throw new NotFoundException();
+    }
+
+    // An unrecognized `type` narrows to nothing rather than 404ing: on a list route the
+    // honest answer to "show me messages of a type that does not exist" is no messages.
+    const wanted = type === undefined ? undefined : MAIL_MESSAGE_TYPES.find((k) => k === type);
+    if (type !== undefined && wanted === undefined) return [];
+
+    return this.mail.allRecords(email, wanted).map(describe);
+  }
 
   @Get('latest')
   latest(@Query('email') email?: string, @Query('type') type?: string) {
@@ -32,6 +62,47 @@ export class TestMailController {
     // inferring the type from which fields happen to be present.
     return { type: record.type, ...record.message };
   }
+}
+
+/**
+ * Subject-ish labels. The application has no subject lines — copy lives in the transport,
+ * not in the payload — so the outbox needs a human name per type from somewhere, and the
+ * discriminator is the only honest source. Kept here rather than in `mail.service.ts`
+ * because it is presentation for a dev screen, not part of the mail contract.
+ */
+const SUBJECTS: Record<MailMessageType, string> = {
+  password_reset: 'Reset your password',
+  signing_invitation: 'A document is waiting for your signature',
+  signing_reminder: 'Reminder: a document is waiting for your signature',
+  envelope_completed: 'Your document is complete',
+  envelope_declined: 'A signer declined the document',
+  envelope_voided: 'A document was voided',
+};
+
+/**
+ * Flattens one record into the row `/dev` shows: who, what, when, and the one link the
+ * message carries. `link` is the whole point of the panel — it is what a recipient would
+ * click — so each type contributes whichever URL it defines, and the two messages that
+ * carry none say so with `null` rather than being omitted.
+ */
+function describe(record: RecordedMail) {
+  // Read through an index signature rather than narrowing on `type` six ways: the three
+  // URL fields are mutually exclusive across the union, so the first one present is the
+  // link, and a message type added later needs no change here to keep working.
+  const message = record.message as unknown as Record<string, unknown>;
+  const link =
+    (message.signingUrl as string | undefined) ??
+    (message.resetUrl as string | undefined) ??
+    (message.downloadUrl as string | undefined) ??
+    null;
+
+  return {
+    type: record.type,
+    to: message.to as string,
+    subject: SUBJECTS[record.type],
+    sentAt: record.sentAt.toISOString(),
+    link,
+  };
 }
 
 function parseMessageType(value: string): MailMessageType {

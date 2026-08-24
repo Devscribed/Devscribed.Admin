@@ -16,6 +16,13 @@ import {
 export interface RecordedMail<T extends MailMessageType = MailMessageType> {
   type: T;
   message: MailMessages[T];
+  /**
+   * When the sink took the message. Nothing in a mail payload carries a send time — the
+   * dates in them are envelope facts (`expiresAt`, `completedAt`) — so the dev outbox
+   * would have nothing to sort or display without this. Recorded here rather than
+   * derived at read time so the order survives any future filtering.
+   */
+  sentAt: Date;
 }
 
 /**
@@ -132,12 +139,30 @@ export class InMemoryMailService extends ConsoleMailService {
       );
   }
 
+  /**
+   * Every record, newest first, optionally narrowed by address and type.
+   *
+   * `latestFor` answers "the one message a test wants to open"; the dev outbox needs the
+   * whole sink, which is why this exists alongside it rather than as a parameter to it.
+   * A copy is returned so a caller cannot mutate the sink by holding the array.
+   */
+  allRecords(email?: string, type?: MailMessageType): RecordedMail[] {
+    const wanted = email?.trim().toLowerCase();
+    return [...this.records]
+      .reverse()
+      .filter(
+        (record) =>
+          (type === undefined || record.type === type) &&
+          (wanted === undefined || record.message.to.trim().toLowerCase() === wanted),
+      );
+  }
+
   private record<T extends MailMessageType>(type: T, message: MailMessages[T]): void {
     if (this.failNext) {
       this.failNext = false;
       throw new Error('Simulated mail transport failure');
     }
 
-    this.records.push({ type, message } as RecordedMail);
+    this.records.push({ type, message, sentAt: new Date() } as RecordedMail);
   }
 }

@@ -19,7 +19,10 @@ import { MemberProfileService } from './members/member-profile.service';
 import { MembersController } from './members/members.controller';
 import { SignupController } from './signup/signup.controller';
 import { SignupService } from './signup/signup.service';
-import { TestRoleController } from './test-support/test-role.controller';
+import {
+  TestMembershipsController,
+  TestRoleController,
+} from './test-support/test-role.controller';
 
 /**
  * Driver selection used to live here, for mail alone. Documents spec 02 added four more
@@ -62,6 +65,8 @@ import { TestRoleController } from './test-support/test-role.controller';
     MemberProfileController,
     TestMailController,
     TestRoleController,
+    // Read side of the same development-only affordance; both go with spec 04.
+    TestMembershipsController,
   ],
   providers: [SignupService, LoginService, PasswordResetService, MemberProfileService],
 })
