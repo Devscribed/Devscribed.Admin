@@ -259,3 +259,14 @@ export function createAdminMembership(input: {
     status: 'active',
   };
 }
+
+/* ------------------------------------------------------------------ *
+ * Documents area — specs/documents
+ *
+ * Re-exported from the package root so consumers keep importing from
+ * '@devscribed/validation' alone. Nothing above this line changes: these are new
+ * exports, not edits to existing rules or messages.
+ * ------------------------------------------------------------------ */
+
+export * from './roles';
+export * from './documents';

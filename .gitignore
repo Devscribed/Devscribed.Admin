@@ -31,3 +31,4 @@ e2e/test-results/
 .env
 # Scratch notes that have held live credentials before.
 Info.txt
+docker-compose.override.yml

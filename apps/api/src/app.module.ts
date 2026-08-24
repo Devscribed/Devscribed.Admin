@@ -8,16 +8,17 @@ import {
   ResetPasswordController,
 } from './auth/password-reset.controller';
 import { PasswordResetService } from './auth/password-reset.service';
-import { SessionService } from './auth/session.service';
+import { CoreModule } from './core.module';
+import { DocumentsModule } from './documents/documents.module';
 import { ConsoleMailService } from './mail/console-mail.service';
 import { InMemoryMailService } from './mail/in-memory-mail.service';
 import { MailService } from './mail/mail.service';
 import { TestMailController } from './mail/test-mail.controller';
 import { MeController } from './members/me.controller';
 import { MembersController } from './members/members.controller';
-import { PrismaService } from './prisma.service';
 import { SignupController } from './signup/signup.controller';
 import { SignupService } from './signup/signup.service';
+import { TestRoleController } from './test-support/test-role.controller';
 
 /**
  * Spec 02 leaves the real transport out of scope, so there are only two stand-ins.
@@ -46,6 +47,12 @@ const mailProvider = {
       global: true,
       secret: process.env.SESSION_SECRET || 'dev-only-insecure-secret',
     }),
+    // Prisma and the session reader, shared by every module rather than duplicated
+    // into each one — see the note in core.module.ts.
+    CoreModule,
+    // The first feature module in the codebase. Everything below stays flat; the
+    // documents area brings its own controllers rather than lengthening this list.
+    DocumentsModule,
   ],
   controllers: [
     SignupController,
@@ -56,14 +63,8 @@ const mailProvider = {
     MeController,
     MembersController,
     TestMailController,
+    TestRoleController,
   ],
-  providers: [
-    PrismaService,
-    SignupService,
-    LoginService,
-    PasswordResetService,
-    SessionService,
-    mailProvider,
-  ],
+  providers: [SignupService, LoginService, PasswordResetService, mailProvider],
 })
 export class AppModule {}

@@ -1,8 +1,11 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
+import { hasCapability } from '@devscribed/validation';
 import { NavItem, SectionLabel } from '@/ds';
+import { DocumentsIcon } from '@/documents/icons';
 import { PeopleIcon } from './icons';
+import { useSession } from './session-context';
 
 interface NavEntry {
   testId: string;
@@ -11,27 +14,58 @@ interface NavEntry {
   icon: React.ReactNode;
 }
 
+interface NavGroup {
+  label: string;
+  entries: NavEntry[];
+}
+
 /**
  * Only destinations that exist today. The Meridian template carries seven groups from
  * the wider product (Timesheets, Reports, Time off…); shipping them as dead links
  * would promise screens no spec has yet defined. Entries arrive as their specs land —
  * Requests (spec 10) is the next one, and it is role-gated.
+ *
+ * Documents is the first capability-gated group. A `user` or `viewer` gets a 404 from
+ * the route itself, so rendering the entry for them would be a dead control pointing at
+ * a wall — the repository rule is that a control the caller cannot use is never drawn.
  */
-function navigation(orgId: string): NavEntry[] {
-  return [
+function navigation(orgId: string, role: string): NavGroup[] {
+  const groups: NavGroup[] = [
     {
-      testId: 'nav-members',
-      label: 'Members',
-      href: `/org/${orgId}/members`,
-      icon: <PeopleIcon />,
+      label: 'People',
+      entries: [
+        {
+          testId: 'nav-members',
+          label: 'Members',
+          href: `/org/${orgId}/members`,
+          icon: <PeopleIcon />,
+        },
+      ],
     },
   ];
+
+  if (hasCapability(role, 'ViewDocumentTemplates')) {
+    groups.push({
+      label: 'Documents',
+      entries: [
+        {
+          testId: 'nav-documents',
+          label: 'Templates',
+          href: `/org/${orgId}/documents/templates`,
+          icon: <DocumentsIcon />,
+        },
+      ],
+    });
+  }
+
+  return groups;
 }
 
 export function Sidebar({ orgId }: { orgId: string }) {
   const pathname = usePathname();
   const router = useRouter();
-  const entries = navigation(orgId);
+  const { role } = useSession();
+  const groups = navigation(orgId, role);
 
   return (
     <nav className="shell-sidebar" data-testid="app-sidebar" aria-label="Main">
@@ -40,33 +74,37 @@ export function Sidebar({ orgId }: { orgId: string }) {
       </div>
 
       <div className="shell-nav">
-        <SectionLabel className="shell-nav-section" style={{ margin: '0 12px 10px' }}>
-          People
-        </SectionLabel>
+        {groups.map((group, index) => (
+          <div key={group.label} style={{ marginTop: index === 0 ? 0 : 'var(--sp-8)' }}>
+            <SectionLabel className="shell-nav-section" style={{ margin: '0 12px 10px' }}>
+              {group.label}
+            </SectionLabel>
 
-        {entries.map((entry) => {
-          const active = pathname === entry.href || pathname.startsWith(`${entry.href}/`);
-          return (
-            // `NavItem` renders its own <a> and takes no `as`/component prop, so it
-            // cannot host a next/link. Passing `href` keeps the row a real link
-            // (middle-click, copy address) while onClick keeps navigation client-side.
-            <NavItem
-              key={entry.href}
-              href={entry.href}
-              onClick={(event: React.MouseEvent) => {
-                if (event.metaKey || event.ctrlKey || event.shiftKey) return;
-                event.preventDefault();
-                router.push(entry.href);
-              }}
-              icon={entry.icon}
-              active={active}
-              title={entry.label}
-              data-testid={entry.testId}
-              aria-current={active ? 'page' : undefined}
-              label={<span className="shell-nav-label">{entry.label}</span>}
-            />
-          );
-        })}
+            {group.entries.map((entry) => {
+              const active = pathname === entry.href || pathname.startsWith(`${entry.href}/`);
+              return (
+                // `NavItem` renders its own <a> and takes no `as`/component prop, so it
+                // cannot host a next/link. Passing `href` keeps the row a real link
+                // (middle-click, copy address) while onClick keeps navigation client-side.
+                <NavItem
+                  key={entry.href}
+                  href={entry.href}
+                  onClick={(event: React.MouseEvent) => {
+                    if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+                    event.preventDefault();
+                    router.push(entry.href);
+                  }}
+                  icon={entry.icon}
+                  active={active}
+                  title={entry.label}
+                  data-testid={entry.testId}
+                  aria-current={active ? 'page' : undefined}
+                  label={<span className="shell-nav-label">{entry.label}</span>}
+                />
+              );
+            })}
+          </div>
+        ))}
       </div>
     </nav>
   );

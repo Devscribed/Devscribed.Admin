@@ -1,0 +1,111 @@
+name: Tests
+
+# The documents area adds roughly sixty test cases, and until this workflow existed
+# nothing in CI ran a single one of them — `.github/workflows/migrate.yml` was the whole
+# of `.github/`. The area README calls this a merge blocker rather than a follow-up, so
+# it runs on every pull request as well as on main.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # One connection string for both jobs. `postgres` is the service container's hostname
+  # inside the runner's network, and the port is the container's own 5432 — the 5433/5434
+  # remapping in docker-compose.yml only exists to dodge a developer's local Postgres.
+  TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/devscribed_test
+
+jobs:
+  # Pure functions only — no database, no browser. It fails in seconds when a shared
+  # validation rule drifts, which is the cheapest possible signal.
+  unit:
+    name: Unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:unit
+
+  integration:
+    name: Integration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: devscribed_test
+        ports: ['5432:5432']
+        # Without this the first `prisma migrate reset` races the server's own
+        # initialisation and fails with a connection error.
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build --workspace @devscribed/validation
+      - name: API integration suite
+        env:
+          # test/global-setup.ts resets this database before every run, which is exactly
+          # what a disposable service container is for.
+          TEST_DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+        run: npm run test:int
+
+  e2e:
+    name: E2E
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: devscribed_dev
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/devscribed_dev
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/devscribed_dev
+      SESSION_SECRET: ci-only-secret
+      # The sink transport is what makes signing and reset mail readable from a test;
+      # `/api/test/*` stays 404 under any real transport and in production.
+      MAIL_TRANSPORT: memory
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build --workspace @devscribed/validation
+      - run: npx playwright install --with-deps chromium
+      # Playwright's webServer starts both dev servers itself; the API's `predev` applies
+      # the migrations, so there is no separate migrate step here.
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 7

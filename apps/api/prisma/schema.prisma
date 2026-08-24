@@ -29,6 +29,9 @@ model Account {
 
   memberships        Membership[]
   passwordResetTokens PasswordResetToken[]
+  templatesCreated        DocumentTemplate[]        @relation("TemplatesCreated")
+  templatesArchived       DocumentTemplate[]        @relation("TemplatesArchived")
+  templateVersionsCreated DocumentTemplateVersion[] @relation("TemplateVersionsCreated")
 }
 
 /// Single-use, time-limited password-reset grant (spec 02).
@@ -56,6 +59,7 @@ model Organization {
   createdAt DateTime @default(now())
 
   memberships Membership[]
+  documentTemplates DocumentTemplate[]
 }
 
 /// Links an account to its organization. One per account — single-org-per-user (FR-8).
@@ -73,4 +77,109 @@ model Membership {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Documents area — spec 01, Document Templates.
+//
+// Strictly additive: none of the four models above changes a column, they only
+// gain back-relations. That is what lets `.github/workflows/migrate.yml` and the
+// Vercel deploy land in either order.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum TemplateStatus {
+  draft
+  published
+  archived
+}
+
+enum TemplateFieldType {
+  text
+  multiline
+  number
+  date
+  email
+  select
+  checkbox
+}
+
+/// A reusable contract. The template itself carries only identity and lifecycle —
+/// every piece of content lives on a version, so that publishing can freeze it.
+model DocumentTemplate {
+  id             String         @id @default(uuid())
+  organizationId String
+  name           String
+  description    String?
+  status         TemplateStatus @default(draft)
+  /// The version new envelopes bind to. Null until the first publish, and only
+  /// ever moved by a successful publish (requirement 4).
+  currentVersionId String?      @unique
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  createdByAccountId String
+  archivedAt     DateTime?
+  archivedByAccountId String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    Account      @relation("TemplatesCreated", fields: [createdByAccountId], references: [id])
+  archivedBy   Account?     @relation("TemplatesArchived", fields: [archivedByAccountId], references: [id])
+  versions     DocumentTemplateVersion[] @relation("TemplateVersions")
+  /// Deliberately not a foreign key back to `versions`: Postgres would need the row
+  /// to exist before the template does. Resolved in the service instead.
+  currentVersion DocumentTemplateVersion? @relation("TemplateCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+
+  /// Uniqueness is case-insensitive per the spec, which a plain @@unique cannot
+  /// express — the migration adds a lower(name) unique index and the service
+  /// checks first so the caller gets the spec's message rather than a 500.
+  @@index([organizationId])
+}
+
+/// Immutable once `publishedAt` is set. Nothing in the application may write to a
+/// published row — requirement 8, asserted by TC-01-INT-05.
+model DocumentTemplateVersion {
+  id            String    @id @default(uuid())
+  templateId    String
+  versionNumber Int
+  bodyHtml      String    @default("")
+  /// Ordered, frozen copy of the field definitions, written at publish. The live
+  /// definitions stay in `fields` so a draft can be edited row by row.
+  fieldsSnapshot Json?
+  /// `[{ key, label, order }]` — exactly two entries once published.
+  signerRoles   Json      @default("[]")
+  publishedAt   DateTime?
+  /// Optimistic lock. Incremented on every draft save; a stale value is a 409.
+  rowVersion    Int       @default(1)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  createdByAccountId String
+
+  template  DocumentTemplate @relation("TemplateVersions", fields: [templateId], references: [id], onDelete: Cascade)
+  createdBy Account          @relation("TemplateVersionsCreated", fields: [createdByAccountId], references: [id])
+  fields    TemplateField[]
+  currentFor DocumentTemplate? @relation("TemplateCurrentVersion")
+
+  @@unique([templateId, versionNumber])
+  @@index([templateId])
+}
+
+model TemplateField {
+  id                String            @id @default(uuid())
+  templateVersionId String
+  key               String
+  label             String
+  type              TemplateFieldType
+  required          Boolean           @default(false)
+  /// For `select`: an array of strings. Null for every other type.
+  options           Json?
+  maxLength         Int?
+  /// `sender` or `signer:{roleKey}` — validated against the version's signer roles.
+  filledBy          String            @default("sender")
+  /// Catalogue key from spec 03; null means the value is typed by hand.
+  autofillSource    String?
+  order             Int
+
+  version DocumentTemplateVersion @relation(fields: [templateVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([templateVersionId, key])
+  @@index([templateVersionId])
 }
