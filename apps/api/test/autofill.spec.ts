@@ -519,6 +519,9 @@ describe('Field autofill', () => {
       const detail = await get(admin, `/${created.body.id}`).expect(200);
       // `SetNull`, so the envelope survives its subject.
       expect(detail.body.subjectMembershipId).toBeNull();
+      // And so does the name that goes with it: nothing left to name, so the screen shows
+      // no subject rather than a dangling one.
+      expect(detail.body.subject).toBeNull();
       const byKey = Object.fromEntries(
         detail.body.fields.map((f: { key: string }) => [f.key, f]),
       );

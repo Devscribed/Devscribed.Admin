@@ -316,9 +316,14 @@ function EnvelopeScreen({ orgId, envelopeId }: { orgId: string; envelopeId: stri
                 currentVersionNumber: detail.template.versionNumber,
               },
             ]}
-            members={[]}
+            /* Exactly one member: the subject this envelope already has, named by the API.
+               This screen never changes the subject (it is fixed at creation), so it needs
+               the one name the Select has to resolve — not the roster the new-document
+               screen loads to *choose* from. Fetching that roster here would put every
+               member's name on a read-only screen that needs one of them. */
+            members={detail.subject ? [detail.subject] : []}
             templateId={detail.template.id}
-            subjectId={detail.subjectMembershipId ?? ''}
+            subjectId={detail.subject?.id ?? detail.subjectMembershipId ?? ''}
             onTemplateChange={() => undefined}
             onSubjectChange={() => undefined}
             creating={false}

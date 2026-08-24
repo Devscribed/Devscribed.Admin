@@ -820,6 +820,15 @@ describe('Envelopes', () => {
       expect(detail.body.expiresInDays).toBe(14);
       expect(detail.body.expiresAt).toBeNull();
       expect(detail.body.subjectMembershipId).toBe(membership.id);
+      // The name comes with the id. The envelope screens name the subject, and a screen
+      // that reads one envelope must not have to pull the whole member roster to turn one
+      // id into one name — before this, the detail screen showed "None" for an envelope
+      // that plainly had a subject.
+      expect(detail.body.subject).toEqual({
+        id: membership.id,
+        name: 'Pat Owner',
+        isRemoved: false,
+      });
 
       const taxId = detail.body.fields.find((f: { key: string }) => f.key === 'contractor_tax_id');
       expect(taxId.maxLength).toBe(20);

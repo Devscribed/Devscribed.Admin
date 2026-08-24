@@ -50,6 +50,7 @@ import { SignatureProvider } from '../signature/signature-provider';
 import { FileStorage, PRESIGNED_URL_TTL_SECONDS } from '../storage/file-storage';
 import { EnvelopeEventsService } from './envelope-events.service';
 import {
+  capturedSignatures,
   presentDocument,
   renderEnvelopeDocument,
   signerOwnedFieldKeys,
@@ -362,10 +363,17 @@ export class EnvelopesService {
     const envelope = await this.load(session, id);
 
     // Once sent, the frozen copy *is* the document; re-rendering it would show something
-    // that is not what anybody signed. The signer-owned placeholders it still carries are
-    // filled in for display only — the stored bytes are the ones that were hashed.
+    // that is not what anybody signed. The signer-owned placeholders and the empty
+    // signature slots it still carries are filled in for display only — the stored bytes
+    // are the ones that were hashed.
     if (envelope.renderedHtml) {
-      return { html: presentDocument(envelope.renderedHtml, readFieldValues(envelope.fieldValues)) };
+      return {
+        html: presentDocument(
+          envelope.renderedHtml,
+          readFieldValues(envelope.fieldValues),
+          capturedSignatures(envelope.signers),
+        ),
+      };
     }
 
     const roles = readSignerRoles(envelope.templateVersion.signerRoles);
@@ -376,6 +384,7 @@ export class EnvelopesService {
         values: readFieldValues(envelope.fieldValues),
         signerOwnedKeys: signerOwnedFieldKeys(readFields(envelope.templateVersion.fieldsSnapshot)),
         signers: envelope.signers.map((s) => ({
+          roleKey: s.roleKey,
           roleLabel: roles.find((r) => r.key === s.roleKey)?.label ?? s.roleKey,
           name: s.name,
           order: s.order,
@@ -787,6 +796,7 @@ export class EnvelopesService {
           bodyHtml: version.bodyHtml,
           values,
           signers: fresh.signers.map((s) => ({
+            roleKey: s.roleKey,
             roleLabel: roles.find((r) => r.key === s.roleKey)?.label ?? s.roleKey,
             name: s.name,
             order: s.order,
@@ -1187,6 +1197,16 @@ export class EnvelopesService {
      * ------------------------------------------------------------------ */
     const canSeePii = await this.callerCanReadProfilePii(session, envelope.subjectMembershipId);
 
+    // The subject's *name*, resolved here rather than by the reader.
+    //
+    // The envelope screens name the subject, and a screen that only reads one envelope has
+    // no business fetching the organization's whole member roster to turn one id into one
+    // name — that would put every member's name on a screen that needs exactly one, and it
+    // is a roster read a viewer of this envelope may not otherwise be entitled to. The
+    // name itself is not PII-gated (it is already on the roster, in the signature block,
+    // and on the certificate); the *profile* behind it still is, and nothing here reads it.
+    const subject = await this.subjectSummary(envelope.subjectMembershipId);
+
     const lastEmail = await this.prisma.envelopeEvent.findMany({
       where: {
         envelopeId: envelope.id,
@@ -1211,6 +1231,10 @@ export class EnvelopesService {
       },
       expiresInDays: readExpiryDays(envelope.fieldValues),
       subjectMembershipId: envelope.subjectMembershipId,
+      // `null` when the envelope has no subject, and also when the membership has since
+      // been deleted outright — the id column is `SetNull` on delete, so that case cannot
+      // normally arise, but the reader must not have to care.
+      subject,
       autofilled: [...autofilled],
       autofillTruncated: [...truncated],
       fields: fields.map((field) => {
@@ -1249,11 +1273,12 @@ export class EnvelopesService {
       // Requirement: present only once the envelope has been sent. Before that the
       // client renders a live preview from the template and the current values.
       //
-      // Presentation copy: the frozen HTML keeps every signer-owned placeholder literal,
-      // and a reader must see the value the signer typed rather than template syntax.
+      // Presentation copy: the frozen HTML keeps every signer-owned placeholder literal
+      // and every signature slot empty, and a reader must see the value the signer typed
+      // and the signatures collected so far rather than template syntax and blank lines.
       // `documentHash` below still belongs to the stored bytes, which are unchanged.
       renderedHtml: envelope.renderedHtml
-        ? presentDocument(envelope.renderedHtml, values)
+        ? presentDocument(envelope.renderedHtml, values, capturedSignatures(envelope.signers))
         : null,
       documentHash: envelope.documentHash,
       pdfStatus: envelope.pdfStatus,
@@ -1434,6 +1459,35 @@ export class EnvelopesService {
             },
       organizationName: organization?.name ?? '',
       timezone: creator?.timezone ?? null,
+    };
+  }
+
+  /**
+   * The subject as the envelope screens need to name them: id, display name, and whether
+   * they have since left. Deliberately nothing else — no profile row is touched here, so
+   * the PII rules that govern the profile screen have nothing to govern.
+   *
+   * `isRemoved` is carried for the same reason the subject picker carries it (spec 03
+   * requirement 13): a contract may legitimately be about someone who has left, and the
+   * screen says so as an advisory note rather than an error.
+   */
+  private async subjectSummary(
+    subjectMembershipId: string | null,
+  ): Promise<{ id: string; name: string; isRemoved: boolean } | null> {
+    if (subjectMembershipId === null) return null;
+
+    const membership = await this.prisma.membership.findUnique({
+      where: { id: subjectMembershipId },
+      select: { id: true, status: true, account: { select: { firstName: true, lastName: true } } },
+    });
+    if (!membership) return null;
+
+    return {
+      id: membership.id,
+      // Same composition as the members list, so one member reads identically on the
+      // picker and on the envelope that was created from it.
+      name: `${membership.account.firstName} ${membership.account.lastName}`,
+      isRemoved: membership.status === 'removed',
     };
   }
 

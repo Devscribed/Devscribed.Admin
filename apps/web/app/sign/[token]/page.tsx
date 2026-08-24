@@ -185,21 +185,40 @@ function SigningScreen({ token }: { token: string }) {
         consentAccepted: consent,
       }),
     });
-    setSubmitting(false);
 
     if (result.ok) {
       // Requirement 25 — the link is now a read-only view of the same document.
-      setPayload((current) =>
-        current
-          ? {
-              ...current,
-              state: 'already_signed',
-              signedAt: result.data.signedAt,
-              envelopeStatus: result.data.envelopeStatus,
-              downloadAvailable: result.data.downloadAvailable,
-            }
-          : current,
-      );
+      //
+      // The document has *changed* by signing: the values just submitted (and, once the
+      // server draws them, the signature itself) belong in the rendered body. The payload
+      // in state was fetched before the submit, so re-rendering from it showed the signer
+      // a document without their own answers. The server composes that HTML — patching it
+      // here would drift from the PDF — so the fresh copy is read back from the server.
+      // The button stays in its loading state across the re-read: the submit is not
+      // finished, from the signer's point of view, until the signed document is on screen.
+      const refreshed = await apiRequest<SigningPayload>(signingUrl(token));
+      setSubmitting(false);
+
+      setPayload((current) => {
+        // Whichever source is more current wins per field: the sign response is
+        // authoritative for the outcome, the re-read for the document. Read defensively —
+        // an API that grows `envelope` on the sign response, or one that returns nothing
+        // useful from the re-read, must both leave the panel renderable.
+        const base = refreshed.ok ? { ...current, ...refreshed.data } : { ...current };
+        const signedEnvelope =
+          (result.data as Partial<SigningPayload>).envelope ??
+          (refreshed.ok ? refreshed.data.envelope : null) ??
+          current?.envelope ??
+          null;
+        return {
+          ...base,
+          envelope: signedEnvelope,
+          state: 'already_signed',
+          signedAt: result.data.signedAt,
+          envelopeStatus: result.data.envelopeStatus,
+          downloadAvailable: result.data.downloadAvailable,
+        };
+      });
       toast.show({
         testId: 'toast-signing-signed',
         message: ENVELOPE_MESSAGES.toast.signed,
@@ -208,6 +227,7 @@ function SigningScreen({ token }: { token: string }) {
       return;
     }
 
+    setSubmitting(false);
     const failure = result.failure as SigningFailure;
 
     if (failure.errors) {

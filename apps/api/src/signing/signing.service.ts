@@ -25,7 +25,7 @@ import {
 } from '@prisma/client';
 import type { Request } from 'express';
 import { EnvelopeEventsService } from '../documents/envelope-events.service';
-import { presentDocument } from '../documents/envelope-renderer';
+import { capturedSignatures, presentDocument } from '../documents/envelope-renderer';
 import type { DeclineDto, SignDto } from '../documents/envelopes.dto';
 import {
   clientIp,
@@ -124,11 +124,13 @@ export class SigningService {
         senderOrganizationName: envelope.organization.name,
         // Always the frozen HTML. Re-rendering it from the template here would quietly
         // undo the guarantee the freeze exists to give — so this is the stored document
-        // with only its signer-owned placeholders filled in, for display. The signer sees
-        // what has been entered so far instead of raw `{{key}}` syntax, while
-        // `documentHash` below still describes the untouched stored bytes.
+        // with only its signer-owned placeholders filled in and the signatures captured
+        // so far drawn onto their lines, for display. Sequential signing exists so that
+        // the second party receives a document already signed by the first, and this is
+        // where they see it; their own block stays empty until they sign. `documentHash`
+        // below still describes the untouched stored bytes.
         renderedHtml: envelope.renderedHtml
-          ? presentDocument(envelope.renderedHtml, values)
+          ? presentDocument(envelope.renderedHtml, values, capturedSignatures(envelope.signers))
           : null,
         documentHash: envelope.documentHash,
         expiresAt: envelope.expiresAt?.toISOString() ?? null,

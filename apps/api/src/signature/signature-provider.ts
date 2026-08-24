@@ -69,6 +69,12 @@ export interface AppliedSignature {
 export interface FinalizeSigner {
   name: string;
   email: string;
+  /**
+   * The template's role key. It is what ties this signer to their signature block in the
+   * frozen document — the block carries `data-signer-role`, so finalize can draw the
+   * signature on the right line without parsing the prose around it.
+   */
+  roleKey: string;
   roleLabel: string;
   order: number;
   signatureImage: string;

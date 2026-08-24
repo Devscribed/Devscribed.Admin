@@ -19,6 +19,25 @@ export function versionSummary(published: number | null, draft: number | null): 
   return `Draft v${draft ?? 1}`;
 }
 
+/**
+ * One line of the editor's version-history picker: `v3 · current`, `v4 · draft`,
+ * `v2 · published 12 Aug 2026`. The qualifier is what tells the author which of several
+ * `v`-numbers is the one the app is actually serving, so it is never omitted.
+ */
+export function versionOptionLabel(version: {
+  versionNumber: number;
+  publishedAt: string | null;
+  isCurrent: boolean;
+  isDraft: boolean;
+}): string {
+  const name = `v${version.versionNumber}`;
+  if (version.isDraft) return `${name} · draft`;
+  if (version.isCurrent) return `${name} · current`;
+  return version.publishedAt
+    ? `${name} · published ${formatUpdatedAt(version.publishedAt)}`
+    : `${name} · published`;
+}
+
 /** Status pill tone. Archived reads as retired, not as a failure, hence `neutral`. */
 export function statusTone(status: string): 'active' | 'warning' | 'neutral' {
   if (status === 'published') return 'active';

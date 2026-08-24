@@ -242,6 +242,8 @@ export interface EnvelopeSeed {
   fieldValues?: Record<string, string>;
   signers: [EnvelopeSignerSeed, EnvelopeSignerSeed];
   expiresInDays?: number;
+  /** The member the contract is about (spec 03). Omitted means an envelope with none. */
+  subjectMembershipId?: string;
   /** Leave false to keep the envelope in `draft`. */
   send?: boolean;
 }
@@ -265,7 +267,7 @@ export async function createEnvelope(
   const created = await request.post(base, {
     data: {
       templateId: seed.templateId,
-      subjectMembershipId: null,
+      subjectMembershipId: seed.subjectMembershipId ?? null,
       title: null,
       expiresInDays: seed.expiresInDays ?? 30,
     },
@@ -705,4 +707,48 @@ export async function requestReset(
 ): Promise<void> {
   const response = await request.post(`${API}/api/forgot-password`, { data: { email } });
   if (!response.ok()) throw new Error(`Reset request failed for ${email}`);
+}
+
+/* ------------------------------------------------------------------ *
+ * Regression preconditions
+ *
+ * Appended for `regressions.spec.ts`. Nothing above this line changed.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Publishes one more version of an already-published template, so a test can look at a
+ * template that genuinely has a history.
+ *
+ * `PUT .../draft` clones the current version into a fresh draft whenever none is open,
+ * which is why only the body has to be supplied: the signer roles and the fields come
+ * across from the version being superseded. `rowVersion` is read back rather than
+ * guessed — a template that *does* have an open draft would otherwise 409, and a
+ * precondition that fails as a conflict looks like a bug in the case under way.
+ */
+export async function publishTemplateVersion(
+  request: APIRequestContext,
+  orgId: string,
+  templateId: string,
+  bodyHtml: string,
+): Promise<void> {
+  const base = `${API}/api/organizations/${orgId}/document-templates/${templateId}`;
+
+  const detail = await (await request.get(base)).json();
+  const rowVersion = detail.draftVersion?.rowVersion ?? 0;
+
+  const draft = await request.put(`${base}/draft`, { data: { rowVersion, bodyHtml } });
+  if (!draft.ok()) {
+    throw new Error(
+      `Precondition failed: could not open a new draft of ${templateId} ` +
+        `(${draft.status()} ${await draft.text()})`,
+    );
+  }
+
+  const published = await request.post(`${base}/publish`, { data: {} });
+  if (!published.ok()) {
+    throw new Error(
+      `Precondition failed: could not publish the new version of ${templateId} ` +
+        `(${published.status()} ${await published.text()})`,
+    );
+  }
 }

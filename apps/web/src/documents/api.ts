@@ -65,6 +65,21 @@ export interface TemplateDraftVersion {
   fields: TemplateFieldDto[];
 }
 
+/**
+ * One entry of `GET .../document-templates/{id}`'s version history, newest first.
+ *
+ * Optional on `TemplateDetail` because the field is newer than this screen: an API that
+ * does not send it yet leaves the editor's version picker unrendered rather than showing
+ * an empty control or crashing on `undefined.map`.
+ */
+export interface TemplateVersionSummary {
+  id: string;
+  versionNumber: number;
+  publishedAt: string | null;
+  isCurrent: boolean;
+  isDraft: boolean;
+}
+
 export interface TemplateValidation {
   unknownPlaceholders: string[];
   unusedFields: string[];
@@ -77,6 +92,8 @@ export interface TemplateDetail {
   status: TemplateStatus;
   currentVersion: TemplateVersionRef | null;
   draftVersion: TemplateDraftVersion | null;
+  /** Newest first. Absent on APIs that predate the version history. */
+  versions?: TemplateVersionSummary[];
   validation: TemplateValidation;
   canManage: boolean;
   canDelete: boolean;

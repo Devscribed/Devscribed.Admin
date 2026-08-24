@@ -134,6 +134,26 @@ export class DocumentTemplatesService {
             fields: draft.fields.map((f) => this.presentField(f)),
           }
         : null,
+      /**
+       * Every version this template has ever had, newest first.
+       *
+       * Spec 01 promises that "version 1 is still readable" and the preview endpoint
+       * already accepts any `versionId` of the template — but nothing in this response
+       * said the older versions existed, so there was no way to ask for one. This is that
+       * index, and nothing more: no bodies, no fields (`preview` serves those), and no
+       * new capability, because anyone who may read the template may read its history.
+       */
+      versions: [...template.versions]
+        .sort((a, b) => b.versionNumber - a.versionNumber)
+        .map((version) => ({
+          id: version.id,
+          versionNumber: version.versionNumber,
+          publishedAt: version.publishedAt?.toISOString() ?? null,
+          isCurrent: version.id === template.currentVersionId,
+          // The open draft is a version like any other here; the flag is what lets the
+          // client label it rather than offer it as a published one.
+          isDraft: version.publishedAt === null,
+        })),
       validation: inspected
         ? this.advisoryValidation(
             inspected.bodyHtml,

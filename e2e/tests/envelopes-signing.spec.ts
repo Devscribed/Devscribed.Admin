@@ -167,9 +167,10 @@ test.describe('Envelopes and signing', () => {
 
     await page.getByTestId('envelope-new-btn').click();
 
-    // The DS `Select` is a button plus a popover of links, not a native <select>.
+    // The DS `Select` is a button plus a popover, not a native <select>. Its options carry
+    // `role="option"` inside a `role="listbox"` panel portalled to `document.body`.
     await page.getByTestId('envelope-template-select').click();
-    await page.getByRole('link', { name: 'Contractor agreement BY (v1)' }).click();
+    await page.getByRole('option', { name: 'Contractor agreement BY (v1)' }).click();
 
     await expect(page.getByTestId('envelope-fill-form')).toBeVisible();
     await expect(page.getByTestId('envelope-field-full_name')).toBeVisible();

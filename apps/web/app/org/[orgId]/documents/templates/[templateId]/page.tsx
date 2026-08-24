@@ -3,7 +3,7 @@
 import { notFound, useRouter } from 'next/navigation';
 import { use, useCallback, useEffect, useRef, useState } from 'react';
 import { TEMPLATE_MESSAGES } from '@devscribed/validation';
-import { Button, Card, InfoBanner, Input, Modal, Spinner, Tabs } from '@/ds';
+import { Button, Card, InfoBanner, Input, Modal, Select, Spinner, Tabs } from '@/ds';
 import { focusByTestId } from '@/field-error';
 import { PageHeader } from '@/layout/PageHeader';
 import {
@@ -16,10 +16,11 @@ import {
   type TemplateDetail,
   type TemplateFieldDto,
   type TemplateValidation,
+  type TemplateVersionSummary,
 } from '@/documents/api';
 import { BodyEditor } from '@/documents/BodyEditor';
 import { FieldModal } from '@/documents/FieldModal';
-import { versionSummary } from '@/documents/format';
+import { versionOptionLabel, versionSummary } from '@/documents/format';
 import { PreviewModal } from '@/documents/PreviewModal';
 import { ToastProvider, useToast } from '@/documents/toast';
 
@@ -133,6 +134,14 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
   const canEdit = canManage && !archived;
   const publishedNoDraft = detail !== null && detail.draftVersion === null && publishedVersion !== null;
   const readOnly = !canEdit || (publishedNoDraft && !editUnlocked);
+  /**
+   * The version history, newest first. `Array.isArray` rather than `?? []` because the
+   * field is newer than this screen: an API that has not grown it yet — or that sends
+   * something unexpected in its place — must leave the picker unrendered, not throw.
+   */
+  const versions: TemplateVersionSummary[] = Array.isArray(detail?.versions)
+    ? detail.versions
+    : [];
 
   function markDirty(): void {
     revision.current += 1;
@@ -299,13 +308,20 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
     router.push(`/org/${orgId}/documents/templates`);
   }
 
-  async function preview(): Promise<void> {
+  /**
+   * With no argument this previews what the editor is showing (the draft if there is one,
+   * otherwise the published body). `versionId` is how the version-history picker asks for
+   * an *older* version — the same endpoint, the same modal, a different version.
+   */
+  async function preview(versionId?: string): Promise<void> {
     const result = await apiRequest<{ html: string }>(`${url}/preview`, {
       method: 'POST',
       body: JSON.stringify(
-        detail?.draftVersion || draftVersion !== null
-          ? {}
-          : { versionId: detail?.currentVersion?.id },
+        versionId
+          ? { versionId }
+          : detail?.draftVersion || draftVersion !== null
+            ? {}
+            : { versionId: detail?.currentVersion?.id },
       ),
     });
     if (!result.ok) {
@@ -390,6 +406,28 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
             >
               {SAVE_LABEL[saveState]}
             </span>
+            {/*
+              The version history. Until now the header only ever named the current and
+              draft numbers, so there was no way to look at what v1 actually said. The
+              control is a menu rather than a stateful field: picking an entry opens the
+              read-only preview for it and the picker falls straight back to its
+              placeholder, because nothing on this page is "on" the old version.
+            */}
+            {versions.length > 0 && (
+              <Select
+                value=""
+                placeholder="Version history"
+                options={versions.map((version) => ({
+                  value: version.id,
+                  label: versionOptionLabel(version),
+                }))}
+                onChange={(versionId: string) => void preview(versionId)}
+                data-testid="template-version-picker"
+                wrapperStyle={{ minWidth: 210 }}
+                // Sized down to the header's button row rather than the form default.
+                style={{ height: 'var(--field-h-sm)', fontSize: 'var(--fs-14)' }}
+              />
+            )}
             <Button variant="secondary" data-testid="template-preview-btn" onClick={() => void preview()}>
               Preview
             </Button>

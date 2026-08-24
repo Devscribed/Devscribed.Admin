@@ -1,4 +1,5 @@
 import { INestApplication } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import { json } from 'express';
@@ -15,6 +16,7 @@ import {
   SigningRateLimiter,
 } from '../src/signing/signing-rate-limit.guard';
 import {
+  DRAWN_SIGNATURE,
   Signed,
   createEnvelope,
   drawnSignaturePayload,
@@ -34,7 +36,14 @@ import {
  * internal sweep. Every `describe` carries its TC id.
  */
 class StubPdfRenderer extends PdfRenderer {
+  /**
+   * The last document handed to the renderer. The PDF itself is a stub, so this is the
+   * only place a case can see what the completed document actually says.
+   */
+  static lastHtml = '';
+
   async render(html: string): Promise<Buffer> {
+    StubPdfRenderer.lastHtml = html;
     return Buffer.from(`%PDF-1.4 stub ${html.length}`);
   }
 }
@@ -553,6 +562,161 @@ describe('Signing', () => {
       const stored = await prisma.envelope.findUniqueOrThrow({ where: { id: envelope.id } });
       expect(stored.renderedHtml).toBe(frozen.renderedHtml);
       expect(after.body.envelope.documentHash).toBe(stored.documentHash);
+    });
+
+    /* ---------------------------------------------------------------- *
+     * The signature on the line.
+     *
+     * Sequential signing exists so that the second party receives a document already
+     * signed by the first, and a completed contract must carry its signatures in its own
+     * signature block — the Certificate of Completion beneath it is attribution, not the
+     * signature. Both are filled from the frozen HTML on the way out, never written back.
+     * ---------------------------------------------------------------- */
+    it('shows the second signer the first signature, and leaves their own block empty', async () => {
+      await sentEnvelope();
+      await signAs(invitationTokenFor('company@acme.com')).expect(200);
+
+      const contractor = await openLink(invitationTokenFor('alex@example.com')).expect(200);
+      const html: string = contractor.body.envelope.renderedHtml;
+
+      // Signer 1's signature is on signer 1's line — inside the block, not only in a
+      // certificate the signing page never shows.
+      expect(html).toContain(
+        `<div class="signature-line"><span class="signature-mark" data-signature-for="company">` +
+          `<img src="${DRAWN_SIGNATURE}"`,
+      );
+      // Signer 2 has not signed, so their slot is still the empty anchor.
+      expect(html).toContain(
+        '<div class="signature-block" data-signer-role="contractor">' +
+          '<div class="signature-line"><span class="signature-mark" ' +
+          'data-signature-for="contractor"></span></div>',
+      );
+      expect(html.match(/<img src="data:image\//g) ?? []).toHaveLength(1);
+    });
+
+    it('carries both signatures in their blocks in the completed document', async () => {
+      const { envelope } = await sentEnvelope();
+      const frozen = await prisma.envelope.findUniqueOrThrow({ where: { id: envelope.id } });
+
+      await signAs(invitationTokenFor('company@acme.com')).expect(200);
+      await signAs(invitationTokenFor('alex@example.com'), {
+        // Typed, so the case also proves a typed signature is drawn on the line the same
+        // way the certificate renders it, rather than left blank.
+        signature: { type: 'typed', value: 'Alex Kaminski' },
+        fieldValues: { contractor_bank: 'IBAN BY13 ACME' },
+      }).expect(200);
+      await queue.whenIdle();
+
+      const finalized = StubPdfRenderer.lastHtml;
+      const document = finalized.slice(0, finalized.indexOf('<section class="certificate">'));
+
+      expect(document).toContain(
+        `<span class="signature-mark" data-signature-for="company">` +
+          `<img src="${DRAWN_SIGNATURE}"`,
+      );
+      const typed = await prisma.envelopeSigner.findFirstOrThrow({
+        where: { envelopeId: envelope.id, order: 2 },
+      });
+      expect(document).toContain(
+        `<span class="signature-mark" data-signature-for="contractor">` +
+          `<img src="${typed.signatureImage}"`,
+      );
+      // The certificate is unchanged: it still carries both images as attribution.
+      const certificate = finalized.slice(finalized.indexOf('<section class="certificate">'));
+      expect(certificate).toContain(DRAWN_SIGNATURE);
+      expect(certificate).toContain(typed.signatureImage);
+
+      // Neither pass wrote back: the stored bytes still hash to the stored hash and still
+      // carry the *unfilled* anchor and the untouched signer placeholder.
+      const stored = await prisma.envelope.findUniqueOrThrow({ where: { id: envelope.id } });
+      expect(stored.renderedHtml).toBe(frozen.renderedHtml);
+      expect(stored.renderedHtml).toContain(
+        '<span class="signature-mark" data-signature-for="company"></span>',
+      );
+      expect(stored.renderedHtml).toContain('{{contractor_bank}}');
+      expect(createHash('sha256').update(stored.renderedHtml ?? '', 'utf8').digest('hex')).toBe(
+        stored.documentHash,
+      );
+    });
+
+    it('never lets a signature-shaped string that is not an image reach the document', async () => {
+      const { envelope } = await sentEnvelope();
+      await signAs(invitationTokenFor('company@acme.com')).expect(200);
+
+      // The stored column is bypassed deliberately: the API refuses this payload, so the
+      // only way to ask "and if a bad value were in the column?" is to put one there.
+      await prisma.envelopeSigner.updateMany({
+        where: { envelopeId: envelope.id, order: 1 },
+        data: { signatureImage: '"><script>alert(1)</script><img src=x onerror=alert(1)>' },
+      });
+
+      const contractor = await openLink(invitationTokenFor('alex@example.com')).expect(200);
+      const html: string = contractor.body.envelope.renderedHtml;
+
+      expect(html).not.toContain('<script>');
+      expect(html).not.toContain('onerror');
+      // Nothing we cannot vouch for is drawn, so the line is simply left blank.
+      expect(html).toContain(
+        '<span class="signature-mark" data-signature-for="company"></span>',
+      );
+    });
+
+    it('leaves the certificate cell empty for a stored image it cannot vouch for', async () => {
+      const { envelope } = await sentEnvelope();
+      await signAs(invitationTokenFor('company@acme.com')).expect(200);
+
+      // Same deliberate bypass as the document case above: the API refuses this payload on
+      // the wire, so the only way to ask what the *certificate* does with a bad stored
+      // value is to put one in the column. The certificate and the document must agree
+      // about what a signature is — before this, the certificate escaped the string and
+      // handed it to `<img src>` anyway.
+      await prisma.envelopeSigner.updateMany({
+        where: { envelopeId: envelope.id, order: 1 },
+        data: { signatureImage: 'javascript:alert(1)' },
+      });
+
+      await signAs(invitationTokenFor('alex@example.com'), {
+        signature: { type: 'typed', value: 'Alex Kaminski' },
+        fieldValues: { contractor_bank: 'IBAN BY13 ACME' },
+      }).expect(200);
+      await queue.whenIdle();
+
+      const finalized = StubPdfRenderer.lastHtml;
+      const certificate = finalized.slice(finalized.indexOf('<section class="certificate">'));
+
+      expect(certificate).not.toContain('javascript:');
+      // An empty cell, not a broken image: the row still records who signed and when, and
+      // says nothing it cannot support about the mark itself.
+      expect(certificate).toContain('<tr><th>Signature (drawn)</th><td></td></tr>');
+      // Signer 2's typed signature is untouched — the guard rejects one value, not the
+      // whole certificate.
+      const typed = await prisma.envelopeSigner.findFirstOrThrow({
+        where: { envelopeId: envelope.id, order: 2 },
+      });
+      expect(certificate).toContain(typed.signatureImage);
+    });
+
+    it('makes the finalized document inert wherever it is opened', async () => {
+      await sentEnvelope();
+      await signAs(invitationTokenFor('company@acme.com')).expect(200);
+      await signAs(invitationTokenFor('alex@example.com'), {
+        fieldValues: { contractor_bank: 'IBAN BY13 ACME' },
+      }).expect(200);
+      await queue.whenIdle();
+
+      // The frozen document's own CSP is now a `<meta>` inside an embedded fragment and
+      // governs nothing. This wrapper is what becomes the PDF and what the completion mail
+      // links to, and it carries author-controlled template HTML plus signer-supplied
+      // images, so the policy has to be restated at the top of it.
+      const finalized = StubPdfRenderer.lastHtml;
+      const head = finalized.slice(0, finalized.indexOf('</head>'));
+      expect(head).toContain('http-equiv="Content-Security-Policy"');
+      expect(head).toContain("default-src 'none'");
+      expect(head).toContain('img-src data:');
+      expect(head).toContain("base-uri 'none'");
+      expect(head).toContain("form-action 'none'");
+      // The signature images still render, which is the whole point of allowing `data:`.
+      expect(finalized).toContain('<img src="data:image/');
     });
 
     it('records viewed once per signer however many times the link is opened', async () => {

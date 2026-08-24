@@ -1,5 +1,8 @@
 import { escapeHtml, substitute } from '@devscribed/validation';
 import { Injectable } from '@nestjs/common';
+// The anchor contract (what the slot looks like, and what may be drawn into it) lives
+// with the renderer that writes it, so writer and reader cannot drift apart.
+import { drawSignatures, signatureImageSrc } from '../documents/envelope-renderer';
 import {
   AppliedSignature,
   FinalizeRequest,
@@ -65,10 +68,31 @@ export class InternalSignatureProvider extends SignatureProvider {
     // inject markup here than a sender could at send. Re-*rendering* it from the template
     // would quietly defeat the guarantee the frozen `renderedHtml` exists to give; this
     // does not, because every word that was hashed is still there unchanged.
-    const document = substitute(request.renderedHtml, request.fieldValues ?? {});
+    // Then the signatures go onto the lines the freeze left empty. A contract whose own
+    // signature block is blank is not a signed contract, however complete the certificate
+    // below it is — the certificate is attribution, the block is the signature itself.
+    // Same discipline as the values: fill the anchors, never rewrite the words.
+    const document = drawSignatures(
+      substitute(request.renderedHtml, request.fieldValues ?? {}),
+      request.signers.map((signer) => ({
+        roleKey: signer.roleKey,
+        signatureImage: signer.signatureImage,
+        signerName: signer.name,
+      })),
+    );
 
+    // The wrapper carries its own CSP, at least as restrictive as the one frozen into
+    // `renderedHtml`. That inner policy is a `<meta>` tag inside a fragment that is
+    // embedded here, so it no longer applies to anything — this document is what becomes
+    // the PDF and what the completion mail links to, and it is assembled from
+    // author-controlled template HTML plus signer-supplied images. It must be inert
+    // wherever it is opened, not only inside the frame the app puts it in.
+    // `style-src 'unsafe-inline'` is what the stylesheet below needs; nothing here loads,
+    // submits, or navigates anywhere, so everything else is denied.
     const html =
       '<!doctype html><html><head><meta charset="utf-8">' +
+      '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; ' +
+      "img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'\">" +
       `<title>${escapeHtml(request.title)}</title>${CERTIFICATE_STYLES}</head><body>` +
       `<section class="document">${document}</section>` +
       certificateOfCompletion(request) +
@@ -82,10 +106,18 @@ function requireDrawnImage(image: string | undefined): string {
   // Structural check only. "A drawn signature with no ink" is a validation rule and lives
   // in `packages/validation`; what the provider guarantees is that it never stores
   // something that is not an image.
-  if (!image || !image.startsWith('data:image/')) {
+  //
+  // The check is `signatureImageSrc`'s and not a looser one of its own: a `startsWith`
+  // test would admit strings the renderer will later refuse to draw, and a column whose
+  // contents cannot be rendered is worse than a rejected signature — the signer is still
+  // in front of us and can sign again, while the envelope is not. So the writer and the
+  // reader agree on what a signature is, in exactly one place. The normalized form is
+  // stored, so what the column holds is what the document will carry.
+  const src = signatureImageSrc(image);
+  if (!src) {
     throw new Error('A drawn signature must be an image data URI');
   }
-  return image;
+  return src;
 }
 
 function requireTypedName(name: string | undefined): string {
@@ -192,14 +224,23 @@ function signerEnteredValues(fields: readonly FinalizeSignerField[]): string {
 }
 
 function signerBlock(signer: FinalizeSigner, timeZone: string): string {
+  // The same guard the document body goes through. Escaping alone already stops attribute
+  // breakout, but the certificate and the document must not disagree about what counts as
+  // a signature: a stored value the document declines to draw would otherwise appear here
+  // as a broken image, which reads as "the signature is missing from the record" when the
+  // truth is "we hold something we cannot vouch for". An empty cell says that honestly;
+  // the rest of the row — who signed, when, from where — is unaffected and still stands.
+  const src = signatureImageSrc(signer.signatureImage);
+
   return (
     '<table>' +
     row(`Signer ${signer.order} — ${signer.roleLabel}`, signer.name) +
     row('Email', signer.email) +
-    `<tr><th>Signature (${signer.method})</th><td>` +
-    `<img src="${escapeHtml(signer.signatureImage)}" alt="Signature of ${escapeHtml(
-      signer.name,
-    )}"></td></tr>` +
+    `<tr><th>Signature (${escapeHtml(signer.method)})</th><td>` +
+    (src
+      ? `<img src="${escapeHtml(src)}" alt="Signature of ${escapeHtml(signer.name)}">`
+      : '') +
+    '</td></tr>' +
     row('Signed (UTC)', formatUtc(signer.signedAt)) +
     row(`Signed (${timeZone})`, formatInZone(signer.signedAt, timeZone)) +
     row('Consent accepted (UTC)', formatUtc(signer.consentAcceptedAt)) +

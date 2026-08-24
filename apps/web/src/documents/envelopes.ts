@@ -117,6 +117,12 @@ export interface EnvelopeDetail {
    */
   expiresInDays?: number;
   subjectMembershipId?: string | null;
+  /**
+   * The subject already resolved to a name by the API. It is what lets a screen that reads
+   * one envelope name its subject without fetching the whole member roster; absent (or
+   * `null`) whenever the envelope has no subject.
+   */
+  subject?: { id: string; name: string; isRemoved: boolean } | null;
   voidedAt?: string | null;
   voidReason?: string | null;
   completedAt?: string | null;

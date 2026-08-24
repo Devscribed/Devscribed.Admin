@@ -111,6 +111,7 @@ export class EnvelopeCompletionService implements OnModuleInit {
         signers: envelope.signers.map<FinalizeSigner>((signer) => ({
           name: signer.name,
           email: signer.email,
+          roleKey: signer.roleKey,
           roleLabel: roles.find((r) => r.key === signer.roleKey)?.label ?? signer.roleKey,
           order: signer.order,
           signatureImage: signer.signatureImage ?? '',

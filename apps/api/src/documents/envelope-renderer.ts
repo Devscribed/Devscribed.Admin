@@ -1,9 +1,25 @@
 import { escapeHtml, substitute } from '@devscribed/validation';
 
 export interface RenderSigner {
+  /** The template's role key. It is what anchors this signer's signature block. */
+  roleKey: string;
   roleLabel: string;
   name: string;
   order: number;
+}
+
+/**
+ * One signature as it has been captured so far, ready to be drawn onto its line.
+ *
+ * `signatureImage` is whatever the provider stored — a signer-supplied data URI for a
+ * drawn signature, our own SVG for a typed one — and is deliberately typed as possibly
+ * absent, because "this signer has not signed yet" is the normal case on a part-signed
+ * envelope and must leave the block empty rather than throw.
+ */
+export interface CapturedSignature {
+  roleKey: string;
+  signatureImage: string | null | undefined;
+  signerName: string;
 }
 
 export interface RenderEnvelopeInput {
@@ -40,8 +56,99 @@ export function signerOwnedFieldKeys(fields: readonly FieldOwnership[]): string[
  * exactly the bytes that were signed. It exists so a counterparty is never shown raw
  * `{{contractor_bank}}` template syntax on the signing page or the envelope detail.
  */
-export function presentDocument(renderedHtml: string, values: Record<string, string>): string {
-  return substitute(renderedHtml, values ?? {});
+export function presentDocument(
+  renderedHtml: string,
+  values: Record<string, string>,
+  signatures: readonly CapturedSignature[] = [],
+): string {
+  return drawSignatures(substitute(renderedHtml, values ?? {}), signatures);
+}
+
+/* ------------------------------------------------------------------ *
+ * Signatures on the line
+ *
+ * The signature blocks are frozen with an empty, named slot in them rather than with the
+ * images, for the same reason the signer-owned placeholders are left standing: at send
+ * nobody has signed yet, and `renderedHtml` is written once (invariant 5). So the slot is
+ * an *anchor* — an attribute, never prose — that the two downstream passes find and fill:
+ * `presentDocument` for display, and the provider's `finalize` for the completed PDF.
+ * Neither writes back, so the stored bytes and `documentHash` stay exactly what was
+ * signed.
+ * ------------------------------------------------------------------ */
+
+/**
+ * The empty slot as it is frozen, and the needle the fill passes look for. Both sides go
+ * through this one function so the anchor cannot drift between writer and reader.
+ */
+function signatureSlot(roleKey: string): string {
+  return `<span class="signature-mark" data-signature-for="${escapeHtml(roleKey)}"></span>`;
+}
+
+/**
+ * A stored signature image is signer-supplied data, so it is re-checked here rather than
+ * trusted because it came out of our own column: only a base64 data URI of a known image
+ * type reaches the document, and it is escaped into the attribute like any other value.
+ * Anything else — a `javascript:` URI, an HTML fragment, a stray quote — yields `null`
+ * and leaves the line blank, which is the honest rendering of "we have no signature we
+ * can vouch for" and can never become an injection path.
+ *
+ * `svg+xml` is on the list because a typed signature is rendered as an SVG data URI
+ * (`typedSignatureImage`); an SVG loaded through `<img src>` cannot run script, and the
+ * document's own CSP allows `img-src data:` and nothing else.
+ */
+const SIGNATURE_IMAGE = /^data:image\/(?:png|jpeg|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=\s]+$/;
+
+export function signatureImageSrc(image: string | null | undefined): string | null {
+  const value = (image ?? '').trim();
+  if (!SIGNATURE_IMAGE.test(value)) return null;
+  // The validator tolerates whitespace inside the base64 payload (it survives from the
+  // wire), so it is stripped rather than emitted into an attribute.
+  return value.replace(/\s+/g, '');
+}
+
+/**
+ * Draws every signature captured so far into its own block, and leaves the rest empty.
+ *
+ * Pure: it takes HTML and returns HTML, so both callers can use it on a copy and neither
+ * can accidentally persist the result. HTML written before this change carries no slots,
+ * so it passes through untouched — an existing envelope keeps its stored bytes and its
+ * stored hash.
+ */
+/**
+ * The envelope's signer rows as this module wants them. Structural rather than a Prisma
+ * type so the renderer keeps knowing nothing about the database — the same reason
+ * `FieldOwnership` exists.
+ */
+export function capturedSignatures(
+  signers: readonly { roleKey: string; name: string; signatureImage: string | null }[],
+): CapturedSignature[] {
+  return (signers ?? [])
+    .filter((signer) => signer.signatureImage)
+    .map((signer) => ({
+      roleKey: signer.roleKey,
+      signatureImage: signer.signatureImage,
+      signerName: signer.name,
+    }));
+}
+
+export function drawSignatures(html: string, signatures: readonly CapturedSignature[]): string {
+  let result = html ?? '';
+
+  for (const signature of signatures ?? []) {
+    const src = signatureImageSrc(signature.signatureImage);
+    if (!src) continue;
+
+    const slot = signatureSlot(signature.roleKey);
+    // Literal replacement, not a regex: the needle is built by the same function that
+    // wrote it, so no role key needs escaping twice and no pattern can over-match.
+    const filled =
+      `<span class="signature-mark" data-signature-for="${escapeHtml(signature.roleKey)}">` +
+      `<img src="${escapeHtml(src)}" alt="Signature of ${escapeHtml(signature.signerName)}" />` +
+      '</span>';
+    result = result.split(slot).join(filled);
+  }
+
+  return result;
 }
 
 /**
@@ -82,7 +189,9 @@ export function renderEnvelopeDocument(input: RenderEnvelopeInput): string {
     .sort((a, b) => a.order - b.order)
     .map(
       (signer) =>
-        '<div class="signature-block"><div class="signature-line"></div>' +
+        `<div class="signature-block" data-signer-role="${escapeHtml(signer.roleKey)}">` +
+        // The slot is empty at send and filled on the way out — see `drawSignatures`.
+        `<div class="signature-line">${signatureSlot(signer.roleKey)}</div>` +
         `<div class="signature-label">${escapeHtml(signer.roleLabel)}</div>` +
         `<div class="signature-name">${escapeHtml(signer.name)}</div></div>`,
     )
@@ -102,7 +211,10 @@ table { border-collapse: collapse; }
 td, th { border: 1px solid #999; padding: 0.25rem 0.5rem; }
 .signatures { display: flex; gap: 3rem; margin-top: 4rem; }
 .signature-block { flex: 1; }
-.signature-line { border-bottom: 1px solid #111; height: 2.5rem; }
+/* The line keeps its height whether or not it carries an image, so a part-signed
+   document and a signed one lay out identically. */
+.signature-line { border-bottom: 1px solid #111; height: 2.5rem; display: flex; align-items: flex-end; overflow: hidden; }
+.signature-mark img { max-height: 2.4rem; max-width: 100%; }
 .signature-label { font-weight: bold; margin-top: 0.25rem; }
 .signature-name { color: #444; font-size: 10pt; }
 </style>

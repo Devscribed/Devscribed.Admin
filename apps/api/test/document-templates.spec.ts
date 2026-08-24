@@ -242,6 +242,76 @@ describe('Document templates', () => {
     });
   });
 
+  /**
+   * The history index. Spec 01 promises version 1 stays readable and `preview` already
+   * accepts any `versionId` of the template — but until this list existed nothing in the
+   * API said the older versions were there, so nobody could ask for one.
+   */
+  describe('Version history', () => {
+    it('lists every version newest first, flagging the current one and the open draft', async () => {
+      const admin = await signup('admin@acme.com', 'Acme Inc');
+      const created = await publishedTemplate(admin);
+
+      await saveDraft(
+        admin,
+        created.id,
+        draftPayload(1, { bodyHtml: '<p>Second for {{full_name}}</p>' }),
+      ).expect(200);
+      await request(app.getHttpServer())
+        .post(api(admin, `/${created.id}/publish`))
+        .set('Cookie', admin.cookies)
+        .expect(200);
+
+      // A third version, left open, so the response has to distinguish all three states.
+      await saveDraft(
+        admin,
+        created.id,
+        draftPayload(1, { bodyHtml: '<p>Third for {{full_name}}</p>' }),
+      ).expect(200);
+
+      const response = await detail(admin, created.id).expect(200);
+      const versions = response.body.versions as {
+        id: string;
+        versionNumber: number;
+        publishedAt: string | null;
+        isCurrent: boolean;
+        isDraft: boolean;
+      }[];
+
+      expect(versions).toHaveLength(3);
+      expect(versions.map((v) => v.versionNumber)).toEqual([3, 2, 1]);
+      expect(versions.map((v) => v.isDraft)).toEqual([true, false, false]);
+      expect(versions.map((v) => v.isCurrent)).toEqual([false, true, false]);
+      expect(versions[0].publishedAt).toBeNull();
+      expect(versions[1].publishedAt).not.toBeNull();
+      expect(versions[2].id).toBe(created.versionId);
+
+      // The point of the list: an old version can now be asked for, and answers.
+      const preview = await request(app.getHttpServer())
+        .post(api(admin, `/${created.id}/preview`))
+        .set('Cookie', admin.cookies)
+        .send({ versionId: versions[2].id })
+        .expect(200);
+      expect(preview.body.html).toContain('AGREEMENT');
+    });
+
+    it('lists the single draft version of a template that was never published', async () => {
+      const admin = await signup('admin@acme.com', 'Acme Inc');
+      const created = await createTemplate(admin);
+
+      const response = await detail(admin, created.id).expect(200);
+      expect(response.body.versions).toEqual([
+        {
+          id: created.versionId,
+          versionNumber: 1,
+          publishedAt: null,
+          isCurrent: false,
+          isDraft: true,
+        },
+      ]);
+    });
+  });
+
   describe('TC-01-INT-05: A published version is immutable', () => {
     it('leaves the published row byte-identical when a save targets its versionId', async () => {
       const admin = await signup('admin@acme.com', 'Acme Inc');

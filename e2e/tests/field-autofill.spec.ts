@@ -163,10 +163,17 @@ async function seed(
   return { orgId, adminEmail, templateId, subject };
 }
 
-/** The DS `Select` is a button plus a popover of links, not a native `<select>`. */
+/**
+ * The DS `Select` is a button plus a popover, not a native `<select>`.
+ *
+ * The options are anchors, but they now carry `role="option"` inside a `role="listbox"`
+ * panel, which overrides the implicit `link` role they used to expose — so this looks them
+ * up as the options they are. The panel is also portalled to `document.body`, which is why
+ * it is reached from `page` rather than from the field's own subtree.
+ */
 async function choose(page: Page, testId: string, optionLabel: string): Promise<void> {
   await page.getByTestId(testId).click();
-  await page.getByRole('link', { name: optionLabel, exact: true }).click();
+  await page.getByRole('option', { name: optionLabel, exact: true }).click();
 }
 
 /**
