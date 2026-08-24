@@ -18,6 +18,14 @@ Functional specifications for the user-management surface of Devscribed.Admin. E
 | 09 | [Vacation Requests](09-vacation-requests.md) | — | vacation-request, submit, approve, reject, cancel, debit, refund |
 | 10 | [Organization Requests Page](10-organization-requests-page.md) | — | requests-page, sidebar, badge, status-filter, organization-wide |
 
+## Related Areas
+
+[`specs/documents/`](../documents/README.md) — contract templates and two-party electronic
+signature. It builds on this area: the token pattern from spec 02, the member list from spec 04,
+and the member detail tabs from spec 05 (it adds a Contract details tab). It also introduces the
+first role-based authorization in the codebase and, until the role enum below is migrated, resolves
+capabilities through a `normalizeRole()` helper that maps the legacy `member` value to `user`.
+
 ## Shared Rules
 
 | Rule | Defined in | Referenced by |
