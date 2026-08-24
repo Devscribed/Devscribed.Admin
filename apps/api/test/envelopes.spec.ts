@@ -1,5 +1,7 @@
 import { INestApplication } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import { Test } from '@nestjs/testing';
+import { substitute } from '@devscribed/validation';
 import cookieParser from 'cookie-parser';
 import { json } from 'express';
 import request from 'supertest';
@@ -442,6 +444,101 @@ describe('Envelopes', () => {
     });
   });
 
+  /**
+   * Requirement 26 end to end: a field whose `filledBy` is `signer:{roleKey}` is typed on
+   * the signing page, long after the document was frozen at send. The freeze must
+   * therefore keep its placeholder rather than blanking it, and the completed document —
+   * the legal artefact — must show what the signer actually entered.
+   */
+  describe('Signer-entered values in the frozen and finalized document', () => {
+    it('keeps the placeholder frozen, the hash intact, and the value in the signed document', async () => {
+      const admin = await signup(app, 'admin@acme.com', 'Acme Inc');
+      const template = await publishTemplate(app, admin);
+      const envelope = await sendableEnvelope(app, admin, template.id);
+      await post(admin, `/${envelope.id}/send`).expect(200);
+
+      const frozen = await prisma.envelope.findUniqueOrThrow({ where: { id: envelope.id } });
+      // The sender's value is substituted at send; the signer's is not yet knowable, so
+      // its placeholder is what gets hashed and signed.
+      expect(frozen.renderedHtml).toContain('AGREEMENT with Alex Kaminski');
+      expect(frozen.renderedHtml).toContain('{{contractor_bank}}');
+
+      await signAs(invitationTokenFor('company@acme.com')).expect(200);
+      await signAs(invitationTokenFor('alex@example.com'), {
+        fieldValues: { contractor_bank: 'IBAN BY13 ACME' },
+      }).expect(200);
+      await queue.whenIdle();
+
+      // Invariant 5 — the column is written once. Signing does not rewrite it, so
+      // requirement 23's integrity check still recomputes to the frozen hash.
+      const stored = await prisma.envelope.findUniqueOrThrow({ where: { id: envelope.id } });
+      expect(stored.renderedHtml).toBe(frozen.renderedHtml);
+      expect(stored.renderedHtml).toContain('{{contractor_bank}}');
+      expect(createHash('sha256').update(stored.renderedHtml!, 'utf8').digest('hex')).toBe(
+        stored.documentHash,
+      );
+
+      const finalized = pdf.rendered[pdf.rendered.length - 1];
+      expect(finalized).toContain('Bank details: IBAN BY13 ACME');
+      expect(finalized).not.toContain('{{contractor_bank}}');
+      // Requirement 26 on the record side: the certificate says this value was added
+      // during signing, and by whom.
+      expect(finalized).toContain('Values entered during signing');
+      expect(finalized).toContain('Bank details');
+      expect(finalized).toContain('Alex Kaminski (Contractor)');
+    });
+
+    it('escapes a signer value on its way into the finalized document', async () => {
+      const admin = await signup(app, 'admin@acme.com', 'Acme Inc');
+      const template = await publishTemplate(app, admin);
+      const envelope = await sendableEnvelope(app, admin, template.id);
+      await post(admin, `/${envelope.id}/send`).expect(200);
+
+      await signAs(invitationTokenFor('company@acme.com')).expect(200);
+      await signAs(invitationTokenFor('alex@example.com'), {
+        fieldValues: { contractor_bank: '<b>x</b> & co' },
+      }).expect(200);
+      await queue.whenIdle();
+
+      // The signer substitutes into HTML that has already been signed, so the escaping
+      // matters here for the same reason it does at send: no counterparty may introduce
+      // markup into a document the other side agreed to.
+      const finalized = pdf.rendered[pdf.rendered.length - 1];
+      expect(finalized).toContain('&lt;b&gt;x&lt;/b&gt; &amp; co');
+      expect(finalized).not.toContain('<b>x</b>');
+    });
+
+    it('substitutes the current values everywhere the document is displayed', async () => {
+      const admin = await signup(app, 'admin@acme.com', 'Acme Inc');
+      const template = await publishTemplate(app, admin);
+      const envelope = await sendableEnvelope(app, admin, template.id);
+      await post(admin, `/${envelope.id}/send`).expect(200);
+
+      await signAs(invitationTokenFor('company@acme.com')).expect(200);
+      const contractorToken = invitationTokenFor('alex@example.com');
+      await signAs(contractorToken, {
+        fieldValues: { contractor_bank: 'IBAN BY13 ACME' },
+      }).expect(200);
+      await queue.whenIdle();
+
+      // Neither reader may ever be shown template syntax, however the value got there.
+      const detail = await get(admin, `/${envelope.id}`).expect(200);
+      expect(detail.body.renderedHtml).toContain('IBAN BY13 ACME');
+      expect(detail.body.renderedHtml).not.toContain('{{');
+
+      const signingPage = await request(app.getHttpServer())
+        .get(`/api/sign/${contractorToken}`)
+        .expect(200);
+      expect(signingPage.body.envelope.renderedHtml).toContain('IBAN BY13 ACME');
+      expect(signingPage.body.envelope.renderedHtml).not.toContain('{{');
+
+      // Presentation only: the hash the detail reports is still the frozen document's.
+      const stored = await prisma.envelope.findUniqueOrThrow({ where: { id: envelope.id } });
+      expect(detail.body.documentHash).toBe(stored.documentHash);
+      expect(detail.body.renderedHtml).not.toBe(stored.renderedHtml);
+    });
+  });
+
   describe('TC-02-INT-19: Completion survives a render failure', () => {
     it('stays completed with pdfStatus failed, then recovers on retry', async () => {
       const admin = await signup(app, 'admin@acme.com', 'Acme Inc');
@@ -701,7 +798,11 @@ describe('Envelopes', () => {
       await post(admin, `/${envelope.id}/send`).expect(200);
       const stored = await prisma.envelope.findUniqueOrThrow({ where: { id: envelope.id } });
       const sentPreview = await post(admin, `/${envelope.id}/preview`).expect(200);
-      expect(sentPreview.body.html).toBe(stored.renderedHtml);
+      // The frozen copy, with only the signer-owned placeholders it deliberately still
+      // carries filled in from the envelope's current values (none entered yet, so they
+      // render empty). The stored bytes themselves are never re-rendered.
+      expect(stored.renderedHtml).toContain('{{contractor_bank}}');
+      expect(sentPreview.body.html).toBe(substitute(stored.renderedHtml!, {}));
     });
 
     it('carries the draft expiry, the subject, and every field constraint on the detail', async () => {

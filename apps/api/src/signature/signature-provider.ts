@@ -79,11 +79,34 @@ export interface FinalizeSigner {
   userAgent: string;
 }
 
+/**
+ * One value a signer typed on the signing page rather than the sender before the send.
+ * The certificate lists these so the record says which parts of the document were added
+ * after the freeze instead of leaving them indistinguishable from the sender's.
+ */
+export interface FinalizeSignerField {
+  key: string;
+  label: string;
+  /** The signer who entered it. */
+  signerName: string;
+  roleLabel: string;
+}
+
 export interface FinalizeRequest {
   envelopeId: string;
   title: string;
   /** The frozen document, exactly as signed. Never re-rendered from the template. */
   renderedHtml: string;
+  /**
+   * Every value the envelope holds at completion, sender-entered and signer-entered
+   * alike. The frozen HTML above still carries the signer-owned placeholders literally
+   * (they had no value at send), so the provider fills them in — substituting, never
+   * re-rendering, so what the PDF shows is the signed document plus exactly the values
+   * the signers agreed to.
+   */
+  fieldValues: Record<string, string>;
+  /** Of those values, the ones entered during signing. For the certificate. */
+  signerEnteredFields: readonly FinalizeSignerField[];
   documentHash: string;
   templateName: string;
   templateVersion: number;

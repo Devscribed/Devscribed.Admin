@@ -529,6 +529,32 @@ describe('Signing', () => {
       ]);
     });
 
+    it('never shows a signer a raw placeholder, before or after the value is entered', async () => {
+      const { envelope } = await sentEnvelope();
+      const first = invitationTokenFor('company@acme.com');
+
+      // The frozen document keeps the contractor's placeholder — it is what was hashed
+      // and signed — but no counterparty is ever shown template syntax.
+      const frozen = await prisma.envelope.findUniqueOrThrow({ where: { id: envelope.id } });
+      expect(frozen.renderedHtml).toContain('{{contractor_bank}}');
+      const opened = await openLink(first).expect(200);
+      expect(opened.body.envelope.renderedHtml).not.toContain('{{');
+
+      await signAs(first).expect(200);
+      const second = invitationTokenFor('alex@example.com');
+      await signAs(second, { fieldValues: { contractor_bank: 'IBAN BY13 ACME' } }).expect(200);
+      await queue.whenIdle();
+
+      // The same link, reopened after signing, shows what was actually agreed.
+      const after = await openLink(second).expect(200);
+      expect(after.body.envelope.renderedHtml).toContain('IBAN BY13 ACME');
+      expect(after.body.envelope.renderedHtml).not.toContain('{{');
+      // Presentation only: the stored document and the hash it reports are untouched.
+      const stored = await prisma.envelope.findUniqueOrThrow({ where: { id: envelope.id } });
+      expect(stored.renderedHtml).toBe(frozen.renderedHtml);
+      expect(after.body.envelope.documentHash).toBe(stored.documentHash);
+    });
+
     it('records viewed once per signer however many times the link is opened', async () => {
       const { envelope } = await sentEnvelope();
       const token = invitationTokenFor('company@acme.com');

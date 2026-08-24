@@ -7,10 +7,14 @@ import { PrismaService } from '../prisma.service';
 import { JobQueue } from '../queue/job-queue';
 import type { Job } from '../queue/job-queue';
 import { SignatureProvider } from '../signature/signature-provider';
-import type { FinalizeSigner, SignatureMethod } from '../signature/signature-provider';
+import type {
+  FinalizeSigner,
+  FinalizeSignerField,
+  SignatureMethod,
+} from '../signature/signature-provider';
 import { FileStorage, PRESIGNED_URL_TTL_SECONDS } from '../storage/file-storage';
 import { EnvelopeEventsService } from './envelope-events.service';
-import { readSignerRoles } from './envelopes.service';
+import { readFieldValues, readFields, readSignerRoles } from './envelopes.service';
 
 /** Requirement 25 — the download link stays usable for 30 days after completion. */
 export const DOWNLOAD_WINDOW_DAYS = 30;
@@ -70,12 +74,33 @@ export class EnvelopeCompletionService implements OnModuleInit {
     }
 
     const roles = readSignerRoles(envelope.templateVersion.signerRoles);
+    const values = readFieldValues(envelope.fieldValues);
+
+    // The values a signer typed on the signing page: they were not in the document when
+    // it was frozen, so the provider needs them both to fill the placeholders the freeze
+    // left standing and to attribute them on the certificate.
+    const signerEnteredFields: FinalizeSignerField[] = readFields(
+      envelope.templateVersion.fieldsSnapshot,
+    ).flatMap((field) => {
+      const signer = envelope.signers.find((s) => field.filledBy === `signer:${s.roleKey}`);
+      if (!signer || (values[field.key] ?? '').trim().length === 0) return [];
+      return [
+        {
+          key: field.key,
+          label: field.label,
+          signerName: signer.name,
+          roleLabel: roles.find((r) => r.key === signer.roleKey)?.label ?? signer.roleKey,
+        },
+      ];
+    });
 
     try {
       const finalized = await this.signature.finalize({
         envelopeId: envelope.id,
         title: envelope.title,
         renderedHtml: envelope.renderedHtml,
+        fieldValues: values,
+        signerEnteredFields,
         documentHash: envelope.documentHash,
         templateName: envelope.templateVersion.template.name,
         templateVersion: envelope.templateVersion.versionNumber,

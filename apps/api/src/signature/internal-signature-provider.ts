@@ -1,9 +1,10 @@
-import { escapeHtml } from '@devscribed/validation';
+import { escapeHtml, substitute } from '@devscribed/validation';
 import { Injectable } from '@nestjs/common';
 import {
   AppliedSignature,
   FinalizeRequest,
   FinalizeSigner,
+  FinalizeSignerField,
   FinalizedDocument,
   InvitationRequest,
   IssuedInvitation,
@@ -58,12 +59,18 @@ export class InternalSignatureProvider extends SignatureProvider {
   }
 
   async finalize(request: FinalizeRequest): Promise<FinalizedDocument> {
-    // The signed document is used verbatim. Re-rendering it from the template here would
-    // quietly defeat the guarantee the frozen `renderedHtml` exists to give.
+    // The signed document is used as frozen. The only thing done to it is filling in the
+    // placeholders the freeze deliberately left standing for the signer-owned fields —
+    // `substitute` touches nothing else and escapes every value, so a signer can no more
+    // inject markup here than a sender could at send. Re-*rendering* it from the template
+    // would quietly defeat the guarantee the frozen `renderedHtml` exists to give; this
+    // does not, because every word that was hashed is still there unchanged.
+    const document = substitute(request.renderedHtml, request.fieldValues ?? {});
+
     const html =
       '<!doctype html><html><head><meta charset="utf-8">' +
       `<title>${escapeHtml(request.title)}</title>${CERTIFICATE_STYLES}</head><body>` +
-      `<section class="document">${request.renderedHtml}</section>` +
+      `<section class="document">${document}</section>` +
       certificateOfCompletion(request) +
       '</body></html>';
 
@@ -115,6 +122,10 @@ const CERTIFICATE_STYLES =
   '.certificate th,.certificate td{border:1px solid #d1d5db;padding:6px 8px;' +
   'text-align:left;vertical-align:top;word-break:break-word}' +
   '.certificate th{width:34%;background:#f9fafb;font-weight:600}' +
+  '.certificate h2{font-size:13px;margin:0 0 4px}' +
+  // The signer-values table is a real three-column table, not the label/value pairs the
+  // rest of the certificate uses, so it must not inherit the 34% label column.
+  '.certificate table.entered th{width:auto}' +
   '.certificate img{max-height:64px}' +
   '.hash{font-family:Menlo,Consolas,monospace;font-size:10px}' +
   '</style>';
@@ -147,8 +158,36 @@ function certificateOfCompletion(request: FinalizeRequest): string {
       request.documentHash,
     )}</td></tr>` +
     '</table>' +
+    signerEnteredValues(request.signerEnteredFields) +
     signers +
     '</section>'
+  );
+}
+
+/**
+ * Requirement 26's other half, on the record side: these values were typed on the signing
+ * page *after* the document was frozen, so the certificate names them. Without this the
+ * completed PDF would show them indistinguishably from the sender's own values, and
+ * nothing in the artefact would say who put them there.
+ *
+ * The values themselves are not repeated — they are in the document above, and the
+ * certificate's job here is attribution, not duplication.
+ */
+function signerEnteredValues(fields: readonly FinalizeSignerField[]): string {
+  if (!fields || fields.length === 0) return '';
+
+  const rows = fields
+    .map(
+      (field) =>
+        `<tr><td>${escapeHtml(field.key)}</td><td>${escapeHtml(field.label)}</td>` +
+        `<td>${escapeHtml(`${field.signerName} (${field.roleLabel})`)}</td></tr>`,
+    )
+    .join('');
+
+  return (
+    '<h2>Values entered during signing</h2>' +
+    '<table class="entered"><thead><tr><th>Field</th><th>Label</th><th>Entered by</th>' +
+    `</tr></thead><tbody>${rows}</tbody></table>`
   );
 }
 

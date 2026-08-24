@@ -498,11 +498,16 @@ test.describe('Envelopes and signing', () => {
     expect(adminSrcdoc).toContain('УНП');
     expect(adminSrcdoc).not.toContain('�');
 
-    // The signer's own Cyrillic value is not in that HTML and must not be: the document
-    // is frozen at send and written exactly once (invariant 5). It is asserted where it
-    // does live — the envelope's stored values, read back through the API — because the
-    // round trip through the request, the database, and the response is exactly the path
-    // an encoding bug would break.
+    // The signer's own Cyrillic value is entered after the freeze, so the stored document
+    // carries its placeholder rather than the value (invariant 5 — written exactly once).
+    // What a reader is served is that document with the value filled in, and this is the
+    // assertion that says so: the completed document shows what the contractor typed,
+    // byte for byte, not a blank and not `{{contractor_bank}}`.
+    expect(adminSrcdoc).toContain(cyrillicBank);
+    expect(adminSrcdoc).not.toContain('{{');
+
+    // Also asserted where the value is stored — the round trip through the request, the
+    // database, and the response is exactly the path an encoding bug would break.
     const detail = await (
       await request.get(
         `${API}/api/organizations/${fixture.orgId}/envelopes/${fixture.envelopeId}`,

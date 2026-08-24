@@ -11,6 +11,37 @@ export interface RenderEnvelopeInput {
   bodyHtml: string;
   values: Record<string, string>;
   signers: readonly RenderSigner[];
+  /**
+   * The keys of the fields a signer fills in on the signing page (`filledBy` of
+   * `signer:{roleKey}`, spec 01 requirement 26). Their placeholders are left standing in
+   * the frozen HTML — see the note on `renderEnvelopeDocument`.
+   */
+  signerOwnedKeys?: readonly string[];
+}
+
+/** The subset of `readFields()` this module needs, so it does not depend on the service. */
+export interface FieldOwnership {
+  key: string;
+  filledBy: string;
+}
+
+export function signerOwnedFieldKeys(fields: readonly FieldOwnership[]): string[] {
+  return fields
+    .filter((field) => (field.filledBy ?? '').trim().startsWith('signer:'))
+    .map((field) => field.key);
+}
+
+/**
+ * The frozen document as a *reader* should see it: the stored HTML with the envelope's
+ * current values filled into the placeholders the freeze deliberately left standing.
+ *
+ * Presentation only. The caller never writes the result back, so the stored column and
+ * its hash are untouched and requirement 23's integrity check keeps recomputing over
+ * exactly the bytes that were signed. It exists so a counterparty is never shown raw
+ * `{{contractor_bank}}` template syntax on the signing page or the envelope detail.
+ */
+export function presentDocument(renderedHtml: string, values: Record<string, string>): string {
+  return substitute(renderedHtml, values ?? {});
 }
 
 /**
@@ -26,9 +57,26 @@ export interface RenderEnvelopeInput {
  *
  * `substitute` escapes every value, and the body was allow-list sanitized on save
  * (spec 01), so neither an author nor a signer can inject markup here.
+ *
+ * Only *sender-owned* values are substituted. A signer-owned field has no value yet at
+ * send — substituting it would blank the placeholder for good, because this HTML is
+ * written once and never rewritten (invariant 5), and the signed PDF would then be
+ * missing the very clause the signer typed. Its placeholder is therefore left standing
+ * in the frozen bytes and filled in on the way out: `presentDocument` for display, and
+ * the signature provider's `finalize` for the completed document.
  */
 export function renderEnvelopeDocument(input: RenderEnvelopeInput): string {
-  const body = substitute(input.bodyHtml ?? '', input.values ?? {});
+  const signerOwned = new Set(input.signerOwnedKeys ?? []);
+  const frozen: Record<string, string> = {};
+  for (const [key, value] of Object.entries(input.values ?? {})) {
+    if (!signerOwned.has(key)) frozen[key] = value;
+  }
+  // Mapping a signer-owned key to its own placeholder is how the token is kept literal
+  // without a second substitution routine: `escapeHtml` does not touch braces, so
+  // `{{key}}` comes back out of `substitute` byte for byte and stays substitutable.
+  for (const key of signerOwned) frozen[key] = `{{${key}}}`;
+
+  const body = substitute(input.bodyHtml ?? '', frozen);
 
   const signatures = [...input.signers]
     .sort((a, b) => a.order - b.order)

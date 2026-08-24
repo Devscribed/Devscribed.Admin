@@ -44,7 +44,11 @@ import { JobQueue } from '../queue/job-queue';
 import { SignatureProvider } from '../signature/signature-provider';
 import { FileStorage, PRESIGNED_URL_TTL_SECONDS } from '../storage/file-storage';
 import { EnvelopeEventsService } from './envelope-events.service';
-import { renderEnvelopeDocument } from './envelope-renderer';
+import {
+  presentDocument,
+  renderEnvelopeDocument,
+  signerOwnedFieldKeys,
+} from './envelope-renderer';
 import type {
   CreateEnvelopeDto,
   EnvelopeField,
@@ -319,8 +323,11 @@ export class EnvelopesService {
     const envelope = await this.load(session, id);
 
     // Once sent, the frozen copy *is* the document; re-rendering it would show something
-    // that is not what anybody signed.
-    if (envelope.renderedHtml) return { html: envelope.renderedHtml };
+    // that is not what anybody signed. The signer-owned placeholders it still carries are
+    // filled in for display only — the stored bytes are the ones that were hashed.
+    if (envelope.renderedHtml) {
+      return { html: presentDocument(envelope.renderedHtml, readFieldValues(envelope.fieldValues)) };
+    }
 
     const roles = readSignerRoles(envelope.templateVersion.signerRoles);
     return {
@@ -328,6 +335,7 @@ export class EnvelopesService {
         title: envelope.title,
         bodyHtml: envelope.templateVersion.bodyHtml,
         values: readFieldValues(envelope.fieldValues),
+        signerOwnedKeys: signerOwnedFieldKeys(readFields(envelope.templateVersion.fieldsSnapshot)),
         signers: envelope.signers.map((s) => ({
           roleLabel: roles.find((r) => r.key === s.roleKey)?.label ?? s.roleKey,
           name: s.name,
@@ -684,6 +692,7 @@ export class EnvelopesService {
             name: s.name,
             order: s.order,
           })),
+          signerOwnedKeys: signerOwnedFieldKeys(fields),
         });
         const documentHash = sha256HexOfString(renderedHtml);
 
@@ -1110,7 +1119,13 @@ export class EnvelopesService {
       })),
       // Requirement: present only once the envelope has been sent. Before that the
       // client renders a live preview from the template and the current values.
-      renderedHtml: envelope.renderedHtml,
+      //
+      // Presentation copy: the frozen HTML keeps every signer-owned placeholder literal,
+      // and a reader must see the value the signer typed rather than template syntax.
+      // `documentHash` below still belongs to the stored bytes, which are unchanged.
+      renderedHtml: envelope.renderedHtml
+        ? presentDocument(envelope.renderedHtml, values)
+        : null,
       documentHash: envelope.documentHash,
       pdfStatus: envelope.pdfStatus,
       expiresAt: envelope.expiresAt?.toISOString() ?? null,
