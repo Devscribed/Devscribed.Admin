@@ -48,12 +48,47 @@ export function normalizeRole(role: string | null | undefined): NormalizedRole {
  * because ROLE_CAPABILITIES is keyed by role and typed against the union, adding a member
  * here forces every role's list to be revisited at compile time.
  */
-export type Capability = 'ViewDocumentTemplates' | 'ManageDocumentTemplates';
+export type Capability =
+  // Spec 01 — document templates.
+  | 'ViewDocumentTemplates'
+  | 'ManageDocumentTemplates'
+  // Spec 02 — envelopes and signing.
+  | 'ViewEnvelopes'
+  | 'ManageEnvelopes'
+  | 'VoidEnvelope'
+  | 'DownloadSignedDocument'
+  | 'ViewEnvelopeAudit';
 
-/** Permission matrix from spec 01, "Roles & Permission Matrix". */
+/**
+ * Permission matrix from spec 01 and spec 02, "Roles & Permission Matrix".
+ *
+ * Spec 02 gives `manager` the full envelope set, unlike templates where a manager may
+ * only look: authoring a template is a change to the org's legal boilerplate, whereas
+ * sending, voiding, and auditing one contract is the day-to-day work the role exists for.
+ *
+ * Signing itself appears nowhere here on purpose. A signer is authorized solely by their
+ * token (spec 02, "Roles & Permission Matrix"), and a signer who happens to be a member
+ * gets no extra rights from their session — so routing that check through a role-keyed
+ * table would be the exact mistake the note in the spec warns against.
+ */
 export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = {
-  admin: ['ViewDocumentTemplates', 'ManageDocumentTemplates'],
-  manager: ['ViewDocumentTemplates'],
+  admin: [
+    'ViewDocumentTemplates',
+    'ManageDocumentTemplates',
+    'ViewEnvelopes',
+    'ManageEnvelopes',
+    'VoidEnvelope',
+    'DownloadSignedDocument',
+    'ViewEnvelopeAudit',
+  ],
+  manager: [
+    'ViewDocumentTemplates',
+    'ViewEnvelopes',
+    'ManageEnvelopes',
+    'VoidEnvelope',
+    'DownloadSignedDocument',
+    'ViewEnvelopeAudit',
+  ],
   user: [],
   viewer: [],
 };

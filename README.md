@@ -22,6 +22,7 @@ apps/api/             NestJS: POST /api/signup, /api/login, /api/logout,
                       GET /api/me, GET /api/organizations/{orgId}/members
 apps/web/             Next.js: /signup, /login, /org/{orgId}/members
 e2e/                  Playwright specs, one per TC-01-E2E-* case
+infra/terraform/      AWS for the documents area — one root module, dev and prod
 ```
 
 `packages/validation` exists so the client and the server can never disagree about a
@@ -208,6 +209,47 @@ API environment variables:
 
 Migrations do not run at deploy time. `.github/workflows/migrate.yml` applies them with
 `prisma migrate deploy` on every merge to `main`, using the `DIRECT_DATABASE_URL` secret.
+
+### Documents area infrastructure
+
+The documents area (`specs/documents/`) needs storage, mail, PDF rendering, and deferred
+work. Each of those sits behind a port in `apps/api/src/` — `FileStorage`, `MailService`,
+`PdfRenderer`, `JobQueue`, `SignatureProvider` — registered globally in `core.module.ts`,
+with the driver chosen in each port's own `*.provider.ts`. The rule is the one
+`MAIL_TRANSPORT` already followed: an explicit environment variable always wins, and the
+**local driver is the default whenever `NODE_ENV` is not `production`**. Nothing in the
+Jest or Playwright suites touches AWS, and a fresh clone needs none of these set —
+documents go to the gitignored `apps/api/.local-storage`, mail goes to the in-memory sink,
+PDFs are rendered by the Playwright Chromium already installed for E2E (falling back to a
+built-in single-page PDF writer, with a warning, when no browser is present), and jobs run
+in-process after the transaction commits.
+
+`apps/api/.env.example` lists every variable with its local default. The production values
+come from Terraform outputs, not from the AWS console.
+
+Terraform lives in `infra/terraform/` — one root module, two complete and independent
+environments (`dev`, `prod`), composed through `-backend-config` and `-var-file`. There are
+no workspaces. State is in S3 with native locking (`use_lockfile`, so Terraform >= 1.10).
+
+```bash
+cd infra/terraform
+make validate     # fmt -check, init -backend=false, validate — what CI runs on a PR
+make plan-dev
+make apply-dev
+make plan-prod
+make apply-prod   # gated on a manual environment approval in CI
+```
+
+Three things are bootstrapped once, out of band, and are the only hand-made resources: the
+`devscribed-tfstate-{account}` state bucket, the Vercel OIDC provider (account-global, so no
+per-environment state file can own it), and the account-level SES suppression list. **No
+secret value is ever written to a `.tfvars` file** — Terraform creates the Secrets Manager
+containers and the IAM policies; the values are set out of band, so nothing secret can land
+in the state file.
+
+`environments/{dev,prod}.tfvars` contain exactly the inputs that the spec's "What differs
+between the environments" table says differ. Everything else is defaulted in
+`variables.tf` on purpose: a value present in both files is a value that can drift.
 
 ## Design-system notes
 

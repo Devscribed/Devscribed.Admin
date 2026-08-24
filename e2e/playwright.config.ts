@@ -19,9 +19,28 @@ export default defineConfig({
     {
       command: 'npm run dev --workspace @devscribed/api',
       cwd: '..',
-      // The sink transport keeps reset links readable from the tests; it is also what
-      // unlocks /api/test/mail, which stays 404 under any real transport.
-      env: { MAIL_TRANSPORT: 'memory' },
+      // Only what the suite genuinely needs to stay hermetic. Each of these is already
+      // the non-production default, and each is named anyway because Playwright reuses an
+      // already-running dev server: without them, whether the suite touched AWS would
+      // depend on how that server happened to be started. Everything else the documents
+      // area reads (bucket names, queue URLs, SES settings) is deliberately absent — a
+      // hermetic run must not have a value to reach for.
+      env: {
+        // The sink transport keeps reset links and signing invitations readable from the
+        // tests; it is also what unlocks /api/test/mail, which stays 404 under any real
+        // transport.
+        MAIL_TRANSPORT: 'memory',
+        // Signed documents go to apps/api/.local-storage, never to S3.
+        STORAGE_DRIVER: 'local',
+        // Chromium via playwright-core, with the built-in fallback writer if the browser
+        // is missing. Never the render Lambda.
+        PDF_RENDERER: 'local-chromium',
+        // The completion render runs in-process, after the transaction commits, so a test
+        // can assert on the finished envelope without polling a queue.
+        JOB_QUEUE: 'inline',
+        // Signing links must point at the web server this config starts.
+        APP_PUBLIC_URL: WEB,
+      },
       port: 4000,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,

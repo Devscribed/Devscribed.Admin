@@ -44,18 +44,31 @@ function navigation(orgId: string, role: string): NavGroup[] {
     },
   ];
 
-  if (hasCapability(role, 'ViewDocumentTemplates')) {
-    groups.push({
+  // The two entries are separately gated because the two capabilities are separately
+  // granted: spec 02 gives a `manager` the full envelope set while spec 01 leaves them
+  // read-only on templates, so the group is assembled from whichever rows survive.
+  const documents: NavEntry[] = [];
+
+  if (hasCapability(role, 'ViewEnvelopes')) {
+    documents.push({
+      testId: 'nav-envelopes',
       label: 'Documents',
-      entries: [
-        {
-          testId: 'nav-documents',
-          label: 'Templates',
-          href: `/org/${orgId}/documents/templates`,
-          icon: <DocumentsIcon />,
-        },
-      ],
+      href: `/org/${orgId}/documents`,
+      icon: <DocumentsIcon />,
     });
+  }
+
+  if (hasCapability(role, 'ViewDocumentTemplates')) {
+    documents.push({
+      testId: 'nav-documents',
+      label: 'Templates',
+      href: `/org/${orgId}/documents/templates`,
+      icon: <DocumentsIcon />,
+    });
+  }
+
+  if (documents.length > 0) {
+    groups.push({ label: 'Documents', entries: documents });
   }
 
   return groups;
@@ -66,6 +79,16 @@ export function Sidebar({ orgId }: { orgId: string }) {
   const router = useRouter();
   const { role } = useSession();
   const groups = navigation(orgId, role);
+
+  /**
+   * `/documents` is a prefix of `/documents/templates`, so a plain `startsWith` would
+   * light up two rows at once. Only the *longest* matching destination is the one the
+   * caller is actually on.
+   */
+  const matched = groups
+    .flatMap((group) => group.entries)
+    .filter((entry) => pathname === entry.href || pathname.startsWith(`${entry.href}/`))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
   return (
     <nav className="shell-sidebar" data-testid="app-sidebar" aria-label="Main">
@@ -81,7 +104,7 @@ export function Sidebar({ orgId }: { orgId: string }) {
             </SectionLabel>
 
             {group.entries.map((entry) => {
-              const active = pathname === entry.href || pathname.startsWith(`${entry.href}/`);
+              const active = matched === entry.href;
               return (
                 // `NavItem` renders its own <a> and takes no `as`/component prop, so it
                 // cannot host a next/link. Passing `href` keeps the row a real link

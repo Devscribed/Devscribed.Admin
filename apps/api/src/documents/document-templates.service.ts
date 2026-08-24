@@ -495,13 +495,19 @@ export class DocumentTemplatesService {
    * ---------------------------------------------------------------- */
 
   /**
-   * Envelopes arrive in spec 02. Until then no version has ever backed one, so the
-   * answer is always zero — but `canDelete`, `envelopeCount`, and the `template_in_use`
-   * branch are wired end to end against it, so spec 02 replaces this method body and
-   * nothing else.
+   * How many documents any version of this template has ever backed — the whole basis
+   * of requirement 6, which permits a hard delete only for a template nobody has used.
+   *
+   * It counts across every version, not just the current one: an envelope pins the
+   * version it was created from, so deleting the template would orphan a document bound
+   * to a version published two edits ago just as surely as one bound to today's.
+   * `Envelope.templateVersionId` is `Restrict` in the schema, so this check is the
+   * friendly half of a guarantee the database enforces regardless.
    */
-  private async countEnvelopesFor(_templateId: string): Promise<number> {
-    return 0;
+  private async countEnvelopesFor(templateId: string): Promise<number> {
+    return this.prisma.envelope.count({
+      where: { templateVersion: { templateId } },
+    });
   }
 
   /**

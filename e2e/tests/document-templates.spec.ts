@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import {
+  createEnvelope,
   createTemplate,
   registerOrganization,
   setMembershipRole,
@@ -156,12 +157,7 @@ test.describe('Document templates', () => {
     await expect(page.getByTestId('template-version-summary')).toHaveText('v1 published · v2 draft');
   });
 
-  // Envelopes arrive with spec 02; until one exists no template can be "in use", so the
-  // blocking modal this asserts can never be reached. The body is left written so that
-  // spec 02 only has to seed an envelope and drop the skip.
   test('TC-01-E2E-05: Delete is blocked for a used template', async ({ page, request }) => {
-    test.skip(true, 'Needs an envelope to make the template used — spec 02 (Envelopes).');
-
     const email = uniqueEmail('tpl-inuse');
     const { orgId } = await registerOrganization(request, email);
     const templateId = await createTemplate(request, orgId, {
@@ -170,7 +166,17 @@ test.describe('Document templates', () => {
       fields: [{ key: 'contractor_full_name', label: 'Full name', required: true }],
       publish: true,
     });
-    // TODO(spec 02): create one envelope from version 1 of `templateId` here.
+    // One envelope is what makes the template "in use" (spec 02). A draft is enough —
+    // the count the delete refusal reports is of envelopes pinned to a version of this
+    // template, whatever became of them afterwards.
+    await createEnvelope(request, orgId, {
+      templateId,
+      fieldValues: { contractor_full_name: 'Alex Kaminski' },
+      signers: [
+        { name: 'Ivan Demchenko', email: 'ivan@devscribed.io' },
+        { name: 'Alex Kaminski', email: 'alex@example.com' },
+      ],
+    });
 
     await signIn(page, email);
     await page.goto(TEMPLATES(orgId));
@@ -178,11 +184,12 @@ test.describe('Document templates', () => {
     await page.getByTestId(`template-actions-${templateId}`).click();
     await page.getByTestId('template-delete-btn').click();
 
-    const modal = page.getByRole('dialog');
-    await expect(modal).toContainText('cannot be deleted');
+    // The DS `Modal` renders no `role="dialog"`, so the panel is located by its own copy.
+    const modal = page.getByText(/cannot be deleted/);
+    await expect(modal).toBeVisible();
     await expect(modal).toContainText('1 documents');
 
-    await modal.getByTestId('template-archive-btn').click();
+    await page.getByTestId('template-archive-btn').click();
     await expect(page.getByTestId('toast-template-archived')).toHaveText('Template archived');
     await expect(page.getByTestId(`template-status-${templateId}`)).toHaveText('Archived');
   });

@@ -24,6 +24,18 @@ playwright/.cache/
 e2e/playwright-report/
 e2e/test-results/
 
+# Local FileStorage driver — signed documents a developer or a test produced. A signed
+# contract is still a signed contract; none of it belongs in version control.
+.local-storage/
+
+# Terraform — the provider lock file is deliberately NOT ignored: a plan that resolves
+# different provider versions on two machines is not a plan of the same infrastructure.
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
 # misc
 .DS_Store
 *.pem

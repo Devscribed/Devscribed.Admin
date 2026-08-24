@@ -38,8 +38,23 @@ describe('normalizeRole', () => {
 describe('ROLE_CAPABILITIES matrix', () => {
   it('matches the spec table exactly', () => {
     expect(ROLE_CAPABILITIES).toEqual({
-      admin: ['ViewDocumentTemplates', 'ManageDocumentTemplates'],
-      manager: ['ViewDocumentTemplates'],
+      admin: [
+        'ViewDocumentTemplates',
+        'ManageDocumentTemplates',
+        'ViewEnvelopes',
+        'ManageEnvelopes',
+        'VoidEnvelope',
+        'DownloadSignedDocument',
+        'ViewEnvelopeAudit',
+      ],
+      manager: [
+        'ViewDocumentTemplates',
+        'ViewEnvelopes',
+        'ManageEnvelopes',
+        'VoidEnvelope',
+        'DownloadSignedDocument',
+        'ViewEnvelopeAudit',
+      ],
       user: [],
       viewer: [],
     });
@@ -73,9 +88,78 @@ describe('hasCapability', () => {
 
 describe('capabilitiesFor', () => {
   it('returns the full set for a role, so UI gating needs one call', () => {
-    expect(capabilitiesFor('admin')).toEqual(['ViewDocumentTemplates', 'ManageDocumentTemplates']);
-    expect(capabilitiesFor('manager')).toEqual(['ViewDocumentTemplates']);
+    expect(capabilitiesFor('admin')).toEqual([
+      'ViewDocumentTemplates',
+      'ManageDocumentTemplates',
+      'ViewEnvelopes',
+      'ManageEnvelopes',
+      'VoidEnvelope',
+      'DownloadSignedDocument',
+      'ViewEnvelopeAudit',
+    ]);
+    expect(capabilitiesFor('manager')).toEqual([
+      'ViewDocumentTemplates',
+      'ViewEnvelopes',
+      'ManageEnvelopes',
+      'VoidEnvelope',
+      'DownloadSignedDocument',
+      'ViewEnvelopeAudit',
+    ]);
     expect(capabilitiesFor('member')).toEqual([]);
     expect(capabilitiesFor(null)).toEqual([]);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * TC-02-UNIT-06: Capability map
+ *
+ * The five envelope capabilities across every role the column can produce —
+ * the target enum, the legacy `member`, an unknown string, and NULL.
+ * ------------------------------------------------------------------ */
+
+describe('TC-02-UNIT-06: Capability map', () => {
+  const ENVELOPE_CAPABILITIES: readonly Capability[] = [
+    'ViewEnvelopes',
+    'ManageEnvelopes',
+    'VoidEnvelope',
+    'DownloadSignedDocument',
+    'ViewEnvelopeAudit',
+  ];
+
+  // Spec 02, "Roles & Permission Matrix": admin and manager get all five; user and
+  // viewer get none. A signer never appears here — a token authorizes signing, not a role.
+  const GRANTED: Array<[string | null | undefined, boolean]> = [
+    ['admin', true],
+    ['manager', true],
+    ['user', false],
+    ['viewer', false],
+    // The legacy value the schema stores today must resolve exactly like `user`.
+    ['member', false],
+    ['owner', false],
+    ['', false],
+    [null, false],
+    [undefined, false],
+  ];
+
+  for (const [role, granted] of GRANTED) {
+    for (const capability of ENVELOPE_CAPABILITIES) {
+      it(`${JSON.stringify(role)} ${granted ? 'has' : 'lacks'} ${capability}`, () => {
+        expect(hasCapability(role, capability)).toBe(granted);
+      });
+    }
+  }
+
+  it('resolves `member` identically to `user`', () => {
+    expect(capabilitiesFor('member')).toEqual(capabilitiesFor('user'));
+  });
+
+  it('grants an unknown role nothing, because normalization lands on viewer', () => {
+    expect(capabilitiesFor('superadmin')).toEqual([]);
+  });
+
+  it('leaves the spec 01 capabilities exactly as they were', () => {
+    expect(hasCapability('manager', 'ManageDocumentTemplates')).toBe(false);
+    expect(hasCapability('manager', 'ViewDocumentTemplates')).toBe(true);
+    expect(hasCapability('user', 'ViewDocumentTemplates')).toBe(false);
   });
 });

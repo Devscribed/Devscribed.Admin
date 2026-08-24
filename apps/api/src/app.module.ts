@@ -10,10 +10,9 @@ import {
 import { PasswordResetService } from './auth/password-reset.service';
 import { CoreModule } from './core.module';
 import { DocumentsModule } from './documents/documents.module';
-import { ConsoleMailService } from './mail/console-mail.service';
-import { InMemoryMailService } from './mail/in-memory-mail.service';
-import { MailService } from './mail/mail.service';
+import { InternalModule } from './internal/internal.module';
 import { TestMailController } from './mail/test-mail.controller';
+import { SigningModule } from './signing/signing.module';
 import { MeController } from './members/me.controller';
 import { MembersController } from './members/members.controller';
 import { SignupController } from './signup/signup.controller';
@@ -21,38 +20,31 @@ import { SignupService } from './signup/signup.service';
 import { TestRoleController } from './test-support/test-role.controller';
 
 /**
- * Spec 02 leaves the real transport out of scope, so there are only two stand-ins.
- *
- * The sink is the default outside production: it logs the link exactly like the
- * console transport *and* records it, which is what lets an E2E run read the reset
- * mail. Defaulting rather than requiring `MAIL_TRANSPORT=memory` matters because
- * Playwright reuses an already-running dev server — if the sink were opt-in, whether
- * the suite passed would depend on how that server happened to be started.
- *
- * An explicit `MAIL_TRANSPORT` always wins, and `/api/test/mail` stays 404 in
- * production regardless.
+ * Driver selection used to live here, for mail alone. Documents spec 02 added four more
+ * ports with the same env-var-or-local-default rule, so each port now chooses its own
+ * driver in its own `*.provider.ts` — next to the drivers it chooses between — and
+ * `CoreModule` registers all five globally. The rule itself is unchanged: an explicit
+ * env var always wins, and the local driver is the default whenever `NODE_ENV` is not
+ * `production`. `MAIL_TRANSPORT` is read in `mail/mail.provider.ts`.
  */
-const useMailSink =
-  process.env.MAIL_TRANSPORT === 'memory' ||
-  (process.env.MAIL_TRANSPORT === undefined && process.env.NODE_ENV !== 'production');
-
-const mailProvider = {
-  provide: MailService,
-  useClass: useMailSink ? InMemoryMailService : ConsoleMailService,
-};
-
 @Module({
   imports: [
     JwtModule.register({
       global: true,
       secret: process.env.SESSION_SECRET || 'dev-only-insecure-secret',
     }),
-    // Prisma and the session reader, shared by every module rather than duplicated
-    // into each one — see the note in core.module.ts.
+    // Prisma, the session reader, and the five infrastructure ports, shared by every
+    // module rather than duplicated into each one — see the note in core.module.ts.
     CoreModule,
     // The first feature module in the codebase. Everything below stays flat; the
     // documents area brings its own controllers rather than lengthening this list.
     DocumentsModule,
+    // Two more modules rather than more controllers here, because both have an
+    // authorization model that is not this application's: `SigningModule` is session-less
+    // and authorized by a token, `InternalModule` by a shared secret. Keeping them apart
+    // is what stops a guard from being applied to the wrong half by accident.
+    SigningModule,
+    InternalModule,
   ],
   controllers: [
     SignupController,
@@ -65,6 +57,6 @@ const mailProvider = {
     TestMailController,
     TestRoleController,
   ],
-  providers: [SignupService, LoginService, PasswordResetService, mailProvider],
+  providers: [SignupService, LoginService, PasswordResetService],
 })
 export class AppModule {}

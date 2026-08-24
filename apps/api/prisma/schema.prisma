@@ -32,6 +32,9 @@ model Account {
   templatesCreated        DocumentTemplate[]        @relation("TemplatesCreated")
   templatesArchived       DocumentTemplate[]        @relation("TemplatesArchived")
   templateVersionsCreated DocumentTemplateVersion[] @relation("TemplateVersionsCreated")
+  envelopesCreated        Envelope[]                @relation("EnvelopesCreated")
+  envelopesVoided         Envelope[]                @relation("EnvelopesVoided")
+  envelopeEventsActed     EnvelopeEvent[]           @relation("EnvelopeEventsActed")
 }
 
 /// Single-use, time-limited password-reset grant (spec 02).
@@ -60,6 +63,7 @@ model Organization {
 
   memberships Membership[]
   documentTemplates DocumentTemplate[]
+  envelopes         Envelope[]
 }
 
 /// Links an account to its organization. One per account — single-org-per-user (FR-8).
@@ -75,6 +79,8 @@ model Membership {
 
   account      Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  envelopesAsSubject Envelope[]       @relation("EnvelopeSubject")
+  signerRecords      EnvelopeSigner[] @relation("SignerMembership")
 
   @@index([organizationId])
 }
@@ -157,6 +163,7 @@ model DocumentTemplateVersion {
   createdBy Account          @relation("TemplateVersionsCreated", fields: [createdByAccountId], references: [id])
   fields    TemplateField[]
   currentFor DocumentTemplate? @relation("TemplateCurrentVersion")
+  envelopes  Envelope[]
 
   @@unique([templateId, versionNumber])
   @@index([templateId])
@@ -182,4 +189,185 @@ model TemplateField {
 
   @@unique([templateVersionId, key])
   @@index([templateVersionId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Documents area — spec 02, Envelopes & Signing.
+//
+// Additive again: the models above gain back-relations only. `Envelope` pins
+// `templateVersionId` with Restrict, which is the database half of the guarantee
+// that template maintenance can never alter a document already sent or signed.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum EnvelopeStatus {
+  draft
+  sent
+  partially_signed
+  completed
+  declined
+  voided
+  expired
+}
+
+enum SignerStatus {
+  pending
+  notified
+  viewed
+  signed
+  declined
+}
+
+enum SignatureType {
+  drawn
+  typed
+}
+
+enum PdfStatus {
+  not_required
+  pending
+  ready
+  failed
+}
+
+enum EnvelopeEventType {
+  created
+  sent
+  email_accepted
+  email_delivered
+  email_bounced
+  viewed
+  signed
+  declined
+  reminded
+  voided
+  expired
+  completed
+  downloaded
+  pdf_failed
+  tamper_detected
+}
+
+/// One contract in flight: a pinned template version, the values filled into it,
+/// two signers, and the trail of everything that happened to it.
+model Envelope {
+  id                String         @id @default(uuid())
+  organizationId    String
+  /// Pinned at creation and never changed. `Restrict` rather than `Cascade`: a
+  /// version that backs a document must not be deletable at all.
+  templateVersionId String
+  title             String
+  status            EnvelopeStatus @default(draft)
+  /// Map of field key to value, accumulated from the sender and from each signer.
+  fieldValues       Json           @default("{}")
+  /// Written exactly once, at send, and never again (invariant 5).
+  renderedHtml      String?
+  documentHash      String?
+  signedPdfKey      String?
+  signedPdfHash     String?
+  pdfStatus         PdfStatus      @default(not_required)
+  /// Autofill subject (spec 03). SetNull so deleting a member cannot take an
+  /// executed contract with it.
+  subjectMembershipId String?
+  /// The SignatureProvider port, present from day one so that adding a
+  /// third-party adapter later is a class and an env var, not a migration.
+  providerKey       String         @default("internal")
+  providerRef       String         @default("")
+  expiresAt         DateTime?
+  sentAt            DateTime?
+  completedAt       DateTime?
+  voidedAt          DateTime?
+  voidedByAccountId String?
+  voidReason        String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  createdByAccountId String
+
+  organization    Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  templateVersion DocumentTemplateVersion @relation(fields: [templateVersionId], references: [id], onDelete: Restrict)
+  subject         Membership?             @relation("EnvelopeSubject", fields: [subjectMembershipId], references: [id], onDelete: SetNull)
+  createdBy       Account                 @relation("EnvelopesCreated", fields: [createdByAccountId], references: [id])
+  voidedBy        Account?                @relation("EnvelopesVoided", fields: [voidedByAccountId], references: [id])
+  signers         EnvelopeSigner[]
+  events          EnvelopeEvent[]
+
+  @@index([organizationId, status])
+  @@index([templateVersionId])
+}
+
+model EnvelopeSigner {
+  id                 String         @id @default(uuid())
+  envelopeId         String
+  roleKey            String
+  name               String         @default("")
+  /// Normalized to lowercase. The signature is bound to this address, not to an
+  /// account, which is why removing a member leaves an in-flight envelope alone.
+  email              String         @default("")
+  order              Int
+  status             SignerStatus   @default(pending)
+  membershipId       String?
+  signedAt           DateTime?
+  declinedAt         DateTime?
+  declineReason      String?
+  /// PNG data URI. A typed signature keeps both the rendering and the name.
+  signatureImage     String?
+  signatureType      SignatureType?
+  signatureTypedName String?
+  /// The ESIGN/UETA consent record (requirement 21).
+  consentAcceptedAt  DateTime?
+
+  envelope   Envelope        @relation(fields: [envelopeId], references: [id], onDelete: Cascade)
+  membership Membership?     @relation("SignerMembership", fields: [membershipId], references: [id], onDelete: SetNull)
+  tokens     SigningToken[]
+  events     EnvelopeEvent[]
+
+  @@unique([envelopeId, roleKey])
+  @@unique([envelopeId, order])
+  @@index([envelopeId])
+}
+
+/// Mirrors PasswordResetToken deliberately: the raw token exists only in the
+/// email and the URL, and only its SHA-256 is ever stored.
+model SigningToken {
+  id               String    @id @default(uuid())
+  envelopeSignerId String
+  tokenHash        String    @unique
+  expiresAt        DateTime
+  usedAt           DateTime?
+  /// Set by decline, void, or resend.
+  isInvalidated    Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+
+  signer EnvelopeSigner @relation(fields: [envelopeSignerId], references: [id], onDelete: Cascade)
+
+  @@index([envelopeSignerId])
+}
+
+/// Append-only. The application has no update or delete path, and the rows form a
+/// hash chain so that an edited or deleted row is detectable rather than merely
+/// unlikely (requirements 38-39).
+model EnvelopeEvent {
+  id               String            @id @default(uuid())
+  envelopeId       String
+  envelopeSignerId String?
+  type             EnvelopeEventType
+  actorAccountId   String?
+  actorEmail       String?
+  ipAddress        String?
+  userAgent        String?
+  documentHash     String?
+  /// Never contains field values: the trail records that a document was signed,
+  /// not what was written in it (requirement 40).
+  metadata         Json?
+  /// Lets the chain algorithm evolve without invalidating chains written under
+  /// the old one.
+  schemaVersion    Int               @default(1)
+  occurredAt       DateTime          @default(now())
+  previousEventHash String?
+  eventHash        String
+
+  envelope Envelope        @relation(fields: [envelopeId], references: [id], onDelete: Cascade)
+  signer   EnvelopeSigner? @relation(fields: [envelopeSignerId], references: [id], onDelete: SetNull)
+  actor    Account?        @relation("EnvelopeEventsActed", fields: [actorAccountId], references: [id], onDelete: SetNull)
+
+  @@index([envelopeId, occurredAt])
 }

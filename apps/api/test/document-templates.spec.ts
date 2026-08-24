@@ -114,6 +114,10 @@ describe('Document templates', () => {
   });
 
   beforeEach(async () => {
+    // Envelopes first: `Envelope.templateVersionId` is `Restrict`, so a document left
+    // behind by TC-01-INT-09 would make the template delete below fail — and only in
+    // some file orderings, which is the worst kind of flake.
+    await prisma.envelope.deleteMany();
     await prisma.documentTemplate.updateMany({ data: { currentVersionId: null } });
     await prisma.documentTemplate.deleteMany();
     await prisma.membership.deleteMany();
@@ -365,9 +369,73 @@ describe('Document templates', () => {
     });
   });
 
-  it.todo(
-    'TC-01-INT-09: Delete blocked once used, archive allowed — needs envelopes from spec 02',
-  );
+  describe('TC-01-INT-09: Delete blocked once used, archive allowed', () => {
+    it('refuses the delete, allows the archive, and leaves the existing document intact', async () => {
+      const admin = await signup('admin@acme.com', 'Acme Inc');
+      const created = await publishedTemplate(admin);
+
+      const envelope = await request(app.getHttpServer())
+        .post(`/api/organizations/${admin.organizationId}/envelopes`)
+        .set('Cookie', admin.cookies)
+        .send({ templateId: created.id })
+        .expect(201);
+
+      // Requirement 6: a template that has ever backed a document is not deletable, and
+      // the caller is told how many so the UI can offer archival instead of guessing.
+      const blocked = await request(app.getHttpServer())
+        .delete(api(admin, `/${created.id}`))
+        .set('Cookie', admin.cookies)
+        .expect(409);
+      // `toMatchObject`, not `toEqual`: the endpoint also returns the spec's
+      // human-readable message alongside the machine-readable pair, which is what the
+      // blocking modal renders.
+      expect(blocked.body).toMatchObject({ error: 'template_in_use', envelopeCount: 1 });
+
+      const archived = await request(app.getHttpServer())
+        .post(api(admin, `/${created.id}/archive`))
+        .set('Cookie', admin.cookies)
+        .expect(200);
+      expect(archived.body).toEqual({ status: 'archived' });
+
+      // Archival closes the template to NEW documents only. Spec 02's POST /envelopes
+      // contract answers 400 here, where spec 01 answers 409 for editing an archived
+      // template — different endpoints, and both codes are what their spec prints.
+      const refused = await request(app.getHttpServer())
+        .post(`/api/organizations/${admin.organizationId}/envelopes`)
+        .set('Cookie', admin.cookies)
+        .send({ templateId: created.id })
+        .expect(400);
+      expect(refused.body.error).toBe('template_archived');
+
+      // The pre-existing envelope is untouched and still resolves its pinned version —
+      // the whole point of pinning, checked here rather than assumed.
+      const still = await request(app.getHttpServer())
+        .get(`/api/organizations/${admin.organizationId}/envelopes/${envelope.body.id}`)
+        .set('Cookie', admin.cookies)
+        .expect(200);
+      expect(still.body.status).toBe('draft');
+      expect(still.body.template.versionNumber).toBe(1);
+    });
+
+    it('reports canDelete false and the count on the detail and list reads', async () => {
+      const admin = await signup('admin@acme.com', 'Acme Inc');
+      const created = await publishedTemplate(admin);
+      await request(app.getHttpServer())
+        .post(`/api/organizations/${admin.organizationId}/envelopes`)
+        .set('Cookie', admin.cookies)
+        .send({ templateId: created.id })
+        .expect(201);
+
+      const body = (await detail(admin, created.id).expect(200)).body;
+      expect(body.canDelete).toBe(false);
+
+      const list = await request(app.getHttpServer())
+        .get(api(admin))
+        .set('Cookie', admin.cookies)
+        .expect(200);
+      expect(list.body.templates[0].envelopeCount).toBe(1);
+    });
+  });
 
   describe('TC-01-INT-10: Delete allowed for an unused template', () => {
     it('removes the template with its versions and fields', async () => {
