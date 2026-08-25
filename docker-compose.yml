@@ -30,5 +30,33 @@ services:
       timeout: 5s
       retries: 10
 
+  # Browser UI for the database above, on http://localhost:5050. Purely a convenience —
+  # nothing in the app or the test suite depends on it.
+  pgadmin:
+    image: dpage/pgadmin4:9
+    container_name: devscribed-pgadmin
+    restart: unless-stopped
+    environment:
+      # Desktop mode: no login screen and no master password, because the only thing
+      # this instance can reach is a throwaway local database. The credentials below are
+      # still required by the image's entrypoint even when it never asks for them.
+      PGADMIN_DEFAULT_EMAIL: dev@devscribed.com
+      PGADMIN_DEFAULT_PASSWORD: devscribed
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+      PGADMIN_LISTEN_PORT: 80
+    ports:
+      - '5050:80'
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+      # Pre-registers the connection, so the server is already in the tree on first open.
+      # Imported once, on an empty pgadmin-data volume. The password is not part of it —
+      # enter `devscribed` on the first connect and tick "Save password".
+      - ./docker/pgadmin-servers.json:/pgadmin4/servers.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   postgres-data:
+  pgadmin-data:

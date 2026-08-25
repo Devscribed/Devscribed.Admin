@@ -89,6 +89,12 @@ docker compose ps
 Wait for the status to read `healthy` before continuing — an immediate `migrate` against
 a still-initialising server fails with a connection error.
 
+The same command also brings up **pgAdmin** on <http://localhost:5050> if you want to
+browse the data. It opens straight into the UI with no login, and the local server is
+already registered as *Devscribed (local)* — the first connect asks for the password,
+which is `devscribed`. Nothing else depends on it, so it is safe to ignore or to stop on
+its own with `docker compose stop pgadmin`.
+
 ### 4. Build the shared validation package
 
 ```bash
@@ -157,6 +163,7 @@ already up.
 | `@devscribed/validation` fails to resolve | package not built — step 4 |
 | `Environment variable not found: DATABASE_URL` | `apps/api/.env` missing — step 2 |
 | Port 5433 already allocated | another container holds it — `docker compose down`, or change the host port in `docker-compose.yml` and in `.env` |
+| Port 5050 already allocated | something else holds the pgAdmin port — change the host port in `docker-compose.yml`, or drop the service |
 
 To start over from an empty database:
 
@@ -167,7 +174,8 @@ npm run db:migrate --workspace @devscribed/api
 ```
 
 `-v` drops the volume, which is what makes `docker/postgres-init.sql` run again and
-recreate both databases.
+recreate both databases. It also clears pgAdmin's own volume, so
+`docker/pgadmin-servers.json` is re-imported on the next start.
 
 ## The app shell
 
