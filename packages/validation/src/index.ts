@@ -259,3 +259,9 @@ export function createAdminMembership(input: {
     status: 'active',
   };
 }
+
+/* ------------------------------------------------------------------ *
+ * Hiring — specs 01 (vacancies) and 02 (booking page)
+ * ------------------------------------------------------------------ */
+
+export * from './hiring';

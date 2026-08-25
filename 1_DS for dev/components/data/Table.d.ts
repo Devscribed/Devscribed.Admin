@@ -14,6 +14,11 @@ export interface TableColumn<Row = any> {
 export interface TableProps<Row = any> {
   columns: TableColumn<Row>[];
   rows: (Row & { id?: string | number; dim?: boolean })[];
+  /** Turns each row into a real anchor. A string applies to every row. */
+  rowHref?: string | ((row: Row) => string | null | undefined);
+  /** `data-testid` for each row — a function so it can carry the row's own id. */
+  rowTestId?: string | ((row: Row) => string);
+  onRowClick?: (row: Row, event: React.MouseEvent) => void;
   style?: React.CSSProperties;
 }
 

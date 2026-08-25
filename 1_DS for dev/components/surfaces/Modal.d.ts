@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-export interface ModalProps {
+export interface ModalProps extends React.HTMLAttributes<HTMLDivElement> {
   open?: boolean;
   title: React.ReactNode;
   onClose?: () => void;
@@ -12,5 +12,9 @@ export interface ModalProps {
   style?: React.CSSProperties;
 }
 
-/** Dialog shell — 14px radius, heavier brown-cast shadow, ink-tinted scrim. */
+/**
+ * Dialog shell — 14px radius, heavier brown-cast shadow, ink-tinted scrim. Anything
+ * beyond the named props is spread onto the dialog panel, matching `Card` and
+ * `AuthLayout`.
+ */
 export declare function Modal(props: ModalProps): JSX.Element;

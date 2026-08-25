@@ -83,3 +83,74 @@ export async function requestReset(
   const response = await request.post(`${API}/api/forgot-password`, { data: { email } });
   if (!response.ok()) throw new Error(`Reset request failed for ${email}`);
 }
+
+/** Signs in through the UI and waits for the app shell to settle on Members. */
+export async function signIn(page: Page, email: string): Promise<void> {
+  await page.goto('/login');
+  await page.getByTestId('login-email-input').fill(email);
+  await page.getByTestId('login-password-input').fill(VALID.password);
+  await page.getByTestId('login-submit-button').click();
+  await page.waitForURL('**/members');
+}
+
+export interface Registered {
+  email: string;
+  accountId: string;
+  organizationId: string;
+}
+
+/**
+ * Registers an organization and hands back its ids. The request context keeps the
+ * session cookie, so a caller can go on to seed hiring data through the API — a
+ * precondition, not the thing under test.
+ */
+export async function registerOrganization(
+  request: APIRequestContext,
+  email: string,
+): Promise<Registered> {
+  const response = await request.post(`${API}/api/signup`, {
+    data: { ...VALID, email, orgName: 'Acme Inc', timezone: 'Europe/Berlin' },
+  });
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: could not register ${email} (${response.status()})`);
+  }
+  const body = await response.json();
+  return { email, accountId: body.account.id, organizationId: body.organization.id };
+}
+
+export interface SeededVacancy {
+  id: string;
+  publicSlug: string;
+  title: string;
+}
+
+/** Creates a vacancy through the API, interviewed by the account that owns the session. */
+export async function createVacancy(
+  request: APIRequestContext,
+  org: Registered,
+  overrides: { title?: string; durationMinutes?: number; description?: string } = {},
+): Promise<SeededVacancy> {
+  const response = await request.post(
+    `${API}/api/organizations/${org.organizationId}/hiring/vacancies`,
+    {
+      data: {
+        title: overrides.title ?? 'Senior React Engineer',
+        durationMinutes: overrides.durationMinutes ?? 60,
+        description: overrides.description ?? '',
+        interviewerAccountId: org.accountId,
+      },
+    },
+  );
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: could not create a vacancy (${response.status()})`);
+  }
+  const body = await response.json();
+  return { id: body.id, publicSlug: body.publicSlug, title: body.title };
+}
+
+/** A tiny but non-empty PDF — enough to satisfy every rule the CV validator applies. */
+export const CV_FILE = {
+  name: 'jane-doe-cv.pdf',
+  mimeType: 'application/pdf',
+  buffer: Buffer.from('%PDF-1.4 a perfectly ordinary cv'),
+};

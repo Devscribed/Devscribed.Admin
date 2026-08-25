@@ -1,7 +1,11 @@
 # Devscribed.Admin
 
-Implementation of the user-management specs in [`specs/`](specs/). Spec 01 —
-[Organization Creation](specs/user-management/01-organization-creation.md) — is complete.
+Implementation of the specs in [`specs/`](specs/). User-management specs 01
+([Organization Creation](specs/user-management/01-organization-creation.md)) and 02
+([Authentication & Login](specs/user-management/02-authentication-login.md)) are complete.
+The [hiring specs](specs/hiring/README.md) are at their first phase: a vacancy can be created
+and a candidate can book an interview against it end to end. See [Hiring](#hiring) for what is
+deliberately a stand-in until the Microsoft 365 integration lands.
 
 ## Stack
 
@@ -17,11 +21,14 @@ Implementation of the user-management specs in [`specs/`](specs/). Spec 01 —
 ## Layout
 
 ```
-packages/validation/  every signup rule and error message — one source shared by web and API
+packages/validation/  every rule and error message — one source shared by web and API
 apps/api/             NestJS: POST /api/signup, /api/login, /api/logout,
-                      GET /api/me, GET /api/organizations/{orgId}/members
-apps/web/             Next.js: /signup, /login, /org/{orgId}/members
-e2e/                  Playwright specs, one per TC-01-E2E-* case
+                      GET /api/me, GET /api/organizations/{orgId}/members,
+                      …/hiring/vacancies, …/hiring/interviewers,
+                      …/hiring/applications/{id}/cv, and the public /api/book/{slug}
+apps/web/             Next.js: /signup, /login, /org/{orgId}/members,
+                      /org/{orgId}/hiring/vacancies, and the public /book/{slug}
+e2e/                  Playwright specs, one per TC-*-E2E-* case
 ```
 
 `packages/validation` exists so the client and the server can never disagree about a
@@ -60,6 +67,10 @@ The defaults already match the Docker database below, so nothing needs editing. 
 is deliberately untracked, which means every machine — and every fresh clone — needs
 this step. `SESSION_SECRET` there is a development placeholder; every deployed
 environment must override it.
+
+`STORAGE_PROVIDER=fs` keeps uploaded CVs in `apps/api/.storage`, which is git-ignored.
+That combination is refused outright when `NODE_ENV=production` — see
+[Hiring](#hiring).
 
 ### 3. Start Postgres
 
@@ -145,9 +156,9 @@ reads it.
 ## Tests
 
 ```bash
-npm run test:unit   # validation rules — TC-01-UNIT-01…07
-npm run test:int    # signup endpoint — TC-01-INT-01…04, needs Postgres running
-npm run test:e2e    # browser flows — TC-01-E2E-01…07 (starts both dev servers)
+npm run test:unit   # validation rules — TC-01-UNIT-*, TC-H01-UNIT-*, TC-H02-UNIT-07
+npm run test:int    # API endpoints — TC-01-INT-*, TC-H00/H01/H02-INT-*, needs Postgres running
+npm run test:e2e    # browser flows — TC-01-E2E-*, TC-H01-E2E-01, TC-H02-E2E-01
 ```
 
 `test:int` resets `devscribed_test` before it starts, so a failed run never poisons the
@@ -217,6 +228,48 @@ API environment variables:
 Migrations do not run at deploy time. `.github/workflows/migrate.yml` applies them with
 `prisma migrate deploy` on every merge to `main`, using the `DIRECT_DATABASE_URL` secret.
 
+## Hiring
+
+Three things hiring depends on and does not own are expressed as capabilities, each with one
+implementation behind it ([`specs/hiring/00-integrations.md`](specs/hiring/00-integrations.md)).
+No vendor name appears outside its own module, and no screen names one at all.
+
+| Capability | Ships today | Where |
+|---|---|---|
+| `CalendarProvider` | `FakeCalendarProvider` | `apps/api/src/hiring/calendar/` |
+| `Storage` | `LocalFsStorage` | `apps/api/src/hiring/storage/` |
+| `MailService` | nothing — Outlook delivers the invite | — |
+
+**The calendar is a fake, on purpose.** It resolves every address to a mailbox, reports flat
+09:00–17:00 UTC weekdays, and records the events a booking creates in memory. That is enough to
+run the whole booking path — the public route, the CV upload, the atomic write and its
+compensation — before an Azure app registration exists, and it is what the test suites keep
+running against afterwards, since neither can hold a real tenant mailbox. Set
+`FAKE_CALENDAR_NO_MAILBOX` to a comma-separated list to see an ineligible interviewer in the
+picker. `TenantAppOnlyProvider` arrives behind the same token; nothing that calls it changes.
+
+Consequently, on the booking page **every time is UTC**, and the page says so. The calendar
+grid, the time-zone selector, and the 12-hour toggle belong to the real availability engine and
+arrive with it. The flat list of start times is the stand-in it replaces.
+
+**Storage fails fast.** An application configured with `NODE_ENV=production` and
+`STORAGE_PROVIDER=fs` refuses to start, naming the variable, and opens no listener. A Vercel
+function's filesystem is read-only except `/tmp`, and `/tmp` does not survive the invocation —
+so the alternative is accepting bookings and silently discarding every CV. This is deliberately
+stricter than `SESSION_SECRET`, which falls back to a development key without complaint: a
+missing signing key breaks loudly on the next request, where a discarded CV breaks silently and
+cannot be recovered.
+
+CVs are streamed through `GET /api/organizations/{orgId}/hiring/applications/{id}/cv`, never
+linked to. Storage keys are `{applicationId}{extension}` — application-generated, never derived
+from the uploaded filename, and never present in any response.
+
+`/book/{slug}` is the product's only public route. The slug carries 72 bits of entropy, which is
+why it needs no organization segment, and it is frozen at creation so a link already sent keeps
+working. There is **no rate limiting on the booking POST** — see
+[02 §11](specs/hiring/02-booking-page.md), which records the exposure that leaves open rather
+than implying the endpoint is protected.
+
 ## Design-system notes
 
 - Components come from `1_DS for dev/index.js` via the `@ds` alias
@@ -225,3 +278,13 @@ Migrations do not run at deploy time. `.github/workflows/migrate.yml` applies th
 - `Input` has no way to tag its error message node, so the app passes the message as a
   node carrying `field-error-{fieldName}`. A first-class `errorId` prop belongs in the
   DS; see the "DS gaps" table in the design spec.
+- Hiring closed several gaps the design specs had already recorded, in the design system
+  rather than in the screens: `BookingLayout`, `Textarea`, `FileInput`, `Toast` and
+  `Skeleton` are new components; `SelectOption` gained `disabled`, `hint` and `testId` so
+  an ineligible interviewer can be shown-but-disabled with its reason; `Table` gained
+  `rowHref`/`rowTestId`; `Modal` now forwards unknown props to its panel, matching `Card`
+  and `AuthLayout`. `Button`'s disabled state drops to a sunken field with faint ink
+  instead of fading the violet fill — a 55%-opacity primary still reads as the primary
+  action, which is the one thing a disabled CTA must not do.
+- Still outstanding for later hiring phases: `Calendar`, `Combobox`, `Menu`, `Tooltip`,
+  and promoting the template's `P` glyph dictionary to real icon exports.

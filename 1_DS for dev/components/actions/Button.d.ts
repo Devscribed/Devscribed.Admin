@@ -9,6 +9,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   glow?: boolean;
   /** Shows a leading spinner, drops the lip, and blocks the click. Use for in-flight submits. */
   loading?: boolean;
+  /** Filled variants drop to a sunken field with faint ink; outlined ones dim. */
   disabled?: boolean;
   children?: React.ReactNode;
 }

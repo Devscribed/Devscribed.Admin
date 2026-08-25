@@ -15,6 +15,17 @@ import { MailService } from './mail/mail.service';
 import { TestMailController } from './mail/test-mail.controller';
 import { MeController } from './members/me.controller';
 import { MembersController } from './members/members.controller';
+import { BookingController } from './hiring/booking.controller';
+import { BookingService } from './hiring/booking.service';
+import { CalendarProvider } from './hiring/calendar/calendar-provider';
+import { FakeCalendarProvider } from './hiring/calendar/fake-calendar.provider';
+import { CvController } from './hiring/cv.controller';
+import { HiringManageGuard } from './hiring/hiring-manage.guard';
+import { LocalFsStorage } from './hiring/storage/local-fs.storage';
+import { Storage } from './hiring/storage/storage';
+import { resolveStorageConfig } from './hiring/storage/storage.config';
+import { VacanciesController } from './hiring/vacancies.controller';
+import { VacanciesService } from './hiring/vacancies.service';
 import { PrismaService } from './prisma.service';
 import { SignupController } from './signup/signup.controller';
 import { SignupService } from './signup/signup.service';
@@ -40,6 +51,29 @@ const mailProvider = {
   useClass: useMailSink ? InMemoryMailService : ConsoleMailService,
 };
 
+/**
+ * Storage is resolved at module construction, so a misconfiguration throws before
+ * `main.ts` ever reaches `listen()` — an application that would accept bookings and
+ * discard every CV must not open a port (hiring 00 requirement 15).
+ *
+ * `LocalFsStorage` is the only implementation this release ships; `resolveStorageConfig`
+ * is what refuses every environment it is wrong for.
+ */
+const storageProvider = {
+  provide: Storage,
+  useFactory: (): Storage => new LocalFsStorage(resolveStorageConfig().root),
+};
+
+/**
+ * One calendar implementation, chosen here so no caller ever names it. The fake
+ * unblocks the whole booking path before an Azure app registration exists; the Graph
+ * provider arrives behind this same token.
+ */
+const calendarProvider = {
+  provide: CalendarProvider,
+  useClass: FakeCalendarProvider,
+};
+
 @Module({
   imports: [
     JwtModule.register({
@@ -56,6 +90,9 @@ const mailProvider = {
     MeController,
     MembersController,
     TestMailController,
+    VacanciesController,
+    BookingController,
+    CvController,
   ],
   providers: [
     PrismaService,
@@ -64,6 +101,11 @@ const mailProvider = {
     PasswordResetService,
     SessionService,
     mailProvider,
+    storageProvider,
+    calendarProvider,
+    HiringManageGuard,
+    VacanciesService,
+    BookingService,
   ],
 })
 export class AppModule {}

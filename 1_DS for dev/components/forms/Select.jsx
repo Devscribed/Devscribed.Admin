@@ -18,6 +18,8 @@ export function Select({ label, value, options = [], onChange, placeholder = 'Se
   const borderColor = error ? 'var(--error-500)' : (open && !disabled ? 'var(--accent)' : 'var(--border-strong)');
   const current = options.find((o) => (typeof o === 'string' ? o : o.value) === value);
   const label2 = current ? (typeof current === 'string' ? current : current.label) : placeholder;
+  // An option may be shown-but-unselectable: hiding an entry makes a missing one
+  // indistinguishable from a bug, so the reason travels with it in `hint`.
   return (
     <div ref={ref} style={{ position: 'relative', ...wrapperStyle }}>
       {label && (
@@ -52,18 +54,31 @@ export function Select({ label, value, options = [], onChange, placeholder = 'Se
           {options.map((o) => {
             const v = typeof o === 'string' ? o : o.value;
             const l = typeof o === 'string' ? o : o.label;
+            const hint = typeof o === 'string' ? null : o.hint;
+            const off = typeof o === 'string' ? false : !!o.disabled;
+            const testId = typeof o === 'string' ? undefined : o.testId;
             const isCurrent = v === value;
             return (
-              <a key={v} href="#" onClick={(e) => { e.preventDefault(); onChange && onChange(v); setOpen(false); }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--hover-bg-tint)')}
+              <a key={v} href="#"
+                data-testid={testId}
+                aria-disabled={off || undefined}
+                onClick={(e) => { e.preventDefault(); if (off) return; onChange && onChange(v); setOpen(false); }}
+                onMouseEnter={(e) => { if (!off) e.currentTarget.style.background = 'var(--hover-bg-tint)'; }}
                 onMouseLeave={(e) => (e.currentTarget.style.background = isCurrent ? 'var(--accent-soft)' : 'transparent')}
                 style={{
-                  display: 'block', padding: '10px 14px',
+                  display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10,
+                  padding: '10px 14px',
                   fontFamily: 'var(--font-text)', fontSize: 'var(--fs-14)',
                   textDecoration: 'none',
-                  color: isCurrent ? 'var(--accent)' : 'var(--text)',
+                  cursor: off ? 'not-allowed' : 'pointer',
+                  color: off ? 'var(--text-faint)' : (isCurrent ? 'var(--accent)' : 'var(--text)'),
                   background: isCurrent ? 'var(--accent-soft)' : 'transparent',
-                }}>{l}</a>
+                }}>
+                <span>{l}</span>
+                {hint && (
+                  <span style={{ fontSize: 'var(--fs-12)', color: 'var(--text-muted)' }}>{hint}</span>
+                )}
+              </a>
             );
           })}
         </div>

@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
   // Neon's pooled endpoint in production, a plain local Postgres in dev and tests.
   url       = env("DATABASE_URL")
   // Migrations must bypass the pooler — pgbouncer cannot run the advisory locks and
@@ -13,37 +13,42 @@ datasource db {
 
 /// Login credentials + the person behind them.
 model Account {
-  id           String   @id @default(uuid())
+  id                String    @id @default(uuid())
   /// Always stored lowercase; uniqueness is therefore case-insensitive.
-  email        String   @unique
-  passwordHash String
-  firstName    String
-  lastName     String
+  email             String    @unique
+  passwordHash      String
+  firstName         String
+  lastName          String
   /// IANA zone auto-detected from the browser at signup.
-  timezone     String?
+  timezone          String?
   /// Session-revocation token. Carried in every session cookie and re-checked on each
   /// authenticated request; regenerating it invalidates every outstanding cookie at
   /// once (spec 02 requirement 12 — shared with specs 04 and 06).
-  securityStamp String  @default(uuid())
-  createdAt    DateTime @default(now())
+  securityStamp     String    @default(uuid())
+  /// Last time the calendar provider resolved this address to a tenant mailbox
+  /// (hiring 00 requirement 12). A cache for the interviewer picker only — every
+  /// write re-verifies, so a stale value can never authorise an assignment.
+  mailboxVerifiedAt DateTime?
+  createdAt         DateTime  @default(now())
 
-  memberships        Membership[]
-  passwordResetTokens PasswordResetToken[]
+  memberships          Membership[]
+  passwordResetTokens  PasswordResetToken[]
+  interviewerVacancies Vacancy[]            @relation("VacancyInterviewer")
 }
 
 /// Single-use, time-limited password-reset grant (spec 02).
 model PasswordResetToken {
-  id        String   @id @default(uuid())
-  accountId String
+  id            String    @id @default(uuid())
+  accountId     String
   /// SHA-256 of the raw token, hex-encoded. The raw token exists only in the email —
   /// a database breach therefore yields nothing usable.
-  tokenHash String   @unique
-  createdAt DateTime @default(now())
-  expiresAt DateTime
+  tokenHash     String    @unique
+  createdAt     DateTime  @default(now())
+  expiresAt     DateTime
   /// Set when the token is spent; null while unused.
-  usedAt    DateTime?
+  usedAt        DateTime?
   /// Set when a newer request supersedes this token (requirement 8).
-  isInvalidated Boolean @default(false)
+  isInvalidated Boolean   @default(false)
 
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
@@ -53,9 +58,15 @@ model PasswordResetToken {
 model Organization {
   id        String   @id @default(uuid())
   name      String
+  /// Reserved by the hiring 01 migration. Nothing uploads or renders a logo in this
+  /// release — the booking page's wordmark is plain type (hiring 02 requirement 2).
+  logoKey   String?
   createdAt DateTime @default(now())
 
-  memberships Membership[]
+  memberships  Membership[]
+  vacancies    Vacancy[]
+  candidates   Candidate[]
+  applications Application[]
 }
 
 /// Links an account to its organization. One per account — single-org-per-user (FR-8).
@@ -73,4 +84,92 @@ model Membership {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
+}
+
+/// One open position: one interviewer, one interview length, one public booking link.
+model Vacancy {
+  id                   String   @id @default(uuid())
+  /// Carried from the first migration rather than retrofitted — see hiring 00.
+  organizationId       String
+  title                String
+  description          String?
+  /// Exactly one interviewer; their mailbox is what availability is read from.
+  interviewerAccountId String
+  /// 15 | 30 | 45 | 60. Enforced in application code, which owns the message.
+  durationMinutes      Int
+  /// "open" | "closed". No `draft`: the slug is already unguessable.
+  status               String   @default("open")
+  /// `slugify(title)-randomBytes(9).base64url`. Globally unique, frozen at creation,
+  /// stored in plaintext — the manager has to be able to copy it again.
+  publicSlug           String   @unique
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  interviewer  Account       @relation("VacancyInterviewer", fields: [interviewerAccountId], references: [id])
+  applications Application[]
+
+  @@index([organizationId])
+  @@index([interviewerAccountId])
+}
+
+/// A person who has applied at least once. Never signs in; the team owns the record.
+model Candidate {
+  id             String   @id @default(uuid())
+  organizationId String
+  /// Overwritten by the latest booking (hiring 02 requirement 27) — a typo in the
+  /// first booking must not be permanently uncorrectable.
+  firstName      String
+  lastName       String
+  /// Always lowercase, matching the account rule.
+  email          String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  applications Application[]
+
+  @@unique([organizationId, email])
+}
+
+/// One candidate against one vacancy: the interview, its outcome, and its board card.
+model Application {
+  id             String   @id @default(uuid())
+  organizationId String
+  candidateId    String
+  vacancyId      String
+  /// The board column itself — one field, five values, no mirrored status (hiring 05).
+  status         String   @default("scheduled")
+  /// Gap integer scoped to (vacancyId, status); `id` is the stable tiebreak.
+  position       Int
+  /// The name exactly as submitted, frozen — the candidate's display name may move on.
+  submittedName  String
+  start          DateTime
+  end            DateTime
+  /// The IANA zone the candidate booked in, so every screen can name it.
+  timeZone       String
+  /// Identifier of the calendar event in the interviewer's mailbox.
+  graphEventId   String?
+  /// Opaque, application-generated storage key — never a path and never user input.
+  cvKey          String?
+  cvFileName     String?
+  cvContentType  String?
+  /// The candidate's own note from the booking form.
+  note           String?
+  /// Written during the interview (hiring 04). Shared fields, last write wins.
+  interviewNotes String?
+  conclusion     String?
+  /// Specified but dormant: nothing sets it in this release. It exists now so the
+  /// deferred reschedule flow does not arrive and invent a sixth board column.
+  isCancelled    Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  candidate    Candidate    @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  vacancy      Vacancy      @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([candidateId])
+  @@index([vacancyId, status, position])
 }

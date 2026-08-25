@@ -38,7 +38,20 @@ export function Button({ variant = 'primary', size = 'md', disabled, loading, gl
   const s = { ...base, ...sizes[size], ...variants[variant] };
   if (glow && variant === 'primary') s.boxShadow = 'var(--lip-accent),var(--glow-accent-dark)';
   if (loading) { s.boxShadow = 'none'; s.cursor = 'progress'; }
-  if (disabled) { s.opacity = 0.55; s.cursor = 'not-allowed'; }
+  if (disabled) {
+    s.cursor = 'not-allowed';
+    // A filled button loses its fill and its lip rather than fading: a 55%-opacity
+    // violet still reads as the primary action, which is the one thing a disabled
+    // CTA must not do.
+    if (variant === 'primary' || variant === 'danger') {
+      s.background = 'var(--bg-sunken)';
+      s.color = 'var(--text-faint)';
+      s.borderColor = 'var(--border)';
+      s.boxShadow = 'none';
+    } else {
+      s.opacity = 0.55;
+    }
+  }
   return (
     <button {...rest} disabled={disabled || loading} aria-busy={loading || undefined} style={{ ...s, ...style }}>
       {loading && <Spinner />}

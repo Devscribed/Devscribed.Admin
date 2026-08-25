@@ -1,6 +1,6 @@
 import React from 'react';
 
-export function Table({ columns = [], rows = [], style }) {
+export function Table({ columns = [], rows = [], rowHref, rowTestId, onRowClick, style }) {
   return (
     <div style={{
       background: 'var(--bg-panel)', border: '1px solid var(--border)',
@@ -17,14 +17,24 @@ export function Table({ columns = [], rows = [], style }) {
           <div key={i} style={{ flex: c.flex || 1, display: 'flex', alignItems: 'center', justifyContent: c.align || 'flex-start' }}>{c.label}</div>
         ))}
       </div>
-      {rows.map((r, ri) => (
-        <div key={r.id ?? ri}
+      {rows.map((r, ri) => {
+        // A linked row is a real anchor, so middle-click and copy-address work; the
+        // caller intercepts onClick to keep navigation client-side.
+        const href = typeof rowHref === 'function' ? rowHref(r) : rowHref;
+        const Row = href ? 'a' : 'div';
+        return (
+        <Row key={r.id ?? ri}
+          href={href || undefined}
+          data-testid={typeof rowTestId === 'function' ? rowTestId(r) : rowTestId}
+          onClick={onRowClick ? (e) => onRowClick(r, e) : undefined}
           onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--hover-bg-tint)')}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
           style={{
             display: 'flex', minHeight: 62, padding: '0 18px', alignItems: 'center',
             borderTop: '1px solid var(--divider)',
             fontFamily: 'var(--font-text)', fontSize: 'var(--fs-15)', color: 'var(--text)',
+            textDecoration: 'none',
+            cursor: href || onRowClick ? 'pointer' : 'default',
             opacity: r.dim ? 0.65 : 1,
             transition: 'background .12s',
           }}>
@@ -36,8 +46,9 @@ export function Table({ columns = [], rows = [], style }) {
               fontWeight: c.mono ? 600 : 400,
             }}>{typeof c.render === 'function' ? c.render(r) : r[c.key]}</div>
           ))}
-        </div>
-      ))}
+        </Row>
+        );
+      })}
     </div>
   );
 }
