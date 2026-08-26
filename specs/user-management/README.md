@@ -9,9 +9,9 @@ Functional specifications for the user-management surface of Devscribed.Admin. E
 | 00 | — (no business rules of its own) | [design](00-app-shell.design.md) | app-shell, sidebar, topbar, page-header, navigation, logout |
 | 01 | [Organization Creation](01-organization-creation.md) | [design](01-organization-creation.design.md) · [mockup](01-organization-creation.mock.html) | signup, registration, org-creation, admin-role, password-policy |
 | 02 | [Authentication & Login](02-authentication-login.md) | [design](02-authentication-login.design.md) · [mockup](02-authentication-login.mock.html) | login, session, forgot-password, reset-password, SecurityStamp |
-| 03 | [User Invitation](03-user-invitation.md) | — | invite, token, accept-invite, role-picker, onboarding, supersede |
-| 04 | [Member List & Management](04-member-list-management.md) | — | member-list, search, soft-delete, restore, last-admin-guard |
-| 05 | [Member Detail: About](05-member-detail-about.md) | — | member-detail, role-picker, job-title, zero-admin-guard, avatar |
+| 03 | [User Invitation](03-user-invitation.md) | [design](03-user-invitation.design.md) | invite, token, accept-invite, role-picker, onboarding, supersede |
+| 04 | [Member List & Management](04-member-list-management.md) | [design](04-member-list-management.design.md) | member-list, search, soft-delete, restore, last-admin-guard |
+| 05 | [Member Detail: About](05-member-detail-about.md) | [design](05-member-detail-about.design.md) | member-detail, role-picker, job-title, zero-admin-guard, avatar |
 | 06 | [Account Settings](06-account-settings.md) | — | account-settings, change-email, change-password, profile, timezone |
 | 07 | [Member Financial Settings](07-vacation-accrual-management.md) | — | salary, hourly-rate, billing, reserve, auto-calculate, snapshot |
 | 08 | [Vacation Reserve & Auto-Accrual](08-vacation-reserve-auto-accrual.md) | — | vacation-reserve, auto-accrual, ledger, monthly-credit, year-end-expiry |

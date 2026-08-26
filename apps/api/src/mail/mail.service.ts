@@ -7,6 +7,17 @@ export interface PasswordResetEmail {
   resetUrl: string;
 }
 
+/** Spec 03. */
+export interface InvitationEmail {
+  to: string;
+  organizationName: string;
+  role: string;
+  /** The raw token — this is the only place outside the email that ever holds it. */
+  token: string;
+  /** Fully-formed link the recipient clicks. */
+  acceptUrl: string;
+}
+
 /**
  * Transport-agnostic outbound mail. Spec 02 defines the contract, not the transport:
  * the real sender is out of scope, so this stays abstract and is swapped per
@@ -17,4 +28,5 @@ export interface PasswordResetEmail {
  */
 export abstract class MailService {
   abstract sendPasswordReset(message: PasswordResetEmail): Promise<void>;
+  abstract sendInvitation(message: InvitationEmail): Promise<void>;
 }

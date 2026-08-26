@@ -1,8 +1,8 @@
 import React from 'react';
 
-export function Table({ columns = [], rows = [], style }) {
+export function Table({ columns = [], rows = [], style, onRowClick, ...rest }) {
   return (
-    <div style={{
+    <div {...rest} style={{
       background: 'var(--bg-panel)', border: '1px solid var(--border)',
       borderRadius: 'var(--radius-2xl)', overflow: 'hidden', ...style,
     }}>
@@ -19,6 +19,8 @@ export function Table({ columns = [], rows = [], style }) {
       </div>
       {rows.map((r, ri) => (
         <div key={r.id ?? ri}
+          data-testid={r.testId}
+          onClick={onRowClick ? () => onRowClick(r) : undefined}
           onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--hover-bg-tint)')}
           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
           style={{
@@ -26,6 +28,7 @@ export function Table({ columns = [], rows = [], style }) {
             borderTop: '1px solid var(--divider)',
             fontFamily: 'var(--font-text)', fontSize: 'var(--fs-15)', color: 'var(--text)',
             opacity: r.dim ? 0.65 : 1,
+            cursor: onRowClick ? 'pointer' : undefined,
             transition: 'background .12s',
           }}>
           {columns.map((c, ci) => (

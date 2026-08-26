@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-export interface ModalProps {
+export interface ModalProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'title' | 'style'> {
   open?: boolean;
   title: React.ReactNode;
   onClose?: () => void;

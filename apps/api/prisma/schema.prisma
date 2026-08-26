@@ -31,6 +31,34 @@ model Account {
   passwordResetTokens PasswordResetToken[]
 }
 
+/// Pending, used, or invalidated invitation to join an organization (spec 03).
+model Invitation {
+  id     String @id @default(uuid())
+  /// Normalized (lowercase) invitee email, max 254 chars.
+  email  String
+  /// Target role: "admin" | "manager" | "user" | "viewer".
+  role   String
+  organizationId String
+  /// The membership of the person who sent the invite.
+  inviterMembershipId String
+
+  /// SHA-256 hash of the raw token (hex-encoded, lowercase). The raw token is never stored.
+  tokenHash String   @unique
+  createdAt DateTime @default(now())
+  /// createdAt + 7 days. Expiry is exclusive (spec 03 requirement 3).
+  expiresAt DateTime
+  /// "pending" | "used" | "invalidated".
+  status    String   @default("pending")
+  /// Set when the invitation is accepted; null while unused.
+  usedAt    DateTime?
+
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  inviterMembership Membership   @relation(fields: [inviterMembershipId], references: [id], onDelete: Cascade)
+
+  // Supersession lookup: at most one live `pending` invitation per (email, org).
+  @@index([email, organizationId, status])
+}
+
 /// Single-use, time-limited password-reset grant (spec 02).
 model PasswordResetToken {
   id        String   @id @default(uuid())
@@ -56,6 +84,7 @@ model Organization {
   createdAt DateTime @default(now())
 
   memberships Membership[]
+  invitations Invitation[]
 }
 
 /// Links an account to its organization. One per account — single-org-per-user (FR-8).
@@ -63,14 +92,19 @@ model Membership {
   id             String   @id @default(uuid())
   accountId      String   @unique
   organizationId String
-  /// "admin" | "member" — org control is expressed purely through the admin role (FR-7).
+  /// "admin" | "manager" | "user" | "viewer" (spec 03 requirement 4 widens this to four roles).
   role           String
-  /// "active" | "invited" | "removed" — `removed` is the soft-deleted state (specs 02, 04).
+  /// "active" | "removed" — `removed` is the soft-deleted state (specs 02, 04). There is
+  /// no `invited` status; unaccepted invitees have no `Membership` row (spec 03).
   status         String
   joinedAt       DateTime @default(now())
+  /// Optional job title, max 100 chars. Cleared on membership restoration via invitation
+  /// acceptance (spec 03 requirement 5; spec 05).
+  jobTitle       String?
 
   account      Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitationsSent Invitation[]
 
   @@index([organizationId])
 }

@@ -9,15 +9,19 @@ import {
 } from './auth/password-reset.controller';
 import { PasswordResetService } from './auth/password-reset.service';
 import { SessionService } from './auth/session.service';
+import { InvitationsController } from './invitations/invitations.controller';
+import { InvitationsService } from './invitations/invitations.service';
 import { ConsoleMailService } from './mail/console-mail.service';
 import { InMemoryMailService } from './mail/in-memory-mail.service';
 import { MailService } from './mail/mail.service';
 import { TestMailController } from './mail/test-mail.controller';
 import { MeController } from './members/me.controller';
 import { MembersController } from './members/members.controller';
+import { MembersService } from './members/members.service';
 import { PrismaService } from './prisma.service';
 import { SignupController } from './signup/signup.controller';
 import { SignupService } from './signup/signup.service';
+import { TestFixturesController } from './test/test-fixtures.controller';
 
 /**
  * Spec 02 leaves the real transport out of scope, so there are only two stand-ins.
@@ -55,13 +59,17 @@ const mailProvider = {
     ResetPasswordController,
     MeController,
     MembersController,
+    InvitationsController,
     TestMailController,
+    TestFixturesController,
   ],
   providers: [
     PrismaService,
     SignupService,
     LoginService,
     PasswordResetService,
+    InvitationsService,
+    MembersService,
     SessionService,
     mailProvider,
   ],

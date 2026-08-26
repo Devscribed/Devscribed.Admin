@@ -14,9 +14,17 @@ export class TestMailController {
   constructor(private readonly mail: MailService) {}
 
   @Get('latest')
-  latest(@Query('email') email?: string) {
+  latest(@Query('email') email?: string, @Query('type') type?: string) {
     if (process.env.NODE_ENV === 'production' || !(this.mail instanceof InMemoryMailService)) {
       throw new NotFoundException();
+    }
+
+    if (type === 'invitation') {
+      const invitation = email
+        ? this.mail.lastInvitationFor(email)
+        : this.mail.sentInvitations[this.mail.sentInvitations.length - 1];
+      if (!invitation) throw new NotFoundException('No message for that address');
+      return invitation;
     }
 
     const message = email ? this.mail.lastFor(email) : this.mail.sent[this.mail.sent.length - 1];

@@ -14,3 +14,17 @@ export function PeopleIcon() {
     </svg>
   );
 }
+
+/**
+ * The row-actions ("⋮") trigger glyph — three stacked dots, lifted verbatim from the
+ * `icDots` entry in `MeridianApp.dc.html`'s members-list section (spec 04).
+ */
+export function DotsIcon() {
+  return (
+    <svg viewBox="0 0 4 16" width={4} height={16} fill="currentColor" aria-hidden>
+      <circle cx="2" cy="2" r="1.6" />
+      <circle cx="2" cy="8" r="1.6" />
+      <circle cx="2" cy="14" r="1.6" />
+    </svg>
+  );
+}

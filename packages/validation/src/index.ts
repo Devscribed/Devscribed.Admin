@@ -33,6 +33,11 @@ export const MESSAGES = {
     noLetter: 'Password must contain at least one letter',
     noDigit: 'Password must contain at least one digit',
   },
+  /** Spec 03 requirement 11 — the invitation role picker. */
+  role: {
+    required: 'Role is required',
+    invalid: 'Invalid role',
+  },
   generic: 'Something went wrong. Please try again.',
 } as const;
 
@@ -42,6 +47,8 @@ export const LIMITS = {
   emailMax: 254,
   passwordMin: 8,
   passwordMax: 128,
+  /** Spec 05 requirement 6 — job title on the member detail page. */
+  jobTitleMax: 100,
 } as const;
 
 export type SignupField = 'orgName' | 'firstName' | 'lastName' | 'email' | 'password';
@@ -171,8 +178,12 @@ export function validateSignup(input: Partial<SignupInput>): SignupValidation {
 export const AUTH_MESSAGES = {
   /** Unknown email and wrong password share this one string (requirement 4). */
   invalidCredentials: 'Invalid email or password',
-  /** Deliberately distinct — retrying cannot fix it (requirement 6). */
-  deactivated: 'Your account has been deactivated, contact your administrator',
+  /**
+   * Deliberately distinct — retrying cannot fix it (requirement 6). Verbatim wording
+   * from spec 04's Error Messages table (the source of truth for this string as of
+   * spec 04; spec 02's prose predates it and has not been updated to match).
+   */
+  deactivated: 'Your account has been deactivated. Contact your administrator.',
   credentialsRequired: 'Email and password are required',
   emailRequired: 'Email is required',
   /** Returned whether or not the address is registered (requirement 7). */
@@ -233,9 +244,14 @@ export function validateLogin(input: Partial<LoginInput>): LoginValidation {
   return { valid: firstInvalidField === null, errors, firstInvalidField, value };
 }
 
-export type MembershipRole = 'admin' | 'member';
-/** `removed` is the soft-deleted state (specs 02 and 04). */
-export type MembershipStatus = 'active' | 'invited' | 'removed';
+/** Spec 01 requirement 7; widened to four roles by spec 03. */
+export type MembershipRole = 'admin' | 'manager' | 'user' | 'viewer';
+/**
+ * `removed` is the soft-deleted state (specs 02 and 04). There is no `invited` status —
+ * an unaccepted invitee has no `Membership` row at all; invitation state lives entirely
+ * in the `Invitation` table (spec 03).
+ */
+export type MembershipStatus = 'active' | 'removed';
 
 export interface CreatorMembership {
   accountId: string;
@@ -258,4 +274,326 @@ export function createAdminMembership(input: {
     role: 'admin',
     status: 'active',
   };
+}
+
+/* ------------------------------------------------------------------ *
+ * Spec 03 — user invitation
+ * ------------------------------------------------------------------ */
+
+/** Alias kept local to the invitation surface, matching spec 03's own naming. */
+export type Role = MembershipRole;
+
+export const ROLE_VALUES: readonly Role[] = ['admin', 'manager', 'user', 'viewer'];
+
+export function isValidRole(input: string): input is Role {
+  return (ROLE_VALUES as readonly string[]).includes(input);
+}
+
+/**
+ * Whole-request outcome messages for spec 03 — self-invitation, role authority,
+ * already-a-member, token validity, and accept-time password check. Field-level
+ * messages (email, role, name, password) live in `MESSAGES`, following the
+ * `AUTH_MESSAGES` precedent of a section-specific export for non-field messages.
+ */
+export const INVITE_MESSAGES = {
+  selfInvitation: 'You cannot invite yourself',
+  alreadyMember: 'This person is already a member of your organization',
+  roleAuthority: 'You do not have permission to assign the admin role',
+  permissionDenied: 'You do not have permission to invite members',
+  tokenExpired: 'This invitation has expired',
+  tokenInvalid: 'This invitation is no longer valid',
+  incorrectPassword: 'Incorrect password',
+} as const;
+
+function validateRole(input: string): FieldResult {
+  const value = (input ?? '').trim();
+  if (value.length === 0) return fail(MESSAGES.role.required);
+  if (!isValidRole(value)) return fail(MESSAGES.role.invalid);
+  return ok(value);
+}
+
+/**
+ * Case-insensitive comparison after normalization (spec 03 requirement 1 / TC-03-UNIT-03).
+ * Pure so it can be unit-tested directly; the service supplies both emails from the
+ * session and the request body.
+ */
+export function isSelfInvitation(inviterEmail: string, inviteeEmail: string): boolean {
+  return normalizeEmail(inviterEmail) === normalizeEmail(inviteeEmail);
+}
+
+/**
+ * `admin` may assign any role. `manager` may assign `manager`/`user`/`viewer` but not
+ * `admin`. `user`/`viewer` cannot invite at all — callers must reject those before
+ * reaching this check (spec 03 requirement 4).
+ */
+export function canAssignRole(inviterRole: Role, targetRole: Role): boolean {
+  if (inviterRole === 'admin') return true;
+  if (inviterRole === 'manager') return targetRole !== 'admin';
+  return false;
+}
+
+export type InviteCreateField = 'email' | 'role';
+
+/** Top-to-bottom order on the invite modal. */
+export const INVITE_CREATE_FIELD_ORDER: readonly InviteCreateField[] = ['email', 'role'];
+
+export interface InviteCreateInput {
+  email: string;
+  role: string;
+}
+
+export interface InviteCreateValidation {
+  valid: boolean;
+  errors: Partial<Record<InviteCreateField, string>>;
+  firstInvalidField: InviteCreateField | null;
+  value: Record<InviteCreateField, string>;
+}
+
+/**
+ * Field-level validation only (email format/length, role enum membership). Role
+ * *authority* (can this inviter assign this role?) and the DB-backed checks
+ * (self-invitation, already-a-member) are not field errors and stay out of this pure
+ * validator — see `canAssignRole` and the service layer.
+ */
+export function validateInviteCreate(input: Partial<InviteCreateInput>): InviteCreateValidation {
+  const validators: Record<InviteCreateField, (value: string) => FieldResult> = {
+    email: validateEmail,
+    role: validateRole,
+  };
+
+  const errors: Partial<Record<InviteCreateField, string>> = {};
+  const value = {} as Record<InviteCreateField, string>;
+
+  for (const field of INVITE_CREATE_FIELD_ORDER) {
+    const result = validators[field](input[field] ?? '');
+    if (result.valid) {
+      value[field] = result.value;
+    } else {
+      errors[field] = result.error;
+      value[field] = input[field] ?? '';
+    }
+  }
+
+  const firstInvalidField = INVITE_CREATE_FIELD_ORDER.find((f) => errors[f]) ?? null;
+  return { valid: firstInvalidField === null, errors, firstInvalidField, value };
+}
+
+export type InviteAcceptField = 'firstName' | 'lastName' | 'password';
+
+/** Top-to-bottom order on the new-account accept form. */
+export const INVITE_ACCEPT_FIELD_ORDER: readonly InviteAcceptField[] = [
+  'firstName',
+  'lastName',
+  'password',
+];
+
+export interface InviteAcceptNewAccountInput {
+  firstName: string;
+  lastName: string;
+  password: string;
+}
+
+export interface InviteAcceptNewAccountValidation {
+  valid: boolean;
+  errors: Partial<Record<InviteAcceptField, string>>;
+  firstInvalidField: InviteAcceptField | null;
+  value: Record<InviteAcceptField, string>;
+}
+
+/**
+ * New-account accept-invite validation (spec 03 requirement 5, requirement 11's
+ * "new account" table). Reuses the exact name/password rules from spec 01 — the
+ * messages are verbatim-identical by construction, not by duplication.
+ */
+export function validateInviteAcceptNewAccount(
+  input: Partial<InviteAcceptNewAccountInput>,
+): InviteAcceptNewAccountValidation {
+  const validators: Record<InviteAcceptField, (value: string) => FieldResult> = {
+    firstName: validateFirstName,
+    lastName: validateLastName,
+    password: validatePassword,
+  };
+
+  const errors: Partial<Record<InviteAcceptField, string>> = {};
+  const value = {} as Record<InviteAcceptField, string>;
+
+  for (const field of INVITE_ACCEPT_FIELD_ORDER) {
+    const result = validators[field](input[field] ?? '');
+    if (result.valid) {
+      value[field] = result.value;
+    } else {
+      errors[field] = result.error;
+      value[field] = input[field] ?? '';
+    }
+  }
+
+  const firstInvalidField = INVITE_ACCEPT_FIELD_ORDER.find((f) => errors[f]) ?? null;
+  return { valid: firstInvalidField === null, errors, firstInvalidField, value };
+}
+
+/* ------------------------------------------------------------------ *
+ * Spec 04 — member list & management
+ * ------------------------------------------------------------------ */
+
+/**
+ * Whole-request outcome messages for spec 04's delete/restore endpoints. Verbatim
+ * from spec 04's Error Messages table.
+ */
+export const MEMBER_MESSAGES = {
+  cannotRemoveSelf: 'You cannot remove yourself from the organization',
+  lastAdminGuard: 'Organization must retain at least one admin',
+  alreadyRemoved: 'Member is already removed',
+  deleteForbidden: 'You do not have permission to remove members',
+  notRemoved: 'Member is not in removed status',
+  restoreForbidden: 'You do not have permission to restore members',
+  /**
+   * Spec 05 additions — verbatim from spec 05's Error Messages table. `lastAdminGuard`
+   * above is reused as-is (the zero-admin guard message is identical between the
+   * delete flow and the role-change flow).
+   */
+  editForbidden: 'You do not have permission to edit members',
+  memberRemoved: 'Cannot edit a removed member',
+  roleAuthority: 'You do not have permission to assign this role',
+  jobTitleTooLong: 'Job title must be at most 100 characters',
+  memberNotFound: 'Member not found',
+  viewForbidden: 'You do not have permission to view this member',
+} as const;
+
+/**
+ * The capability names in spec 04's Roles & Permission Matrix table. `'invite'` is
+ * spec 03's capability, included here so `can()` is a single source of truth for the
+ * whole matrix rather than splitting it awkwardly across two modules.
+ */
+export type MemberCapability = 'view-list' | 'invite' | 'delete-restore' | 'edit-detail';
+
+/**
+ * Pure lookup against spec 04's Roles & Permission Matrix (TC-04-UNIT-05), widened by
+ * spec 05's `edit-detail` (requirement 11 — same admin/manager-only shape as
+ * `delete-restore`, kept as a distinct key since it gates a different endpoint).
+ * `admin` and `manager` get every capability; `user` and `viewer` get read-only list
+ * access and nothing else.
+ */
+const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
+  admin: { 'view-list': true, invite: true, 'delete-restore': true, 'edit-detail': true },
+  manager: { 'view-list': true, invite: true, 'delete-restore': true, 'edit-detail': true },
+  user: { 'view-list': true, invite: false, 'delete-restore': false, 'edit-detail': false },
+  viewer: { 'view-list': true, invite: false, 'delete-restore': false, 'edit-detail': false },
+};
+
+export function can(role: Role, capability: MemberCapability): boolean {
+  return CAPABILITY_MATRIX[role]?.[capability] ?? false;
+}
+
+/** The subset of a member's fields the pure search/filter logic below needs. */
+export interface SearchableMember {
+  id: string;
+  fullName: string;
+  email: string;
+  status: MembershipStatus;
+}
+
+/**
+ * Case-insensitive partial match against full name OR email (requirement 3). A
+ * plain substring test on lower-cased strings — no regex compiled from user input,
+ * so arbitrary special characters (TC-04-UNIT-03) can never crash or be interpreted
+ * as anything other than literal text; they simply fail to match.
+ */
+export function matchesMemberSearch(
+  member: Pick<SearchableMember, 'fullName' | 'email'>,
+  term: string,
+): boolean {
+  const query = (term ?? '').trim().toLowerCase();
+  if (query.length === 0) return true;
+  return (
+    member.fullName.toLowerCase().includes(query) || member.email.toLowerCase().includes(query)
+  );
+}
+
+export interface VisibleMembersOptions {
+  search?: string;
+  showRemoved?: boolean;
+}
+
+/**
+ * Composes the removed-filter and the search filter (requirements 2, 4, 5): default
+ * is active-only; `showRemoved` is an additive reveal, not a replace, and the search
+ * term applies across whichever set is currently visible.
+ */
+export function visibleMembers<T extends SearchableMember>(
+  members: readonly T[],
+  options: VisibleMembersOptions = {},
+): T[] {
+  const showRemoved = options.showRemoved ?? false;
+  return members.filter(
+    (member) =>
+      (showRemoved || member.status === 'active') && matchesMemberSearch(member, options.search ?? ''),
+  );
+}
+
+/* ------------------------------------------------------------------ *
+ * Spec 05 — member detail: about
+ * ------------------------------------------------------------------ */
+
+/**
+ * Job title (requirement 6): optional/clearable, max 100 chars. Trimmed like every
+ * other free-text field in this module — a title of only whitespace is treated as
+ * cleared rather than counted toward the length limit.
+ */
+export function validateJobTitle(input: string): FieldResult {
+  const value = (input ?? '').trim();
+  if (value.length > LIMITS.jobTitleMax) return fail(MEMBER_MESSAGES.jobTitleTooLong);
+  return ok(value);
+}
+
+/**
+ * The role options a caller may assign to a member currently holding `targetCurrentRole`
+ * (spec 05 requirement 8 / the Roles & Permission Matrix). This is the single source of
+ * truth behind both `canChangeRole` and the API's `availableRoles` field — an `admin`
+ * has blanket authority regardless of the target's current role; a `manager` only has
+ * authority over targets currently `user`/`viewer`, and even then may never assign
+ * `admin`; `user`/`viewer` callers have no authority at all.
+ *
+ * Two independent facts collapse into one function here rather than a 2-arg
+ * `canChangeRole(callerRole, role)`, because the matrix genuinely depends on both the
+ * target's *current* role (does the caller have any authority over this member?) and
+ * the *desired* role (is this specific assignment allowed?) — collapsing them into a
+ * single role parameter can't distinguish TC-05-UNIT-03 cases 1 and 4 (manager
+ * changing a `user` target to `manager` vs. to `admin`) from cases 5 and 6 (manager
+ * touching a `manager`/`admin` target at all).
+ */
+export function getAvailableRoles(callerRole: Role, targetCurrentRole: Role): Role[] {
+  if (callerRole === 'admin') return [...ROLE_VALUES];
+  if (callerRole === 'manager') {
+    if (targetCurrentRole === 'user' || targetCurrentRole === 'viewer') {
+      return ['manager', 'user', 'viewer'];
+    }
+    return [];
+  }
+  return [];
+}
+
+/**
+ * Pure role-change-authority check (TC-05-UNIT-03): may `callerRole` change a member
+ * currently holding `targetCurrentRole` to `newRole`? Built on `getAvailableRoles` so
+ * the two can never drift. Note this only answers the authority question for a given
+ * transition — the service layer additionally short-circuits this check entirely when
+ * `newRole === targetCurrentRole` (spec 05 requirement 5's note / TC-05-INT-15: a
+ * job-title-only save that resends the unchanged role must not be blocked even when
+ * the caller has no authority over that role).
+ */
+export function canChangeRole(callerRole: Role, targetCurrentRole: Role, newRole: Role): boolean {
+  return getAvailableRoles(callerRole, targetCurrentRole).includes(newRole);
+}
+
+/**
+ * Avatar initials (requirement 4 / TC-05-UNIT-04): uppercase first character of first
+ * name + uppercase first character of last name. Spread (not indexing) to take a full
+ * Unicode code point rather than a UTF-16 code unit, and `toLocaleUpperCase` (not
+ * `toUpperCase`) so accented letters like "María" uppercase correctly ("M", not a
+ * mis-cased or unchanged character).
+ */
+export function getAvatarInitials(firstName: string, lastName: string): string {
+  const firstChar = [...(firstName ?? '').trim()][0] ?? '';
+  const lastChar = [...(lastName ?? '').trim()][0] ?? '';
+  return (firstChar + lastChar).toLocaleUpperCase();
 }

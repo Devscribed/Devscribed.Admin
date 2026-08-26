@@ -150,9 +150,9 @@ describe('POST /api/signup', () => {
     const members = await agent
       .get(`/api/organizations/${created.body.organization.id}/members`)
       .expect(200);
-    expect(members.body).toHaveLength(1);
-    expect(members.body[0]).toMatchObject({
-      name: 'Pat Owner',
+    expect(members.body.members).toHaveLength(1);
+    expect(members.body.members[0]).toMatchObject({
+      fullName: 'Pat Owner',
       email: 'owner@acme.com',
       role: 'admin',
       status: 'active',
