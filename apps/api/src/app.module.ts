@@ -16,6 +16,7 @@ import { TestMailController } from './mail/test-mail.controller';
 import { MeController } from './members/me.controller';
 import { MembersController } from './members/members.controller';
 import { MembersService } from './members/members.service';
+import { TestMembersController } from './members/test-members.controller';
 import { AvailabilityService } from './hiring/availability.service';
 import { BoardController, PlacementController } from './hiring/board.controller';
 import { BoardScopeGuard } from './hiring/board-scope.guard';
@@ -38,6 +39,9 @@ import { CandidatesService } from './hiring/candidates.service';
 import { CvController } from './hiring/cv.controller';
 import { TestCalendarController } from './hiring/calendar/test-calendar.controller';
 import { HiringManageGuard } from './hiring/hiring-manage.guard';
+import { InterviewerScopeGuard } from './hiring/interviewer-scope.guard';
+import { MyInterviewsController } from './hiring/my-interviews.controller';
+import { MyInterviewsService } from './hiring/my-interviews.service';
 import { LocalFsStorage } from './hiring/storage/local-fs.storage';
 import { Storage } from './hiring/storage/storage';
 import { resolveStorageConfig } from './hiring/storage/storage.config';
@@ -123,6 +127,7 @@ const calendarProvider = {
     MeController,
     MembersController,
     TestMailController,
+    TestMembersController,
     VacanciesController,
     CategoriesController,
     CriteriaController,
@@ -130,6 +135,7 @@ const calendarProvider = {
     CvController,
     CandidatesController,
     CandidateDatabaseController,
+    MyInterviewsController,
     ApplicationsController,
     BoardController,
     PlacementController,
@@ -148,6 +154,7 @@ const calendarProvider = {
     HiringManageGuard,
     BoardScopeGuard,
     CandidateDatabaseGuard,
+    InterviewerScopeGuard,
     VacanciesService,
     CategoriesService,
     CriteriaService,
@@ -156,6 +163,7 @@ const calendarProvider = {
     ViewerTimeZoneService,
     CandidatesService,
     CandidateDatabaseService,
+    MyInterviewsService,
     BoardService,
   ],
 })

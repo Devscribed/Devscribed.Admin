@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import {
+  addMember,
   bookInterview,
   createVacancy,
   registerOrganization,
@@ -235,5 +236,42 @@ test.describe('Vacancies', () => {
     await expect(page.getByTestId('vacancy-booking-link')).toHaveText(
       new RegExp(`/book/${vacancy.publicSlug}$`),
     );
+  });
+
+  /**
+   * TC-H01-E2E-05 — `user` and `viewer` never see the Hiring section.
+   *
+   * Two assertions, and the second is the one that matters: the row is absent, *and*
+   * typing the URL renders nothing. A sidebar that hides a link its API would still
+   * serve is decoration, not a permission.
+   */
+  test.describe('for a role with no hiring access', () => {
+    for (const role of ['user', 'viewer']) {
+      test(`a ${role} sees no Hiring section and no vacancies`, async ({ page, request }) => {
+        const org = await registerOrganization(request, uniqueEmail('owner'));
+        const vacancy = await createVacancy(request, org, { title: 'Senior React Engineer' });
+        const member = await addMember(request, { email: uniqueEmail(role), role });
+
+        await signIn(page, member.email);
+
+        // The shell resolves the session before rendering anything, which is what stops
+        // a gated row appearing and being taken away again.
+        await expect(page.getByTestId('app-sidebar')).toBeVisible();
+        await expect(page.getByTestId('nav-members')).toBeVisible();
+        for (const row of ['nav-vacancies', 'nav-candidates', 'nav-hiring-settings', 'nav-my-interviews']) {
+          await expect(page.getByTestId(row)).toHaveCount(0);
+        }
+
+        // The not-found state, not a permission error and not any vacancy data.
+        await page.goto(`/org/${org.organizationId}/hiring/vacancies`);
+        await expect(page.getByTestId('vacancies-list')).toHaveCount(0);
+        await expect(page.getByTestId('vacancies-empty-state')).toHaveCount(0);
+        expect(await page.content()).not.toContain('Senior React Engineer');
+
+        await page.goto(`/org/${org.organizationId}/hiring/vacancies/${vacancy.id}`);
+        await expect(page.getByTestId('vacancy-detail')).toHaveCount(0);
+        expect(await page.content()).not.toContain(vacancy.publicSlug);
+      });
+    }
   });
 });

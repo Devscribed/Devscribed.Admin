@@ -25,6 +25,11 @@ export interface TableProps<Row = any> {
    * already there is what stops the page reflowing under the reader.
    */
   busy?: boolean;
+  /**
+   * Drops the uppercase header rule, keeping the column widths. For a short list whose
+   * columns are self-evident and whose grouping label already names it.
+   */
+  hideHeader?: boolean;
   style?: React.CSSProperties;
 }
 

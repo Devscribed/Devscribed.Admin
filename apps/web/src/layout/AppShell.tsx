@@ -12,7 +12,11 @@ export function AppShell({ session, children }: { session: Session; children: Re
   return (
     <SessionProvider session={session}>
       <div className="shell">
-        <Sidebar orgId={session.organization.id} role={session.role} />
+        <Sidebar
+          orgId={session.organization.id}
+          role={session.role}
+          isInterviewer={session.isInterviewer}
+        />
         <div className="shell-main">
           <Topbar />
           <main className="shell-content">{children}</main>

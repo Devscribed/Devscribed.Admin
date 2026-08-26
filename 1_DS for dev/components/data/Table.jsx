@@ -1,6 +1,6 @@
 import React from 'react';
 
-export function Table({ columns = [], rows = [], rowHref, rowTestId, onRowClick, busy, style }) {
+export function Table({ columns = [], rows = [], rowHref, rowTestId, onRowClick, busy, hideHeader, style }) {
   return (
     // `busy` dims the body and announces itself rather than replacing the table with a
     // spinner: a filterable list that collapsed on every refilter would reflow under the
@@ -9,6 +9,13 @@ export function Table({ columns = [], rows = [], rowHref, rowTestId, onRowClick,
       background: 'var(--bg-panel)', border: '1px solid var(--border)',
       borderRadius: 'var(--radius-2xl)', overflow: 'hidden', ...style,
     }}>
+      {/*
+        A short list whose columns are self-evident carries its own header badly: three
+        rows under an uppercase rule read as a report rather than as a list. `hideHeader`
+        drops the rule and keeps the column widths, which is what the two My interviews
+        groups need — the grouping label above them already says what they are.
+      */}
+      {!hideHeader && (
       <div style={{
         display: 'flex', height: 52, padding: '0 18px',
         background: 'var(--bg-header)',
@@ -20,6 +27,7 @@ export function Table({ columns = [], rows = [], rowHref, rowTestId, onRowClick,
           <div key={i} style={{ flex: c.flex || 1, display: 'flex', alignItems: 'center', justifyContent: c.align || 'flex-start' }}>{c.label}</div>
         ))}
       </div>
+      )}
       {rows.map((r, ri) => {
         // A linked row is a real anchor, so middle-click and copy-address work; the
         // caller intercepts onClick to keep navigation client-side.
@@ -34,7 +42,7 @@ export function Table({ columns = [], rows = [], rowHref, rowTestId, onRowClick,
           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
           style={{
             display: 'flex', minHeight: 62, padding: '0 18px', alignItems: 'center',
-            borderTop: '1px solid var(--divider)',
+            borderTop: hideHeader && ri === 0 ? 'none' : '1px solid var(--divider)',
             fontFamily: 'var(--font-text)', fontSize: 'var(--fs-15)', color: 'var(--text)',
             textDecoration: 'none',
             cursor: href || onRowClick ? 'pointer' : 'default',

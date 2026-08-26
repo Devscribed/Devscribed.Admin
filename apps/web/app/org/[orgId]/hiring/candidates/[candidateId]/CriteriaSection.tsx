@@ -24,12 +24,21 @@ import type { CardCriterion, Criterion } from '@/hiring/types';
  * because there is no such thing as an assessment without one: the row is written by the
  * first value, not by the choosing. Removing a chip that never got a value is therefore a
  * purely local undo, with nothing to delete.
+ *
+ * `readOnly` is the assigned interviewer's view of the same section, and it is a
+ * consequence of the permission matrix rather than a design choice: both libraries are
+ * `admin`/`manager` only, `GET` included (06 §Actors), so a `user` interviewer cannot be
+ * offered an autocomplete over a library they may not read, nor a scale whose other
+ * values they were never sent. What they *can* be shown is what was recorded, which the
+ * card's own response carries in full — so the chips render as text and nothing on them
+ * is a control.
  */
 export function CriteriaSection({
   orgId,
   applicationId,
   criteria,
   library,
+  readOnly = false,
   onChange,
   onLibraryChange,
 }: {
@@ -38,6 +47,8 @@ export function CriteriaSection({
   criteria: CardCriterion[];
   /** The whole library, archived entries included — an archived chip still renders. */
   library: Criterion[];
+  /** The caller may not read the library, so there is nothing here to choose from. */
+  readOnly?: boolean;
   onChange: (criteria: CardCriterion[]) => void;
   onLibraryChange: () => void;
 }) {
@@ -153,6 +164,8 @@ export function CriteriaSection({
   const options = library
     .filter((criterion) => !criterion.isArchived)
     .map((criterion) => ({ value: criterion.id, label: criterion.name }));
+
+  if (readOnly) return <ReadOnlyCriteria criteria={criteria} />;
 
   return (
     <div>
@@ -416,6 +429,63 @@ function TypedValue({
       style={{ height: 26, width: type === 'number' ? 84 : 160, fontSize: 'var(--fs-13)' }}
     />
   );
+}
+
+/**
+ * What was recorded, as text.
+ *
+ * Everything it renders came with the card, so it needs no library and asks for none —
+ * which is the point: the interviewer sees the assessment on their own candidate without
+ * the org-wide library being opened to them to make one autocomplete work.
+ */
+function ReadOnlyCriteria({ criteria }: { criteria: CardCriterion[] }) {
+  return (
+    <div>
+      <SectionLabel>Criteria</SectionLabel>
+      {criteria.length === 0 ? (
+        <p
+          data-testid="card-criteria-empty"
+          style={{ margin: 'var(--sp-4) 0 0', fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}
+        >
+          {HIRING_MESSAGES.card.noCriteria}
+        </p>
+      ) : (
+        <ul
+          data-testid="card-criteria-list"
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 'var(--sp-4)',
+            listStyle: 'none',
+            margin: 'var(--sp-4) 0 0',
+            padding: 0,
+          }}
+        >
+          {criteria.map((assessment) => (
+            <li key={assessment.criterionId}>
+              <Badge tone="neutral" dot={false} data-testid={`card-criterion-${assessment.criterionId}`}>
+                {assessment.name}
+                <span
+                  data-testid={`card-criterion-value-${assessment.criterionId}`}
+                  style={{ marginLeft: 'var(--sp-3)', color: 'var(--text)' }}
+                >
+                  {recordedValue(assessment)}
+                </span>
+              </Badge>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** The one value column the assessment's type names, as the chip reads it. */
+function recordedValue(assessment: CardCriterion): string {
+  if (assessment.valueLabel !== null) return assessment.valueLabel;
+  if (assessment.valueBool !== null) return assessment.valueBool ? 'Yes' : 'No';
+  if (assessment.valueNumber !== null) return String(assessment.valueNumber);
+  return assessment.valueText ?? '';
 }
 
 /**

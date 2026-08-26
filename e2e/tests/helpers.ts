@@ -118,6 +118,70 @@ export async function registerOrganization(
   return { email, accountId: body.account.id, organizationId: body.organization.id };
 }
 
+export interface SeededMember {
+  email: string;
+  accountId: string;
+  role: string;
+}
+
+/**
+ * Adds a second member with a given role, through the API's test-only seam.
+ *
+ * There is no invitation endpoint yet (user-management spec 03), so a browser has no way
+ * to produce a `manager`, a `user` or a `viewer` at all — and hiring's permission matrix
+ * is four roles wide, with the interviewer's row gated on assignment rather than role.
+ * `POST /api/test/members` is that missing seam and only that: it answers behind an
+ * `admin`'s own session and never in production, the same way the mail sink and the
+ * calendar stub do.
+ *
+ * The request context must be carrying the admin's session — `registerOrganization`
+ * leaves it there.
+ */
+export async function addMember(
+  request: APIRequestContext,
+  input: { email: string; role: string; firstName?: string; lastName?: string },
+): Promise<SeededMember> {
+  const response = await request.post(`${API}/api/test/members`, {
+    data: { password: VALID.password, ...input },
+  });
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not seed a ${input.role} (${response.status()})`,
+    );
+  }
+  const body = await response.json();
+  return { email: body.email, accountId: body.accountId, role: body.role };
+}
+
+/**
+ * Creates a vacancy interviewed by somebody other than the session's owner — which is
+ * what makes a `user` an interviewer, and is the precondition for every rule in
+ * hiring 03 §06 and 04 §01.
+ */
+export async function createVacancyFor(
+  request: APIRequestContext,
+  org: Registered,
+  interviewerAccountId: string,
+  overrides: { title?: string; durationMinutes?: number } = {},
+): Promise<SeededVacancy> {
+  const response = await request.post(
+    `${API}/api/organizations/${org.organizationId}/hiring/vacancies`,
+    {
+      data: {
+        title: overrides.title ?? 'Senior React Engineer',
+        durationMinutes: overrides.durationMinutes ?? 60,
+        description: '',
+        interviewerAccountId,
+      },
+    },
+  );
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: could not create a vacancy (${response.status()})`);
+  }
+  const body = await response.json();
+  return { id: body.id, publicSlug: body.publicSlug, title: body.title };
+}
+
 export interface SeededCategory {
   id: string;
   name: string;

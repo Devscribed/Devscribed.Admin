@@ -13,7 +13,7 @@ import type { Response } from 'express';
 import { OrgScopeGuard } from '../auth/org-scope.guard';
 import type { AuthenticatedRequest } from '../auth/session.guard';
 import { SessionGuard } from '../auth/session.guard';
-import { HiringManageGuard } from './hiring-manage.guard';
+import { InterviewerScopeGuard } from './interviewer-scope.guard';
 import { PrismaService } from '../prisma.service';
 import { Storage } from './storage/storage';
 
@@ -38,12 +38,13 @@ const INLINE_CONTENT_TYPES: Record<string, string> = {
  * appears in a response, so no client ever holds anything that could be turned into a
  * direct object reference.
  *
- * 404 rather than 403 for an application outside the caller's organization: the
- * interviewer scope of a later phase answers the same way, and the two should not be
- * distinguishable by their status code.
+ * 404 rather than 403 for an application outside the caller's organization, and
+ * `InterviewerScopeGuard` answers the same way for one they may not see — an interviewer
+ * reaches the CV of the candidate they are about to interview and of nobody else, and
+ * the two refusals are indistinguishable by their status code.
  */
 @Controller('api/organizations/:orgId/hiring/applications')
-@UseGuards(SessionGuard, OrgScopeGuard, HiringManageGuard)
+@UseGuards(SessionGuard, OrgScopeGuard, InterviewerScopeGuard)
 export class CvController {
   constructor(
     private readonly prisma: PrismaService,

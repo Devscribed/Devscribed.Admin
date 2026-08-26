@@ -216,3 +216,29 @@ export interface CandidateDatabase {
   viewerTimeZone: string;
   candidates: CandidateRow[];
 }
+
+/* ------------------------------------------------------------------ *
+ * My interviews — spec 03 §06
+ * ------------------------------------------------------------------ */
+
+/**
+ * One row: an **application**, unlike the candidate database's person, because this
+ * screen answers "what interviews do I have?" rather than "who do I know?".
+ */
+export interface MyInterviewRow {
+  applicationId: string;
+  candidateId: string;
+  candidateName: string;
+  vacancyTitle: string;
+  startUtc: string;
+  status: ApplicationStatus;
+}
+
+export interface MyInterviews {
+  /** Named once above the two groups rather than on every row. */
+  viewerTimeZone: string;
+  /** Soonest first. */
+  upcoming: MyInterviewRow[];
+  /** Most recent first. */
+  past: MyInterviewRow[];
+}

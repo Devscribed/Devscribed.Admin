@@ -12,7 +12,6 @@ import {
   createVacancy,
   firstSlots,
   resetDatabase,
-  setRole,
   signInAs,
   signup,
   type Signed,
@@ -195,17 +194,111 @@ describe('Hiring — candidate card', () => {
     expect(JSON.stringify(outsider.body)).not.toContain('jane@example.com');
   });
 
-  it('refuses a user and a viewer, and refuses their writes too', async () => {
+  /**
+   * TC-H04-INT-02 — a candidate a `user` cannot see, and a `viewer` who can see none.
+   *
+   * 404 for both, and the same 404 the previous case gives for a candidate in another
+   * organization: on this surface "you may not" and "there is no such candidate" are one
+   * answer, because telling them apart is exactly what a stranger walking ids wants
+   * (04 §01.4).
+   */
+  it('answers 404 to a viewer, and to a user who interviews for somebody else', async () => {
     const admin = await signup(app, 'pat@acme.com');
-    const vacancy = await createVacancy(app, admin);
-    const [startUtc] = await firstSlots(app, vacancy.slug, 1);
-    const { candidateId, applicationId } = await book(vacancy.slug, { startUtc });
+    // P interviews for their own vacancy, and for nothing to do with this candidate.
+    const p = await addMember(prisma, admin.organizationId, { email: 'p@acme.com', role: 'user' });
+    await createVacancy(app, admin, { title: 'Node Engineer', interviewerAccountId: p.accountId });
 
-    for (const role of ['user', 'viewer']) {
-      await setRole(prisma, admin.accountId, role);
-      expect((await card(admin, candidateId)).status).toBe(403);
-      expect((await patch(admin, applicationId, { interviewNotes: 'x' })).status).toBe(403);
+    const theirs = await createVacancy(app, admin, { title: 'React Engineer' });
+    const [startUtc] = await firstSlots(app, theirs.slug, 1);
+    const { candidateId, applicationId } = await book(theirs.slug, { startUtc });
+
+    const viewer = await addMember(prisma, admin.organizationId, {
+      email: 'viewer@acme.com',
+      role: 'viewer',
+    });
+
+    for (const member of [p, viewer]) {
+      const session = await signInAs(app, {
+        email: member === p ? 'p@acme.com' : 'viewer@acme.com',
+        accountId: member.accountId,
+        organizationId: admin.organizationId,
+      });
+
+      const refused = await card(session, candidateId);
+      expect(refused.status).toBe(404);
+      // Not even the candidate's existence — the body is the plain not-found shape.
+      expect(JSON.stringify(refused.body)).not.toContain('jane@example.com');
+      expect((await patch(session, applicationId, { interviewNotes: 'x' })).status).toBe(404);
     }
+  });
+
+  /**
+   * TC-H04-INT-01 — an interviewer sees their own vacancy's application and no other.
+   *
+   * The other vacancy's id, title, notes and criteria are **absent from the response**
+   * rather than hidden by the page: a section the browser never receives is one no
+   * devtools panel can open (04 §01.2).
+   */
+  it('answers an interviewer with only their own vacancy’s applications', async () => {
+    const admin = await signup(app, 'pat@acme.com');
+    const p = await addMember(prisma, admin.organizationId, { email: 'p@acme.com', role: 'user' });
+    const s = await addMember(prisma, admin.organizationId, { email: 's@acme.com', role: 'user' });
+
+    const mine = await createVacancy(app, admin, {
+      title: 'React Engineer',
+      interviewerAccountId: p.accountId,
+    });
+    const theirs = await createVacancy(app, admin, {
+      title: 'Node Engineer',
+      interviewerAccountId: s.accountId,
+    });
+
+    // One candidate, one application to each vacancy.
+    const [first, second] = await firstSlots(app, mine.slug, 2);
+    const ours = await book(mine.slug, { startUtc: first });
+    const other = await book(theirs.slug, { startUtc: second });
+    expect(ours.candidateId).toBe(other.candidateId);
+
+    // Something written on the other application, so its absence is a real absence.
+    const english = await createCriterion(app, admin, { name: 'English' });
+    await patch(admin, other.applicationId, { interviewNotes: 'said something private' });
+    await assess(admin, other.applicationId, english.id, { valueId: english.values[0].id });
+
+    const interviewer = await signInAs(app, {
+      email: 'p@acme.com',
+      accountId: p.accountId,
+      organizationId: admin.organizationId,
+    });
+
+    const scoped = await card(interviewer, ours.candidateId);
+    expect(scoped.status).toBe(200);
+    expect(scoped.body.applications).toHaveLength(1);
+    expect(scoped.body.applications[0].id).toBe(ours.applicationId);
+
+    const body = JSON.stringify(scoped.body);
+    for (const secret of [other.applicationId, theirs.id, 'Node Engineer', 'said something private', english.id]) {
+      expect(body).not.toContain(secret);
+    }
+
+    // The admin, on the same candidate, still gets both.
+    const full = await card(admin, ours.candidateId);
+    expect(full.body.applications).toHaveLength(2);
+
+    // And the interviewer's own write goes through on their own application.
+    expect((await patch(interviewer, ours.applicationId, { interviewNotes: 'mine' })).status).toBe(200);
+    // Reaching for the other one by id is 404, not 403 — the same answer a stranger gets.
+    expect((await patch(interviewer, other.applicationId, { conclusion: 'x' })).status).toBe(404);
+    expect(
+      (await assess(interviewer, other.applicationId, english.id, { valueId: english.values[1].id }))
+        .status,
+    ).toBe(404);
+    expect((await unassess(interviewer, other.applicationId, english.id)).status).toBe(404);
+    // Nothing the interviewer sent touched the application they may not see.
+    const untouched = await prisma.application.findUniqueOrThrow({
+      where: { id: other.applicationId },
+      select: { interviewNotes: true, conclusion: true },
+    });
+    expect(untouched).toEqual({ interviewNotes: 'said something private', conclusion: null });
   });
 
   /** TC-H04-INT-03 — notes and conclusion are shared, last write wins. */
@@ -591,6 +684,11 @@ describe('Hiring — candidate card', () => {
     expect(await prisma.applicationCriterion.count()).toBe(0);
   });
 
+  /**
+   * Neither is the interviewer on this vacancy, so neither may reach the application at
+   * all — and the refusal is the surface's uniform 404 rather than a 403 that would
+   * confirm the application is there.
+   */
   it.each(['user', 'viewer'])('refuses both assessment endpoints to a %s', async (role) => {
     const admin = await signup(app, 'pat@acme.com');
     const vacancy = await createVacancy(app, admin);
@@ -608,8 +706,8 @@ describe('Hiring — candidate card', () => {
       organizationId: admin.organizationId,
     });
 
-    expect((await assess(session, applicationId, english.id, { valueId: english.values[0].id })).status).toBe(403);
-    expect((await unassess(session, applicationId, english.id)).status).toBe(403);
+    expect((await assess(session, applicationId, english.id, { valueId: english.values[0].id })).status).toBe(404);
+    expect((await unassess(session, applicationId, english.id)).status).toBe(404);
     expect(await prisma.applicationCriterion.count()).toBe(0);
   });
 });

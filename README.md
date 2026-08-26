@@ -167,9 +167,9 @@ reads it.
 ## Tests
 
 ```bash
-npm run test:unit   # validation rules — TC-01-UNIT-*, TC-H01/H02/H03/H04-UNIT-*
+npm run test:unit   # validation rules — TC-01-UNIT-*, TC-H01/H02/H03/H04/H05/H06-UNIT-*
 npm run test:int    # API endpoints — TC-01-INT-*, TC-H00…H06-INT-*, needs Postgres running
-npm run test:e2e    # browser flows — TC-01-E2E-*, TC-H01/H02/H03/H04-E2E-*
+npm run test:e2e    # browser flows — TC-01-E2E-*, TC-H01…H06-E2E-*
 ```
 
 `test:int` resets `devscribed_test` before it starts, so a failed run never poisons the
@@ -349,12 +349,12 @@ could not be reached — that one is still a `503`.
 **The candidate card is what the invite links to.** The calendar event's body carries
 `/org/{orgId}/hiring/candidates/{candidateId}?application={applicationId}`, and that link works: it
 opens the card with that application's section expanded, signing the visitor in first when they
-arrive without a session and returning them to it afterwards. An `admin` or `manager` now also
-reaches a card through the candidate database; a `user` interviewer still has the invite and
-nothing else until My interviews lands, which is why the E2E suite reads the link out of `GET
-/api/test/calendar/latest` rather than assembling it, the same way it reads a reset link out of the
-mail sink. Both endpoints answer only behind their stand-in implementation and never in
-production.
+arrive without a session and returning them to it afterwards. An `admin` or `manager` also reaches
+a card through the candidate database, and a `user` interviewer through My interviews — the invite
+is no longer their only route, which is exactly why that screen exists. The E2E suite still reads
+the link out of `GET /api/test/calendar/latest` rather than assembling it, the same way it reads a
+reset link out of the mail sink. Both endpoints answer only behind their stand-in implementation
+and never in production.
 
 **Interview notes and the conclusion autosave, and a failure stops the loop.** Both are plain text,
 both are shared fields with last-write-wins, and both write about two seconds after typing stops.
@@ -420,7 +420,7 @@ guard rather than `HiringManageGuard` for that one reason: a `user` who intervie
 is the single caller who could read a permission error as "the board is there, you are not senior
 enough". A `viewer`, and a `user` with no assignment, get the honest 403 the rest of the hiring
 surface gives — they already know the vacancy exists. The general rule, an interviewer's whole
-narrowed view of hiring, is `InterviewerScopeGuard` in its own phase.
+narrowed view of hiring, is `InterviewerScopeGuard` below.
 
 **A vacancy with applications cannot be deleted, only closed.** Deleting it would take
 its interview notes, conclusions and criteria assessments with it, and spec 04 treats
@@ -506,11 +506,17 @@ redundant: typing a name that exists would then match nothing and the control wo
 *create* it, which the library refuses as a duplicate. So they stay, and choosing one moves focus to
 the value already there and says "Already assessed — edit the existing value".
 
-**One tension is left for the interviewer phase to resolve.** Both libraries are `admin`/`manager`
-only, `GET` included, which is what [06's TC-H06-INT-08](specs/hiring/06-libraries.md) asserts — and
-an assigned `user` interviewer will need to read the criteria library to assess anybody on their own
-vacancy's card. The assessment endpoints narrow naturally under `InterviewerScopeGuard`; the
-library's read does not, and the permission matrix is what settles it.
+**The library tension was settled by the matrix, not by convenience.** Both libraries are
+`admin`/`manager` only, `GET` included, which is what
+[06's TC-H06-INT-08](specs/hiring/06-libraries.md) asserts — and an assigned `user` interviewer
+needs the criteria library to assess anybody on their own vacancy's card. The assessment endpoints
+narrowed naturally under `InterviewerScopeGuard`, because they name an application; the library's
+read does not, because it names nothing. Opening it for the sake of one autocomplete would have
+made every criterion, every scale and every usage count readable by any interviewer, to solve a
+control. So the library stayed shut and **the card renders criteria read-only for an interviewer**:
+the chips are text, with no value control, no remove and no Add, and everything they show came with
+the card's own response. The page detects it by the 403 rather than by inspecting a role — a screen
+that predicted a permission would eventually predict it wrongly.
 
 **The naming half of both libraries is one class.** `LibraryNames` holds what categories and
 criteria share — the 1–50 rule, the case-insensitive lookup, the 409 that carries the existing row's
@@ -586,6 +592,60 @@ refused callers rather than one: a `viewer` and an unassigned `user` have no rou
 assigned interviewer — who *does* reach candidates, their own — would read a permission error as
 "the database is there, ask to be promoted". `CandidateDatabaseGuard` is therefore its own guard
 rather than `HiringManageGuard`, which still answers the card's different question.
+
+**`InterviewerScopeGuard` is the one non-uniform permission in the product.** Every other rule in
+hiring is a role test; this one is a row test. A `user` who has been assigned an interview reaches
+the candidate card, its notes, its conclusion, its status, its CV and its criteria — for *their*
+vacancy's applications and nothing else. The guard covers the whole candidate-shaped surface (the
+card, `PATCH …/applications/{id}`, both criteria endpoints, and the CV stream), resolving whichever
+of `:candidateId` or `:applicationId` the route names, so an interviewer patching another vacancy's
+application by id is refused on the row rather than on their role.
+
+**It answers 404 and never 403**, and so does everything else that surface touches — including for
+a `viewer`, and for a `user` with no assignment. Not because the caller could not be told, but
+because the alternative leaks: a 403 on `…/candidates/{id}` confirms the id names a real candidate
+in this organization, which is precisely what somebody walking ids is trying to learn. Every
+refusal there looks identical, an id from another organization included. The vacancy and library
+endpoints keep their honest 403 — the caller already knows their organization has vacancies, and
+there is nothing to conceal.
+
+**The scoped card omits, it does not hide.** An interviewer's response holds only their own
+applications; the other vacancy's id, title, notes and criteria are absent from the body rather
+than filtered out by the page. A section the browser never receives is one no devtools panel can
+open. The guard decides the scope once and hands it to the service, so the membership lookup that
+decided it is not repeated per query.
+
+**My interviews is gated on assignment, not role.** It is application-grain — one row per
+interview, unlike the candidate database's one row per person — because it answers "what interviews
+do I have?" rather than "who do I know?", and it has no search, no filters and no pagination
+because it is a short list by construction. Its endpoint is the one hiring route with no role guard
+at all: `admin`, `manager` and `user` all see the same screen showing their own assigned
+interviews, and a `viewer` cannot hold an assignment, so the row count answers for every role at
+once.
+
+A member with **no assignment** gets 404, not an empty list — the screen's existence is not
+advertised to people it will never serve. A member who holds a vacancy **nobody has booked yet**
+gets the screen with an empty `UPCOMING` group. Those are two different facts and the split between
+them is the assignment, not the bookings. Upcoming is soonest-first and past is most-recent-first,
+divided by the interview's **end**: one that started ten minutes ago is the card the interviewer is
+most likely to be opening, and moving it to `PAST` the instant it began would drop it below every
+finished interview at exactly the wrong moment.
+
+**The sidebar row rides on `/api/me`.** `isInterviewer` travels with the session because the shell
+already blocks on that response before rendering anything, which is what stops a gated row flashing
+into view and back out — the same mechanism the role-gated rows use, with a different predicate. Any
+assigned vacancy counts, closed ones included: a closed vacancy keeps its past interviews, and
+dropping the row would take away the only route an interviewer has to those cards. The HIRING
+section is therefore assembled row by row rather than gated whole, and an interviewer sees the
+label with exactly one row under it.
+
+**`POST /api/test/members` is a seam, not a feature.** Hiring's permission matrix is four roles
+wide and its last row is gated on assignment, so the rules cannot be exercised from one admin
+account — and with no invitation endpoint yet (user-management spec 03) a browser has no way to
+produce a second member at all. This creates exactly the account and membership an invitation
+eventually will, fenced like `/api/test/mail` and `/api/test/calendar` and one turn tighter: never
+in production, and only behind an `admin`'s own session, so what it can create is bounded by an
+organization somebody already administers.
 
 `/book/{slug}` is the product's only public route. The slug carries 72 bits of entropy, which is
 why it needs no organization segment, and it is frozen at creation so a link already sent keeps
@@ -717,10 +777,14 @@ than implying the endpoint is protected.
 - `Table` gained `busy`, which dims the body and sets `aria-busy` while a refetch is in
   flight. It went into the DS rather than into the screen so every filterable table gets
   the same treatment: the alternative is each page dimming its own rows slightly
-  differently, and the one thing this state must do is stay unremarkable.
-- Still outstanding for later hiring phases: promoting the template's `P` glyph
-  dictionary to real icon exports, and `Table`'s `hideHeader` for the My-interviews
-  pattern. The booking page's time-zone selector is still a plain `Select` and therefore
-  a long unsearchable list — the whole IANA set is offered, because a shortlist would
-  strand anyone whose zone it left out, and moving it onto `Combobox` is the obvious
-  next use of the control the libraries introduced.
+  differently, and the one thing this state must do is stay unremarkable. It also gained
+  `hideHeader`, which drops the uppercase rule and keeps the column widths — My
+  interviews is two groups of a few rows each, already named by the `SectionLabel` above
+  them, and a header rule over three rows reads as a report rather than as a glance at
+  today.
+- Still outstanding: promoting the template's `P` glyph dictionary to real icon exports —
+  raised for the fourth time now, since My interviews borrows the `timesheets` clock. The
+  booking page's time-zone selector is still a plain `Select` and therefore a long
+  unsearchable list — the whole IANA set is offered, because a shortlist would strand
+  anyone whose zone it left out, and moving it onto `Combobox` is the obvious next use of
+  the control the libraries introduced.

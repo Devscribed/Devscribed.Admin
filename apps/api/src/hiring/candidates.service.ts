@@ -44,8 +44,9 @@ export interface PresentedAssessment {
  *
  * Everything on this screen is scoped by the session's organization, and a record
  * outside it answers 404 rather than 403: a permission error would confirm that the
- * candidate exists, and the interviewer scope of a later phase answers the same way, so
- * the two must not be distinguishable by their status code (04 §01.4).
+ * candidate exists, and `InterviewerScopeGuard` answers the same way for a candidate
+ * the caller may not see, so the two are not distinguishable by their status code
+ * (04 §01.4).
  */
 @Injectable()
 export class CandidatesService {
@@ -54,7 +55,19 @@ export class CandidatesService {
     private readonly viewerTimeZone: ViewerTimeZoneService,
   ) {}
 
-  async card(organizationId: string, candidateId: string, viewerAccountId: string) {
+  /**
+   * @param ownVacanciesOnly the caller reaches this candidate as an assigned
+   * interviewer, so the card holds **their** applications and no others. The other
+   * vacancy's id, title, notes and criteria are absent from the response rather than
+   * hidden by the page (04 §01.2) — a section the browser never receives is one no
+   * devtools panel can open.
+   */
+  async card(
+    organizationId: string,
+    candidateId: string,
+    viewerAccountId: string,
+    ownVacanciesOnly = false,
+  ) {
     const candidate = await this.prisma.candidate.findFirst({
       where: { id: candidateId, organizationId },
       select: { id: true, firstName: true, lastName: true, email: true, createdAt: true },
@@ -62,7 +75,11 @@ export class CandidatesService {
     if (!candidate) throw new NotFoundException();
 
     const applications = await this.prisma.application.findMany({
-      where: { candidateId, organizationId },
+      where: {
+        candidateId,
+        organizationId,
+        ...(ownVacanciesOnly ? { vacancy: { interviewerAccountId: viewerAccountId } } : {}),
+      },
       // Most recent interview first (04 §03.13); `id` keeps two interviews booked at
       // the same instant in a stable order across renders.
       orderBy: [{ start: 'desc' }, { id: 'asc' }],

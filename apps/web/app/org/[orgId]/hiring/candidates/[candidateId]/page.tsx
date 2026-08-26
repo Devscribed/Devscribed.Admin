@@ -65,13 +65,30 @@ export default function CandidateCardPage({
    * its scale, even though it has left the add-autocomplete (06 §03.18).
    */
   const [library, setLibrary] = useState<Criterion[]>([]);
+  /**
+   * Whether the caller may read the org-wide library at all.
+   *
+   * Both libraries are `admin`/`manager` only, `GET` included (06 §Actors), and an
+   * assigned `user` interviewer reaches this card without reaching them. So the criteria
+   * section renders read-only for them: a page cannot offer an autocomplete over a list
+   * it may not fetch, and opening the whole library to make one control work is the
+   * trade the permission matrix already refused. The answer to that request is the
+   * predicate — no second endpoint, and nothing on screen that guesses at a role.
+   */
+  const [libraryReadable, setLibraryReadable] = useState(true);
 
   const loadLibrary = useCallback(async (): Promise<void> => {
     const response = await fetch(
       `/api/organizations/${orgId}/hiring/criteria?includeArchived=true`,
       { credentials: 'same-origin' },
     );
-    if (response.ok) setLibrary((await response.json()).criteria);
+    if (response.ok) {
+      setLibrary((await response.json()).criteria);
+      setLibraryReadable(true);
+      return;
+    }
+    // A refusal, not a failure: the page still renders everything the card carried.
+    if (response.status === 403 || response.status === 404) setLibraryReadable(false);
   }, [orgId]);
 
   const load = useCallback(async (): Promise<void> => {
@@ -80,9 +97,9 @@ export default function CandidateCardPage({
       const response = await fetch(`/api/organizations/${orgId}/hiring/candidates/${candidateId}`, {
         credentials: 'same-origin',
       });
-      // 403 for a role with no hiring access, 404 for a candidate this caller may not
-      // see. Both render the same not-found state; neither is an answer this page
-      // should elaborate on.
+      // 404 for a candidate this caller may not see, whatever the reason — a role with
+      // no hiring access, an interviewer reaching for somebody else's vacancy, or an id
+      // that names nothing. Which of those it is, is exactly what it must not say.
       if (response.status === 403 || response.status === 404) {
         setState({ status: 'gone' });
         return;
@@ -281,6 +298,7 @@ export default function CandidateCardPage({
                   applicationId={application.id}
                   criteria={application.criteria}
                   library={library}
+                  readOnly={!libraryReadable}
                   onChange={(criteria) => setCriteria(application.id, criteria)}
                   onLibraryChange={() => void loadLibrary()}
                 />

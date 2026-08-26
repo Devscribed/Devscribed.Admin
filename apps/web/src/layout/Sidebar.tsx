@@ -1,9 +1,9 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { canManageHiring } from '@devscribed/validation';
+import { INTERVIEW_MESSAGES, canManageHiring } from '@devscribed/validation';
 import { NavItem, SectionLabel } from '@/ds';
-import { CandidatesIcon, PeopleIcon, SettingsIcon, VacanciesIcon } from './icons';
+import { CandidatesIcon, MyInterviewsIcon, PeopleIcon, SettingsIcon, VacanciesIcon } from './icons';
 
 interface NavEntry {
   testId: string;
@@ -22,11 +22,18 @@ interface NavSection {
  * the wider product (Timesheets, Reports, Time off…); shipping them as dead links
  * would promise screens no spec has yet defined. Entries arrive as their specs land.
  *
- * Sections are role-gated whole: a member with no hiring access sees no HIRING label
- * at all, rather than an empty one. The shell resolves the session before it renders
- * anything, which is what stops a gated row flashing into view and back out.
+ * The HIRING section is built row by row rather than gated whole, because its rows do
+ * not share one predicate. Vacancies, Candidates and Settings are `admin`/`manager`;
+ * **My interviews is gated on assignment, not role** (hiring 03 §06.31) — which is what
+ * lets an engineer interview without becoming an org admin, and is the only non-uniform
+ * permission in the product. A member with neither sees no HIRING label at all rather
+ * than an empty one, and an interviewer sees the label with exactly one row under it.
+ *
+ * The shell resolves the session before it renders anything, which is what stops a
+ * gated row flashing into view and back out — including this one, whose predicate rides
+ * on `/api/me` for that reason.
  */
-function navigation(orgId: string, role: string): NavSection[] {
+function navigation(orgId: string, session: NavSession): NavSection[] {
   const sections: NavSection[] = [
     {
       label: 'People',
@@ -41,36 +48,57 @@ function navigation(orgId: string, role: string): NavSection[] {
     },
   ];
 
-  if (canManageHiring(role)) {
-    sections.push({
-      label: 'Hiring',
-      entries: [
-        {
-          testId: 'nav-vacancies',
-          label: 'Vacancies',
-          href: `/org/${orgId}/hiring/vacancies`,
-          icon: <VacanciesIcon />,
-        },
-        {
-          testId: 'nav-candidates',
-          label: 'Candidates',
-          href: `/org/${orgId}/hiring/candidates`,
-          icon: <CandidatesIcon />,
-        },
-        {
-          testId: 'nav-hiring-settings',
-          label: 'Settings',
-          href: `/org/${orgId}/hiring/settings`,
-          icon: <SettingsIcon />,
-        },
-      ],
+  const hiring: NavEntry[] = [];
+
+  if (canManageHiring(session.role)) {
+    hiring.push(
+      {
+        testId: 'nav-vacancies',
+        label: 'Vacancies',
+        href: `/org/${orgId}/hiring/vacancies`,
+        icon: <VacanciesIcon />,
+      },
+      {
+        testId: 'nav-candidates',
+        label: 'Candidates',
+        href: `/org/${orgId}/hiring/candidates`,
+        icon: <CandidatesIcon />,
+      },
+    );
+  }
+
+  // Below the two lists it narrows, above Settings — an interviewer's whole section is
+  // this one row, and a manager reads it as "and mine", which is where it belongs.
+  if (session.isInterviewer) {
+    hiring.push({
+      testId: 'nav-my-interviews',
+      label: INTERVIEW_MESSAGES.title,
+      href: `/org/${orgId}/hiring/my-interviews`,
+      icon: <MyInterviewsIcon />,
     });
   }
+
+  if (canManageHiring(session.role)) {
+    hiring.push({
+      testId: 'nav-hiring-settings',
+      label: 'Settings',
+      href: `/org/${orgId}/hiring/settings`,
+      icon: <SettingsIcon />,
+    });
+  }
+
+  if (hiring.length > 0) sections.push({ label: 'Hiring', entries: hiring });
 
   return sections;
 }
 
-export function Sidebar({ orgId, role }: { orgId: string; role: string }) {
+/** Only what the navigation asks of the session: a role, and one assignment fact. */
+interface NavSession {
+  role: string;
+  isInterviewer: boolean;
+}
+
+export function Sidebar({ orgId, ...session }: { orgId: string } & NavSession) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -81,7 +109,7 @@ export function Sidebar({ orgId, role }: { orgId: string; role: string }) {
       </div>
 
       <div className="shell-nav">
-        {navigation(orgId, role).map((section) => (
+        {navigation(orgId, session).map((section) => (
           <div key={section.label} style={{ marginBottom: 'var(--sp-6)' }}>
             <SectionLabel className="shell-nav-section" style={{ margin: '0 12px 10px' }}>
               {section.label}
