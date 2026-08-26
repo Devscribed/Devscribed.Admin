@@ -36,9 +36,12 @@ test.describe('App shell', () => {
 
     await page.waitForURL('**/login');
 
-    // The cookie is gone, so the guarded route bounces back to the login screen.
+    // The cookie is gone, so the guarded route bounces back to the login screen —
+    // carrying `?next` now, so that signing in returns the visitor to where they were
+    // headed rather than dropping them on the default screen (hiring 04 §01.5).
     await page.goto(appUrl);
-    await page.waitForURL('**/login');
+    await page.waitForURL('**/login**');
+    await expect(page).toHaveURL(/[?&]next=/);
     await expect(page.getByTestId('login-form')).toBeVisible();
   });
 });

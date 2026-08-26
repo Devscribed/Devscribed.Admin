@@ -228,6 +228,7 @@ export class BookingService {
         cvKey,
         cvFileName: cv!.originalname,
         cvContentType: cv!.mimetype,
+        cvSizeBytes: cv!.size,
       });
     } catch (error) {
       await this.compensate({ stored, cvKey, mailbox, eventId });
@@ -308,6 +309,7 @@ export class BookingService {
     cvKey: string;
     cvFileName: string;
     cvContentType: string;
+    cvSizeBytes: number;
   }): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       const candidate = await tx.candidate.upsert({
@@ -347,6 +349,7 @@ export class BookingService {
           cvKey: input.cvKey,
           cvFileName: input.cvFileName,
           cvContentType: input.cvContentType,
+          cvSizeBytes: input.cvSizeBytes,
           note: input.note || null,
         },
       });

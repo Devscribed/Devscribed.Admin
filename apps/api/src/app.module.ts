@@ -23,7 +23,10 @@ import { CalendarProvider } from './hiring/calendar/calendar-provider';
 import { resolveCalendarConfig } from './hiring/calendar/calendar.config';
 import { FakeCalendarProvider } from './hiring/calendar/fake-calendar.provider';
 import { TenantAppOnlyProvider } from './hiring/calendar/graph-calendar.provider';
+import { ApplicationsController, CandidatesController } from './hiring/candidates.controller';
+import { CandidatesService } from './hiring/candidates.service';
 import { CvController } from './hiring/cv.controller';
+import { TestCalendarController } from './hiring/calendar/test-calendar.controller';
 import { HiringManageGuard } from './hiring/hiring-manage.guard';
 import { LocalFsStorage } from './hiring/storage/local-fs.storage';
 import { Storage } from './hiring/storage/storage';
@@ -112,6 +115,9 @@ const calendarProvider = {
     VacanciesController,
     BookingController,
     CvController,
+    CandidatesController,
+    ApplicationsController,
+    TestCalendarController,
   ],
   providers: [
     PrismaService,
@@ -127,6 +133,7 @@ const calendarProvider = {
     VacanciesService,
     AvailabilityService,
     BookingService,
+    CandidatesService,
   ],
 })
 export class AppModule {}

@@ -1,24 +1,36 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 
-export function Textarea({ label, error, hint, rows = 4, style, wrapperStyle, ...rest }) {
+export function Textarea({ label, error, hint, trailing, rows = 4, id, style, wrapperStyle, ...rest }) {
   const [focus, setFocus] = useState(false);
+  const generatedId = useId();
+  const fieldId = id || generatedId;
   const borderColor = error ? 'var(--error-500)' : (focus ? 'var(--accent)' : 'var(--border-strong)');
   const ring = focus
     ? (error ? 'var(--shadow-glow-error)' : 'var(--shadow-glow-accent)')
     : 'none';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', ...wrapperStyle }}>
-      {label && (
-        <label style={{
-          display: 'block',
-          fontFamily: 'var(--font-display)', fontSize: 'var(--fs-11)', letterSpacing: 1,
-          textTransform: 'uppercase',
-          color: error ? 'var(--error-500)' : 'var(--text-muted)',
-          marginBottom: 6,
-        }}>{label}</label>
+      {(label || trailing) && (
+        // The label row is a row so `trailing` can sit at its far end — a saved-at
+        // indicator, a character count — without displacing the field below it. It
+        // keeps its height whether or not either side has anything in it, so text
+        // appearing there never nudges what someone is typing into.
+        <div style={{
+          display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+          gap: 12, minHeight: 17, marginBottom: 6,
+        }}>
+          <label htmlFor={fieldId} style={{
+            display: 'block',
+            fontFamily: 'var(--font-display)', fontSize: 'var(--fs-11)', letterSpacing: 1,
+            textTransform: 'uppercase',
+            color: error ? 'var(--error-500)' : 'var(--text-muted)',
+          }}>{label}</label>
+          {trailing}
+        </div>
       )}
       <textarea
         {...rest}
+        id={fieldId}
         rows={rows}
         onFocus={(e) => { setFocus(true); rest.onFocus && rest.onFocus(e); }}
         onBlur={(e) => { setFocus(false); rest.onBlur && rest.onBlur(e); }}

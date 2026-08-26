@@ -154,6 +154,10 @@ model Application {
   cvKey          String?
   cvFileName     String?
   cvContentType  String?
+  /// Recorded at upload so the card can name the file's size without reading it back
+  /// out of storage (hiring 04 §API). Null on any application booked before this
+  /// column existed, which the card renders as a filename with no size.
+  cvSizeBytes    Int?
   /// The candidate's own note from the booking form.
   note           String?
   /// Written during the interview (hiring 04). Shared fields, last write wins.

@@ -3,9 +3,10 @@
 Implementation of the specs in [`specs/`](specs/). User-management specs 01
 ([Organization Creation](specs/user-management/01-organization-creation.md)) and 02
 ([Authentication & Login](specs/user-management/02-authentication-login.md)) are complete.
-The [hiring specs](specs/hiring/README.md) are at their first phase: a vacancy can be created
-and a candidate can book an interview against it end to end. See [Hiring](#hiring) for what is
-deliberately a stand-in until the Microsoft 365 integration lands.
+The [hiring specs](specs/hiring/README.md) run from a vacancy through a booking to the card the
+team takes notes on during the interview. Boards, the candidate database and the two libraries are
+still to come. See [Hiring](#hiring) for the capability boundaries and the rules that are easy to
+mistake for omissions.
 
 ## Stack
 
@@ -25,9 +26,11 @@ packages/validation/  every rule and error message — one source shared by web 
 apps/api/             NestJS: POST /api/signup, /api/login, /api/logout,
                       GET /api/me, GET /api/organizations/{orgId}/members,
                       …/hiring/vacancies, …/hiring/interviewers,
+                      …/hiring/candidates/{id}, …/hiring/applications/{id},
                       …/hiring/applications/{id}/cv, and the public /api/book/{slug}
 apps/web/             Next.js: /signup, /login, /org/{orgId}/members,
-                      /org/{orgId}/hiring/vacancies, and the public /book/{slug}
+                      /org/{orgId}/hiring/vacancies,
+                      /org/{orgId}/hiring/candidates/{id}, and the public /book/{slug}
 e2e/                  Playwright specs, one per TC-*-E2E-* case
 ```
 
@@ -146,6 +149,13 @@ Two terminals — the API must be up before the web app can serve anything past 
 screen. Open http://localhost:3000/signup and create an organization to get a usable
 account.
 
+The API loads `apps/api/.env` itself (`import 'dotenv/config'`, first line of `main.ts`).
+The Nest CLI does not, and only the Prisma CLI in `predev` used to — which left the dev
+server without a `DATABASE_URL`, falling back to `pg`'s default port, and working only
+when the shell already carried the variables. That is also why `npm run test:e2e` could
+not start its own API from a cold shell. A deployment has no `.env` file and dotenv never
+overwrites a variable that is already set, so nothing about production changes.
+
 The web app proxies `/api/*` to the API (`next.config.mjs` rewrites), so the session
 cookie is same-origin and `httpOnly`. That is also why the browser only ever addresses
 port 3000; calling port 4000 directly is only useful for `curl`.
@@ -157,9 +167,9 @@ reads it.
 ## Tests
 
 ```bash
-npm run test:unit   # validation rules — TC-01-UNIT-*, TC-H01-UNIT-*, TC-H02-UNIT-07
-npm run test:int    # API endpoints — TC-01-INT-*, TC-H00/H01/H02-INT-*, needs Postgres running
-npm run test:e2e    # browser flows — TC-01-E2E-*, TC-H01-E2E-01, TC-H02-E2E-01
+npm run test:unit   # validation rules — TC-01-UNIT-*, TC-H01/H02/H04-UNIT-*
+npm run test:int    # API endpoints — TC-01-INT-*, TC-H00/H01/H02/H04-INT-*, needs Postgres running
+npm run test:e2e    # browser flows — TC-01-E2E-*, TC-H01/H02/H04-E2E-*
 ```
 
 `test:int` resets `devscribed_test` before it starts, so a failed run never poisons the
@@ -174,6 +184,7 @@ already up.
 | `The table 'public.Account' does not exist` | schema never applied — step 5 |
 | `@devscribed/validation` fails to resolve | package not built — step 4 |
 | `Environment variable not found: DATABASE_URL` | `apps/api/.env` missing — step 2 |
+| `ECONNREFUSED` from the API but `prisma migrate status` connects | `apps/api/.env` missing — the CLI has its own loader, so only the server notices |
 | Port 5433 already allocated | another container holds it — `docker compose down`, or change the host port in `docker-compose.yml` and in `.env` |
 | Port 5050 already allocated | something else holds the pgAdmin port — change the host port in `docker-compose.yml`, or drop the service |
 
@@ -335,6 +346,43 @@ explanation rather than something that looks broken. Availability for a closed v
 answers the window with no slots in it, which is a different fact from a calendar that
 could not be reached — that one is still a `503`.
 
+**The candidate card is what the invite links to.** The calendar event's body carries
+`/org/{orgId}/hiring/candidates/{candidateId}?application={applicationId}`, and from this release
+that link works: it opens the card with that application's section expanded, signing the visitor in
+first when they arrive without a session and returning them to it afterwards. Until the candidate
+database lands, the invite is the only route to a card that the product hands anyone — which is why
+the E2E suite reads the link out of `GET /api/test/calendar/latest` rather than assembling it, the
+same way it reads a reset link out of the mail sink. Both endpoints answer only behind their
+stand-in implementation and never in production.
+
+**Interview notes and the conclusion autosave, and a failure stops the loop.** Both are plain text,
+both are shared fields with last-write-wins, and both write about two seconds after typing stops.
+Saves never overlap: keystrokes arriving during one are coalesced into a single write that follows
+it. A failed save keeps the text and its cursor, shows an error with a retry, and **stops
+autosaving** until the member retries or edits again — a failing endpoint retried every two seconds
+for the length of an interview is worse than one that stopped and said so. The loop itself lives in
+`packages/validation/hiring-autosave.ts`, away from any component, because when a save fires and
+when it does not is a rule rather than a rendering detail.
+
+Everything on that screen answers to one constraint: someone is on a live call. Nothing steals
+focus, nothing moves under the cursor — the saved-at indicator sits in a label row that reserves its
+height whether or not it has text — and no save is silent. The record is fetched once and never
+refetched in the background, and a status change is patched in place, because a response arriving
+mid-sentence would replace text someone was still writing. The one focus move on the page is the
+Conclusion field taking focus after a status change to `Didn't pass` or `Offer`, which is a direct
+answer to what the member just did. Prompted, never required.
+
+**Autosaves are not announced; explicit saves and failures are.** A polite live region that spoke
+every two seconds would talk over the interview it exists to help record, so the visible indicator
+carries the routine case on its own and the live region is a separate node that stays empty for it.
+
+**The CV is named and sized, never located.** `Application.cvSizeBytes` is recorded at upload so the
+card can show the size without reading the file back out of storage. **View** asks for
+`?disposition=inline`, which serves a content type derived from the extension rather than the stored
+one — the stored type came from the candidate's own multipart upload, and a `.txt` announced as
+`text/html` and rendered inline would be script running on this origin. Only `.pdf` and `.txt` are
+ever inline; everything else downloads, with `nosniff` on both paths.
+
 **A vacancy with applications cannot be deleted, only closed.** Deleting it would take
 its interview notes, conclusions and criteria assessments with it, and spec 04 treats
 that record as permanent. `DELETE` answers `409 has_applications`; the menu item is
@@ -364,7 +412,14 @@ than implying the endpoint is protected.
   DS; see the "DS gaps" table in the design spec.
 - Hiring closed several gaps the design specs had already recorded, in the design system
   rather than in the screens: `BookingLayout`, `Textarea`, `FileInput`, `Toast`,
-  `Skeleton`, `Calendar`, `Menu` and `Tooltip` are new components; `SelectOption` gained
+  `Skeleton`, `Calendar`, `Menu` and `Tooltip` are new components; `Textarea` gained a
+  `trailing` slot in its label row — where `Input`'s sits inside the field, which a
+  multi-line field has no unambiguous place for — so the candidate card's saved-at
+  indicator can appear and change without moving the field below it, and a real
+  `<label for>`, since the micro-label was previously only sitting above the field
+  rather than naming it; `Button` gained `as="a"` for an action that is a navigation,
+  because a CV download through an onClick would lose middle-click, copy-address and the
+  browser's own download handling; `SelectOption` gained
   `disabled`, `hint` and `testId` so an ineligible interviewer can be shown-but-disabled
   with its reason;
   `Select`'s popover now scrolls, because a time-zone picker is hundreds of rows and
@@ -378,9 +433,9 @@ than implying the endpoint is protected.
   window and the time zone are business rules and stay on the page. It owns the grid
   semantics and the keyboard — arrows by day and by week, `Home`/`End`, `PageUp`/
   `PageDown`, and focus that only ever lands on a selectable date.
-- The public booking page is the one screen with real breakpoints, and inline styles
-  cannot express a media query, so its layout classes live in `apps/web/app/globals.css`.
-  Every value there is still a token.
+- The public booking page and the candidate card are the two screens with real
+  breakpoints, and inline styles cannot express a media query, so their layout classes
+  live in `apps/web/app/globals.css`. Every value there is still a token.
 - `Menu` and `Tooltip` are a pair. A blocked action — Delete on a vacancy that has
   candidates, and the last-admin guard when spec 04 lands — is **disabled rather than
   hidden**, because a missing action is indistinguishable from a bug. That only works if

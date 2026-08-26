@@ -335,6 +335,27 @@ export function formatBookedWhen(instant: Date, timeZone: string): string {
 }
 
 /**
+ * `26 Aug 2026` — the candidate card's collapsed application summary (04 §Copy).
+ *
+ * Abbreviated rather than spelled out because the collapsed row carries four facts on
+ * one line and the date is the least of them.
+ */
+export function formatShortDate(instant: Date, timeZone: string): string {
+  const parts = zonedParts(instant, timeZone);
+  return `${parts.day} ${MONTHS[parts.month - 1].slice(0, 3)} ${parts.year}`;
+}
+
+/**
+ * `Tue 26 Aug 2026, 14:00` — the interview line on an expanded application section
+ * (04 §Screens). Internal screens are 24-hour, so there is no format flag here; the
+ * public booking page owns the only 12-hour rendering in the product.
+ */
+export function formatShortWhen(instant: Date, timeZone: string): string {
+  const weekday = WEEKDAYS[zonedParts(instant, timeZone).weekday].slice(0, 3);
+  return `${weekday} ${formatShortDate(instant, timeZone)}, ${formatSlotTime(instant, timeZone)}`;
+}
+
+/**
  * Month navigation is bounded by the booking window, not by the calendar: previous is
  * unavailable while the window's first month is displayed, because a candidate can
  * never reach a month wholly in the past, and next stops at the month holding the last

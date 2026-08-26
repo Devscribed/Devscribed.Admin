@@ -1,6 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { shiftMonth, yearMonthOf } from '@devscribed/validation';
+import * as bcrypt from 'bcryptjs';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
@@ -72,10 +73,17 @@ export async function signup(
   };
 }
 
+/** The password every seeded member signs in with. */
+export const MEMBER_PASSWORD = 'Passw0rd';
+
 /**
  * There is no invitation endpoint yet (user-management spec 03), so a second member of
  * a given role is written directly. The role column is a plain string, so this creates
  * exactly what an invitation eventually will.
+ *
+ * The password hash is real, so `signInAs` can mint this member a genuine session
+ * rather than a hand-assembled cookie — the guards a test is exercising are the same
+ * ones the login endpoint's cookie goes through.
  */
 export async function addMember(
   prisma: PrismaService,
@@ -85,7 +93,7 @@ export async function addMember(
   const account = await prisma.account.create({
     data: {
       email: input.email,
-      passwordHash: 'not-a-real-hash',
+      passwordHash: await bcrypt.hash(MEMBER_PASSWORD, 10),
       firstName: input.firstName ?? 'Sam',
       lastName: input.lastName ?? 'Member',
     },
@@ -94,6 +102,27 @@ export async function addMember(
     data: { accountId: account.id, organizationId, role: input.role, status: 'active' },
   });
   return { accountId: account.id };
+}
+
+/** Signs a seeded member in through the real endpoint and returns their cookie jar. */
+export async function signInAs(
+  app: INestApplication,
+  member: { email: string; accountId: string; organizationId: string },
+): Promise<Signed> {
+  const response = await request(app.getHttpServer())
+    .post('/api/login')
+    .send({ email: member.email, password: MEMBER_PASSWORD });
+
+  if (response.status !== 200) {
+    throw new Error(`Precondition failed: login for ${member.email} answered ${response.status}`);
+  }
+
+  return {
+    cookies: response.headers['set-cookie'] as unknown as string[],
+    accountId: member.accountId,
+    organizationId: member.organizationId,
+    email: member.email,
+  };
 }
 
 /** Signs the caller's own membership into a different role, keeping their session. */
@@ -136,7 +165,22 @@ export async function createVacancy(
   return { id: response.body.id, slug: response.body.publicSlug, title: response.body.title };
 }
 
-export const CV_BYTES = Buffer.from('%PDF-1.4 a perfectly ordinary cv');
+/**
+ * A real, minimal PDF: 303 bytes, one blank A4 page, no fonts and no content stream.
+ *
+ * It has to be a PDF a reader can actually open, not merely a file the CV validator
+ * accepts — the card's **View** action hands it to the browser's PDF viewer, and a
+ * fixture that only satisfies the extension check makes that button look broken when it
+ * is working perfectly.
+ *
+ * Base64 rather than a string literal because a PDF's cross-reference table is
+ * byte-addressed and each of its entries ends in a significant trailing space. An editor
+ * set to trim trailing whitespace would silently shift every offset and break the file.
+ */
+const BLANK_PDF_BASE64 =
+  'JVBERi0xLjQKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCjIgMCBvYmo8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PmVuZG9iagozIDAgb2JqPDwvVHlwZS9QYWdlL1BhcmVudCAyIDAgUi9NZWRpYUJveFswIDAgNTk1IDg0Ml0+PmVuZG9iagp4cmVmCjAgNAowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAwMDAgbiAKMDAwMDAwMDA1MiAwMDAwMCBuIAowMDAwMDAwMTAxIDAwMDAwIG4gCnRyYWlsZXI8PC9TaXplIDQvUm9vdCAxIDAgUj4+CnN0YXJ0eHJlZgoxNjQKJSVFT0YK';
+
+export const CV_BYTES = Buffer.from(BLANK_PDF_BASE64, 'base64');
 
 /**
  * Every integration booking is made in UTC. The zone the candidate picks is exercised

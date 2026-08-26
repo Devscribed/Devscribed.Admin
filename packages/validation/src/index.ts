@@ -282,9 +282,11 @@ export function createAdminMembership(input: {
 }
 
 /* ------------------------------------------------------------------ *
- * Hiring — specs 01 (vacancies) and 02 (booking page)
+ * Hiring — specs 01 (vacancies), 02 (booking page) and 04 (candidate card)
  * ------------------------------------------------------------------ */
 
 export * from './hiring';
 export * from './hiring-time';
 export * from './hiring-slots';
+export * from './hiring-card';
+export * from './hiring-autosave';

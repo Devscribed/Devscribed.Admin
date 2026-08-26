@@ -152,11 +152,13 @@ export async function createVacancy(
  * Books an interview straight through the public endpoint, at the earliest time the
  * interviewer is free. A precondition for the screens that need a vacancy with
  * candidates on it, not the thing under test — the booking page has its own suite.
+ *
+ * `slotIndex` picks a later slot when a test needs two interviews that do not collide.
  */
 export async function bookInterview(
   request: APIRequestContext,
   publicSlug: string,
-  candidate: { firstName?: string; lastName?: string; email?: string } = {},
+  candidate: { firstName?: string; lastName?: string; email?: string; slotIndex?: number } = {},
 ): Promise<{ startUtc: string }> {
   const availability = await request.get(`${API}/api/book/${publicSlug}/availability`, {
     params: { timeZone: 'UTC' },
@@ -168,7 +170,7 @@ export async function bookInterview(
   const dates: Record<string, string[]> = (await availability.json()).dates ?? {};
   const startUtc = Object.keys(dates)
     .sort()
-    .flatMap((date) => dates[date])[0];
+    .flatMap((date) => dates[date])[candidate.slotIndex ?? 0];
   if (!startUtc) throw new Error('Precondition failed: the window offers no slots');
 
   const booked = await request.post(`${API}/api/book/${publicSlug}`, {
@@ -187,9 +189,60 @@ export async function bookInterview(
   return { startUtc };
 }
 
-/** A tiny but non-empty PDF — enough to satisfy every rule the CV validator applies. */
+/**
+ * A real, minimal PDF: 303 bytes, one blank A4 page, no fonts and no content stream.
+ *
+ * It has to be a PDF a reader can actually open, not merely a file the CV validator
+ * accepts — the card's **View** action hands it to the browser's PDF viewer, and a
+ * fixture that only satisfies the extension check makes that button look broken when it
+ * is working perfectly.
+ *
+ * Base64 rather than a string literal because a PDF's cross-reference table is
+ * byte-addressed and each of its entries ends in a significant trailing space. An editor
+ * set to trim trailing whitespace would silently shift every offset and break the file.
+ */
+const BLANK_PDF_BASE64 =
+  'JVBERi0xLjQKMSAwIG9iajw8L1R5cGUvQ2F0YWxvZy9QYWdlcyAyIDAgUj4+ZW5kb2JqCjIgMCBvYmo8PC9UeXBlL1BhZ2VzL0tpZHNbMyAwIFJdL0NvdW50IDE+PmVuZG9iagozIDAgb2JqPDwvVHlwZS9QYWdlL1BhcmVudCAyIDAgUi9NZWRpYUJveFswIDAgNTk1IDg0Ml0+PmVuZG9iagp4cmVmCjAgNAowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAwMDAgbiAKMDAwMDAwMDA1MiAwMDAwMCBuIAowMDAwMDAwMTAxIDAwMDAwIG4gCnRyYWlsZXI8PC9TaXplIDQvUm9vdCAxIDAgUj4+CnN0YXJ0eHJlZgoxNjQKJSVFT0YK';
+
 export const CV_FILE = {
   name: 'jane-doe-cv.pdf',
   mimeType: 'application/pdf',
-  buffer: Buffer.from('%PDF-1.4 a perfectly ordinary cv'),
+  buffer: Buffer.from(BLANK_PDF_BASE64, 'base64'),
 };
+
+export interface InviteLink {
+  organizationId: string;
+  candidateId: string;
+  applicationId: string;
+  /** The path the interviewer actually clicks, query string included. */
+  path: string;
+}
+
+/**
+ * The deep link out of the invite the last booking created.
+ *
+ * Until the candidate database lands, this is the only route to a candidate card that
+ * the product itself hands anyone ([04 §01.7](../../specs/hiring/04-candidate-card.md)).
+ * Reading it from the event is the calendar's equivalent of reading a reset link out of
+ * the mail sink — a test that assembled the URL from ids it got elsewhere would be
+ * testing a link nobody is ever sent.
+ */
+export async function latestInviteLink(request: APIRequestContext): Promise<InviteLink> {
+  const response = await request.get(`${API}/api/test/calendar/latest`);
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: no calendar event (${response.status()})`);
+  }
+
+  const body = (await response.json()).body as string;
+  const match = body.match(
+    /\/org\/([0-9a-f-]+)\/hiring\/candidates\/([0-9a-f-]+)\?application=([0-9a-f-]+)/,
+  );
+  if (!match) throw new Error(`Precondition failed: no card link in the invite:\n${body}`);
+
+  return {
+    organizationId: match[1],
+    candidateId: match[2],
+    applicationId: match[3],
+    path: match[0],
+  };
+}

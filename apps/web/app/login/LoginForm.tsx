@@ -37,6 +37,27 @@ const VALIDATORS = { email: validateEmail, password: validatePasswordPresent };
 const toneFor = (message: string) =>
   message === AUTH_MESSAGES.deactivated ? ('warning' as const) : ('error' as const);
 
+/**
+ * Where to land after signing in.
+ *
+ * `?next` is set by the app shell when a signed-out visitor opened a deep link — the
+ * calendar invite's link to a candidate card is the one that matters (hiring 04 §01.5).
+ * It is honoured only when it addresses this account's own organization, which makes it
+ * same-origin by construction and refuses `//evil.example` and another organization's
+ * route in the same test. Anything else lands on the default screen rather than
+ * erroring: a stale link is not worth a failed sign-in.
+ *
+ * Read from `window` at submit time rather than through `useSearchParams`, which would
+ * opt this route out of the static shell for a value only ever needed on the client.
+ */
+function destination(organizationId: string): string {
+  const home = `/org/${organizationId}/members`;
+  if (typeof window === 'undefined') return home;
+
+  const next = new URLSearchParams(window.location.search).get('next');
+  return next?.startsWith(`/org/${organizationId}/`) ? next : home;
+}
+
 export function LoginForm() {
   const router = useRouter();
   const [values, setValues] = useState<Values>(EMPTY);
@@ -89,7 +110,7 @@ export function LoginForm() {
         // The session cookie is httpOnly, so the organization has to come back in the
         // body for the client to know which /org/{id}/… route to land on.
         const { organizationId } = await response.json();
-        router.push(`/org/${organizationId}/members`);
+        router.push(destination(organizationId));
         router.refresh();
         return;
       }

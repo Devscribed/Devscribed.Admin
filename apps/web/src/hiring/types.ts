@@ -1,8 +1,11 @@
 /**
  * The shapes the hiring API answers with. They mirror the contracts in
- * `specs/hiring/01-vacancies.md` and `02-booking-page.md` exactly, so a change to one
- * is a compile error here rather than a blank cell on a screen.
+ * `specs/hiring/01-vacancies.md`, `02-booking-page.md` and `04-candidate-card.md`
+ * exactly, so a change to one is a compile error here rather than a blank cell on a
+ * screen.
  */
+
+import type { ApplicationStatus } from '@devscribed/validation';
 
 export interface Vacancy {
   id: string;
@@ -58,4 +61,44 @@ export interface BookingConfirmation {
   lastName: string;
   email: string;
   cvFileName: string;
+}
+
+/* ------------------------------------------------------------------ *
+ * Candidate card — spec 04
+ * ------------------------------------------------------------------ */
+
+export interface CardCandidate {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  createdAt: string;
+}
+
+export interface CardApplication {
+  id: string;
+  status: ApplicationStatus;
+  isCancelled: boolean;
+  /** Frozen at booking; the candidate's display name may since have moved on. */
+  submittedName: string;
+  vacancy: { id: string; title: string; durationMinutes: number };
+  interviewer: { accountId: string; fullName: string };
+  startUtc: string;
+  /** The booked end. A later change to the vacancy's length never moves it. */
+  endUtc: string;
+  bookedTimeZone: string;
+  note: string | null;
+  /** Named and sized, never located — the storage key never leaves the server. */
+  cv: { fileName: string; sizeBytes: number | null } | null;
+  interviewNotes: string;
+  conclusion: string;
+  /** Assessments arrive with the criteria library; the key is present from the start. */
+  criteria: unknown[];
+}
+
+export interface CandidateCard {
+  candidate: CardCandidate;
+  /** The member's own zone, falling back to the interviewer's mailbox zone. */
+  viewerTimeZone: string;
+  applications: CardApplication[];
 }

@@ -110,6 +110,21 @@ export const HIRING_MESSAGES = {
     availabilityFailed: "We couldn't load available times. Try again.",
     notFound: "This link doesn't lead anywhere.",
   },
+  card: {
+    /**
+     * Spec 04 writes this as "Couldn't save. Retry", the design spec as
+     * "Couldn't save. **Retry**" — one sentence whose last word is a control. It is
+     * stored as its two parts so the banner can render the button it describes, and
+     * `saveFailedMessage()` reassembles the sentence a screen reader hears.
+     */
+    saveFailed: "Couldn't save.",
+    retry: 'Retry',
+    notesTooLong: 'Notes must be at most 20,000 characters',
+    conclusionTooLong: 'Conclusion must be at most 5,000 characters',
+    notFound: "We couldn't find that candidate.",
+    cvUnavailable: "This CV couldn't be loaded.",
+    noCriteria: 'No criteria recorded yet.',
+  },
   toast: {
     vacancyCreated: 'Vacancy created',
     vacancyUpdated: 'Vacancy updated',
@@ -118,6 +133,10 @@ export const HIRING_MESSAGES = {
     linkCopied: 'Booking link copied',
   },
 } as const;
+
+/** "Couldn't save. Retry" — the whole sentence, for the polite live region. */
+export const saveFailedMessage = (): string =>
+  `${HIRING_MESSAGES.card.saveFailed} ${HIRING_MESSAGES.card.retry}`;
 
 /* ------------------------------------------------------------------ *
  * Vacancy — spec 01
@@ -575,3 +594,25 @@ export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
 /** Columns number independently, in clean multiples (05 §03.8). */
 export const POSITION_STEP = 1000;
+
+/**
+ * The column names, in board order (05 §01.1). The card's status control writes the
+ * same field the board column does, so the two must read the same words — which is why
+ * the labels are here rather than beside either screen.
+ */
+export const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {
+  scheduled: 'Scheduled',
+  didnt_pass: "Didn't pass",
+  maybe: 'Maybe',
+  passed: 'Passed',
+  offer: 'Offer',
+};
+
+export const isApplicationStatus = (input: unknown): input is ApplicationStatus =>
+  APPLICATION_STATUSES.includes(input as ApplicationStatus);
+
+/**
+ * The two columns that prompt for a conclusion (04 §06.31, 05 §06.20). Prompted, never
+ * required: an outcome recorded without a reason is still a recorded outcome.
+ */
+export const CONCLUSION_PROMPTING_STATUSES: readonly ApplicationStatus[] = ['didnt_pass', 'offer'];

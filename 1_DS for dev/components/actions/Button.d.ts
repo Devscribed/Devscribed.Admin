@@ -1,6 +1,22 @@
 import * as React from 'react';
 
-export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps
+  extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'href'> {
+  /**
+   * Element to render. `'a'` makes the button a real link — for an action that is a
+   * navigation, such as a file download, where a `<button>` with an onClick would lose
+   * middle-click, copy-address and the browser's own download handling. `disabled`
+   * becomes `aria-disabled` and drops the tab stop, since an `<a>` has no disabled state.
+   */
+  as?: 'button' | 'a';
+  /** Only with `as="a"`. */
+  href?: string;
+  /** Only with `as="a"`. */
+  download?: boolean | string;
+  /** Only with `as="a"`. */
+  target?: string;
+  /** Only with `as="a"`. */
+  rel?: string;
   /** Visual role. `primary` is the violet action; `danger` is red-lipped destructive. */
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
   /** `md` (44px) is the default across the app. */

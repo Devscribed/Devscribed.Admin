@@ -5,14 +5,18 @@ import type { ReactNode } from 'react';
 /**
  * The title block every screen inside the shell opens with — Grotesk 27px, optional
  * subtitle, optional trailing action. Values follow the app template's page header.
+ *
+ * Both the title and the subtitle take nodes rather than strings: the candidate card
+ * needs to tag the name and the email inside them, and the heading level and its
+ * `page-title` belong to this component either way.
  */
 export function PageHeader({
   title,
   subtitle,
   action,
 }: {
-  title: string;
-  subtitle?: string;
+  title: ReactNode;
+  subtitle?: ReactNode;
   action?: ReactNode;
 }) {
   return (

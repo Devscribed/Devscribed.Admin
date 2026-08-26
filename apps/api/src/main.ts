@@ -1,4 +1,16 @@
 import 'reflect-metadata';
+/**
+ * First, and before `./app.module` is evaluated — that module reads `process.env` at
+ * module scope to choose its mail transport, storage and calendar.
+ *
+ * The Nest CLI does not read `.env`; only the Prisma CLI in `predev` did, which left
+ * the dev server itself without a `DATABASE_URL` and falling back to `pg`'s default
+ * port. It worked only when the shell already carried the variables, which is why
+ * `npm run test:e2e` could not start its own API from a cold shell. A deployment has
+ * no `.env` file and dotenv never overwrites a variable that is already set, so this
+ * changes nothing in production.
+ */
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';

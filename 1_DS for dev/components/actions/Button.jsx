@@ -34,7 +34,7 @@ const variants = {
   },
 };
 
-export function Button({ variant = 'primary', size = 'md', disabled, loading, glow, style, children, ...rest }) {
+export function Button({ as: Tag = 'button', variant = 'primary', size = 'md', disabled, loading, glow, style, children, ...rest }) {
   const s = { ...base, ...sizes[size], ...variants[variant] };
   if (glow && variant === 'primary') s.boxShadow = 'var(--lip-accent),var(--glow-accent-dark)';
   if (loading) { s.boxShadow = 'none'; s.cursor = 'progress'; }
@@ -52,10 +52,26 @@ export function Button({ variant = 'primary', size = 'md', disabled, loading, gl
       s.opacity = 0.55;
     }
   }
+  // Rendered as an anchor when the action is a navigation — a CV download, an export.
+  // `disabled` has no meaning on an <a>, so it becomes `aria-disabled` plus removal
+  // from the tab order rather than an attribute a browser would silently ignore.
+  const link = Tag !== 'button';
+  const stateProps = link
+    ? {
+        'aria-disabled': disabled || loading || undefined,
+        ...(disabled || loading ? { tabIndex: -1 } : {}),
+      }
+    : { disabled: disabled || loading };
+
   return (
-    <button {...rest} disabled={disabled || loading} aria-busy={loading || undefined} style={{ ...s, ...style }}>
+    <Tag
+      {...rest}
+      {...stateProps}
+      aria-busy={loading || undefined}
+      style={{ ...s, ...(link ? { textDecoration: 'none' } : null), ...style }}
+    >
       {loading && <Spinner />}
       {children}
-    </button>
+    </Tag>
   );
 }
