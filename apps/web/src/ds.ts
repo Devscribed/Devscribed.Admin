@@ -11,6 +11,8 @@
 export {
   AuthLayout,
   Badge,
+  BoardCard,
+  BoardColumn,
   BookingLayout,
   Button,
   Calendar,

@@ -23,7 +23,7 @@ type Notice = { message: string; tone: 'success' | 'error' };
 
 /**
  * The vacancy detail page. The booking link is first because copying it is the reason
- * to visit; the Board action arrives with the board.
+ * to visit.
  *
  * Closing changes nothing but whether the link accepts bookings (01 §03.9), so the link
  * stays on the page for a closed vacancy — carrying a note rather than disappearing.
@@ -169,6 +169,13 @@ export default function VacancyDetailPage({
         )} · ${vacancy.interviewer.fullName}`}
         action={
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+            <Button
+              variant="secondary"
+              onClick={() => router.push(`/org/${orgId}/hiring/vacancies/${vacancyId}/board`)}
+              data-testid="vacancy-board-link"
+            >
+              Board
+            </Button>
             <Button variant="secondary" onClick={() => setEditing(true)} data-testid="vacancy-edit-button">
               Edit
             </Button>

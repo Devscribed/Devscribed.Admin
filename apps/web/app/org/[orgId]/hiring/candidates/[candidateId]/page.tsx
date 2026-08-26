@@ -45,6 +45,12 @@ export default function CandidateCardPage({
   const { orgId, candidateId } = use(params);
   const search = useSearchParams();
   const deepLinkedId = search.get('application');
+  /**
+   * The board's drop into `Didn't pass` or `Offer` arrives here (05 §06.20). It is the
+   * same prompt a status change made on this page raises — the member has just recorded
+   * an outcome, and the reason for it is the gap.
+   */
+  const focusConclusion = search.get('focus') === 'conclusion';
 
   const [state, setState] = useState<State>({ status: 'loading' });
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -69,6 +75,9 @@ export default function CandidateCardPage({
       }
       const card: CandidateCard = await response.json();
       setState({ status: 'ready', card });
+      // After the section has rendered, and only on arrival. Nothing else on this page
+      // moves focus without the member having just asked for it.
+      if (focusConclusion) requestAnimationFrame(() => focusByTestId('card-conclusion-input'));
       // The section the deep link names, or the most recent — which is the first, since
       // the API orders them (04 §03.13).
       setExpandedId(
@@ -79,7 +88,7 @@ export default function CandidateCardPage({
     } catch {
       setState({ status: 'error' });
     }
-  }, [orgId, candidateId, deepLinkedId]);
+  }, [orgId, candidateId, deepLinkedId, focusConclusion]);
 
   useEffect(() => {
     void load();

@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   Injectable,
-  Logger,
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
@@ -12,16 +11,13 @@ import {
 } from '@devscribed/validation';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
-import { CalendarProvider } from './calendar/calendar-provider';
+import { ViewerTimeZoneService } from './viewer-time-zone.service';
 
 export interface ApplicationPatchDto {
   interviewNotes?: unknown;
   conclusion?: unknown;
   status?: unknown;
 }
-
-/** The zone a card falls back to when nothing better can be established. */
-const FALLBACK_TIME_ZONE = 'UTC';
 
 /**
  * The candidate card (spec 04) — one candidate, their applications, and the three
@@ -34,11 +30,9 @@ const FALLBACK_TIME_ZONE = 'UTC';
  */
 @Injectable()
 export class CandidatesService {
-  private readonly logger = new Logger(CandidatesService.name);
-
   constructor(
     private readonly prisma: PrismaService,
-    private readonly calendar: CalendarProvider,
+    private readonly viewerTimeZone: ViewerTimeZoneService,
   ) {}
 
   async card(organizationId: string, candidateId: string, viewerAccountId: string) {
@@ -67,7 +61,10 @@ export class CandidatesService {
 
     return {
       candidate: { ...candidate, createdAt: candidate.createdAt.toISOString() },
-      viewerTimeZone: await this.viewerTimeZone(viewerAccountId, applications),
+      viewerTimeZone: await this.viewerTimeZone.forViewer(
+        viewerAccountId,
+        applications[0]?.vacancy.interviewer.email,
+      ),
       applications: applications.map((application) => ({
         id: application.id,
         status: application.status,
@@ -182,38 +179,5 @@ export class CandidatesService {
       _min: { position: true },
     });
     return top._min.position === null ? POSITION_STEP : top._min.position - POSITION_STEP;
-  }
-
-  /**
-   * The zone every time on the card is rendered in: the viewing member's own
-   * (`Account.timezone`), falling back to the interviewer's mailbox zone (04 §03.11).
-   *
-   * The fallback costs two calendar calls, so it runs only when the account has no zone
-   * of its own — which today means a member who never went through signup. Any calendar
-   * failure resolves to UTC rather than propagating: this is the page someone is taking
-   * notes on during a live call, and it must not fail to open because Graph is having a
-   * bad morning.
-   */
-  private async viewerTimeZone(
-    viewerAccountId: string,
-    applications: Array<{ vacancy: { interviewer: { email: string } } }>,
-  ): Promise<string> {
-    const account = await this.prisma.account.findUnique({
-      where: { id: viewerAccountId },
-      select: { timezone: true },
-    });
-    if (account?.timezone) return account.timezone;
-
-    const interviewerEmail = applications[0]?.vacancy.interviewer.email;
-    if (!interviewerEmail) return FALLBACK_TIME_ZONE;
-
-    try {
-      const mailbox = await this.calendar.resolveMailbox(interviewerEmail);
-      if (!mailbox) return FALLBACK_TIME_ZONE;
-      return (await this.calendar.workingHours(mailbox)).timeZone;
-    } catch (error) {
-      this.logger.warn(`Could not read a mailbox zone for ${interviewerEmail}: ${String(error)}`);
-      return FALLBACK_TIME_ZONE;
-    }
   }
 }

@@ -4,6 +4,8 @@
 export { Button } from './components/actions/Button.jsx';
 export { IconButton } from './components/actions/IconButton.jsx';
 
+export { BoardCard } from './components/data/BoardCard.jsx';
+export { BoardColumn } from './components/data/BoardColumn.jsx';
 export { Calendar } from './components/data/Calendar.jsx';
 export { Table } from './components/data/Table.jsx';
 

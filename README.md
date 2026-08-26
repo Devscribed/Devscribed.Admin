@@ -383,6 +383,44 @@ one — the stored type came from the candidate's own multipart upload, and a `.
 `text/html` and rendered inline would be script running on this origin. Only `.pdf` and `.txt` are
 ever inline; everything else downloads, with `nosniff` on both paths.
 
+**The board is one field, not a column and a status.** `Application.status` *is* the column, and
+`Application.position` orders it — a gap integer scoped to `(vacancyId, status)` with `id` as a
+stable tiebreak, so two cards that collide on a position never swap between renders. Every
+transition between the five columns is allowed, backwards included: hiring is not a state machine,
+and any guard written there would be fought within a month.
+
+**A drop names its neighbours, never a position.** `PATCH …/applications/{id}/placement` carries the
+target status and the ids of the cards immediately above and below the drop point; the server reads
+their *current* positions and takes the midpoint. A position sent by the client is not rejected — it
+is simply never read, because the number a browser can see is the one it last fetched, and a stale
+board would otherwise write a position that has since been reused. A named neighbour that has left
+the column answers `409 stale_neighbours`, the board says "This board changed. Refreshing…" and
+refetches, rather than putting the card somewhere nobody aimed at. A move writes exactly one row.
+
+When the gap between two neighbours closes below 2 there is no integer left between them, so that
+one column is renumbered back to clean multiples of 1000 **in the same transaction as the move**.
+It is the only time another card's position changes, and it never crosses into another column.
+
+**Moves are optimistic and reverted on failure.** A drag that visibly waits for a round trip stops
+feeling like a drag. The card being dragged is not drawn at all — a single card-sized placeholder
+travels to wherever the drop would land, so what you see mid-drag is the shape of the result. On success the board refetches; on failure the card animates back and
+`toast-move-failed` appears. Dropping into `Didn't pass` or `Offer` completes the move and *then*
+opens the card with Conclusion focused — after the request is confirmed, so a failed move never
+navigates. Prompted, never required: cards in those two columns with no conclusion carry an amber
+marker so the gaps can be found later.
+
+**`Application.isCancelled` is specified and dormant.** Nothing sets it in this release — a no-show
+is handled by dragging the card to `Didn't pass`. The board renders it as a mark on the card, in the
+column the card is already in, so the deferred reschedule flow does not arrive and invent a sixth
+column that would strand an assessment already recorded.
+
+**The board answers an assigned interviewer 404, not 403.** `BoardScopeGuard` is the board's own
+guard rather than `HiringManageGuard` for that one reason: a `user` who interviews for this vacancy
+is the single caller who could read a permission error as "the board is there, you are not senior
+enough". A `viewer`, and a `user` with no assignment, get the honest 403 the rest of the hiring
+surface gives — they already know the vacancy exists. The general rule, an interviewer's whole
+narrowed view of hiring, is `InterviewerScopeGuard` in its own phase.
+
 **A vacancy with applications cannot be deleted, only closed.** Deleting it would take
 its interview notes, conclusions and criteria assessments with it, and spec 04 treats
 that record as permanent. `DELETE` answers `409 has_applications`; the menu item is
@@ -412,7 +450,8 @@ than implying the endpoint is protected.
   DS; see the "DS gaps" table in the design spec.
 - Hiring closed several gaps the design specs had already recorded, in the design system
   rather than in the screens: `BookingLayout`, `Textarea`, `FileInput`, `Toast`,
-  `Skeleton`, `Calendar`, `Menu` and `Tooltip` are new components; `Textarea` gained a
+  `Skeleton`, `Calendar`, `Menu`, `Tooltip`, `BoardColumn` and `BoardCard` are new
+  components; `Textarea` gained a
   `trailing` slot in its label row — where `Input`'s sits inside the field, which a
   multi-line field has no unambiguous place for — so the candidate card's saved-at
   indicator can appear and change without moving the field below it, and a real
@@ -443,6 +482,48 @@ than implying the endpoint is protected.
   instead of the `disabled` attribute, which would take it out of the tab order and the
   reason with it. The `Tooltip` bubble stays in the accessibility tree at all times and
   only changes visibility, so `aria-describedby` always resolves.
+- `BoardColumn` and `BoardCard` are Meridian's only drag-and-drop primitive, and the
+  pick-up/gap/drop visual language is now the system's rather than one screen's, so a
+  second board would not invent its own. They are presentational and drag-mechanical only:
+  a column turns a pointer position into a **slot index** and hands it back, and what the
+  slots mean, which columns exist, and what a drop writes all stay in the app.
+- **One placeholder, and it travels.** A card dragged with a pointer is not rendered at
+  all; the gap it would fill is a single card-sized placeholder that moves to wherever the
+  drop would land. Its height is measured from the card at pick-up, so the gap is exactly
+  the size of the thing going into it. The slot index counts **cards only** — the
+  placeholder is never a slot — which is what keeps the arithmetic stable while the gap
+  moves around under the pointer, and it means every index everywhere is an index into the
+  column as it will be *without* the card in flight: the same list the server resolves
+  neighbours against, with no rendered-versus-model conversion anywhere.
+  [05's design spec](specs/hiring/05-board.design.md) originally paired a placeholder at
+  the *source* with a 2px insertion line at the target; two grey marks for one card read
+  as two cards in flight, and the line was too slight to say what size the gap would be.
+  The spec's Interactions section records the revision and why.
+- **A keyboard-held card stays where it is** and only the placeholder travels. Moving it
+  would re-parent the element between columns, and a focused node moved to a new parent is
+  blurred — which would take the arrow keys, `Escape` and the drop itself with it, one
+  keystroke into the drag.
+- **Two things about HTML5 drag that are not optional here.** The browser rasterizes the
+  drag image at the end of the `dragstart` handler, and React flushes a discrete event's
+  state update before that handler returns — so the card is unmounted one frame *later*,
+  via `requestAnimationFrame`, or the pointer drags a blank. And because the source element
+  is gone for the length of the drag, `dragend` is delivered to a detached node that bubbles
+  nowhere: a native `once` listener is attached to the node itself at pick-up, which is what
+  ends a drag released over no column at all. Without it the gap stays on screen for good
+  and the next drag begins on a board still holding the last one. Both have regression tests
+  that fail without them.
+- `BoardCard` is the one `role="button"` in Meridian that does **not** activate on `Space`:
+  `Space` picks the card up and `Enter` opens it. A board whose cards activated on `Space`
+  could not be dragged with a keyboard at all, and the drag is the screen's whole purpose.
+  The hint that says so is rendered once by the board, not repeated on every card, and
+  `prefers-reduced-motion` drops the lift while keeping the placeholder, which is what
+  carries the information.
+- `Tabs` became a real `tablist`. Its tabs were anchors to `#`, which a screen reader
+  announces as links that go nowhere, and it is a control that chooses which panel is shown
+  rather than a set of destinations — so they are buttons now, with `aria-selected`,
+  `aria-controls`, roving focus and arrow-key movement, plus a `testId` per item. The count
+  on the board's mobile tabs rides in the item's `label` node: a strip that grew a `count`
+  prop would then need a badge, and an icon.
 - Still outstanding for later hiring phases: `Combobox`, and promoting the template's `P`
   glyph dictionary to real icon exports. `Combobox` is the reason the time-zone selector
   is a long unsearchable list: the whole IANA set is offered, because a shortlist would

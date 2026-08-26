@@ -125,6 +125,21 @@ export const HIRING_MESSAGES = {
     cvUnavailable: "This CV couldn't be loaded.",
     noCriteria: 'No criteria recorded yet.',
   },
+  board: {
+    /**
+     * Deliberately not the vacancy's wording: the board refuses a role that may not
+     * manage **candidates**, and the two screens are reached separately.
+     */
+    forbidden: 'You do not have permission to manage candidates',
+    moveFailed: "Couldn't move that card. Please try again.",
+    staleBoard: 'This board changed. Refreshing\u2026',
+    emptyColumn: 'Nothing here yet.',
+    emptyBoard: 'No candidates yet. Share the booking link to start.',
+    /** The missing-conclusion marker's meaning lives here, not in the amber alone. */
+    noConclusion: 'No conclusion recorded',
+    cancelled: 'Cancelled',
+    keyboardHint: 'Press Space to pick up, arrow keys to move, Space to drop.',
+  },
   toast: {
     vacancyCreated: 'Vacancy created',
     vacancyUpdated: 'Vacancy updated',

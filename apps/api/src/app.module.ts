@@ -17,6 +17,9 @@ import { MeController } from './members/me.controller';
 import { MembersController } from './members/members.controller';
 import { MembersService } from './members/members.service';
 import { AvailabilityService } from './hiring/availability.service';
+import { BoardController, PlacementController } from './hiring/board.controller';
+import { BoardScopeGuard } from './hiring/board-scope.guard';
+import { BoardService } from './hiring/board.service';
 import { BookingController } from './hiring/booking.controller';
 import { BookingService } from './hiring/booking.service';
 import { CalendarProvider } from './hiring/calendar/calendar-provider';
@@ -33,6 +36,7 @@ import { Storage } from './hiring/storage/storage';
 import { resolveStorageConfig } from './hiring/storage/storage.config';
 import { VacanciesController } from './hiring/vacancies.controller';
 import { VacanciesService } from './hiring/vacancies.service';
+import { ViewerTimeZoneService } from './hiring/viewer-time-zone.service';
 import { PrismaService } from './prisma.service';
 import { SignupController } from './signup/signup.controller';
 import { SignupService } from './signup/signup.service';
@@ -117,6 +121,8 @@ const calendarProvider = {
     CvController,
     CandidatesController,
     ApplicationsController,
+    BoardController,
+    PlacementController,
     TestCalendarController,
   ],
   providers: [
@@ -130,10 +136,13 @@ const calendarProvider = {
     storageProvider,
     calendarProvider,
     HiringManageGuard,
+    BoardScopeGuard,
     VacanciesService,
     AvailabilityService,
     BookingService,
+    ViewerTimeZoneService,
     CandidatesService,
+    BoardService,
   ],
 })
 export class AppModule {}

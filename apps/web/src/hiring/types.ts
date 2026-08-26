@@ -102,3 +102,34 @@ export interface CandidateCard {
   viewerTimeZone: string;
   applications: CardApplication[];
 }
+
+/* ------------------------------------------------------------------ *
+ * Board — spec 05
+ * ------------------------------------------------------------------ */
+
+export interface BoardCardData {
+  applicationId: string;
+  candidateId: string;
+  /** The candidate's current name, which the latest booking may have corrected. */
+  name: string;
+  startUtc: string;
+  position: number;
+  hasCv: boolean;
+  isCancelled: boolean;
+  /** Whether one exists — the conclusion itself is never sent to the board. */
+  hasConclusion: boolean;
+}
+
+export interface BoardColumnData {
+  status: ApplicationStatus;
+  count: number;
+  cards: BoardCardData[];
+}
+
+export interface Board {
+  vacancy: { id: string; title: string; durationMinutes: number };
+  /** The viewing member's zone, named once on the board rather than on every card. */
+  viewerTimeZone: string;
+  /** Every column, in the documented order, even when empty. */
+  columns: BoardColumnData[];
+}

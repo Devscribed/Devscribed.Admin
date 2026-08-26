@@ -246,3 +246,49 @@ export async function latestInviteLink(request: APIRequestContext): Promise<Invi
     path: match[0],
   };
 }
+
+export interface BoardCard {
+  applicationId: string;
+  candidateId: string;
+  name: string;
+  position: number;
+  hasConclusion: boolean;
+}
+
+export interface BoardColumn {
+  status: string;
+  count: number;
+  cards: BoardCard[];
+}
+
+/**
+ * The board straight through the API, so a test can name the card it is about to drag.
+ *
+ * A precondition, not the thing under test: the ids are generated server-side and there
+ * is no other way for a test to learn them. The request context carries the session from
+ * `registerOrganization`, which is the same cookie the browser will use.
+ */
+export async function readBoard(
+  request: APIRequestContext,
+  org: Registered,
+  vacancyId: string,
+): Promise<BoardColumn[]> {
+  const response = await request.get(
+    `${API}/api/organizations/${org.organizationId}/hiring/vacancies/${vacancyId}/board`,
+  );
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: the board answered ${response.status()}`);
+  }
+  return (await response.json()).columns as BoardColumn[];
+}
+
+/** The cards of one column, in board order. */
+export async function columnCards(
+  request: APIRequestContext,
+  org: Registered,
+  vacancyId: string,
+  status: string,
+): Promise<BoardCard[]> {
+  const columns = await readBoard(request, org, vacancyId);
+  return columns.find((column) => column.status === status)!.cards;
+}
