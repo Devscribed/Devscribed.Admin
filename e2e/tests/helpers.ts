@@ -302,8 +302,9 @@ export interface InviteLink {
 /**
  * The deep link out of the invite the last booking created.
  *
- * Until the candidate database lands, this is the only route to a candidate card that
- * the product itself hands anyone ([04 §01.7](../../specs/hiring/04-candidate-card.md)).
+ * The candidate database is now a second route for an `admin` or `manager`, but for a
+ * `user` interviewer this is still the only one the product hands them until My
+ * interviews lands ([04 §01.7](../../specs/hiring/04-candidate-card.md)).
  * Reading it from the event is the calendar's equivalent of reading a reset link out of
  * the mail sink — a test that assembled the URL from ids it got elsewhere would be
  * testing a link nobody is ever sent.

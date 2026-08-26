@@ -29,6 +29,7 @@ export { Eye, EyeOff } from './components/icons/Eye.jsx';
 
 export { Menu } from './components/navigation/Menu.jsx';
 export { NavItem } from './components/navigation/NavItem.jsx';
+export { Pagination } from './components/navigation/Pagination.jsx';
 export { Tabs } from './components/navigation/Tabs.jsx';
 export { Toggle } from './components/navigation/Toggle.jsx';
 

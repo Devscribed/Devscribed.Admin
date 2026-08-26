@@ -19,6 +19,12 @@ export interface TableProps<Row = any> {
   /** `data-testid` for each row — a function so it can carry the row's own id. */
   rowTestId?: string | ((row: Row) => string);
   onRowClick?: (row: Row, event: React.MouseEvent) => void;
+  /**
+   * A refetch is in flight: dims the body and sets `aria-busy`, leaving the rows in
+   * place. Meridian never replaces a filtered table with a spinner — the shape that is
+   * already there is what stops the page reflowing under the reader.
+   */
+  busy?: boolean;
   style?: React.CSSProperties;
 }
 

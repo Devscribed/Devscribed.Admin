@@ -1,8 +1,8 @@
 /**
  * The shapes the hiring API answers with. They mirror the contracts in
- * `specs/hiring/01-vacancies.md`, `02-booking-page.md` and `04-candidate-card.md`
- * exactly, so a change to one is a compile error here rather than a blank cell on a
- * screen.
+ * `specs/hiring/01-vacancies.md`, `02-booking-page.md`, `03-candidate-database.md`,
+ * `04-candidate-card.md` and `05-board.md` exactly, so a change to one is a compile
+ * error here rather than a blank cell on a screen.
  */
 
 import type { ApplicationStatus, CriterionType } from '@devscribed/validation';
@@ -178,4 +178,41 @@ export interface Board {
   viewerTimeZone: string;
   /** Every column, in the documented order, even when empty. */
   columns: BoardColumnData[];
+}
+
+/* ------------------------------------------------------------------ *
+ * Candidate database — spec 03
+ * ------------------------------------------------------------------ */
+
+/**
+ * One row of the database: a **person**, with their latest application beside them.
+ *
+ * `fullName` is the candidate's current name, which the latest booking may have
+ * corrected — the frozen `submittedName` belongs to an application and stays on the card.
+ */
+export interface CandidateRow {
+  id: string;
+  fullName: string;
+  email: string;
+  /** Rendered only when it is more than one (03 §01.2). */
+  applicationCount: number;
+  /** Deduplicated across every vacancy they have applied to. */
+  categories: Array<{ id: string; name: string }>;
+  latestApplication: {
+    id: string;
+    vacancyTitle: string;
+    startUtc: string;
+    status: ApplicationStatus;
+  } | null;
+}
+
+export interface CandidateDatabase {
+  /** Unfiltered, so the count line can say "12 of 128" (03 §05.20). */
+  total: number;
+  matched: number;
+  page: number;
+  pageSize: number;
+  /** Named once above the table rather than on every row. */
+  viewerTimeZone: string;
+  candidates: CandidateRow[];
 }

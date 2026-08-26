@@ -9,13 +9,28 @@
  * renders in the candidate's chosen zone, with their chosen format.
  */
 
-import { formatBookedWhen, zoneLabel, zoneOffsetMs } from '@devscribed/validation';
+import {
+  formatBookedWhen,
+  formatShortDate,
+  formatSlotTime,
+  zoneLabel,
+  zoneOffsetMs,
+} from '@devscribed/validation';
 
 export const formatDuration = (minutes: number): string => `${minutes} minutes`;
 
 /** "Tuesday, 25 August 2026 at 14:00" in the zone the value belongs to. */
 export const formatWhen = (iso: string, timeZone = 'UTC'): string =>
   formatBookedWhen(new Date(iso), timeZone);
+
+/**
+ * `26 Aug 2026, 14:00` — one interview on one line of a list (03 §Screens).
+ *
+ * No weekday: the candidate database's rows are scanned for *who*, and the date is there
+ * to place them rather than to be diarised against.
+ */
+export const formatListWhen = (iso: string, timeZone: string): string =>
+  `${formatShortDate(new Date(iso), timeZone)}, ${formatSlotTime(new Date(iso), timeZone)}`;
 
 /**
  * The zone the browser thinks it is in, which is what the booking page opens with.

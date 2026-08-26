@@ -28,6 +28,7 @@ export {
   Menu,
   Modal,
   NavItem,
+  Pagination,
   Radio,
   RadioGroup,
   SearchField,

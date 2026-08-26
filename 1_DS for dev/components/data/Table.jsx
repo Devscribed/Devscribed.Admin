@@ -1,8 +1,11 @@
 import React from 'react';
 
-export function Table({ columns = [], rows = [], rowHref, rowTestId, onRowClick, style }) {
+export function Table({ columns = [], rows = [], rowHref, rowTestId, onRowClick, busy, style }) {
   return (
-    <div style={{
+    // `busy` dims the body and announces itself rather than replacing the table with a
+    // spinner: a filterable list that collapsed on every refilter would reflow under the
+    // reader, and the result count is the feedback that matters.
+    <div aria-busy={busy || undefined} style={{
       background: 'var(--bg-panel)', border: '1px solid var(--border)',
       borderRadius: 'var(--radius-2xl)', overflow: 'hidden', ...style,
     }}>
@@ -35,8 +38,8 @@ export function Table({ columns = [], rows = [], rowHref, rowTestId, onRowClick,
             fontFamily: 'var(--font-text)', fontSize: 'var(--fs-15)', color: 'var(--text)',
             textDecoration: 'none',
             cursor: href || onRowClick ? 'pointer' : 'default',
-            opacity: r.dim ? 0.65 : 1,
-            transition: 'background .12s',
+            opacity: busy ? 0.55 : r.dim ? 0.65 : 1,
+            transition: 'background .12s, opacity .12s',
           }}>
           {columns.map((c, ci) => (
             <div key={ci} style={{

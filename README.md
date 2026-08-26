@@ -167,9 +167,9 @@ reads it.
 ## Tests
 
 ```bash
-npm run test:unit   # validation rules — TC-01-UNIT-*, TC-H01/H02/H04-UNIT-*
-npm run test:int    # API endpoints — TC-01-INT-*, TC-H00/H01/H02/H04-INT-*, needs Postgres running
-npm run test:e2e    # browser flows — TC-01-E2E-*, TC-H01/H02/H04-E2E-*
+npm run test:unit   # validation rules — TC-01-UNIT-*, TC-H01/H02/H03/H04-UNIT-*
+npm run test:int    # API endpoints — TC-01-INT-*, TC-H00…H06-INT-*, needs Postgres running
+npm run test:e2e    # browser flows — TC-01-E2E-*, TC-H01/H02/H03/H04-E2E-*
 ```
 
 `test:int` resets `devscribed_test` before it starts, so a failed run never poisons the
@@ -347,13 +347,14 @@ answers the window with no slots in it, which is a different fact from a calenda
 could not be reached — that one is still a `503`.
 
 **The candidate card is what the invite links to.** The calendar event's body carries
-`/org/{orgId}/hiring/candidates/{candidateId}?application={applicationId}`, and from this release
-that link works: it opens the card with that application's section expanded, signing the visitor in
-first when they arrive without a session and returning them to it afterwards. Until the candidate
-database lands, the invite is the only route to a card that the product hands anyone — which is why
-the E2E suite reads the link out of `GET /api/test/calendar/latest` rather than assembling it, the
-same way it reads a reset link out of the mail sink. Both endpoints answer only behind their
-stand-in implementation and never in production.
+`/org/{orgId}/hiring/candidates/{candidateId}?application={applicationId}`, and that link works: it
+opens the card with that application's section expanded, signing the visitor in first when they
+arrive without a session and returning them to it afterwards. An `admin` or `manager` now also
+reaches a card through the candidate database; a `user` interviewer still has the invite and
+nothing else until My interviews lands, which is why the E2E suite reads the link out of `GET
+/api/test/calendar/latest` rather than assembling it, the same way it reads a reset link out of the
+mail sink. Both endpoints answer only behind their stand-in implementation and never in
+production.
 
 **Interview notes and the conclusion autosave, and a failure stops the loop.** Both are plain text,
 both are shared fields with last-write-wins, and both write about two seconds after typing stops.
@@ -521,6 +522,71 @@ service sees the whole final state, and a unique index would break a legitimate 
 labels collides halfway through, since a plain unique index is checked per statement and an
 expression index cannot be declared deferrable.
 
+**The candidate database is one row per person, and that decides everything else.** A candidate
+who applied three times is one row with a count beside it, so every filter is evaluated across all
+three of their applications: filters AND across kinds and OR within a multi-select, and each clause
+is satisfied by *any* application. `React AND Senior` therefore matches somebody whose React
+application and whose Senior-tagged application are two different applications — the row is the
+person, and the screen exists to find people to contact rather than to audit applications.
+
+**The rollup is what makes the headline query work.** A candidate's value for a criterion is the
+assessment from their **most recent interview**, whichever vacancy it was recorded against, ties
+broken on the assessment's own `updatedAt`. Which is what lets English assessed during a .NET
+interview count when filtering React applicants — English is English. "Most recent" is the
+application's `start`, not the assessment's timestamp: notes edited a month later do not make an
+older interview newer. Only applications actually carrying an assessment are considered, so a later
+interview where nobody asked about English does not blank out an earlier answer.
+
+**Absence is not a value.** A candidate never assessed on English is absent from `English at least
+B1` *and* from `English at most B1`, and from `is not B1` too — the negative operators are claims
+about somebody who was assessed. That rule lives in one `if` at the top of the comparison, before
+the operator is read, because it is the one place every operator would otherwise have to remember
+it.
+
+**Half the filter runs in SQL and half in JavaScript, on purpose.** Search, positions and
+categories are indexed comparisons and belong in the query. The rollup is not expressible there:
+"the assessment from their most recent interview" is a correlated per-candidate maximum, and
+writing it as raw SQL would put a second copy of the comparison rules beside the one in
+`@devscribed/validation` that the criterion dialog and the filter row already share — the two would
+disagree about `at least` within a release. So the assessments for the criteria a query *names* are
+read, rolled up per candidate and matched with the shared predicate, and the surviving ids restrict
+the query. One extra round trip, bounded by one row per application per named criterion, and the
+comparison exists once.
+
+**An unknown id is refused, never dropped.** A `vacancyId` from another organization, an operator a
+criterion's type does not answer, a scale value belonging to a different scale: all `422
+invalid_filter`, because from the caller's side they are one mistake — a filter this organization
+cannot evaluate — and a query that silently ignored a clause would return more people than the
+chips on screen claim to allow. `pageSize` is the deliberate exception: over 100 is clamped rather
+than refused, since nothing about it can make the answer wrong.
+
+**A boolean asks two questions, not four.** `is yes` and `is no` are the operator itself, and the
+row has no value control at all. Offering `is`/`is not` beside `yes`/`no` would be four spellings
+of two questions, and one of them would have to be explained.
+
+**The count is the feedback, which is why the list is paginated.** Infinite scroll cannot show how
+many rows match, and "how many?" is the question a filtered list is asked — so the count sits above
+the table, holds both numbers once anything narrows it, and is the only `aria-live` region on the
+screen. A refilter never replaces the table with a spinner: the rows stay, dimmed and `aria-busy`,
+and only the number becomes one. A table that collapsed and re-expanded on every keystroke would
+reflow the page under the reader for no information at all. `Table` gained the `busy` flag for it,
+so the next filterable list dims the same way instead of inventing its own.
+
+**A half-built criteria row is not a filter.** A row whose value is still empty is skipped rather
+than sent — treating it as a filter would empty the list under somebody mid-way through building
+it — and changing the criterion resets the operator and the value rather than carrying a
+meaningless leftover across types. Archived criteria stay in the picker, marked, because history
+has to stay reachable; the marker rides in the option's text rather than in a `Badge`, since the
+combobox filters on what its options say and a node there would make an archived criterion
+unfindable by typing its name.
+
+**The database answers 404 to everyone it refuses, including an interviewer.** `403` is never
+returned here. It is the one hiring surface where the honest 403 would be wrong for all three
+refused callers rather than one: a `viewer` and an unassigned `user` have no route to it, and an
+assigned interviewer — who *does* reach candidates, their own — would read a permission error as
+"the database is there, ask to be promoted". `CandidateDatabaseGuard` is therefore its own guard
+rather than `HiringManageGuard`, which still answers the card's different question.
+
 `/book/{slug}` is the product's only public route. The slug carries 72 bits of entropy, which is
 why it needs no organization segment, and it is frozen at creation so a link already sent keeps
 working. There is **no rate limiting on the booking POST** — see
@@ -632,7 +698,29 @@ than implying the endpoint is protected.
   `aria-controls`, roving focus and arrow-key movement, plus a `testId` per item. The count
   on the board's mobile tabs rides in the item's `label` node: a strip that grew a `count`
   prop would then need a badge, and an icon.
-- Still outstanding for later hiring phases: `Combobox`, and promoting the template's `P`
-  glyph dictionary to real icon exports. `Combobox` is the reason the time-zone selector
-  is a long unsearchable list: the whole IANA set is offered, because a shortlist would
-  strand anyone whose zone it left out.
+- `Pagination` is new, and it exists because of a rejected alternative rather than a
+  missing widget: the candidate database is paginated precisely because infinite scroll
+  cannot answer "how many match?". Bounds are disabled rather than hidden — a Previous
+  that vanishes on page 1 moves Next under the cursor — and a long range windows around
+  the current page while keeping the first and last reachable, since those are the two
+  anybody jumps to.
+- **A `Card` clipped every popover opened inside it.** Cards clip to their radius, which
+  is what rounds an edge-to-edge `Table`'s square corners — and it also cut a `Select` or
+  `Combobox` list off at the card's edge, so the options below the fold were invisible and
+  unclickable. `clip` (default `true`) is the opt-out, and every card that hosts a popover
+  passes `clip={false}`: the candidate database's filter bar, the candidate card's
+  application section, and the two library cards on hiring settings, whose row menus were
+  clipped the same way below 768px. The regression test hit-tests the option's own coordinates rather
+  than clicking it: a clipped popover keeps its layout box and still scrolls into view
+  inside the card hiding it, so a click passes either way and only what is *painted* there
+  tells the two apart.
+- `Table` gained `busy`, which dims the body and sets `aria-busy` while a refetch is in
+  flight. It went into the DS rather than into the screen so every filterable table gets
+  the same treatment: the alternative is each page dimming its own rows slightly
+  differently, and the one thing this state must do is stay unremarkable.
+- Still outstanding for later hiring phases: promoting the template's `P` glyph
+  dictionary to real icon exports, and `Table`'s `hideHeader` for the My-interviews
+  pattern. The booking page's time-zone selector is still a plain `Select` and therefore
+  a long unsearchable list — the whole IANA set is offered, because a shortlist would
+  strand anyone whose zone it left out, and moving it onto `Combobox` is the obvious
+  next use of the control the libraries introduced.

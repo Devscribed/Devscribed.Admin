@@ -27,6 +27,7 @@ declare module '@ds' {
   export * from '@ds/components/icons/Eye';
   export * from '@ds/components/navigation/Menu';
   export * from '@ds/components/navigation/NavItem';
+  export * from '@ds/components/navigation/Pagination';
   export * from '@ds/components/navigation/Tabs';
   export * from '@ds/components/navigation/Toggle';
   export * from '@ds/components/surfaces/AuthLayout';

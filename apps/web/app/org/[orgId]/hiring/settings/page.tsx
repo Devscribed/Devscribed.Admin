@@ -235,7 +235,9 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
         </div>
       )}
 
+      {/* `clip={false}`: the narrow layout's row menus drop their list into the card. */}
       <Card
+        clip={false}
         title="Categories"
         action={
           <Button
@@ -359,6 +361,7 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
 
       <div style={{ marginTop: 'var(--sp-10)' }}>
         <Card
+          clip={false}
           title="Criteria"
           action={
             <Button

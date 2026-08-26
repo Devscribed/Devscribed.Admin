@@ -75,7 +75,12 @@ export function ApplicationSection({
       className="card-section"
       data-testid={`application-section-${application.id}`}
     >
-      <Card>
+      {/*
+        `clip={false}` because this card hosts pickers: the status `Select` in its header
+        and the criteria value controls further down both drop a list into the card, and
+        a clipped one is cut off at its edge.
+      */}
+      <Card clip={false}>
         <div className="card-section-head">
           <div style={{ minWidth: 0, flex: 1 }}>
             <Heading

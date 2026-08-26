@@ -26,6 +26,9 @@ import { CalendarProvider } from './hiring/calendar/calendar-provider';
 import { resolveCalendarConfig } from './hiring/calendar/calendar.config';
 import { FakeCalendarProvider } from './hiring/calendar/fake-calendar.provider';
 import { TenantAppOnlyProvider } from './hiring/calendar/graph-calendar.provider';
+import { CandidateDatabaseController } from './hiring/candidate-database.controller';
+import { CandidateDatabaseGuard } from './hiring/candidate-database.guard';
+import { CandidateDatabaseService } from './hiring/candidate-database.service';
 import { CategoriesController } from './hiring/categories.controller';
 import { CategoriesService } from './hiring/categories.service';
 import { CriteriaController } from './hiring/criteria.controller';
@@ -126,6 +129,7 @@ const calendarProvider = {
     BookingController,
     CvController,
     CandidatesController,
+    CandidateDatabaseController,
     ApplicationsController,
     BoardController,
     PlacementController,
@@ -143,6 +147,7 @@ const calendarProvider = {
     calendarProvider,
     HiringManageGuard,
     BoardScopeGuard,
+    CandidateDatabaseGuard,
     VacanciesService,
     CategoriesService,
     CriteriaService,
@@ -150,6 +155,7 @@ const calendarProvider = {
     BookingService,
     ViewerTimeZoneService,
     CandidatesService,
+    CandidateDatabaseService,
     BoardService,
   ],
 })
