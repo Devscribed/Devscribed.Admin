@@ -7,6 +7,13 @@
 
 import type { ApplicationStatus } from '@devscribed/validation';
 
+/** A library entry with the usage count that makes a delete decision answerable. */
+export interface Category {
+  id: string;
+  name: string;
+  vacancyCount: number;
+}
+
 export interface Vacancy {
   id: string;
   title: string;

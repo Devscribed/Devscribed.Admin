@@ -434,6 +434,33 @@ never counted, since its link already explains itself. The rest of that screen (
 the removed filter, restore) arrives with its own spec. Removal is a soft delete, and it
 rotates the account's `securityStamp`, which revokes every outstanding session at once.
 
+**Case-insensitive uniqueness is the whole category library.** `react` cannot be created while
+`React` exists, and the rule is enforced by a `lower(name)` unique index per organization rather
+than by a normalized second column — a stored copy of a value is a value that can drift from the
+one it copies. The service looks the collision up first anyway, because it has to answer `409
+duplicate_name` with the **existing row's id**: a member typing `react` into the vacancy dialog
+meant `React`, and the combobox selects it for them instead of showing an error they cannot act on.
+The lookup is a convenience and the index is the guarantee — two concurrent creates of the same
+name both pass the lookup, and the one that loses the write gets the same 409 carrying the row that
+beat it.
+
+Names are stored exactly as typed and folded only to compare, so `Asp.Net` never renders as
+`asp.net`. Renaming propagates everywhere by writing one column and touching no assignment row,
+because a vacancy references the category rather than its name. Deleting is allowed even in use —
+unlike a criterion, a category is a label, so removing it loses a classification rather than a
+judgement — and it unassigns from every vacancy and deletes nothing else; the confirmation names
+the count because there is no undo.
+
+**Merge is not built, and the settings screen says so.** Once uniqueness is enforced, rename cannot
+fix a duplicate that already exists: renaming `ReactJS` to `React` collides. The note on the
+Categories card states the consequence and the way out — reassign the vacancies and delete one —
+rather than leaving a member to discover it against an error message.
+
+**Categories are internal.** They are absent from `GET /api/book/{slug}` entirely, not merely
+hidden by the page: `Middle` or `Senior` on a public posting carries implications that are not ours
+to publish on the team's behalf. A regression test asserts the string does not appear anywhere in
+that response.
+
 `/book/{slug}` is the product's only public route. The slug carries 72 bits of entropy, which is
 why it needs no organization segment, and it is frozen at creation so a link already sent keeps
 working. There is **no rate limiting on the booking POST** — see
@@ -450,8 +477,8 @@ than implying the endpoint is protected.
   DS; see the "DS gaps" table in the design spec.
 - Hiring closed several gaps the design specs had already recorded, in the design system
   rather than in the screens: `BookingLayout`, `Textarea`, `FileInput`, `Toast`,
-  `Skeleton`, `Calendar`, `Menu`, `Tooltip`, `BoardColumn` and `BoardCard` are new
-  components; `Textarea` gained a
+  `Skeleton`, `Calendar`, `Menu`, `Tooltip`, `BoardColumn`, `BoardCard` and `Combobox`
+  are new components; `Textarea` gained a
   `trailing` slot in its label row — where `Input`'s sits inside the field, which a
   multi-line field has no unambiguous place for — so the candidate card's saved-at
   indicator can appear and change without moving the field below it, and a real
@@ -467,6 +494,15 @@ than implying the endpoint is protected.
   disabled state drops to a sunken field with faint ink instead of fading the violet fill
   — a 55%-opacity primary still reads as the primary action, which is the one thing a
   disabled CTA must not do.
+- `Combobox` is `Select` with the four things a library-backed field needs and `Select` has
+  none of: typing, filtering, multi-select, and a `Create "…"` row for what is missing.
+  Its filter folds case deliberately — an option that already exists must never hide
+  behind a create row over a difference in capitalisation, because creating it is exactly
+  what the API will refuse. Like `Calendar` it is presentational: it never writes
+  anything. `onCreate` hands the typed name back and the caller decides what that means,
+  which is what lets the vacancy dialog hold a pending category and create it in the same
+  submit as the vacancy — so cancelling the dialog leaves no orphan behind. Spec 03's
+  filters and spec 04's criteria autocomplete are its next two callers.
 - `Calendar` is presentational by construction: it is handed the weeks to draw, which
   dates may be chosen, and the bounds it may navigate between. Availability, the booking
   window and the time zone are business rules and stay on the page. It owns the grid

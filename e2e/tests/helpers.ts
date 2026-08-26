@@ -118,6 +118,28 @@ export async function registerOrganization(
   return { email, accountId: body.account.id, organizationId: body.organization.id };
 }
 
+export interface SeededCategory {
+  id: string;
+  name: string;
+}
+
+/** Creates a category through the API — a precondition, not the thing under test. */
+export async function createCategory(
+  request: APIRequestContext,
+  org: Registered,
+  name: string,
+): Promise<SeededCategory> {
+  const response = await request.post(
+    `${API}/api/organizations/${org.organizationId}/hiring/categories`,
+    { data: { name } },
+  );
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: could not create category ${name} (${response.status()})`);
+  }
+  const body = await response.json();
+  return { id: body.id, name: body.name };
+}
+
 export interface SeededVacancy {
   id: string;
   publicSlug: string;
@@ -128,7 +150,12 @@ export interface SeededVacancy {
 export async function createVacancy(
   request: APIRequestContext,
   org: Registered,
-  overrides: { title?: string; durationMinutes?: number; description?: string } = {},
+  overrides: {
+    title?: string;
+    durationMinutes?: number;
+    description?: string;
+    categoryIds?: string[];
+  } = {},
 ): Promise<SeededVacancy> {
   const response = await request.post(
     `${API}/api/organizations/${org.organizationId}/hiring/vacancies`,
@@ -138,6 +165,7 @@ export async function createVacancy(
         durationMinutes: overrides.durationMinutes ?? 60,
         description: overrides.description ?? '',
         interviewerAccountId: org.accountId,
+        ...(overrides.categoryIds ? { categoryIds: overrides.categoryIds } : {}),
       },
     },
   );

@@ -9,14 +9,25 @@ import {
   validateVacancy,
   type VacancyField,
 } from '@devscribed/validation';
-import { Button, Input, Modal, Select, Textarea } from '@/ds';
+import { Button, Combobox, Input, Modal, Select, Textarea } from '@/ds';
 import { errorNode, focusByTestId } from '@/field-error';
-import type { InterviewerOption, Vacancy } from '@/hiring/types';
+import type { Category, InterviewerOption, Vacancy } from '@/hiring/types';
 
 type Values = { title: string; interviewerAccountId: string; durationMinutes: string; description: string };
 type Errors = Partial<Record<VacancyField, string>>;
 
 const EMPTY: Values = { title: '', interviewerAccountId: '', durationMinutes: '', description: '' };
+
+/**
+ * A category the member typed that the library does not hold yet. It carries a prefixed
+ * value so one selection list can hold both, and it is resolved into a real id by the
+ * same submit that saves the vacancy (06 §04.22) — creating it up front would leave an
+ * entry behind every time somebody changed their mind and cancelled.
+ */
+const PENDING = 'new:';
+
+const pendingName = (value: string): string | null =>
+  value.startsWith(PENDING) ? value.slice(PENDING.length) : null;
 
 const TEST_IDS: Record<VacancyField, string> = {
   title: 'vacancy-title-input',
@@ -33,8 +44,7 @@ const valuesOf = (vacancy: Vacancy): Values => ({
 });
 
 /**
- * Create and edit a vacancy. Categories belong to the library spec and arrive with it;
- * every other field of the dialog is here.
+ * Create and edit a vacancy.
  *
  * The interviewer picker lists **every** member who may be assigned, with the
  * ineligible ones disabled and carrying the reason. A hidden name is indistinguishable
@@ -65,22 +75,27 @@ export function VacancyDialog({
   const [submitting, setSubmitting] = useState(false);
   const [interviewers, setInterviewers] = useState<InterviewerOption[]>([]);
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [library, setLibrary] = useState<Category[]>([]);
+  /** Existing ids and `new:` names in one list, in the order the member added them. */
+  const [categories, setCategories] = useState<string[]>([]);
 
   useEffect(() => {
     if (!open) return;
     setValues(vacancy ? valuesOf(vacancy) : EMPTY);
+    setCategories(vacancy ? vacancy.categories.map((category) => category.id) : []);
     setErrors({});
     setBanner(null);
     setConfirming(null);
 
     let cancelled = false;
     async function load(): Promise<void> {
-      const response = await fetch(`/api/organizations/${orgId}/hiring/interviewers`, {
-        credentials: 'same-origin',
-      });
-      if (cancelled || !response.ok) return;
-      const body = await response.json();
-      setInterviewers(body.interviewers);
+      const [people, categoryList] = await Promise.all([
+        fetch(`/api/organizations/${orgId}/hiring/interviewers`, { credentials: 'same-origin' }),
+        fetch(`/api/organizations/${orgId}/hiring/categories`, { credentials: 'same-origin' }),
+      ]);
+      if (cancelled) return;
+      if (people.ok) setInterviewers((await people.json()).interviewers);
+      if (categoryList.ok) setLibrary((await categoryList.json()).categories);
     }
 
     void load();
@@ -131,13 +146,28 @@ export function VacancyDialog({
     setConfirming(null);
     setSubmitting(true);
 
+    // Ids for what the library already holds, names for what it does not — the API
+    // resolves a name that turns out to exist to the existing entry rather than
+    // erroring, which is the same rule the combobox applies while typing.
+    const categoryIds = categories.filter((value) => pendingName(value) === null);
+    const newCategoryNames = categories
+      .map(pendingName)
+      .filter((name): name is string => name !== null);
+
     try {
       const response = vacancy
         ? await fetch(`/api/organizations/${orgId}/hiring/vacancies/${vacancy.id}`, {
             method: 'PATCH',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(changedFields(vacancy, validation.value)),
+            body: JSON.stringify({
+              ...changedFields(vacancy, validation.value),
+              // Always sent on an edit, unlike the fields above: an unchanged set
+              // rewrites no assignment row, because `assign` removes only what left the
+              // set and re-inserts nothing that is already there.
+              categoryIds,
+              newCategoryNames,
+            }),
           })
         : await fetch(`/api/organizations/${orgId}/hiring/vacancies`, {
             method: 'POST',
@@ -148,6 +178,8 @@ export function VacancyDialog({
               description: validation.value.description,
               interviewerAccountId: validation.value.interviewerAccountId,
               durationMinutes: validation.value.durationMinutes,
+              categoryIds,
+              newCategoryNames,
             }),
           });
 
@@ -177,6 +209,16 @@ export function VacancyDialog({
     hint: option.eligible ? undefined : HIRING_MESSAGES.vacancy.interviewer.ineligibleOption,
     testId: `vacancy-interviewer-option-${option.accountId}`,
   }));
+
+  // The library, plus whatever the member has typed but not yet saved. Both are options
+  // so the control has one list to filter, and both render as the same chip.
+  const categoryOptions = [
+    ...library.map((category) => ({ value: category.id, label: category.name })),
+    ...categories
+      .map((value) => ({ value, name: pendingName(value) }))
+      .filter((entry): entry is { value: string; name: string } => entry.name !== null)
+      .map((entry) => ({ value: entry.value, label: entry.name })),
+  ];
 
   return (
     <>
@@ -283,6 +325,24 @@ export function VacancyDialog({
               </div>
             )}
           </div>
+
+          <Combobox
+            label="Categories"
+            placeholder="Type to add…"
+            value={categories}
+            options={categoryOptions}
+            allowCreate
+            // Nothing is written here: the name joins the selection as a pending entry
+            // and the submit creates it, so cancelling the dialog leaves no orphan.
+            onCreate={(name) => setCategories((prev) => [...prev, `${PENDING}${name}`])}
+            onChange={setCategories}
+            createTestId="vacancy-category-create-option"
+            optionTestId={(value) => `vacancy-category-option-${value}`}
+            // Not `vacancy-category-chip-{id}` — that one names the read-only chips on
+            // the list, and the dialog opens on top of them.
+            chipTestId={(value) => `vacancy-category-selected-${value}`}
+            data-testid="vacancy-categories-input"
+          />
 
           <Textarea
             label="Description"

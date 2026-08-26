@@ -28,3 +28,16 @@ export function VacanciesIcon() {
     </svg>
   );
 }
+
+/**
+ * The template's `settings` glyph — a cog. Hiring settings is the library maintenance
+ * screen, which is settings in the ordinary sense rather than a hiring concept of its
+ * own, so the generic glyph is the honest one.
+ */
+export function SettingsIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width={18} height={18} fill="currentColor" aria-hidden>
+      <path d="M8.3 20a.75.75 0 0 1-.74-.63l-.3-2.02a5.9 5.9 0 0 1-1-.48 7.2 7.2 0 0 1-.87-.6l-1.9.8a.75.75 0 0 1-.93-.32L.63 13.2a.75.75 0 0 1 .18-.97l1.62-1.22a4.3 4.3 0 0 1-.03-.5v-1a4.3 4.3 0 0 1 .03-.5L.81 7.77a.75.75 0 0 1-.18-.97l1.93-3.55a.75.75 0 0 1 .93-.32l1.9.8c.28-.22.57-.42.88-.6.3-.18.63-.34.98-.48l.3-2.02A.75.75 0 0 1 8.3 0h3.4c.37 0 .68.26.74.63l.3 2.02c.35.14.68.3.99.48.3.18.6.38.87.6l1.9-.8c.35-.14.7 0 .93.32l1.93 3.55a.75.75 0 0 1-.18.97l-1.62 1.22c.02.16.03.33.03.5v1c0 .17-.01.34-.04.5l1.63 1.22c.3.23.37.6.18.97l-1.93 3.55a.75.75 0 0 1-.93.32l-1.9-.8c-.28.22-.57.42-.88.6-.3.18-.63.34-.98.48l-.3 2.02a.75.75 0 0 1-.74.63H8.3ZM10 13.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+    </svg>
+  );
+}

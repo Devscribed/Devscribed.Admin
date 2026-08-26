@@ -67,6 +67,7 @@ model Organization {
   vacancies    Vacancy[]
   candidates   Candidate[]
   applications Application[]
+  categories   Category[]
 }
 
 /// Links an account to its organization. One per account — single-org-per-user (FR-8).
@@ -105,12 +106,44 @@ model Vacancy {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
-  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  interviewer  Account       @relation("VacancyInterviewer", fields: [interviewerAccountId], references: [id])
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  interviewer  Account           @relation("VacancyInterviewer", fields: [interviewerAccountId], references: [id])
   applications Application[]
+  categories   VacancyCategory[]
 
   @@index([organizationId])
   @@index([interviewerAccountId])
+}
+
+/// An org-wide label on a vacancy: `React`, `Senior`, `Engineer` (hiring 06 §02).
+model Category {
+  id             String   @id @default(uuid())
+  organizationId String
+  /// Stored exactly as typed. Uniqueness is enforced case-insensitively by a
+  /// `lower(name)` index the migration creates, not by this column — folding the
+  /// stored value would render `Asp.Net` as `asp.net` on every screen.
+  name           String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vacancies    VacancyCategory[]
+
+  @@index([organizationId])
+}
+
+/// Assignment of a category to a vacancy. Renaming the category touches no row here,
+/// which is the whole reason the assignment references the row rather than the string.
+model VacancyCategory {
+  vacancyId  String
+  categoryId String
+  assignedAt DateTime @default(now())
+
+  vacancy  Vacancy  @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([vacancyId, categoryId])
+  @@index([categoryId])
 }
 
 /// A person who has applied at least once. Never signs in; the team owns the record.

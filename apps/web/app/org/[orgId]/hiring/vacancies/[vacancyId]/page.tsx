@@ -257,20 +257,54 @@ export default function VacancyDetailPage({
           )}
         </Card>
 
-        <Card>
-          <SectionLabel>Description</SectionLabel>
-          <p
-            style={{
-              margin: 'var(--sp-4) 0 0',
-              whiteSpace: 'pre-wrap',
-              fontSize: 'var(--fs-15)',
-              lineHeight: 'var(--lh-normal)',
-              color: vacancy.description ? 'var(--text-sub)' : 'var(--text-muted)',
-            }}
-          >
-            {vacancy.description || 'No description.'}
-          </p>
-        </Card>
+        {/* Categories and Description side by side, the categories column narrower —
+            it holds chips, not prose (01 design §Layout — detail). */}
+        <div className="vacancy-detail-columns">
+          <Card>
+            <SectionLabel>Categories</SectionLabel>
+            <div
+              data-testid="vacancy-detail-categories"
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 'var(--sp-2)',
+                marginTop: 'var(--sp-4)',
+              }}
+            >
+              {vacancy.categories.length === 0 ? (
+                <span style={{ fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}>
+                  No categories.
+                </span>
+              ) : (
+                vacancy.categories.map((category) => (
+                  <Badge
+                    key={category.id}
+                    tone="neutral"
+                    dot={false}
+                    data-testid={`vacancy-category-chip-${category.id}`}
+                  >
+                    {category.name}
+                  </Badge>
+                ))
+              )}
+            </div>
+          </Card>
+
+          <Card>
+            <SectionLabel>Description</SectionLabel>
+            <p
+              style={{
+                margin: 'var(--sp-4) 0 0',
+                whiteSpace: 'pre-wrap',
+                fontSize: 'var(--fs-15)',
+                lineHeight: 'var(--lh-normal)',
+                color: vacancy.description ? 'var(--text-sub)' : 'var(--text-muted)',
+              }}
+            >
+              {vacancy.description || 'No description.'}
+            </p>
+          </Card>
+        </div>
 
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-8)' }}>

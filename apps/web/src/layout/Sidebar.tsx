@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { canManageHiring } from '@devscribed/validation';
 import { NavItem, SectionLabel } from '@/ds';
-import { PeopleIcon, VacanciesIcon } from './icons';
+import { PeopleIcon, SettingsIcon, VacanciesIcon } from './icons';
 
 interface NavEntry {
   testId: string;
@@ -50,6 +50,12 @@ function navigation(orgId: string, role: string): NavSection[] {
           label: 'Vacancies',
           href: `/org/${orgId}/hiring/vacancies`,
           icon: <VacanciesIcon />,
+        },
+        {
+          testId: 'nav-hiring-settings',
+          label: 'Settings',
+          href: `/org/${orgId}/hiring/settings`,
+          icon: <SettingsIcon />,
         },
       ],
     });

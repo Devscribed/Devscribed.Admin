@@ -150,9 +150,32 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
                 label: 'Title',
                 flex: 3,
                 render: (row) => (
-                  <span data-testid={`vacancy-title-${row.id}`} style={{ minWidth: 0 }}>
-                    {row.title}
-                  </span>
+                  <div style={{ minWidth: 0 }}>
+                    <span data-testid={`vacancy-title-${row.id}`}>{row.title}</span>
+                    {/* Chips on a second line inside the title cell — read-only here,
+                        editable only in the dialog (01 §UI Notes). */}
+                    {row.categories.length > 0 && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: 'var(--sp-2)',
+                          marginTop: 'var(--sp-2)',
+                        }}
+                      >
+                        {row.categories.map((category) => (
+                          <Badge
+                            key={category.id}
+                            tone="neutral"
+                            dot={false}
+                            data-testid={`vacancy-category-chip-${category.id}`}
+                          >
+                            {category.name}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 ),
               },
               {

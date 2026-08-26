@@ -18,8 +18,9 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import { CalendarProvider } from './calendar/calendar-provider';
+import { CategoriesService, type CategorySelection } from './categories.service';
 
-export interface CreateVacancyDto {
+export interface CreateVacancyDto extends CategorySelection {
   title?: string;
   description?: string | null;
   interviewerAccountId?: string;
@@ -31,7 +32,7 @@ export interface CreateVacancyDto {
  * PATCH sense — absent means "leave it alone", which is why the service tests for
  * `undefined` rather than for falsiness.
  */
-export interface UpdateVacancyDto {
+export interface UpdateVacancyDto extends CategorySelection {
   title?: string;
   description?: string | null;
   interviewerAccountId?: string;
@@ -61,6 +62,7 @@ export class VacanciesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly calendar: CalendarProvider,
+    private readonly categories: CategoriesService,
   ) {}
 
   /**
@@ -111,6 +113,7 @@ export class VacanciesService {
       },
       include: {
         interviewer: { select: { id: true, firstName: true, lastName: true } },
+        categories: { include: { category: { select: { id: true, name: true } } } },
         _count: { select: { applications: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -144,6 +147,7 @@ export class VacanciesService {
       where: { id: vacancyId, organizationId },
       include: {
         interviewer: { select: { id: true, firstName: true, lastName: true } },
+        categories: { include: { category: { select: { id: true, name: true } } } },
         _count: { select: { applications: true } },
       },
     });
@@ -169,6 +173,10 @@ export class VacanciesService {
 
     await this.assertAssignable(organizationId, interviewerAccountId);
 
+    // Resolved before the vacancy exists, so a name that collides with the library is
+    // refused — or resolved to the entry the member meant — before anything is written.
+    const categoryIds = (await this.categories.resolveForVacancy(organizationId, dto)) ?? [];
+
     const vacancy = await this.insertWithUniqueSlug(() => ({
       organizationId,
       title,
@@ -177,6 +185,10 @@ export class VacanciesService {
       durationMinutes: durationMinutes!,
       status: 'open',
       publicSlug: generateVacancySlug(title),
+      // Assigned in the same statement as the vacancy: 06 §04.22 asks for the inline
+      // category and the vacancy to arrive in one submit, and a second round trip is
+      // one more place for half of that to land.
+      categories: { create: categoryIds.map((categoryId) => ({ categoryId })) },
     }));
 
     return this.get(organizationId, vacancy.id);
@@ -214,17 +226,25 @@ export class VacanciesService {
       await this.assertAssignable(organizationId, interviewerAccountId);
     }
 
-    await this.prisma.vacancy.update({
-      where: { id: vacancyId },
-      // `publicSlug` is absent on purpose — it is frozen at creation, so renaming a
-      // vacancy leaves every link already sent working (01 §01.2).
-      data: {
-        ...(title !== undefined ? { title } : {}),
-        ...(description !== undefined ? { description: description || null } : {}),
-        ...(interviewerAccountId !== undefined ? { interviewerAccountId } : {}),
-        ...(durationMinutes !== undefined ? { durationMinutes } : {}),
-        ...(status !== undefined ? { status } : {}),
-      },
+    // `null` means the caller named neither key, which is "leave the assignments
+    // alone" — distinct from an empty array, which clears them (01 §API PATCH).
+    const categoryIds = await this.categories.resolveForVacancy(organizationId, dto);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.vacancy.update({
+        where: { id: vacancyId },
+        // `publicSlug` is absent on purpose — it is frozen at creation, so renaming a
+        // vacancy leaves every link already sent working (01 §01.2).
+        data: {
+          ...(title !== undefined ? { title } : {}),
+          ...(description !== undefined ? { description: description || null } : {}),
+          ...(interviewerAccountId !== undefined ? { interviewerAccountId } : {}),
+          ...(durationMinutes !== undefined ? { durationMinutes } : {}),
+          ...(status !== undefined ? { status } : {}),
+        },
+      });
+
+      if (categoryIds) await this.categories.assign(tx, vacancyId, categoryIds);
     });
 
     return this.get(organizationId, vacancyId);
@@ -336,6 +356,7 @@ export class VacanciesService {
       publicSlug: string;
       createdAt: Date;
       interviewer: { id: string; firstName: string; lastName: string };
+      categories: Array<{ category: { id: string; name: string } }>;
       _count: { applications: number };
     },
     scheduledCount: number,
@@ -351,9 +372,11 @@ export class VacanciesService {
         accountId: vacancy.interviewer.id,
         fullName: `${vacancy.interviewer.firstName} ${vacancy.interviewer.lastName}`,
       },
-      // Categories arrive with the library in a later phase; the field is present so
-      // the client renders the same shape throughout.
-      categories: [] as Array<{ id: string; name: string }>,
+      // Alphabetical, so the chips under a title read the same way on every screen —
+      // the assignment rows carry no order of their own worth preserving.
+      categories: vacancy.categories
+        .map((assignment) => assignment.category)
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
       applicationCount: vacancy._count.applications,
       scheduledCount,
       createdAt: vacancy.createdAt.toISOString(),

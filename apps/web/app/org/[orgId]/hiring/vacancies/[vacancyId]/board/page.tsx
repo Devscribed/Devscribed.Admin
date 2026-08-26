@@ -14,6 +14,7 @@ import {
 import { BoardCard, BoardColumn, Button, Card, InfoBanner, Skeleton, Tabs, Toast } from '@/ds';
 import { PageHeader } from '@/layout/PageHeader';
 import type { Board, BoardCardData } from '@/hiring/types';
+import { useMediaQuery } from '@/hiring/useMediaQuery';
 import { columnWithout, useBoardDrag, withMove, type Placement } from './useBoardDrag';
 
 type State =
@@ -484,25 +485,6 @@ async function patchPlacement(
   } catch {
     return 'failed';
   }
-}
-
-/**
- * The board's one structural breakpoint, which a media query in CSS cannot express on its
- * own: below it the five columns become a tab strip and drag is not attempted.
- */
-function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
-    const media = window.matchMedia(query);
-    setMatches(media.matches);
-    const onChange = (event: MediaQueryListEvent) => setMatches(event.matches);
-    media.addEventListener('change', onChange);
-    return () => media.removeEventListener('change', onChange);
-  }, [query]);
-
-  return matches;
 }
 
 const VISUALLY_HIDDEN = {

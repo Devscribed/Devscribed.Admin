@@ -17,6 +17,7 @@ declare module '@ds' {
   export * from '@ds/components/feedback/Toast';
   export * from '@ds/components/feedback/Tooltip';
   export * from '@ds/components/forms/Checkbox';
+  export * from '@ds/components/forms/Combobox';
   export * from '@ds/components/forms/FileInput';
   export * from '@ds/components/forms/Input';
   export * from '@ds/components/forms/Radio';

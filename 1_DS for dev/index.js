@@ -17,6 +17,7 @@ export { Toast } from './components/feedback/Toast.jsx';
 export { Tooltip } from './components/feedback/Tooltip.jsx';
 
 export { Checkbox } from './components/forms/Checkbox.jsx';
+export { Combobox } from './components/forms/Combobox.jsx';
 export { FileInput } from './components/forms/FileInput.jsx';
 export { Input } from './components/forms/Input.jsx';
 export { Radio, RadioGroup } from './components/forms/Radio.jsx';

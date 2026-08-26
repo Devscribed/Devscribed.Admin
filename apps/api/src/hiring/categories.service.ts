@@ -1,0 +1,284 @@
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
+import {
+  LIBRARY_MESSAGES,
+  duplicateNameMessage,
+  findLibraryDuplicate,
+  newLibraryNames,
+  renameCollisionMessage,
+  validateLibraryName,
+} from '@devscribed/validation';
+import { Prisma } from '@prisma/client';
+import { PrismaService } from '../prisma.service';
+
+export interface CategoryDto {
+  name?: string;
+}
+
+/** The two ways a caller names categories on a vacancy write (01 §API). */
+export interface CategorySelection {
+  categoryIds?: unknown;
+  newCategoryNames?: unknown;
+}
+
+export interface PresentedCategory {
+  id: string;
+  name: string;
+  vacancyCount: number;
+}
+
+/**
+ * The category library: the org-wide labels a vacancy carries (hiring 06 §02).
+ *
+ * Two callers, one set of rules. The settings screen maintains the library directly,
+ * and the vacancy dialog creates into it inline — `resolveForVacancy` is that second
+ * path, and it goes through the same uniqueness check rather than a relaxed copy of it.
+ */
+@Injectable()
+export class CategoriesService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * The whole library with its usage counts. The count is not decoration: it is what
+   * makes the delete decision answerable, so it is part of the list rather than
+   * something the screen has to ask for per row (06 §UI Notes).
+   */
+  async list(organizationId: string): Promise<PresentedCategory[]> {
+    const categories = await this.prisma.category.findMany({
+      where: { organizationId },
+      include: { _count: { select: { vacancies: true } } },
+    });
+
+    // Sorted here rather than in the query: Postgres orders by the collation's rules,
+    // which puts every capitalized name before every lowercase one — so `asp.net` would
+    // sort below `Senior` in a list somebody is scanning alphabetically for a name.
+    return categories
+      .map((category) => ({
+        id: category.id,
+        name: category.name,
+        vacancyCount: category._count.vacancies,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+  }
+
+  async create(organizationId: string, dto: CategoryDto): Promise<PresentedCategory> {
+    const name = this.validName(dto.name);
+
+    const duplicate = await this.findByName(organizationId, name);
+    // 409 rather than a silent no-op, but the body carries the existing row so an
+    // inline caller can select it instead of surfacing an error the member cannot act
+    // on — they typed `react`, they meant `React`, and it is right there (06 §01.3).
+    if (duplicate) throw this.duplicate(duplicate, duplicateNameMessage(name));
+
+    const category = await this.insert(organizationId, name).catch((error) =>
+      this.recoverFromRace(error, organizationId, name, duplicateNameMessage),
+    );
+
+    return { id: category.id, name: category.name, vacancyCount: 0 };
+  }
+
+  /**
+   * Renaming propagates everywhere by doing nothing at all to the assignments: they
+   * reference the row, never the string (06 §01.4). This method writes one column.
+   */
+  async update(
+    organizationId: string,
+    categoryId: string,
+    dto: CategoryDto,
+  ): Promise<PresentedCategory> {
+    const existing = await this.prisma.category.findFirst({
+      where: { id: categoryId, organizationId },
+      include: { _count: { select: { vacancies: true } } },
+    });
+    // 404 before validation, so a caller guessing ids learns nothing from the shape of
+    // the error it gets back.
+    if (!existing) throw new NotFoundException();
+
+    const name = this.validName(dto.name);
+
+    const duplicate = await this.findByName(organizationId, name, { excludeId: categoryId });
+    // The collision message differs from a create's: with no merge in this release, the
+    // only way out is to reassign and delete, and the message says so (06 §01.5).
+    if (duplicate) throw this.duplicate(duplicate, renameCollisionMessage(name));
+
+    const category = await this.prisma.category
+      .update({ where: { id: categoryId }, data: { name } })
+      .catch((error) => this.recoverFromRace(error, organizationId, name, renameCollisionMessage));
+
+    return { id: category.id, name: category.name, vacancyCount: existing._count.vacancies };
+  }
+
+  /**
+   * Deleting is allowed even in use, unlike a criterion: a category is a label, so
+   * removing it loses a classification rather than a judgement (06 §02.11). It
+   * unassigns from every vacancy and deletes nothing else — no vacancy, no application,
+   * no note.
+   */
+  async remove(
+    organizationId: string,
+    categoryId: string,
+  ): Promise<{ success: true; unassignedFrom: number }> {
+    const category = await this.prisma.category.findFirst({
+      where: { id: categoryId, organizationId },
+      select: { id: true, _count: { select: { vacancies: true } } },
+    });
+    if (!category) throw new NotFoundException();
+
+    // The assignment rows go with it through the join table's cascade; nothing else
+    // references a category, which is what makes "deletes nothing else" a fact about
+    // the schema rather than a promise about this method.
+    await this.prisma.category.delete({ where: { id: categoryId } });
+
+    return { success: true, unassignedFrom: category._count.vacancies };
+  }
+
+  /**
+   * The ids a vacancy write should end up assigned to, creating whatever is genuinely
+   * new along the way (01 §Validation.5).
+   *
+   * Returns `null` when the caller named neither key — absent means "leave the
+   * assignments alone", which is not the same as an empty array clearing them.
+   *
+   * A `newCategoryNames` entry that already exists resolves to the existing category
+   * rather than erroring, because the member typing `react` into the vacancy dialog is
+   * asking for `React` and an error would be a dead end they cannot act on.
+   */
+  async resolveForVacancy(
+    organizationId: string,
+    selection: CategorySelection,
+  ): Promise<string[] | null> {
+    const ids = this.stringArray(selection.categoryIds);
+    const names = this.stringArray(selection.newCategoryNames);
+    if (ids === null && names === null) return null;
+
+    const requestedIds = [...new Set(ids ?? [])];
+    const library = await this.prisma.category.findMany({
+      where: { organizationId },
+      select: { id: true, name: true },
+    });
+
+    // An id from another organization is refused, never quietly dropped: silently
+    // saving a vacancy with one fewer category than was asked for is a worse answer
+    // than saying no (06 §Validation.7).
+    const known = new Set(library.map((category) => category.id));
+    if (requestedIds.some((id) => !known.has(id))) {
+      throw new UnprocessableEntityException({
+        error: 'validation',
+        fields: { categoryIds: LIBRARY_MESSAGES.category.unknown },
+      });
+    }
+
+    // Validated before anything is written, so a blank name in the batch fails without
+    // having created the two that preceded it.
+    const requestedNames = (names ?? []).map((name) => this.validName(name));
+
+    const resolved = [...requestedIds];
+
+    for (const name of requestedNames) {
+      const existing = findLibraryDuplicate(name, library);
+      if (existing && !resolved.includes(existing.id)) resolved.push(existing.id);
+    }
+
+    // What is left after both the library and the rest of this batch have had their
+    // say — two spellings of one new name would otherwise race each other into the
+    // unique index inside a single submit.
+    for (const name of newLibraryNames(requestedNames, library)) {
+      const created = await this.insert(organizationId, name).catch((error) =>
+        this.recoverFromRace(error, organizationId, name, duplicateNameMessage),
+      );
+      resolved.push(created.id);
+    }
+
+    return resolved;
+  }
+
+  /** Replaces a vacancy's assignments with exactly `categoryIds`, inside the caller's transaction. */
+  async assign(
+    tx: Prisma.TransactionClient,
+    vacancyId: string,
+    categoryIds: string[],
+  ): Promise<void> {
+    await tx.vacancyCategory.deleteMany({
+      where: { vacancyId, ...(categoryIds.length ? { categoryId: { notIn: categoryIds } } : {}) },
+    });
+    await tx.vacancyCategory.createMany({
+      data: categoryIds.map((categoryId) => ({ vacancyId, categoryId })),
+      // The rows already there are the ones being kept; re-inserting them is the only
+      // thing this could collide with.
+      skipDuplicates: true,
+    });
+  }
+
+  private validName(input: unknown): string {
+    const result = validateLibraryName(typeof input === 'string' ? input : '');
+    if (!result.valid) {
+      throw new UnprocessableEntityException({
+        error: 'validation',
+        fields: { name: result.error },
+      });
+    }
+    return result.value;
+  }
+
+  /**
+   * `mode: 'insensitive'` is the query form of the same fold the unique index applies,
+   * so what this finds is what that index would have refused.
+   */
+  private async findByName(
+    organizationId: string,
+    name: string,
+    options: { excludeId?: string } = {},
+  ): Promise<{ id: string; name: string } | null> {
+    return this.prisma.category.findFirst({
+      where: {
+        organizationId,
+        name: { equals: name, mode: 'insensitive' },
+        ...(options.excludeId ? { id: { not: options.excludeId } } : {}),
+      },
+      select: { id: true, name: true },
+    });
+  }
+
+  private insert(organizationId: string, name: string) {
+    return this.prisma.category.create({
+      data: { organizationId, name },
+      select: { id: true, name: true },
+    });
+  }
+
+  /**
+   * The lookup above is a convenience; the `lower(name)` unique index is the guarantee.
+   * Two concurrent creates of the same name both pass the lookup and exactly one
+   * survives the write — so a unique violation here means the other one won, and the
+   * caller gets the same 409, carrying the row that beat it.
+   */
+  private async recoverFromRace(
+    error: unknown,
+    organizationId: string,
+    name: string,
+    message: (name: string) => string,
+  ): Promise<never> {
+    const collision =
+      error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+    if (!collision) throw error;
+
+    const winner = await this.findByName(organizationId, name);
+    if (!winner) throw error;
+    throw this.duplicate(winner, message(name));
+  }
+
+  private duplicate(existing: { id: string; name: string }, message: string): ConflictException {
+    return new ConflictException({ error: 'duplicate_name', message, existing });
+  }
+
+  /** A JSON body can carry anything; only an array of strings is a selection. */
+  private stringArray(input: unknown): string[] | null {
+    if (input === undefined || input === null) return null;
+    if (!Array.isArray(input)) return null;
+    return input.filter((entry): entry is string => typeof entry === 'string');
+  }
+}

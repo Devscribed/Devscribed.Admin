@@ -18,6 +18,7 @@ export {
   Calendar,
   Card,
   Checkbox,
+  Combobox,
   Eye,
   EyeOff,
   FileInput,

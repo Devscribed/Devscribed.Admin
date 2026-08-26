@@ -38,7 +38,9 @@ export async function bootHiringApp(): Promise<Harness> {
 export async function resetDatabase(prisma: PrismaService): Promise<void> {
   await prisma.application.deleteMany();
   await prisma.candidate.deleteMany();
+  await prisma.vacancyCategory.deleteMany();
   await prisma.vacancy.deleteMany();
+  await prisma.category.deleteMany();
   await prisma.membership.deleteMany();
   await prisma.organization.deleteMany();
   await prisma.account.deleteMany();
@@ -148,6 +150,8 @@ export async function createVacancy(
     title?: string;
     durationMinutes?: number;
     interviewerAccountId?: string;
+    categoryIds?: string[];
+    newCategoryNames?: string[];
   } = {},
 ): Promise<SeededVacancy> {
   const response = await request(app.getHttpServer())
@@ -157,12 +161,31 @@ export async function createVacancy(
       title: overrides.title ?? 'Senior React Engineer',
       interviewerAccountId: overrides.interviewerAccountId ?? session.accountId,
       durationMinutes: overrides.durationMinutes ?? 60,
+      ...(overrides.categoryIds ? { categoryIds: overrides.categoryIds } : {}),
+      ...(overrides.newCategoryNames ? { newCategoryNames: overrides.newCategoryNames } : {}),
     });
 
   if (response.status !== 201) {
     throw new Error(`Precondition failed: vacancy create answered ${response.status}`);
   }
   return { id: response.body.id, slug: response.body.publicSlug, title: response.body.title };
+}
+
+/** Creates a category through the API — a precondition, not the thing under test. */
+export async function createCategory(
+  app: INestApplication,
+  session: Signed,
+  name: string,
+): Promise<{ id: string; name: string }> {
+  const response = await request(app.getHttpServer())
+    .post(`/api/organizations/${session.organizationId}/hiring/categories`)
+    .set('Cookie', session.cookies)
+    .send({ name });
+
+  if (response.status !== 201) {
+    throw new Error(`Precondition failed: category create answered ${response.status}`);
+  }
+  return { id: response.body.id, name: response.body.name };
 }
 
 /**

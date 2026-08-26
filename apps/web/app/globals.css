@@ -167,6 +167,46 @@ a {
 }
 
 /*
+ * A library row on the hiring settings screen (spec 06). The name takes the slack, the
+ * usage count sits immediately left of the actions, and the universal Meridian row hover
+ * raises the actions from muted to full ink.
+ */
+.library-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-6);
+  padding: var(--sp-5) var(--sp-4);
+  border-radius: var(--radius-sm);
+  border-bottom: 1px solid var(--divider);
+}
+
+.library-row:last-of-type {
+  border-bottom: none;
+}
+
+.library-row:hover {
+  background: var(--hover-bg-tint);
+}
+
+/*
+ * The vacancy detail's lower half: Categories beside Description at desktop width, and
+ * stacked below it (01 design §Responsive). The categories column is narrower because
+ * it holds chips rather than prose.
+ */
+.vacancy-detail-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: var(--sp-10);
+  align-items: start;
+}
+
+@media (max-width: 1023px) {
+  .vacancy-detail-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/*
  * The board (spec 05). Five equal columns; below 1200px the column group scrolls
  * horizontally inside its own container so the page body never does, and below 768px
  * the page swaps the grid for a tab strip in JS — a structural change no media query

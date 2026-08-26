@@ -291,3 +291,4 @@ export * from './hiring-slots';
 export * from './hiring-card';
 export * from './hiring-board';
 export * from './hiring-autosave';
+export * from './hiring-libraries';

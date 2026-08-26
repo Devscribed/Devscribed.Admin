@@ -7,12 +7,7 @@ import {
   uniqueEmail,
 } from './helpers';
 
-/**
- * TC-H01-E2E-01 — create a vacancy and copy its booking link.
- *
- * The spec's step 3 types a category and creates it; categories belong to the library
- * spec and are not built yet, so that step is absent here and returns with them.
- */
+/** TC-H01-E2E-01 — create a vacancy and copy its booking link. */
 test.describe('Vacancies', () => {
   test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
 
@@ -32,11 +27,18 @@ test.describe('Vacancies', () => {
     await page.getByTestId(`vacancy-interviewer-option-${org.accountId}`).click();
     await page.getByTestId('vacancy-duration-60').click();
 
+    // The library is empty, so typing a name offers to create it — and the category is
+    // written by the same submit that writes the vacancy (06 §04.22).
+    await page.getByTestId('vacancy-categories-input').fill('React');
+    await page.getByTestId('vacancy-category-create-option').click();
+
     await page.getByTestId('vacancy-submit-button').click();
 
     await expect(page.getByTestId('vacancy-dialog')).toBeHidden();
     await expect(page.getByTestId('toast-vacancy-created')).toHaveText('Vacancy created');
     await expect(page.getByTestId('vacancy-detail')).toBeVisible();
+
+    await expect(page.getByTestId('vacancy-detail-categories')).toHaveText('React');
 
     const link = page.getByTestId('vacancy-booking-link');
     await expect(link).toBeVisible();
