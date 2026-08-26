@@ -2,6 +2,7 @@ import { expect, test, type APIRequestContext } from '@playwright/test';
 import {
   CV_FILE,
   bookInterview,
+  createCriterion,
   createVacancy,
   latestInviteLink,
   registerOrganization,
@@ -240,5 +241,54 @@ test.describe('Candidate card', () => {
       "We couldn't find that candidate.",
     );
   });
-});
 
+  /** TC-H04-E2E-02 — add a criterion through the autocomplete and set a value. */
+  test('assesses an existing criterion, and keeps it across a reload', async ({
+    page,
+    request,
+  }) => {
+    const { org, invite } = await seed(request, 'card-criteria');
+    const english = await createCriterion(request, org, {
+      name: 'English',
+      values: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
+    });
+    await signIn(page, org.email);
+    await page.goto(invite.path);
+
+    await expect(page.getByTestId('card-criteria-empty')).toHaveText('No criteria recorded yet.');
+
+    await page.getByTestId('card-criteria-add').click();
+    await page.getByTestId('card-criteria-autocomplete').fill('English');
+    // The existing criterion, not an offer to create a second one.
+    await expect(page.getByTestId('card-criteria-create-option')).toBeHidden();
+    await page.getByTestId(`card-criteria-option-${english.id}`).click();
+
+    // The chip appears before it has a value, because the value is what writes the row.
+    const value = page.getByTestId(`card-criterion-value-${english.id}`);
+    await expect(page.getByTestId(`card-criterion-${english.id}`)).toContainText('English');
+    // A select over the scale's own ordered values, named by its criterion.
+    await expect(value).toHaveAccessibleName('English');
+    await value.click();
+    await page.getByTestId(`card-criterion-option-${english.values[3].id}`).click();
+    await expect(value).toContainText('B2');
+
+    // Saved on change — there is no separate save for a criterion (04 §05.27).
+    await page.reload();
+    await expect(page.getByTestId(`card-criterion-value-${english.id}`)).toContainText('B2');
+
+    // Choosing it again edits what is there rather than adding a second chip.
+    await page.getByTestId('card-criteria-add').click();
+    await page.getByTestId('card-criteria-autocomplete').fill('English');
+    await page.getByTestId(`card-criteria-option-${english.id}`).click();
+    await expect(page.getByTestId('card-criteria-note')).toHaveText(
+      'Already assessed — edit the existing value',
+    );
+    await expect(page.getByTestId(`card-criterion-${english.id}`)).toHaveCount(1);
+
+    // Removing it takes the assessment and nothing else.
+    await page.getByTestId(`card-criterion-remove-${english.id}`).click();
+    await expect(page.getByTestId('card-criteria-empty')).toBeVisible();
+    await page.reload();
+    await expect(page.getByTestId('card-criteria-empty')).toBeVisible();
+  });
+});

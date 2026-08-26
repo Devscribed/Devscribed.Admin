@@ -155,6 +155,12 @@ a {
   }
 }
 
+/* A criterion chip: the name, its value control, and the remove button, on one line. */
+.card-criterion-chip {
+  display: inline-flex;
+  min-width: 0;
+}
+
 @media (max-width: 767px) {
   .card-cv-row {
     flex-direction: column;
@@ -163,6 +169,17 @@ a {
 
   .card-cv-actions > * {
     flex: 1;
+  }
+
+  /* Chips stack full width rather than wrapping mid-control (04 design §Responsive). */
+  .card-criterion-chip {
+    display: flex;
+    width: 100%;
+  }
+
+  .card-criterion-chip > * {
+    width: 100%;
+    justify-content: space-between;
   }
 }
 
@@ -186,6 +203,54 @@ a {
 
 .library-row:hover {
   background: var(--hover-bg-tint);
+}
+
+/*
+ * A criterion is two lines where a category is one: name, type and actions above; the
+ * scale and the usage count below. One line cannot hold a six-value scale and a count
+ * beside a name without truncating one of them, and the count is what the row exists to
+ * make answerable.
+ */
+.criterion-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.criterion-row-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+.criterion-row-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.criterion-row-meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-6);
+  font-size: var(--fs-12);
+  color: var(--text-muted);
+}
+
+@media (max-width: 767px) {
+  /* The scale wraps to as many lines as it needs (06 design §Responsive). */
+  .criterion-row-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .criterion-row-meta > span {
+    margin-left: 0 !important;
+  }
 }
 
 /*

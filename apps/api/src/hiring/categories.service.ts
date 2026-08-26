@@ -1,19 +1,14 @@
-import {
-  ConflictException,
-  Injectable,
-  NotFoundException,
-  UnprocessableEntityException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import {
   LIBRARY_MESSAGES,
   duplicateNameMessage,
   findLibraryDuplicate,
   newLibraryNames,
   renameCollisionMessage,
-  validateLibraryName,
 } from '@devscribed/validation';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
+import { LibraryNames, validLibraryName } from './library-names';
 
 export interface CategoryDto {
   name?: string;
@@ -66,16 +61,11 @@ export class CategoriesService {
   }
 
   async create(organizationId: string, dto: CategoryDto): Promise<PresentedCategory> {
-    const name = this.validName(dto.name);
-
-    const duplicate = await this.findByName(organizationId, name);
-    // 409 rather than a silent no-op, but the body carries the existing row so an
-    // inline caller can select it instead of surfacing an error the member cannot act
-    // on — they typed `react`, they meant `React`, and it is right there (06 §01.3).
-    if (duplicate) throw this.duplicate(duplicate, duplicateNameMessage(name));
+    const name = validLibraryName(dto.name);
+    await this.scoped(organizationId).refuseDuplicate(name, duplicateNameMessage);
 
     const category = await this.insert(organizationId, name).catch((error) =>
-      this.recoverFromRace(error, organizationId, name, duplicateNameMessage),
+      this.scoped(organizationId).recoverFromRace(error, name, duplicateNameMessage),
     );
 
     return { id: category.id, name: category.name, vacancyCount: 0 };
@@ -98,16 +88,15 @@ export class CategoriesService {
     // the error it gets back.
     if (!existing) throw new NotFoundException();
 
-    const name = this.validName(dto.name);
-
-    const duplicate = await this.findByName(organizationId, name, { excludeId: categoryId });
+    const name = validLibraryName(dto.name);
     // The collision message differs from a create's: with no merge in this release, the
     // only way out is to reassign and delete, and the message says so (06 §01.5).
-    if (duplicate) throw this.duplicate(duplicate, renameCollisionMessage(name));
+    const names = this.scoped(organizationId);
+    await names.refuseDuplicate(name, renameCollisionMessage, categoryId);
 
     const category = await this.prisma.category
       .update({ where: { id: categoryId }, data: { name } })
-      .catch((error) => this.recoverFromRace(error, organizationId, name, renameCollisionMessage));
+      .catch((error) => names.recoverFromRace(error, name, renameCollisionMessage));
 
     return { id: category.id, name: category.name, vacancyCount: existing._count.vacancies };
   }
@@ -174,7 +163,7 @@ export class CategoriesService {
 
     // Validated before anything is written, so a blank name in the batch fails without
     // having created the two that preceded it.
-    const requestedNames = (names ?? []).map((name) => this.validName(name));
+    const requestedNames = (names ?? []).map((name) => validLibraryName(name));
 
     const resolved = [...requestedIds];
 
@@ -188,7 +177,7 @@ export class CategoriesService {
     // unique index inside a single submit.
     for (const name of newLibraryNames(requestedNames, library)) {
       const created = await this.insert(organizationId, name).catch((error) =>
-        this.recoverFromRace(error, organizationId, name, duplicateNameMessage),
+        this.scoped(organizationId).recoverFromRace(error, name, duplicateNameMessage),
       );
       resolved.push(created.id);
     }
@@ -213,34 +202,23 @@ export class CategoriesService {
     });
   }
 
-  private validName(input: unknown): string {
-    const result = validateLibraryName(typeof input === 'string' ? input : '');
-    if (!result.valid) {
-      throw new UnprocessableEntityException({
-        error: 'validation',
-        fields: { name: result.error },
-      });
-    }
-    return result.value;
-  }
-
   /**
+   * The shared name rules, bound to one organization's shelf of the library.
+   *
    * `mode: 'insensitive'` is the query form of the same fold the unique index applies,
    * so what this finds is what that index would have refused.
    */
-  private async findByName(
-    organizationId: string,
-    name: string,
-    options: { excludeId?: string } = {},
-  ): Promise<{ id: string; name: string } | null> {
-    return this.prisma.category.findFirst({
-      where: {
-        organizationId,
-        name: { equals: name, mode: 'insensitive' },
-        ...(options.excludeId ? { id: { not: options.excludeId } } : {}),
-      },
-      select: { id: true, name: true },
-    });
+  private scoped(organizationId: string): LibraryNames {
+    return new LibraryNames((name, excludeId) =>
+      this.prisma.category.findFirst({
+        where: {
+          organizationId,
+          name: { equals: name, mode: 'insensitive' },
+          ...(excludeId ? { id: { not: excludeId } } : {}),
+        },
+        select: { id: true, name: true },
+      }),
+    );
   }
 
   private insert(organizationId: string, name: string) {
@@ -248,31 +226,6 @@ export class CategoriesService {
       data: { organizationId, name },
       select: { id: true, name: true },
     });
-  }
-
-  /**
-   * The lookup above is a convenience; the `lower(name)` unique index is the guarantee.
-   * Two concurrent creates of the same name both pass the lookup and exactly one
-   * survives the write — so a unique violation here means the other one won, and the
-   * caller gets the same 409, carrying the row that beat it.
-   */
-  private async recoverFromRace(
-    error: unknown,
-    organizationId: string,
-    name: string,
-    message: (name: string) => string,
-  ): Promise<never> {
-    const collision =
-      error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
-    if (!collision) throw error;
-
-    const winner = await this.findByName(organizationId, name);
-    if (!winner) throw error;
-    throw this.duplicate(winner, message(name));
-  }
-
-  private duplicate(existing: { id: string; name: string }, message: string): ConflictException {
-    return new ConflictException({ error: 'duplicate_name', message, existing });
   }
 
   /** A JSON body can carry anything; only an array of strings is a selection. */

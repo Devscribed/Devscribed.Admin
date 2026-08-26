@@ -8,6 +8,7 @@ import {
   addMember,
   bookInterview,
   bootHiringApp,
+  createCriterion,
   createVacancy,
   firstSlots,
   resetDatabase,
@@ -18,11 +19,13 @@ import {
 } from './hiring.helpers';
 
 /**
- * The candidate card (spec 04): what the page reads, and the three fields the team
- * writes during an interview.
+ * The candidate card (spec 04): what the page reads, and the four things the team writes
+ * during an interview — interview notes, a conclusion, the status that is also the board
+ * column, and the criteria assessed against the org-wide library.
  *
- * Criteria assessments (04 §05) belong to the criteria library and are absent here by
- * design — the card serves `criteria: []` until that phase lands.
+ * The library's own rules live in `hiring-criteria.spec.ts`; what is here is what the
+ * card does with them: one assessment per criterion per application, exactly one value
+ * column populated, and removing one that touches nothing else.
  */
 describe('Hiring — candidate card', () => {
   let app: INestApplication;
@@ -39,6 +42,25 @@ describe('Hiring — candidate card', () => {
       .patch(`/api/organizations/${session.organizationId}/hiring/applications/${applicationId}`)
       .set('Cookie', session.cookies)
       .send(body);
+
+  const assess = (session: Signed, applicationId: string, criterionId: string, body: object) =>
+    request(app.getHttpServer())
+      .put(
+        `/api/organizations/${session.organizationId}/hiring/applications/${applicationId}/criteria/${criterionId}`,
+      )
+      .set('Cookie', session.cookies)
+      .send(body);
+
+  const unassess = (session: Signed, applicationId: string, criterionId: string) =>
+    request(app.getHttpServer())
+      .delete(
+        `/api/organizations/${session.organizationId}/hiring/applications/${applicationId}/criteria/${criterionId}`,
+      )
+      .set('Cookie', session.cookies);
+
+  /** The criteria on one application, as the card reads them back. */
+  const criteriaOf = async (session: Signed, candidateId: string, index = 0) =>
+    (await card(session, candidateId)).body.applications[index].criteria;
 
   /** Books one interview and hands back the ids the card is addressed by. */
   async function book(
@@ -375,4 +397,219 @@ describe('Hiring — candidate card', () => {
     });
     return rows.map((row) => row.id);
   }
+
+  /* ---------------------------------------------------------------- *
+   * Criteria — 04 §05
+   * ---------------------------------------------------------------- */
+
+  /** TC-H04-INT-04 — a criterion is assessed at most once per application. */
+  it('edits the assessment already there rather than adding a second', async () => {
+    const admin = await signup(app, 'pat@acme.com');
+    const vacancy = await createVacancy(app, admin);
+    const [startUtc] = await firstSlots(app, vacancy.slug, 1);
+    const { candidateId, applicationId } = await book(vacancy.slug, { startUtc });
+    const english = await createCriterion(app, admin, { name: 'English' });
+    const [, , b1, b2] = english.values;
+
+    const created = await assess(admin, applicationId, english.id, { valueId: b1.id });
+    expect(created.status).toBe(200);
+    expect(created.body).toMatchObject({
+      criterionId: english.id,
+      name: 'English',
+      type: 'scale',
+      valueId: b1.id,
+      valueLabel: 'B1',
+    });
+
+    const updated = await assess(admin, applicationId, english.id, { valueId: b2.id });
+    expect(updated.status).toBe(200);
+    expect(updated.body.valueLabel).toBe('B2');
+
+    // One row, valued B2 — the pair is the row's identity (04 §05.24).
+    expect(await criteriaOf(admin, candidateId)).toEqual([
+      expect.objectContaining({ criterionId: english.id, valueId: b2.id, valueLabel: 'B2' }),
+    ]);
+    expect(await prisma.applicationCriterion.count()).toBe(1);
+  });
+
+  it('stores each type in its own column and refuses a value in the wrong one', async () => {
+    const admin = await signup(app, 'pat@acme.com');
+    const vacancy = await createVacancy(app, admin);
+    const [startUtc] = await firstSlots(app, vacancy.slug, 1);
+    const { candidateId, applicationId } = await book(vacancy.slug, { startUtc });
+
+    const late = await createCriterion(app, admin, { name: 'Late hours', type: 'boolean' });
+    const years = await createCriterion(app, admin, { name: 'Years', type: 'number' });
+    const notes = await createCriterion(app, admin, { name: 'Stack', type: 'text' });
+
+    expect((await assess(admin, applicationId, late.id, { valueBool: true })).status).toBe(200);
+    expect((await assess(admin, applicationId, years.id, { valueNumber: 7 })).status).toBe(200);
+    expect((await assess(admin, applicationId, notes.id, { valueText: 'Ships on Fridays' })).status).toBe(200);
+
+    expect(await criteriaOf(admin, candidateId)).toEqual([
+      expect.objectContaining({ criterionId: late.id, valueBool: true, valueNumber: null, valueText: null }),
+      expect.objectContaining({ criterionId: years.id, valueNumber: 7, valueBool: null }),
+      expect.objectContaining({ criterionId: notes.id, valueText: 'Ships on Fridays' }),
+    ]);
+
+    // The wrong column for the type, and two at once, are the same answer.
+    const mismatched = await assess(admin, applicationId, late.id, { valueText: 'yes' });
+    expect(mismatched.status).toBe(422);
+    expect(mismatched.body).toEqual({
+      error: 'type_mismatch',
+      message: HIRING_MESSAGES.card.criterionTypeMismatch,
+    });
+    expect((await assess(admin, applicationId, years.id, { valueNumber: 7, valueText: '7' })).status).toBe(422);
+
+    // And nothing was overwritten by either refusal.
+    expect((await criteriaOf(admin, candidateId))[0].valueBool).toBe(true);
+  });
+
+  it("refuses a scale value belonging to another criterion's scale", async () => {
+    const admin = await signup(app, 'pat@acme.com');
+    const vacancy = await createVacancy(app, admin);
+    const [startUtc] = await firstSlots(app, vacancy.slug, 1);
+    const { applicationId } = await book(vacancy.slug, { startUtc });
+    const english = await createCriterion(app, admin, { name: 'English' });
+    const skills = await createCriterion(app, admin, { name: 'AI Skills', values: ['None', 'Good'] });
+
+    const response = await assess(admin, applicationId, english.id, {
+      valueId: skills.values[1].id,
+    });
+
+    // From the member's side, a value from another scale is exactly a value that does not
+    // match this criterion (04 §Validation.5).
+    expect(response.status).toBe(422);
+    expect(response.body.error).toBe('type_mismatch');
+    expect(await prisma.applicationCriterion.count()).toBe(0);
+  });
+
+  it('caps a text assessment at 500 characters without truncating it', async () => {
+    const admin = await signup(app, 'pat@acme.com');
+    const vacancy = await createVacancy(app, admin);
+    const [startUtc] = await firstSlots(app, vacancy.slug, 1);
+    const { candidateId, applicationId } = await book(vacancy.slug, { startUtc });
+    const stack = await createCriterion(app, admin, { name: 'Stack', type: 'text' });
+
+    const longest = 'x'.repeat(500);
+    expect((await assess(admin, applicationId, stack.id, { valueText: longest })).status).toBe(200);
+
+    const tooLong = await assess(admin, applicationId, stack.id, { valueText: `${longest}x` });
+    expect(tooLong.status).toBe(422);
+    expect(tooLong.body.error).toBe('too_long');
+    // The refusal left the accepted value alone rather than storing a shortened one.
+    expect((await criteriaOf(admin, candidateId))[0].valueText).toBe(longest);
+  });
+
+  /** TC-H04-INT-05 — removing an assessment leaves the library and every other one alone. */
+  it('removes one assessment and nothing else', async () => {
+    const admin = await signup(app, 'pat@acme.com');
+    const vacancy = await createVacancy(app, admin);
+    const slots = await firstSlots(app, vacancy.slug, 2);
+    const first = await book(vacancy.slug, { startUtc: slots[0], email: 'jane@example.com' });
+    const second = await book(vacancy.slug, { startUtc: slots[1], email: 'sam@example.com' });
+    const english = await createCriterion(app, admin, { name: 'English' });
+
+    await assess(admin, first.applicationId, english.id, { valueId: english.values[2].id });
+    await assess(admin, second.applicationId, english.id, { valueId: english.values[4].id });
+
+    const removed = await unassess(admin, first.applicationId, english.id);
+    expect(removed.status).toBe(200);
+    expect(removed.body).toEqual({ success: true });
+
+    expect(await criteriaOf(admin, first.candidateId)).toEqual([]);
+    // The library keeps the criterion and its whole scale…
+    const library = await request(app.getHttpServer())
+      .get(`/api/organizations/${admin.organizationId}/hiring/criteria`)
+      .set('Cookie', admin.cookies);
+    expect(library.body.criteria[0].values).toHaveLength(6);
+    // …and the other application's assessment is untouched.
+    expect(await criteriaOf(admin, second.candidateId)).toEqual([
+      expect.objectContaining({ criterionId: english.id, valueLabel: 'C1' }),
+    ]);
+  });
+
+  it('answers 404 for an assessment that is not there to remove', async () => {
+    const admin = await signup(app, 'pat@acme.com');
+    const vacancy = await createVacancy(app, admin);
+    const [startUtc] = await firstSlots(app, vacancy.slug, 1);
+    const { applicationId } = await book(vacancy.slug, { startUtc });
+    const english = await createCriterion(app, admin, { name: 'English' });
+
+    expect((await unassess(admin, applicationId, english.id)).status).toBe(404);
+  });
+
+  /** TC-H04-INT-07 — an archived criterion stays readable and editable, and takes no new ones. */
+  it('keeps an archived criterion editable where it is, and refuses it anywhere else', async () => {
+    const admin = await signup(app, 'pat@acme.com');
+    const vacancy = await createVacancy(app, admin);
+    const slots = await firstSlots(app, vacancy.slug, 2);
+    const assessed = await book(vacancy.slug, { startUtc: slots[0], email: 'jane@example.com' });
+    const untouched = await book(vacancy.slug, { startUtc: slots[1], email: 'sam@example.com' });
+    const legacy = await createCriterion(app, admin, { name: 'Legacy skill', type: 'text' });
+
+    await assess(admin, assessed.applicationId, legacy.id, { valueText: 'Delphi' });
+    await request(app.getHttpServer())
+      .patch(`/api/organizations/${admin.organizationId}/hiring/criteria/${legacy.id}`)
+      .set('Cookie', admin.cookies)
+      .send({ isArchived: true });
+
+    // Readable, and marked so the card can say why it is no longer in the autocomplete.
+    expect(await criteriaOf(admin, assessed.candidateId)).toEqual([
+      expect.objectContaining({ criterionId: legacy.id, valueText: 'Delphi', isArchived: true }),
+    ]);
+
+    // Editable where it already is — that is the whole difference from deleting it.
+    const edited = await assess(admin, assessed.applicationId, legacy.id, { valueText: 'Delphi 7' });
+    expect(edited.status).toBe(200);
+    expect(edited.body.valueText).toBe('Delphi 7');
+
+    // And refused anywhere it is not.
+    const refused = await assess(admin, untouched.applicationId, legacy.id, { valueText: 'COBOL' });
+    expect(refused.status).toBe(422);
+    expect(refused.body).toEqual({
+      error: 'archived_criterion',
+      message: HIRING_MESSAGES.card.criterionArchived,
+    });
+    expect(await criteriaOf(admin, untouched.candidateId)).toEqual([]);
+  });
+
+  it('answers 404 for an application or a criterion from another organization', async () => {
+    const acme = await signup(app, 'pat@acme.com');
+    const other = await signup(app, 'sam@other.com', 'Other Ltd');
+    const vacancy = await createVacancy(app, acme);
+    const [startUtc] = await firstSlots(app, vacancy.slug, 1);
+    const { applicationId } = await book(vacancy.slug, { startUtc });
+    const theirs = await createCriterion(app, other, { name: 'English', type: 'text' });
+    const ours = await createCriterion(app, acme, { name: 'English', type: 'text' });
+
+    // Their criterion, our application.
+    expect((await assess(acme, applicationId, theirs.id, { valueText: 'x' })).status).toBe(404);
+    // Our criterion, their application — which they do not have, so any id will do.
+    expect((await assess(other, applicationId, theirs.id, { valueText: 'x' })).status).toBe(404);
+    expect((await unassess(other, applicationId, ours.id)).status).toBe(404);
+    expect(await prisma.applicationCriterion.count()).toBe(0);
+  });
+
+  it.each(['user', 'viewer'])('refuses both assessment endpoints to a %s', async (role) => {
+    const admin = await signup(app, 'pat@acme.com');
+    const vacancy = await createVacancy(app, admin);
+    const [startUtc] = await firstSlots(app, vacancy.slug, 1);
+    const { applicationId } = await book(vacancy.slug, { startUtc });
+    const english = await createCriterion(app, admin, { name: 'English' });
+
+    const member = await addMember(prisma, admin.organizationId, {
+      email: `${role}@acme.com`,
+      role,
+    });
+    const session = await signInAs(app, {
+      email: `${role}@acme.com`,
+      accountId: member.accountId,
+      organizationId: admin.organizationId,
+    });
+
+    expect((await assess(session, applicationId, english.id, { valueId: english.values[0].id })).status).toBe(403);
+    expect((await unassess(session, applicationId, english.id)).status).toBe(403);
+    expect(await prisma.applicationCriterion.count()).toBe(0);
+  });
 });

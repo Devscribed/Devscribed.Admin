@@ -1,17 +1,23 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type APIRequestContext } from '@playwright/test';
 import {
+  API,
+  assessCriterion,
+  bookInterview,
   createCategory,
+  createCriterion,
   createVacancy,
+  latestInviteLink,
   registerOrganization,
   signIn,
   uniqueEmail,
+  type InviteLink,
+  type Registered,
+  type SeededVacancy,
 } from './helpers';
 
 /**
  * The category library (spec 06 §01 §02) — the inline path in the vacancy dialog, and
  * the settings screen that maintains what it creates.
- *
- * The criteria half of this screen arrives with its own phase.
  */
 test.describe('Category library', () => {
   /**
@@ -150,6 +156,226 @@ test.describe('Category library', () => {
     // the button on this screen.
     await expect(page.getByTestId('categories-empty')).toHaveText(
       'No categories yet. Add one when you create a vacancy.',
+    );
+  });
+});
+
+/**
+ * The criteria library (spec 06 §01 §03 §04) — the one with structure.
+ *
+ * Its inline path is not a dialog field like a category's: it is a compact form asking
+ * for a type and, for a scale, its ordered values, opened from a candidate card in the
+ * middle of an interview. Which is the flow the first test walks.
+ */
+test.describe('Criteria library', () => {
+  /** An organization with one vacancy, one booked interview, and its invite link. */
+  async function seed(
+    request: APIRequestContext,
+    prefix: string,
+  ): Promise<{ org: Registered; vacancy: SeededVacancy; invite: InviteLink }> {
+    const org = await registerOrganization(request, uniqueEmail(prefix));
+    const vacancy = await createVacancy(request, org, { title: 'Senior React Engineer' });
+    await bookInterview(request, vacancy.publicSlug, {
+      firstName: 'Jane',
+      lastName: 'Doe',
+      email: uniqueEmail('candidate'),
+    });
+    return { org, vacancy, invite: await latestInviteLink(request) };
+  }
+
+  /** TC-H06-E2E-01 — create a scale criterion inline, mid-interview, then assess it. */
+  test('creates a scale from the candidate card and assesses it in one flow', async ({
+    page,
+    request,
+  }) => {
+    const { org, vacancy, invite } = await seed(request, 'criteria-inline');
+    await signIn(page, org.email);
+    await page.goto(invite.path);
+
+    await page.getByTestId('card-criteria-add').click();
+    await page.getByTestId('card-criteria-autocomplete').fill('English');
+
+    // Nothing matched, so the create row is offered — and it opens the compact form
+    // rather than creating a criterion whose type nobody chose.
+    await page.getByTestId('card-criteria-create-option').click();
+    await expect(page.getByTestId('criterion-dialog')).toBeVisible();
+    await expect(page.getByTestId('criterion-name-input')).toHaveValue('English');
+
+    // Scale is the default, and the values field takes six labels in six returns.
+    await page.getByTestId('criterion-type-scale').click();
+    for (const label of ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']) {
+      await page.getByTestId('criterion-value-add').fill(label);
+      await page.getByTestId('criterion-value-add').press('Enter');
+    }
+    await expect(page.getByTestId('criterion-value-input-5')).toContainText('C2');
+
+    await page.getByTestId('criterion-submit-button').click();
+    await expect(page.getByTestId('criterion-dialog')).toBeHidden();
+
+    // The criterion is in the library and on this application, waiting for a value.
+    const criteria = await request.get(
+      `${API}/api/organizations/${org.organizationId}/hiring/criteria`,
+    );
+    const [english] = (await criteria.json()).criteria;
+    expect(english.name).toBe('English');
+
+    const value = page.getByTestId(`card-criterion-value-${english.id}`);
+    await value.click();
+    await page.getByTestId(`card-criterion-option-${english.values[3].id}`).click();
+    await expect(value).toContainText('B2');
+
+    // It persists, because the value is what writes the assessment — there is no save.
+    await page.reload();
+    await expect(page.getByTestId(`card-criterion-value-${english.id}`)).toContainText('B2');
+
+    // And on the next candidate it is simply there: the common path is autocomplete-and-pick.
+    await bookInterview(request, vacancy.publicSlug, {
+      firstName: 'Sam',
+      lastName: 'Second',
+      email: uniqueEmail('candidate'),
+      slotIndex: 1,
+    });
+    const second = await latestInviteLink(request);
+    await page.goto(second.path);
+    await page.getByTestId('card-criteria-add').click();
+    await page.getByTestId('card-criteria-autocomplete').fill('Eng');
+    await expect(page.getByTestId(`card-criteria-option-${english.id}`)).toHaveText('English');
+    await expect(page.getByTestId('card-criteria-create-option')).toBeHidden();
+  });
+
+  /** TC-H06-E2E-03 — delete is replaced by archive once a criterion is used. */
+  test('disables delete on an assessed criterion and offers archive instead', async ({
+    page,
+    request,
+  }) => {
+    const { org, invite } = await seed(request, 'criteria-archive');
+    const english = await createCriterion(request, org, { name: 'English' });
+    const unused = await createCriterion(request, org, { name: 'Unused', type: 'number' });
+    await assessCriterion(request, org, invite.applicationId, english.id, {
+      valueId: english.values[1].id,
+    });
+
+    await signIn(page, org.email);
+    await page.goto(`/org/${org.organizationId}/hiring/settings`);
+
+    // The count is what makes the decision answerable, so it is on the row.
+    await expect(page.getByTestId(`criterion-usage-${english.id}`)).toHaveText('1 assessment');
+    await expect(page.getByTestId(`criterion-values-${english.id}`)).toHaveText('A1 › A2 › B1');
+
+    // Disabled rather than hidden, and the reason names archive as the alternative.
+    const blocked = page.getByTestId(`criterion-delete-${english.id}`);
+    await expect(blocked).toHaveAttribute('aria-disabled', 'true');
+    await expect(blocked).toHaveAccessibleName('Archive this instead — it has 1 assessment');
+
+    await page.getByTestId(`criterion-archive-${english.id}`).click();
+    await expect(page.getByTestId('toast-criteria-archived')).toBeVisible();
+    await expect(page.getByTestId(`criterion-archived-badge-${english.id}`)).toBeVisible();
+
+    // Archived, it leaves the card's autocomplete without leaving the assessment.
+    await page.goto(invite.path);
+    await expect(page.getByTestId(`card-criterion-${english.id}`)).toBeVisible();
+    await page.getByTestId('card-criteria-add').click();
+    await page.getByTestId('card-criteria-autocomplete').fill('Eng');
+    await expect(page.getByTestId(`card-criteria-option-${english.id}`)).toBeHidden();
+
+    // Restoring returns it to the autocomplete — archiving is reversible, which is the
+    // whole reason it exists instead of a delete.
+    await page.goto(`/org/${org.organizationId}/hiring/settings`);
+    await page.getByTestId(`criterion-restore-${english.id}`).click();
+    await expect(page.getByTestId('toast-criteria-restored')).toBeVisible();
+    await expect(page.getByTestId(`criterion-archived-badge-${english.id}`)).toBeHidden();
+
+    // One with no assessments is deleted outright.
+    await page.getByTestId(`criterion-delete-${unused.id}`).click();
+    await expect(page.getByTestId(`criterion-row-${unused.id}`)).toBeHidden();
+  });
+
+  /** TC-H06-E2E-04 — reordering a scale warns before it changes filter results. */
+  test('confirms a reorder, and leaves the order alone when the warning is cancelled', async ({
+    page,
+    request,
+  }) => {
+    const org = await registerOrganization(request, uniqueEmail('criteria-reorder'));
+    const english = await createCriterion(request, org, {
+      name: 'English',
+      values: ['A1', 'A2', 'B1'],
+    });
+    await signIn(page, org.email);
+    await page.goto(`/org/${org.organizationId}/hiring/settings`);
+
+    await page.getByTestId(`criterion-edit-${english.id}`).click();
+    await expect(page.getByTestId('criterion-dialog')).toBeVisible();
+    // Type is absent from the edit dialog entirely, not disabled — it is immutable.
+    await expect(page.getByTestId('criterion-type-scale')).toBeHidden();
+
+    // Space picks a value up, arrows move it, Space drops it — the same reorder a drag
+    // performs, reachable without a mouse.
+    await page.getByTestId('criterion-value-handle-2').focus();
+    await page.keyboard.press(' ');
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press(' ');
+    await expect(page.getByTestId('criterion-value-input-0')).toContainText('B1');
+
+    await page.getByTestId('criterion-submit-button').click();
+
+    // The confirmation goes up before the request does, so cancelling saves nothing —
+    // it returns to the dialog, where abandoning the edit leaves the stored order intact.
+    const confirm = page.getByTestId('criterion-reorder-confirm');
+    await expect(confirm).toContainText('Reordering changes what existing filters match.');
+    await confirm.getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.getByTestId('criterion-dialog')).toBeVisible();
+    await page.getByTestId('criterion-dialog').getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.getByTestId(`criterion-values-${english.id}`)).toHaveText('A1 › A2 › B1');
+
+    // Confirming saves it.
+    await page.getByTestId(`criterion-edit-${english.id}`).click();
+    await page.getByTestId('criterion-value-handle-2').focus();
+    await page.keyboard.press(' ');
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press(' ');
+    await page.getByTestId('criterion-submit-button').click();
+    await page.getByTestId('criterion-reorder-confirm-button').click();
+
+    await expect(page.getByTestId(`criterion-values-${english.id}`)).toHaveText('B1 › A1 › A2');
+  });
+
+  test('renaming a scale value needs no confirmation, because nothing compares labels', async ({
+    page,
+    request,
+  }) => {
+    const org = await registerOrganization(request, uniqueEmail('criteria-rename'));
+    const english = await createCriterion(request, org, { name: 'English', values: ['A1', 'B1'] });
+    await signIn(page, org.email);
+    await page.goto(`/org/${org.organizationId}/hiring/settings`);
+
+    await page.getByTestId(`criterion-edit-${english.id}`).click();
+    await page.getByTestId(`criterion-value-remove-1`).click();
+    await page.getByTestId('criterion-value-add').fill('B1 (intermediate)');
+    await page.getByTestId('criterion-value-add').press('Enter');
+    await page.getByTestId('criterion-submit-button').click();
+
+    // Straight through: an addition and a removal move no existing value past another.
+    await expect(page.getByTestId('criterion-reorder-confirm')).toBeHidden();
+    await expect(page.getByTestId(`criterion-values-${english.id}`)).toHaveText(
+      'A1 › B1 (intermediate)',
+    );
+  });
+
+  test('points an empty criteria library at where criteria are actually created', async ({
+    page,
+    request,
+  }) => {
+    const org = await registerOrganization(request, uniqueEmail('criteria-empty'));
+    await signIn(page, org.email);
+
+    await page.goto(`/org/${org.organizationId}/hiring/settings`);
+
+    // Inline creation is the primary path, so the copy points at an interview rather than
+    // at the button on this screen.
+    await expect(page.getByTestId('criteria-empty')).toHaveText(
+      'No criteria yet. Add one during an interview.',
     );
   });
 });

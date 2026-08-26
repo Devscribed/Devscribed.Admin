@@ -32,6 +32,7 @@ export function ApplicationSection({
   deepLinked,
   onToggle,
   onStatusChange,
+  criteria,
   children,
 }: {
   orgId: string;
@@ -45,6 +46,8 @@ export function ApplicationSection({
   deepLinked: boolean;
   onToggle: () => void;
   onStatusChange: (status: ApplicationStatus) => void;
+  /** The criteria section, built by the page so it can share the library it fetched. */
+  criteria: ReactNode;
   /** The editors, built by the page so the save closures stay in one place. */
   children: ReactNode;
 }) {
@@ -163,21 +166,7 @@ export function ApplicationSection({
               </div>
             )}
 
-            <div>
-              <SectionLabel>Criteria</SectionLabel>
-              {/* Assessments arrive with the criteria library. The section is here now
-                  so the interview's shape does not change when they do. */}
-              <p
-                data-testid="card-criteria-empty"
-                style={{
-                  margin: 'var(--sp-4) 0 0',
-                  fontSize: 'var(--fs-14)',
-                  color: 'var(--text-muted)',
-                }}
-              >
-                {HIRING_MESSAGES.card.noCriteria}
-              </p>
-            </div>
+            {criteria}
 
             {children}
           </div>

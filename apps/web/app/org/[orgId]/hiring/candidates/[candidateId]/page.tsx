@@ -13,9 +13,10 @@ import {
 import { Button, Card, InfoBanner, Skeleton, Toast } from '@/ds';
 import { focusByTestId } from '@/field-error';
 import { PageHeader } from '@/layout/PageHeader';
-import type { CandidateCard } from '@/hiring/types';
+import type { CandidateCard, CardCriterion, Criterion } from '@/hiring/types';
 import { ApplicationSection } from './ApplicationSection';
 import { AutosavingField } from './AutosavingField';
+import { CriteriaSection } from './CriteriaSection';
 
 type State =
   | { status: 'loading' }
@@ -55,6 +56,23 @@ export default function CandidateCardPage({
   const [state, setState] = useState<State>({ status: 'loading' });
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  /**
+   * The org-wide criteria library, fetched once for the whole page rather than per
+   * application: it is the same list on every section, and a second copy would be a
+   * second thing to keep in step after an inline creation.
+   *
+   * Archived entries included — one already assessed still has to render its chip and
+   * its scale, even though it has left the add-autocomplete (06 §03.18).
+   */
+  const [library, setLibrary] = useState<Criterion[]>([]);
+
+  const loadLibrary = useCallback(async (): Promise<void> => {
+    const response = await fetch(
+      `/api/organizations/${orgId}/hiring/criteria?includeArchived=true`,
+      { credentials: 'same-origin' },
+    );
+    if (response.ok) setLibrary((await response.json()).criteria);
+  }, [orgId]);
 
   const load = useCallback(async (): Promise<void> => {
     setState({ status: 'loading' });
@@ -92,9 +110,33 @@ export default function CandidateCardPage({
 
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadLibrary();
+  }, [load, loadLibrary]);
 
   const registerDirty = useUnsavedGuard();
+
+  /**
+   * One application's assessments, replaced in place.
+   *
+   * Patched rather than refetched for the same reason a status change is: a refetch would
+   * replace the text in every open editor on the page, and the server has just told us
+   * the only thing that changed.
+   */
+  const setCriteria = useCallback((applicationId: string, criteria: CardCriterion[]): void => {
+    setState((current) =>
+      current.status === 'ready'
+        ? {
+            status: 'ready',
+            card: {
+              ...current.card,
+              applications: current.card.applications.map((application) =>
+                application.id === applicationId ? { ...application, criteria } : application,
+              ),
+            },
+          }
+        : current,
+    );
+  }, []);
 
   const patch = useCallback(
     async (applicationId: string, body: Record<string, unknown>) => {
@@ -233,6 +275,16 @@ export default function CandidateCardPage({
                 setExpandedId((current) => (current === application.id ? null : application.id))
               }
               onStatusChange={(status) => void changeStatus(application.id, status)}
+              criteria={
+                <CriteriaSection
+                  orgId={orgId}
+                  applicationId={application.id}
+                  criteria={application.criteria}
+                  library={library}
+                  onChange={(criteria) => setCriteria(application.id, criteria)}
+                  onLibraryChange={() => void loadLibrary()}
+                />
+              }
             >
               {/*
                 Keyed by application, so expanding a different section builds a fresh

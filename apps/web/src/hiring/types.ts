@@ -5,13 +5,33 @@
  * screen.
  */
 
-import type { ApplicationStatus } from '@devscribed/validation';
+import type { ApplicationStatus, CriterionType } from '@devscribed/validation';
 
 /** A library entry with the usage count that makes a delete decision answerable. */
 export interface Category {
   id: string;
   name: string;
   vacancyCount: number;
+}
+
+export interface CriterionValue {
+  id: string;
+  label: string;
+  /** Contiguous from zero, worst to best. What every comparison reads. */
+  position: number;
+  /** Zero is what makes the remove control offerable at all (06 §03.16). */
+  assessmentCount: number;
+}
+
+/** A criterion, its scale, and both counts the settings screen decides on. */
+export interface Criterion {
+  id: string;
+  name: string;
+  type: CriterionType;
+  isArchived: boolean;
+  assessmentCount: number;
+  /** Empty for every type but `scale`. */
+  values: CriterionValue[];
 }
 
 export interface Vacancy {
@@ -99,8 +119,27 @@ export interface CardApplication {
   cv: { fileName: string; sizeBytes: number | null } | null;
   interviewNotes: string;
   conclusion: string;
-  /** Assessments arrive with the criteria library; the key is present from the start. */
-  criteria: unknown[];
+  /** In the order they were added, so a new chip appends rather than re-sorting. */
+  criteria: CardCriterion[];
+}
+
+/**
+ * One assessment as the card reads it: the criterion, and exactly one value.
+ *
+ * All four value keys are present with nulls in the three that do not apply, so the chip
+ * reads the one its `type` names without a shape that changes between assessments.
+ */
+export interface CardCriterion {
+  criterionId: string;
+  name: string;
+  type: CriterionType;
+  /** Marks a chip whose criterion has since left the add-autocomplete. */
+  isArchived: boolean;
+  valueId: string | null;
+  valueLabel: string | null;
+  valueBool: boolean | null;
+  valueNumber: number | null;
+  valueText: string | null;
 }
 
 export interface CandidateCard {

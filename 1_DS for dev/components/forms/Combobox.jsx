@@ -21,7 +21,9 @@ const fold = (value) => String(value ?? '').trim().toLowerCase();
  *
  * Filtering folds case deliberately: an option that already exists must never be hidden
  * behind a `Create "…"` row for a difference in capitalisation, because creating it is
- * exactly what the caller's library will refuse.
+ * exactly what the caller's library will refuse. For the same reason the create row is
+ * offered only when the typed text matches nothing at all — a prefix of an existing entry
+ * is somebody looking for that entry (06 §04.21).
  */
 export function Combobox({
   label,
@@ -71,13 +73,16 @@ export function Combobox({
     );
   }, [options, value, query]);
 
-  // The create row appears only when nothing matches the typed name exactly — a
-  // case variant of an existing entry is an existing entry (06 §01.3).
+  // The create row appears only when the typed name matches **nothing** — not merely
+  // when it is not an exact match. A case variant of an existing entry is that entry, and
+  // so is a prefix of one: somebody typing `Eng` while `English` exists is looking for
+  // English, and offering to create `Eng` beside it is how a library fills with
+  // near-duplicates. Matched against every option rather than the filtered list, so an
+  // entry that is already selected still suppresses it.
   const typed = query.trim();
-  const exists =
-    typed.length > 0 &&
-    options.some((option) => fold(option.label) === fold(typed));
-  const offersCreate = allowCreate && typed.length > 0 && !exists;
+  const matchesSomething =
+    typed.length > 0 && options.some((option) => fold(option.label).includes(fold(typed)));
+  const offersCreate = allowCreate && typed.length > 0 && !matchesSomething;
 
   const rows = offersCreate ? [...matches, { create: true }] : matches;
   const activeRow = rows[Math.min(active, rows.length - 1)];

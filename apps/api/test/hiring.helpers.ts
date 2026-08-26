@@ -36,8 +36,11 @@ export async function bootHiringApp(): Promise<Harness> {
 
 /** Every hiring table, then the account tables the rest of the suite already clears. */
 export async function resetDatabase(prisma: PrismaService): Promise<void> {
+  await prisma.applicationCriterion.deleteMany();
   await prisma.application.deleteMany();
   await prisma.candidate.deleteMany();
+  await prisma.criterionValue.deleteMany();
+  await prisma.criterion.deleteMany();
   await prisma.vacancyCategory.deleteMany();
   await prisma.vacancy.deleteMany();
   await prisma.category.deleteMany();
@@ -186,6 +189,35 @@ export async function createCategory(
     throw new Error(`Precondition failed: category create answered ${response.status}`);
   }
   return { id: response.body.id, name: response.body.name };
+}
+
+export interface SeededCriterion {
+  id: string;
+  name: string;
+  type: string;
+  values: Array<{ id: string; label: string; position: number }>;
+}
+
+/** Creates a criterion through the API — a precondition, not the thing under test. */
+export async function createCriterion(
+  app: INestApplication,
+  session: Signed,
+  input: { name: string; type?: string; values?: string[] },
+): Promise<SeededCriterion> {
+  const type = input.type ?? 'scale';
+  const response = await request(app.getHttpServer())
+    .post(`/api/organizations/${session.organizationId}/hiring/criteria`)
+    .set('Cookie', session.cookies)
+    .send({
+      name: input.name,
+      type,
+      ...(type === 'scale' ? { values: input.values ?? ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] } : {}),
+    });
+
+  if (response.status !== 201) {
+    throw new Error(`Precondition failed: criterion create answered ${response.status}`);
+  }
+  return response.body;
 }
 
 /**

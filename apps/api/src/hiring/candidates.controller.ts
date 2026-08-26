@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Patch, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Put, Req, UseGuards } from '@nestjs/common';
+import type { AssessmentInput } from '@devscribed/validation';
 import { OrgScopeGuard } from '../auth/org-scope.guard';
 import type { AuthenticatedRequest } from '../auth/session.guard';
 import { SessionGuard } from '../auth/session.guard';
@@ -52,5 +53,40 @@ export class ApplicationsController {
     // the dto type and from the update, so no endpoint on this page can write one
     // (04 §Validation.9).
     return this.candidates.patchApplication(req.session!.organizationId, applicationId, dto);
+  }
+
+  /**
+   * One criterion's value on this application (04 §05).
+   *
+   * `PUT` because the pair is the row: assessing a criterion that is already there edits
+   * it rather than adding a second, which is what "at most once per application" means.
+   */
+  @Put(':applicationId/criteria/:criterionId')
+  putCriterion(
+    @Req() req: AuthenticatedRequest,
+    @Param('applicationId') applicationId: string,
+    @Param('criterionId') criterionId: string,
+    @Body() dto: AssessmentInput,
+  ) {
+    return this.candidates.putCriterion(
+      req.session!.organizationId,
+      applicationId,
+      criterionId,
+      dto,
+    );
+  }
+
+  /** Removes the assessment only; the criterion stays in the library (04 §05.25). */
+  @Delete(':applicationId/criteria/:criterionId')
+  removeCriterion(
+    @Req() req: AuthenticatedRequest,
+    @Param('applicationId') applicationId: string,
+    @Param('criterionId') criterionId: string,
+  ) {
+    return this.candidates.removeCriterion(
+      req.session!.organizationId,
+      applicationId,
+      criterionId,
+    );
   }
 }

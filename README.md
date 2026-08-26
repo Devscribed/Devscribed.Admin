@@ -461,6 +461,66 @@ hidden by the page: `Middle` or `Senior` on a public posting carries implication
 to publish on the team's behalf. A regression test asserts the string does not appear anywhere in
 that response.
 
+**A criterion's type is fixed at creation, and that is a schema decision.** Each of the four types
+— scale, boolean, number, text — has its own column on `ApplicationCriterion`, so every filter in
+the candidate database is a plain indexed comparison rather than a cast out of JSON. Which means
+changing a type would strand or silently reinterpret every assessment already recorded, so `PATCH`
+answers `422 type_immutable` and the edit dialog omits the control entirely rather than disabling
+it. Archive the criterion and create a replacement.
+
+The rule is enforced in the database, not only in the service. `ApplicationCriterion` carries a copy
+of its criterion's `type`, kept honest by a composite foreign key onto `Criterion(id, type)`, and a
+check constraint says that exactly one value column is populated and that it is the one `type`
+names. The copy cannot drift, because the value it copies is immutable and the foreign key would
+refuse the write if it moved. A scale's `valueId` is checked the same way — a second composite key
+onto `CriterionValue(criterionId, id)`, so a value from another criterion's scale is not storable —
+and that key is `ON DELETE NO ACTION`, which is what makes "a value in use cannot be removed" a fact
+about the database rather than a promise about the service.
+
+**A scale compares by position, never by label.** Renaming `B1` to `B1 (intermediate)` is therefore
+free and needs no confirmation, while dragging it above `A2` changes what every saved filter
+matches — the only edit in either library with retroactive effect, and so the only one that
+confirms. The whole ordered list is sent on every write and renumbered contiguously from zero, which
+is why two values can never share a position and none is ever skipped. Adding a value is not a
+reorder even though it shifts the positions below it: every existing value keeps its place in the
+sequence, so every existing comparison keeps its answer.
+
+**Criteria are archived, never deleted, once assessed.** Deleting one would destroy exactly the
+judgements the candidate database exists to filter on, and nothing brings them back — so `DELETE`
+answers `409 has_assessments` naming the count, and the settings row disables it with archive named
+as the alternative. An archived criterion leaves the Add-criteria autocomplete, which is the only
+thing archiving does: its assessments stay readable **and editable** where they already are, and it
+stays available to the filter marked "Archived". Whether a `PUT` is a new assessment or an edit of
+an existing one is decided by whether the row is already there.
+
+**A criterion becomes a chip before it has a value.** There is no such thing as an assessment
+without one — the check constraint forbids it — so choosing a criterion from the autocomplete adds a
+pending chip client-side and the first value is what writes the row. Removing a chip that never got
+one is a local undo with nothing to delete. Values save on change and nothing else: a `Select`
+writes the moment it is chosen, and the number and text fields commit on blur and on Enter, because
+saving per keystroke would write `7`, `70`, `700` on the way to `700`.
+
+**Already-assessed criteria stay in the autocomplete.** Filtering them out would be worse than
+redundant: typing a name that exists would then match nothing and the control would offer to
+*create* it, which the library refuses as a duplicate. So they stay, and choosing one moves focus to
+the value already there and says "Already assessed — edit the existing value".
+
+**One tension is left for the interviewer phase to resolve.** Both libraries are `admin`/`manager`
+only, `GET` included, which is what [06's TC-H06-INT-08](specs/hiring/06-libraries.md) asserts — and
+an assigned `user` interviewer will need to read the criteria library to assess anybody on their own
+vacancy's card. The assessment endpoints narrow naturally under `InterviewerScopeGuard`; the
+library's read does not, and the permission matrix is what settles it.
+
+**The naming half of both libraries is one class.** `LibraryNames` holds what categories and
+criteria share — the 1–50 rule, the case-insensitive lookup, the 409 that carries the existing row's
+id, and the recovery when the unique index rather than the lookup catches the duplicate — and takes
+the lookup as a closure so nothing in it names a Prisma delegate. A scale's own labels are unique
+within their criterion case-insensitively, but that one is enforced in the service rather than by an
+index: values are only ever written as one complete ordered list inside one transaction, so the
+service sees the whole final state, and a unique index would break a legitimate edit — swapping two
+labels collides halfway through, since a plain unique index is checked per statement and an
+expression index cannot be declared deferrable.
+
 `/book/{slug}` is the product's only public route. The slug carries 72 bits of entropy, which is
 why it needs no organization segment, and it is frozen at creation so a link already sent keeps
 working. There is **no rate limiting on the booking POST** — see
@@ -498,11 +558,23 @@ than implying the endpoint is protected.
   none of: typing, filtering, multi-select, and a `Create "…"` row for what is missing.
   Its filter folds case deliberately — an option that already exists must never hide
   behind a create row over a difference in capitalisation, because creating it is exactly
-  what the API will refuse. Like `Calendar` it is presentational: it never writes
+  what the API will refuse. The create row now appears only when the typed text matches
+  **nothing at all**, not merely when it is not an exact match: somebody typing `Eng`
+  while `English` exists is looking for English, and offering to create `Eng` beside it is
+  precisely how a library fills with near-duplicates ([06 §04.21](specs/hiring/06-libraries.md)). Like `Calendar` it is presentational: it never writes
   anything. `onCreate` hands the typed name back and the caller decides what that means,
   which is what lets the vacancy dialog hold a pending category and create it in the same
   submit as the vacancy — so cancelling the dialog leaves no orphan behind. Spec 03's
-  filters and spec 04's criteria autocomplete are its next two callers.
+  filters are its next caller; spec 04's criteria autocomplete is already one.
+- **The scale editor is composed in the app, not added to the DS.** Its chips carry a drag
+  handle and a remove control, and [04's design spec](specs/hiring/04-candidate-card.design.md)
+  already recorded the rule that decides this: a `Badge` is a `<span>` with text, and a
+  chip carrying controls is a screen concern rather than a token concern. The criterion
+  chips on the candidate card are composed the same way, for the same reason. Reordering
+  is operable by pointer and by keyboard against one list — `Space` picks a value up,
+  arrows move it, `Space` drops it, each step announced — because this dialog opens
+  mid-interview and a member with both hands on the keyboard should not have to find a
+  mouse to put `B1` above `A2`.
 - `Calendar` is presentational by construction: it is handed the weeks to draw, which
   dates may be chosen, and the bounds it may navigate between. Availability, the booking
   window and the time zone are business rules and stay on the page. It owns the grid

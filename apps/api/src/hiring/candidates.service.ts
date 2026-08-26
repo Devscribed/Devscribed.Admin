@@ -5,9 +5,13 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import {
+  HIRING_MESSAGES,
   POSITION_STEP,
   validateApplicationPatch,
+  validateAssessment,
   type ApplicationStatus,
+  type AssessmentInput,
+  type CriterionType,
 } from '@devscribed/validation';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
@@ -17,6 +21,21 @@ export interface ApplicationPatchDto {
   interviewNotes?: unknown;
   conclusion?: unknown;
   status?: unknown;
+}
+
+/** One assessment, as the card reads it back (04 §API). */
+export interface PresentedAssessment {
+  criterionId: string;
+  name: string;
+  type: CriterionType;
+  /** So the card can mark a chip whose criterion has since left the autocomplete. */
+  isArchived: boolean;
+  valueId: string | null;
+  /** Resolved here, because the card renders a label and stores an id. */
+  valueLabel: string | null;
+  valueBool: boolean | null;
+  valueNumber: number | null;
+  valueText: string | null;
 }
 
 /**
@@ -56,6 +75,7 @@ export class CandidatesService {
             interviewer: { select: { id: true, firstName: true, lastName: true, email: true } },
           },
         },
+        criteria: { orderBy: [{ createdAt: 'asc' }, { criterionId: 'asc' }], include: ASSESSMENT },
       },
     });
 
@@ -96,12 +116,11 @@ export class CandidatesService {
         interviewNotes: application.interviewNotes ?? '',
         conclusion: application.conclusion ?? '',
         /**
-         * Assessments arrive with the criteria library (04 §05, phase 7). The key is
-         * present so the card renders the same shape before and after — the section it
-         * feeds is the one place on this screen a missing array would read as a load
-         * failure rather than an empty list.
+         * In the order they were added, which is the one order that does not move a chip
+         * somebody is reading. Alphabetical would re-sort the row under the cursor every
+         * time a criterion was added mid-interview, and this page moves nothing.
          */
-        criteria: [] as unknown[],
+        criteria: application.criteria.map(presentAssessment),
       })),
     };
   }
@@ -163,6 +182,126 @@ export class CandidatesService {
   }
 
   /**
+   * Assess one criterion on one application, or edit the assessment already there.
+   *
+   * `PUT` rather than `POST` because a criterion is assessed **at most once per
+   * application** (04 §05.24): the pair is the row's identity, so choosing English again
+   * is a correction of the value, not a second English. There is no separate save — the
+   * value control writes on change, which is what makes this a `PUT` of one value rather
+   * than a form submission.
+   */
+  async putCriterion(
+    organizationId: string,
+    applicationId: string,
+    criterionId: string,
+    dto: AssessmentInput,
+  ): Promise<PresentedAssessment> {
+    const application = await this.prisma.application.findFirst({
+      where: { id: applicationId, organizationId },
+      select: { id: true },
+    });
+    // 404 for both, and before validation: a caller guessing ids learns nothing from the
+    // shape of the error it gets back, and an id from another organization is not a
+    // permission problem to report — it is a record that does not exist here.
+    if (!application) throw new NotFoundException();
+
+    const criterion = await this.prisma.criterion.findFirst({
+      where: { id: criterionId, organizationId },
+      select: {
+        id: true,
+        type: true,
+        isArchived: true,
+        values: { select: { id: true } },
+      },
+    });
+    if (!criterion) throw new NotFoundException();
+
+    const key = { applicationId_criterionId: { applicationId, criterionId } };
+    const existing = await this.prisma.applicationCriterion.findUnique({
+      where: key,
+      select: { applicationId: true },
+    });
+
+    // An archived criterion takes no **new** assessment and keeps every existing one
+    // readable and editable (06 §03.18) — which is the whole difference between
+    // archiving and deleting, and it is decided here by whether the row already exists.
+    if (criterion.isArchived && !existing) {
+      throw new UnprocessableEntityException({
+        error: 'archived_criterion',
+        message: HIRING_MESSAGES.card.criterionArchived,
+      });
+    }
+
+    const type = criterion.type as CriterionType;
+    const validation = validateAssessment(type, dto);
+    if (!validation.valid) {
+      throw new UnprocessableEntityException({
+        error: validation.error,
+        message: validation.message,
+      });
+    }
+
+    // A value from another criterion's scale is, from the member's side, exactly a value
+    // that does not match this criterion — so it is the same answer (04 §Validation.5).
+    if (
+      validation.column === 'valueId' &&
+      !criterion.values.some((value) => value.id === validation.value)
+    ) {
+      throw new UnprocessableEntityException({
+        error: 'type_mismatch',
+        message: HIRING_MESSAGES.card.criterionTypeMismatch,
+      });
+    }
+
+    // Written out rather than spread from the validated column, so "exactly one of these
+    // is populated" is visible here as well as in the check constraint that enforces it.
+    const columns = {
+      valueId: validation.column === 'valueId' ? (validation.value as string) : null,
+      valueBool: validation.column === 'valueBool' ? (validation.value as boolean) : null,
+      valueNumber: validation.column === 'valueNumber' ? (validation.value as number) : null,
+      valueText: validation.column === 'valueText' ? (validation.value as string) : null,
+    };
+
+    const saved = await this.prisma.applicationCriterion.upsert({
+      where: key,
+      // `type` is a copy of the criterion's, and a composite foreign key onto
+      // `Criterion(id, type)` is what keeps the copy honest.
+      create: { applicationId, criterionId, type, ...columns },
+      update: columns,
+      include: ASSESSMENT,
+    });
+
+    return presentAssessment(saved);
+  }
+
+  /**
+   * Remove an assessment, and nothing else (04 §05.25).
+   *
+   * The criterion stays in the library with its whole scale, and every other
+   * application's assessment of it is untouched — this deletes one row.
+   */
+  async removeCriterion(
+    organizationId: string,
+    applicationId: string,
+    criterionId: string,
+  ): Promise<{ success: true }> {
+    const application = await this.prisma.application.findFirst({
+      where: { id: applicationId, organizationId },
+      select: { id: true },
+    });
+    if (!application) throw new NotFoundException();
+
+    const removed = await this.prisma.applicationCriterion.deleteMany({
+      where: { applicationId, criterionId },
+    });
+    // Nothing removed means there was no assessment to remove, which is a 404 about the
+    // assessment rather than a success about nothing.
+    if (removed.count === 0) throw new NotFoundException();
+
+    return { success: true };
+  }
+
+  /**
    * The position that puts a card first in its target column (04 §06.30).
    *
    * Gap integers, so arriving at the top is one subtraction and one row written —
@@ -180,4 +319,32 @@ export class CandidatesService {
     });
     return top._min.position === null ? POSITION_STEP : top._min.position - POSITION_STEP;
   }
+}
+
+/** The criterion and, for a scale, the value row — everything a chip renders. */
+const ASSESSMENT = {
+  criterion: { select: { id: true, name: true, type: true, isArchived: true } },
+  value: { select: { id: true, label: true } },
+} as const;
+
+function presentAssessment(assessment: {
+  criterion: { id: string; name: string; type: string; isArchived: boolean };
+  value: { id: string; label: string } | null;
+  valueBool: boolean | null;
+  valueNumber: number | null;
+  valueText: string | null;
+}): PresentedAssessment {
+  return {
+    criterionId: assessment.criterion.id,
+    name: assessment.criterion.name,
+    type: assessment.criterion.type as CriterionType,
+    isArchived: assessment.criterion.isArchived,
+    valueId: assessment.value?.id ?? null,
+    // The label is resolved from the row every time it is read, which is why renaming a
+    // scale value costs nothing and reordering one costs a confirmation (06 §03.15).
+    valueLabel: assessment.value?.label ?? null,
+    valueBool: assessment.valueBool,
+    valueNumber: assessment.valueNumber,
+    valueText: assessment.valueText,
+  };
 }

@@ -124,6 +124,18 @@ export const HIRING_MESSAGES = {
     notFound: "We couldn't find that candidate.",
     cvUnavailable: "This CV couldn't be loaded.",
     noCriteria: 'No criteria recorded yet.',
+    /** A value in the wrong shape for its criterion's type (04 §05.23). */
+    criterionTypeMismatch: "That value doesn't match this criterion",
+    /** An archived criterion can be read and edited where it already is, never added. */
+    criterionArchived: "This criterion is archived and can't be added",
+    /**
+     * A criterion is assessed at most once per application (04 §05.24), so choosing one
+     * that is already there edits the existing value rather than adding a second chip.
+     * The autocomplete keeps offering it — hiding it would leave the member typing a
+     * name that exists and being offered `Create` for it.
+     */
+    criterionPresent: 'Already assessed — edit the existing value',
+    criterionTextTooLong: 'Text must be at most 500 characters',
   },
   board: {
     /**

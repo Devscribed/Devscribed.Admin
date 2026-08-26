@@ -68,6 +68,7 @@ model Organization {
   candidates   Candidate[]
   applications Application[]
   categories   Category[]
+  criteria     Criterion[]
 }
 
 /// Links an account to its organization. One per account — single-org-per-user (FR-8).
@@ -202,11 +203,96 @@ model Application {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  candidate    Candidate    @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  vacancy      Vacancy      @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  candidate    Candidate              @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  vacancy      Vacancy                @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  criteria     ApplicationCriterion[]
 
   @@index([organizationId])
   @@index([candidateId])
   @@index([vacancyId, status, position])
+}
+
+/// Something a candidate is assessed on during an interview: `English`, `AI Skills`,
+/// `Late hours availability` (hiring 06 §03).
+///
+/// Scoped by `organizationId` like every other hiring root. `CriterionValue` and
+/// `ApplicationCriterion` inherit that scope through their parents, exactly as
+/// `VacancyCategory` does — a join row's organization is not a second fact about it.
+model Criterion {
+  id             String   @id @default(uuid())
+  organizationId String
+  /// Stored exactly as typed. Uniqueness is case-insensitive through the same
+  /// `lower(name)` index the categories use, created by the migration.
+  name           String
+  /// "scale" | "boolean" | "number" | "text". Frozen at creation (06 §03.14): every
+  /// assessment lives in the column this names, so changing it would strand them.
+  type           String
+  /// Archived, never deleted, once assessed (06 §03.17). Reversible, and invisible only
+  /// to the add-autocomplete — the filter and the existing assessments keep it.
+  isArchived     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  values       CriterionValue[]
+  assessments  ApplicationCriterion[]
+
+  /// Not a rule about criteria — the key `ApplicationCriterion`'s composite foreign key
+  /// points at, which is what keeps its copy of `type` honest. `id` is already unique.
+  @@unique([id, type])
+  @@index([organizationId])
+}
+
+/// One label on a `scale` criterion's ordered list.
+///
+/// Comparison uses `position`, never `label` (06 §03.15) — which is what makes renaming a
+/// value free and reordering one retroactive, and why only the second is confirmed.
+model CriterionValue {
+  id          String @id @default(uuid())
+  criterionId String
+  label       String
+  /// Contiguous from zero, worst to best. The whole list is renumbered on every write,
+  /// so two values can never share a position and none is ever skipped.
+  position    Int
+
+  criterion   Criterion              @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+  assessments ApplicationCriterion[]
+
+  /// Again a foreign-key target rather than a rule: it is what lets an assessment's
+  /// `(criterionId, valueId)` pair be checked by the database, so a value belonging to
+  /// another scale cannot be stored against this criterion.
+  @@unique([criterionId, id])
+  @@index([criterionId, position])
+}
+
+/// One criterion assessed on one application (hiring 04 §05).
+///
+/// The primary key is the pair, which is what "at most once per application" means:
+/// re-adding a criterion edits the row that is already there rather than adding a second.
+model ApplicationCriterion {
+  applicationId String
+  criterionId   String
+  /// A copy of the criterion's type, kept honest by a composite foreign key onto
+  /// `Criterion(id, type)`. It exists so the check constraint below can be written at
+  /// all — a CHECK cannot read another table — and it can never drift, because the type
+  /// it copies is immutable and the foreign key would refuse the write if it moved.
+  type          String
+  /// Exactly one of these four is populated, and it is the one `type` names. Enforced by
+  /// a check constraint, so every filter in spec 03 stays a plain indexed comparison
+  /// rather than a JSON cast (04 §05.23).
+  valueId       String?
+  valueBool     Boolean?
+  valueNumber   Float?
+  valueText     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  application Application     @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  criterion   Criterion       @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+  value       CriterionValue? @relation(fields: [valueId], references: [id])
+
+  @@id([applicationId, criterionId])
+  @@index([criterionId])
+  @@index([valueId])
 }

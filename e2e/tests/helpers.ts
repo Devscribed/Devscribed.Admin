@@ -140,6 +140,59 @@ export async function createCategory(
   return { id: body.id, name: body.name };
 }
 
+export interface SeededCriterion {
+  id: string;
+  name: string;
+  type: string;
+  values: Array<{ id: string; label: string; position: number; assessmentCount: number }>;
+}
+
+/** Creates a criterion through the API — a precondition, not the thing under test. */
+export async function createCriterion(
+  request: APIRequestContext,
+  org: Registered,
+  input: { name: string; type?: string; values?: string[] },
+): Promise<SeededCriterion> {
+  const type = input.type ?? 'scale';
+  const response = await request.post(
+    `${API}/api/organizations/${org.organizationId}/hiring/criteria`,
+    {
+      data: {
+        name: input.name,
+        type,
+        ...(type === 'scale' ? { values: input.values ?? ['A1', 'A2', 'B1'] } : {}),
+      },
+    },
+  );
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not create criterion ${input.name} (${response.status()})`,
+    );
+  }
+  return response.json();
+}
+
+/**
+ * Assesses a criterion on an application through the API — a precondition for the
+ * settings screen's archive-versus-delete rules, which only differ once something has
+ * been assessed.
+ */
+export async function assessCriterion(
+  request: APIRequestContext,
+  org: Registered,
+  applicationId: string,
+  criterionId: string,
+  value: Record<string, unknown>,
+): Promise<void> {
+  const response = await request.put(
+    `${API}/api/organizations/${org.organizationId}/hiring/applications/${applicationId}/criteria/${criterionId}`,
+    { data: value },
+  );
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: assessment answered ${response.status()}`);
+  }
+}
+
 export interface SeededVacancy {
   id: string;
   publicSlug: string;
