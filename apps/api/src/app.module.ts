@@ -15,6 +15,7 @@ import { MailService } from './mail/mail.service';
 import { TestMailController } from './mail/test-mail.controller';
 import { MeController } from './members/me.controller';
 import { MembersController } from './members/members.controller';
+import { MembersService } from './members/members.service';
 import { AvailabilityService } from './hiring/availability.service';
 import { BookingController } from './hiring/booking.controller';
 import { BookingService } from './hiring/booking.service';
@@ -118,6 +119,7 @@ const calendarProvider = {
     LoginService,
     PasswordResetService,
     SessionService,
+    MembersService,
     mailProvider,
     storageProvider,
     calendarProvider,

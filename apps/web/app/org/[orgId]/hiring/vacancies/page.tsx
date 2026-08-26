@@ -2,18 +2,28 @@
 
 import { notFound, useRouter } from 'next/navigation';
 import { use, useCallback, useEffect, useState } from 'react';
-import { HIRING_MESSAGES } from '@devscribed/validation';
-import { Badge, Button, Card, Skeleton, Table } from '@/ds';
+import { HIRING_MESSAGES, type VacancyStatusFilter } from '@devscribed/validation';
+import { Badge, Button, Card, SearchField, Select, Skeleton, Table } from '@/ds';
 import { PageHeader } from '@/layout/PageHeader';
 import type { Vacancy } from '@/hiring/types';
 import { VacancyDialog } from './VacancyDialog';
 
 type State = { status: 'loading' } | { status: 'ready'; vacancies: Vacancy[] } | { status: 'gone' };
 
+/** 01 §05.16 — the same 300 ms the member search already uses. */
+const SEARCH_DEBOUNCE_MS = 300;
+
+const STATUS_OPTIONS = [
+  { value: 'all', label: 'All', testId: 'vacancies-status-option-all' },
+  { value: 'open', label: 'Open', testId: 'vacancies-status-option-open' },
+  { value: 'closed', label: 'Closed', testId: 'vacancies-status-option-closed' },
+];
+
 /**
- * The vacancies list. Search, the status filter, and the row actions menu belong to
- * the lifecycle spec and arrive with it; this is the list, the create dialog, and the
- * route into a vacancy.
+ * The vacancies list: search, the status filter, and the route into a vacancy.
+ *
+ * Both filters run server-side. The list has no page size, so narrowing it in the
+ * browser would mean fetching every vacancy in the organization to show one.
  *
  * `user` and `viewer` are refused by the API, and the screen renders the not-found
  * state rather than a permission error — the sidebar never offered them the row, so a
@@ -25,8 +35,24 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
   const [state, setState] = useState<State>({ status: 'loading' });
   const [dialogOpen, setDialogOpen] = useState(false);
 
+  const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState<VacancyStatusFilter>('all');
+
+  // Typing debounces; the status filter does not, because a click is already a
+  // deliberate act and waiting on it would read as lag.
+  useEffect(() => {
+    const timer = setTimeout(() => setQuery(search), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [search]);
+
   const load = useCallback(async (): Promise<void> => {
-    const response = await fetch(`/api/organizations/${orgId}/hiring/vacancies`, {
+    const params = new URLSearchParams();
+    if (query.trim()) params.set('search', query.trim());
+    if (status !== 'all') params.set('status', status);
+    const suffix = params.toString() ? `?${params}` : '';
+
+    const response = await fetch(`/api/organizations/${orgId}/hiring/vacancies${suffix}`, {
       credentials: 'same-origin',
     });
     if (response.status === 403 || response.status === 404) {
@@ -36,13 +62,15 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
     if (!response.ok) return;
     const body = await response.json();
     setState({ status: 'ready', vacancies: body.vacancies });
-  }, [orgId]);
+  }, [orgId, query, status]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   if (state.status === 'gone') notFound();
+
+  const filtered = query.trim().length > 0 || status !== 'all';
 
   return (
     <>
@@ -54,6 +82,32 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
           </Button>
         }
       />
+
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'var(--sp-6)',
+          marginBottom: 'var(--sp-10)',
+          flexWrap: 'wrap',
+        }}
+      >
+        <SearchField
+          placeholder="Search vacancies…"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          aria-label="Search vacancies"
+          data-testid="vacancies-search-input"
+          style={{ flex: 1, minWidth: 220 }}
+        />
+        <Select
+          value={status}
+          options={STATUS_OPTIONS}
+          onChange={(value) => setStatus(value as VacancyStatusFilter)}
+          data-testid="vacancies-status-filter"
+          wrapperStyle={{ width: 160 }}
+        />
+      </div>
 
       {state.status === 'loading' ? (
         <Card>
@@ -77,7 +131,7 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
             data-testid="vacancies-empty-state"
             style={{ margin: 0, color: 'var(--text-muted)', fontSize: 'var(--fs-14)' }}
           >
-            {HIRING_MESSAGES.vacancy.empty}
+            {filtered ? HIRING_MESSAGES.vacancy.emptyFiltered : HIRING_MESSAGES.vacancy.empty}
           </p>
         </Card>
       ) : (
@@ -147,7 +201,7 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
         orgId={orgId}
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
-        onCreated={(vacancy) => {
+        onSaved={(vacancy) => {
           setDialogOpen(false);
           // The toast belongs to the destination, so it survives the navigation the
           // spec asks for rather than being raised on a screen about to be replaced.

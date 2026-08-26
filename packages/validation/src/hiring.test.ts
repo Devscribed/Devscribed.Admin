@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   HIRING_MESSAGES,
+  scheduledKeepMessage,
+  validateVacancyPatch,
   SLUG_MAX_LENGTH,
   SLUG_SUFFIX_LENGTH,
   generateVacancySlug,
@@ -126,5 +128,66 @@ describe('validateCv', () => {
       valid: false,
       error: HIRING_MESSAGES.booking.cv.required,
     });
+  });
+});
+
+/**
+ * TC-H01-UNIT-02 continued — a PATCH is a subset, so absence and invalidity have to
+ * stay different answers (01 §04, §API PATCH).
+ */
+describe('validateVacancyPatch', () => {
+  it('accepts an empty patch and reports no fields to write', () => {
+    const result = validateVacancyPatch({});
+
+    expect(result.valid).toBe(true);
+    expect(result.value).toEqual({});
+  });
+
+  it('validates only the fields that are present', () => {
+    const result = validateVacancyPatch({ title: '  Senior React Engineer  ' });
+
+    expect(result.valid).toBe(true);
+    expect(result.value).toEqual({ title: 'Senior React Engineer' });
+    // An absent interviewer and an absent duration are not missing — they are unchanged.
+    expect(result.errors).toEqual({});
+  });
+
+  it('rejects a supplied field that breaks its own rule', () => {
+    const result = validateVacancyPatch({ title: '   ', durationMinutes: 90 });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.title).toBe(HIRING_MESSAGES.vacancy.title.required);
+    expect(result.errors.durationMinutes).toBe(HIRING_MESSAGES.vacancy.duration.required);
+    expect(result.firstInvalidField).toBe('title');
+  });
+
+  it('distinguishes clearing a description from leaving it alone', () => {
+    expect(validateVacancyPatch({ description: '' }).value).toEqual({ description: '' });
+    expect(validateVacancyPatch({ description: null }).value).toEqual({ description: '' });
+    expect(validateVacancyPatch({}).value.description).toBeUndefined();
+  });
+
+  it('accepts only open and closed as a status', () => {
+    expect(validateVacancyPatch({ status: 'open' }).value.status).toBe('open');
+    expect(validateVacancyPatch({ status: 'closed' }).value.status).toBe('closed');
+
+    const rejected = validateVacancyPatch({ status: 'draft' });
+    expect(rejected.valid).toBe(false);
+    expect(rejected.errors.status).toBe(HIRING_MESSAGES.vacancy.status.invalid);
+  });
+});
+
+/** 01 §04.14 — the confirmation names what the change leaves untouched. */
+describe('scheduledKeepMessage', () => {
+  it('reads as the design spec writes it for more than one', () => {
+    expect(scheduledKeepMessage(3)).toBe(
+      '3 scheduled interviews keep their current time and interviewer.',
+    );
+  });
+
+  it('spells the singular out rather than interpolating into a plural frame', () => {
+    expect(scheduledKeepMessage(1)).toBe(
+      '1 scheduled interview keeps its current time and interviewer.',
+    );
   });
 });

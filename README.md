@@ -317,6 +317,37 @@ and nowhere else: a live check on email blur would hand out the answer for the p
 address. Telling the candidate plainly departs from the enumeration-safe posture the rest of the
 product keeps, and [02 §09.38](specs/hiring/02-booking-page.md) makes that trade deliberately.
 
+**Editing a vacancy affects future bookings only.** A new interviewer or a new length
+changes what the booking page offers from the next request onward and nothing else:
+interviews already scheduled keep their time, their length and their original calendar
+event, which stays in the mailbox it was created in. A Graph event cannot be moved
+between mailboxes, and cancelling, recreating and re-inviting a candidate is not a side
+effect a dropdown may have — so `PATCH …/vacancies/{id}` writes to `Vacancy` alone, and
+the absence of any application fix-up is the requirement rather than an omission. The
+screen confirms with the count it is leaving untouched before the request goes out.
+
+**Closing stops new bookings and nothing else.** Existing applications, their events and
+their counts all stand, and the booking link stays on the vacancy page — a manager still
+has to be able to copy it. A closed link is deliberately not a 404: it answers with the
+wordmark, the title and "This position is no longer accepting applications", with no
+calendar and no form, because someone who received the link legitimately deserves an
+explanation rather than something that looks broken. Availability for a closed vacancy
+answers the window with no slots in it, which is a different fact from a calendar that
+could not be reached — that one is still a `503`.
+
+**A vacancy with applications cannot be deleted, only closed.** Deleting it would take
+its interview notes, conclusions and criteria assessments with it, and spec 04 treats
+that record as permanent. `DELETE` answers `409 has_applications`; the menu item is
+disabled with the reason rather than hidden.
+
+**An assigned interviewer cannot be removed from the organization.** `DELETE
+…/members/{id}` — user-management spec 04's endpoint, which lands here because this is
+the guard that needs it — refuses with `409 interviewer_on_open_vacancies` and the count
+of open vacancies still assigned. Reassigning or closing them lifts it; a closed vacancy
+never counted, since its link already explains itself. The rest of that screen (search,
+the removed filter, restore) arrives with its own spec. Removal is a soft delete, and it
+rotates the account's `securityStamp`, which revokes every outstanding session at once.
+
 `/book/{slug}` is the product's only public route. The slug carries 72 bits of entropy, which is
 why it needs no organization segment, and it is frozen at creation so a link already sent keeps
 working. There is **no rate limiting on the booking POST** — see
@@ -333,8 +364,9 @@ than implying the endpoint is protected.
   DS; see the "DS gaps" table in the design spec.
 - Hiring closed several gaps the design specs had already recorded, in the design system
   rather than in the screens: `BookingLayout`, `Textarea`, `FileInput`, `Toast`,
-  `Skeleton` and `Calendar` are new components; `SelectOption` gained `disabled`, `hint`
-  and `testId` so an ineligible interviewer can be shown-but-disabled with its reason;
+  `Skeleton`, `Calendar`, `Menu` and `Tooltip` are new components; `SelectOption` gained
+  `disabled`, `hint` and `testId` so an ineligible interviewer can be shown-but-disabled
+  with its reason;
   `Select`'s popover now scrolls, because a time-zone picker is hundreds of rows and
   would otherwise run off the viewport; `Table` gained `rowHref`/`rowTestId`; `Toggle`
   and `Modal` now forward unknown props, matching `Card` and `AuthLayout`. `Button`'s
@@ -349,7 +381,14 @@ than implying the endpoint is protected.
 - The public booking page is the one screen with real breakpoints, and inline styles
   cannot express a media query, so its layout classes live in `apps/web/app/globals.css`.
   Every value there is still a token.
-- Still outstanding for later hiring phases: `Combobox`, `Menu`, `Tooltip`, and promoting
-  the template's `P` glyph dictionary to real icon exports. `Combobox` is the reason the
-  time-zone selector is a long unsearchable list: the whole IANA set is offered, because a
-  shortlist would strand anyone whose zone it left out.
+- `Menu` and `Tooltip` are a pair. A blocked action — Delete on a vacancy that has
+  candidates, and the last-admin guard when spec 04 lands — is **disabled rather than
+  hidden**, because a missing action is indistinguishable from a bug. That only works if
+  the reason is reachable, so a disabled item keeps `tabIndex` and `aria-disabled`
+  instead of the `disabled` attribute, which would take it out of the tab order and the
+  reason with it. The `Tooltip` bubble stays in the accessibility tree at all times and
+  only changes visibility, so `aria-describedby` always resolves.
+- Still outstanding for later hiring phases: `Combobox`, and promoting the template's `P`
+  glyph dictionary to real icon exports. `Combobox` is the reason the time-zone selector
+  is a long unsearchable list: the whole IANA set is offered, because a shortlist would
+  strand anyone whose zone it left out.

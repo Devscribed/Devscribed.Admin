@@ -13,6 +13,7 @@ declare module '@ds' {
   export * from '@ds/components/feedback/Skeleton';
   export * from '@ds/components/feedback/Spinner';
   export * from '@ds/components/feedback/Toast';
+  export * from '@ds/components/feedback/Tooltip';
   export * from '@ds/components/forms/Checkbox';
   export * from '@ds/components/forms/FileInput';
   export * from '@ds/components/forms/Input';
@@ -21,6 +22,7 @@ declare module '@ds' {
   export * from '@ds/components/forms/Select';
   export * from '@ds/components/forms/Textarea';
   export * from '@ds/components/icons/Eye';
+  export * from '@ds/components/navigation/Menu';
   export * from '@ds/components/navigation/NavItem';
   export * from '@ds/components/navigation/Tabs';
   export * from '@ds/components/navigation/Toggle';

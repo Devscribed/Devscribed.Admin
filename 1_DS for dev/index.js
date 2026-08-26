@@ -12,6 +12,7 @@ export { InfoBanner } from './components/feedback/InfoBanner.jsx';
 export { Skeleton } from './components/feedback/Skeleton.jsx';
 export { Spinner } from './components/feedback/Spinner.jsx';
 export { Toast } from './components/feedback/Toast.jsx';
+export { Tooltip } from './components/feedback/Tooltip.jsx';
 
 export { Checkbox } from './components/forms/Checkbox.jsx';
 export { FileInput } from './components/forms/FileInput.jsx';
@@ -23,6 +24,7 @@ export { Textarea } from './components/forms/Textarea.jsx';
 
 export { Eye, EyeOff } from './components/icons/Eye.jsx';
 
+export { Menu } from './components/navigation/Menu.jsx';
 export { NavItem } from './components/navigation/NavItem.jsx';
 export { Tabs } from './components/navigation/Tabs.jsx';
 export { Toggle } from './components/navigation/Toggle.jsx';

@@ -1,10 +1,19 @@
-import { Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import {
   HIRING_MESSAGES,
   canBeInterviewer,
   generateVacancySlug,
+  isVacancyStatus,
   validateVacancy,
-  type VacancyValidation,
+  validateVacancyPatch,
+  type VacancyField,
+  type VacancyPatchField,
+  type VacancyStatusFilter,
 } from '@devscribed/validation';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
@@ -15,6 +24,25 @@ export interface CreateVacancyDto {
   description?: string | null;
   interviewerAccountId?: string;
   durationMinutes?: unknown;
+}
+
+/**
+ * Any subset of the editable fields (01 §API PATCH). Every property is optional in the
+ * PATCH sense — absent means "leave it alone", which is why the service tests for
+ * `undefined` rather than for falsiness.
+ */
+export interface UpdateVacancyDto {
+  title?: string;
+  description?: string | null;
+  interviewerAccountId?: string;
+  durationMinutes?: unknown;
+  status?: unknown;
+}
+
+export interface VacancyFilters {
+  /** Title only, case-insensitive, server-side — the list is not paged (01 §05.16). */
+  search?: string;
+  status?: VacancyStatusFilter | string;
 }
 
 export interface InterviewerOption {
@@ -63,9 +91,24 @@ export class VacanciesService {
     );
   }
 
-  async list(organizationId: string) {
+  /**
+   * Search and the status filter run in the query, not in the browser: the list has no
+   * page size, so filtering client-side would mean shipping every vacancy in the
+   * organization to narrow it down to one (01 §05.16).
+   */
+  async list(organizationId: string, filters: VacancyFilters = {}) {
+    const search = (filters.search ?? '').trim();
+    // Anything but `open` or `closed` — including the list's own `all` — is no filter.
+    const status = isVacancyStatus(filters.status) ? filters.status : null;
+
     const vacancies = await this.prisma.vacancy.findMany({
-      where: { organizationId },
+      where: {
+        organizationId,
+        ...(status ? { status } : {}),
+        // `React` must find `Senior React Engineer` — a title search that respected case
+        // would be a search nobody can use.
+        ...(search ? { title: { contains: search, mode: 'insensitive' as const } } : {}),
+      },
       include: {
         interviewer: { select: { id: true, firstName: true, lastName: true } },
         _count: { select: { applications: true } },
@@ -83,7 +126,11 @@ export class VacanciesService {
 
     const scheduled = await this.prisma.application.groupBy({
       by: ['vacancyId'],
-      where: { organizationId, status: 'scheduled' },
+      where: {
+        organizationId,
+        status: 'scheduled',
+        vacancyId: { in: ordered.map((vacancy) => vacancy.id) },
+      },
       _count: { _all: true },
     });
     const scheduledByVacancy = new Map(scheduled.map((row) => [row.vacancyId, row._count._all]));
@@ -116,7 +163,7 @@ export class VacanciesService {
       interviewerAccountId: dto.interviewerAccountId ?? '',
       durationMinutes: dto.durationMinutes,
     });
-    if (!validation.valid) throw this.validationError(validation);
+    if (!validation.valid) throw this.validationError(validation.errors);
 
     const { title, description, interviewerAccountId, durationMinutes } = validation.value;
 
@@ -133,6 +180,91 @@ export class VacanciesService {
     }));
 
     return this.get(organizationId, vacancy.id);
+  }
+
+  /**
+   * Editing, with the one rule that matters: **future bookings only** (01 §04.13).
+   *
+   * A new interviewer or a new length changes what the booking page offers from the
+   * next request onward and nothing else. Interviews already scheduled keep their time,
+   * their length, and their event — which stays in the original interviewer's mailbox,
+   * because a Graph event cannot be moved between mailboxes and re-inviting a candidate
+   * is not a side effect a dropdown may have.
+   *
+   * So this method writes to `Vacancy` alone. There is deliberately no application
+   * fix-up here, and its absence is the requirement.
+   */
+  async update(organizationId: string, vacancyId: string, dto: UpdateVacancyDto) {
+    const existing = await this.prisma.vacancy.findFirst({
+      where: { id: vacancyId, organizationId },
+      select: { id: true },
+    });
+    // 404 before validation: a caller guessing ids must not learn which of them exist
+    // from the shape of the error.
+    if (!existing) throw new NotFoundException();
+
+    const validation = validateVacancyPatch(dto);
+    if (!validation.valid) throw this.validationError(validation.errors);
+
+    const { title, description, interviewerAccountId, durationMinutes, status } = validation.value;
+
+    // Re-resolved here as well as at create: a mailbox that has since disappeared must
+    // not be assignable just because it once was (01 §02.7).
+    if (interviewerAccountId !== undefined) {
+      await this.assertAssignable(organizationId, interviewerAccountId);
+    }
+
+    await this.prisma.vacancy.update({
+      where: { id: vacancyId },
+      // `publicSlug` is absent on purpose — it is frozen at creation, so renaming a
+      // vacancy leaves every link already sent working (01 §01.2).
+      data: {
+        ...(title !== undefined ? { title } : {}),
+        ...(description !== undefined ? { description: description || null } : {}),
+        ...(interviewerAccountId !== undefined ? { interviewerAccountId } : {}),
+        ...(durationMinutes !== undefined ? { durationMinutes } : {}),
+        ...(status !== undefined ? { status } : {}),
+      },
+    });
+
+    return this.get(organizationId, vacancyId);
+  }
+
+  /**
+   * Deletion is for vacancies nobody has applied to. One with applications is closed
+   * instead: deleting it would take its interview notes, conclusions and criteria
+   * assessments with it, and 04 treats that record as permanent (01 §03.11).
+   */
+  async remove(organizationId: string, vacancyId: string) {
+    const vacancy = await this.prisma.vacancy.findFirst({
+      where: { id: vacancyId, organizationId },
+      select: { id: true, _count: { select: { applications: true } } },
+    });
+    if (!vacancy) throw new NotFoundException();
+
+    if (vacancy._count.applications > 0) {
+      throw new ConflictException({
+        error: 'has_applications',
+        message: HIRING_MESSAGES.vacancy.deleteBlocked,
+      });
+    }
+
+    await this.prisma.vacancy.delete({ where: { id: vacancyId } });
+    return { success: true };
+  }
+
+  /**
+   * How many `open` vacancies this member is the interviewer on.
+   *
+   * The cross-spec guard of 01 §06.17, kept here rather than in user-management: the
+   * rule is hiring's, and removing a member who holds a live booking link would break
+   * every one of those links silently. Closed vacancies do not count — their links
+   * already explain themselves.
+   */
+  async openVacancyCount(organizationId: string, accountId: string): Promise<number> {
+    return this.prisma.vacancy.count({
+      where: { organizationId, interviewerAccountId: accountId, status: 'open' },
+    });
   }
 
   /**
@@ -188,11 +320,10 @@ export class VacanciesService {
     }
   }
 
-  private validationError(validation: VacancyValidation): UnprocessableEntityException {
-    return new UnprocessableEntityException({
-      error: 'validation',
-      fields: validation.errors,
-    });
+  private validationError(
+    fields: Partial<Record<VacancyField | VacancyPatchField, string>>,
+  ): UnprocessableEntityException {
+    return new UnprocessableEntityException({ error: 'validation', fields });
   }
 
   private present(

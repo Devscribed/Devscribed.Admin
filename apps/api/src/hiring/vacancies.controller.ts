@@ -1,9 +1,21 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { OrgScopeGuard } from '../auth/org-scope.guard';
 import type { AuthenticatedRequest } from '../auth/session.guard';
 import { SessionGuard } from '../auth/session.guard';
 import { HiringManageGuard } from './hiring-manage.guard';
-import type { CreateVacancyDto } from './vacancies.service';
+import type { CreateVacancyDto, UpdateVacancyDto, VacancyFilters } from './vacancies.service';
 import { VacanciesService } from './vacancies.service';
 
 /**
@@ -24,9 +36,11 @@ export class VacanciesController {
   }
 
   @Get('vacancies')
-  list(@Req() req: AuthenticatedRequest) {
+  list(@Req() req: AuthenticatedRequest, @Query() query: VacancyFilters) {
     // Always the session's organization — the path parameter has only been compared.
-    return this.vacancies.list(req.session!.organizationId).then((vacancies) => ({ vacancies }));
+    return this.vacancies
+      .list(req.session!.organizationId, query)
+      .then((vacancies) => ({ vacancies }));
   }
 
   @Post('vacancies')
@@ -40,5 +54,19 @@ export class VacanciesController {
   @Get('vacancies/:vacancyId')
   get(@Req() req: AuthenticatedRequest, @Param('vacancyId') vacancyId: string) {
     return this.vacancies.get(req.session!.organizationId, vacancyId);
+  }
+
+  @Patch('vacancies/:vacancyId')
+  update(
+    @Req() req: AuthenticatedRequest,
+    @Param('vacancyId') vacancyId: string,
+    @Body() dto: UpdateVacancyDto,
+  ) {
+    return this.vacancies.update(req.session!.organizationId, vacancyId, dto);
+  }
+
+  @Delete('vacancies/:vacancyId')
+  remove(@Req() req: AuthenticatedRequest, @Param('vacancyId') vacancyId: string) {
+    return this.vacancies.remove(req.session!.organizationId, vacancyId);
   }
 }

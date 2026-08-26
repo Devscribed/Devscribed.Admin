@@ -53,13 +53,35 @@ export const HIRING_MESSAGES = {
       ineligibleOption: 'No Microsoft 365 mailbox',
       /** Returned by the server when the mailbox no longer resolves. */
       ineligible: 'This member has no Microsoft 365 mailbox',
+      /**
+       * Returned by user-management's member `DELETE` when the member still holds open
+       * vacancies (01 §06.17). The count travels beside it as `openVacancies` rather
+       * than inside it, so the screen can name the number without this string having to
+       * guess at its own grammar.
+       */
+      removalBlocked: "Reassign or close this member's open vacancies first",
     },
     duration: {
       required: 'Choose an interview length',
     },
+    status: {
+      /**
+       * Server-side only: the filter offers three fixed choices and the menu writes one
+       * of two values, so nothing in the UI can produce this.
+       */
+      invalid: 'Status must be open or closed',
+    },
     deleteBlocked: 'Close this vacancy instead — it has candidates',
+    /** Shown against a closed vacancy's booking link, which stays visible (01 §Screens). */
+    closedLinkNote: 'This link is no longer accepting bookings.',
     forbidden: 'You do not have permission to manage vacancies',
     empty: 'No vacancies yet.',
+    /**
+     * Spec 01 names one empty string, for an organization with no vacancies at all.
+     * A search that matches nothing is a different fact, and telling someone who has
+     * twelve vacancies that they have none would read as data loss.
+     */
+    emptyFiltered: 'No vacancies match these filters.',
   },
   booking: {
     firstName: {
@@ -110,7 +132,17 @@ export const VACANCY_LIMITS = {
 export const VACANCY_DURATIONS = [15, 30, 45, 60] as const;
 export type VacancyDuration = (typeof VACANCY_DURATIONS)[number];
 
-export type VacancyStatus = 'open' | 'closed';
+/** Open or closed, freely and repeatedly. There is no `draft` (01 §03.8). */
+export const VACANCY_STATUSES = ['open', 'closed'] as const;
+export type VacancyStatus = (typeof VACANCY_STATUSES)[number];
+
+/** The list filter's three choices — `all` is the absence of a filter, not a status. */
+export const VACANCY_STATUS_FILTERS = ['all', 'open', 'closed'] as const;
+export type VacancyStatusFilter = (typeof VACANCY_STATUS_FILTERS)[number];
+
+export const isVacancyStatus = (input: unknown): input is VacancyStatus =>
+  VACANCY_STATUSES.includes(input as VacancyStatus);
+
 
 const ok = (value: string): FieldResult => ({ valid: true, value });
 const fail = (error: string): FieldResult => ({ valid: false, error });
@@ -209,6 +241,100 @@ export function validateVacancy(input: Partial<VacancyInput>): VacancyValidation
       description: description.valid ? description.value : '',
     },
   };
+}
+
+/* ------------------------------------------------------------------ *
+ * Vacancy edits — spec 01 §04
+ * ------------------------------------------------------------------ */
+
+export type VacancyPatchField = VacancyField | 'status';
+
+/** The dialog's order, with `status` last — the menu writes it, never the form. */
+export const VACANCY_PATCH_FIELD_ORDER: readonly VacancyPatchField[] = [
+  ...VACANCY_FIELD_ORDER,
+  'status',
+];
+
+export interface VacancyPatchInput {
+  title: string;
+  description: string | null;
+  interviewerAccountId: string;
+  durationMinutes: unknown;
+  status: unknown;
+}
+
+export interface VacancyPatchValidation {
+  valid: boolean;
+  errors: Partial<Record<VacancyPatchField, string>>;
+  firstInvalidField: VacancyPatchField | null;
+  /** Only the fields the caller actually sent — a PATCH is a subset, not a whole. */
+  value: {
+    title?: string;
+    description?: string;
+    interviewerAccountId?: string;
+    durationMinutes?: VacancyDuration;
+    status?: VacancyStatus;
+  };
+}
+
+/**
+ * A PATCH carries any subset of the editable fields (01 §API PATCH), so absence and
+ * emptiness must stay distinguishable: an absent `description` leaves the stored one
+ * alone, an empty one clears it. Validating the whole shape here — as `validateVacancy`
+ * does for a create — would reject every partial edit for missing a field the caller
+ * never intended to change.
+ */
+export function validateVacancyPatch(
+  input: Partial<VacancyPatchInput>,
+): VacancyPatchValidation {
+  const errors: Partial<Record<VacancyPatchField, string>> = {};
+  const value: VacancyPatchValidation['value'] = {};
+
+  if (input.title !== undefined) {
+    const title = validateVacancyTitle(input.title);
+    if (title.valid) value.title = title.value;
+    else errors.title = title.error;
+  }
+
+  if (input.description !== undefined) {
+    const description = validateVacancyDescription(input.description);
+    if (description.valid) value.description = description.value;
+    else errors.description = description.error;
+  }
+
+  if (input.interviewerAccountId !== undefined) {
+    const interviewer = validateInterviewerAccountId(input.interviewerAccountId);
+    if (interviewer.valid) value.interviewerAccountId = interviewer.value;
+    else errors.interviewerAccountId = interviewer.error;
+  }
+
+  if (input.durationMinutes !== undefined) {
+    const duration = validateDurationMinutes(input.durationMinutes);
+    if (duration.valid) value.durationMinutes = duration.value;
+    else errors.durationMinutes = duration.error;
+  }
+
+  if (input.status !== undefined) {
+    if (isVacancyStatus(input.status)) value.status = input.status;
+    else errors.status = HIRING_MESSAGES.vacancy.status.invalid;
+  }
+
+  const firstInvalidField = VACANCY_PATCH_FIELD_ORDER.find((field) => errors[field]) ?? null;
+  return { valid: firstInvalidField === null, errors, firstInvalidField, value };
+}
+
+/**
+ * The confirmation shown before an interviewer or a duration change (01 §04.14).
+ *
+ * The design spec writes the copy as `{n} scheduled interviews keep their current time
+ * and interviewer.` A single interview would read as "1 scheduled interviews keep
+ * their", so the singular is spelled out rather than interpolated into a plural frame —
+ * the sentence the visitor reads is the contract, not the template.
+ */
+export function scheduledKeepMessage(count: number): string {
+  return count === 1
+    ? '1 scheduled interview keeps its current time and interviewer.'
+    : `${count} scheduled interviews keep their current time and interviewer.`;
 }
 
 /* ------------------------------------------------------------------ *

@@ -233,6 +233,27 @@ export function validateLogin(input: Partial<LoginInput>): LoginValidation {
   return { valid: firstInvalidField === null, errors, firstInvalidField, value };
 }
 
+/* ------------------------------------------------------------------ *
+ * Spec 04 — member list management
+ * ------------------------------------------------------------------ */
+
+/**
+ * The whole-request outcomes of removing a member, verbatim from spec 04's Error
+ * Messages table. Only the `DELETE` path is here: the rest of that screen — search,
+ * the removed filter, restore — arrives with the spec itself.
+ */
+export const MEMBER_MESSAGES = {
+  removeForbidden: 'You do not have permission to remove members',
+  cannotRemoveSelf: 'You cannot remove yourself from the organization',
+  lastAdmin: 'Organization must retain at least one admin',
+  alreadyRemoved: 'Member is already removed',
+} as const;
+
+/** Removing a member is `admin`/`manager`, the same pair that manages hiring. */
+export const MEMBER_MANAGE_ROLES: readonly string[] = ['admin', 'manager'];
+
+export const canManageMembers = (role: string): boolean => MEMBER_MANAGE_ROLES.includes(role);
+
 export type MembershipRole = 'admin' | 'member';
 /** `removed` is the soft-deleted state (specs 02 and 04). */
 export type MembershipStatus = 'active' | 'invited' | 'removed';

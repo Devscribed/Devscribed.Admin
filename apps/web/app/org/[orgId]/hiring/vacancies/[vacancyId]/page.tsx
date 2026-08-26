@@ -1,18 +1,34 @@
 'use client';
 
-import { notFound, useSearchParams } from 'next/navigation';
-import { use, useEffect, useState } from 'react';
-import { HIRING_MESSAGES } from '@devscribed/validation';
-import { Badge, Button, Card, SectionLabel, Skeleton, Toast } from '@/ds';
+import { notFound, useRouter, useSearchParams } from 'next/navigation';
+import { use, useCallback, useEffect, useState } from 'react';
+import { HIRING_MESSAGES, MESSAGES } from '@devscribed/validation';
+import { Badge, Button, Card, Menu, Modal, SectionLabel, Skeleton, Toast } from '@/ds';
 import { PageHeader } from '@/layout/PageHeader';
 import { formatDuration } from '@/hiring/format';
 import type { Vacancy } from '@/hiring/types';
+import { VacancyDialog } from '../VacancyDialog';
 
 type State = { status: 'loading' } | { status: 'ready'; vacancy: Vacancy } | { status: 'gone' };
 
+const TOAST_TEST_IDS: Record<string, string> = {
+  [HIRING_MESSAGES.toast.vacancyCreated]: 'toast-vacancy-created',
+  [HIRING_MESSAGES.toast.vacancyUpdated]: 'toast-vacancy-updated',
+  [HIRING_MESSAGES.toast.vacancyClosed]: 'toast-vacancy-closed',
+  [HIRING_MESSAGES.toast.vacancyReopened]: 'toast-vacancy-reopened',
+  [HIRING_MESSAGES.toast.linkCopied]: 'toast-link-copied',
+};
+
+type Notice = { message: string; tone: 'success' | 'error' };
+
 /**
  * The vacancy detail page. The booking link is first because copying it is the reason
- * to visit; Board, Edit and the actions menu arrive with the phases that own them.
+ * to visit; the Board action arrives with the board.
+ *
+ * Closing changes nothing but whether the link accepts bookings (01 §03.9), so the link
+ * stays on the page for a closed vacancy — carrying a note rather than disappearing.
+ * Delete is disabled rather than hidden once there are candidates: a missing action is
+ * indistinguishable from a bug, and the tooltip carries the reason.
  */
 export default function VacancyDetailPage({
   params,
@@ -20,38 +36,95 @@ export default function VacancyDetailPage({
   params: Promise<{ orgId: string; vacancyId: string }>;
 }) {
   const { orgId, vacancyId } = use(params);
+  const router = useRouter();
   const search = useSearchParams();
   const [state, setState] = useState<State>({ status: 'loading' });
-  const [toast, setToast] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   // Raised here rather than on the list, so it survives the navigation that follows a
   // successful create.
   useEffect(() => {
-    if (search.get('created') === '1') setToast(HIRING_MESSAGES.toast.vacancyCreated);
+    if (search.get('created') === '1') {
+      setNotice({ message: HIRING_MESSAGES.toast.vacancyCreated, tone: 'success' });
+    }
   }, [search]);
 
-  useEffect(() => {
-    let cancelled = false;
+  const load = useCallback(async (): Promise<Vacancy | null> => {
+    const response = await fetch(`/api/organizations/${orgId}/hiring/vacancies/${vacancyId}`, {
+      credentials: 'same-origin',
+    });
+    if (response.status === 403 || response.status === 404) {
+      setState({ status: 'gone' });
+      return null;
+    }
+    if (!response.ok) return null;
+    const vacancy: Vacancy = await response.json();
+    setState({ status: 'ready', vacancy });
+    return vacancy;
+  }, [orgId, vacancyId]);
 
-    async function load(): Promise<void> {
-      const response = await fetch(
-        `/api/organizations/${orgId}/hiring/vacancies/${vacancyId}`,
-        { credentials: 'same-origin' },
-      );
-      if (cancelled) return;
-      if (response.status === 403 || response.status === 404) {
-        setState({ status: 'gone' });
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  /** Close and reopen are the same write with a different value (01 §03.8). */
+  async function setStatus(next: 'open' | 'closed'): Promise<void> {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/organizations/${orgId}/hiring/vacancies/${vacancyId}`, {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: next }),
+      });
+      if (!response.ok) {
+        setNotice({ message: MESSAGES.generic, tone: 'error' });
         return;
       }
-      if (!response.ok) return;
-      setState({ status: 'ready', vacancy: await response.json() });
+      // Refetched rather than patched in place — no optimistic updates on this screen.
+      await load();
+      setNotice({
+        message:
+          next === 'closed'
+            ? HIRING_MESSAGES.toast.vacancyClosed
+            : HIRING_MESSAGES.toast.vacancyReopened,
+        tone: 'success',
+      });
+    } catch {
+      setNotice({ message: MESSAGES.generic, tone: 'error' });
+    } finally {
+      setBusy(false);
     }
+  }
 
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [orgId, vacancyId]);
+  async function remove(): Promise<void> {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/organizations/${orgId}/hiring/vacancies/${vacancyId}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      });
+      if (response.ok) {
+        router.push(`/org/${orgId}/hiring/vacancies`);
+        return;
+      }
+      // Reachable only by a race — the action is disabled once there are candidates —
+      // so the server's reason is what gets shown, not a guess at it.
+      const body = await response.json().catch(() => ({}));
+      setConfirmingDelete(false);
+      setNotice({ message: body.message ?? MESSAGES.generic, tone: 'error' });
+      await load();
+    } catch {
+      setNotice({ message: MESSAGES.generic, tone: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  }
 
   if (state.status === 'gone') notFound();
 
@@ -64,13 +137,15 @@ export default function VacancyDetailPage({
   }
 
   const { vacancy } = state;
+  const open = vacancy.status === 'open';
+  const blocked = vacancy.applicationCount > 0;
   const bookingUrl =
     typeof window === 'undefined' ? '' : `${window.location.origin}/book/${vacancy.publicSlug}`;
 
   async function copyLink(): Promise<void> {
     try {
       await navigator.clipboard.writeText(bookingUrl);
-      setToast(HIRING_MESSAGES.toast.linkCopied);
+      setNotice({ message: HIRING_MESSAGES.toast.linkCopied, tone: 'success' });
     } catch {
       // The action never silently fails: if the clipboard is unavailable, the link
       // text is selected so it can be copied by hand.
@@ -89,9 +164,45 @@ export default function VacancyDetailPage({
     <div data-testid="vacancy-detail">
       <PageHeader
         title={vacancy.title}
-        subtitle={`${vacancy.status === 'open' ? 'Open' : 'Closed'} · ${formatDuration(
+        subtitle={`${open ? 'Open' : 'Closed'} · ${formatDuration(
           vacancy.durationMinutes,
         )} · ${vacancy.interviewer.fullName}`}
+        action={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+            <Button variant="secondary" onClick={() => setEditing(true)} data-testid="vacancy-edit-button">
+              Edit
+            </Button>
+            <Menu
+              label="Vacancy actions"
+              data-testid="vacancy-actions-menu"
+              items={[
+                open
+                  ? {
+                      key: 'close',
+                      label: 'Close vacancy',
+                      testId: 'vacancy-action-close',
+                      onSelect: () => void setStatus('closed'),
+                    }
+                  : {
+                      key: 'reopen',
+                      label: 'Reopen vacancy',
+                      testId: 'vacancy-action-reopen',
+                      onSelect: () => void setStatus('open'),
+                    },
+                {
+                  key: 'delete',
+                  label: 'Delete vacancy',
+                  testId: 'vacancy-action-delete',
+                  tone: 'danger',
+                  disabled: blocked,
+                  tooltip: HIRING_MESSAGES.vacancy.deleteBlocked,
+                  tooltipTestId: 'vacancy-delete-guard-message',
+                  onSelect: () => setConfirmingDelete(true),
+                },
+              ]}
+            />
+          </div>
+        }
       />
 
       <div style={{ display: 'grid', gap: 'var(--sp-10)' }}>
@@ -129,6 +240,14 @@ export default function VacancyDetailPage({
               Copy
             </Button>
           </div>
+          {!open && (
+            <p
+              data-testid="vacancy-closed-link-note"
+              style={{ margin: 'var(--sp-4) 0 0', fontSize: 'var(--fs-12)', color: 'var(--text-muted)' }}
+            >
+              {HIRING_MESSAGES.vacancy.closedLinkNote}
+            </p>
+          )}
         </Card>
 
         <Card>
@@ -148,8 +267,11 @@ export default function VacancyDetailPage({
 
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-8)' }}>
-            <Badge tone={vacancy.status === 'open' ? 'active' : 'inactive'}>
-              {vacancy.status === 'open' ? 'Open' : 'Closed'}
+            <Badge
+              tone={open ? 'active' : 'inactive'}
+              data-testid={`vacancy-status-${vacancy.id}`}
+            >
+              {open ? 'Open' : 'Closed'}
             </Badge>
             <span
               data-testid="vacancy-detail-counts"
@@ -161,15 +283,51 @@ export default function VacancyDetailPage({
         </Card>
       </div>
 
-      {toast && (
+      <VacancyDialog
+        orgId={orgId}
+        open={editing}
+        vacancy={vacancy}
+        onClose={() => setEditing(false)}
+        onSaved={() => {
+          setEditing(false);
+          void load();
+          setNotice({ message: HIRING_MESSAGES.toast.vacancyUpdated, tone: 'success' });
+        }}
+      />
+
+      <Modal
+        open={confirmingDelete}
+        title="Delete vacancy?"
+        onClose={() => setConfirmingDelete(false)}
+        data-testid="vacancy-delete-confirm"
+        actions={
+          <>
+            <Button variant="secondary" onClick={() => setConfirmingDelete(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={remove}
+              loading={busy}
+              data-testid="vacancy-delete-confirm-button"
+            >
+              Delete vacancy
+            </Button>
+          </>
+        }
+      >
+        <p style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}>
+          {vacancy.title} will be removed. This cannot be undone.
+        </p>
+      </Modal>
+
+      {notice && (
         <Toast
-          tone="success"
-          onDismiss={() => setToast(null)}
-          data-testid={
-            toast === HIRING_MESSAGES.toast.linkCopied ? 'toast-link-copied' : 'toast-vacancy-created'
-          }
+          tone={notice.tone}
+          onDismiss={() => setNotice(null)}
+          data-testid={TOAST_TEST_IDS[notice.message] ?? 'toast-vacancy-error'}
         >
-          {toast}
+          {notice.message}
         </Toast>
       )}
     </div>

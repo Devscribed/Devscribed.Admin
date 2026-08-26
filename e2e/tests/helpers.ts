@@ -148,6 +148,45 @@ export async function createVacancy(
   return { id: body.id, publicSlug: body.publicSlug, title: body.title };
 }
 
+/**
+ * Books an interview straight through the public endpoint, at the earliest time the
+ * interviewer is free. A precondition for the screens that need a vacancy with
+ * candidates on it, not the thing under test — the booking page has its own suite.
+ */
+export async function bookInterview(
+  request: APIRequestContext,
+  publicSlug: string,
+  candidate: { firstName?: string; lastName?: string; email?: string } = {},
+): Promise<{ startUtc: string }> {
+  const availability = await request.get(`${API}/api/book/${publicSlug}/availability`, {
+    params: { timeZone: 'UTC' },
+  });
+  if (!availability.ok()) {
+    throw new Error(`Precondition failed: availability answered ${availability.status()}`);
+  }
+
+  const dates: Record<string, string[]> = (await availability.json()).dates ?? {};
+  const startUtc = Object.keys(dates)
+    .sort()
+    .flatMap((date) => dates[date])[0];
+  if (!startUtc) throw new Error('Precondition failed: the window offers no slots');
+
+  const booked = await request.post(`${API}/api/book/${publicSlug}`, {
+    multipart: {
+      firstName: candidate.firstName ?? 'Jane',
+      lastName: candidate.lastName ?? 'Doe',
+      email: candidate.email ?? uniqueEmail('candidate'),
+      startUtc,
+      timeZone: 'UTC',
+      cv: CV_FILE,
+    },
+  });
+  if (!booked.ok()) {
+    throw new Error(`Precondition failed: booking answered ${booked.status()}`);
+  }
+  return { startUtc };
+}
+
 /** A tiny but non-empty PDF — enough to satisfy every rule the CV validator applies. */
 export const CV_FILE = {
   name: 'jane-doe-cv.pdf',

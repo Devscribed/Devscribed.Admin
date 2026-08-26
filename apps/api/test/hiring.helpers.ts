@@ -105,6 +105,37 @@ export async function setRole(
   await prisma.membership.update({ where: { accountId }, data: { role } });
 }
 
+export interface SeededVacancy {
+  id: string;
+  slug: string;
+  title: string;
+}
+
+/** Creates a vacancy through the API — a precondition, not the thing under test. */
+export async function createVacancy(
+  app: INestApplication,
+  session: Signed,
+  overrides: {
+    title?: string;
+    durationMinutes?: number;
+    interviewerAccountId?: string;
+  } = {},
+): Promise<SeededVacancy> {
+  const response = await request(app.getHttpServer())
+    .post(`/api/organizations/${session.organizationId}/hiring/vacancies`)
+    .set('Cookie', session.cookies)
+    .send({
+      title: overrides.title ?? 'Senior React Engineer',
+      interviewerAccountId: overrides.interviewerAccountId ?? session.accountId,
+      durationMinutes: overrides.durationMinutes ?? 60,
+    });
+
+  if (response.status !== 201) {
+    throw new Error(`Precondition failed: vacancy create answered ${response.status}`);
+  }
+  return { id: response.body.id, slug: response.body.publicSlug, title: response.body.title };
+}
+
 export const CV_BYTES = Buffer.from('%PDF-1.4 a perfectly ordinary cv');
 
 /**
@@ -139,19 +170,28 @@ export async function availabilityFor(
  * the following month before giving up.
  */
 export async function firstSlot(app: INestApplication, slug: string): Promise<string> {
+  return (await firstSlots(app, slug, 1))[0];
+}
+
+/** The earliest `count` bookable starts, in ascending order. */
+export async function firstSlots(
+  app: INestApplication,
+  slug: string,
+  count: number,
+): Promise<string[]> {
   const first = await availabilityFor(app, slug);
   if (first.status !== 200) {
     throw new Error(`Precondition failed: availability answered ${first.status}`);
   }
 
   const slots = flattenSlots(first.body);
-  if (slots.length > 0) return slots[0];
+  if (slots.length >= count) return slots.slice(0, count);
 
   const nextMonth = shiftMonth(yearMonthOf(first.body.window.from), 1);
   const next = await availabilityFor(app, slug, { month: nextMonth });
-  const later = flattenSlots(next.body);
-  if (later.length === 0) throw new Error('Precondition failed: the window offers no slots');
-  return later[0];
+  const all = [...slots, ...flattenSlots(next.body)];
+  if (all.length < count) throw new Error('Precondition failed: the window offers too few slots');
+  return all.slice(0, count);
 }
 
 /** Ascending, across every date the response covers. */
@@ -159,4 +199,20 @@ export function flattenSlots(body: AvailabilityBody): string[] {
   return Object.keys(body.dates ?? {})
     .sort()
     .flatMap((date) => body.dates[date]);
+}
+
+/** Books an interview through the public endpoint, exactly as a candidate would. */
+export function bookInterview(
+  app: INestApplication,
+  slug: string,
+  values: { firstName: string; lastName: string; email: string; startUtc: string },
+) {
+  return request(app.getHttpServer())
+    .post(`/api/book/${slug}`)
+    .field('firstName', values.firstName)
+    .field('lastName', values.lastName)
+    .field('email', values.email)
+    .field('startUtc', values.startUtc)
+    .field('timeZone', TIME_ZONE)
+    .attach('cv', CV_BYTES, { filename: 'cv.pdf', contentType: 'application/pdf' });
 }

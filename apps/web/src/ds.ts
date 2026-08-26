@@ -22,6 +22,7 @@ export {
   IconButton,
   InfoBanner,
   Input,
+  Menu,
   Modal,
   NavItem,
   Radio,
@@ -36,4 +37,5 @@ export {
   Textarea,
   Toast,
   Toggle,
+  Tooltip,
 } from '@ds';
