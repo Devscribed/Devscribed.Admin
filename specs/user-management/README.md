@@ -17,6 +17,8 @@ Functional specifications for the user-management surface of Devscribed.Admin. E
 | 08 | [Vacation Reserve & Auto-Accrual](08-vacation-reserve-auto-accrual.md) | — | vacation-reserve, auto-accrual, ledger, monthly-credit, year-end-expiry |
 | 09 | [Vacation Requests](09-vacation-requests.md) | — | vacation-request, submit, approve, reject, cancel, debit, refund |
 | 10 | [Organization Requests Page](10-organization-requests-page.md) | — | requests-page, sidebar, badge, status-filter, organization-wide |
+| 11 | [Projects](11-projects.md) | [mockup](11-projects.mock.html) | project, project-member, assignment, archive, restore, sidebar, projects-page |
+| 12 | [Time Tracking](12-time-tracking.md) | [mockup](12-time-tracking.mock.html) | time-tracking, timer, time-entry, running-timer, daily-view, weekly-view, monthly-view, calendar, topbar-indicator |
 
 ## Shared Rules
 
@@ -29,7 +31,7 @@ Functional specifications for the user-management surface of Devscribed.Admin. E
 | SecurityStamp session revocation | 02 | 04, 06 |
 | Zero-admin guard (reject if 0 active admins remain) | 04, 05 | — |
 | Role enum: admin, manager, user, viewer | 01 | all |
-| Member status enum: active, removed | 04 | 05, 07-10 |
+| Member status enum: active, removed | 04 | 05, 07-12 |
 | Submit CTA is never disabled for validation; clicking an invalid form shows every error and focuses the first invalid field | 01 | 02 (applied), 03 (not yet applied) |
 | Signed-out shell: one `AuthLayout`, one 480px card, cross-account link outside the card in the footer | 02 | 01, 03 |
 
@@ -60,6 +62,10 @@ Spec 03 still gates its submit buttons on validation and needs the shared CTA ru
 | Password reset | 02 | All sessions revoked | 02 |
 | Inviter removed | 04 | Pending invitations invalidated | 03 |
 | Financials updated | 07 | Snapshot created (EffectiveFrom = today) | 07 |
+| Project archived | 11 | Existing time entries preserved; project hidden from selectors | 12 |
+| Member removed | 04 | Project assignments cascade-deleted | 11 |
+| Member removed | 04 | Running timer cascade-deleted (no entry created) | 12 |
+| Timer stopped | 12 | TimeEntry created from RunningTimer | 12 |
 | 1st of month (or manual trigger) | 08 | Auto-accrual credit for billing month | 08 |
 | Vacation approved | 09 | Debit transaction in reserve ledger | 08 |
 | Approved vacation cancelled | 09 | Compensating refund transaction | 08 |
@@ -79,4 +85,7 @@ Spec 03 still gates its submit buttons on validation and needs the shared CTA ru
 │             │              └─► 09 Vacation Requests
 │             │                   └─► 10 Organization Requests Page
 │             └─► 09 (removal cascades)
+│
+11 Projects
+└─► 12 Time Tracking
 ```

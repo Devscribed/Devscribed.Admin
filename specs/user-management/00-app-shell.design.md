@@ -57,10 +57,12 @@ Sidebar and top bar are fixed. Only the content column scrolls.
 
 ### Planned rows
 
-| Row | Route | Ships with | Visible to |
-|---|---|---|---|
-| Members | `/org/{orgId}/members` | now | all roles |
-| Requests | `/org/{orgId}/requests` | spec 10 | admin, manager |
+| Section | Row | Route | Ships with | Visible to |
+|---|---|---|---|---|
+| PEOPLE | Members | `/org/{orgId}/members` | now | all roles |
+| PROJECTS | Projects | `/org/{orgId}/projects` | spec 11 | admin, manager |
+| TIME | Time Tracking | `/org/{orgId}/time-tracking` | spec 12 | admin, manager, user |
+| — | Requests | `/org/{orgId}/requests` | spec 10 | admin, manager |
 
 ## Top bar
 
@@ -69,7 +71,8 @@ Right-aligned, and deliberately thin:
 - **Account** — full name in Grotesk 500 / `--fs-14`, then a 38px circular avatar: initials in `--accent` on `--accent-soft`. No photograph; the product carries no imagery.
 - **Menu** — click opens a card (`--bg-panel`, 1px `--border`, `--radius-lg`, `--shadow-card`) holding **Log out**. Closes on outside click or `Escape`.
 - **Log out** calls `POST /api/logout` and then replaces the history entry with `/login`, so the signed-in URL is not sitting behind the back button.
-- **Not shipped:** the tracker chip (`00:00:00`) belongs to Timesheets, which no spec covers, and the theme toggle is excluded by the light-only rule.
+- **Timer indicator** (spec 12): when the current user has a running timer, a chip appears to the left of the account button showing elapsed time (`HH:MM:SS`), truncated project name, and a stop button. Clicking the time/project navigates to `/org/{orgId}/time-tracking`; clicking stop calls `POST .../timer/stop`. Data is fetched via `GET .../timer` on shell mount.
+- **Not shipped:** the theme toggle is excluded by the light-only rule.
 
 > **Logout is not session revocation.** It drops this browser's cookie; the signed token itself stays valid until it expires. Revoking every outstanding session is what `SecurityStamp` rotation does (spec 02 requirement 12) — and it is deliberately not wired to logout, which would otherwise sign the account out of every other device too.
 
