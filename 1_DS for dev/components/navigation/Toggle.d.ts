@@ -1,10 +1,9 @@
 import * as React from 'react';
 
-export interface ToggleProps {
+export interface ToggleProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'> {
   options: (string | { value: string; label: React.ReactNode })[];
   value?: string;
   onChange?: (value: string) => void;
-  style?: React.CSSProperties;
 }
 
 /** Pill-shaped segmented control — the day/week/month + light/dark pattern. */

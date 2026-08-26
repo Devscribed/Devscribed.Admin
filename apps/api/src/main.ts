@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
+import { resolveCalendarConfig } from './hiring/calendar/calendar.config';
 import { resolveStorageConfig } from './hiring/storage/storage.config';
 
 /**
@@ -10,10 +11,11 @@ import { resolveStorageConfig } from './hiring/storage/storage.config';
  */
 async function bootstrap(): Promise<void> {
   // Before anything else, and deliberately before the port is opened: an application
-  // configured to keep CVs somewhere they will not survive must not accept bookings.
-  // The module would refuse too, but this reports it as its own sentence rather than
-  // as a dependency-injection failure.
+  // that would keep CVs somewhere they will not survive, or create no calendar event at
+  // all, must not accept bookings. The module would refuse too, but this reports it as
+  // its own sentence rather than as a dependency-injection failure.
   resolveStorageConfig();
+  resolveCalendarConfig();
 
   const app = await NestFactory.create(AppModule);
   app.use(cookieParser());

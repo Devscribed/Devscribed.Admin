@@ -5,12 +5,13 @@ import {
   HttpCode,
   Param,
   Post,
+  Query,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { BOOKING_LIMITS } from '@devscribed/validation';
-import type { BookingDto, UploadedCv } from './booking.service';
+import type { AvailabilityQuery, BookingDto, UploadedCv } from './booking.service';
 import { BookingService } from './booking.service';
 
 /**
@@ -31,8 +32,8 @@ export class BookingController {
   }
 
   @Get(':slug/availability')
-  availability(@Param('slug') slug: string) {
-    return this.booking.availability(slug);
+  availability(@Param('slug') slug: string, @Query() query: AvailabilityQuery) {
+    return this.booking.availabilityFor(slug, query);
   }
 
   @Post(':slug')

@@ -4,7 +4,15 @@ import request from 'supertest';
 import { PrismaService } from '../src/prisma.service';
 import { Storage } from '../src/hiring/storage/storage';
 import { StubCalendarProvider } from './stub-calendar.provider';
-import { CV_BYTES, bootHiringApp, resetDatabase, signup } from './hiring.helpers';
+import { formatBookedWhen } from '@devscribed/validation';
+import {
+  CV_BYTES,
+  TIME_ZONE,
+  bootHiringApp,
+  firstSlot,
+  resetDatabase,
+  signup,
+} from './hiring.helpers';
 
 /**
  * The public booking path, end to end: what a booking writes, what a repeat booking
@@ -32,13 +40,6 @@ describe('Hiring — booking', () => {
     return { id: response.body.id, slug: response.body.publicSlug };
   };
 
-  const firstSlot = async (slug: string): Promise<string> => {
-    const response = await request(app.getHttpServer()).get(`/api/book/${slug}/availability`);
-    expect(response.status).toBe(200);
-    expect(response.body.slots.length).toBeGreaterThan(0);
-    return response.body.slots[0];
-  };
-
   const book = (
     slug: string,
     values: { firstName: string; lastName: string; email: string; startUtc: string; note?: string },
@@ -48,7 +49,8 @@ describe('Hiring — booking', () => {
       .field('firstName', values.firstName)
       .field('lastName', values.lastName)
       .field('email', values.email)
-      .field('startUtc', values.startUtc);
+      .field('startUtc', values.startUtc)
+      .field('timeZone', TIME_ZONE);
     if (values.note) call.field('note', values.note);
     return call.attach('cv', CV_BYTES, {
       filename: 'jane-doe-cv.pdf',
@@ -83,7 +85,7 @@ describe('Hiring — booking', () => {
   it('creates exactly one event and one application', async () => {
     const admin = await signup(app, 'pat@acme.com');
     const vacancy = await createVacancy(admin);
-    const startUtc = await firstSlot(vacancy.slug);
+    const startUtc = await firstSlot(app, vacancy.slug);
 
     const response = await book(vacancy.slug, {
       firstName: 'Jane',
@@ -147,7 +149,7 @@ describe('Hiring — booking', () => {
       firstName: 'Jon',
       lastName: 'Smith',
       email: 'jane@example.com',
-      startUtc: await firstSlot(vacancyA.slug),
+      startUtc: await firstSlot(app, vacancyA.slug),
     });
     expect(first.status).toBe(201);
 
@@ -155,7 +157,7 @@ describe('Hiring — booking', () => {
       firstName: 'Jonathan',
       lastName: 'Smith',
       email: 'jane@example.com',
-      startUtc: await firstSlot(vacancyB.slug),
+      startUtc: await firstSlot(app, vacancyB.slug),
     });
     expect(second.status).toBe(201);
 
@@ -172,11 +174,120 @@ describe('Hiring — booking', () => {
     expect(forA.submittedName).toBe('Jon Smith');
   });
 
+  /** TC-H02-INT-03 */
+  it('blocks a repeat future booking for the same vacancy, naming the existing time', async () => {
+    const admin = await signup(app, 'pat@acme.com');
+    const vacancyA = await createVacancy(admin, 'React Engineer');
+    const vacancyB = await createVacancy(admin, 'DotNet Engineer');
+    const first = await firstSlot(app, vacancyA.slug);
+
+    expect(
+      (await book(vacancyA.slug, {
+        firstName: 'Jane',
+        lastName: 'Doe',
+        email: 'jane@example.com',
+        startUtc: first,
+      })).status,
+    ).toBe(201);
+
+    const repeat = await book(vacancyA.slug, {
+      firstName: 'Jane',
+      lastName: 'Doe',
+      email: 'jane@example.com',
+      startUtc: await firstSlot(app, vacancyA.slug),
+    });
+
+    expect(repeat.status).toBe(409);
+    expect(repeat.body.error).toBe('already_booked');
+    // The date, the time, and the zone of the interview they already have.
+    expect(repeat.body.message).toBe(
+      `You already have an interview for this position on ${formatBookedWhen(
+        new Date(first),
+        TIME_ZONE,
+      )} (${TIME_ZONE}).`,
+    );
+    expect([...calendar.events.values()]).toHaveLength(1);
+    expect(await prisma.application.count({ where: { vacancyId: vacancyA.id } })).toBe(1);
+
+    // Another position is not a duplicate — one person applying to two roles is normal.
+    const other = await book(vacancyB.slug, {
+      firstName: 'Jane',
+      lastName: 'Doe',
+      email: 'jane@example.com',
+      startUtc: await firstSlot(app, vacancyB.slug),
+    });
+    expect(other.status).toBe(201);
+    expect(await prisma.application.count()).toBe(2);
+  });
+
+  /** TC-H02-INT-04 */
+  it('lets a candidate whose interview is in the past book again', async () => {
+    const admin = await signup(app, 'pat@acme.com');
+    const vacancy = await createVacancy(admin);
+    const startUtc = await firstSlot(app, vacancy.slug);
+
+    expect(
+      (await book(vacancy.slug, {
+        firstName: 'Jane',
+        lastName: 'Doe',
+        email: 'jane@example.com',
+        startUtc,
+      })).status,
+    ).toBe(201);
+
+    // Interviewing three months ago makes someone a re-interview, not a duplicate, and
+    // the only way to have a past application is for time to have passed.
+    const past = new Date(Date.now() - 90 * 24 * 60 * 60_000);
+    await prisma.application.updateMany({
+      data: { start: past, end: new Date(past.getTime() + 60 * 60_000) },
+    });
+    calendar.reset();
+
+    const again = await book(vacancy.slug, {
+      firstName: 'Jane',
+      lastName: 'Doe',
+      email: 'jane@example.com',
+      startUtc: await firstSlot(app, vacancy.slug),
+    });
+
+    expect(again.status).toBe(201);
+    expect(await prisma.candidate.count()).toBe(1);
+    expect(await prisma.application.count()).toBe(2);
+  });
+
+  /** TC-H02-INT-05 */
+  it('never reveals the duplicate to an incomplete probe', async () => {
+    const admin = await signup(app, 'pat@acme.com');
+    const vacancy = await createVacancy(admin);
+    expect(
+      (await book(vacancy.slug, {
+        firstName: 'Jane',
+        lastName: 'Doe',
+        email: 'jane@example.com',
+        startUtc: await firstSlot(app, vacancy.slug),
+      })).status,
+    ).toBe(201);
+
+    // There is no endpoint that takes an email alone, so the cheapest probe available is
+    // a submission missing the CV — and it is answered before the duplicate is looked up.
+    const probe = await request(app.getHttpServer())
+      .post(`/api/book/${vacancy.slug}`)
+      .field('firstName', 'Jane')
+      .field('lastName', 'Doe')
+      .field('email', 'jane@example.com')
+      .field('startUtc', await firstSlot(app, vacancy.slug))
+      .field('timeZone', TIME_ZONE);
+
+    expect(probe.status).toBe(422);
+    expect(probe.body.fields.cv).toBe('Please attach your CV');
+    expect(JSON.stringify(probe.body)).not.toContain('already have an interview');
+  });
+
   /** TC-H02-INT-07 */
   it('leaves nothing behind when the calendar fails part-way', async () => {
     const admin = await signup(app, 'pat@acme.com');
     const vacancy = await createVacancy(admin);
-    const startUtc = await firstSlot(vacancy.slug);
+    const startUtc = await firstSlot(app, vacancy.slug);
     // Earlier tests in this run stored their own CVs, so the assertion is that this
     // booking added nothing — not that the directory is empty.
     const before = await storedFiles();
@@ -203,7 +314,7 @@ describe('Hiring — booking', () => {
   it('cancels the event it created when the write that follows fails', async () => {
     const admin = await signup(app, 'pat@acme.com');
     const vacancy = await createVacancy(admin);
-    const startUtc = await firstSlot(vacancy.slug);
+    const startUtc = await firstSlot(app, vacancy.slug);
     // The vacancy disappears between the event and the application insert.
     const original = prisma.$transaction.bind(prisma);
     jest
@@ -227,7 +338,7 @@ describe('Hiring — booking', () => {
   it('rejects a start time that was never offered', async () => {
     const admin = await signup(app, 'pat@acme.com');
     const vacancy = await createVacancy(admin);
-    const startUtc = await firstSlot(vacancy.slug);
+    const startUtc = await firstSlot(app, vacancy.slug);
     // Inside the day, but off the 60-minute anchor.
     const offAnchor = new Date(new Date(startUtc).getTime() + 7 * 60_000).toISOString();
 
@@ -246,7 +357,7 @@ describe('Hiring — booking', () => {
   it('re-enforces CV validation on the server', async () => {
     const admin = await signup(app, 'pat@acme.com');
     const vacancy = await createVacancy(admin);
-    const startUtc = await firstSlot(vacancy.slug);
+    const startUtc = await firstSlot(app, vacancy.slug);
 
     const wrongType = await request(app.getHttpServer())
       .post(`/api/book/${vacancy.slug}`)
@@ -254,6 +365,7 @@ describe('Hiring — booking', () => {
       .field('lastName', 'Doe')
       .field('email', 'jane@example.com')
       .field('startUtc', startUtc)
+      .field('timeZone', TIME_ZONE)
       .attach('cv', CV_BYTES, { filename: 'cv.pages', contentType: 'application/octet-stream' });
 
     expect(wrongType.status).toBe(422);
@@ -266,7 +378,8 @@ describe('Hiring — booking', () => {
       .field('firstName', 'Jane')
       .field('lastName', 'Doe')
       .field('email', 'jane@example.com')
-      .field('startUtc', startUtc);
+      .field('startUtc', startUtc)
+      .field('timeZone', TIME_ZONE);
 
     expect(missing.status).toBe(422);
     expect(missing.body.fields.cv).toBe('Please attach your CV');
@@ -309,7 +422,7 @@ describe('Hiring — booking', () => {
       firstName: 'Jane',
       lastName: 'Doe',
       email: 'jane@example.com',
-      startUtc: await firstSlot(vacancy.slug),
+      startUtc: await firstSlot(app, vacancy.slug),
     });
     const application = (await prisma.application.findFirst())!;
     const path = `/api/organizations/${admin.organizationId}/hiring/applications/${application.id}/cv`;

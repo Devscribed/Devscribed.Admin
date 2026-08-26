@@ -69,8 +69,9 @@ this step. `SESSION_SECRET` there is a development placeholder; every deployed
 environment must override it.
 
 `STORAGE_PROVIDER=fs` keeps uploaded CVs in `apps/api/.storage`, which is git-ignored.
-That combination is refused outright when `NODE_ENV=production` — see
-[Hiring](#hiring).
+That combination is refused outright when `NODE_ENV=production`, and so is a production
+process with no Microsoft Graph credentials — see [Hiring](#hiring). Leaving the `GRAPH_*`
+variables empty locally is expected: the fake calendar takes over.
 
 ### 3. Start Postgres
 
@@ -236,21 +237,65 @@ No vendor name appears outside its own module, and no screen names one at all.
 
 | Capability | Ships today | Where |
 |---|---|---|
-| `CalendarProvider` | `FakeCalendarProvider` | `apps/api/src/hiring/calendar/` |
+| `CalendarProvider` | `TenantAppOnlyProvider` (Microsoft Graph) · `FakeCalendarProvider` | `apps/api/src/hiring/calendar/` |
 | `Storage` | `LocalFsStorage` | `apps/api/src/hiring/storage/` |
 | `MailService` | nothing — Outlook delivers the invite | — |
 
-**The calendar is a fake, on purpose.** It resolves every address to a mailbox, reports flat
-09:00–17:00 UTC weekdays, and records the events a booking creates in memory. That is enough to
-run the whole booking path — the public route, the CV upload, the atomic write and its
-compensation — before an Azure app registration exists, and it is what the test suites keep
-running against afterwards, since neither can hold a real tenant mailbox. Set
-`FAKE_CALENDAR_NO_MAILBOX` to a comma-separated list to see an ineligible interviewer in the
-picker. `TenantAppOnlyProvider` arrives behind the same token; nothing that calls it changes.
+**Which calendar runs.** Graph whenever `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID` and
+`GRAPH_CLIENT_SECRET` are set, and the fake otherwise — which is every development machine and
+both automated suites, neither of which can hold a real tenant mailbox. `CALENDAR_PROVIDER`
+overrides the choice. The API names the one it chose on the first line of its startup log. Like
+storage, the wrong combination is refused at boot: production with the fake calendar would take
+bookings and invite nobody, which is the same silent loss as discarding a CV.
 
-Consequently, on the booking page **every time is UTC**, and the page says so. The calendar
-grid, the time-zone selector, and the 12-hour toggle belong to the real availability engine and
-arrive with it. The flat list of start times is the stand-in it replaces.
+To point a local API at a real tenant, fill in these three in `apps/api/.env` and restart it:
+
+| Variable | Where it comes from |
+|---|---|
+| `GRAPH_TENANT_ID` | Entra ID → the app registration's **Directory (tenant) ID** |
+| `GRAPH_CLIENT_ID` | the same page's **Application (client) ID** |
+| `GRAPH_CLIENT_SECRET` | Certificates & secrets → a new **client secret**, copied at creation |
+
+The registration needs three **application** permissions, admin-consented — `Calendars.ReadWrite`,
+`MailboxSettings.Read`, `User.Read.All` — because app-only auth has no signed-in user to delegate
+from. Delegated permissions of the same name will not work.
+
+One consequence worth expecting: interviewers must be real mailboxes in that tenant. A member
+whose address has no `mail` attribute resolves to nothing, so the picker shows them disabled with
+"No Microsoft 365 mailbox" and the API refuses to assign them. Seed accounts created for local
+development will all fail that check.
+
+**`TenantAppOnlyProvider`** authenticates with client credentials against one Azure app
+registration and names the mailbox on every call (`/users/{upn}/…`), because app-only auth has
+no signed-in user. It needs `Calendars.ReadWrite`, `MailboxSettings.Read` and `User.Read.All`,
+admin-consented. It talks to Graph over `fetch` rather than through the SDK: the surface hiring
+needs is six calls, and the SDK's types are exactly what must not escape that module.
+
+**The fake is not scaffolding.** It resolves every address to a mailbox, reports flat
+09:00–17:00 UTC weekdays, and treats the interviews it has created as busy — so a slot booked
+locally stops being offered, exactly as a real one would. Set `FAKE_CALENDAR_NO_MAILBOX` to a
+comma-separated list to see an ineligible interviewer in the picker.
+
+**Availability comes from the mailbox, never from configuration.** Working hours are
+`mailboxSettings.workingHours`; busy blocks are free/busy, filtered to `busy`, `tentative` and
+`oof` so a `free` event neither removes a slot nor creates one outside working hours. Graph
+reports Windows zone ids, which `windows-zones.ts` translates on the way out — the engine only
+ever sees IANA. Slots are anchored to the vacancy's duration from the start of working hours, so
+a 45-minute interview drifts (`09:00, 09:45, 10:30`) and that is correct: anchoring keeps
+bookings tiling and never strands a gap too small to reuse. Overlap is half-open, there is no
+lead time and no buffer, and the window runs today through the same day-of-month one month
+ahead, clamped when that day does not exist.
+
+The engine itself is in `packages/validation` (`hiring-time.ts`, `hiring-slots.ts`) rather than
+in the API. The booking page re-derives the same window to bound its month navigation, and a
+page that offered a start time the server would reject is precisely the failure that sharing
+prevents.
+
+**An availability failure is never an empty month.** `GET /api/book/{slug}/availability` answers
+`503 availability_unavailable` when the calendar cannot be reached, and the page renders its own
+error state with a retry. A date present with an empty array is fully booked; a date absent from
+the response is outside the window. Those are three different facts and none of them is allowed
+to look like another.
 
 **Storage fails fast.** An application configured with `NODE_ENV=production` and
 `STORAGE_PROVIDER=fs` refuses to start, naming the variable, and opens no listener. A Vercel
@@ -263,6 +308,14 @@ cannot be recovered.
 CVs are streamed through `GET /api/organizations/{orgId}/hiring/applications/{id}/cv`, never
 linked to. Storage keys are `{applicationId}{extension}` — application-generated, never derived
 from the uploaded filename, and never present in any response.
+
+**One future interview per email per vacancy.** A repeat booking is refused with `409
+already_booked`, naming the date, time and zone of the interview the candidate already has. The
+check is scoped on both axes — same vacancy only, because applying to two roles is normal, and
+future only, because someone who interviewed three months ago is a re-interview. It runs at submit
+and nowhere else: a live check on email blur would hand out the answer for the price of typing an
+address. Telling the candidate plainly departs from the enumeration-safe posture the rest of the
+product keeps, and [02 §09.38](specs/hiring/02-booking-page.md) makes that trade deliberately.
 
 `/book/{slug}` is the product's only public route. The slug carries 72 bits of entropy, which is
 why it needs no organization segment, and it is frozen at creation so a link already sent keeps
@@ -279,12 +332,24 @@ than implying the endpoint is protected.
   node carrying `field-error-{fieldName}`. A first-class `errorId` prop belongs in the
   DS; see the "DS gaps" table in the design spec.
 - Hiring closed several gaps the design specs had already recorded, in the design system
-  rather than in the screens: `BookingLayout`, `Textarea`, `FileInput`, `Toast` and
-  `Skeleton` are new components; `SelectOption` gained `disabled`, `hint` and `testId` so
-  an ineligible interviewer can be shown-but-disabled with its reason; `Table` gained
-  `rowHref`/`rowTestId`; `Modal` now forwards unknown props to its panel, matching `Card`
-  and `AuthLayout`. `Button`'s disabled state drops to a sunken field with faint ink
-  instead of fading the violet fill — a 55%-opacity primary still reads as the primary
-  action, which is the one thing a disabled CTA must not do.
-- Still outstanding for later hiring phases: `Calendar`, `Combobox`, `Menu`, `Tooltip`,
-  and promoting the template's `P` glyph dictionary to real icon exports.
+  rather than in the screens: `BookingLayout`, `Textarea`, `FileInput`, `Toast`,
+  `Skeleton` and `Calendar` are new components; `SelectOption` gained `disabled`, `hint`
+  and `testId` so an ineligible interviewer can be shown-but-disabled with its reason;
+  `Select`'s popover now scrolls, because a time-zone picker is hundreds of rows and
+  would otherwise run off the viewport; `Table` gained `rowHref`/`rowTestId`; `Toggle`
+  and `Modal` now forward unknown props, matching `Card` and `AuthLayout`. `Button`'s
+  disabled state drops to a sunken field with faint ink instead of fading the violet fill
+  — a 55%-opacity primary still reads as the primary action, which is the one thing a
+  disabled CTA must not do.
+- `Calendar` is presentational by construction: it is handed the weeks to draw, which
+  dates may be chosen, and the bounds it may navigate between. Availability, the booking
+  window and the time zone are business rules and stay on the page. It owns the grid
+  semantics and the keyboard — arrows by day and by week, `Home`/`End`, `PageUp`/
+  `PageDown`, and focus that only ever lands on a selectable date.
+- The public booking page is the one screen with real breakpoints, and inline styles
+  cannot express a media query, so its layout classes live in `apps/web/app/globals.css`.
+  Every value there is still a token.
+- Still outstanding for later hiring phases: `Combobox`, `Menu`, `Tooltip`, and promoting
+  the template's `P` glyph dictionary to real icon exports. `Combobox` is the reason the
+  time-zone selector is a long unsearchable list: the whole IANA set is offered, because a
+  shortlist would strand anyone whose zone it left out.

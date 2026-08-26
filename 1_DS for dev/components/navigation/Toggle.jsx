@@ -1,8 +1,8 @@
 import React from 'react';
 
-export function Toggle({ options = [], value, onChange, style }) {
+export function Toggle({ options = [], value, onChange, style, ...rest }) {
   return (
-    <div style={{
+    <div {...rest} style={{
       display: 'inline-flex', alignItems: 'center',
       background: 'var(--bg-sunken)', border: '1px solid var(--border)',
       borderRadius: 'var(--radius-pill)', padding: 3, ...style,

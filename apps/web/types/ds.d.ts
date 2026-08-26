@@ -6,6 +6,7 @@
 declare module '@ds' {
   export * from '@ds/components/actions/Button';
   export * from '@ds/components/actions/IconButton';
+  export * from '@ds/components/data/Calendar';
   export * from '@ds/components/data/Table';
   export * from '@ds/components/feedback/Badge';
   export * from '@ds/components/feedback/InfoBanner';

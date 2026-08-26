@@ -51,9 +51,16 @@ export class FakeCalendarProvider extends CalendarProvider {
     return { daysOfWeek: [1, 2, 3, 4, 5], startTime: '09:00', endTime: '17:00', timeZone: 'UTC' };
   }
 
-  /** Nothing blocks: the fake tenant's calendars are empty by construction. */
-  async busy(): Promise<Interval[]> {
-    return [];
+  /**
+   * The fake tenant's calendars hold nothing but the interviews booked against them,
+   * which is enough for availability to behave: book a slot locally and it stops being
+   * offered, exactly as a real busy block would.
+   */
+  async busy(mailbox: MailboxRef, fromUtc: Date, toUtc: Date): Promise<Interval[]> {
+    return [...this.events.values()]
+      .filter(({ mailbox: address }) => address === mailbox.address)
+      .map(({ draft }) => ({ startUtc: draft.startUtc, endUtc: draft.endUtc }))
+      .filter((block) => block.startUtc < toUtc && fromUtc < block.endUtc);
   }
 
   async isFree(mailbox: MailboxRef, startUtc: Date, endUtc: Date): Promise<boolean> {

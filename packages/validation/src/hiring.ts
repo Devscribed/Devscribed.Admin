@@ -10,6 +10,8 @@
 // Only referenced from inside function bodies. `index.ts` re-exports this module at the
 // end of its own body, so nothing here may read a value from it at module-eval time.
 import { normalizeEmail, validateEmail, type FieldResult } from './index';
+// A sibling module, so this one is safe to read at module-eval time — unlike `./index`.
+import { formatBookedWhen } from './hiring-time';
 
 /* ------------------------------------------------------------------ *
  * Roles
@@ -79,6 +81,8 @@ export const HIRING_MESSAGES = {
     },
     slotRequired: 'Choose a time',
     slotTaken: 'That time was just booked. Please choose another.',
+    /** Completed by `alreadyBookedMessage` — the date, time and zone come from the row. */
+    alreadyBooked: 'You already have an interview for this position on {when} ({zone}).',
     vacancyClosed: 'This position is no longer accepting applications',
     failed: "We couldn't complete your booking. Please try again.",
     availabilityFailed: "We couldn't load available times. Try again.",
@@ -352,6 +356,24 @@ export function validateCv(file: CvCandidate | null | undefined): CvResult {
     return { valid: false, error: HIRING_MESSAGES.booking.cv.tooLarge };
   }
   return { valid: true };
+}
+
+/**
+ * The refusal a repeat booking gets, naming the interview the candidate already has
+ * (02 §09.35).
+ *
+ * The zone named is the one they booked in, not the one they happen to be reading this
+ * in: it is the record of what they agreed to, and it is what their invite says.
+ *
+ * Telling them plainly departs from the enumeration-safe posture the rest of the
+ * product keeps, and 02 §09.38 makes that trade deliberately — reaching this check
+ * costs an unguessable link, a name, a valid slot selection and a CV upload, which is
+ * not the cheap oracle a single-field form is.
+ */
+export function alreadyBookedMessage(startUtc: Date, timeZone: string): string {
+  return HIRING_MESSAGES.booking.alreadyBooked
+    .replace('{when}', formatBookedWhen(startUtc, timeZone))
+    .replace('{zone}', timeZone);
 }
 
 export type BookingField = 'firstName' | 'lastName' | 'email' | 'cv' | 'note';

@@ -1,37 +1,69 @@
 /**
- * Every hiring screen renders times the same way: 24-hour, and always naming the zone
- * the value is expressed in. The public page gains a zone selector and a 12-hour
- * toggle when the real availability engine lands; until then there is one zone, and
- * saying so is more honest than implying a choice.
+ * Screen-level formatting for hiring.
+ *
+ * The arithmetic itself lives in `@devscribed/validation`, so the page and the API
+ * cannot disagree about what a start time reads as. What is here is the little that is
+ * only ever rendered: how long an interview is, and how a zone is named in a picker.
+ *
+ * Internal screens are 24-hour and UTC. The public booking page is the exception — it
+ * renders in the candidate's chosen zone, with their chosen format.
  */
 
-const DATE = new Intl.DateTimeFormat('en-GB', {
-  weekday: 'long',
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-  timeZone: 'UTC',
-});
-
-const TIME = new Intl.DateTimeFormat('en-GB', {
-  hour: '2-digit',
-  minute: '2-digit',
-  hour12: false,
-  timeZone: 'UTC',
-});
-
-const SHORT_DATE = new Intl.DateTimeFormat('en-GB', {
-  weekday: 'short',
-  day: 'numeric',
-  month: 'short',
-  timeZone: 'UTC',
-});
-
-export const formatDate = (iso: string): string => DATE.format(new Date(iso));
-export const formatTime = (iso: string): string => TIME.format(new Date(iso));
-export const formatShortDate = (iso: string): string => SHORT_DATE.format(new Date(iso));
-
-/** "Tuesday, 25 August 2026 at 14:00" — the confirmation's own line. */
-export const formatWhen = (iso: string): string => `${formatDate(iso)} at ${formatTime(iso)}`;
+import { formatBookedWhen, zoneLabel, zoneOffsetMs } from '@devscribed/validation';
 
 export const formatDuration = (minutes: number): string => `${minutes} minutes`;
+
+/** "Tuesday, 25 August 2026 at 14:00" in the zone the value belongs to. */
+export const formatWhen = (iso: string, timeZone = 'UTC'): string =>
+  formatBookedWhen(new Date(iso), timeZone);
+
+/**
+ * The zone the browser thinks it is in, which is what the booking page opens with.
+ * `Intl` answers `undefined` in a handful of old environments; UTC is the honest
+ * fallback because it is also what the server would assume.
+ */
+export function detectTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
+export interface TimeZoneOption {
+  value: string;
+  label: string;
+  /** Options are otherwise addressable only by their text, which repeats per offset. */
+  testId: string;
+}
+
+/**
+ * Every zone the browser knows, labelled `(UTC+03:00) Minsk` and ordered by offset.
+ *
+ * The whole list rather than a curated one: a candidate whose zone is missing has no
+ * way to say when they are free, and a shortlist that covers every offset still strands
+ * anyone whose city observes a different summer-time rule. The consequence is a long
+ * unsearchable popover, which is the design system's `Combobox` gap and is noted as
+ * such in the README.
+ */
+export function timeZoneOptions(include?: string, at: Date = new Date()): TimeZoneOption[] {
+  const zones = new Set(supportedTimeZones());
+  // The browser's own zone always appears, even when it is one `Intl` will not list.
+  if (include) zones.add(include);
+
+  return [...zones]
+    .map((value) => ({ value, label: zoneLabel(value, at), offset: zoneOffsetMs(at, value) }))
+    .sort((left, right) => left.offset - right.offset || left.label.localeCompare(right.label))
+    .map(({ value, label }) => ({ value, label, testId: `timezone-option-${value}` }));
+}
+
+function supportedTimeZones(): string[] {
+  const intl = Intl as typeof Intl & { supportedValuesOf?: (key: string) => string[] };
+  try {
+    const values = intl.supportedValuesOf?.('timeZone');
+    if (values && values.length > 0) return values;
+  } catch {
+    // Falls through to the minimum any environment can name.
+  }
+  return ['UTC'];
+}

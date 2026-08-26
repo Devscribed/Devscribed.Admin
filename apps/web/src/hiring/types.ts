@@ -37,10 +37,16 @@ export interface PublicVacancy {
 }
 
 export interface Availability {
-  durationMinutes: number;
+  /** The zone the dates were bucketed in — echoed back, never guessed at. */
   timeZone: string;
-  /** Absolute UTC instants. The page renders them; it never invents one. */
-  slots: string[];
+  /** Today through one calendar month ahead, in `timeZone`. */
+  window: { from: string; to: string };
+  /**
+   * One entry per date in the requested month, holding absolute UTC instants. An empty
+   * array is a date with nothing free; a date that is absent is outside the window.
+   * The page renders these; it never invents one.
+   */
+  dates: Record<string, string[]>;
 }
 
 export interface BookingConfirmation {

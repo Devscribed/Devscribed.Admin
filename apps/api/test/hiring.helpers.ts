@@ -1,5 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { shiftMonth, yearMonthOf } from '@devscribed/validation';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
@@ -105,3 +106,57 @@ export async function setRole(
 }
 
 export const CV_BYTES = Buffer.from('%PDF-1.4 a perfectly ordinary cv');
+
+/**
+ * Every integration booking is made in UTC. The zone the candidate picks is exercised
+ * by the availability suite; here it only has to be one the server accepts.
+ */
+export const TIME_ZONE = 'UTC';
+
+export interface AvailabilityBody {
+  timeZone: string;
+  window: { from: string; to: string };
+  dates: Record<string, string[]>;
+}
+
+export async function availabilityFor(
+  app: INestApplication,
+  slug: string,
+  query: { timeZone?: string; month?: string } = {},
+): Promise<{ status: number; body: AvailabilityBody }> {
+  const response = await request(app.getHttpServer())
+    .get(`/api/book/${slug}/availability`)
+    .query({ timeZone: query.timeZone ?? TIME_ZONE, ...(query.month ? { month: query.month } : {}) });
+  return { status: response.status, body: response.body };
+}
+
+/**
+ * The earliest bookable start for a vacancy.
+ *
+ * Availability answers one month at a time, and the current month can legitimately have
+ * none left in it — a suite that runs on the last Saturday of a month would otherwise
+ * fail for reasons that have nothing to do with what it is testing. So it looks into
+ * the following month before giving up.
+ */
+export async function firstSlot(app: INestApplication, slug: string): Promise<string> {
+  const first = await availabilityFor(app, slug);
+  if (first.status !== 200) {
+    throw new Error(`Precondition failed: availability answered ${first.status}`);
+  }
+
+  const slots = flattenSlots(first.body);
+  if (slots.length > 0) return slots[0];
+
+  const nextMonth = shiftMonth(yearMonthOf(first.body.window.from), 1);
+  const next = await availabilityFor(app, slug, { month: nextMonth });
+  const later = flattenSlots(next.body);
+  if (later.length === 0) throw new Error('Precondition failed: the window offers no slots');
+  return later[0];
+}
+
+/** Ascending, across every date the response covers. */
+export function flattenSlots(body: AvailabilityBody): string[] {
+  return Object.keys(body.dates ?? {})
+    .sort()
+    .flatMap((date) => body.dates[date]);
+}

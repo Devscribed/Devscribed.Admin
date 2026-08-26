@@ -265,3 +265,5 @@ export function createAdminMembership(input: {
  * ------------------------------------------------------------------ */
 
 export * from './hiring';
+export * from './hiring-time';
+export * from './hiring-slots';

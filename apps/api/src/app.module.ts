@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { LoginController } from './auth/login.controller';
 import { LoginService } from './auth/login.service';
@@ -15,10 +15,13 @@ import { MailService } from './mail/mail.service';
 import { TestMailController } from './mail/test-mail.controller';
 import { MeController } from './members/me.controller';
 import { MembersController } from './members/members.controller';
+import { AvailabilityService } from './hiring/availability.service';
 import { BookingController } from './hiring/booking.controller';
 import { BookingService } from './hiring/booking.service';
 import { CalendarProvider } from './hiring/calendar/calendar-provider';
+import { resolveCalendarConfig } from './hiring/calendar/calendar.config';
 import { FakeCalendarProvider } from './hiring/calendar/fake-calendar.provider';
+import { TenantAppOnlyProvider } from './hiring/calendar/graph-calendar.provider';
 import { CvController } from './hiring/cv.controller';
 import { HiringManageGuard } from './hiring/hiring-manage.guard';
 import { LocalFsStorage } from './hiring/storage/local-fs.storage';
@@ -65,13 +68,28 @@ const storageProvider = {
 };
 
 /**
- * One calendar implementation, chosen here so no caller ever names it. The fake
- * unblocks the whole booking path before an Azure app registration exists; the Graph
- * provider arrives behind this same token.
+ * One calendar implementation, chosen here so no caller ever names it.
+ *
+ * Graph whenever the tenant credentials are present, and the fake otherwise — which is
+ * every development machine and both automated suites, neither of which can hold a real
+ * mailbox. `resolveCalendarConfig` is what refuses the one combination that would take
+ * bookings and invite nobody: the fake in production.
  */
 const calendarProvider = {
   provide: CalendarProvider,
-  useClass: FakeCalendarProvider,
+  useFactory: (): CalendarProvider => {
+    const config = resolveCalendarConfig();
+    // Which calendar is in play decides whether a booking reaches anyone's Outlook, so
+    // it is stated at boot rather than inferred from behaviour later.
+    new Logger('CalendarProvider').log(
+      config.provider === 'graph'
+        ? `Microsoft Graph, tenant ${config.graph.tenantId}`
+        : 'Fake calendar — bookings create no real event',
+    );
+    return config.provider === 'graph'
+      ? new TenantAppOnlyProvider(config.graph)
+      : new FakeCalendarProvider();
+  },
 };
 
 @Module({
@@ -105,6 +123,7 @@ const calendarProvider = {
     calendarProvider,
     HiringManageGuard,
     VacanciesService,
+    AvailabilityService,
     BookingService,
   ],
 })

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   Logger,
@@ -10,12 +11,15 @@ import { randomUUID } from 'crypto';
 import {
   HIRING_MESSAGES,
   POSITION_STEP,
+  alreadyBookedMessage,
   cvExtension,
+  formatBookedWhen,
+  isValidTimeZone,
   validateBooking,
 } from '@devscribed/validation';
 import { PrismaService } from '../prisma.service';
+import { AvailabilityService, CalendarUnavailableError } from './availability.service';
 import { CalendarProvider, type MailboxRef } from './calendar/calendar-provider';
-import { availableSlots, isOfferedSlot } from './slots';
 import { Storage } from './storage/storage';
 
 export interface UploadedCv {
@@ -34,12 +38,10 @@ export interface BookingDto {
   timeZone?: string;
 }
 
-/**
- * The zone every phase-1 time is expressed in. The candidate picks a zone in phase 2,
- * when the calendar control and the real availability engine arrive; until then the
- * page says UTC rather than implying a choice it does not offer.
- */
-const DISPLAY_ZONE = 'UTC';
+export interface AvailabilityQuery {
+  timeZone?: string;
+  month?: string;
+}
 
 @Injectable()
 export class BookingService {
@@ -47,6 +49,9 @@ export class BookingService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly availability: AvailabilityService,
+    // Reads go through `AvailabilityService`; creating and cancelling the event are
+    // booking actions, so they address the capability directly.
     private readonly calendar: CalendarProvider,
     private readonly storage: Storage,
   ) {}
@@ -70,30 +75,36 @@ export class BookingService {
   }
 
   /**
-   * A closed vacancy returns no slots at all, and a calendar that cannot be reached
-   * throws rather than returning an empty list — "no times available" and "we could
-   * not load times" must never look the same (00 §05.21).
+   * One month of the window at a time, keyed by the candidate's own calendar dates.
+   *
+   * A closed vacancy answers with the window and no slots in it; a calendar that cannot
+   * be reached throws instead of answering with an empty map. Those are three different
+   * facts and the contract keeps all three distinguishable, because "we could not load
+   * times" rendered as "there are no times" is a candidate who quietly goes away.
    */
-  async availability(slug: string) {
+  async availabilityFor(slug: string, query: AvailabilityQuery) {
+    const timeZone = this.requireTimeZone(query.timeZone);
     const vacancy = await this.findBySlug(slug);
+
     if (vacancy.status !== 'open') {
-      return { durationMinutes: vacancy.durationMinutes, timeZone: DISPLAY_ZONE, slots: [] };
+      const window = this.availability.window(timeZone);
+      return {
+        timeZone,
+        window,
+        dates: this.availability.emptyDates(this.availability.monthRange(window, query.month)),
+      };
     }
 
-    const mailbox = await this.resolveOrThrow(vacancy.interviewer.email, () => this.unavailable());
-
     try {
-      const free: string[] = [];
-      for (const start of availableSlots(vacancy.durationMinutes)) {
-        const end = this.endOf(start, vacancy.durationMinutes);
-        if (await this.calendar.isFree(mailbox, start, end)) free.push(start.toISOString());
-      }
-      return { durationMinutes: vacancy.durationMinutes, timeZone: DISPLAY_ZONE, slots: free };
+      return await this.availability.forVacancy({
+        interviewerEmail: vacancy.interviewer.email,
+        durationMinutes: vacancy.durationMinutes,
+        timeZone,
+        month: query.month,
+      });
     } catch (error) {
-      // Loudly, never as emptiness: an empty list means "fully booked", which is a
-      // different thing for the candidate to read.
-      this.logger.error(`Availability read failed for ${mailbox.address}: ${String(error)}`);
-      throw this.unavailable();
+      if (error instanceof CalendarUnavailableError) throw this.unavailable();
+      throw error;
     }
   }
 
@@ -103,6 +114,7 @@ export class BookingService {
    * is created cancels it, before the candidate ever sees an error.
    */
   async book(slug: string, dto: BookingDto, cv: UploadedCv | undefined) {
+    const timeZone = this.requireTimeZone(dto.timeZone);
     const vacancy = await this.findBySlug(slug);
 
     // 1. The vacancy may have closed while the page was open.
@@ -113,7 +125,9 @@ export class BookingService {
       });
     }
 
-    // 2. Field validation, before anything is written or reserved.
+    // 2. Field validation, before anything is written or reserved. It runs ahead of the
+    //    duplicate and slot checks so an incomplete probe learns nothing about either
+    //    (02 §09.37, TC-H02-INT-05).
     const validation = validateBooking({
       firstName: dto.firstName,
       lastName: dto.lastName,
@@ -125,39 +139,69 @@ export class BookingService {
       throw new UnprocessableEntityException({ error: 'validation', fields: validation.errors });
     }
 
-    // 3. The slot, re-checked against the live calendar. A start time that was never
-    //    offered is rejected as taken rather than accommodated.
+    const { firstName, lastName, email, note } = validation.value;
+
+    // 3. The duplicate check, which runs only here — there is no live variant on email
+    //    blur, because that would hand out the answer for the price of typing an
+    //    address (02 §09.37).
+    await this.assertNotAlreadyBooked(vacancy.organizationId, vacancy.id, email);
+
+    // 4. The slot, re-checked against the live calendar. Two questions, deliberately
+    //    separate: was this ever on offer, and is it still free.
     const start = this.parseStart(dto.startUtc);
     const end = this.endOf(start, vacancy.durationMinutes);
-    if (!isOfferedSlot(start, vacancy.durationMinutes)) throw this.slotTaken();
 
-    const mailbox = await this.resolveOrThrow(vacancy.interviewer.email, () => this.bookingFailed());
-    if (!(await this.calendar.isFree(mailbox, start, end))) throw this.slotTaken();
+    const mailbox = await this.resolveMailbox(vacancy.interviewer.email);
+    const offered = await this.guard(() =>
+      this.availability.isOffered({
+        mailbox,
+        startUtc: start,
+        durationMinutes: vacancy.durationMinutes,
+        timeZone,
+      }),
+    );
+    if (!offered) throw this.slotTaken();
+    if (!(await this.guard(() => this.availability.isFree(mailbox, start, end)))) {
+      throw this.slotTaken();
+    }
 
-    const { firstName, lastName, email, note } = validation.value;
     const submittedName = `${firstName} ${lastName}`;
 
-    // The id is minted here so the storage key can be `{applicationId}{extension}` —
-    // opaque, application-generated, and never derived from the uploaded filename.
+    // The ids are minted here so the storage key can be `{applicationId}{extension}` —
+    // opaque, application-generated, never derived from the uploaded filename — and so
+    // the invite can carry a link to the candidate's card, which needs their id before
+    // the row exists. Reading the candidate is not writing one; the upsert below is
+    // still the first thing this booking changes.
     const applicationId = randomUUID();
+    const candidateId = await this.candidateIdFor(vacancy.organizationId, email);
     const cvKey = `${applicationId}${cvExtension(cv!.originalname)}`;
 
     let stored = false;
     let eventId: string | null = null;
 
     try {
-      // 4. Store the CV.
+      // 5. Store the CV.
       await this.storage.put(cvKey, cv!.buffer, cv!.mimetype);
       stored = true;
 
-      // 5. Create the event. Adding the candidate as an attendee is what delivers the
+      // 6. Create the event. Adding the candidate as an attendee is what delivers the
       //    invite to both parties — this release sends no mail of its own.
       eventId = await this.calendar.createEvent(mailbox, {
         subject: `${vacancy.title} — interview with ${submittedName}`,
-        body: this.eventBody(vacancy, submittedName, email, note, start),
+        body: this.eventBody({
+          vacancy,
+          organizationId: vacancy.organizationId,
+          candidateId,
+          applicationId,
+          submittedName,
+          email,
+          note,
+          start,
+          timeZone,
+        }),
         startUtc: start,
         endUtc: end,
-        timeZone: DISPLAY_ZONE,
+        timeZone,
         attendee: { email, name: submittedName },
         attachment: {
           fileName: cv!.originalname,
@@ -166,9 +210,10 @@ export class BookingService {
         },
       });
 
-      // 6. Candidate and application, in one transaction.
+      // 7. Candidate and application, in one transaction.
       await this.writeBooking({
         applicationId,
+        candidateId,
         organizationId: vacancy.organizationId,
         vacancyId: vacancy.id,
         firstName,
@@ -177,6 +222,7 @@ export class BookingService {
         submittedName,
         start,
         end,
+        timeZone,
         note,
         eventId,
         cvKey,
@@ -196,12 +242,48 @@ export class BookingService {
       vacancyTitle: vacancy.title,
       durationMinutes: vacancy.durationMinutes,
       startUtc: start.toISOString(),
-      timeZone: DISPLAY_ZONE,
+      timeZone,
       firstName,
       lastName,
       email,
       cvFileName: cv!.originalname,
     };
+  }
+
+  /**
+   * One future interview per email per vacancy (02 §09).
+   *
+   * Scoped deliberately on both axes. **Same vacancy only**, because applying to a React
+   * role and a .NET role is normal and the candidate database is built on filtering one
+   * person's applications by position. **Future only**, because someone who interviewed
+   * three months ago is a re-interview, not a duplicate.
+   *
+   * A cancelled application does not block either. Nothing sets `isCancelled` in this
+   * release, so today the clause changes no outcome — it is here so the deferred
+   * reschedule flow cannot silently lock a candidate out of rebooking.
+   */
+  private async assertNotAlreadyBooked(
+    organizationId: string,
+    vacancyId: string,
+    email: string,
+  ): Promise<void> {
+    const existing = await this.prisma.application.findFirst({
+      where: {
+        organizationId,
+        vacancyId,
+        isCancelled: false,
+        start: { gt: new Date() },
+        candidate: { organizationId, email },
+      },
+      orderBy: { start: 'asc' },
+      select: { start: true, timeZone: true },
+    });
+    if (!existing) return;
+
+    throw new ConflictException({
+      error: 'already_booked',
+      message: alreadyBookedMessage(existing.start, existing.timeZone),
+    });
   }
 
   /**
@@ -211,6 +293,7 @@ export class BookingService {
    */
   private async writeBooking(input: {
     applicationId: string;
+    candidateId: string;
     organizationId: string;
     vacancyId: string;
     firstName: string;
@@ -219,6 +302,7 @@ export class BookingService {
     submittedName: string;
     start: Date;
     end: Date;
+    timeZone: string;
     note: string;
     eventId: string;
     cvKey: string;
@@ -231,6 +315,7 @@ export class BookingService {
           organizationId_email: { organizationId: input.organizationId, email: input.email },
         },
         create: {
+          id: input.candidateId,
           organizationId: input.organizationId,
           firstName: input.firstName,
           lastName: input.lastName,
@@ -257,7 +342,7 @@ export class BookingService {
           submittedName: input.submittedName,
           start: input.start,
           end: input.end,
-          timeZone: DISPLAY_ZONE,
+          timeZone: input.timeZone,
           graphEventId: input.eventId,
           cvKey: input.cvKey,
           cvFileName: input.cvFileName,
@@ -266,6 +351,18 @@ export class BookingService {
         },
       });
     });
+  }
+
+  /**
+   * The id the invite's deep link will point at — the existing candidate's when this
+   * email has booked before, a fresh one otherwise, which the upsert then uses.
+   */
+  private async candidateIdFor(organizationId: string, email: string): Promise<string> {
+    const existing = await this.prisma.candidate.findUnique({
+      where: { organizationId_email: { organizationId, email } },
+      select: { id: true },
+    });
+    return existing?.id ?? randomUUID();
   }
 
   /** No orphaned event, no orphaned CV — whatever succeeded is undone (02 §06.26). */
@@ -288,25 +385,36 @@ export class BookingService {
   }
 
   /**
-   * Identical content for both parties — one event, one body. The deep link to the
-   * candidate's card is the only internal thing in it, and it is authenticated.
+   * Identical content for both parties — one event, one body (00 §04.19). The deep link
+   * to the candidate's card is the only internal thing in it: it is authenticated and
+   * the ids are UUIDs, so it reveals that an admin tool exists and nothing else, which
+   * 02 §08.32 accepts deliberately.
    */
-  private eventBody(
-    vacancy: { title: string; durationMinutes: number },
-    submittedName: string,
-    email: string,
-    note: string,
-    start: Date,
-  ): string {
-    const when = start.toISOString().replace('T', ' ').slice(0, 16);
+  private eventBody(input: {
+    vacancy: { title: string; durationMinutes: number };
+    organizationId: string;
+    candidateId: string;
+    applicationId: string;
+    submittedName: string;
+    email: string;
+    note: string;
+    start: Date;
+    timeZone: string;
+  }): string {
+    const base = process.env.WEB_ORIGIN || 'http://localhost:3000';
+    const link = `${base}/org/${input.organizationId}/hiring/candidates/${input.candidateId}?application=${input.applicationId}`;
+
     return [
-      `${vacancy.title} — ${vacancy.durationMinutes} minutes`,
-      // 24-hour, unconditionally: the page's format toggle is the candidate's, not ours.
-      `${when} (${DISPLAY_ZONE})`,
-      `${submittedName} · ${email}`,
-      note ? `Note: ${note}` : null,
+      `${input.vacancy.title} — ${input.vacancy.durationMinutes} minutes`,
+      // 24-hour, unconditionally: the page's format toggle is the candidate's, not
+      // ours, and the zone named is the one they booked in (02 §08.34).
+      `${formatBookedWhen(input.start, input.timeZone)} (${input.timeZone})`,
+      `${input.submittedName} · ${input.email}`,
+      input.note ? `Note: ${input.note}` : null,
+      '',
+      link,
     ]
-      .filter(Boolean)
+      .filter((line) => line !== null)
       .join('\n');
   }
 
@@ -324,23 +432,28 @@ export class BookingService {
   }
 
   /**
-   * An interviewer whose mailbox has stopped resolving is not a closed vacancy: the
-   * position is still open, the system simply cannot answer. Which failure that is
-   * depends on what the caller was doing, so each supplies its own.
+   * The zone is machine-supplied — the page reads it from the browser — so a bad one is
+   * a malformed request, not something to write a candidate-facing message about.
    */
-  private async resolveOrThrow(
-    email: string,
-    failure: () => ServiceUnavailableException,
-  ): Promise<MailboxRef> {
-    let mailbox: MailboxRef | null;
-    try {
-      mailbox = await this.calendar.resolveMailbox(email);
-    } catch (error) {
-      this.logger.error(`Mailbox resolution failed for ${email}: ${String(error)}`);
-      throw failure();
+  private requireTimeZone(timeZone: string | undefined): string {
+    if (!isValidTimeZone(timeZone)) {
+      throw new BadRequestException({ error: 'invalid_time_zone' });
     }
-    if (!mailbox) throw failure();
-    return mailbox;
+    return timeZone;
+  }
+
+  private async resolveMailbox(email: string): Promise<MailboxRef> {
+    return this.guard(() => this.availability.mailbox(email));
+  }
+
+  /** Anything the calendar could not answer aborts the booking, never half-books it. */
+  private async guard<T>(operation: () => Promise<T>): Promise<T> {
+    try {
+      return await operation();
+    } catch (error) {
+      if (error instanceof CalendarUnavailableError) throw this.bookingFailed();
+      throw error;
+    }
   }
 
   private unavailable(): ServiceUnavailableException {

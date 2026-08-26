@@ -9,9 +9,9 @@ import {
 
 /**
  * The calendar the integration suites run against. It exists so a test can state its
- * precondition — "this address has no mailbox", "event creation fails" — instead of
- * arranging one through environment variables, and so assertions can read what a
- * booking actually created.
+ * precondition — "this address has no mailbox", "free/busy is unreachable", "event
+ * creation fails" — instead of arranging one through environment variables, and so
+ * assertions can read what a booking actually created.
  */
 export class StubCalendarProvider extends CalendarProvider {
   /** Addresses that resolve to nothing. Everything else resolves. */
@@ -20,7 +20,18 @@ export class StubCalendarProvider extends CalendarProvider {
   /** Busy blocks per mailbox address. */
   busyBlocks = new Map<string, Interval[]>();
 
+  /** Mon–Fri 09:00–17:00 UTC unless a test says otherwise. */
+  workingHoursSpec: WorkingHours = {
+    daysOfWeek: [1, 2, 3, 4, 5],
+    startTime: '09:00',
+    endTime: '17:00',
+    timeZone: 'UTC',
+  };
+
   failOnCreate = false;
+
+  /** An unreachable calendar, which must never be rendered as an empty month. */
+  failOnBusy = false;
 
   readonly events = new Map<EventId, { mailbox: string; draft: CalendarEventDraft }>();
 
@@ -35,17 +46,29 @@ export class StubCalendarProvider extends CalendarProvider {
   }
 
   async workingHours(): Promise<WorkingHours> {
-    return { daysOfWeek: [1, 2, 3, 4, 5], startTime: '09:00', endTime: '17:00', timeZone: 'UTC' };
+    return this.workingHoursSpec;
   }
 
-  async busy(mailbox: MailboxRef): Promise<Interval[]> {
-    return this.busyBlocks.get(mailbox.address) ?? [];
+  /**
+   * The blocks a test declared, plus the interviews this stub has itself created. A
+   * real calendar does not distinguish the two, and one that forgot its own events
+   * would let a suite pass while the product double-booked.
+   */
+  async busy(mailbox: MailboxRef, fromUtc?: Date, toUtc?: Date): Promise<Interval[]> {
+    if (this.failOnBusy) throw new Error('stub: free/busy is unreachable');
+
+    const booked = [...this.events.values()]
+      .filter(({ mailbox: address }) => address === mailbox.address)
+      .map(({ draft }) => ({ startUtc: draft.startUtc, endUtc: draft.endUtc }));
+
+    const all = [...(this.busyBlocks.get(mailbox.address) ?? []), ...booked];
+    if (!fromUtc || !toUtc) return all;
+    return all.filter((block) => block.startUtc < toUtc && fromUtc < block.endUtc);
   }
 
   async isFree(mailbox: MailboxRef, startUtc: Date, endUtc: Date): Promise<boolean> {
-    const blocks = this.busyBlocks.get(mailbox.address) ?? [];
     // Half-open, so a slot may begin exactly when a block ends.
-    return !blocks.some((block) => block.startUtc < endUtc && startUtc < block.endUtc);
+    return (await this.busy(mailbox, startUtc, endUtc)).length === 0;
   }
 
   async createEvent(mailbox: MailboxRef, draft: CalendarEventDraft): Promise<EventId> {
@@ -61,10 +84,24 @@ export class StubCalendarProvider extends CalendarProvider {
     this.events.delete(eventId);
   }
 
+  /** Marks an interval busy for an address, as a test precondition. */
+  block(address: string, startUtc: Date, endUtc: Date): void {
+    const blocks = this.busyBlocks.get(address) ?? [];
+    blocks.push({ startUtc, endUtc });
+    this.busyBlocks.set(address, blocks);
+  }
+
   reset(): void {
     this.withoutMailbox.clear();
     this.busyBlocks.clear();
+    this.workingHoursSpec = {
+      daysOfWeek: [1, 2, 3, 4, 5],
+      startTime: '09:00',
+      endTime: '17:00',
+      timeZone: 'UTC',
+    };
     this.failOnCreate = false;
+    this.failOnBusy = false;
     this.events.clear();
     this.cancelled.length = 0;
     this.sequence = 0;

@@ -4,6 +4,7 @@
 export { Button } from './components/actions/Button.jsx';
 export { IconButton } from './components/actions/IconButton.jsx';
 
+export { Calendar } from './components/data/Calendar.jsx';
 export { Table } from './components/data/Table.jsx';
 
 export { Badge } from './components/feedback/Badge.jsx';

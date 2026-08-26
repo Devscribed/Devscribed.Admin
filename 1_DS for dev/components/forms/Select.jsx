@@ -9,11 +9,17 @@ const Chev = () => (
 export function Select({ label, value, options = [], onChange, placeholder = 'Select…', error, disabled, style, wrapperStyle, ...rest }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
+  const currentRef = useRef(null);
   useEffect(() => {
     if (!open) return;
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+  // A long list opens scrolled to the top, which for a hundreds-of-rows picker means
+  // opening nowhere near what is currently chosen.
+  useEffect(() => {
+    if (open && currentRef.current) currentRef.current.scrollIntoView({ block: 'nearest' });
   }, [open]);
   const borderColor = error ? 'var(--error-500)' : (open && !disabled ? 'var(--accent)' : 'var(--border-strong)');
   const current = options.find((o) => (typeof o === 'string' ? o : o.value) === value);
@@ -49,7 +55,11 @@ export function Select({ label, value, options = [], onChange, placeholder = 'Se
         <div style={{
           position: 'absolute', left: 0, right: 0, top: '100%', marginTop: 6,
           background: 'var(--bg-panel)', border: '1px solid var(--border)',
-          borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-pop)', overflow: 'hidden', zIndex: 30,
+          borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-pop)', zIndex: 30,
+          // A long list scrolls inside the popover instead of running off the viewport;
+          // a time-zone picker is hundreds of rows and would otherwise be unreachable.
+          overflowY: 'auto', overflowX: 'hidden', maxHeight: 300,
+          overscrollBehavior: 'contain',
         }}>
           {options.map((o) => {
             const v = typeof o === 'string' ? o : o.value;
@@ -60,6 +70,7 @@ export function Select({ label, value, options = [], onChange, placeholder = 'Se
             const isCurrent = v === value;
             return (
               <a key={v} href="#"
+                ref={isCurrent ? currentRef : undefined}
                 data-testid={testId}
                 aria-disabled={off || undefined}
                 onClick={(e) => { e.preventDefault(); if (off) return; onChange && onChange(v); setOpen(false); }}

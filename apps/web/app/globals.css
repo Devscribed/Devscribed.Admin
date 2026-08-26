@@ -15,3 +15,86 @@ body {
 a {
   color: var(--accent);
 }
+
+/*
+ * The public booking page is the one screen with real breakpoints — a calendar beside
+ * a slot list beside a form. Inline styles cannot express a media query, so its layout
+ * lives here. Every value is still a token or a breakpoint from
+ * `specs/hiring/02-booking-page.design.md`.
+ */
+.booking-panels {
+  display: grid;
+  gap: var(--sp-8);
+  grid-template-columns: 1fr 1fr;
+}
+
+.booking-names {
+  display: grid;
+  gap: var(--sp-8);
+  grid-template-columns: 1fr 1fr;
+}
+
+.booking-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-6);
+}
+
+.booking-zone {
+  min-width: 260px;
+  max-width: 340px;
+}
+
+.booking-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4);
+}
+
+.booking-format {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.booking-submit {
+  min-width: 320px;
+}
+
+@media (max-width: 879px) {
+  .booking-panels {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 599px) {
+  .booking-names {
+    grid-template-columns: 1fr;
+  }
+
+  .booking-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* Stacked, the toggle keeps its own width instead of stretching into a wide pill. */
+  .booking-format {
+    justify-content: flex-start;
+  }
+
+  .booking-zone {
+    min-width: 0;
+    max-width: none;
+  }
+
+  /* The list scrolls in its own region rather than growing the page unbounded. */
+  .booking-slots {
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+
+  .booking-submit {
+    min-width: 0;
+    width: 100%;
+  }
+}
