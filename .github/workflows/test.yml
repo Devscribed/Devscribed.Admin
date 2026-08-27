@@ -12,6 +12,28 @@ name: Tests
 # first half of the pipeline in `deploy.yml`, which runs whether or not deploys are
 # switched on; adding `push` as well would run the whole suite, Playwright included, twice
 # for every merge.
+#
+# ---------------------------------------------------------------------------------------
+# Wall clock
+#
+# The gate sits in front of every deploy, so its duration is added to every deploy. It used
+# to be 6m40s, and essentially all of that was one E2E job running 120 browser tests two at
+# a time on a two-core runner.
+#
+# Both database suites are now **sharded across runners** rather than made to go faster on
+# one. Each shard is a separate runner with its own Postgres service container, which is
+# what makes it safe: the integration suite truncates tables between tests and the E2E
+# suite mints accounts in a shared database, and neither would survive two shards pointed
+# at one server. Nothing about the tests themselves changed — only how many machines run
+# them.
+#
+#   unit          ~40s
+#   integration   2 shards   ~1m50s each
+#   e2e           3 shards   ~3m each
+#
+# so the gate is about three minutes, which is roughly one E2E shard, and an E2E shard is
+# roughly its own setup. Shards past three would mostly buy more `npm ci`.
+# ---------------------------------------------------------------------------------------
 on:
   pull_request:
   workflow_call:
@@ -22,9 +44,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # One connection string for both jobs. `postgres` is the service container's hostname
-  # inside the runner's network, and the port is the container's own 5432 — the 5433/5434
-  # remapping in docker-compose.yml only exists to dodge a developer's local Postgres.
+  # One connection string for every integration shard. `postgres` is the service
+  # container's hostname inside the runner's network, and the port is the container's own
+  # 5432 — the 5433/5434 remapping in docker-compose.yml only exists to dodge a
+  # developer's local Postgres.
   TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/devscribed_test
 
 jobs:
@@ -43,8 +66,14 @@ jobs:
       - run: npm run test:unit
 
   integration:
-    name: Integration
+    name: Integration ${{ matrix.shard }}/2
     runs-on: ubuntu-latest
+    strategy:
+      # A failing shard must not cancel the other one. Two failures in different areas are
+      # two things to fix, and learning about the second one next run wastes a whole round.
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     services:
       postgres:
         image: postgres:17-alpine
@@ -71,13 +100,26 @@ jobs:
       - name: API integration suite
         env:
           # test/global-setup.ts resets this database before every run, which is exactly
-          # what a disposable service container is for.
+          # what a disposable service container is for — and why a shard can have one to
+          # itself rather than share.
           TEST_DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
-        run: npm run test:int
+        # Jest shards by test *file*, so every test in a file lands on the same shard and
+        # the truncating `beforeEach` stays sequential within it. `--runInBand`, which the
+        # suite still needs, applies inside a shard.
+        #
+        # The workspace is named directly rather than going through the root `test:int`
+        # alias: `npm run test:int -- --shard=…` would hand the flag to the *outer* `npm
+        # run`, which passes it to npm rather than to jest, and jest would silently run
+        # everything on every shard.
+        run: npm run test --workspace @devscribed/api -- --shard=${{ matrix.shard }}/2
 
   e2e:
-    name: E2E
+    name: E2E ${{ matrix.shard }}/3
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     services:
       postgres:
         image: postgres:17-alpine
@@ -106,13 +148,53 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build --workspace @devscribed/validation
+
+      # Keyed on the resolved Playwright version, because that version is exactly what
+      # decides which browser revisions the install step would download. A hit turns a
+      # twenty-second download into a two-second restore, on every shard.
+      - name: Resolve the Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('playwright-core/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
+      # `npx playwright install` downloads the browser revisions pinned by the **hoisted**
+      # playwright-core, the one `@playwright/test` brings in. The API's PDF renderer
+      # imports playwright-core too, and when its range resolves to a different version npm
+      # nests a second copy — one that asks for a headless-shell revision nothing ever
+      # downloaded. `LocalChromiumPdfRenderer` then quietly degrades to its Latin-1
+      # fallback writer, and the only symptom is a signed PDF that is merely *small*: one
+      # E2E case fails on a byte count, and nothing anywhere names the cause.
+      #
+      # That happened, so the invariant is asserted rather than assumed. `@playwright/test`
+      # in e2e/package.json and `playwright-core` in apps/api/package.json stay on the same
+      # minor, and if they drift CI says so in a sentence instead of in a byte count.
+      - name: One Playwright in the tree
+        run: |
+          set -euo pipefail
+          copies="$(find . -path ./.git -prune -o -name playwright-core -type d -print)"
+          count="$(printf '%s' "${copies}" | grep -c . || true)"
+          if [ "${count}" != 1 ]; then
+            printf '%s\n' "${copies}"
+            echo "::error::Found ${count} copies of playwright-core; expected 1. Align @playwright/test (e2e) and playwright-core (apps/api) to the same minor."
+            exit 1
+          fi
+
+      # `--with-deps` also installs the shared system libraries, which the cache above does
+      # not hold; the browser download is the part a cache hit skips.
       - run: npx playwright install --with-deps chromium
+
       # Playwright's webServer starts both dev servers itself; the API's `predev` applies
       # the migrations, so there is no separate migrate step here.
-      - run: npm run test:e2e
+      #
+      # Named workspace, not the root `test:e2e` alias — see the integration job for why.
+      - run: npm run test --workspace @devscribed/e2e -- --shard=${{ matrix.shard }}/3
+
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: e2e/playwright-report/
           retention-days: 7

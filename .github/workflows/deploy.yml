@@ -20,7 +20,7 @@ name: Deploy
 # The tests job runs whether or not deploys are switched on, so `main` is still covered
 # when `DEPLOY_ENABLED` is unset. Only the deploy half is gated.
 #
-# Two switches remain, and both are deliberate:
+# Three switches remain, and all three are deliberate:
 #
 #   1. The repository variable `DEPLOY_ENABLED` must be `true`
 #      (Settings → Secrets and variables → Actions → Variables). A repository with it
@@ -29,6 +29,9 @@ name: Deploy
 #      `terraform output github_deploy_role_arn` prints for each environment. The job
 #      checks its own before asking AWS for anything, so an unset one fails with that
 #      sentence rather than with an OIDC error.
+#   3. `DEPLOY_REQUIRE_TESTS` — unset or anything other than `false` keeps the gate. Set
+#      it to `false` to skip the suite on this pipeline and deploy immediately. See the
+#      `tests` job below and docs/deployment.md before doing that.
 #
 # There are no AWS access keys in this file and none in the repository's secrets. GitHub
 # presents an OIDC token naming this repo, this environment, and this workflow; the role's
@@ -95,18 +98,38 @@ jobs:
           echo "### Target: \`${environment}\` (${services})" >> "$GITHUB_STEP_SUMMARY"
 
   # Not `if: vars.DEPLOY_ENABLED`. The suite has to run on main regardless of whether this
-  # repository is allowed to deploy, and gating it here is how `main` would end up with no
-  # CI at all the first time somebody turned deploys off.
+  # repository is allowed to deploy, and gating it *there* is how `main` would end up with
+  # no CI at all the first time somebody turned deploys off.
+  #
+  # `DEPLOY_REQUIRE_TESTS` is a different question, and the only one that can switch this
+  # off: set it to `false` and a push to main goes straight to the rollout, roughly three
+  # minutes sooner. What that buys and what it costs is spelled out in docs/deployment.md;
+  # the short version is that it is only defensible when every change reaches main through
+  # a pull request, because the PR run is then the last suite anybody sees. Pushing
+  # straight to main with it off deploys code no suite has run.
   tests:
     name: Tests
+    if: vars.DEPLOY_REQUIRE_TESTS != 'false'
     uses: ./.github/workflows/test.yml
 
   deploy:
     name: Deploy ${{ needs.target.outputs.environment }}
     needs: [target, tests]
 
-    # The master switch. A repository with this unset cannot deploy by accident.
-    if: vars.DEPLOY_ENABLED == 'true'
+    # Three conditions, and the middle one is the master switch: a repository with
+    # `DEPLOY_ENABLED` unset cannot deploy by accident.
+    #
+    # `!cancelled()` is load-bearing rather than defensive. GitHub skips a job whose
+    # `needs` were skipped, so without it, turning `DEPLOY_REQUIRE_TESTS` off would skip
+    # the tests job and then silently skip this one too — the deploy would simply never
+    # happen, and nothing would say why. With it, the `needs.tests.result` clause below is
+    # what decides, and it accepts `skipped` (tests deliberately off) while still refusing
+    # `failure` (tests ran and were red).
+    if: >-
+      !cancelled()
+      && vars.DEPLOY_ENABLED == 'true'
+      && needs.target.result == 'success'
+      && (needs.tests.result == 'success' || needs.tests.result == 'skipped')
 
     runs-on: ubuntu-latest
 
