@@ -76,8 +76,8 @@ describe('POST /api/login', () => {
       .set('Cookie', cookies);
 
     expect(members.status).toBe(200);
-    expect(members.body).toHaveLength(1);
-    expect(members.body[0]).toMatchObject({ email: 'pat@acme.com', role: 'admin' });
+    expect(members.body.members).toHaveLength(1);
+    expect(members.body.members[0]).toMatchObject({ email: 'pat@acme.com', role: 'admin' });
   });
 
   it('never reveals which half of the pair was wrong', async () => {
@@ -135,7 +135,7 @@ describe('POST /api/login', () => {
 
   it('treats an account with no active membership as deactivated', async () => {
     await signup({ email: 'invited@acme.com' });
-    await prisma.membership.updateMany({ data: { status: 'invited' } });
+    await prisma.membership.updateMany({ data: { status: 'removed' } });
 
     const response = await login({ email: 'invited@acme.com', password: 'Passw0rd' });
 

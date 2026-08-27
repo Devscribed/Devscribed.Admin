@@ -1,5 +1,9 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
+import { AccountController } from './account/account.controller';
+import { AccountService } from './account/account.service';
+import { AccrualController } from './accrual/accrual.controller';
+import { AccrualService } from './accrual/accrual.service';
 import { LoginController } from './auth/login.controller';
 import { LoginService } from './auth/login.service';
 import { LogoutController } from './auth/logout.controller';
@@ -9,15 +13,24 @@ import {
 } from './auth/password-reset.controller';
 import { PasswordResetService } from './auth/password-reset.service';
 import { SessionService } from './auth/session.service';
+import { InvitationsController } from './invitations/invitations.controller';
+import { InvitationsService } from './invitations/invitations.service';
 import { ConsoleMailService } from './mail/console-mail.service';
 import { InMemoryMailService } from './mail/in-memory-mail.service';
 import { MailService } from './mail/mail.service';
 import { TestMailController } from './mail/test-mail.controller';
 import { MeController } from './members/me.controller';
 import { MembersController } from './members/members.controller';
+import { MembersService } from './members/members.service';
 import { PrismaService } from './prisma.service';
+import { RequestsController } from './requests/requests.controller';
+import { RequestsService } from './requests/requests.service';
 import { SignupController } from './signup/signup.controller';
 import { SignupService } from './signup/signup.service';
+import { TestFixturesController } from './test/test-fixtures.controller';
+import { VacationController } from './vacation/vacation.controller';
+import { VacationRequestsService } from './vacation/vacation-requests.service';
+import { VacationService } from './vacation/vacation.service';
 
 /**
  * Spec 02 leaves the real transport out of scope, so there are only two stand-ins.
@@ -55,13 +68,26 @@ const mailProvider = {
     ResetPasswordController,
     MeController,
     MembersController,
+    InvitationsController,
+    AccountController,
+    VacationController,
+    RequestsController,
+    AccrualController,
     TestMailController,
+    TestFixturesController,
   ],
   providers: [
     PrismaService,
     SignupService,
     LoginService,
     PasswordResetService,
+    InvitationsService,
+    MembersService,
+    AccountService,
+    VacationService,
+    VacationRequestsService,
+    RequestsService,
+    AccrualService,
     SessionService,
     mailProvider,
   ],

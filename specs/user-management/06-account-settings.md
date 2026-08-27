@@ -517,6 +517,11 @@ Account Settings page:
 - `account-save-button`, `toast-account-saved`
 - `field-error-firstName`, `field-error-lastName`, `field-error-phoneNumber`, `field-error-phoneCountryCode`, `field-error-timezone`, `field-error-firstDayOfWeek` (inline validation on settings page)
 
+Added during implementation (not in the original list above):
+- `account-settings-menu-link` — the "Account settings" item added to the top-bar account menu (the entry point to this screen; a spec-00 / app-shell touch).
+- `account-error-message` — the settings-page form-level error banner shown on a 5xx/network failure of the Save (`PUT /api/account/settings`); the spec names this "error area" but assigned no id.
+- `account-settings-loading-skeleton` — the skeleton shown while `GET /api/account/settings` is in flight; the spec names the Loading state but assigned no id.
+
 Change Email modal:
 - `change-email-form`, `change-email-new-input`, `change-email-submit-button`
 - `change-email-confirmation-message`, `change-email-error`

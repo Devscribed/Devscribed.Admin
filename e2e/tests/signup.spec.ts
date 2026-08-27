@@ -23,8 +23,9 @@ test.describe('01 — Organization Creation', () => {
     const rows = list.locator('[data-testid^="member-row-"]');
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toContainText('Pat Owner');
-    await expect(rows.first().getByTestId('member-role')).toHaveText('admin');
-    await expect(rows.first()).toContainText('active');
+    // Spec 04 renders the role as `member-role-badge-{id}`, not a bare `member-role`
+    // testid, and gives active rows no status badge at all (only removed rows get one).
+    await expect(rows.first().locator('[data-testid^="member-role-badge-"]')).toHaveText('admin');
   });
 
   // TC-01-E2E-02

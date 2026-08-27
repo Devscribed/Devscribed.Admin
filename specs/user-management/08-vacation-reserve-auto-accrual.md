@@ -88,6 +88,8 @@ Capabilities introduced in spec 07 continue to apply. This spec adds one new cap
 
 18. On December 31 (or the first admin/manager action of the new year), any remaining reserve balance from the previous year is zeroed out with an `expiry` transaction. Unused vacation days do not carry over.
 
+> **Implementation note (added during implementation).** The reserve balance is derived as `SUM(amount)` over the transactions whose `CreatedAt` falls in the **current calendar year** (requirement 15), so an unused prior-year balance is already excluded from the live balance the moment the year rolls over — the "unused days do not carry over" behaviour is realised by this year-scoped sum. No standalone expiry-trigger endpoint ships in this spec (none is defined and no test case exercises one); the `expiry` transaction type remains reserved in the enum for a future explicit-zeroing job. When a member's approved requests (spec 09) are added, `usedDays` continues to reference the same current calendar year.
+
 ## Data Model
 
 ### VacationReserveTransaction
@@ -392,11 +394,11 @@ availableDays       = min(floor(reserveBalance / dailySalary),
 ### TC-08-INT-02: Auto-accrual — pro-rated first month
 
 - **Level:** Integration
-- **Preconditions:** user M joined and financials configured on June 15, 2025. June 2025 has 21 working days. From June 15 to June 30 = 12 working days.
+- **Preconditions:** user M joined and financials configured on June 15, 2025. June 2025 has 21 working days. June 15, 2025 is a **Sunday**, so counting weekdays inclusively from June 15 to June 30 gives **11 working days** (not 12).
 - **Steps:**
   1. Trigger the auto-accrual job for billing month June 2025.
 - **Expected Result:**
-  1. Credit = round(fullMonthCredit × 12/21, 2). Pro-rated based on working days from config date to end of month.
+  1. Credit = round(fullMonthCredit × 11/21, 2). Pro-rated based on working days from config date to end of month. (Corrected during implementation — an earlier draft of this case said "12/21", but June 15, 2025 is a Sunday; the calendar-correct count is 11.)
 
 ### TC-08-INT-03: Auto-accrual — salary change mid-month uses snapshot
 

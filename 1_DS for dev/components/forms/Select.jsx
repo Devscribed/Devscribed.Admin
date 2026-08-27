@@ -47,7 +47,8 @@ export function Select({ label, value, options = [], onChange, placeholder = 'Se
         <div style={{
           position: 'absolute', left: 0, right: 0, top: '100%', marginTop: 6,
           background: 'var(--bg-panel)', border: '1px solid var(--border)',
-          borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-pop)', overflow: 'hidden', zIndex: 30,
+          borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-pop)',
+          maxHeight: '280px', overflowY: 'auto', overflowX: 'hidden', zIndex: 30,
         }}>
           {options.map((o) => {
             const v = typeof o === 'string' ? o : o.value;

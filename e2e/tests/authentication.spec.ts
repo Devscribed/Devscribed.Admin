@@ -1,5 +1,18 @@
 import { expect, test } from '@playwright/test';
-import { VALID, latestResetToken, registerAccount, requestReset, uniqueEmail } from './helpers';
+import {
+  VALID,
+  acceptInvitationViaApi,
+  findMember,
+  latestInvitationToken,
+  latestResetToken,
+  login,
+  registerAccount,
+  removeMember,
+  requestReset,
+  sendInvitation,
+  signupOrg,
+  uniqueEmail,
+} from './helpers';
 
 const focusedTestId = (page: import('@playwright/test').Page) =>
   page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? null);
@@ -86,12 +99,36 @@ test.describe('02 — Authentication & Login', () => {
     await expect(page.getByTestId('login-error-message')).toHaveText('Invalid email or password');
   });
 
-  /**
-   * TC-02-E2E-04 needs a member whose status is `removed`, and nothing can produce one
-   * until spec 04 ships the removal endpoint. The rule itself is already covered at the
-   * API level by TC-02-INT-04 and TC-02-INT-04b; only the amber banner is unproven here.
-   */
-  test.skip('TC-02-E2E-04 removed member sees the deactivation message — needs spec 04', () => {});
+  // TC-02-E2E-04
+  test('removed member sees the deactivation message', async ({ page, request }) => {
+    const adminEmail = uniqueEmail('admin');
+    const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
+
+    const memberEmail = uniqueEmail('removed');
+    await sendInvitation(request, memberEmail, 'user');
+    const token = await latestInvitationToken(request, memberEmail);
+    await acceptInvitationViaApi(request, {
+      token,
+      firstName: 'Rem',
+      lastName: 'Oved',
+      password: VALID.password,
+    });
+
+    // Removal is spec 04's soft-delete — a precondition here, not the thing under test.
+    await login(request, adminEmail);
+    const member = await findMember(request, org.organizationId, memberEmail);
+    await removeMember(request, org.organizationId, member.id);
+
+    await page.goto('/login');
+    await page.getByTestId('login-email-input').fill(memberEmail);
+    await page.getByTestId('login-password-input').fill(VALID.password);
+    await page.getByTestId('login-submit-button').click();
+
+    await expect(page.getByTestId('login-error-message')).toHaveText(
+      'Your account has been deactivated. Contact your administrator.',
+    );
+    await expect(page).toHaveURL(/\/login$/);
+  });
 
   // TC-02-E2E-05
   test('a dead reset link shows the error and hides the fields', async ({ page, request }) => {
