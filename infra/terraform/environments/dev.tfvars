@@ -49,6 +49,15 @@ alarm_email = "ivan.demchenko.dev@gmail.com"
 
 log_retention_days = 14
 
+# Mail is simulated here, not sent: the product has no provider yet, and the signing link
+# lives only inside the message. Without this the deployed suite cannot reach a link at all.
+#
+# Costs, stated so nobody has to rediscover them: this environment no longer exercises SES,
+# the API is pinned to one task (the outbox is in process memory), and whoever holds
+# /devscribed-dev/TEST_MAIL_SINK_SECRET can read every signing link this stand has issued.
+# Turn it off the day real mail works.
+test_mail_sink_enabled = true
+
 # ---------------------------------------------------------------------------------------
 # CI/CD — provisioned, and off by default. See .github/workflows/deploy.yml.
 # ---------------------------------------------------------------------------------------

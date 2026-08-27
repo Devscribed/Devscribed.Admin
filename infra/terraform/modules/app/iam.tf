@@ -57,12 +57,15 @@ data "aws_iam_policy_document" "execution_secrets" {
   statement {
     sid     = "ReadContainerSecrets"
     actions = ["ssm:GetParameters"]
-    resources = [
-      var.database_url_parameter_arn,
-      var.direct_url_parameter_arn,
-      aws_ssm_parameter.session_secret.arn,
-      aws_ssm_parameter.internal_task_secret.arn,
-    ]
+    resources = concat(
+      [
+        var.database_url_parameter_arn,
+        var.direct_url_parameter_arn,
+        aws_ssm_parameter.session_secret.arn,
+        aws_ssm_parameter.internal_task_secret.arn,
+      ],
+      aws_ssm_parameter.test_mail_sink_secret[*].arn,
+    )
   }
 
   statement {

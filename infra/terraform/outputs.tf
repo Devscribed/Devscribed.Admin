@@ -124,3 +124,11 @@ output "log_groups" {
     sweep   = module.app.sweep_log_group_name
   }
 }
+
+output "test_mail_sink_parameter" {
+  description = <<-EOT
+    SSM parameter holding the token that reads `/api/test/mail`, or empty where mail is
+    real. `make e2e-<env>` fetches it; nothing else should.
+  EOT
+  value       = module.app.test_mail_sink_parameter
+}

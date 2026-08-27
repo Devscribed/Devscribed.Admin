@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Browser, type Page } from '@playwright/test';
 import {
+  API,
   addMemberToOrganization,
   createEnvelope,
   createTemplate,
@@ -527,7 +528,7 @@ async function documentHashOf(
   envelopeId: string,
 ): Promise<string> {
   const response = await request.get(
-    `http://localhost:4000/api/organizations/${orgId}/envelopes/${envelopeId}`,
+    `${API}/api/organizations/${orgId}/envelopes/${envelopeId}`,
   );
   if (!response.ok()) throw new Error(`Could not read envelope ${envelopeId}`);
   return (await response.json()).documentHash as string;

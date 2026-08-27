@@ -141,6 +141,25 @@ variable "api_port" {
   type        = number
 }
 
+variable "test_mail_sink_enabled" {
+  description = <<-EOT
+    Whether this environment records outbound mail in memory and lets a token holder read
+    it back through `/api/test/mail`. **False everywhere except the dev stand**, and false
+    by default so that opening it is always an explicit act.
+
+    It exists because the product has no mail provider yet: SES is in the sandbox with an
+    unverified identity, so a deployed E2E run has no mailbox to read a signing link from.
+    Simulating the mailbox is the only way to exercise the signing flow against a real
+    deployment today, and it retires the moment real mail works.
+
+    Two consequences, both real. Mail genuinely stops being sent, so this environment no
+    longer exercises SES at all. And anyone holding the token can read every signing link
+    the environment has issued.
+  EOT
+  type        = bool
+  default     = false
+}
+
 variable "log_retention_days" {
   description = "CloudWatch retention for both services' logs."
   type        = number

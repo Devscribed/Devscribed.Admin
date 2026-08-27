@@ -501,6 +501,19 @@ neither is a deploy step:
 2. **SES production access.** While the account is sandboxed, delivery succeeds **only to verified
    addresses** — a signer whose address is not in `verified_emails` never receives their invitation.
 
+**The dev stand does not send mail at all.** It sets `MAIL_TRANSPORT=memory`, so messages are
+recorded in the API's memory, and `/api/test/mail` hands them back to a caller holding a
+per-environment bearer token. That exists because the signing link lives *only* inside the
+message — `envelopes.service.ts` gives it to the transport and returns it to nobody — so
+without a mailbox to read, a deployed E2E run cannot exercise signing at all, and there is no
+mail provider yet to give it one.
+
+The costs are real and are recorded rather than buried: that environment stops exercising SES
+entirely, its API is pinned to one task (an in-memory outbox is per-process, and a second task
+would own a second one), and anyone holding the token can read every signing link it has
+issued. `prod` creates no token, which shuts the gate there in a way no other setting can
+open. It retires the day real mail works.
+
 Delivery events reach the SNS topic. Turning them into `EnvelopeEvent` rows of type
 `email_delivered` / `email_bounced` is **not deployed**: an SNS HTTPS subscription cannot reach an
 API with no public address, and the in-VPC consumer that would is separate work. Recorded in

@@ -56,6 +56,18 @@ export async function fillSignup(page: Page, values: SignupValues): Promise<void
  */
 export const API = process.env.E2E_API_URL ?? process.env.E2E_BASE_URL ?? 'http://localhost:4000';
 
+/**
+ * Headers for the mail sink.
+ *
+ * Empty locally, where the sink is open to anyone who can reach the dev server. Against a
+ * deployment the sink is closed unless a token is presented — it hands out live signing
+ * links, and that endpoint is on a public host — so `make e2e-<env>` fetches the token from
+ * SSM and puts it here. No token, no read, and the suite says so rather than pretending.
+ */
+const MAIL_SINK_HEADERS: Record<string, string> = process.env.E2E_MAIL_SINK_TOKEN
+  ? { authorization: `Bearer ${process.env.E2E_MAIL_SINK_TOKEN}` }
+  : {};
+
 /** Registers an account straight through the API — a precondition, not the thing under test. */
 export async function registerAccount(
   request: APIRequestContext,
@@ -78,7 +90,10 @@ export async function latestResetToken(
   request: APIRequestContext,
   email: string,
 ): Promise<string> {
-  const response = await request.get(`${API}/api/test/mail/latest`, { params: { email } });
+  const response = await request.get(`${API}/api/test/mail/latest`, {
+    params: { email },
+    headers: MAIL_SINK_HEADERS,
+  });
   if (!response.ok()) {
     throw new Error(`No reset mail for ${email} (${response.status()})`);
   }
@@ -339,7 +354,10 @@ export async function latestMail(
 ): Promise<Record<string, unknown> | null> {
   const params: Record<string, string> = { email };
   if (type) params.type = type;
-  const response = await request.get(`${API}/api/test/mail/latest`, { params });
+  const response = await request.get(`${API}/api/test/mail/latest`, {
+    params,
+    headers: MAIL_SINK_HEADERS,
+  });
   if (response.status() === 404) return null;
   if (!response.ok()) {
     throw new Error(`Mail sink refused the read for ${email} (${response.status()})`);

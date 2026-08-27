@@ -90,3 +90,11 @@ output "migrate_log_group_name" {
   description = "Where `make migrate-<env>` writes. Separate from the API's on purpose."
   value       = aws_cloudwatch_log_group.migrate.name
 }
+
+output "test_mail_sink_parameter" {
+  description = <<-EOT
+    SSM parameter holding the token that reads `/api/test/mail`, or empty where the sink is
+    shut. `make e2e-dev` fetches it; nothing else should.
+  EOT
+  value       = try(aws_ssm_parameter.test_mail_sink_secret[0].name, "")
+}

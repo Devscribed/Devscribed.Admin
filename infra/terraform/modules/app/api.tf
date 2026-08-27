@@ -33,7 +33,9 @@ locals {
     STORAGE_DRIVER   = "s3"
     DOCUMENTS_BUCKET = var.documents_bucket
 
-    MAIL_TRANSPORT        = "ses"
+    # `memory` on the dev stand, where mail is simulated because no provider exists yet —
+    # see `test_mail_sink_enabled`. Everywhere else this is the real transport.
+    MAIL_TRANSPORT        = var.test_mail_sink_enabled ? "memory" : "ses"
     MAIL_FROM             = var.mail_from
     SES_CONFIGURATION_SET = var.ses_configuration_set
 
@@ -49,12 +51,19 @@ locals {
     ENVELOPE_EXPIRY_DAYS   = tostring(var.envelope_expiry_days)
   }
 
-  api_secrets = {
-    DATABASE_URL         = var.database_url_parameter_arn
-    DIRECT_URL           = var.direct_url_parameter_arn
-    SESSION_SECRET       = aws_ssm_parameter.session_secret.arn
-    INTERNAL_TASK_SECRET = aws_ssm_parameter.internal_task_secret.arn
-  }
+  api_secrets = merge(
+    {
+      DATABASE_URL         = var.database_url_parameter_arn
+      DIRECT_URL           = var.direct_url_parameter_arn
+      SESSION_SECRET       = aws_ssm_parameter.session_secret.arn
+      INTERNAL_TASK_SECRET = aws_ssm_parameter.internal_task_secret.arn
+    },
+    # Absent unless the sink is open, so the container has no token to check against and
+    # the endpoint's third gate stays shut on its own.
+    var.test_mail_sink_enabled ? {
+      TEST_MAIL_SINK_SECRET = aws_ssm_parameter.test_mail_sink_secret[0].arn
+    } : {},
+  )
 
   api_container = {
     name      = "api"
@@ -178,7 +187,16 @@ resource "aws_appautoscaling_target" "api" {
   resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.api.name}"
   scalable_dimension = "ecs:service:DesiredCount"
   min_capacity       = var.desired_count_override != null ? var.desired_count_override : var.api_min_tasks
-  max_capacity       = var.desired_count_override != null ? max(var.desired_count_override, 1) : var.api_max_tasks
+
+  # A ceiling of one while the mail sink is open, and this is correctness rather than
+  # thrift. The sink lives in the API process's memory, so a second task owns a second,
+  # different outbox — and a test that sends an invitation through one task and then reads
+  # for it through the other finds nothing, intermittently, under load. Capping the service
+  # is the only way to make that read deterministic.
+  max_capacity = (
+    var.desired_count_override != null ? max(var.desired_count_override, 1) :
+    var.test_mail_sink_enabled ? 1 : var.api_max_tasks
+  )
 }
 
 resource "aws_appautoscaling_policy" "api_cpu" {

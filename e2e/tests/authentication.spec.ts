@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { VALID, latestResetToken, registerAccount, requestReset, uniqueEmail } from './helpers';
+import { API, VALID, latestResetToken, registerAccount, requestReset, uniqueEmail } from './helpers';
 
 const focusedTestId = (page: import('@playwright/test').Page) =>
   page.evaluate(() => document.activeElement?.getAttribute('data-testid') ?? null);
@@ -101,7 +101,7 @@ test.describe('02 — Authentication & Login', () => {
     const used = await latestResetToken(request, email);
 
     // Spend it, so the link is genuinely dead rather than merely malformed.
-    await request.post('http://localhost:4000/api/reset-password', {
+    await request.post(`${API}/api/reset-password`, {
       data: { token: used, password: 'NewPass1', passwordConfirmation: 'NewPass1' },
     });
 

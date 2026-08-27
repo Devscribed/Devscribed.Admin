@@ -292,6 +292,24 @@ variable "log_retention_days" {
   type        = number
 }
 
+variable "test_mail_sink_enabled" {
+  description = <<-EOT
+    Whether this environment simulates mail instead of sending it: messages are recorded in
+    the API's memory and a token holder can read them back through `/api/test/mail`.
+
+    **True on the dev stand only.** The product has no mail provider yet — SES is in the
+    sandbox with an unverified identity — so a deployed E2E run has no mailbox to read a
+    signing link from, and the signing link exists nowhere else by design. Simulating the
+    mailbox is what makes the signing flow testable against a real deployment at all.
+
+    It is not free. This environment stops exercising SES entirely, and anyone holding the
+    token can read every signing link it has issued. It also pins the API to a single task,
+    because an in-memory outbox is per-process. Retire it the day real mail works.
+  EOT
+  type        = bool
+  default     = false
+}
+
 variable "alarms_enabled" {
   description = "Whether the service alarms are armed. `make stop-<env>` turns them off with the tasks."
   type        = bool

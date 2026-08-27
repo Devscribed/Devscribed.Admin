@@ -1,4 +1,5 @@
-import { Controller, Get, NotFoundException, Query } from '@nestjs/common';
+import { Controller, Get, Headers, NotFoundException, Query } from '@nestjs/common';
+import { timingSafeEqual } from 'node:crypto';
 import { InMemoryMailService, RecordedMail } from './in-memory-mail.service';
 import { MAIL_MESSAGE_TYPES, MailMessageType, MailService } from './mail.service';
 
@@ -12,13 +13,51 @@ import { MAIL_MESSAGE_TYPES, MailMessageType, MailService } from './mail.service
  *
  * Lets an E2E run read a link the way a recipient would, without a mailbox.
  *
- * This endpoint hands out live reset and signing tokens, so it is fenced twice: it only
- * answers when the sink transport is actually in use, and never when NODE_ENV is
- * production. A real deployment uses a real transport, so both gates are shut.
+ * This endpoint hands out live reset and signing tokens, so it is fenced hard, and the
+ * fence is worth reading before changing:
+ *
+ *  1. It answers only when the sink transport is actually in use. Under a real transport
+ *     there is nothing to read and the route does not exist.
+ *  2. Outside production that is the whole gate — a developer's machine is not a target.
+ *  3. **In production it additionally requires a bearer token**, and refuses outright if
+ *     no token is configured. That third case exists for one reason: the deployed `dev`
+ *     environment is a real deployment, so `NODE_ENV` is `production` there, and until
+ *     this product has a mail provider an E2E run against it has no mailbox to read from.
+ *     `MAIL_TRANSPORT=memory` plus a token lets the suite read what was "sent".
+ *
+ * Understand what enabling it costs before doing so: anyone holding the token can read
+ * every signing link that environment has issued. `prod` sets no token, so gate 3 is shut
+ * there and no value of any other variable can open it.
  */
 @Controller('api/test/mail')
 export class TestMailController {
   constructor(private readonly mail: MailService) {}
+
+  /**
+   * The sink, if every gate above is satisfied; otherwise 404. One method rather than a
+   * repeated condition, because the two routes must never drift apart — one of them
+   * staying open by accident is the whole risk. It *returns* the sink rather than merely
+   * asserting, so the narrowing survives into the caller.
+   */
+  private readableSink(authorization?: string): InMemoryMailService {
+    if (!(this.mail instanceof InMemoryMailService)) throw new NotFoundException();
+    const sink = this.mail;
+    if (process.env.NODE_ENV !== 'production') return sink;
+
+    const expected = process.env.TEST_MAIL_SINK_SECRET;
+    // Unset means shut, and shut is the default everywhere it is not deliberately opened.
+    if (!expected) throw new NotFoundException();
+
+    const offered = (authorization ?? '').replace(/^Bearer /i, '');
+    // Length first: timingSafeEqual throws on a mismatch rather than returning false, and
+    // the length is not the secret.
+    if (offered.length !== expected.length) throw new NotFoundException();
+    if (!timingSafeEqual(Buffer.from(offered), Buffer.from(expected))) {
+      throw new NotFoundException();
+    }
+
+    return sink;
+  }
 
   /**
    * The whole sink, newest first — what the `/dev` outbox renders.
@@ -30,24 +69,28 @@ export class TestMailController {
    * out live signing and reset tokens.
    */
   @Get()
-  list(@Query('email') email?: string, @Query('type') type?: string) {
-    if (process.env.NODE_ENV === 'production' || !(this.mail instanceof InMemoryMailService)) {
-      throw new NotFoundException();
-    }
+  list(
+    @Query('email') email?: string,
+    @Query('type') type?: string,
+    @Headers('authorization') authorization?: string,
+  ) {
+    const sink = this.readableSink(authorization);
 
     // An unrecognized `type` narrows to nothing rather than 404ing: on a list route the
     // honest answer to "show me messages of a type that does not exist" is no messages.
     const wanted = type === undefined ? undefined : MAIL_MESSAGE_TYPES.find((k) => k === type);
     if (type !== undefined && wanted === undefined) return [];
 
-    return this.mail.allRecords(email, wanted).map(describe);
+    return sink.allRecords(email, wanted).map(describe);
   }
 
   @Get('latest')
-  latest(@Query('email') email?: string, @Query('type') type?: string) {
-    if (process.env.NODE_ENV === 'production' || !(this.mail instanceof InMemoryMailService)) {
-      throw new NotFoundException();
-    }
+  latest(
+    @Query('email') email?: string,
+    @Query('type') type?: string,
+    @Headers('authorization') authorization?: string,
+  ) {
+    const sink = this.readableSink(authorization);
 
     // Omitting `type` still means "the last thing this address received", which is what
     // the pre-existing password-reset helper relies on. Naming a type is what documents
@@ -55,7 +98,7 @@ export class TestMailController {
     // notice to the same address, and a test has to be able to ask for one of them.
     const wanted = type === undefined ? undefined : parseMessageType(type);
 
-    const record = this.mail.latestFor(email, wanted);
+    const record = sink.latestFor(email, wanted);
     if (!record) throw new NotFoundException('No message for that address');
 
     // The discriminator is part of the response so a test can assert on it rather than
