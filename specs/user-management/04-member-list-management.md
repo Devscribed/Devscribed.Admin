@@ -443,7 +443,16 @@ Side effects on success:
 - **Steps:**
   1. Simultaneously: A1 deletes A2, A2 deletes A1.
 - **Expected Result:**
-  1. At most one request succeeds; the other is rejected by the zero-admin guard.
+  1. Exactly one request succeeds. The other is **rejected**, and which rejection it gets
+     depends on where the winner's commit lands relative to the loser's authorization:
+     - `409 last_admin_guard` — the loser was still an active admin when it was authorized,
+       reached the zero-admin guard inside the transaction, and was refused there.
+     - `403` — the winner had already committed by the time the loser's membership was read,
+       so the loser was no longer a member of the organization at all (a session whose
+       membership has been removed can also surface as `401`, since the removal rotates the
+       security stamp).
+     Both are correct, and neither is a race the guard failed to catch: the loser is refused
+     either way. A test must assert *rejection*, not one specific status.
   2. The organization retains at least one `active` admin.
 
 ### TC-04-INT-10: Server-side search with query parameters

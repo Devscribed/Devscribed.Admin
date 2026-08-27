@@ -345,9 +345,24 @@ describe('Member list & management (spec 04)', () => {
     ]);
 
     const statuses = [r1.status, r2.status].sort();
-    // Exactly one 2xx success, one 409 rejection.
+    // Exactly one 2xx success, and the loser rejected — but not always by the same rule,
+    // and asserting `409` alone is what made this test flake on CI.
+    //
+    // `remove()` reads the caller's membership *before* it takes the organization row lock.
+    // Whether the loser sees 409 or 403 is therefore decided by where the winner's commit
+    // lands relative to that read:
+    //
+    //   - read first  -> the loser is still an active admin, enters the transaction, waits
+    //                    on the lock, and the zero-admin count inside it refuses: 409.
+    //   - commit first -> the loser's own membership is already `removed`, so it is not a
+    //                    member of this organization any more and never reaches the guard:
+    //                    403 (401 too, if `SessionGuard` is the one that reads the rotated
+    //                    security stamp after the commit).
+    //
+    // Both outcomes preserve what the guard exists to preserve, which the count below is
+    // the real assertion of. See TC-04-INT-09 in the spec.
     expect(statuses[0]).toBeLessThan(300);
-    expect(statuses[1]).toBe(409);
+    expect([401, 403, 409]).toContain(statuses[1]);
 
     const activeAdmins = await prisma.membership.count({
       where: { organizationId: a1.organizationId, role: 'admin', status: 'active' },
