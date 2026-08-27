@@ -12,6 +12,11 @@
     "test:int": "npm run test --workspace @devscribed/api",
     "test:e2e": "npm run test --workspace @devscribed/e2e",
     "dev": "npm run dev --workspace @devscribed/api & npm run dev --workspace @devscribed/web",
-    "build": "npm run build --workspaces --if-present"
+    "build": "npm run build --workspaces --if-present",
+    "release": "release-it",
+    "release:dry": "release-it --dry-run"
+  },
+  "devDependencies": {
+    "release-it": "21.0.2"
   }
 }

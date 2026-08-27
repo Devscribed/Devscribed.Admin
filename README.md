@@ -284,14 +284,43 @@ Nothing is destroyed and no data is lost.
 
 ### Automatic deploys from GitHub
 
-[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) exists and is **off**, behind three
-separate switches:
+[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) is the pipeline for `main`. It tests
+first and deploys second:
 
-1. The repository variable `DEPLOY_ENABLED` must be `true`.
+| Trigger | Runs the suite | Then deploys |
+|---|---|---|
+| push to `main` | yes | `dev` |
+| tag `v*` pointing at a commit on `main` | yes | `prod` |
+| manual dispatch | yes | whichever environment you pick |
+| pull request | yes ([`test.yml`](.github/workflows/test.yml)) | nothing |
+
+**The suite is a gate, not a neighbour.** `test.yml` is a reusable workflow that `deploy.yml` calls,
+and the deploy job `needs` it, so nothing reaches an environment on a red run. That dependency is
+what makes an automatic deploy safe to have at all: while deploys were manual a human read the test
+result before pressing the button, and now nobody does. It is also why `test.yml` has no `push`
+trigger of its own — on `main` it runs as the first half of this pipeline, and a second trigger
+would run Playwright twice per merge.
+
+The tests half runs whether or not deploys are switched on. Only the deploy half is gated, on two
+switches that remain deliberately:
+
+1. The repository variable `DEPLOY_ENABLED` must be `true`. A repository with it unset runs the
+   suite and deploys nothing, however the workflow is triggered.
 2. `AWS_DEPLOY_ROLE_DEV` / `AWS_DEPLOY_ROLE_PROD` must hold the ARNs that
-   `terraform output github_deploy_role_arn` prints for each environment.
-3. The automatic `push` trigger is commented out. Until it is uncommented, even a fully configured
-   repository only deploys when somebody presses the button.
+   `terraform output github_deploy_role_arn` prints for each environment. The job checks its own
+   **before** asking AWS for anything, so an unset one fails with a sentence naming the variable
+   rather than with an opaque OIDC rejection.
+
+`AWS_DEPLOY_ROLE_PROD` is unset today because prod has never been applied — there is no role to
+name yet. A `v*` tag will fail at that check until `make infra-prod` has run once.
+
+A prod tag is verified to point at a commit on `main` before anything is built. A tag can be created
+on any commit, including one that was never reviewed, and GitHub will happily run the workflow for
+it.
+
+After the rollout the workflow asks the deployed address for `/api/health` and fails the run if it
+never answers 200. `deploy.sh` already waits for both services to reach steady state, so this is not
+"did the rollout finish" — it is the one question a rollout cannot answer about itself.
 
 The workflow runs `infra/deploy.sh` — the same script `make deploy-dev` runs. One code path, so what
 CI does is what somebody has already done by hand, and an image deployed from CI lands in the same
@@ -301,11 +330,43 @@ Authentication is GitHub OIDC: **no AWS access key exists** in this repository, 
 in the account. The role's trust policy matches `repo:Devscribed/Devscribed.Admin:environment:{env}`,
 and because that claim only takes the `environment:` form when a job declares an environment,
 GitHub's required-reviewers setting on `prod` becomes part of the credential rather than part of the
-interface.
+interface — and a branch cannot deploy prod by being named something clever.
 
 `.github/workflows/migrate.yml` — which applied migrations to Neon on every merge to `main` — is
 gone. The database is no longer reachable from a GitHub runner, and migrations are part of the
 deploy.
+
+### Releasing to prod
+
+Prod moves on a tag, and the tag is made by [`release-it`](https://github.com/release-it/release-it):
+
+```bash
+npm run release:dry       # everything it would do, doing none of it
+npm run release           # pick patch/minor/major, then it does the rest
+```
+
+It runs the unit suite, asks for the bump, writes the section for this version into
+`CHANGELOG.md`, commits `Release v<version>`, tags `v<version>`, pushes both, and opens a GitHub
+release. The pushed tag is what starts the pipeline above, which runs the full suite again on a
+clean runner before prod sees anything.
+
+Three guards are on by default and worth leaving on: the working tree must be clean, the branch must
+be `main`, and `main` must have an upstream. Releasing a dirty tree produces a version that exists
+in no commit.
+
+`GITHUB_TOKEN` has to be in the environment for the release step. With the `gh` CLI already signed
+in, that is:
+
+```bash
+GITHUB_TOKEN="$(gh auth token)" npm run release
+```
+
+The changelog is generated from commit subjects by [`scripts/changelog.mjs`](scripts/changelog.mjs)
+rather than by `@release-it/conventional-changelog`. That plugin reads the bump and the headings out
+of `feat:` / `fix:` prefixes, and this repository writes commit subjects as sentences — it would
+file every one of them under "other", never bump anything, and produce an empty changelog. Editing a
+generated section afterwards is fine; hand-adding a version is not, because the tag is what makes a
+release.
 
 ### How the application is configured
 

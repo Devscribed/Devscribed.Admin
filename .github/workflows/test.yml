@@ -4,13 +4,17 @@ name: Tests
 # in CI ran a single one of them. The area README calls this a merge blocker rather than a
 # follow-up, so it runs on every pull request as well as on main.
 #
-# This is the only workflow that runs on its own. `deploy.yml` is off behind three
-# switches, and there is deliberately no dependency between the two: a green test run does
-# not deploy anything.
+# It is also a **reusable** workflow. `deploy.yml` calls it and refuses to deploy unless it
+# passes, which is what makes an automatic deploy on push safe to have at all — a stand
+# rolled forward onto a red suite is worse than one that is a commit behind.
+#
+# That call is why there is no `push` trigger here. On `main` this workflow runs as the
+# first half of the pipeline in `deploy.yml`, which runs whether or not deploys are
+# switched on; adding `push` as well would run the whole suite, Playwright included, twice
+# for every merge.
 on:
-  push:
-    branches: [main]
   pull_request:
+  workflow_call:
   workflow_dispatch:
 
 concurrency:
