@@ -20,15 +20,26 @@
 #      plan promises has to be the image that runs.
 #   4. For a service it did NOT build, reads the digest currently deployed, so deploying
 #      one service cannot silently roll the other one back or forward.
-#   5. Applies. Terraform waits for both services to reach steady state, so this command
+#   5. Runs the migrations, from the image it is about to deploy.
+#   6. Applies. Terraform waits for both services to reach steady state, so this command
 #      failing means the deploy failed — not that it was merely submitted.
-#   6. Runs the migrations, from the image it just deployed.
 #
-# Migrations run AFTER the rollout, and that is safe by the rule this repository already
-# holds itself to: migrations are additive, so the deploy and the migration are
-# independent and either order must work (see CLAUDE.md). Running them from the same image
-# the API runs is what stops the schema and the code that depends on it being built from
-# different commits.
+# **Migrations run BEFORE the rollout**, and the order is the whole point.
+#
+# It used to be the other way round, justified by the rule that migrations here are
+# additive and therefore "either order must work". That reasoning is backwards. Additive
+# migrations make *old code against a new schema* safe — the old code simply ignores the
+# column it does not know about. They say nothing about *new code against an old schema*,
+# which is exactly what deploying first produces: the new API starts serving, and every
+# query touching a table the migration has not created yet fails until it does.
+#
+# The user-management merge is what makes that concrete rather than theoretical. It adds
+# `Invitation`, `PendingEmailChange` and `Membership.jobTitle`, and the code reading all
+# three ships in the same commit; rolling out first would have meant a minute or two of
+# 500s on the members list.
+#
+# Running them from the same image the API runs is what stops the schema and the code that
+# depends on it being built from different commits.
 set -euo pipefail
 
 ENV="${1:?usage: deploy.sh <dev|prod> [api] [web]}"
@@ -154,18 +165,30 @@ for service in api web; do
   fi
 done
 
+# Only when the API changed. A web-only deploy cannot have changed the schema, and running
+# migrations anyway would make every deploy wait on a task that has nothing to do.
+#
+# The one-off task has to run the image that is about to be deployed, so its task
+# definition is registered on its own first. `-target` is a documented escape hatch and
+# this is what it is for: it updates the migrate task definition — and, on a first deploy,
+# the network and database it depends on — without rolling any service out.
+if printf '%s\n' "${SERVICES[@]}" | grep -qx api; then
+  say "migrate task definition (${ENV})"
+  tf apply -input=false -auto-approve \
+    -target=module.app.aws_ecs_task_definition.migrate \
+    -var-file="environments/${ENV}.tfvars" \
+    -var "web_image=${IMAGE[web]}" \
+    -var "api_image=${IMAGE[api]}"
+
+  say "migrate (${ENV})"
+  "${REPO_ROOT}/infra/migrate.sh" "${ENV}"
+fi
+
 say "apply (${ENV})"
 tf apply -input=false -auto-approve \
   -var-file="environments/${ENV}.tfvars" \
   -var "web_image=${IMAGE[web]}" \
   -var "api_image=${IMAGE[api]}"
-
-# Only when the API changed. A web-only deploy cannot have changed the schema, and running
-# migrations anyway would make every deploy wait on a task that has nothing to do.
-if printf '%s\n' "${SERVICES[@]}" | grep -qx api; then
-  say "migrate (${ENV})"
-  "${REPO_ROOT}/infra/migrate.sh" "${ENV}"
-fi
 
 say "deployed"
 tf output -raw app_url && echo
