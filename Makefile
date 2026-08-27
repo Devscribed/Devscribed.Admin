@@ -9,6 +9,7 @@
 #   make migrate-dev        run prisma migrate deploy inside the VPC
 #   make e2e-dev            run the Playwright suite against the deployed environment
 #   make seed-dev           build a demo organization to click through by hand
+#   make member-dev         add one person to an organization (no invite flow yet)
 #   make url-dev            print the address people open
 #   make logs-dev-api       tail the API's logs
 #   make stop-dev           scale both services to zero (stops the Fargate bill)
@@ -43,13 +44,13 @@ TF_VARS  = -var-file=environments/$(1).tfvars
         plan-dev plan-prod infra-dev infra-prod \
         deploy-dev deploy-dev-api deploy-dev-web \
         deploy-prod deploy-prod-api deploy-prod-web \
-        migrate-dev migrate-prod url-dev url-prod output-dev output-prod e2e-dev seed-dev \
+        migrate-dev migrate-prod url-dev url-prod output-dev output-prod e2e-dev seed-dev member-dev \
         logs-dev-api logs-dev-web logs-prod-api logs-prod-web \
         stop-dev start-dev stop-prod start-prod \
         destroy-dev destroy-prod
 
 help:
-	@sed -n '3,21p' $(MAKEFILE_LIST)
+	@sed -n '3,22p' $(MAKEFILE_LIST)
 
 # ---------------------------------------------------------------------------------------
 # Once per account
@@ -146,6 +147,17 @@ e2e-dev:
 seed-dev:
 	$(call TF_INIT,dev)
 	@URL="$$($(TF) -chdir=$(TF_DIR) output -raw app_url)"; 	PARAM="$$($(TF) -chdir=$(TF_DIR) output -raw test_fixture_parameter 2>/dev/null || true)"; 	TOKEN=""; 	if [ -n "$$PARAM" ]; then 	  TOKEN="$$(MSYS_NO_PATHCONV=1 aws ssm get-parameter --name "$$PARAM" --with-decryption --query Parameter.Value --output text)"; 	fi; 	node scripts/seed-demo.mjs --url "$$URL" --token "$$TOKEN"
+
+# Puts one person into an organization, because the product cannot yet — there is no
+# invite flow until user-management spec 04. Registers the account and moves the membership
+# signup just created, which is what an invitation will do in one step later.
+#
+#   make member-dev EMAIL=new@example.com FIRST=Ivan LAST=Petrov ROLE=manager #     AS=admin@example.com AS_PASSWORD='the admin password'
+#
+# ROLE is one of admin, manager, user, viewer. This target goes away with spec 04.
+member-dev:
+	$(call TF_INIT,dev)
+	@URL="$$($(TF) -chdir=$(TF_DIR) output -raw app_url)"; 	PARAM="$$($(TF) -chdir=$(TF_DIR) output -raw test_fixture_parameter 2>/dev/null || true)"; 	TOKEN=""; 	if [ -n "$$PARAM" ]; then 	  TOKEN="$$(MSYS_NO_PATHCONV=1 aws ssm get-parameter --name "$$PARAM" --with-decryption --query Parameter.Value --output text)"; 	fi; 	node scripts/add-member.mjs --url "$$URL" --token "$$TOKEN" 	  --as "$(AS)" --as-password "$(AS_PASSWORD)" 	  --email "$(EMAIL)" --first "$(FIRST)" --last "$(LAST)" --role "$(ROLE)"
 
 migrate-dev:
 	$(call TF_INIT,dev)
