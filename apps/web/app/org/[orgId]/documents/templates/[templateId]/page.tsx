@@ -98,6 +98,35 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
    */
   const revision = useRef(0);
 
+  /**
+   * The editor state as of this render, readable from inside a save that was queued
+   * earlier. A queued save must send what the buffer holds when it finally runs, not the
+   * snapshot its closure captured when it was asked for — above all `rowVersion`, which
+   * the save ahead of it in the queue has just moved on.
+   */
+  const latest = useRef({ body, fields, signers, rowVersion });
+  latest.current = { body, fields, signers, rowVersion };
+
+  /**
+   * The save in flight, if any. Saves are serialized through it, and that is a
+   * correctness guard rather than politeness: two overlapping PUTs both carry the
+   * `rowVersion` they read before either returned, so the server accepts the first and
+   * rejects the second as a conflict — and this screen then tells the author their
+   * template was "changed by someone else" when the someone else was their own previous
+   * keystroke. It never happens on a developer's machine, where a save round-trips in
+   * single-digit milliseconds; it happens as soon as there is a network, which is what
+   * the deployed suite caught (TC-01-E2E-01).
+   */
+  const inFlight = useRef<Promise<boolean> | null>(null);
+
+  /**
+   * Bumped with every edit so the autosave timer below restarts. The cadence the spec
+   * asks for is two seconds of *idle*, and until now that came for free from `save`
+   * changing identity on every keystroke — a property of `useCallback` dependencies, not
+   * a decision. `save` no longer depends on the buffer, so the reset is explicit.
+   */
+  const [editTick, setEditTick] = useState(0);
+
   const load = useCallback(async (): Promise<void> => {
     const result = await apiRequest<TemplateDetail>(url);
     if (!result.ok) {
@@ -145,28 +174,37 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
 
   function markDirty(): void {
     revision.current += 1;
+    setEditTick((tick) => tick + 1);
     setSaveState('dirty');
   }
 
-  const save = useCallback(async (): Promise<boolean> => {
-    if (!canEdit) return false;
+  /**
+   * One PUT. Never called directly — `save` below is what guarantees only one of these is
+   * ever in flight.
+   */
+  const flush = useCallback(async (): Promise<boolean> => {
     const sentRevision = revision.current;
+    // Read at the moment the request is actually built, not when the save was asked for.
+    const { body: sentBody, fields: sentFields, signers: sentSigners, rowVersion: sentRowVersion } =
+      latest.current;
     setSaveState('saving');
 
     const result = await apiRequest<DraftSaveResponse>(`${url}/draft`, {
       method: 'PUT',
       body: JSON.stringify({
-        rowVersion,
-        bodyHtml: body,
-        signerRoles: signers.map((signer, index) => ({ ...signer, order: index + 1 })),
-        fields: fields.map((field, index) => ({ ...field, order: index + 1 })),
+        rowVersion: sentRowVersion,
+        bodyHtml: sentBody,
+        signerRoles: sentSigners.map((signer, index) => ({ ...signer, order: index + 1 })),
+        fields: sentFields.map((field, index) => ({ ...field, order: index + 1 })),
       }),
     });
 
     if (!result.ok) {
       setSaveState('dirty');
       if (result.failure.error === 'stale_version') {
-        setStaleBody(body);
+        // A genuine conflict now: this tab is the only writer it can be racing, and it
+        // no longer races itself.
+        setStaleBody(sentBody);
         return false;
       }
       toast.show({
@@ -178,6 +216,10 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
     }
 
     setRowVersion(result.data.rowVersion);
+    // The ref too, and before the next queued save can read it: `setRowVersion` only
+    // reaches `latest` on the next render, which is a turn too late for a save that is
+    // already waiting behind this one.
+    latest.current = { ...latest.current, rowVersion: result.data.rowVersion };
     setDraftVersion(result.data.versionNumber);
     setValidation(result.data.validation);
     setRemovedElements(result.data.removedElements ?? []);
@@ -186,6 +228,7 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
       // The stored body is the sanitized one — adopting it is what makes "what you saved
       // is what will render" true in the editor as well as on the server.
       setBody(result.data.bodyHtml);
+      latest.current = { ...latest.current, body: result.data.bodyHtml };
       setSaveState('saved');
     } else {
       setSaveState('dirty');
@@ -197,13 +240,41 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
       tone: 'success',
     });
     return true;
-  }, [body, canEdit, fields, rowVersion, signers, toast, url]);
+  }, [toast, url]);
 
+  /**
+   * Flush the buffer, waiting out whatever is already flushing.
+   *
+   * Callers get a promise that resolves once *their* turn has run, so `publish` can still
+   * say "save, then publish" and mean it.
+   */
+  const save = useCallback((): Promise<boolean> => {
+    if (!canEdit) return Promise.resolve(false);
+
+    const mine = (inFlight.current ?? Promise.resolve(true))
+      // A failed save must not poison the queue: the next one is a fresh attempt, and
+      // whether the previous succeeded is the previous caller's business.
+      .catch(() => false)
+      .then(() => flush());
+
+    // What the *next* caller waits on. Never rejects, so nobody inherits a rejection.
+    const tracked = mine.catch(() => false);
+    inFlight.current = tracked;
+    void tracked.then(() => {
+      // Only clear it if nothing has queued behind us in the meantime.
+      if (inFlight.current === tracked) inFlight.current = null;
+    });
+
+    return mine;
+  }, [canEdit, flush]);
+
+  // `editTick` is what makes this two seconds of *idle* rather than two seconds from the
+  // first edit: every keystroke restarts the timer.
   useEffect(() => {
     if (saveState !== 'dirty' || !canEdit) return;
     const timer = setTimeout(() => void save(), AUTOSAVE_IDLE_MS);
     return () => clearTimeout(timer);
-  }, [saveState, canEdit, save]);
+  }, [saveState, editTick, canEdit, save]);
 
   if (gone) notFound();
 
@@ -232,7 +303,10 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
 
   async function publish(): Promise<void> {
     setPublishError(null);
-    if (saveState === 'dirty') {
+    // Unconditionally, not only when dirty. The button is disabled while a save is in
+    // flight, but a save can also be queued behind one, and publishing a version the
+    // server has not been told about yet publishes the wrong text.
+    if (saveState === 'dirty' || inFlight.current) {
       const saved = await save();
       if (!saved) return;
     }

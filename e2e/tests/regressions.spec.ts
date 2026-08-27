@@ -519,6 +519,78 @@ test.describe('Regressions', () => {
     // fill passes work on a copy, and `documentHash` still describes the stored bytes.
     expect(await documentHashOf(request, orgId, envelope.id)).toBe(hashAtSend);
   });
+
+  /* ---------------------------------------------------------------- *
+   * BUG-07 — "the template editor said someone else changed it, and nobody had"
+   * ---------------------------------------------------------------- */
+
+  /**
+   * Found by the E2E suite running against the deployed stand, and by nothing else.
+   *
+   * The editor saved on a two-second idle timer *and* explicitly on every tab change, with
+   * no guard against a second save starting while the first was still in flight. Both
+   * carried the `rowVersion` they had read before either returned, so the server took the
+   * first and refused the second as a conflict — and the screen then told the author their
+   * template had been "changed by someone else". There was no someone else. It was their
+   * own previous keystroke.
+   *
+   * It cannot reproduce on a developer's machine: a save round-trips in single-digit
+   * milliseconds there, so two never overlap. Latency is the whole bug, so this test
+   * supplies its own rather than depending on a slow environment — every draft save is
+   * held for a second, which is long enough for the tab change to land on top of the
+   * autosave and short enough to keep the test quick.
+   *
+   * What it asserts is the symptom the author saw: the conflict dialog, which is modal and
+   * covers the header, never appears, and Publish goes through.
+   */
+  test('BUG-07: quick edits do not make the editor accuse a second author', async ({
+    page,
+    request,
+  }) => {
+    const email = uniqueEmail('rgx-conflict');
+    const { orgId } = await registerOrganization(request, email);
+    const templateId = await createTemplate(request, orgId, {
+      name: 'Concurrent save contract',
+      bodyHtml: '<p>Placeholder</p>',
+    });
+
+    // Applied before the page loads so the very first save is slow too.
+    await page.route('**/document-templates/*/draft', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await route.continue();
+    });
+
+    await signIn(page, email);
+    await page.goto(`${TEMPLATES(orgId)}/${templateId}`);
+    await expect(page.getByTestId('template-editor')).toBeVisible();
+
+    // Edit, then move between tabs faster than a save can finish. Each tab change asks for
+    // an explicit save; with a save already in flight, this is exactly the overlap.
+    await page
+      .getByTestId('template-body-editor')
+      .fill('<p>AGREEMENT with {{contractor_full_name}}</p>');
+    await page.getByTestId('template-tab-fields').click();
+    await page.getByTestId('template-field-add-btn').click();
+    await page.getByTestId('template-field-key-input').fill('contractor_full_name');
+    await page.getByTestId('template-field-label-input').fill('Full name');
+    await page.getByTestId('template-field-save-btn').click();
+    await page.getByTestId('template-tab-signers').click();
+    await page.getByTestId('template-signer-key-1').fill('company');
+    await page.getByTestId('template-signer-label-1').fill('Company');
+    await page.getByTestId('template-signer-key-2').fill('contractor');
+    await page.getByTestId('template-signer-label-2').fill('Contractor');
+    await page.getByTestId('template-tab-body').click();
+
+    await expect(page.getByTestId('template-save-state')).toHaveText('Saved', { timeout: 20_000 });
+
+    // The dialog is the bug. It is modal, so had it opened, the click below would time out
+    // against it rather than reach the button — which is how this was found.
+    await expect(page.getByText('Changed by someone else')).toHaveCount(0);
+
+    await page.getByTestId('template-publish-btn').click();
+    await expect(page.getByTestId('toast-template-published')).toHaveText('Template published');
+  });
+
 });
 
 /** The envelope's `documentHash`, read the way the detail screen reads it. */

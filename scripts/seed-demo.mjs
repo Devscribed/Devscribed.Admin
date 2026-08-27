@@ -157,9 +157,15 @@ async function addTeammate(admin, { firstName, lastName, local, role, profile })
 async function publishTemplate(admin, template) {
   const base = `/api/organizations/${admin.orgId}/document-templates`;
 
+  // The description belongs to the template, and the template is made here — the draft
+  // save neither reads nor writes it.
   const created = await expect(
     `create template ${template.name}`,
-    call(base, { method: 'POST', cookies: admin.cookies, body: { name: template.name } }),
+    call(base, {
+      method: 'POST',
+      cookies: admin.cookies,
+      body: { name: template.name, description: template.description ?? null },
+    }),
   );
   const id = created.json.id;
 
@@ -170,7 +176,6 @@ async function publishTemplate(admin, template) {
       cookies: admin.cookies,
       body: {
         rowVersion: 1,
-        description: template.description ?? null,
         bodyHtml: template.bodyHtml,
         signerRoles: template.signerRoles,
         fields: template.fields.map((field, index) => ({
@@ -586,8 +591,8 @@ Done.
     ${pavel.email}  user     — empty contract details, to see autofill find nothing
     ${olga.email}  viewer   — the narrowest role there is
 
-  Templates  ${BASE}/organizations/${admin.orgId}/document-templates
-  Documents  ${BASE}/organizations/${admin.orgId}/documents
+  Templates  ${BASE}/org/${admin.orgId}/documents/templates
+  Documents  ${BASE}/org/${admin.orgId}/documents
 
   Waiting on a signature: "${halfway.title}" — the contractor still has to sign, and the
   link lives only in the email. Read it from the sink:
