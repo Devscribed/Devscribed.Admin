@@ -5,7 +5,7 @@ import { hasCapability } from '@devscribed/validation';
 import { NavItem, SectionLabel } from '@/ds';
 import { DocumentsIcon } from '@/documents/icons';
 import { PeopleIcon } from './icons';
-import { useSession } from './session-context';
+import { useSession, type SessionFeatures } from './session-context';
 
 interface NavEntry {
   testId: string;
@@ -29,7 +29,7 @@ interface NavGroup {
  * the route itself, so rendering the entry for them would be a dead control pointing at
  * a wall — the repository rule is that a control the caller cannot use is never drawn.
  */
-function navigation(orgId: string, role: string): NavGroup[] {
+function navigation(orgId: string, role: string, features: SessionFeatures): NavGroup[] {
   const groups: NavGroup[] = [
     {
       label: 'People',
@@ -67,6 +67,19 @@ function navigation(orgId: string, role: string): NavGroup[] {
     });
   }
 
+  // Where mail is simulated there is somewhere to read it, and reading it is how a person
+  // reaches a signing link at all. Two conditions, both needed: the environment has to
+  // have an outbox, and the caller has to be one of the roles allowed to see signing
+  // links — which is the same set that decides who signs in the first place.
+  if (features.mailOutbox && hasCapability(role, 'ManageEnvelopes')) {
+    documents.push({
+      testId: 'nav-outbox',
+      label: 'Outbox',
+      href: `/org/${orgId}/outbox`,
+      icon: <DocumentsIcon />,
+    });
+  }
+
   if (documents.length > 0) {
     groups.push({ label: 'Documents', entries: documents });
   }
@@ -77,8 +90,8 @@ function navigation(orgId: string, role: string): NavGroup[] {
 export function Sidebar({ orgId }: { orgId: string }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { role } = useSession();
-  const groups = navigation(orgId, role);
+  const { role, features } = useSession();
+  const groups = navigation(orgId, role, features);
 
   /**
    * `/documents` is a prefix of `/documents/templates`, so a plain `startsWith` would

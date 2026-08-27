@@ -161,6 +161,7 @@ export class EnvelopeCompletionService implements OnModuleInit {
       id: string;
       title: string;
       completedAt: Date | null;
+      organizationId: string;
       organization: { name: string };
       signers: { name: string; email: string }[];
     },
@@ -182,6 +183,7 @@ export class EnvelopeCompletionService implements OnModuleInit {
           recipientName: signer.name,
           envelopeTitle: envelope.title,
           organizationName: envelope.organization.name,
+          organizationId: envelope.organizationId,
           downloadUrl: url,
           downloadExpiresAt,
           completedAt,

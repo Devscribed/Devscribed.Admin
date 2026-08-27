@@ -1,6 +1,8 @@
 import { Controller, Get, Req, UseGuards } from '@nestjs/common';
 import type { AuthenticatedRequest } from '../auth/session.guard';
 import { SessionGuard } from '../auth/session.guard';
+import { InMemoryMailService } from '../mail/in-memory-mail.service';
+import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma.service';
 
 /**
@@ -10,7 +12,10 @@ import { PrismaService } from '../prisma.service';
 @Controller('api')
 @UseGuards(SessionGuard)
 export class MeController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mail: MailService,
+  ) {}
 
   /** The signed-in account plus its organization — what the app shell renders. */
   @Get('me')
@@ -30,6 +35,16 @@ export class MeController {
       },
       organization: { id: membership.organization.id, name: membership.organization.name },
       role: membership.role,
+      /**
+       * What this environment can do that the product does not otherwise promise. The
+       * outbox screen only exists where mail is simulated, and the repository rule is that
+       * a control the caller cannot use is never drawn — so the shell has to be told,
+       * rather than render the entry and let the route 404 behind it.
+       *
+       * A capability check does not belong here: the sidebar already gates on the role it
+       * holds. This answers the other half — whether there is anything to gate.
+       */
+      features: { mailOutbox: this.mail instanceof InMemoryMailService },
     };
   }
 }

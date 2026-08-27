@@ -45,8 +45,16 @@ export default function OrgLayout({
         router.replace('/login');
         return;
       }
+      // `features` is newer than this shell. An API that has not grown it — or that sends
+      // something unexpected in its place — must leave the screens behind it undrawn
+      // rather than throw on the first read of a field that is not there.
+      const features = {
+        mailOutbox: session.features?.mailOutbox === true,
+      };
       setResolution(
-        session.organization.id === orgId ? { state: 'ready', session } : { state: 'gone' },
+        session.organization.id === orgId
+          ? { state: 'ready', session: { ...session, features } }
+          : { state: 'gone' },
       );
     }
 

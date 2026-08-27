@@ -12,6 +12,7 @@ import { CoreModule } from './core.module';
 import { DocumentsModule } from './documents/documents.module';
 import { HealthController } from './health.controller';
 import { InternalModule } from './internal/internal.module';
+import { OutboxController } from './mail/outbox.controller';
 import { TestMailController } from './mail/test-mail.controller';
 import { SigningModule } from './signing/signing.module';
 import { MeController } from './members/me.controller';
@@ -68,6 +69,9 @@ import {
     // member profile is a member-management resource that the documents area reads,
     // not a documents resource.
     MemberProfileController,
+    // The dev outbox. A product screen with the ordinary guard stack, not a fixture —
+    // see the note at the top of the controller for why it is not the route below.
+    OutboxController,
     TestMailController,
     TestRoleController,
     // The membership fixtures: the `/dev` console's picker, and the move that puts a

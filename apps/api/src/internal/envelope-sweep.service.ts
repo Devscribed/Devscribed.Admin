@@ -169,6 +169,7 @@ export class EnvelopeSweepService {
           recipientName: signer.name,
           envelopeTitle: envelope.title,
           organizationName: envelope.organization.name,
+          organizationId: envelope.organizationId,
           senderName: `${envelope.createdBy.firstName} ${envelope.createdBy.lastName}`.trim(),
           signingUrl: invitation.signingUrl,
           expiresAt,

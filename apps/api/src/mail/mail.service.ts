@@ -14,6 +14,14 @@ export interface EnvelopeEmailBase {
   recipientName: string;
   envelopeTitle: string;
   organizationName: string;
+  /**
+   * The organization the envelope belongs to — the id, alongside the name that was
+   * already here. No transport formats it into a message; it is what lets the dev outbox
+   * be **scoped**, so an admin looking at simulated mail sees their own organization's
+   * and no one else's. Without it the only honest outbox would be all-or-nothing, and a
+   * signing link is enough to sign as its recipient.
+   */
+  organizationId: string;
 }
 
 export interface SigningInvitationEmail extends EnvelopeEmailBase {

@@ -15,10 +15,20 @@ export interface SessionOrganization {
   name: string;
 }
 
+/**
+ * What this environment can do that the product does not otherwise promise. Not
+ * permissions — the role covers those — but whether a thing exists here at all.
+ */
+export interface SessionFeatures {
+  /** Mail is simulated here and readable, so the Outbox screen exists. */
+  mailOutbox: boolean;
+}
+
 export interface Session {
   account: SessionAccount;
   organization: SessionOrganization;
   role: string;
+  features: SessionFeatures;
 }
 
 const SessionContext = createContext<Session | null>(null);
