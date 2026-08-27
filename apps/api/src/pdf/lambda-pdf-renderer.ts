@@ -28,7 +28,7 @@ export class LambdaPdfRenderer extends PdfRenderer {
     if (!functionName) throw new Error('PDF_RENDERER=lambda requires PDF_RENDER_FUNCTION');
 
     this.functionName = functionName;
-    this.client = new LambdaClient({ region: process.env.AWS_REGION || 'eu-central-1' });
+    this.client = new LambdaClient({ region: process.env.AWS_REGION || 'us-west-1' });
   }
 
   async render(html: string): Promise<Buffer> {

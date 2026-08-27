@@ -5,10 +5,35 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 /** The Meridian bundle lives outside the app; it is the single source of UI truth. */
 const designSystem = path.resolve(here, '../../1_DS for dev');
 
+/**
+ * Where `/api/*` is proxied to.
+ *
+ * **Read at build time, not at run time.** Next resolves `rewrites()` during `next build`
+ * and writes the destination into `.next/routes-manifest.json`; the server — standalone or
+ * not — then serves from that manifest and never consults this variable again. Setting
+ * `API_ORIGIN` on a running container therefore does nothing at all, silently, and the app
+ * goes on proxying to whatever was baked in.
+ *
+ * So it is set at build time, by `apps/web/Dockerfile`, to a Cloud Map name that carries no
+ * environment: dev and prod each resolve it inside their own VPC. Locally there is no such
+ * name, and the default below is the API's dev-server port.
+ */
 const apiOrigin = process.env.API_ORIGIN || 'http://localhost:4000';
 
 /** @type {import('next').NextConfig} */
 export default {
+  /**
+   * Ships a self-contained server with only the traced node_modules, so the container
+   * image carries a fraction of the workspace install. Harmless locally: `next dev` and
+   * `next start` ignore it, and only `next build` writes .next/standalone.
+   */
+  output: 'standalone',
+  /**
+   * Tracing has to start at the repository root, not at this app. Two of the app's
+   * dependencies live above it — `packages/validation` and the design system — and a
+   * trace rooted here would silently leave them out of the standalone bundle.
+   */
+  outputFileTracingRoot: path.resolve(here, '../..'),
   // Lets Next compile the .jsx design-system files that sit outside this app's root.
   experimental: { externalDir: true },
   webpack: (config) => {

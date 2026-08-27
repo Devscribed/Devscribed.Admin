@@ -10,6 +10,7 @@ import {
 import { PasswordResetService } from './auth/password-reset.service';
 import { CoreModule } from './core.module';
 import { DocumentsModule } from './documents/documents.module';
+import { HealthController } from './health.controller';
 import { InternalModule } from './internal/internal.module';
 import { TestMailController } from './mail/test-mail.controller';
 import { SigningModule } from './signing/signing.module';
@@ -52,6 +53,9 @@ import {
     InternalModule,
   ],
   controllers: [
+    // First, so that a reader looking for "what does the load balancer call" finds it
+    // without reading the rest of the list.
+    HealthController,
     SignupController,
     LoginController,
     LogoutController,

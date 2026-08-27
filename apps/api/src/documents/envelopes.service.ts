@@ -181,7 +181,7 @@ export function readFields(value: unknown): EnvelopeField[] {
 
 /**
  * Requirement 41 — the IP is taken from the trusted proxy header chain, and only the
- * first hop the platform vouches for. Vercel prepends the real client, so the first
+ * first hop the platform vouches for. The load balancer prepends the real client, so the first
  * entry is the one with provenance; everything after it is whatever the client chose to
  * claim and is discarded.
  */

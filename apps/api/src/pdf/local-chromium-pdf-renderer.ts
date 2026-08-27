@@ -6,10 +6,11 @@ import { PdfRenderer } from './pdf-renderer';
  * The development and test driver.
  *
  * Chromium comes from `playwright-core`, which the E2E suite already installs — no
- * second browser download, no `puppeteer` alongside `playwright`. It is a
- * *devDependency* and is imported dynamically, which is the same decision twice: the
- * production bundle on Vercel must not carry a browser launcher it will never call, and
- * an environment without the package has to degrade rather than fail at import time.
+ * second browser download, no `puppeteer` alongside `playwright`. It is a runtime
+ * dependency: the container image installs a real browser (see apps/api/Dockerfile),
+ * because the fallback below writes Latin-1 only and a Cyrillic contract rendered
+ * through it is mojibake. The import stays dynamic anyway, so an environment without
+ * the package degrades rather than failing at import time.
  *
  * **It degrades, never explodes.** If no Chromium executable can be resolved — a fresh
  * clone before `npx playwright install`, a CI image without browsers — the driver falls

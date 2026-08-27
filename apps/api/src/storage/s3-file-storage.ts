@@ -13,7 +13,7 @@ import { FileStorage, PRESIGNED_URL_TTL_SECONDS, assertSafeStorageKey } from './
  * customer-managed key, and downloads only ever as presigned `GET`s.
  *
  * No credentials are constructed here. The API assumes its role through OIDC from
- * Vercel, so the SDK's default provider chain is deliberately the whole story — a static
+ * the ECS task role, so the SDK's default provider chain is deliberately the whole story — a static
  * access key anywhere in this repository would be the thing the IAM design exists to
  * avoid.
  */
@@ -34,7 +34,7 @@ export class S3FileStorage extends FileStorage {
     }
     this.bucket = bucket;
     this.kmsKeyId = process.env.DOCUMENTS_KMS_KEY_ID || undefined;
-    this.client = new S3Client({ region: process.env.AWS_REGION || 'eu-central-1' });
+    this.client = new S3Client({ region: process.env.AWS_REGION || 'us-west-1' });
   }
 
   async put(key: string, bytes: Buffer, contentType: string): Promise<void> {

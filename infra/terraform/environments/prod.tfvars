@@ -1,41 +1,73 @@
 # Non-secret prod inputs.
 #
-# This file holds EXACTLY the inputs the spec's "What differs between the environments"
-# table lists, and nothing else. Every other input has a default in variables.tf so it
-# cannot drift between the environments.
+# Deliberately almost identical to dev.tfvars, and that is the point: the brief asks for
+# the same configuration in both environments, scalable by changing numbers. The numbers
+# live in variables.tf, once, so dev is a genuine rehearsal for prod. What differs here is
+# only what *must*: the address space, and every switch that decides whether a mistake is
+# recoverable.
 #
-# NO SECRET IS EVER WRITTEN HERE. Terraform creates the Secrets Manager containers; the
-# values are set out of band, once, per environment.
+# NO SECRET IS EVER WRITTEN HERE.
 
 env = "prod"
 
-# documents_bucket is derived as devscribed-documents-prod-{account}. Hard isolation from
-# dev comes from the name plus the per-environment IAM policies that name these ARNs
-# explicitly — the dev API role has no statement mentioning this bucket at all.
+vpc_cidr = "10.20.0.0/16"
 
-# Seven years, GOVERNANCE mode. Signed documents are records. GOVERNANCE lets a break-glass
-# role delete after review; COMPLIANCE would make a mistake permanent for everyone.
+# Seven years, GOVERNANCE mode. Signed documents are records. GOVERNANCE lets a
+# break-glass role delete after review; COMPLIANCE would make one mistake permanent for
+# everyone, including the account root.
 object_lock_years = 7
 
-# A prod bucket must never be destroyable by a `terraform destroy` typo.
-bucket_force_destroy = false
+# None of these may be true here. A `terraform destroy` typed in the wrong terminal must
+# hit a wall, not a bucket full of contracts.
+bucket_force_destroy   = false
+db_deletion_protection = true
+db_skip_final_snapshot = false
 
-ses_domain = "mail.devscribed.com"
+# ---------------------------------------------------------------------------------------
+# Mail
+#
+# Still an address and still sandboxed, for the same reason as dev: this account owns no
+# domain and AWS has not granted production access. Both are prerequisites for sending a
+# real contract to a real counterparty, and both are lead-time items:
+#
+#   1. Register a domain and verify it as a SES *domain* identity, with DKIM and a custom
+#      MAIL FROM. Sending contracts from a gmail.com address fails DMARC at the recipient.
+#   2. File the SES production-access request, which lifts the verified-recipients-only
+#      restriction below.
+#
+# Until then this environment can be deployed and exercised, but only among the addresses
+# listed here.
+# ---------------------------------------------------------------------------------------
 
-# False asserts that AWS has granted production access. Terraform cannot leave the sandbox
-# — that is a support request with lead time, and it must be filed before the first real
-# contract can be sent.
-ses_sandbox = false
+sender_email = "ivan.demchenko.dev@gmail.com"
 
-render_reserved_concurrency = 5
+verified_emails = [
+  "ivan.demchenko.dev@gmail.com",
+]
 
-# Identical to dev on purpose.
-render_memory_mb = 2048
+# Flip to false only once AWS has actually granted production access. It provisions
+# nothing; it is the recorded assertion that the request was filed and answered.
+ses_sandbox_expected = true
 
-# Prod logs are part of the evidentiary picture.
+# ---------------------------------------------------------------------------------------
+# Operations
+# ---------------------------------------------------------------------------------------
+
+alarm_email = "ivan.demchenko.dev@gmail.com"
+
+# A year. Prod logs are part of the evidentiary picture around a disputed signature.
 log_retention_days = 365
 
-alarm_email = "oncall@devscribed.com"
+# ---------------------------------------------------------------------------------------
+# CI/CD
+# ---------------------------------------------------------------------------------------
 
-# Identical to dev on purpose.
-envelope_expiry_default_days = 30
+# Dev created the account's OIDC provider; there is only one.
+create_github_oidc_provider = false
+
+# `environment:prod` rather than a branch: it matches only a workflow job that declares
+# `environment: prod`, which is where GitHub applies required reviewers. That makes a
+# human approval part of the credential, not just part of the UI.
+github_allowed_refs = [
+  "environment:prod",
+]

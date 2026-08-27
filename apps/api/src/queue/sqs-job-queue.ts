@@ -23,7 +23,7 @@ export class SqsJobQueue extends JobQueue {
     if (!queueUrl) throw new Error('JOB_QUEUE=sqs requires PDF_RENDER_QUEUE_URL');
 
     this.queueUrl = queueUrl;
-    this.client = new SQSClient({ region: process.env.AWS_REGION || 'eu-central-1' });
+    this.client = new SQSClient({ region: process.env.AWS_REGION || 'us-west-1' });
   }
 
   registerHandler(_name: JobName, _handler: JobHandler): void {

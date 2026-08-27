@@ -1,13 +1,27 @@
 generator client {
   provider = "prisma-client-js"
+
+  // `native` alone is not enough, and the failure it causes is worth spelling out.
+  //
+  // Prisma picks its query-engine binary by *detecting* the OpenSSL version at generate
+  // time. The container image generates in `node:22-bookworm-slim`, which ships no
+  // OpenSSL at all, so detection falls back to `debian-openssl-1.1.x` — and then the
+  // runtime, which does have OpenSSL 3, cannot load it. The application starts, maps
+  // every route, and dies on the first database call with "Unable to require
+  // libquery_engine".
+  //
+  // Naming the target removes the guess. `native` stays first so a developer on Windows
+  // or macOS still gets their own engine.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
   provider = "postgresql"
-  // Neon's pooled endpoint in production, a plain local Postgres in dev and tests.
+  // RDS PostgreSQL in a deployed environment, a plain local Postgres in dev and tests.
   url       = env("DATABASE_URL")
-  // Migrations must bypass the pooler — pgbouncer cannot run the advisory locks and
-  // DDL transactions Prisma Migrate needs. Locally both point at the same server.
+  // Prisma Migrate needs advisory locks and DDL transactions, neither of which survives a
+  // pooler, so this must never be a pooled endpoint. There is no pooler in front of RDS,
+  // so deployed environments give it the same value; locally it is the same server.
   directUrl = env("DIRECT_URL")
 }
 

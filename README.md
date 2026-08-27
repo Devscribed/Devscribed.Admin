@@ -37,7 +37,7 @@ message. The API re-runs it on every request — the client's copy is a convenie
 
 | | Version | Why |
 |---|---|---|
-| Node.js | 22.x | the version CI and Vercel run; the repo uses npm workspaces |
+| Node.js | 22.x | the version CI and both container images run; the repo uses npm workspaces |
 | Docker | any recent | supplies Postgres 17 — nothing is installed on the host |
 
 Nothing else is needed globally: the Prisma CLI, Nest CLI and Playwright all come from
@@ -192,73 +192,181 @@ answers 404 on any disagreement; queries still scope by the session.
 
 ## Deployment
 
-Two Vercel projects from this one repository, plus a Neon database.
+Everything runs on AWS — web, API, database, storage, mail — in two complete and independent
+environments, `dev` and `prod`. Terraform describes all of it; nothing is created by hand in the
+console.
 
-| | Root directory | Framework preset | Notes |
-|---|---|---|---|
-| web | `apps/web` | Next.js | needs `API_ORIGIN` pointing at the api project's URL |
-| api | `apps/api` | NestJS | zero-config; no `vercel.json` |
-
-The api project needs no deployment scaffolding of its own. Vercel detects `src/main.ts`
-by name, builds the whole application into a single function and runs it on Fluid
-compute, so `app.listen()` behaves the same there as it does locally.
-
-The browser only ever talks to the web domain: the front end calls relative `/api/*` and
-`next.config.mjs` rewrites those to `API_ORIGIN`. That keeps the session cookie
-same-origin, which is why `sameSite: 'lax'` works and no CORS configuration is involved.
-
-API environment variables:
-
-| Variable | Value |
-|---|---|
-| `DATABASE_URL` | Neon **pooled** endpoint (`-pooler` host), `?sslmode=require&connection_limit=1&pgbouncer=true` |
-| `DIRECT_URL` | Neon direct endpoint — migrations only |
-| `SESSION_SECRET` | required; without it the app silently falls back to the development key |
-| `WEB_ORIGIN` | the web project's URL, used to build password-reset links |
-
-Migrations do not run at deploy time. `.github/workflows/migrate.yml` applies them with
-`prisma migrate deploy` on every merge to `main`, using the `DIRECT_DATABASE_URL` secret.
-
-### Documents area infrastructure
-
-The documents area (`specs/documents/`) needs storage, mail, PDF rendering, and deferred
-work. Each of those sits behind a port in `apps/api/src/` — `FileStorage`, `MailService`,
-`PdfRenderer`, `JobQueue`, `SignatureProvider` — registered globally in `core.module.ts`,
-with the driver chosen in each port's own `*.provider.ts`. The rule is the one
-`MAIL_TRANSPORT` already followed: an explicit environment variable always wins, and the
-**local driver is the default whenever `NODE_ENV` is not `production`**. Nothing in the
-Jest or Playwright suites touches AWS, and a fresh clone needs none of these set —
-documents go to the gitignored `apps/api/.local-storage`, mail goes to the in-memory sink,
-PDFs are rendered by the Playwright Chromium already installed for E2E (falling back to a
-built-in single-page PDF writer, with a warning, when no browser is present), and jobs run
-in-process after the transaction commits.
-
-`apps/api/.env.example` lists every variable with its local default. The production values
-come from Terraform outputs, not from the AWS console.
-
-Terraform lives in `infra/terraform/` — one root module, two complete and independent
-environments (`dev`, `prod`), composed through `-backend-config` and `-var-file`. There are
-no workspaces. State is in S3 with native locking (`use_lockfile`, so Terraform >= 1.10).
-
-```bash
-cd infra/terraform
-make validate     # fmt -check, init -backend=false, validate — what CI runs on a PR
-make plan-dev
-make apply-dev
-make plan-prod
-make apply-prod   # gated on a manual environment approval in CI
+```
+  the internet ──HTTPS──►  ALB  ──►  web (Fargate, Next.js)
+                                       │  /api/* rewritten by next.config.mjs
+                                       ▼
+                                     api (Fargate, NestJS + Chromium)   ← no public address
+                                       ├──► RDS PostgreSQL   (private subnets, no route out)
+                                       ├──► S3 documents     (SSE-KMS, versioned)
+                                       └──► SES v2
 ```
 
-Three things are bootstrapped once, out of band, and are the only hand-made resources: the
-`devscribed-tfstate-{account}` state bucket, the Vercel OIDC provider (account-global, so no
-per-environment state file can own it), and the account-level SES suppression list. **No
-secret value is ever written to a `.tfvars` file** — Terraform creates the Secrets Manager
-containers and the IAM policies; the values are set out of band, so nothing secret can land
-in the state file.
+Exactly one thing in the account is reachable from the internet: the web service. The API is not,
+because it does not need to be — the browser calls relative `/api/*` and `next.config.mjs` rewrites
+those to a Cloud Map name that resolves only inside the VPC. That is the same rewrite that makes
+local development work, and it is what keeps the session cookie same-origin with no CORS involved.
 
-`environments/{dev,prod}.tfvars` contain exactly the inputs that the spec's "What differs
-between the environments" table says differ. Everything else is defaulted in
-`variables.tf` on purpose: a value present in both files is a value that can drift.
+The web service runs on **ECS Express Mode**, which creates and owns its load balancer, TLS
+certificate, DNS name, and scaling policy — so the deployment has an HTTPS address without this
+account owning a domain. The full topology, the trade-offs, and the per-line cost are in
+[`specs/documents/02-envelopes-and-signing.md`](specs/documents/02-envelopes-and-signing.md), under
+*AWS Infrastructure*.
+
+### First time, in one account
+
+```bash
+export AWS_PROFILE=Devscribed.Admin-Admins    # the Makefile defaults to this
+make bootstrap            # creates the Terraform state bucket. Idempotent; run once per account
+make deploy-dev           # builds, pushes, applies, waits for health, runs migrations
+make url-dev              # the address to open
+```
+
+`make bootstrap` is the only step outside Terraform, and the only hand-made resource in the account
+is the state bucket it creates. A Terraform root module that creates its own backend has to keep its
+first state file somewhere else, and that file becomes the thing nobody can rebuild.
+
+Two things need a human once, after the first apply, and neither can be automated:
+
+- **Confirm the SES identity.** AWS mails a verification link to every address in `verified_emails`.
+  Until it is clicked that address can neither send nor — while the account is in the SES sandbox,
+  which it is — receive. `terraform output ses_verification_pending` lists them.
+- **Confirm the alarm subscription.** SNS mails a confirmation link to `alarm_email`. Until it is
+  clicked, alarms fire into nothing.
+
+### Every day
+
+```bash
+make deploy-dev           # both services, then migrations
+make deploy-dev-api       # the API alone — web keeps the digest it is already running
+make deploy-dev-web       # and the reverse
+make plan-dev             # what an apply would change, without changing it
+make infra-dev            # apply infrastructure without rebuilding images
+make migrate-dev          # prisma migrate deploy, as a one-off task inside the VPC
+make url-dev              # print the address
+make logs-dev-api         # tail
+make stop-dev             # scale both services to zero
+make start-dev            # bring them back
+make destroy-dev          # tear it down
+```
+
+Every target exists for `prod`: `make deploy-prod`, `make plan-prod`, and so on. They are
+deliberately the same number of keystrokes as the dev ones, so nobody builds a habit that ends at
+the wrong environment — and `infra-prod` is not auto-approved.
+
+Run these from **Git Bash** on Windows; the recipes are bash.
+
+Images deploy **by digest, never by tag**. A tag is a pointer somebody else can move, and the image
+a plan promises has to be the image that runs. Deploying one service reads the other's current
+digest out of the state, so a web deploy cannot silently roll the API forward or back. Both services
+are applied with `wait_for_steady_state`, so `make deploy-dev` failing means the deploy failed —
+not that it was merely submitted.
+
+**Migrations run after the rollout**, from the same image the API runs. That is safe because
+migrations here are additive by rule (see [CLAUDE.md](CLAUDE.md)): the deploy and the migration are
+independent and either order must work. They have to run inside the VPC because the database has no
+route out of it, which is also why they cannot be run from a laptop or a CI runner directly.
+
+### Pausing an environment
+
+```bash
+make stop-dev             # both services to zero tasks; alarms and the hourly sweep disarm with them
+make start-dev
+```
+
+The load balancer and the database keep running and keep billing. This stops the compute half,
+which for an idle dev environment is most of the bill — roughly $62/month becomes roughly $40.
+Nothing is destroyed and no data is lost.
+
+### Automatic deploys from GitHub
+
+[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) exists and is **off**, behind three
+separate switches:
+
+1. The repository variable `DEPLOY_ENABLED` must be `true`.
+2. `AWS_DEPLOY_ROLE_DEV` / `AWS_DEPLOY_ROLE_PROD` must hold the ARNs that
+   `terraform output github_deploy_role_arn` prints for each environment.
+3. The automatic `push` trigger is commented out. Until it is uncommented, even a fully configured
+   repository only deploys when somebody presses the button.
+
+The workflow runs `infra/deploy.sh` — the same script `make deploy-dev` runs. One code path, so what
+CI does is what somebody has already done by hand, and an image deployed from CI lands in the same
+Terraform state rather than drifting away from it.
+
+Authentication is GitHub OIDC: **no AWS access key exists** in this repository, in its secrets, or
+in the account. The role's trust policy matches `repo:Devscribed/Devscribed.Admin:environment:{env}`,
+and because that claim only takes the `environment:` form when a job declares an environment,
+GitHub's required-reviewers setting on `prod` becomes part of the credential rather than part of the
+interface.
+
+`.github/workflows/migrate.yml` — which applied migrations to Neon on every merge to `main` — is
+gone. The database is no longer reachable from a GitHub runner, and migrations are part of the
+deploy.
+
+### How the application is configured
+
+Storage, mail, PDF rendering, deferred work, and signing each sit behind a port in `apps/api/src/`
+— `FileStorage`, `MailService`, `PdfRenderer`, `JobQueue`, `SignatureProvider` — registered globally
+in `core.module.ts`, with the driver chosen in each port's own `*.provider.ts`. The rule is the one
+`MAIL_TRANSPORT` already followed: an explicit environment variable always wins, and the **local
+driver is the default whenever `NODE_ENV` is not `production`**.
+
+Nothing in the Jest or Playwright suites touches AWS, and a fresh clone needs none of these set:
+documents go to the gitignored `apps/api/.local-storage`, mail goes to the in-memory sink, PDFs are
+rendered by the Playwright Chromium already installed for E2E, and jobs run in-process after the
+transaction commits. `apps/api/.env.example` lists every variable with its local default.
+
+In a deployed environment those values come from Terraform, not from the console, and no person
+types a secret. `SESSION_SECRET` and `INTERNAL_TASK_SECRET` are generated by Terraform and stored as
+SSM `SecureString` parameters; the database URL is assembled and stored the same way; the container
+resolves all three through its execution role. **No secret value is ever written to a `.tfvars`
+file.**
+
+### Terraform layout
+
+```
+infra/
+  bootstrap.sh          the state bucket. The only hand-run step, and it is idempotent
+  deploy.sh             build → push → resolve digest → apply → migrate
+  migrate.sh            prisma migrate deploy, as a one-off task inside the VPC
+  terraform/
+    main.tf variables.tf outputs.tf versions.tf
+    modules/            network database registry app storage mail sweep observability cicd
+    environments/       dev.tfbackend dev.tfvars prod.tfbackend prod.tfvars
+```
+
+One root module, two environments, composed through `-backend-config` and `-var-file`. **No
+workspaces**: a mistyped `terraform workspace select` is a one-keystroke path from a dev change to a
+prod bucket. State is in S3 with native locking (`use_lockfile`, so Terraform >= 1.10), and the AWS
+provider is pinned `~> 6.38` because that is the release that added
+`aws_ecs_express_gateway_service`.
+
+`environments/{dev,prod}.tfvars` contain **only** what genuinely differs between the environments —
+the name, the address space, and every switch that decides whether a mistake is recoverable. Task
+sizes, the database class, scaling targets, and token lifetimes are defaults in `variables.tf`, on
+purpose: a value present in both files is a value that can drift, and an environment that behaves
+differently from prod stops being a test of prod.
+
+```bash
+make validate             # fmt -check, init -backend=false, validate
+```
+
+> **Offline provider mirror.** This machine's `terraform.rc` pins provider installation to
+> `C:/terraform-mirror` with no `direct` fallback, because the registry is not reachable without a
+> VPN. Adding or upgrading a provider means topping the mirror up first, with the registry
+> reachable:
+>
+> ```bash
+> TF_CLI_CONFIG_FILE=<a config with `provider_installation { direct {} }`> \
+>   terraform -chdir=infra/terraform providers mirror -platform=windows_amd64 -platform=linux_amd64 C:/terraform-mirror
+> terraform -chdir=infra/terraform providers lock -platform=windows_amd64 -platform=linux_amd64
+> ```
+>
+> Both platforms, because `.terraform.lock.hcl` is committed and a GitHub runner is `linux_amd64`.
 
 ## Design-system notes
 

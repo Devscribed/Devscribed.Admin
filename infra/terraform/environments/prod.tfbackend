@@ -1,18 +1,15 @@
 # State for the prod environment.
 #
-# Composed with `terraform init -backend-config=environments/dev.tfbackend -reconfigure`.
+# Composed with `terraform init -backend-config=environments/prod.tfbackend -reconfigure`.
 # Separate state files with separate backend configs, not workspaces: a mistyped
 # `terraform workspace select` is a one-keystroke path from a dev change to a prod bucket,
 # and this layout makes that mistake impossible to make silently.
 #
-# The state bucket itself is bootstrapped once, out of band, and is the only hand-created
-# resource in the account. It has versioning on, public access blocked, and a lifecycle
-# that keeps 90 days of state versions.
-#
-# Replace {account} with the account id before the first init.
-bucket = "devscribed-tfstate-{account}"
-key    = "documents/prod/terraform.tfstate"
-region = "eu-central-1"
+# The state bucket is the only hand-created resource in the account. `infra/bootstrap.sh`
+# creates it, idempotently, and `make bootstrap` runs that.
+bucket = "devscribed-tfstate-786197525160"
+key    = "app/prod/terraform.tfstate"
+region = "us-west-1"
 
 # S3-native locking. No DynamoDB table to own, and no lock that outlives the object it
 # guards. Requires Terraform >= 1.10.

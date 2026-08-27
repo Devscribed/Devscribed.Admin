@@ -129,7 +129,7 @@ function requireTypedName(name: string | undefined): string {
 /**
  * Requirement 22 asks for a typed name "rendered into an image". The image is an SVG data
  * URI rather than a PNG: rasterizing text in the API process would mean shipping a font
- * and a rasterizer into a Vercel bundle that deliberately cannot even carry Chromium.
+ * and a rasterizer alongside the Chromium the renderer already owns.
  * The column stores a data URI either way, and both the signing page and the PDF
  * renderer draw an SVG and a PNG identically — while the SVG additionally keeps the
  * typed name readable as text inside the artefact, which is a small evidentiary win.

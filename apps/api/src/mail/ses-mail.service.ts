@@ -17,10 +17,12 @@ import {
  * requires — content that lives in a SES template is content that is not in git, cannot
  * be reviewed in a pull request, and cannot be rolled back with the deploy.
  *
- * No credentials are constructed: the API assumes its role via OIDC from Vercel and the
- * SDK's default provider chain does the rest. The configuration set is what routes send,
- * delivery, bounce, and complaint events to SNS and from there into `EnvelopeEvent`, so
- * it is attached to every message, not only to the signing ones.
+ * No credentials are constructed: the task carries an ECS task role and the SDK's default
+ * provider chain picks it up from the container credentials endpoint. The configuration
+ * set routes send, delivery, bounce, and complaint events to SNS, and it is attached to
+ * every message rather than only to the signing ones — a bounce on a password reset is the
+ * same operational signal as a bounce on an invitation. Turning those SNS events into
+ * `EnvelopeEvent` rows is not deployed yet; see Known Gaps in specs/documents/README.md.
  */
 @Injectable()
 export class SesMailService extends MailService {
@@ -36,7 +38,7 @@ export class SesMailService extends MailService {
 
     this.from = from;
     this.configurationSet = process.env.SES_CONFIGURATION_SET || undefined;
-    this.client = new SESv2Client({ region: process.env.AWS_REGION || 'eu-central-1' });
+    this.client = new SESv2Client({ region: process.env.AWS_REGION || 'us-west-1' });
   }
 
   async sendPasswordReset(message: PasswordResetEmail): Promise<void> {

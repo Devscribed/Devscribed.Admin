@@ -297,43 +297,149 @@ Invariants:
 
 ## AWS Infrastructure
 
-The application deploys to Vercel (Next.js web, NestJS API). Everything stateful or heavy for this
-feature runs on AWS, provisioned by Terraform in this repository under `infra/terraform/`. There is
-no AWS footprint today, so this spec also establishes the baseline.
+The whole product runs on AWS — web, API, database, storage, and mail — provisioned by Terraform in
+this repository under `infra/terraform/`. Nothing is created by hand in the console: a resource that
+exists only in the console is a resource nobody can rebuild, and signed contracts are the wrong
+place to discover that.
+
+> **This section was rewritten when the area was actually deployed.** The original assumed the
+> application would run on Vercel with Neon for Postgres, and everything downstream of that
+> assumption changed: the PDF renderer, the render queue, the sweep, and the trust model all existed
+> to work around a platform the product no longer runs on. What each of those turned into, and why,
+> is recorded under *What changed from the original plan* at the end.
 
 ### Topology
 
 ```
-                 ┌──────────────────────── AWS account ─────────────────────────┐
-                 │                                                              │
-  Vercel         │   ┌────────────┐   presigned PUT/GET   ┌──────────────────┐  │
-  ┌──────────┐   │   │  S3        │◄──────────────────────┤                  │  │
-  │ Next.js  │   │   │ documents  │                       │                  │  │
-  └────┬─────┘   │   └─────┬──────┘                       │                  │  │
-       │ /api    │         │ versioning, Object Lock,     │                  │  │
-  ┌────▼─────┐   │         │ SSE-KMS, no public access    │                  │  │
-  │ NestJS   ├───┼─────────┘                              │   IAM role       │  │
-  │ API      │   │                                        │   (OIDC from     │  │
-  └────┬─────┘   │   ┌────────────┐   SendEmail           │    Vercel)       │  │
-       │         ├──►│  SES v2    │──► signer inbox       │                  │  │
-       │         │   └─────┬──────┘                       └──────────────────┘  │
-       │         │         │ bounce/complaint/delivery                          │
-       │         │   ┌─────▼──────┐    ┌──────────────┐                         │
-       │         │   │ SNS topic  │───►│ ses-events λ │──► EnvelopeEvent        │
-       │         │   └────────────┘    └──────────────┘                         │
-       │         │                                                              │
-       │ enqueue │   ┌────────────┐    ┌──────────────┐    ┌──────────────┐     │
-       └─────────┼──►│ SQS FIFO   │───►│ pdf-render λ │───►│ DLQ          │     │
-                 │   └────────────┘    │ + Chromium   │    └──────────────┘     │
-                 │                     │   layer      │                         │
-                 │   ┌────────────┐    └──────────────┘                         │
-                 │   │ EventBridge│───►┌──────────────┐                         │
-                 │   │ Scheduler  │    │ sweep λ      │──► expiry + reminders   │
-                 │   └────────────┘    └──────────────┘                         │
-                 └──────────────────────────────────────────────────────────────┘
+   the internet
+        │  HTTPS, AWS-issued certificate
+        ▼
+ ┌──────────────────────────── AWS account, one VPC per environment ─────────────────────────┐
+ │                                                                                           │
+ │  ┌───────────────────────┐                                                                │
+ │  │ ALB  (Express Mode    │   public subnets, no NAT gateway                                │
+ │  │       creates + owns) │                                                                │
+ │  └───────────┬───────────┘                                                                │
+ │              ▼                                                                            │
+ │  ┌───────────────────────┐   /api/* via next.config.mjs rewrite                            │
+ │  │ web   Fargate         ├──────────────────────┐                                          │
+ │  │       Next.js         │                      │  http://api.devscribed-{env}.internal    │
+ │  └───────────────────────┘                      ▼  (Cloud Map, A record per task)          │
+ │                                     ┌───────────────────────┐                              │
+ │                                     │ api   Fargate         │   no load balancer,          │
+ │                                     │       NestJS          │   no public address          │
+ │                                     │       + Chromium      │                              │
+ │                                     └───┬────┬────┬─────────┘                              │
+ │                                         │    │    │                                        │
+ │              ┌──────────────────────────┘    │    └──────────────┐                         │
+ │              ▼                               ▼                   ▼                         │
+ │   ┌────────────────────┐         ┌────────────────────┐  ┌────────────────────┐            │
+ │   │ RDS PostgreSQL     │         │ S3  documents      │  │ SES v2             │            │
+ │   │ private subnets,   │         │ SSE-KMS, versioned,│  │ configuration set  │            │
+ │   │ no route out       │         │ Object Lock (prod) │  └─────────┬──────────┘            │
+ │   └────────────────────┘         └────────────────────┘            │ bounce/complaint      │
+ │                                                                    ▼                       │
+ │   ┌────────────────────┐    hourly    ┌────────────────────┐   ┌──────────┐                │
+ │   │ EventBridge        ├─────────────►│ sweep  Fargate     │   │ SNS      │                │
+ │   │ Scheduler          │   RunTask    │ (the API's image)  │   └──────────┘                │
+ │   └────────────────────┘              └─────────┬──────────┘                               │
+ │                                                 │ POST /api/internal/envelopes/sweep       │
+ │                                                 └──────────────► api                       │
+ └───────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+Two properties of that picture carry most of the design.
+
+**Exactly one thing has a public address.** The web service does; the API does not, the database
+does not, the bucket does not. The API needs no public address because every route it serves is
+behind either a session or a signing token, and the signing links themselves point at the *web*
+app — so there is no request in this product that has to arrive at the API from outside the VPC.
+The browser therefore only ever talks to one origin, which is also what keeps the session cookie
+same-origin with no CORS involved.
+
+**The mechanism that makes that possible already existed.** `apps/web/next.config.mjs` rewrites
+`/api/*` to `API_ORIGIN`, and has since the first commit, because local development needed it. In
+the deployed environment `API_ORIGIN` is a Cloud Map name that resolves only inside the VPC. No
+application code was written for this topology.
+
+### Compute — ECS Fargate
+
+| | web | api |
+|---|---|---|
+| Kind | ECS Express Mode service | plain ECS service |
+| Public | yes — AWS-issued HTTPS endpoint | **no address of any kind** |
+| Load balancer | created and owned by Express Mode, shared | none |
+| Discovery | — | Cloud Map private DNS, `api.devscribed-{env}.internal` |
+| Size | 0.25 vCPU / 512 MiB | 0.25 vCPU / 1024 MiB |
+| Health check | ALB `GET /login` | container `GET /api/health` |
+| Scaling | Express Mode target-tracking, average CPU | `aws_appautoscaling_*`, same metric and target |
+| Architecture | x86_64 | x86_64 |
+
+**Why Express Mode for the web app.** It creates and maintains the load balancer, target group,
+listener, TLS certificate, DNS name, security group, and scaling policy. That is worth roughly 700
+lines of Terraform, and it supplies a public HTTPS endpoint on a domain this account does not have
+to own — which matters, because it does not own one. The price is named rather than hidden: Express
+Mode exposes no capacity provider strategy and no architecture setting, so there is **no Fargate
+Spot and no Graviton**, both of which are about a fifth off the compute bill.
+
+**Why not Express Mode for the API.** Express Mode always builds a load balancer and owns its
+security group, so an Express API could not have been closed to the internet. Being unable to close
+it is the whole objection.
+
+**x86_64, not Graviton, and the reason is consistency rather than preference.** Express Mode runs
+x86_64 and offers no choice; running the API on ARM would mean building and maintaining two
+architectures of every image for a saving of about a dollar a month.
+
+### Network
+
+| Setting | Value | Why |
+|---|---|---|
+| VPC | `10.10.0.0/16` (dev), `10.20.0.0/16` (prod) | Distinct, so the two could be peered later without renumbering |
+| Zones | Two | An ALB requires two, and so does an RDS subnet group — even Single-AZ |
+| Public subnets | Tasks and the load balancer, `map_public_ip_on_launch` | See below |
+| Private subnets | The database, and nothing else. **No default route at all** | The absence is the control: no security group written later can expose it |
+| NAT Gateway | **None** | $32/month per environment, which is most of this product's compute bill |
+| S3 | Gateway VPC endpoint | Free, keeps signed contracts off the public internet, removes egress cost on every PDF |
+
+**There is no NAT Gateway, and the tasks are in public subnets.** "Public" describes the route
+table, not the exposure. A Fargate task in a public subnet with a public address can pull from ECR
+and reach SES; its security group is what decides who can reach *it*, and the web tasks accept only
+from inside the VPC while the API tasks accept only from the web tasks' security group. The
+alternative — private subnets plus interface endpoints for ECR, ECR-dkr, CloudWatch Logs, SSM, and
+Secrets Manager — is five endpoints at roughly $8/month, which is *more* than the NAT it avoids.
+
+### Database — RDS PostgreSQL
+
+| Setting | Value | Why |
+|---|---|---|
+| Engine | PostgreSQL 17, `db.t4g.micro`, Single-AZ | Graviton at the same price list as `t3` |
+| Storage | 20 GB gp3, autoscaling to 100 GB, encrypted | The event log only ever grows |
+| Network | Private subnets, `publicly_accessible = false` | Two locks on the same door |
+| TLS | `rds.force_ssl = 1`, `sslmode=require` in the URL | In-VPC traffic is not automatically private traffic |
+| Backups | 7 days, final snapshot required in prod | |
+| Deletion protection | off in dev, **on in prod** | |
+
+`DATABASE_URL` and `DIRECT_URL` hold the same string. Neon needed them to differ because Prisma
+Migrate takes advisory locks and runs DDL in transactions, neither of which survives pgbouncer;
+there is no pooler in front of this instance, so the distinction is vestigial — and both are still
+set, because `schema.prisma` declares both and `migrate deploy` fails at the least convenient moment
+without them.
+
+**Aurora Serverless v2 was evaluated and rejected.** It can now scale to zero ACUs and pause, which
+reads like the obvious choice for an environment nobody uses at 3am. It is not: pausing requires no
+open connections, and the API holds a Prisma pool for as long as its task runs. The cluster would
+never pause, and the 0.5-ACU floor bills about $44/month against this instance's $15.
+
+**Migrations run as a one-off Fargate task**, from the same image the API runs, started by
+`make migrate-<env>`. They have to run inside the VPC because the database has no route out of it,
+and running them from the API's own image is what stops the schema and the code that depends on it
+being built from different commits. They run *after* the rollout, which is safe by the rule this
+repository already holds itself to: migrations are additive, so the deploy and the migration are
+independent and either order must work.
+
 ### S3 — document storage
+
+Unchanged from the original design, and still correct.
 
 | Setting | Value | Why |
 |---|---|---|
@@ -341,219 +447,310 @@ no AWS footprint today, so this spec also establishes the baseline.
 | Public access | Block all four settings | Signed contracts must never be reachable by URL guessing. |
 | Encryption | SSE-KMS with a customer-managed key, bucket key enabled | Key rotation and an auditable `kms:Decrypt` trail; bucket key keeps request cost down. |
 | Versioning | Enabled | A bad overwrite is recoverable. |
-| Object Lock | Governance mode, 7-year default retention on the `signed/` prefix | Signed documents are records. Governance mode lets a break-glass role delete after review; compliance mode would make mistakes permanent. |
+| Object Lock | Governance mode, 7-year default retention (prod only) | Signed documents are records. Governance lets a break-glass role delete after review; compliance would make mistakes permanent. |
 | Lifecycle | Transition `signed/` to STANDARD_IA at 90 days; expire `render-tmp/` at 1 day | Signed documents are read rarely but must never be deleted — no expiration rule on `signed/`. |
 | Key layout | `signed/{orgId}/{envelopeId}/{sha256}.pdf`, `render-tmp/{jobId}.html` | Content-addressed names make the write-once rule structural. |
 | Access | Presigned `GET`, 15-minute TTL, `ResponseContentDisposition=attachment` | No object is ever public; each download is a fresh, short-lived, logged grant. |
 | Logging | Server access logging to a separate log bucket | Independent record of every object read. |
 
-> The existing lifecycle habit of expiring non-current versions after 90 days (seen in the sibling
-> meetwave infrastructure) **must not** be copied here. Signed contracts are retained, not aged out.
+> The lifecycle habit of expiring non-current versions after 90 days (seen in the sibling meetwave
+> infrastructure) **must not** be copied here. Signed contracts are retained, not aged out.
+
+### PDF rendering — in the API container
+
+The renderer runs Chromium **inside the API container**. `PDF_RENDERER=local-chromium`,
+`JOB_QUEUE=inline`, and there is no render function, no Chromium layer, and no queue.
+
+The original design put the renderer in Lambda for exactly one reason, and the spec said so: a
+Chromium binary does not fit a Vercel function bundle. On Fargate the API is a long-running process
+in an image this repository builds, so it simply carries the browser — `apps/api/Dockerfile` installs
+it, along with fonts covering Cyrillic.
+
+This is not a convenience. `fallback-pdf.ts` — the writer the renderer degrades to when no browser
+can be resolved — emits **Latin-1** text on a single page. A Russian contract through that path is
+mojibake, so a signed document produced without Chromium would be worthless. Requirement 31 still
+holds (a captured signature is never lost to a render failure), which is why the fallback still
+exists; a CloudWatch metric filter on its warning raises an alarm whenever it is used, because
+nothing else in the system would ever say so.
+
+`PdfRenderer` remains an abstraction and `lambda-pdf-renderer.ts` remains in the tree. The port is
+what makes the driver a one-line decision, and that was worth keeping even though today every
+environment selects the same driver.
 
 ### SES v2 — email
 
-| Setting | Value |
-|---|---|
-| Identity | Domain identity for the sending domain, DKIM (Easy DKIM, 2048-bit) and SPF aligned |
-| Custom MAIL FROM | A subdomain, so DMARC alignment does not depend on the bounce domain |
-| Configuration set | One per environment, with reputation metrics enabled |
-| Event destination | SNS topic receiving `send`, `delivery`, `bounce`, `complaint`, `reject` |
-| Suppression list | Account-level, enabled for bounces and complaints |
-| Templates | Rendered in the API from `packages/validation`-owned copy; SES templates are not used, so message content stays versioned in git |
-
-Delivery events flow SNS → `ses-events` Lambda → API webhook (HMAC-signed) → `EnvelopeEvent` rows
-of type `email_delivered` / `email_bounced`. A bounce on a signing invitation surfaces in the
-envelope UI as "We could not deliver the invitation to {email}" with a resend action — otherwise a
-typo in a counterparty address looks identical to a counterparty who is simply slow.
-
-**Production access:** a new SES account starts in the sandbox and can only send to verified
-addresses. Production access must be requested before any real contract goes out; this is a
-lead-time item, not a deploy step.
-
-### Lambda — PDF rendering
+`MailService` (`apps/api/src/mail/mail.service.ts`) is an abstract class used directly as the DI
+token, with four implementations behind it: an in-memory sink for tests, a console logger, and
+`SesMailService` for production. The infrastructure provisions what `MAIL_TRANSPORT=ses` needs and
+touches nothing else.
 
 | Setting | Value |
 |---|---|
-| Function | `devscribed-pdf-render-{env}`, Node 22, 2048 MB, 120 s timeout |
-| Layer | Chromium (`@sparticuz/chromium`) |
-| Trigger | SQS FIFO for final documents; direct invoke for synchronous preview |
-| Concurrency | Reserved concurrency of 5 per environment |
-| Network | No VPC — it needs no private resources, and VPC attachment would add cold-start latency |
-| Fonts | The layer bundles a font with full Cyrillic coverage; a fully Cyrillic contract must render without tofu |
+| Identity | **Email-address identities**, not a domain — this account owns no domain |
+| Configuration set | One per environment, reputation metrics on, `tls_policy = REQUIRE` |
+| Event destination | SNS topic receiving `send`, `delivery`, `bounce`, `complaint`, `reject`, `rendering_failure` |
+| Suppression | Bounces and complaints |
+| Templates | Rendered in the API; SES templates are not used, so message content stays versioned in git |
 
-The renderer lives in Lambda rather than in the API process because the API deploys to Vercel,
-where a Chromium binary does not fit the function bundle. This is the single reason for the split,
-and it is why `PdfRenderer` is an abstraction: locally and in tests the driver is a local Chromium,
-in production it is this Lambda.
+**Two lead-time items stand between this and a real contract sent to a real counterparty**, and
+neither is a deploy step:
 
-### SQS — render queue
+1. **A domain.** Address identities work, but mail sent from a `gmail.com` address fails DMARC at
+   the recipient. The target state is a domain identity with Easy DKIM and a custom MAIL FROM
+   subdomain, which is what the module should grow into once a domain exists.
+2. **SES production access.** While the account is sandboxed, delivery succeeds **only to verified
+   addresses** — a signer whose address is not in `verified_emails` never receives their invitation.
 
-| Setting | Value |
-|---|---|
-| Queue | `devscribed-pdf-render-{env}.fifo`, content-based deduplication |
-| Group id | The envelope id — renders for one envelope never run concurrently |
-| Visibility timeout | 180 s (1.5× the function timeout) |
-| Redrive | `maxReceiveCount` 3, then the DLQ |
-| DLQ alarm | CloudWatch alarm on `ApproximateNumberOfMessagesVisible > 0` |
+Delivery events reach the SNS topic. Turning them into `EnvelopeEvent` rows of type
+`email_delivered` / `email_bounced` is **not deployed**: an SNS HTTPS subscription cannot reach an
+API with no public address, and the in-VPC consumer that would is separate work. Recorded in
+*Known Gaps*.
 
-FIFO with the envelope id as the group key is what makes requirement 29 (write-once PDF) hold under
-retries: two deliveries of the same job cannot render the same envelope at once.
+### Sweep — a container task, not a function
 
-### EventBridge Scheduler — sweep
+An hourly EventBridge Scheduler rule with an `ecs:RunTask` target, running the API's own image with
+a one-line `node -e` command that posts to `/api/internal/envelopes/sweep` with an SSM-held bearer
+token.
 
-A cron schedule (hourly) invoking `devscribed-envelope-sweep-{env}`, which calls
-`POST /api/internal/envelopes/sweep` with a Secrets Manager-held bearer token. The sweep
-materializes expired statuses and sends reminders. It is an optimization: expiry correctness is
-enforced lazily on read, so a failed sweep degrades notification timeliness, never correctness.
+A Lambda would have to live in the VPC to reach the API, which means a zip artifact to build,
+version, and keep in step with the API it calls. A task started from the API's own image has none of
+that, and costs about three cents a month. The sweep remains an optimisation and never correctness:
+expiry is lazily authoritative on read, so a missed hour is not an incident.
 
 ### IAM
 
-Three roles, each least-privilege:
+Four roles, each least-privilege, and the separation is the point.
 
-- **API role** (assumed from Vercel via OIDC, no static keys): `s3:PutObject`/`GetObject` scoped to
-  the bucket ARN with a prefix condition, `kms:GenerateDataKey`/`Decrypt` on the CMK,
-  `ses:SendEmail` restricted to the verified identity via `ses:FromAddress`, `sqs:SendMessage` on
-  the render queue, `secretsmanager:GetSecretValue` on the feature's secrets only.
-- **Render role**: read `render-tmp/`, write `signed/`, CMK access, CloudWatch Logs.
-- **Sweep role**: invoke the API endpoint, read its secret, CloudWatch Logs.
+- **Execution role** — used by the ECS agent *before* the container starts: pull the image, create
+  the log stream, resolve the four SSM parameters that become container secrets. It is not the
+  application's identity and the application never holds it.
+- **Infrastructure role** — assumed by ECS itself to build and maintain what Express Mode manages.
+  Carries the AWS-managed `AmazonECSInfrastructureRoleforExpressGatewayServices`.
+- **API task role** — the application's identity: object-level S3 on this environment's bucket,
+  `kms:Encrypt`/`Decrypt` on this environment's key, `ses:SendEmail` on this environment's identity
+  and configuration set, and the SSM channel permissions for `aws ecs execute-command`.
+- **Web task role** — deliberately almost empty. The web container proxies to the API and calls no
+  AWS API; giving it the API's permissions "just in case" would make the browser-facing container
+  the one holding the keys to the contracts.
 
-No role has `s3:DeleteObject` on `signed/`. Deletion requires a separate break-glass role that is
-not used by the application.
+Every ARN in the API task role's policy names *this environment's* resources explicitly. The dev
+role has no statement mentioning a prod bucket or key at all, which is what makes the isolation real
+rather than conventional.
+
+No role has `s3:DeleteObject` on `signed/`. Deletion requires a separate break-glass role that the
+application does not use.
 
 ### Terraform and environments
 
-All AWS resources for this area are provisioned by Terraform in this repository. Nothing is
-created by hand in the console — a resource that exists only in the console is a resource nobody
-can rebuild, and signed contracts are the wrong place to discover that.
-
-**Two environments: `dev` and `prod`.** They are complete, independent copies of the topology —
-their own bucket, KMS key, SES identity, queue, and functions. No resource is ever shared between
-them, and in particular `dev` can never read or write a `prod` document.
-
-#### Layout
+**Two environments: `dev` and `prod`**, complete and independent copies — their own VPC, database,
+bucket, KMS key, SES identity, registries, and roles. No resource is shared, and in particular dev
+can never read or write a prod document.
 
 ```
-infra/terraform/
-  main.tf                    composes the modules; the only root module
-  variables.tf               every input, each with a type and a description
-  outputs.tf                 bucket name, queue URL, function ARNs, role ARNs → consumed by the app
-  versions.tf                terraform >= 1.9, aws ~> 5.0
-  modules/
-    documents-storage/       S3 bucket, KMS CMK, lifecycle, Object Lock, access-log bucket
-    documents-mail/          SES v2 identity, DKIM, custom MAIL FROM, configuration set, SNS topic
-    documents-render/        pdf-render Lambda, Chromium layer, SQS FIFO + DLQ, alarms
-    documents-sweep/         EventBridge schedule + sweep Lambda
-    documents-iam/           the three roles, policies, and the Vercel OIDC provider
-    observability/           log groups, metric filters, alarms, SNS alarm topic
-  environments/
-    dev.tfbackend            state bucket + key for dev
-    dev.tfvars               non-secret dev inputs
-    prod.tfbackend           state bucket + key for prod
-    prod.tfvars              non-secret prod inputs
-  Makefile                   plan-dev / apply-dev / plan-prod / apply-prod
+infra/
+  bootstrap.sh               creates the state bucket; the only hand-run step, and it is idempotent
+  deploy.sh                  build → push → resolve digest → apply → migrate
+  migrate.sh                 prisma migrate deploy, as a one-off task inside the VPC
+  terraform/
+    main.tf                  composes the modules; the only root module
+    variables.tf             every input, typed and described
+    outputs.tf               what the Makefile and a human read after an apply
+    versions.tf              terraform >= 1.10, aws ~> 6.38
+    modules/
+      network/               VPC, subnets, routes, security groups, S3 gateway endpoint
+      database/              RDS instance, subnet group, parameter group, connection parameters
+      registry/              ECR repositories and their lifecycle policies
+      app/                   cluster, Cloud Map, IAM, log groups, secrets, both services, migrations
+      storage/               S3 bucket, KMS CMK, lifecycle, Object Lock, access-log bucket
+      mail/                  SES identities, configuration set, event destination, SNS topic
+      sweep/                 EventBridge schedule + the sweep task definition
+      observability/         alarms, the PDF-fallback metric filter, the alarm topic
+      cicd/                  GitHub OIDC provider and the deploy role
+    environments/
+      dev.tfbackend  dev.tfvars  prod.tfbackend  prod.tfvars
+Makefile                     at the repository root — every entry point
 ```
 
-One root module composed per environment through `-backend-config` and `-var-file`. **No
-workspaces** — a mistyped `terraform workspace select` is a one-keystroke path from a dev change to
-a prod bucket, and separate state files with separate backend configs make that mistake
-impossible to make silently.
+**No workspaces.** One root module composed per environment through `-backend-config` and
+`-var-file`. A mistyped `terraform workspace select` is a one-keystroke path from a dev change to a
+prod bucket; separate state files with separate backend configs make that mistake impossible to make
+silently.
 
 #### State
 
 | | dev | prod |
 |---|---|---|
 | Backend | S3 | S3 |
-| Bucket | `devscribed-tfstate-{account}` | `devscribed-tfstate-{account}` |
-| Key | `documents/dev/terraform.tfstate` | `documents/prod/terraform.tfstate` |
+| Bucket | `devscribed-tfstate-{account}` | same |
+| Key | `app/dev/terraform.tfstate` | `app/prod/terraform.tfstate` |
 | Locking | S3 native (`use_lockfile = true`) | same |
-| Versioning | enabled on the state bucket | enabled |
+| Versioning | enabled, 90 days of old versions | same |
 
-The state bucket itself is bootstrapped once, out of band, and is the only hand-created resource.
-It has versioning and blocked public access, and its own lifecycle keeps 90 days of state
-versions.
+`infra/bootstrap.sh` creates that bucket — versioned, encrypted, TLS-only, public access blocked —
+and is the only thing in this design run outside Terraform. It is a script rather than a Terraform
+root module because a root module that creates its own backend has to keep its first state file
+somewhere else, and that file becomes the thing nobody can rebuild.
 
 #### What differs between the environments
 
-Everything is the same shape; only these inputs differ. This table is the contract — a difference
-not listed here is a bug.
+Everything else is identical, and deliberately so: an environment that behaves differently from prod
+stops being a test of prod. **Every value that should be the same in both lives in `variables.tf`,
+not in a tfvars file** — a value that appears in both tfvars files is a value someone can edit in one
+of them by accident. This table is the contract; a difference not listed here is a bug.
 
 | Input | dev | prod | Why |
 |---|---|---|---|
 | `env` | `dev` | `prod` | Suffixes every resource name |
-| `documents_bucket` | `devscribed-documents-dev-{account}` | `devscribed-documents-prod-{account}` | Hard isolation |
-| `object_lock_years` | `0` (Object Lock off) | `7` | Locked dev objects cannot be cleaned up, which makes dev unusable within weeks |
+| `vpc_cidr` | `10.10.0.0/16` | `10.20.0.0/16` | Distinct address space |
+| `object_lock_years` | `0` (off) | `7` | Locked dev objects cannot be cleaned up, which makes dev unusable within weeks |
 | `bucket_force_destroy` | `true` | `false` | A prod bucket must never be destroyable by a `terraform destroy` typo |
-| `ses_domain` | `mail-dev.{domain}` | `mail.{domain}` | Separate reputation; a dev bounce storm must not touch prod deliverability |
-| `ses_sandbox` | `true` | `false` | Dev stays in the SES sandbox on purpose — it can only mail verified testers, which is the desired blast radius |
-| `render_reserved_concurrency` | `2` | `5` | Cost |
-| `render_memory_mb` | `2048` | `2048` | Same, so dev timings predict prod |
+| `db_deletion_protection` | `false` | `true` | Same reasoning, for the database |
+| `db_skip_final_snapshot` | `true` | `false` | Same |
 | `log_retention_days` | `14` | `365` | Prod logs are part of the evidentiary picture |
-| `alarm_email` | dev channel | on-call channel | |
-| `envelope_expiry_default_days` | `30` | `30` | Same, deliberately |
+| `create_github_oidc_provider` | `true` | `false` | Exactly one per account; dev is applied first |
+| `github_allowed_refs` | `environment:dev` | `environment:prod` | Prod's is where required reviewers attach |
 
-`render_memory_mb` and the expiry default are held identical on purpose: an environment that
-performs or behaves differently from prod stops being a test of prod.
+Task sizes, scaling targets, the database class, the token lifetimes, and the expiry default appear
+in **neither** file. They are defaults in `variables.tf`, which is what makes dev a rehearsal for
+prod rather than a smaller thing that resembles it. Scaling either environment is editing those
+numbers, once.
 
 #### Deploy
 
 ```bash
-make plan-dev     # terraform init -backend-config=environments/dev.tfbackend -reconfigure
-                  # terraform plan  -var-file=environments/dev.tfvars
-make apply-dev
-make plan-prod
-make apply-prod
+make bootstrap        # once per AWS account: the Terraform state bucket
+make deploy-dev       # build, push, roll out, and migrate — both services
+make deploy-dev-api   # the API alone; web keeps the digest it is already running
+make deploy-dev-web   # and the reverse
+make plan-dev         # what an apply would change
+make infra-dev        # apply infrastructure without rebuilding images
+make migrate-dev      # prisma migrate deploy, inside the VPC
+make url-dev          # the address people open
+make logs-dev-api     # tail
+make stop-dev         # scale both services to zero
+make start-dev        # bring them back
 ```
 
-`-reconfigure` on every init is what stops a backend left over from the previous environment from
-being reused.
+Every target exists for prod. `deploy-prod` and `infra-prod` are deliberately the same number of
+keystrokes as their dev counterparts, so nobody builds a habit that ends at the wrong environment;
+`infra-prod` is not auto-approved.
 
-In CI, a pull request touching `infra/terraform/**` runs `plan` for both environments and posts the
-output; `apply-dev` runs on merge to `main`; **`apply-prod` is manual, gated on an environment
-approval.** Terraform runs assume a role via GitHub OIDC — no static AWS keys exist anywhere in the
-repository or in the CI configuration.
+Images are deployed **by digest, never by tag**. A tag is a pointer somebody else can move, and the
+image a plan promises has to be the image that runs. Deploying one service reads the other's current
+digest out of the state, so a web deploy cannot silently roll the API forward or back.
+
+`wait_for_steady_state` is set on both services: an apply that returns before the service is healthy
+is an apply that reports success for a broken deploy.
+
+#### Pausing an environment
+
+`make stop-dev` scales both services to zero and disarms the alarms and the hourly sweep with them —
+an environment stopped on purpose must not page anyone. The load balancer and the database keep
+running and keep billing; this stops the compute half, which for dev is most of it. Nothing is
+destroyed.
+
+#### CI/CD
+
+`.github/workflows/deploy.yml`, **off by default behind three separate switches**: the repository
+variable `DEPLOY_ENABLED` must be `true`, the role ARN variables must be set, and the automatic
+`push` trigger is commented out, so even a fully configured repository only deploys when somebody
+presses the button.
+
+The workflow runs `infra/deploy.sh` — the same script a developer runs. One code path, so what CI
+does is what somebody has already done by hand, and an image deployed from CI is recorded in the
+same state rather than drifting away from it.
+
+Authentication is GitHub OIDC. **No AWS access key exists** in the repository, in its secrets, or in
+the account. The role's trust policy matches `repo:{owner}/{repo}:environment:{env}`, and because
+that claim only takes the `environment:` form when the job declares an environment, GitHub's
+required-reviewers setting on `prod` becomes part of the credential rather than part of the UI.
 
 #### Secrets
 
-**No secret is ever written to a `.tfvars` file.** Terraform creates the Secrets Manager *secret
-containers* and the IAM policies granting access to them; the values are set out of band, once, per
-environment. Terraform never reads a secret value, so no secret can land in the state file.
+**No secret is ever written to a `.tfvars` file**, and none is ever typed by a person. The session
+secret and the internal task secret are generated by Terraform and stored as SSM `SecureString`
+parameters; the container resolves them through the execution role. Nobody ever sees either value,
+which is the point — a secret a person knows is a secret that ends up in a chat message.
 
-This is an explicit correction to the pattern in the sibling `meetwave-serverless-lambda`
-repository, which commits OpenAI, JWT, Paddle, and Resend keys in plaintext `.tfvars`. That
-repository's layout is otherwise a good reference; its secret handling is not.
+SSM Parameter Store rather than Secrets Manager: `SecureString` parameters are free, Secrets Manager
+is $0.40 per secret per month, ECS reads both through the same `secrets` block, and nothing here
+rotates on a schedule. Rotating one is `terraform taint` plus a redeploy — which for the session
+secret invalidates every session, exactly as intended.
+
+> **An amendment to the original rule, stated plainly.** The original spec said Terraform never
+> reads a secret value, so no secret can land in the state file. That no longer holds for one value:
+> the database password is generated by `random_password` and is therefore in state. The alternative
+> — an RDS-managed master password in Secrets Manager — keeps it out of state but stores it as JSON
+> the application would have to assemble a URL from at startup, which means a container entrypoint
+> script permanently between the image and `node dist/main.js`. State lives in a versioned,
+> encrypted, TLS-only, block-public-access bucket; the entrypoint script would be a permanent moving
+> part. If this product ever holds real customer contracts, revisit — that is the point at which the
+> trade flips.
+>
+> The correction this rule was written against still stands: the sibling `meetwave-serverless-lambda`
+> repository commits API keys in plaintext `.tfvars`, and nothing here does.
 
 #### Account model
 
 Both environments live in **one AWS account**, isolated by resource naming and by per-environment
-IAM roles whose policies name the environment's ARNs explicitly — the dev API role cannot
-`s3:GetObject` from the prod bucket, and the dev Terraform role cannot touch prod resources.
+IAM roles whose policies name the environment's ARNs explicitly.
 
 This is the pragmatic starting point for a team of this size, and it is a deliberate trade: a
 separate prod account would give a hard blast-radius boundary that IAM policy alone cannot. If the
-volume of signed contracts or a client's security review ever makes that boundary necessary, the
-module layout is already account-agnostic — moving prod is a new backend config and a new
-`provider` block, not a rewrite.
+volume of signed contracts or a client's security review makes that boundary necessary, the module
+layout is already account-agnostic — moving prod is a new backend config and a new `provider` block,
+not a rewrite.
 
 ### Cost characteristics
 
-At an expected volume of tens of envelopes per month, every service in this topology sits inside or
-near its free tier except S3 storage of the documents themselves, which is negligible at PDF sizes.
-The cost that matters is not per-envelope but per-environment: the KMS key and the sweep schedule
-bill regardless of traffic. This is the concrete comparison against a per-envelope SaaS price.
+Measured against the AWS Pricing API for `us-west-1`, per environment, per month:
+
+| Line | $ |
+|---|---|
+| ALB (created by Express Mode) | 18.40 |
+| Fargate — web, 0.25 vCPU / 0.5 GiB | 10.37 |
+| Fargate — api, 0.25 vCPU / 1 GiB | 12.23 |
+| RDS `db.t4g.micro` + 20 GB gp3 | 18.09 |
+| S3, ECR, SSM, CloudWatch, SES | ~3 |
+| **Total** | **≈ 62** |
+
+The shape of that bill matters more than the number: **it is almost entirely fixed**. The load
+balancer and the database bill identically whether the product serves one envelope a month or ten
+thousand, and per-envelope cost is rounded to zero at this volume. `make stop-dev` removes the
+Fargate lines and brings an idle dev environment to roughly $40.
+
+Two known premiums, both consequences of Express Mode and both quantified here rather than
+discovered later: no Fargate Spot (~$17/month on dev, where Spot interruption is acceptable) and no
+Graviton (~$4.50/month). A hand-rolled ECS service would recover both at the cost of roughly 700
+lines of Terraform to own.
 
 ### Local development and tests
 
-Nothing in the Playwright or Jest suites touches AWS. `FileStorage` uses a local-disk driver,
-`MailService` uses the existing in-memory sink, `PdfRenderer` uses a locally resolved Chromium, and
-`JobQueue` runs inline. The AWS drivers are selected only when `NODE_ENV === 'production'` or when
-the corresponding env var explicitly names them — the same convention `app.module.ts` already uses
-for mail.
+Unchanged, and deliberately so. Nothing in the Playwright or Jest suites touches AWS: `FileStorage`
+uses a local-disk driver, `MailService` uses the in-memory sink, `PdfRenderer` uses a locally
+resolved Chromium, and `JobQueue` runs inline. The AWS drivers are selected only when
+`NODE_ENV === 'production'` or when the corresponding environment variable names them.
 
-The `dev` AWS environment is therefore **not** what the test suite runs against. It exists for the
-deployed dev application — to exercise the real S3, SES, and Lambda path before prod does, and to
-catch the failures that only appear against real services: IAM policy gaps, SES identity
-misconfiguration, Chromium cold starts, presigned-URL expiry. Local development and CI stay
-hermetic and cost nothing, which is what keeps the suite fast enough to run on every change.
+The deployed `dev` environment is therefore **not** what the test suite runs against. It exists to
+exercise the real S3, SES, RDS, and container path before prod does, and to catch the failures that
+only appear against real services: IAM policy gaps, SES identity misconfiguration, image pull time,
+presigned-URL expiry. Local development and CI stay hermetic and cost nothing, which is what keeps
+the suite fast enough to run on every change.
+
+### What changed from the original plan
+
+| Original | Now | Why |
+|---|---|---|
+| Vercel (web + API) | ECS Fargate, both services | The product is hosted entirely on AWS |
+| Neon Postgres | RDS PostgreSQL | Same wire protocol, same Prisma client, same migrations |
+| `pdf-render` Lambda + Chromium layer | Chromium in the API container | The Lambda existed only because a browser does not fit a Vercel bundle |
+| SQS FIFO render queue + DLQ | `JOB_QUEUE=inline` | A long-running process needs no queue to survive the response |
+| `envelope-sweep` Lambda | EventBridge Scheduler → ECS task, API image | No zip artifact to keep in step with the API it calls |
+| API role assumed from Vercel via OIDC | ECS task role | There is no Vercel |
+| SES **domain** identity, DKIM, custom MAIL FROM | SES **address** identity | This account owns no domain. The domain remains the target state |
+| SNS → `ses-events` Lambda → `EnvelopeEvent` | SNS topic only | An SNS subscription cannot reach an API with no public address. Recorded in *Known Gaps* |
+| Secrets Manager containers, values set out of band | SSM `SecureString`, values generated by Terraform | Free, and no human ever sees a value |
+| `terraform >= 1.9, aws ~> 5.0` | `>= 1.10, ~> 6.38` | S3 native locking; `aws_ecs_express_gateway_service` |
 
 ## Screens
 

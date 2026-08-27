@@ -1,0 +1,118 @@
+name: Deploy
+
+# ---------------------------------------------------------------------------------------
+# OFF BY DEFAULT. Two separate switches have to be thrown before this ever deploys:
+#
+#   1. Set the repository variable `DEPLOY_ENABLED` to `true`
+#      (Settings → Secrets and variables → Actions → Variables).
+#      Until then every job here is skipped, including a manual run.
+#
+#   2. Set `AWS_DEPLOY_ROLE_DEV` and/or `AWS_DEPLOY_ROLE_PROD` to the role ARNs
+#      `terraform output github_deploy_role_arn` prints for each environment.
+#
+# Automatic deploys on merge are the commented `push` trigger below. Leaving it commented
+# is the third switch: even with the two variables set, this workflow only runs when
+# somebody presses the button.
+#
+# There are no AWS access keys anywhere in this file, and none in the repository's
+# secrets. GitHub presents an OIDC token naming this repo, this environment, and this
+# workflow; the role's trust policy decides whether that is enough.
+# ---------------------------------------------------------------------------------------
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which environment to deploy
+        type: choice
+        options: [dev, prod]
+        default: dev
+        required: true
+      services:
+        description: Which services to rebuild
+        type: choice
+        options: [both, api, web]
+        default: both
+        required: true
+
+  # Uncomment to deploy dev on every merge into main. The job still checks
+  # DEPLOY_ENABLED, so this alone does not turn anything on.
+  #
+  # push:
+  #   branches: [main]
+
+# Two overlapping deploys into one environment would race each other's rollout. Queued,
+# never cancelled: cancelling mid-rollout leaves a service half-updated.
+concurrency:
+  group: deploy-${{ inputs.environment || 'dev' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # The master switch. A repository with this unset cannot deploy by accident, however
+    # the workflow is triggered.
+    if: vars.DEPLOY_ENABLED == 'true'
+
+    runs-on: ubuntu-latest
+
+    # Not decoration. The OIDC subject claim becomes
+    # `repo:Devscribed/Devscribed.Admin:environment:<name>` when a job declares an
+    # environment, and that string is exactly what the role's trust policy matches. It is
+    # also where GitHub applies required reviewers — so for prod, a human approval is part
+    # of the credential rather than part of the UI.
+    environment: ${{ inputs.environment || 'dev' }}
+
+    permissions:
+      # Mint the OIDC token. Without this the role assumption fails and nothing else in
+      # the job can reach AWS.
+      id-token: write
+      contents: read
+
+    env:
+      AWS_REGION: us-west-1
+      TARGET_ENV: ${{ inputs.environment || 'dev' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assume the deploy role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-west-1
+          role-to-assume: ${{ inputs.environment == 'prod' && vars.AWS_DEPLOY_ROLE_PROD || vars.AWS_DEPLOY_ROLE_DEV }}
+          role-session-name: gha-deploy-${{ github.run_id }}
+
+      - name: Fail early if the role variable is unset
+        run: |
+          if [ -z "${{ inputs.environment == 'prod' && vars.AWS_DEPLOY_ROLE_PROD || vars.AWS_DEPLOY_ROLE_DEV }}" ]; then
+            echo "::error::Set AWS_DEPLOY_ROLE_${TARGET_ENV^^} to the ARN from 'terraform output github_deploy_role_arn'."
+            exit 1
+          fi
+          aws sts get-caller-identity
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          # Matches the floor in infra/terraform/versions.tf: S3 native state locking.
+          terraform_version: 1.12.2
+          # The wrapper rewrites stdout, which breaks the `terraform output -raw` reads
+          # inside infra/deploy.sh.
+          terraform_wrapper: false
+
+      # The same script a developer runs. One code path, so what CI does is what somebody
+      # has already done by hand — and an image deployed here is recorded in the same
+      # Terraform state, not drifted away from it.
+      - name: Deploy
+        run: |
+          case "${{ inputs.services || 'both' }}" in
+            api)  infra/deploy.sh "${TARGET_ENV}" api ;;
+            web)  infra/deploy.sh "${TARGET_ENV}" web ;;
+            *)    infra/deploy.sh "${TARGET_ENV}" api web ;;
+          esac
+
+      - name: Report the address
+        run: |
+          {
+            echo "### Deployed \`${TARGET_ENV}\`"
+            echo
+            echo "$(terraform -chdir=infra/terraform output -raw app_url)"
+          } >> "$GITHUB_STEP_SUMMARY"

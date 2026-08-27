@@ -5,8 +5,10 @@ import { json } from 'express';
 import { AppModule } from './app.module';
 
 /**
- * Vercel detects this file by name and turns the whole application into one function,
- * so `listen()` stays exactly as it is locally — the platform supplies the port.
+ * One long-running process, locally and in every deployed environment: the container image
+ * runs `node dist/main.js` and `PORT` comes from the task definition. Nothing here is
+ * platform-specific, which is why the same entry point serves `nest start --watch` in
+ * development and Fargate in production.
  */
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
