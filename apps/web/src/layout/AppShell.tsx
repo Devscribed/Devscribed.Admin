@@ -5,19 +5,22 @@ import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import type { Session } from './session-context';
 import { SessionProvider } from './session-context';
+import { RequestsBadgeProvider } from './requests-badge-context';
 import './app-shell.css';
 
 /** Sidebar and top bar are fixed; only the content column scrolls. */
 export function AppShell({ session, children }: { session: Session; children: ReactNode }) {
   return (
     <SessionProvider session={session}>
-      <div className="shell">
-        <Sidebar orgId={session.organization.id} />
-        <div className="shell-main">
-          <Topbar />
-          <main className="shell-content">{children}</main>
+      <RequestsBadgeProvider>
+        <div className="shell">
+          <Sidebar orgId={session.organization.id} />
+          <div className="shell-main">
+            <Topbar />
+            <main className="shell-content">{children}</main>
+          </div>
         </div>
-      </div>
+      </RequestsBadgeProvider>
     </SessionProvider>
   );
 }

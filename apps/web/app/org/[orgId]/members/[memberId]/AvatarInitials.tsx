@@ -15,15 +15,19 @@ export function AvatarInitials({
   fullName,
   initials,
   size = 64,
+  'data-testid': dataTestId = 'member-detail-avatar',
 }: {
   fullName: string;
   initials: string;
   size?: number;
+  /** Overridable so callers (e.g. the Requests page cards) can scope the avatar's
+   * testid; defaults to the member-detail value so existing call sites are unaffected. */
+  'data-testid'?: string;
 }) {
   const hue = hashHue(fullName);
   return (
     <div
-      data-testid="member-detail-avatar"
+      data-testid={dataTestId}
       style={{
         width: size,
         height: size,

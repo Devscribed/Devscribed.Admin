@@ -208,7 +208,7 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
 
           <div style={{ paddingTop: 'var(--sp-10)' }}>
             {activeTab === 'vacation' ? (
-              <VacationPanel orgId={orgId} memberId={memberId} />
+              <VacationPanel orgId={orgId} memberId={memberId} memberName={detail.fullName} />
             ) : showForm ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-8)' }}>
                 {detail.canEditRole && (

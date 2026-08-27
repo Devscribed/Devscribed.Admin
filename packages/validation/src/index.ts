@@ -483,7 +483,16 @@ export type MemberCapability =
   /** Spec 07 additions — the Vacation tab / financial-settings capabilities. */
   | 'view-vacation'
   | 'view-own-vacation-balance'
-  | 'edit-member-financials';
+  | 'edit-member-financials'
+  /** Spec 08 addition — trigger a manual monthly accrual run (admin only). */
+  | 'run-accrual'
+  /** Spec 09 additions — the vacation-request lifecycle capabilities. */
+  | 'submit-vacation-request'
+  | 'review-vacation-requests'
+  | 'cancel-own-vacation-request'
+  | 'cancel-any-vacation-request'
+  /** Spec 10 addition — view the organization-wide Requests page (admin, manager). */
+  | 'view-requests';
 
 /**
  * Pure lookup against spec 04's Roles & Permission Matrix (TC-04-UNIT-05), widened by
@@ -501,6 +510,12 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'view-vacation': true,
     'view-own-vacation-balance': true,
     'edit-member-financials': true,
+    'run-accrual': true,
+    'submit-vacation-request': true,
+    'review-vacation-requests': true,
+    'cancel-own-vacation-request': true,
+    'cancel-any-vacation-request': true,
+    'view-requests': true,
   },
   manager: {
     'view-list': true,
@@ -510,6 +525,12 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'view-vacation': true,
     'view-own-vacation-balance': true,
     'edit-member-financials': true,
+    'run-accrual': false,
+    'submit-vacation-request': true,
+    'review-vacation-requests': true,
+    'cancel-own-vacation-request': true,
+    'cancel-any-vacation-request': true,
+    'view-requests': true,
   },
   user: {
     'view-list': true,
@@ -519,6 +540,12 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'view-vacation': false,
     'view-own-vacation-balance': true,
     'edit-member-financials': false,
+    'run-accrual': false,
+    'submit-vacation-request': true,
+    'review-vacation-requests': false,
+    'cancel-own-vacation-request': true,
+    'cancel-any-vacation-request': false,
+    'view-requests': false,
   },
   viewer: {
     'view-list': true,
@@ -528,6 +555,12 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'view-vacation': false,
     'view-own-vacation-balance': false,
     'edit-member-financials': false,
+    'run-accrual': false,
+    'submit-vacation-request': false,
+    'review-vacation-requests': false,
+    'cancel-own-vacation-request': false,
+    'cancel-any-vacation-request': false,
+    'view-requests': false,
   },
 };
 
@@ -1266,3 +1299,500 @@ export function validateMemberFinancials(
     },
   };
 }
+
+// ===========================================================================
+// spec 08 — Vacation Reserve & Auto-Accrual
+// ---------------------------------------------------------------------------
+// Pure, isomorphic helpers for the monthly credit accrual engine, the reserve
+// balance / available-days calculation, deterministic billing-period labels,
+// and the manual-accrual request validator. Every function takes its date
+// parts explicitly — none reads the wall clock — so they stay deterministic on
+// both the API and the web app.
+// ===========================================================================
+
+/**
+ * Months in a year. Used to spread the annual billable-hours figure across
+ * months in the monthly-credit formula.
+ */
+export const MONTHS_PER_YEAR = 12;
+
+/**
+ * Full-month monthly credit (spec requirement 5, TC-08-UNIT-01 cases 1 & 2).
+ *
+ *   expectedMonthlyBilling = clientHourlyRate × (BILLABLE_HOURS_PER_YEAR / MONTHS_PER_YEAR)
+ *   credit                 = round(expectedMonthlyBilling × vacationReservePercent / 100, 2)
+ *
+ * Verified: (40, 3.33) → 230.88; (60, 5.00) → 520.00.
+ */
+export function calculateMonthlyCredit(
+  clientHourlyRate: number,
+  vacationReservePercent: number,
+): number {
+  const expectedMonthlyBilling = clientHourlyRate * (BILLABLE_HOURS_PER_YEAR / MONTHS_PER_YEAR);
+  const credit = (expectedMonthlyBilling * vacationReservePercent) / 100;
+  return Math.round(credit * 100) / 100;
+}
+
+/**
+ * Pro-rate a full-month credit for a member whose financials were first
+ * configured partway through the billing month (spec requirement 6,
+ * TC-08-UNIT-01 case 3).
+ *
+ *   round(fullMonthCredit × workingDaysFromConfig / workingDaysInMonth, 2)
+ *
+ * Verified: (230.88, 10, 22) → 104.95. Guards a zero/negative denominator by
+ * returning 0 rather than producing Infinity/NaN.
+ */
+export function prorateCredit(
+  fullMonthCredit: number,
+  workingDaysFromConfig: number,
+  workingDaysInMonth: number,
+): number {
+  if (workingDaysInMonth <= 0) return 0;
+  const prorated = (fullMonthCredit * workingDaysFromConfig) / workingDaysInMonth;
+  return Math.round(prorated * 100) / 100;
+}
+
+/**
+ * Count the weekdays (Mon–Fri) in a calendar month. `month` is 1-based (1 =
+ * January … 12 = December). No public-holiday calendar — working days are
+ * weekdays only (spec "Out of Scope"). Iterates the month in UTC so the result
+ * is independent of the host time zone.
+ *
+ * Sanity: June 2025 → 21.
+ */
+export function workingDaysInMonth(year: number, month: number): number {
+  let count = 0;
+  const cursor = new Date(Date.UTC(year, month - 1, 1));
+  while (cursor.getUTCMonth() === month - 1) {
+    const dow = cursor.getUTCDay();
+    if (dow >= 1 && dow <= 5) count += 1;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return count;
+}
+
+/**
+ * Count the weekdays (Mon–Fri) from `dayOfMonth` (inclusive) to the last day of
+ * the month. `month` is 1-based. Used to pro-rate a member's first-month credit
+ * from the day their financials became effective (spec requirement 6).
+ *
+ * Sanity: (2025, 6, 15) → 11. NB: June 15 2025 is a Sunday, so it contributes
+ * no weekday. See the discrepancy note where this file's tests are defined.
+ */
+export function workingDaysFromDateToMonthEnd(
+  year: number,
+  month: number,
+  dayOfMonth: number,
+): number {
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  let count = 0;
+  for (let day = dayOfMonth; day <= lastDay; day += 1) {
+    const dow = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+    if (dow >= 1 && dow <= 5) count += 1;
+  }
+  return count;
+}
+
+/**
+ * Available vacation days from the reserve balance (spec requirements 15–17,
+ * TC-08-UNIT-02).
+ *
+ *   dailySalary   = round(monthlySalary × 12 / WORKING_DAYS_PER_YEAR, 2)
+ *   raw           = floor((reserveBalance − pendingHold) / dailySalary)
+ *   capped        = min(raw, vacationDaysPerYear − usedDays)
+ *   availableDays = max(0, capped)
+ *
+ * `dailySalary` is a monetary rate, so it is rounded to cents (2dp) before the
+ * reserve is divided into whole days. This is what both specs' worked examples
+ * assume: spec 08's "138.46" and spec 09's "floor(276.92 / 138.46) = 2". Using the
+ * unrounded 138.4615… would floor the spec-09 case-1 quotient (1.99998) down to 1 —
+ * an artifact of the already-cent-rounded reserve/hold literals, not the intent.
+ * The per-request `deductionAmount` keeps FULL precision (see
+ * `calculateDeductionAmount` → 692.31); only this day-count division rounds the rate.
+ *
+ * Divide-by-zero guard: a non-positive daily salary yields 0. Verified against
+ * TC-08-UNIT-02: (1661.54, 3000, 20, 0)→12; (0,…)→0; (2769.23, 3000, 20, 18)→2;
+ * (-100,…)→0; and TC-09-UNIT-02 case 1 (pendingHold 1384.62)→2.
+ *
+ * Spec 09 requirement 8 extends this with an optional `pendingHold` — the sum of
+ * `deductionAmount` across the member's pending requests in the current calendar
+ * year — subtracted from the reserve before the day count is derived. It defaults
+ * to 0, so every spec-08 call site and result is unchanged (backward-compatible).
+ */
+export function calculateAvailableDays(input: {
+  reserveBalance: number;
+  monthlySalary: number;
+  vacationDaysPerYear: number;
+  usedDays: number;
+  pendingHold?: number;
+}): number {
+  const { reserveBalance, monthlySalary, vacationDaysPerYear, usedDays, pendingHold } = input;
+  const dailySalary = Math.round(((monthlySalary * 12) / WORKING_DAYS_PER_YEAR) * 100) / 100;
+  if (dailySalary <= 0) return 0;
+  const raw = Math.floor((reserveBalance - (pendingHold ?? 0)) / dailySalary);
+  const capped = Math.min(raw, vacationDaysPerYear - usedDays);
+  return Math.max(0, capped);
+}
+
+/**
+ * English month names, index 0 = January. Deterministic and locale-free so the
+ * generated transaction descriptions ("June 2025 accrual") match across the API
+ * and the web app regardless of the host locale.
+ */
+export const MONTH_NAMES: readonly string[] = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+/** "June 2025" — the billing-period label (spec API contract, TC-08-INT-06). */
+export function billingPeriodLabel(year: number, month: number): string {
+  return `${MONTH_NAMES[month - 1]} ${year}`;
+}
+
+/** "June 2025 accrual" — the auto-generated credit description (requirement 5, flow step 2f). */
+export function accrualDescription(year: number, month: number): string {
+  return `${billingPeriodLabel(year, month)} accrual`;
+}
+
+/**
+ * Exact error strings from spec 08's Error Messages table. Shared by the API
+ * (400/403 bodies) and any client-side pre-validation so the wording stays in
+ * one place.
+ */
+export const ACCRUAL_MESSAGES = {
+  invalidMonth: 'Month must be between 1 and 12',
+  futurePeriod: 'Cannot run accrual for a future billing period',
+  forbidden: 'Only admins can trigger manual accrual',
+  noTransactions: 'No reserve transactions yet.',
+} as const;
+
+/** The validated shape of a manual-accrual request body. */
+export interface AccrualRunInput {
+  month: number;
+  year: number;
+}
+
+export type AccrualRunResult =
+  | { valid: true; value: AccrualRunInput }
+  | { valid: false; error: string; message: string };
+
+/** Whole-number check that also rejects NaN/Infinity and numeric-looking strings' junk. */
+function toInteger(input: unknown): number {
+  if (typeof input === 'number') return input;
+  if (typeof input === 'string' && input.trim().length > 0) return Number(input);
+  return NaN;
+}
+
+/**
+ * Validate a manual-accrual request (spec requirements 11 & 14, TC-08-INT-06/09).
+ * `now` carries the caller's current year/month (1-based) so this stays pure —
+ * it never reads the clock itself.
+ *
+ * - `month` must be an integer 1–12, else `invalid_month`.
+ * - the period is "future" iff `year > now.year || (year === now.year && month > now.month)`,
+ *   which also catches a non-integer/NaN year (falls through to `future_period`).
+ * - forbidden (role) is enforced by the caller via `can(role, 'run-accrual')`;
+ *   `ACCRUAL_MESSAGES.forbidden` is the matching 403 body.
+ */
+export function validateAccrualRun(
+  input: { month: unknown; year: unknown },
+  now: { year: number; month: number },
+): AccrualRunResult {
+  const month = toInteger(input.month);
+  if (!Number.isInteger(month) || month < 1 || month > 12) {
+    return { valid: false, error: 'invalid_month', message: ACCRUAL_MESSAGES.invalidMonth };
+  }
+
+  const year = toInteger(input.year);
+  const isFuture =
+    !Number.isInteger(year) || year > now.year || (year === now.year && month > now.month);
+  if (isFuture) {
+    return { valid: false, error: 'future_period', message: ACCRUAL_MESSAGES.futurePeriod };
+  }
+
+  return { valid: true, value: { month, year } };
+}
+
+// ===========================================================================
+// spec 09 — Vacation Requests
+// ---------------------------------------------------------------------------
+// Pure, isomorphic helpers for the vacation-request lifecycle: working-day
+// counting across an inclusive date range, inclusive-range overlap detection,
+// the submission-time deduction amount, and the date-field / cross-year /
+// reviewer-comment / review-decision validators. Every function takes its dates
+// explicitly (never reads the wall clock) and parses 'YYYY-MM-DD' strings as
+// UTC midnight so results are host-time-zone-independent and deterministic on
+// both the API and the web app.
+//
+// The `pendingHold` extension to `calculateAvailableDays` (spec 09 requirement 8)
+// lives with the spec-08 implementation above, kept backward-compatible.
+// ===========================================================================
+
+/** VacationRequest.Status — the four lifecycle states (spec 09 data model). */
+export type VacationRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
+
+/**
+ * Parse a 'YYYY-MM-DD' date string as UTC midnight, or pass a `Date` through
+ * unchanged. Every spec-09 date helper funnels through this so string and Date
+ * inputs are treated identically and the host time zone never shifts a day.
+ */
+function parseUtcDate(input: string | Date): Date {
+  if (input instanceof Date) return input;
+  return new Date(`${input}T00:00:00.000Z`);
+}
+
+/**
+ * Working days in an inclusive date range (spec 09 requirement 2 / TC-09-UNIT-01):
+ * the count of weekdays (Mon–Fri, `getUTCDay()` 1..5) from `start` to `end`
+ * inclusive. Weekends are excluded; no public-holiday calendar. Returns 0 when
+ * `end < start`. Works across a year boundary (the cross-year *request* rule is
+ * enforced separately by `validateVacationRequestDates`).
+ *
+ * Verified: 2025-07-14→2025-07-25 = 10; single Mon 2025-07-14 = 1;
+ * Sat 2025-07-12→Sun 2025-07-13 = 0; 2025-12-29→2026-01-02 = 5.
+ */
+export function calculateWorkingDays(start: string | Date, end: string | Date): number {
+  const startDate = parseUtcDate(start);
+  const endDate = parseUtcDate(end);
+  if (endDate.getTime() < startDate.getTime()) return 0;
+  let count = 0;
+  const cursor = new Date(startDate.getTime());
+  while (cursor.getTime() <= endDate.getTime()) {
+    const dow = cursor.getUTCDay();
+    if (dow >= 1 && dow <= 5) count += 1;
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return count;
+}
+
+/**
+ * Inclusive-range overlap (spec 09 requirement 5 / TC-09-UNIT-03): true iff the
+ * two inclusive date ranges share at least one common day, i.e.
+ * `aStart <= bEnd && bStart <= aEnd`. Endpoints touching counts as an overlap.
+ *
+ * Verified against A = 2025-07-14..2025-07-18: B 07-18..07-25 → true;
+ * C 07-21..07-25 → false; D 07-10..07-16 → true; E 07-15..07-17 → true.
+ */
+export function datesOverlap(
+  aStart: string | Date,
+  aEnd: string | Date,
+  bStart: string | Date,
+  bEnd: string | Date,
+): boolean {
+  const aStartMs = parseUtcDate(aStart).getTime();
+  const aEndMs = parseUtcDate(aEnd).getTime();
+  const bStartMs = parseUtcDate(bStart).getTime();
+  const bEndMs = parseUtcDate(bEnd).getTime();
+  return aStartMs <= bEndMs && bStartMs <= aEndMs;
+}
+
+/**
+ * Submission-time deduction amount (spec 09 requirement 6):
+ * `workingDays × dailySalary`, where `dailySalary = monthlySalary × 12 / 260`,
+ * rounded to two decimal places. This is the amount held against the balance for
+ * a pending request and debited from the reserve on approval.
+ *
+ * Verified: 10 days @ salary 3000 → 1384.62; 5 days → 692.31.
+ */
+export function calculateDeductionAmount(workingDays: number, monthlySalary: number): number {
+  const dailySalary = (monthlySalary * 12) / WORKING_DAYS_PER_YEAR;
+  return Math.round(workingDays * dailySalary * 100) / 100;
+}
+
+/**
+ * Exact strings from spec 09's Error Messages table, verbatim. The two templated
+ * rows are exposed as builder functions; every other row is a static key. Shared
+ * by the API (400/403 bodies), the web form (inline errors + toasts), and any
+ * client-side pre-validation, so the wording lives in exactly one place.
+ *
+ * NB: the overlap builder uses an en-dash (` – `) between the dates, matching the
+ * spec byte-for-byte — a plain hyphen would fail downstream assertions.
+ */
+export const REQUEST_MESSAGES = {
+  startInPast: 'Start date must be today or later',
+  endBeforeStart: 'End date must be on or after start date',
+  crossYear: 'Start and end dates must be within the same calendar year',
+  insufficientBalance: (n: number): string =>
+    `Insufficient vacation balance. You have ${n} day(s) available.`,
+  overlap: (startDate: string, endDate: string): string =>
+    `This request overlaps with an existing vacation request (${startDate} – ${endDate})`,
+  noFinancials: 'Financial settings must be configured before requesting vacation',
+  forAnotherMember: 'You can only submit vacation requests for yourself',
+  reviewNotPending: 'Only pending requests can be reviewed',
+  selfApproval: 'You cannot approve your own vacation request',
+  invalidDecision: "Decision must be 'approved' or 'rejected'",
+  commentTooLong: 'Comment must be at most 500 characters',
+  cancelInvalidStatus: 'Only pending or approved requests can be cancelled',
+  cancelForbidden: 'You do not have permission to cancel this request',
+  reviewForbidden: 'You do not have permission to review vacation requests',
+  noRequests: 'No vacation requests yet.',
+  toastSubmitted: 'Vacation request submitted',
+  toastApproved: 'Request approved',
+  toastRejected: 'Request rejected',
+  toastCancelledPending: 'Request cancelled',
+  toastCancelledApproved: 'Request cancelled and reserve refunded',
+  genericError: 'Something went wrong. Please try again.',
+} as const;
+
+/** Max length of an optional reviewer comment (spec 09 Validation Rule 6). */
+export const REVIEWER_COMMENT_MAX = 500;
+
+/** Is `s` a parseable 'YYYY-MM-DD' date (strict format + real calendar day)? */
+function isValidDateString(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const date = new Date(`${s}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return false;
+  // Round-trip guard: rejects e.g. 2025-02-30 that JS would roll forward.
+  return date.toISOString().slice(0, 10) === s;
+}
+
+export interface VacationRequestDatesInput {
+  startDate: string;
+  endDate: string;
+}
+
+export interface VacationRequestDatesResult {
+  valid: boolean;
+  fieldErrors: { startDate?: string; endDate?: string };
+  /** True when start/end parse into different calendar years (surfaced as `cross_year`). */
+  crossYear: boolean;
+}
+
+/**
+ * Date-field + cross-year validation for a vacation request (spec 09 Validation
+ * Rules 1–3). `today` ('YYYY-MM-DD') is supplied by the caller so this stays pure.
+ *
+ * - startDate: required, a valid date, and `>= today` → else `startInPast`.
+ * - endDate: required, a valid date, and `>= startDate` → else `endBeforeStart`.
+ * - crossYear: `UTCFullYear(start) !== UTCFullYear(end)` (only when both parse).
+ *   The cross-year condition is returned via the `crossYear` flag, NOT a field
+ *   error — the API surfaces it as a top-level `{ error: 'cross_year' }`.
+ *
+ * `valid` is true only when there are no field errors AND not crossYear.
+ */
+export function validateVacationRequestDates(
+  input: { startDate?: unknown; endDate?: unknown },
+  today: string,
+): VacationRequestDatesResult {
+  const fieldErrors: { startDate?: string; endDate?: string } = {};
+
+  const rawStart = typeof input.startDate === 'string' ? input.startDate.trim() : '';
+  const rawEnd = typeof input.endDate === 'string' ? input.endDate.trim() : '';
+
+  const startValid = rawStart.length > 0 && isValidDateString(rawStart);
+  const endValid = rawEnd.length > 0 && isValidDateString(rawEnd);
+
+  // Rule 1 — start required, valid, today-or-later.
+  if (!startValid || rawStart < today) {
+    fieldErrors.startDate = REQUEST_MESSAGES.startInPast;
+  }
+
+  // Rule 2 — end required, valid, on-or-after start. When start is unparseable we
+  // cannot compare, so we still require end to be a valid date first.
+  if (!endValid || (startValid && rawEnd < rawStart)) {
+    fieldErrors.endDate = REQUEST_MESSAGES.endBeforeStart;
+  }
+
+  // Rule 3 — cross-year is only meaningful when both endpoints parse.
+  let crossYear = false;
+  if (startValid && endValid) {
+    crossYear =
+      parseUtcDate(rawStart).getUTCFullYear() !== parseUtcDate(rawEnd).getUTCFullYear();
+  }
+
+  const valid = !fieldErrors.startDate && !fieldErrors.endDate && !crossYear;
+  return { valid, fieldErrors, crossYear };
+}
+
+/**
+ * Optional reviewer comment (spec 09 Validation Rule 6): empty/undefined/null →
+ * valid with `value: null`; otherwise max 500 characters → else `commentTooLong`.
+ * Not trimmed for the length check — the stored comment is the reviewer's text as
+ * typed — but a whitespace-only comment collapses to `null` (treated as omitted).
+ */
+export function validateReviewerComment(
+  comment: string | null | undefined,
+): { valid: true; value: string | null } | { valid: false; error: string } {
+  if (comment === null || comment === undefined || comment.trim().length === 0) {
+    return { valid: true, value: null };
+  }
+  if (comment.length > REVIEWER_COMMENT_MAX) {
+    return { valid: false, error: REQUEST_MESSAGES.commentTooLong };
+  }
+  return { valid: true, value: comment };
+}
+
+/**
+ * Review decision guard (spec 09 Error Messages / review contract): the decision
+ * must be exactly `'approved'` or `'rejected'`. Anything else is rejected by the
+ * caller with `REQUEST_MESSAGES.invalidDecision`.
+ */
+export function isValidReviewDecision(decision: unknown): decision is 'approved' | 'rejected' {
+  return decision === 'approved' || decision === 'rejected';
+}
+
+// ---------------------------------------------------------------------------
+// Spec 10 — Organization Requests Page
+// ---------------------------------------------------------------------------
+// Pure helpers for the org-wide Requests page: parsing the `status`/`type`
+// query parameters of GET /api/organizations/{orgId}/requests, and the page's
+// forbidden / empty-state copy. Page access itself is gated by the
+// `view-requests` capability (admin/manager) via `can(...)`.
+
+/** The five valid values of the `status` query parameter (`pending` is the default). */
+export type RequestStatusFilter = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'all';
+
+export const REQUEST_STATUS_FILTERS: readonly RequestStatusFilter[] = [
+  'pending',
+  'approved',
+  'rejected',
+  'cancelled',
+  'all',
+];
+
+/**
+ * Parse the `status` query parameter. Returns the value when it is one of the
+ * five valid filters (case-sensitive, lowercase); otherwise falls back to the
+ * default `'pending'` — covering `undefined`, empty string, and any unknown value.
+ */
+export function parseRequestStatusFilter(value: unknown): RequestStatusFilter {
+  return REQUEST_STATUS_FILTERS.includes(value as RequestStatusFilter)
+    ? (value as RequestStatusFilter)
+    : 'pending';
+}
+
+/**
+ * Request `type` query parameter. Reserved for future request types; today the
+ * only valid (and default) value is `'vacation'`.
+ */
+export type RequestTypeFilter = 'vacation';
+
+/**
+ * Parse the `type` query parameter. Only `'vacation'` is defined today, and any
+ * other/absent value falls back to it — so this always resolves to `'vacation'`.
+ */
+export function parseRequestTypeFilter(_value: unknown): RequestTypeFilter {
+  return 'vacation';
+}
+
+/**
+ * Requests-page copy (spec 10 Error Messages / States). `emptyOther` builds the
+ * empty-state message for a non-pending filter from the lowercase status word,
+ * e.g. `emptyOther('approved')` → `'No approved requests.'`.
+ */
+export const REQUESTS_PAGE_MESSAGES = {
+  viewForbidden: 'You do not have permission to view requests',
+  emptyPending: 'No pending requests.',
+  emptyOther: (status: string) => `No ${status} requests.`,
+} as const;

@@ -14,9 +14,9 @@ Functional specifications for the user-management surface of Devscribed.Admin. E
 | 05 | [Member Detail: About](05-member-detail-about.md) | [design](05-member-detail-about.design.md) | member-detail, role-picker, job-title, zero-admin-guard, avatar |
 | 06 | [Account Settings](06-account-settings.md) | [design](06-account-settings.design.md) | account-settings, change-email, change-password, profile, timezone |
 | 07 | [Member Financial Settings](07-vacation-accrual-management.md) | [design](07-vacation-accrual-management.design.md) | salary, hourly-rate, billing, reserve, auto-calculate, snapshot |
-| 08 | [Vacation Reserve & Auto-Accrual](08-vacation-reserve-auto-accrual.md) | — | vacation-reserve, auto-accrual, ledger, monthly-credit, year-end-expiry |
-| 09 | [Vacation Requests](09-vacation-requests.md) | — | vacation-request, submit, approve, reject, cancel, debit, refund |
-| 10 | [Organization Requests Page](10-organization-requests-page.md) | — | requests-page, sidebar, badge, status-filter, organization-wide |
+| 08 | [Vacation Reserve & Auto-Accrual](08-vacation-reserve-auto-accrual.md) | [design](08-vacation-reserve-auto-accrual.design.md) | vacation-reserve, auto-accrual, ledger, monthly-credit, year-end-expiry |
+| 09 | [Vacation Requests](09-vacation-requests.md) | [design](09-vacation-requests.design.md) | vacation-request, submit, approve, reject, cancel, debit, refund |
+| 10 | [Organization Requests Page](10-organization-requests-page.md) | [design](10-organization-requests-page.design.md) | requests-page, sidebar, badge, status-filter, organization-wide |
 | 11 | [Projects](11-projects.md) | [mockup](11-projects.mock.html) | project, project-member, assignment, archive, restore, sidebar, projects-page |
 | 12 | [Time Tracking](12-time-tracking.md) | [mockup](12-time-tracking.mock.html) | time-tracking, timer, time-entry, running-timer, daily-view, weekly-view, monthly-view, calendar, topbar-indicator |
 

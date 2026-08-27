@@ -163,8 +163,10 @@ describe('Vacation financial settings (spec 07)', () => {
         pendingDays: 0,
         totalDaysPerYear: 20,
       },
+      requests: [],
+      transactions: [],
       canEdit: true,
-      canReviewRequests: false,
+      canReviewRequests: true,
       canSubmitRequest: false,
     });
   });
@@ -353,9 +355,11 @@ describe('Vacation financial settings (spec 07)', () => {
         pendingDays: 0,
         totalDaysPerYear: 20,
       },
+      requests: [],
+      transactions: null,
       canEdit: false,
       canReviewRequests: false,
-      canSubmitRequest: false,
+      canSubmitRequest: true,
     });
 
     const another = await getVacation(u.cookies, admin.organizationId, other.membershipId);
@@ -400,8 +404,10 @@ describe('Vacation financial settings (spec 07)', () => {
     expect(response.body).toEqual({
       financials: null,
       balance: null,
+      requests: [],
+      transactions: null,
       canEdit: true,
-      canReviewRequests: false,
+      canReviewRequests: true,
       canSubmitRequest: false,
     });
   });
@@ -424,6 +430,8 @@ describe('Vacation financial settings (spec 07)', () => {
     expect(response.body).toEqual({
       financials: null,
       balance: null,
+      requests: [],
+      transactions: null,
       canEdit: false,
       canReviewRequests: false,
       canSubmitRequest: false,

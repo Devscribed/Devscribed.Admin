@@ -2,23 +2,33 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { NavItem, SectionLabel } from '@/ds';
-import { PeopleIcon } from './icons';
+import { can, type Role } from '@devscribed/validation';
+import { InboxIcon, PeopleIcon } from './icons';
+import { useSession } from './session-context';
+import { usePendingRequests } from './requests-badge-context';
 
 interface NavEntry {
   testId: string;
   label: string;
   href: string;
   icon: React.ReactNode;
+  /** Optional count pill (spec 10 Requests row). Hidden when `undefined`/0. */
+  badge?: number;
+  badgeTestId?: string;
 }
 
 /**
  * Only destinations that exist today. The Meridian template carries seven groups from
  * the wider product (Timesheets, Reports, Time off…); shipping them as dead links
- * would promise screens no spec has yet defined. Entries arrive as their specs land —
- * Requests (spec 10) is the next one, and it is role-gated.
+ * would promise screens no spec has yet defined. Entries arrive as their specs land.
+ *
+ * The Requests row (spec 10) is role-gated — appended only for callers with the
+ * `view-requests` capability (admin/manager), so `user`/`viewer` never see it (it is
+ * omitted from the array, never rendered-then-hidden). Its badge carries the shared
+ * pending count and disappears at 0.
  */
-function navigation(orgId: string): NavEntry[] {
-  return [
+function navigation(orgId: string, role: Role, pendingCount: number): NavEntry[] {
+  const entries: NavEntry[] = [
     {
       testId: 'nav-members',
       label: 'Members',
@@ -26,12 +36,27 @@ function navigation(orgId: string): NavEntry[] {
       icon: <PeopleIcon />,
     },
   ];
+
+  if (can(role, 'view-requests')) {
+    entries.push({
+      testId: 'sidebar-requests-link',
+      label: 'Requests',
+      href: `/org/${orgId}/requests`,
+      icon: <InboxIcon />,
+      badge: pendingCount || undefined,
+      badgeTestId: 'sidebar-requests-badge',
+    });
+  }
+
+  return entries;
 }
 
 export function Sidebar({ orgId }: { orgId: string }) {
   const pathname = usePathname();
   const router = useRouter();
-  const entries = navigation(orgId);
+  const session = useSession();
+  const { pendingCount } = usePendingRequests();
+  const entries = navigation(orgId, session.role as Role, pendingCount);
 
   return (
     <nav className="shell-sidebar" data-testid="app-sidebar" aria-label="Main">
@@ -60,6 +85,8 @@ export function Sidebar({ orgId }: { orgId: string }) {
               }}
               icon={entry.icon}
               active={active}
+              badge={entry.badge}
+              badgeTestId={entry.badgeTestId}
               title={entry.label}
               data-testid={entry.testId}
               aria-current={active ? 'page' : undefined}

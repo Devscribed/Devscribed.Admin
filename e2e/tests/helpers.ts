@@ -331,6 +331,157 @@ export async function findMember(
 }
 
 /**
+ * Configures a member's vacation financials straight through the API — a precondition
+ * for the accrual E2E (spec 08), not the thing under test. Requires `request`'s cookie
+ * jar to be authenticated as an admin/manager of the organization.
+ */
+export async function configureFinancials(
+  request: APIRequestContext,
+  organizationId: string,
+  memberId: string,
+  body: {
+    monthlySalary: number;
+    clientHourlyRate: number;
+    vacationDaysPerYear: number;
+    currency: string;
+    isReservePercentManual: boolean;
+    vacationReservePercent?: number;
+  },
+): Promise<void> {
+  const response = await request.put(
+    `${API}/api/organizations/${organizationId}/members/${memberId}/vacation/financials`,
+    { data: body },
+  );
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not configure financials for member ${memberId} (${response.status()})`,
+    );
+  }
+}
+
+/**
+ * Test-only backdoor (`TestFixturesController`) that backdates a member's financials
+ * snapshot(s) `effectiveFrom` to a past date, keyed by the member's account email. This
+ * makes accrual for a past billing month find an effective snapshot and produce a FULL
+ * (non-prorated) credit — mirrors `expireEmailChange`: there is no product-facing,
+ * HTTP-only way to move a snapshot's effective date into the past.
+ */
+export async function backdateFinancials(
+  request: APIRequestContext,
+  email: string,
+  effectiveFrom: string,
+): Promise<void> {
+  const response = await request.post(`${API}/api/test/financials/backdate`, {
+    data: { email, effectiveFrom },
+  });
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not backdate financials for ${email} (${response.status()})`,
+    );
+  }
+}
+
+export interface AccrualRunResult {
+  processed: number;
+  creditsCreated: number;
+  skipped: number;
+  billingPeriod: string;
+}
+
+/**
+ * Runs the manual accrual trigger straight through the API — a precondition for the
+ * accrual E2E (spec 08) that generates the credit transactions the UI then renders.
+ * Requires `request`'s cookie jar to be authenticated as an admin. Unlike the other
+ * helpers it returns the parsed run summary so a caller can assert on the counts.
+ */
+export async function runAccrual(
+  request: APIRequestContext,
+  month: number,
+  year: number,
+): Promise<AccrualRunResult> {
+  const response = await request.post(`${API}/api/admin/accrual/run`, {
+    data: { month, year },
+  });
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not run accrual for ${month}/${year} (${response.status()})`,
+    );
+  }
+  return (await response.json()) as AccrualRunResult;
+}
+
+/**
+ * Test-only backdoor (`TestFixturesController`) that seeds a `credit` vacation reserve
+ * transaction of an exact `amount` for the member behind `email`. The accrual engine only
+ * produces formula-derived amounts, so this is how spec 09's E2E sets a precise balance
+ * precondition ("exactly N available days"). `createdAt` defaults to now (current calendar
+ * year) so the credit counts toward the live reserve. With the default salary 3000
+ * (`dailySalary` ≈ 138.46), seed 1400 → 10 available days, seed 300 → 2 available days.
+ */
+export async function seedReserveCredit(
+  request: APIRequestContext,
+  email: string,
+  amount: number,
+): Promise<void> {
+  const response = await request.post(`${API}/api/test/vacation/seed-credit`, {
+    data: { email, amount },
+  });
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not seed reserve credit for ${email} (${response.status()})`,
+    );
+  }
+}
+
+/**
+ * Submits a vacation request straight through the API — a precondition for the spec 09
+ * approve/cancel E2E, not the thing under test. Requires `request`'s cookie jar to be
+ * authenticated as the MEMBER submitting for themselves (`memberId` must be the caller's
+ * own membership; `login(request, memberEmail)` first). Returns the parsed `201` body.
+ */
+export async function submitVacationRequestViaApi(
+  request: APIRequestContext,
+  organizationId: string,
+  memberId: string,
+  dates: { startDate: string; endDate: string },
+): Promise<{ id: string; workingDays: number; deductionAmount: number }> {
+  const response = await request.post(
+    `${API}/api/organizations/${organizationId}/members/${memberId}/vacation/requests`,
+    { data: dates },
+  );
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not submit vacation request for member ${memberId} (${response.status()})`,
+    );
+  }
+  return (await response.json()) as { id: string; workingDays: number; deductionAmount: number };
+}
+
+/**
+ * Reviews (approves/rejects) a vacation request straight through the API — a precondition
+ * (e.g. "an already-approved request") for the spec 09 cancel-refund E2E. Requires
+ * `request`'s cookie jar to be authenticated as an admin/manager who is NOT the request
+ * owner (`login` back as that actor first — submitting as the member swapped the jar).
+ */
+export async function reviewVacationRequestViaApi(
+  request: APIRequestContext,
+  organizationId: string,
+  memberId: string,
+  requestId: string,
+  body: { decision: 'approved' | 'rejected'; comment?: string },
+): Promise<void> {
+  const response = await request.put(
+    `${API}/api/organizations/${organizationId}/members/${memberId}/vacation/requests/${requestId}/review`,
+    { data: body },
+  );
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not review vacation request ${requestId} (${response.status()})`,
+    );
+  }
+}
+
+/**
  * Soft-deletes a member straight through the API — a precondition (e.g. for
  * TC-02-E2E-04's "removed member tries to log in"), not the thing under test.
  * Requires `request`'s cookie jar to be authenticated as an admin/manager.

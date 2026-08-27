@@ -22,6 +22,7 @@ import { randomUUID } from 'crypto';
 import type { SessionPayload } from '../auth/session.service';
 import { InvitationsService } from '../invitations/invitations.service';
 import { PrismaService } from '../prisma.service';
+import { VacationRequestsService } from '../vacation/vacation-requests.service';
 
 export interface MemberListItem {
   id: string;
@@ -92,6 +93,7 @@ export class MembersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly invitations: InvitationsService,
+    private readonly vacationRequests: VacationRequestsService,
   ) {}
 
   async list(session: SessionPayload, query: MemberListQuery): Promise<MemberListResult> {
@@ -193,6 +195,11 @@ export class MembersService {
         where: { id: target.accountId },
         data: { securityStamp: randomUUID() },
       });
+
+      // Spec 09 requirement 20 — cancel the removed member's pending requests and refund
+      // any future-dated approved ones. Runs on this same `tx` so it is atomic with the
+      // removal (past approved requests are left untouched).
+      await this.vacationRequests.cancelActiveForRemoval(tx, target.id, session.accountId);
 
       return target.id;
     });

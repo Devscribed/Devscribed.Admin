@@ -16,6 +16,19 @@ export function PeopleIcon() {
 }
 
 /**
+ * Inbox/tray glyph for the sidebar "Requests" row (spec 10). Meridian ships no icon
+ * export beyond the members glyph, so this is a simple geometric tray — an open box with
+ * a downward notch — drawn with `currentColor` fills to sit alongside `PeopleIcon`.
+ */
+export function InboxIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width={19} height={19} fill="currentColor" aria-hidden>
+      <path d="M4 2.5a1.75 1.75 0 0 0-1.62 1.09L.6 8.02A2 2 0 0 0 .45 8.77V15A2.5 2.5 0 0 0 2.95 17.5H17.05A2.5 2.5 0 0 0 19.55 15V8.77a2 2 0 0 0-.15-.75L17.62 3.59A1.75 1.75 0 0 0 16 2.5H4Zm0 1.5H16a.25.25 0 0 1 .23.16L17.8 8H13.5a1 1 0 0 0-1 1 2.5 2.5 0 0 1-5 0 1 1 0 0 0-1-1H2.2l1.57-3.84A.25.25 0 0 1 4 4Z" />
+    </svg>
+  );
+}
+
+/**
  * The row-actions ("⋮") trigger glyph — three stacked dots, lifted verbatim from the
  * `icDots` entry in `MeridianApp.dc.html`'s members-list section (spec 04).
  */

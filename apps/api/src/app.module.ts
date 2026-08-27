@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { AccountController } from './account/account.controller';
 import { AccountService } from './account/account.service';
+import { AccrualController } from './accrual/accrual.controller';
+import { AccrualService } from './accrual/accrual.service';
 import { LoginController } from './auth/login.controller';
 import { LoginService } from './auth/login.service';
 import { LogoutController } from './auth/logout.controller';
@@ -21,10 +23,13 @@ import { MeController } from './members/me.controller';
 import { MembersController } from './members/members.controller';
 import { MembersService } from './members/members.service';
 import { PrismaService } from './prisma.service';
+import { RequestsController } from './requests/requests.controller';
+import { RequestsService } from './requests/requests.service';
 import { SignupController } from './signup/signup.controller';
 import { SignupService } from './signup/signup.service';
 import { TestFixturesController } from './test/test-fixtures.controller';
 import { VacationController } from './vacation/vacation.controller';
+import { VacationRequestsService } from './vacation/vacation-requests.service';
 import { VacationService } from './vacation/vacation.service';
 
 /**
@@ -66,6 +71,8 @@ const mailProvider = {
     InvitationsController,
     AccountController,
     VacationController,
+    RequestsController,
+    AccrualController,
     TestMailController,
     TestFixturesController,
   ],
@@ -78,6 +85,9 @@ const mailProvider = {
     MembersService,
     AccountService,
     VacationService,
+    VacationRequestsService,
+    RequestsService,
+    AccrualService,
     SessionService,
     mailProvider,
   ],
