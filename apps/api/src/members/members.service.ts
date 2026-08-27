@@ -61,6 +61,12 @@ export interface MemberDetail {
   canEditJobTitle: boolean;
   availableRoles: Role[];
   callerRole: string;
+  /**
+   * Spec 07 — drives the Vacation tab's enabled/disabled state. True when the target is
+   * active AND the caller can view vacation for anyone, OR the caller is viewing their
+   * own membership and can view their own balance. Never true for a removed target.
+   */
+  canViewVacation: boolean;
 }
 
 /** Spec 05 — `PUT /members/:memberId` request body. */
@@ -291,6 +297,12 @@ export class MembersService {
     const canEditJobTitle =
       targetStatus === 'active' && (caller.role === 'admin' || caller.role === 'manager');
 
+    const isSelf = target.id === caller.id;
+    const canViewVacation =
+      targetStatus === 'active' &&
+      (can(caller.role, 'view-vacation') ||
+        (isSelf && can(caller.role, 'view-own-vacation-balance')));
+
     return {
       id: target.id,
       fullName: `${target.account.firstName} ${target.account.lastName}`,
@@ -306,6 +318,7 @@ export class MembersService {
       canEditJobTitle,
       availableRoles,
       callerRole: caller.role,
+      canViewVacation,
     };
   }
 

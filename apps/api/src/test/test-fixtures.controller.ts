@@ -48,6 +48,30 @@ export class TestFixturesController {
   }
 
   /**
+   * Forces a pending email change into the expired state. Mirrors `expireInvitation`:
+   * E2E tests cannot fast-forward 24 hours nor touch the database directly, so spec
+   * 06's "expired confirmation link" case needs this to manufacture its precondition.
+   *
+   * The record is identified by its `newEmail` (the address the E2E requested the
+   * change TO) — that is the value the E2E holds, since the confirmation link and the
+   * mail sink are both keyed by the new address.
+   */
+  @Post('email-change/expire')
+  @HttpCode(200)
+  async expireEmailChange(@Body() body: { email?: unknown }) {
+    this.guard();
+    const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+    if (!email) throw new NotFoundException();
+
+    const result = await this.prisma.pendingEmailChange.updateMany({
+      where: { newEmail: email, usedAt: null, isInvalidated: false },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    if (result.count === 0) throw new NotFoundException();
+    return { message: 'expired' };
+  }
+
+  /**
    * Creates an account with a password but no organization membership at all — the
    * "existing account, not yet affiliated with any org" state spec 03's plain
    * existing-account-accept case needs. Every account reachable through the public API

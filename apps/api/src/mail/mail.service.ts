@@ -18,6 +18,22 @@ export interface InvitationEmail {
   acceptUrl: string;
 }
 
+/** Spec 06 — confirmation link, sent to the NEW address. */
+export interface EmailChangeConfirmationEmail {
+  to: string;
+  firstName: string;
+  /** The raw token — this is the only place outside the email that ever holds it. */
+  token: string;
+  /** Fully-formed link the recipient clicks. */
+  confirmUrl: string;
+}
+
+/** Spec 06 — informational notice, sent to the OLD address (requirement 2). */
+export interface EmailChangeNotificationEmail {
+  to: string;
+  firstName: string;
+}
+
 /**
  * Transport-agnostic outbound mail. Spec 02 defines the contract, not the transport:
  * the real sender is out of scope, so this stays abstract and is swapped per
@@ -29,4 +45,6 @@ export interface InvitationEmail {
 export abstract class MailService {
   abstract sendPasswordReset(message: PasswordResetEmail): Promise<void>;
   abstract sendInvitation(message: InvitationEmail): Promise<void>;
+  abstract sendEmailChangeConfirmation(message: EmailChangeConfirmationEmail): Promise<void>;
+  abstract sendEmailChangeNotification(message: EmailChangeNotificationEmail): Promise<void>;
 }

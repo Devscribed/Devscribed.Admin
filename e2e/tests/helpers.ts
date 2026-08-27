@@ -97,7 +97,14 @@ export interface SignedUpOrg {
  */
 export async function signupOrg(
   request: APIRequestContext,
-  values: { orgName: string; email: string; firstName?: string; lastName?: string; password?: string },
+  values: {
+    orgName: string;
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    password?: string;
+    timezone?: string;
+  },
 ): Promise<SignedUpOrg> {
   const response = await request.post(`${API}/api/signup`, {
     data: {
@@ -106,6 +113,9 @@ export async function signupOrg(
       lastName: values.lastName ?? VALID.lastName,
       email: values.email,
       password: values.password ?? VALID.password,
+      // Signup leaves timezone null when unset, which parks the settings Save button
+      // behind an empty required field; callers that go on to save pass a real zone.
+      ...(values.timezone ? { timezone: values.timezone } : {}),
     },
   });
   if (!response.ok()) {
@@ -170,6 +180,61 @@ export async function acceptInvitationViaApi(
   const response = await request.post(`${API}/api/invitations/accept`, { data: payload });
   if (!response.ok()) {
     throw new Error(`Precondition failed: could not accept invitation (${response.status()})`);
+  }
+}
+
+/**
+ * Fires an email-change request straight through the API, as a precondition — requires
+ * `request`'s cookie jar to already be authenticated as the account changing its email.
+ */
+export async function requestEmailChangeViaApi(
+  request: APIRequestContext,
+  newEmail: string,
+): Promise<void> {
+  const response = await request.post(`${API}/api/account/change-email`, {
+    data: { newEmail },
+  });
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not request email change to ${newEmail} (${response.status()})`,
+    );
+  }
+}
+
+/**
+ * Reads the email-change confirmation link out of the test mail sink, mirroring
+ * `latestResetToken` — the confirmation mail is keyed by the NEW address and carries the
+ * raw token. Only answers while the API runs the sink transport.
+ */
+export async function latestEmailChangeToken(
+  request: APIRequestContext,
+  newEmail: string,
+): Promise<string> {
+  const response = await request.get(`${API}/api/test/mail/latest`, {
+    params: { email: newEmail, type: 'email-change-confirmation' },
+  });
+  if (!response.ok()) {
+    throw new Error(`No email-change mail for ${newEmail} (${response.status()})`);
+  }
+  return (await response.json()).token as string;
+}
+
+/**
+ * Test-only backdoor (`TestFixturesController`) that force-expires a pending email
+ * change, identified by its NEW address. Mirrors `expireInvitation`: there is no
+ * product-facing, HTTP-only way to fast-forward 24 hours.
+ */
+export async function expireEmailChange(
+  request: APIRequestContext,
+  newEmail: string,
+): Promise<void> {
+  const response = await request.post(`${API}/api/test/email-change/expire`, {
+    data: { email: newEmail },
+  });
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not expire email change for ${newEmail} (${response.status()})`,
+    );
   }
 }
 

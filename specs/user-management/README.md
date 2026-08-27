@@ -12,8 +12,8 @@ Functional specifications for the user-management surface of Devscribed.Admin. E
 | 03 | [User Invitation](03-user-invitation.md) | [design](03-user-invitation.design.md) | invite, token, accept-invite, role-picker, onboarding, supersede |
 | 04 | [Member List & Management](04-member-list-management.md) | [design](04-member-list-management.design.md) | member-list, search, soft-delete, restore, last-admin-guard |
 | 05 | [Member Detail: About](05-member-detail-about.md) | [design](05-member-detail-about.design.md) | member-detail, role-picker, job-title, zero-admin-guard, avatar |
-| 06 | [Account Settings](06-account-settings.md) | — | account-settings, change-email, change-password, profile, timezone |
-| 07 | [Member Financial Settings](07-vacation-accrual-management.md) | — | salary, hourly-rate, billing, reserve, auto-calculate, snapshot |
+| 06 | [Account Settings](06-account-settings.md) | [design](06-account-settings.design.md) | account-settings, change-email, change-password, profile, timezone |
+| 07 | [Member Financial Settings](07-vacation-accrual-management.md) | [design](07-vacation-accrual-management.design.md) | salary, hourly-rate, billing, reserve, auto-calculate, snapshot |
 | 08 | [Vacation Reserve & Auto-Accrual](08-vacation-reserve-auto-accrual.md) | — | vacation-reserve, auto-accrual, ledger, monthly-credit, year-end-expiry |
 | 09 | [Vacation Requests](09-vacation-requests.md) | — | vacation-request, submit, approve, reject, cancel, debit, refund |
 | 10 | [Organization Requests Page](10-organization-requests-page.md) | — | requests-page, sidebar, badge, status-filter, organization-wide |
@@ -50,6 +50,11 @@ Rules that hold across every design spec:
 Spec 03 still gates its submit buttons on validation and needs the shared CTA rule applied when it is next touched. Its "I understand" checkbox gate stays disabled-until-checked — that is a deliberate confirmation, not a validation. Its accept-invite screen also belongs to the signed-out set and should adopt the shell rules above.
 
 `InfoBanner` hardcodes its four tone triplets as literal `oklch(...)` values rather than tokens. Spec 02 uses all four; promoting them to tokens is the outstanding design-system chore before spec 03 adds more banners.
+
+Two DS-level items surfaced while building spec 07's currency picker (details in [07's DS gaps](07-vacation-accrual-management.design.md)):
+
+- **`Select` dropdown scroll — fixed.** The `Select` popover had no `max-height` and `overflow: hidden`, so a long option list (the 42-item ISO 4217 currency picker) was clipped inside a `Modal` and its lower options — including `USD` — were unreachable by mouse. `1_DS for dev/components/forms/Select.jsx` now caps the dropdown at `max-height: 280px` with `overflow-y: auto` (keeping `overflow-x: hidden` for rounded corners). Strictly-improving for every `Select` instance (role picker, timezone, country, currency, first-day); short lists are unaffected.
+- **`Modal` full-screen drawer < 480px — open.** Spec 07 asks for the edit modal to become a full-screen drawer on narrow viewports, but the DS `Modal` has a fixed `width` prop and no breakpoint variant. Not addressed yet — the modal uses the standard `width={480}` shell; a responsive `Modal` variant is the outstanding chore.
 
 ## Cross-Spec Side Effects
 

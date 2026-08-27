@@ -38,6 +38,17 @@ export const MESSAGES = {
     required: 'Role is required',
     invalid: 'Invalid role',
   },
+  /** Spec 06 requirement 9 — account-settings edit-information fields. */
+  phone: {
+    invalid: 'Enter a valid phone number',
+    countryCodeRequired: 'Select a country code',
+  },
+  timezone: {
+    required: 'Timezone is required',
+  },
+  firstDayOfWeek: {
+    invalid: 'Invalid first day of week',
+  },
   generic: 'Something went wrong. Please try again.',
 } as const;
 
@@ -464,7 +475,15 @@ export const MEMBER_MESSAGES = {
  * spec 03's capability, included here so `can()` is a single source of truth for the
  * whole matrix rather than splitting it awkwardly across two modules.
  */
-export type MemberCapability = 'view-list' | 'invite' | 'delete-restore' | 'edit-detail';
+export type MemberCapability =
+  | 'view-list'
+  | 'invite'
+  | 'delete-restore'
+  | 'edit-detail'
+  /** Spec 07 additions — the Vacation tab / financial-settings capabilities. */
+  | 'view-vacation'
+  | 'view-own-vacation-balance'
+  | 'edit-member-financials';
 
 /**
  * Pure lookup against spec 04's Roles & Permission Matrix (TC-04-UNIT-05), widened by
@@ -474,10 +493,42 @@ export type MemberCapability = 'view-list' | 'invite' | 'delete-restore' | 'edit
  * access and nothing else.
  */
 const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
-  admin: { 'view-list': true, invite: true, 'delete-restore': true, 'edit-detail': true },
-  manager: { 'view-list': true, invite: true, 'delete-restore': true, 'edit-detail': true },
-  user: { 'view-list': true, invite: false, 'delete-restore': false, 'edit-detail': false },
-  viewer: { 'view-list': true, invite: false, 'delete-restore': false, 'edit-detail': false },
+  admin: {
+    'view-list': true,
+    invite: true,
+    'delete-restore': true,
+    'edit-detail': true,
+    'view-vacation': true,
+    'view-own-vacation-balance': true,
+    'edit-member-financials': true,
+  },
+  manager: {
+    'view-list': true,
+    invite: true,
+    'delete-restore': true,
+    'edit-detail': true,
+    'view-vacation': true,
+    'view-own-vacation-balance': true,
+    'edit-member-financials': true,
+  },
+  user: {
+    'view-list': true,
+    invite: false,
+    'delete-restore': false,
+    'edit-detail': false,
+    'view-vacation': false,
+    'view-own-vacation-balance': true,
+    'edit-member-financials': false,
+  },
+  viewer: {
+    'view-list': true,
+    invite: false,
+    'delete-restore': false,
+    'edit-detail': false,
+    'view-vacation': false,
+    'view-own-vacation-balance': false,
+    'edit-member-financials': false,
+  },
 };
 
 export function can(role: Role, capability: MemberCapability): boolean {
@@ -596,4 +647,622 @@ export function getAvatarInitials(firstName: string, lastName: string): string {
   const firstChar = [...(firstName ?? '').trim()][0] ?? '';
   const lastChar = [...(lastName ?? '').trim()][0] ?? '';
   return (firstChar + lastChar).toLocaleUpperCase();
+}
+
+/* ------------------------------------------------------------------ *
+ * Spec 06 — account settings
+ * ------------------------------------------------------------------ */
+
+import { isPossiblePhoneNumber } from 'libphonenumber-js';
+import type { CountryCode } from 'libphonenumber-js';
+
+/**
+ * Whole-request outcome messages for spec 06 — the change-email, change-password, and
+ * email-confirmation flows. Field-level messages (name, email, password) live in
+ * `MESSAGES`, following the `AUTH_MESSAGES`/`MEMBER_MESSAGES` precedent of a
+ * section-specific export for non-field messages. Verbatim from spec 06 requirement 9.
+ *
+ * The confirm-password mismatch string is intentionally absent — it is identical to
+ * `AUTH_MESSAGES.passwordMismatch` ('Passwords do not match') and is reused from there
+ * rather than retyped, so the two flows can never drift.
+ */
+export const ACCOUNT_MESSAGES = {
+  /** Change email — the new address equals the current one (case-insensitive). */
+  sameAsCurrentEmail: 'This is already your email address',
+  /** Change email — the new address already belongs to another account (server-side). */
+  emailInUse: 'This email is already in use',
+  /** Change password — the current-password field is empty. */
+  currentPasswordRequired: 'Current password is required',
+  /** Change password — the supplied current password is wrong (server-side). */
+  currentPasswordIncorrect: 'Current password is incorrect',
+  /** Change password — the confirm field is empty. */
+  confirmPasswordRequired: 'Please confirm your new password',
+  /** Email confirmation — the token is past its 24-hour expiry. */
+  confirmationExpired: 'This confirmation link has expired',
+  /** Email confirmation — the token is used, invalidated, not found, or malformed. */
+  confirmationInvalid: 'This confirmation link is no longer valid',
+} as const;
+
+/**
+ * Phone number validation for the selected country (requirement 4 / TC-06-UNIT-03,
+ * TC-06-UNIT-10). Phone is optional and informational only; `countryCode` is an
+ * ISO 3166-1 alpha-2 code (e.g. "US").
+ *
+ * Rules: empty number with no country code is valid (phone omitted); a number with no
+ * country code selected fails with "Select a country code"; a number that does not fit
+ * the selected country fails with "Enter a valid phone number".
+ *
+ * We use `isPossiblePhoneNumber` (length/prefix plausibility) rather than
+ * `isValidPhoneNumber` (full national-number assignment) deliberately: the spec's
+ * canonical example "+1 (555) 123-4567" uses the 555 exchange, which is a reserved
+ * fictional range, so `isValidPhoneNumber(..., 'US')` returns false — it would reject
+ * both TC-06-UNIT-03 step 1 and TC-06-UNIT-10 step 3, which the spec requires to pass.
+ * `isPossiblePhoneNumber` accepts those while still rejecting the too-short "12345".
+ */
+export function validatePhoneNumber(phoneNumber: string, countryCode: string): FieldResult {
+  const number = (phoneNumber ?? '').trim();
+  const country = (countryCode ?? '').trim();
+
+  // Phone is optional: nothing entered → valid, stored as empty.
+  if (number.length === 0) return ok('');
+
+  // A number was entered but no country was selected — we cannot interpret it.
+  if (country.length === 0) return fail(MESSAGES.phone.countryCodeRequired);
+
+  // An unknown country code, or any parsing failure, is treated as an invalid number
+  // rather than throwing out of the pure validator.
+  try {
+    if (!isPossiblePhoneNumber(number, country as CountryCode)) {
+      return fail(MESSAGES.phone.invalid);
+    }
+  } catch {
+    return fail(MESSAGES.phone.invalid);
+  }
+
+  return ok(number);
+}
+
+/**
+ * Timezone (requirement 4 / TC-06-UNIT-12): required, non-empty. The IANA zone itself is
+ * chosen from a curated list on the client; the shared layer only guards presence, since
+ * the spec exercises empty-vs-populated and not membership in the full IANA database.
+ */
+export function validateTimezone(input: string): FieldResult {
+  const value = (input ?? '').trim();
+  if (value.length === 0) return fail(MESSAGES.timezone.required);
+  return ok(value);
+}
+
+/** The only accepted first-day-of-week values (requirement 4). Monday is the default. */
+export const FIRST_DAY_OF_WEEK_VALUES = ['Monday', 'Sunday'] as const;
+
+export type FirstDayOfWeek = (typeof FIRST_DAY_OF_WEEK_VALUES)[number];
+
+export function isFirstDayOfWeek(input: string): input is FirstDayOfWeek {
+  return (FIRST_DAY_OF_WEEK_VALUES as readonly string[]).includes(input);
+}
+
+/**
+ * First day of week (requirement 4 / TC-06-UNIT-06): must be exactly "Monday" or
+ * "Sunday". Any other value — including an empty selection — is rejected.
+ */
+export function validateFirstDayOfWeek(input: string): FieldResult {
+  const value = (input ?? '').trim();
+  if (!isFirstDayOfWeek(value)) return fail(MESSAGES.firstDayOfWeek.invalid);
+  return ok(value);
+}
+
+/**
+ * True when the requested new email equals the account's current email after
+ * normalization (requirement 2 / TC-06-UNIT-08). Case- and whitespace-insensitive via
+ * `normalizeEmail`; the change-email service uses this to reject a no-op change with
+ * `ACCOUNT_MESSAGES.sameAsCurrentEmail`.
+ */
+export function isSameAsCurrentEmail(currentEmail: string, newEmail: string): boolean {
+  return normalizeEmail(currentEmail) === normalizeEmail(newEmail);
+}
+
+/**
+ * Email-change confirmation token expiry (requirement 7 / TC-06-UNIT-09). Validity is
+ * `now < expiresAt`, so the boundary is exclusive: a token is expired at exactly
+ * `expiresAt` (`CreatedAt + 24h`) and after. Pure date math, shared so the confirm
+ * screen and the API compute expiry identically.
+ */
+export function isEmailChangeTokenExpired(now: Date, expiresAt: Date): boolean {
+  return now.getTime() >= expiresAt.getTime();
+}
+
+/* --- Change password -------------------------------------------------------- */
+
+/**
+ * Current-password presence (requirement 3 / TC-06-UNIT-11). Never trimmed — surrounding
+ * whitespace is part of the secret. Correctness of the password is a server-side check
+ * (`ACCOUNT_MESSAGES.currentPasswordIncorrect`), not a field rule.
+ */
+export function validateCurrentPassword(input: string): FieldResult {
+  const value = input ?? '';
+  if (value.length === 0) return fail(ACCOUNT_MESSAGES.currentPasswordRequired);
+  return ok(value);
+}
+
+/**
+ * New-password confirmation (requirement 3 / TC-06-UNIT-07): empty → "Please confirm your
+ * new password"; non-empty but not byte-for-byte equal to the new password → "Passwords do
+ * not match" (reused from `AUTH_MESSAGES`). Comparison is case-sensitive and untrimmed.
+ */
+export function validatePasswordConfirmation(newPassword: string, confirmation: string): FieldResult {
+  const value = confirmation ?? '';
+  if (value.length === 0) return fail(ACCOUNT_MESSAGES.confirmPasswordRequired);
+  if (value !== (newPassword ?? '')) return fail(AUTH_MESSAGES.passwordMismatch);
+  return ok(value);
+}
+
+export type ChangePasswordField = 'currentPassword' | 'newPassword' | 'passwordConfirmation';
+
+/** Top-to-bottom order in the Change Password modal — drives focus on submit-blocked. */
+export const CHANGE_PASSWORD_FIELD_ORDER: readonly ChangePasswordField[] = [
+  'currentPassword',
+  'newPassword',
+  'passwordConfirmation',
+];
+
+export interface ChangePasswordInput {
+  currentPassword: string;
+  newPassword: string;
+  passwordConfirmation: string;
+}
+
+export interface ChangePasswordValidation {
+  valid: boolean;
+  errors: Partial<Record<ChangePasswordField, string>>;
+  firstInvalidField: ChangePasswordField | null;
+  value: Record<ChangePasswordField, string>;
+}
+
+/**
+ * Composite change-password validation (requirement 3 / TC-06-UNIT-11). Current password
+ * present, new password meets the spec-01 policy (reused via `validatePassword`), and the
+ * confirmation matches. The confirmation rule spans two inputs, so this cannot use the
+ * simple per-field validator map that the other composites use.
+ */
+export function validateChangePassword(input: Partial<ChangePasswordInput>): ChangePasswordValidation {
+  const currentPassword = input.currentPassword ?? '';
+  const newPassword = input.newPassword ?? '';
+  const passwordConfirmation = input.passwordConfirmation ?? '';
+
+  const results: Record<ChangePasswordField, FieldResult> = {
+    currentPassword: validateCurrentPassword(currentPassword),
+    newPassword: validatePassword(newPassword),
+    passwordConfirmation: validatePasswordConfirmation(newPassword, passwordConfirmation),
+  };
+
+  const errors: Partial<Record<ChangePasswordField, string>> = {};
+  const value = {} as Record<ChangePasswordField, string>;
+
+  for (const field of CHANGE_PASSWORD_FIELD_ORDER) {
+    const result = results[field];
+    if (result.valid) {
+      value[field] = result.value;
+    } else {
+      errors[field] = result.error;
+      value[field] = input[field] ?? '';
+    }
+  }
+
+  const firstInvalidField = CHANGE_PASSWORD_FIELD_ORDER.find((f) => errors[f]) ?? null;
+  return { valid: firstInvalidField === null, errors, firstInvalidField, value };
+}
+
+/* --- Edit information ------------------------------------------------------- */
+
+export type AccountSettingsField =
+  | 'firstName'
+  | 'lastName'
+  | 'phoneCountryCode'
+  | 'phoneNumber'
+  | 'timezone'
+  | 'firstDayOfWeek';
+
+/** Top-to-bottom field order on the Edit Information form (requirement 4 / UI section). */
+export const ACCOUNT_SETTINGS_FIELD_ORDER: readonly AccountSettingsField[] = [
+  'firstName',
+  'lastName',
+  'phoneCountryCode',
+  'phoneNumber',
+  'timezone',
+  'firstDayOfWeek',
+];
+
+export interface AccountSettingsInput {
+  firstName: string;
+  lastName: string;
+  /** ISO 3166-1 alpha-2 country code; may be null/empty when no phone is set. */
+  phoneCountryCode: string;
+  /** May be null/empty — phone is optional. */
+  phoneNumber: string;
+  timezone: string;
+  firstDayOfWeek: string;
+}
+
+export interface AccountSettingsValidation {
+  valid: boolean;
+  errors: Partial<Record<AccountSettingsField, string>>;
+  firstInvalidField: AccountSettingsField | null;
+  value: Record<AccountSettingsField, string>;
+}
+
+/**
+ * Composite Edit-Information validation (requirement 4 / TC-06-INT-12,13,17). Names reuse
+ * the spec-01 rules; the phone country-code and number are one rule spanning two fields,
+ * so the single phone error is routed to the correct `field-error-{fieldName}` id — a
+ * missing country code keys `phoneCountryCode` ("Select a country code"), a number that
+ * does not fit the country keys `phoneNumber` ("Enter a valid phone number").
+ */
+export function validateAccountSettings(input: Partial<AccountSettingsInput>): AccountSettingsValidation {
+  const errors: Partial<Record<AccountSettingsField, string>> = {};
+  const value = {} as Record<AccountSettingsField, string>;
+
+  const firstName = validateFirstName(input.firstName ?? '');
+  if (firstName.valid) value.firstName = firstName.value;
+  else {
+    errors.firstName = firstName.error;
+    value.firstName = input.firstName ?? '';
+  }
+
+  const lastName = validateLastName(input.lastName ?? '');
+  if (lastName.valid) value.lastName = lastName.value;
+  else {
+    errors.lastName = lastName.error;
+    value.lastName = input.lastName ?? '';
+  }
+
+  // Phone country code + number: one rule, two possible field ids.
+  const phoneCountryCode = (input.phoneCountryCode ?? '').trim();
+  const phone = validatePhoneNumber(input.phoneNumber ?? '', input.phoneCountryCode ?? '');
+  if (phone.valid) {
+    value.phoneCountryCode = phoneCountryCode;
+    value.phoneNumber = phone.value;
+  } else if (phone.error === MESSAGES.phone.countryCodeRequired) {
+    errors.phoneCountryCode = phone.error;
+    value.phoneCountryCode = phoneCountryCode;
+    value.phoneNumber = input.phoneNumber ?? '';
+  } else {
+    errors.phoneNumber = phone.error;
+    value.phoneCountryCode = phoneCountryCode;
+    value.phoneNumber = input.phoneNumber ?? '';
+  }
+
+  const timezone = validateTimezone(input.timezone ?? '');
+  if (timezone.valid) value.timezone = timezone.value;
+  else {
+    errors.timezone = timezone.error;
+    value.timezone = input.timezone ?? '';
+  }
+
+  const firstDayOfWeek = validateFirstDayOfWeek(input.firstDayOfWeek ?? '');
+  if (firstDayOfWeek.valid) value.firstDayOfWeek = firstDayOfWeek.value;
+  else {
+    errors.firstDayOfWeek = firstDayOfWeek.error;
+    value.firstDayOfWeek = input.firstDayOfWeek ?? '';
+  }
+
+  const firstInvalidField = ACCOUNT_SETTINGS_FIELD_ORDER.find((f) => errors[f]) ?? null;
+  return { valid: firstInvalidField === null, errors, firstInvalidField, value };
+}
+
+/* ------------------------------------------------------------------ *
+ * Spec 07 — member financial settings
+ * ------------------------------------------------------------------ */
+
+/**
+ * Whole-request and field-level messages for spec 07's Vacation tab / financial
+ * settings, verbatim from spec 07's Validation Rules and Error Messages tables.
+ * Follows the `MEMBER_MESSAGES` precedent of a section-specific export that carries
+ * both the per-field strings (routed to `field-error-{fieldName}` ids and the PUT
+ * `{errors:{...}}` contract) and the non-field outcome strings.
+ *
+ * Note the thousands separators in the salary/rate ranges — these strings are matched
+ * byte-for-byte by both the API and the web form, so the commas are load-bearing.
+ */
+export const FINANCIALS_MESSAGES = {
+  monthlySalaryRange: 'Monthly salary must be between 0.01 and 999,999.99',
+  clientHourlyRateRange: 'Client hourly rate must be between 0.01 and 9,999.99',
+  vacationDaysRange: 'Vacation days per year must be between 1 and 365',
+  invalidCurrency: 'Invalid currency code',
+  reservePercentRange: 'Reserve percentage must be between 0.01 and 99.99',
+  /** PUT rejects a removed member before validation (TC-07-INT-06). */
+  memberRemoved: 'Cannot configure vacation for a removed member',
+  /** GET forbidden — viewer, or user viewing another member (TC-07-INT-07/08). */
+  viewForbidden: "You do not have permission to view this member's vacation data",
+  /** PUT forbidden — caller is user/viewer (TC-07-INT-04). */
+  editForbidden: 'You do not have permission to edit financial settings',
+} as const;
+
+/** Numeric bounds for the financial fields (spec 07 Validation Rules 1–3, 5). */
+export const FINANCIALS_LIMITS = {
+  monthlySalaryMin: 0.01,
+  monthlySalaryMax: 999999.99,
+  clientHourlyRateMin: 0.01,
+  clientHourlyRateMax: 9999.99,
+  vacationDaysMin: 1,
+  vacationDaysMax: 365,
+  reservePercentMin: 0.01,
+  reservePercentMax: 99.99,
+} as const;
+
+/** Fixed constants in the auto-calc formula (requirement 7) — not configurable. */
+export const WORKING_DAYS_PER_YEAR = 260;
+export const BILLABLE_HOURS_PER_YEAR = 2080;
+
+/**
+ * A numeric field either yields a parsed `number` or a message. Financial inputs arrive
+ * as JSON numbers from the API and as strings from the web form, so the validators below
+ * accept both and coerce defensively; anything non-numeric collapses to `NaN` and is
+ * reported as out-of-range rather than throwing out of these pure functions.
+ */
+export type NumericFieldResult =
+  | { valid: true; value: number }
+  | { valid: false; error: string };
+
+const okNum = (value: number): NumericFieldResult => ({ valid: true, value });
+const failNum = (error: string): NumericFieldResult => ({ valid: false, error });
+
+/**
+ * Coerce a JSON number or a form string to a number. Empty/blank strings and null/undefined
+ * become `NaN` (treated as "missing/out of range"), never `0` — `Number('')` is `0`, which
+ * would silently pass a required field, so blanks are guarded explicitly.
+ */
+function toFinancialNumber(input: number | string | null | undefined): number {
+  if (typeof input === 'number') return input;
+  if (typeof input === 'string') {
+    const trimmed = input.trim();
+    if (trimmed.length === 0) return NaN;
+    return Number(trimmed);
+  }
+  return NaN;
+}
+
+/**
+ * Count decimal places from the original text (for strings) or the number's canonical
+ * string form. Used to enforce the "two decimal places" rule without incurring binary
+ * float rounding surprises. Values in these ranges never reach exponential notation.
+ */
+function decimalPlaces(input: number | string): number {
+  const s = typeof input === 'string' ? input.trim() : String(input);
+  const dot = s.indexOf('.');
+  return dot === -1 ? 0 : s.length - dot - 1;
+}
+
+/**
+ * Shared decimal-field check: required (non-blank/finite), within `[min, max]` inclusive,
+ * and at most two decimal places. Every failure maps to the single spec message for that
+ * field — the spec exposes only one error per field, so range and precision share it.
+ */
+function validateDecimalField(
+  input: number | string | null | undefined,
+  min: number,
+  max: number,
+  message: string,
+): NumericFieldResult {
+  const value = toFinancialNumber(input);
+  if (!Number.isFinite(value)) return failNum(message);
+  if (value < min || value > max) return failNum(message);
+  if (decimalPlaces(input as number | string) > 2) return failNum(message);
+  return okNum(value);
+}
+
+/** MonthlySalary (requirement 2): required, 0.01–999,999.99, ≤2 decimal places. */
+export function validateMonthlySalary(
+  input: number | string | null | undefined,
+): NumericFieldResult {
+  return validateDecimalField(
+    input,
+    FINANCIALS_LIMITS.monthlySalaryMin,
+    FINANCIALS_LIMITS.monthlySalaryMax,
+    FINANCIALS_MESSAGES.monthlySalaryRange,
+  );
+}
+
+/** ClientHourlyRate (requirement 3): required, 0.01–9,999.99, ≤2 decimal places. */
+export function validateClientHourlyRate(
+  input: number | string | null | undefined,
+): NumericFieldResult {
+  return validateDecimalField(
+    input,
+    FINANCIALS_LIMITS.clientHourlyRateMin,
+    FINANCIALS_LIMITS.clientHourlyRateMax,
+    FINANCIALS_MESSAGES.clientHourlyRateRange,
+  );
+}
+
+/** VacationDaysPerYear (requirement 4): required integer, 1–365. */
+export function validateVacationDaysPerYear(
+  input: number | string | null | undefined,
+): NumericFieldResult {
+  const value = toFinancialNumber(input);
+  if (!Number.isFinite(value)) return failNum(FINANCIALS_MESSAGES.vacationDaysRange);
+  if (!Number.isInteger(value)) return failNum(FINANCIALS_MESSAGES.vacationDaysRange);
+  if (value < FINANCIALS_LIMITS.vacationDaysMin || value > FINANCIALS_LIMITS.vacationDaysMax) {
+    return failNum(FINANCIALS_MESSAGES.vacationDaysRange);
+  }
+  return okNum(value);
+}
+
+/**
+ * VacationReservePercent (requirement 6, when manual): required, 0.01–99.99, ≤2 decimals.
+ * Only enforced when `isReservePercentManual` is true — in auto mode the value is computed
+ * server-side and any submitted percent is ignored (requirement 7).
+ */
+export function validateVacationReservePercent(
+  input: number | string | null | undefined,
+): NumericFieldResult {
+  return validateDecimalField(
+    input,
+    FINANCIALS_LIMITS.reservePercentMin,
+    FINANCIALS_LIMITS.reservePercentMax,
+    FINANCIALS_MESSAGES.reservePercentRange,
+  );
+}
+
+/**
+ * A pragmatic set of active ISO 4217 alphabetic codes. Not the exhaustive standard — the
+ * spec only exercises membership (`USD` valid, `XXXX` invalid, TC-07-INT-03) — but a broad
+ * enough real-world set that a currency dropdown built from it is useful on its own.
+ */
+export const ISO_4217_CURRENCIES: readonly string[] = [
+  'AED', 'ARS', 'AUD', 'BGN', 'BRL', 'CAD', 'CHF', 'CLP', 'CNY', 'COP',
+  'CZK', 'DKK', 'EGP', 'EUR', 'GBP', 'HKD', 'HUF', 'IDR', 'ILS', 'INR',
+  'ISK', 'JPY', 'KRW', 'MXN', 'MYR', 'NGN', 'NOK', 'NZD', 'PHP', 'PLN',
+  'RON', 'RUB', 'SAR', 'SEK', 'SGD', 'THB', 'TRY', 'TWD', 'UAH', 'USD',
+  'VND', 'ZAR',
+] as const;
+
+const CURRENCY_SET: ReadonlySet<string> = new Set(ISO_4217_CURRENCIES);
+
+/**
+ * A currency is valid iff it is exactly three uppercase ASCII letters AND a member of the
+ * known set (requirement 5 / TC-07-INT-03 step 5). Lowercase input is rejected — the field
+ * stores the canonical uppercase code.
+ */
+export function isValidCurrency(code: string | null | undefined): boolean {
+  const value = code ?? '';
+  if (!/^[A-Z]{3}$/.test(value)) return false;
+  return CURRENCY_SET.has(value);
+}
+
+/** Currency (requirement 5): required, valid ISO 4217 code. */
+export function validateCurrency(input: string | null | undefined): FieldResult {
+  const value = (input ?? '').trim();
+  if (!isValidCurrency(value)) return fail(FINANCIALS_MESSAGES.invalidCurrency);
+  return ok(value);
+}
+
+export interface CalculateReserveInput {
+  monthlySalary: number;
+  clientHourlyRate: number;
+  vacationDaysPerYear: number;
+}
+
+/**
+ * Auto-calculated reserve percentage (requirement 7 / TC-07-UNIT-01):
+ *
+ *   dailySalary          = monthlySalary × 12 / 260
+ *   annualVacationCost   = dailySalary × vacationDaysPerYear
+ *   expectedAnnualBilling= clientHourlyRate × 2080
+ *   percent              = round(annualVacationCost / expectedAnnualBilling × 100, 2)
+ *
+ * The whole expression is evaluated in full double precision — there is NO intermediate
+ * rounding — and only the final ratio is rounded to two decimal places via
+ * `Math.round(x * 100) / 100`. Verified to return exactly 3.33 (3000/40/20), 3.70
+ * (5000/60/20), 2.66 (2000/25/15), and 4.44 (4000/40/20, TC-07-INT-05).
+ */
+export function calculateReservePercent(input: CalculateReserveInput): number {
+  const { monthlySalary, clientHourlyRate, vacationDaysPerYear } = input;
+  const annualVacationCost = ((monthlySalary * 12) / WORKING_DAYS_PER_YEAR) * vacationDaysPerYear;
+  const expectedAnnualBilling = clientHourlyRate * BILLABLE_HOURS_PER_YEAR;
+  const percent = (annualVacationCost / expectedAnnualBilling) * 100;
+  return Math.round(percent * 100) / 100;
+}
+
+export type MemberFinancialsField =
+  | 'monthlySalary'
+  | 'clientHourlyRate'
+  | 'vacationDaysPerYear'
+  | 'currency'
+  | 'vacationReservePercent';
+
+/**
+ * Top-to-bottom field order as rendered in the Edit Financial Settings modal — drives
+ * focus on submit-blocked and the `firstInvalidField` result.
+ */
+export const MEMBER_FINANCIALS_FIELD_ORDER: readonly MemberFinancialsField[] = [
+  'monthlySalary',
+  'clientHourlyRate',
+  'vacationDaysPerYear',
+  'currency',
+  'vacationReservePercent',
+];
+
+/**
+ * The PUT `.../vacation/financials` request body. The API sends JSON numbers, the web form
+ * sends strings, so the numeric fields accept both; the API DTO can be `Partial<...>`.
+ * `vacationReservePercent` is only meaningful (and only validated) when
+ * `isReservePercentManual` is true.
+ */
+export interface MemberFinancialsInput {
+  monthlySalary: number | string;
+  clientHourlyRate: number | string;
+  vacationDaysPerYear: number | string;
+  currency: string;
+  isReservePercentManual: boolean;
+  vacationReservePercent?: number | string | null;
+}
+
+export interface MemberFinancialsValidation {
+  valid: boolean;
+  errors: Partial<Record<MemberFinancialsField, string>>;
+  firstInvalidField: MemberFinancialsField | null;
+  /**
+   * Coerced/normalized values for downstream use: numbers for the numeric fields (NaN when
+   * that field was invalid), the uppercase currency string, the manual flag, and the reserve
+   * percent (null in auto mode, since it is server-computed, not client-supplied).
+   */
+  value: {
+    monthlySalary: number;
+    clientHourlyRate: number;
+    vacationDaysPerYear: number;
+    currency: string;
+    isReservePercentManual: boolean;
+    vacationReservePercent: number | null;
+  };
+}
+
+/**
+ * Composite validation for the PUT financials contract (requirements 2–6 / TC-07-INT-03).
+ * Enforces every field rule and keys errors by the exact `field-error-{fieldName}` ids.
+ * The reserve-percent rule is skipped entirely when `isReservePercentManual` is false —
+ * in auto mode the percent is computed by `calculateReservePercent`, not submitted.
+ */
+export function validateMemberFinancials(
+  input: Partial<MemberFinancialsInput>,
+): MemberFinancialsValidation {
+  const errors: Partial<Record<MemberFinancialsField, string>> = {};
+
+  const isManual = input.isReservePercentManual === true;
+
+  const salary = validateMonthlySalary(input.monthlySalary);
+  if (!salary.valid) errors.monthlySalary = salary.error;
+
+  const rate = validateClientHourlyRate(input.clientHourlyRate);
+  if (!rate.valid) errors.clientHourlyRate = rate.error;
+
+  const days = validateVacationDaysPerYear(input.vacationDaysPerYear);
+  if (!days.valid) errors.vacationDaysPerYear = days.error;
+
+  const currency = validateCurrency(input.currency);
+  if (!currency.valid) errors.currency = currency.error;
+
+  // Reserve percent is only a field when the manager set it manually.
+  let percentValue: number | null = null;
+  if (isManual) {
+    const percent = validateVacationReservePercent(input.vacationReservePercent ?? undefined);
+    if (percent.valid) percentValue = percent.value;
+    else errors.vacationReservePercent = percent.error;
+  }
+
+  const firstInvalidField = MEMBER_FINANCIALS_FIELD_ORDER.find((f) => errors[f]) ?? null;
+
+  return {
+    valid: firstInvalidField === null,
+    errors,
+    firstInvalidField,
+    value: {
+      monthlySalary: toFinancialNumber(input.monthlySalary),
+      clientHourlyRate: toFinancialNumber(input.clientHourlyRate),
+      vacationDaysPerYear: toFinancialNumber(input.vacationDaysPerYear),
+      currency: currency.valid ? currency.value : (input.currency ?? '').trim(),
+      isReservePercentManual: isManual,
+      vacationReservePercent: percentValue,
+    },
+  };
 }

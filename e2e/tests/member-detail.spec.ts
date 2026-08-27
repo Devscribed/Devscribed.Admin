@@ -237,7 +237,13 @@ test.describe('05 — Member Detail: About', () => {
     await expect(page.getByTestId('member-detail-tab-about')).toBeVisible();
     await expect(page.getByTestId('member-detail-tab-about')).not.toHaveAttribute('aria-disabled', 'true');
 
-    for (const tab of ['vacation', 'projects', 'roles', 'payments']) {
+    // Spec 07 enables the Vacation tab for admin/manager on an active member (here the
+    // admin viewing their own active detail), so it is no longer a disabled placeholder.
+    await expect(page.getByTestId('member-detail-tab-vacation')).toBeVisible();
+    await expect(page.getByTestId('member-detail-tab-vacation')).not.toHaveAttribute('aria-disabled', 'true');
+
+    // Projects/Roles/Payments remain disabled placeholders until their own specs land.
+    for (const tab of ['projects', 'roles', 'payments']) {
       const el = page.getByTestId(`member-detail-tab-${tab}`);
       await expect(el).toBeVisible();
       await expect(el).toHaveAttribute('aria-disabled', 'true');

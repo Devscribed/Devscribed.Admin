@@ -21,6 +21,15 @@ model Account {
   lastName     String
   /// IANA zone auto-detected from the browser at signup.
   timezone     String?
+  /// ISO 3166-1 alpha-2 country code for the phone number (spec 06); max 5 chars —
+  /// Prisma cannot express a length cap, it is enforced in the shared validation layer.
+  phoneCountryCode String?
+  /// Phone number in the selected country's format (spec 06); informational only,
+  /// no uniqueness constraint. Max 20 chars, enforced in the validation layer.
+  phoneNumber  String?
+  /// "Monday" (default) or "Sunday" — the source for how dates are displayed to this
+  /// user elsewhere (spec 06 requirement 4/6). Max 10 chars, enforced in validation.
+  firstDayOfWeek String @default("Monday")
   /// Session-revocation token. Carried in every session cookie and re-checked on each
   /// authenticated request; regenerating it invalidates every outstanding cookie at
   /// once (spec 02 requirement 12 — shared with specs 04 and 06).
@@ -29,6 +38,33 @@ model Account {
 
   memberships        Membership[]
   passwordResetTokens PasswordResetToken[]
+  pendingEmailChanges PendingEmailChange[]
+  financialsUpdated   MemberFinancials[]
+}
+
+/// Pending email-change confirmation grant (spec 06). The account's email is only
+/// updated once the token emailed to the NEW address is confirmed; a notification also
+/// goes to the OLD address. At most one live record per account (supersession).
+model PendingEmailChange {
+  id        String   @id @default(uuid())
+  accountId String
+  /// Normalized (lowercase) target email, max 254 chars.
+  newEmail  String
+  /// SHA-256 of the raw token, hex-encoded. The raw token exists only in the email —
+  /// a database breach therefore yields nothing usable.
+  tokenHash String   @unique
+  createdAt DateTime @default(now())
+  /// createdAt + 24 hours. Expiry is exclusive (spec 06 requirement 7).
+  expiresAt DateTime
+  /// Set when the token is consumed; null while unused.
+  usedAt    DateTime?
+  /// Set to true when a newer request supersedes this record (requirement 2).
+  isInvalidated Boolean @default(false)
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  // Supersession lookup: at most one live (non-invalidated, unused) record per account.
+  @@index([accountId, isInvalidated])
 }
 
 /// Pending, used, or invalidated invitation to join an organization (spec 03).
@@ -105,6 +141,55 @@ model Membership {
   account      Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   invitationsSent Invitation[]
+  financials         MemberFinancials?
+  financialsSnapshots MemberFinancialsSnapshot[]
 
   @@index([organizationId])
+}
+
+/// Current financial settings for an active membership (spec 07). Exactly one per
+/// membership (one-to-one). Every write also appends a `MemberFinancialsSnapshot`.
+model MemberFinancials {
+  id           String   @id @default(uuid())
+  /// One-to-one with Membership — a member has at most one live settings record.
+  membershipId String   @unique
+  /// Employee monthly salary. Min 0.01, max 999999.99 (validation layer).
+  monthlySalary          Decimal @db.Decimal(10, 2)
+  /// Hourly rate billed to the client. Min 0.01, max 9999.99 (validation layer).
+  clientHourlyRate       Decimal @db.Decimal(8, 2)
+  /// Effective reserve percentage — auto-calculated or the manager's manual value.
+  vacationReservePercent Decimal @db.Decimal(5, 2)
+  /// true if the manager set the percentage manually; false if auto-calculated.
+  isReservePercentManual Boolean
+  /// Maximum vacation days per calendar year. Default 20, min 1, max 365.
+  vacationDaysPerYear    Int     @default(20)
+  /// ISO 4217 currency code (e.g. "USD").
+  currency               String  @db.VarChar(3)
+  updatedAt              DateTime @updatedAt
+  /// Account that last modified these settings.
+  updatedByAccountId     String
+
+  membership   Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  updatedBy    Account    @relation(fields: [updatedByAccountId], references: [id])
+}
+
+/// Historical snapshot of a member's financial settings (spec 07 requirements 11–13).
+/// A new row is appended on every create/update; existing rows are never mutated. The
+/// accrual job (spec 08) looks up which values were in effect during a billing month.
+model MemberFinancialsSnapshot {
+  id           String   @id @default(uuid())
+  membershipId String
+  monthlySalary          Decimal @db.Decimal(10, 2)
+  clientHourlyRate       Decimal @db.Decimal(8, 2)
+  vacationReservePercent Decimal @db.Decimal(5, 2)
+  isReservePercentManual Boolean
+  vacationDaysPerYear    Int
+  currency               String  @db.VarChar(3)
+  /// Date from which these settings are effective (date-only, the day of the change).
+  effectiveFrom DateTime @db.Date
+  createdAt     DateTime @default(now())
+
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([membershipId])
 }

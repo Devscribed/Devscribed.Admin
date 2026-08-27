@@ -9,6 +9,7 @@ import { MEMBER_MESSAGES, MESSAGES, validateJobTitle, type Role } from '@devscri
 import { AvatarInitials } from './AvatarInitials';
 import { ClockIcon, MailIcon } from './icons';
 import { RoleSelect } from './RoleSelect';
+import { VacationPanel } from './VacationPanel';
 
 interface MemberDetail {
   id: string;
@@ -27,6 +28,9 @@ interface MemberDetail {
   canEditJobTitle: boolean;
   availableRoles: Role[];
   callerRole: Role;
+  /** Spec 07 — server-computed: true when the caller may open the Vacation tab
+   * (admin/manager on any active member, or a user on their own active membership). */
+  canViewVacation: boolean;
 }
 
 type ScreenState =
@@ -41,13 +45,20 @@ function jobTitleError(value: string): string | null {
   return result.valid ? null : result.error;
 }
 
-const TABS = [
-  { value: 'about', label: 'About', testId: 'member-detail-tab-about' },
-  { value: 'vacation', label: 'Vacation', disabled: true, testId: 'member-detail-tab-vacation' },
-  { value: 'projects', label: 'Projects', disabled: true, testId: 'member-detail-tab-projects' },
-  { value: 'roles', label: 'Roles', disabled: true, testId: 'member-detail-tab-roles' },
-  { value: 'payments', label: 'Payments', disabled: true, testId: 'member-detail-tab-payments' },
-] as const;
+/**
+ * Built per-render from `detail` — only the Vacation tab is conditionally enabled
+ * (spec 07: `disabled: !detail.canViewVacation`, the API decides). The other
+ * placeholder tabs stay permanently disabled until their own specs land.
+ */
+function buildTabs(canViewVacation: boolean) {
+  return [
+    { value: 'about', label: 'About', testId: 'member-detail-tab-about' },
+    { value: 'vacation', label: 'Vacation', disabled: !canViewVacation, testId: 'member-detail-tab-vacation' },
+    { value: 'projects', label: 'Projects', disabled: true, testId: 'member-detail-tab-projects' },
+    { value: 'roles', label: 'Roles', disabled: true, testId: 'member-detail-tab-roles' },
+    { value: 'payments', label: 'Payments', disabled: true, testId: 'member-detail-tab-payments' },
+  ];
+}
 
 export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberId: string }) {
   const { showToast } = useToast();
@@ -56,6 +67,7 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
   const [jobTitle, setJobTitle] = useState('');
   const [jobTitleErr, setJobTitleErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState('about');
 
   const fetchDetail = useCallback(async (): Promise<
     { ok: true; detail: MemberDetail } | { ok: false; message: string }
@@ -191,11 +203,13 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
           <Header detail={detail} />
 
           <div style={{ marginTop: 'var(--sp-10)' }}>
-            <Tabs items={[...TABS]} value="about" />
+            <Tabs items={buildTabs(detail.canViewVacation)} value={activeTab} onChange={setActiveTab} />
           </div>
 
           <div style={{ paddingTop: 'var(--sp-10)' }}>
-            {showForm ? (
+            {activeTab === 'vacation' ? (
+              <VacationPanel orgId={orgId} memberId={memberId} />
+            ) : showForm ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-8)' }}>
                 {detail.canEditRole && (
                   <div>

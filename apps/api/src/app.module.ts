@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
+import { AccountController } from './account/account.controller';
+import { AccountService } from './account/account.service';
 import { LoginController } from './auth/login.controller';
 import { LoginService } from './auth/login.service';
 import { LogoutController } from './auth/logout.controller';
@@ -22,6 +24,8 @@ import { PrismaService } from './prisma.service';
 import { SignupController } from './signup/signup.controller';
 import { SignupService } from './signup/signup.service';
 import { TestFixturesController } from './test/test-fixtures.controller';
+import { VacationController } from './vacation/vacation.controller';
+import { VacationService } from './vacation/vacation.service';
 
 /**
  * Spec 02 leaves the real transport out of scope, so there are only two stand-ins.
@@ -60,6 +64,8 @@ const mailProvider = {
     MeController,
     MembersController,
     InvitationsController,
+    AccountController,
+    VacationController,
     TestMailController,
     TestFixturesController,
   ],
@@ -70,6 +76,8 @@ const mailProvider = {
     PasswordResetService,
     InvitationsService,
     MembersService,
+    AccountService,
+    VacationService,
     SessionService,
     mailProvider,
   ],

@@ -1,5 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InvitationEmail, MailService, PasswordResetEmail } from './mail.service';
+import {
+  EmailChangeConfirmationEmail,
+  EmailChangeNotificationEmail,
+  InvitationEmail,
+  MailService,
+  PasswordResetEmail,
+} from './mail.service';
 
 /**
  * The test mail sink. Keeps every message in memory so integration and E2E tests can
@@ -11,6 +17,8 @@ import { InvitationEmail, MailService, PasswordResetEmail } from './mail.service
 export class InMemoryMailService extends MailService {
   readonly sent: PasswordResetEmail[] = [];
   readonly sentInvitations: InvitationEmail[] = [];
+  readonly sentEmailChangeConfirmations: EmailChangeConfirmationEmail[] = [];
+  readonly sentEmailChangeNotifications: EmailChangeNotificationEmail[] = [];
   private readonly logger = new Logger(InMemoryMailService.name);
   private failNext = false;
 
@@ -34,6 +42,24 @@ export class InMemoryMailService extends MailService {
     );
   }
 
+  async sendEmailChangeConfirmation(message: EmailChangeConfirmationEmail): Promise<void> {
+    if (this.failNext) {
+      this.failNext = false;
+      throw new Error('Simulated mail transport failure');
+    }
+    this.sentEmailChangeConfirmations.push(message);
+    this.logger.log(`Email change confirmation for ${message.to}: ${message.confirmUrl}`);
+  }
+
+  async sendEmailChangeNotification(message: EmailChangeNotificationEmail): Promise<void> {
+    if (this.failNext) {
+      this.failNext = false;
+      throw new Error('Simulated mail transport failure');
+    }
+    this.sentEmailChangeNotifications.push(message);
+    this.logger.log(`Email change notification for ${message.to}`);
+  }
+
   /** Arms a single failure, so callers can prove dispatch errors are swallowed. */
   failNextSend(): void {
     this.failNext = true;
@@ -42,6 +68,8 @@ export class InMemoryMailService extends MailService {
   clear(): void {
     this.sent.length = 0;
     this.sentInvitations.length = 0;
+    this.sentEmailChangeConfirmations.length = 0;
+    this.sentEmailChangeNotifications.length = 0;
   }
 
   /** Most recent password-reset message for an address — what a test would open. */
@@ -52,5 +80,19 @@ export class InMemoryMailService extends MailService {
   /** Most recent invitation message for an address — what a test would open. */
   lastInvitationFor(email: string): InvitationEmail | undefined {
     return [...this.sentInvitations].reverse().find((m) => m.to === email.trim().toLowerCase());
+  }
+
+  /** Most recent email-change confirmation for the NEW address — carries the token. */
+  lastEmailChangeConfirmationFor(email: string): EmailChangeConfirmationEmail | undefined {
+    return [...this.sentEmailChangeConfirmations]
+      .reverse()
+      .find((m) => m.to === email.trim().toLowerCase());
+  }
+
+  /** Most recent email-change notification sent to the OLD address. */
+  lastEmailChangeNotificationFor(email: string): EmailChangeNotificationEmail | undefined {
+    return [...this.sentEmailChangeNotifications]
+      .reverse()
+      .find((m) => m.to === email.trim().toLowerCase());
   }
 }

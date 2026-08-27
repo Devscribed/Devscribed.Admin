@@ -1,5 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InvitationEmail, MailService, PasswordResetEmail } from './mail.service';
+import {
+  EmailChangeConfirmationEmail,
+  EmailChangeNotificationEmail,
+  InvitationEmail,
+  MailService,
+  PasswordResetEmail,
+} from './mail.service';
 
 /**
  * Development transport. Spec 02 puts the real sender out of scope, so until one
@@ -17,5 +23,13 @@ export class ConsoleMailService extends MailService {
     this.logger.log(
       `Invitation to join ${message.organizationName} as ${message.role} for ${message.to}: ${message.acceptUrl}`,
     );
+  }
+
+  async sendEmailChangeConfirmation(message: EmailChangeConfirmationEmail): Promise<void> {
+    this.logger.log(`Email change confirmation for ${message.to}: ${message.confirmUrl}`);
+  }
+
+  async sendEmailChangeNotification(message: EmailChangeNotificationEmail): Promise<void> {
+    this.logger.log(`Email change notification for ${message.to}`);
   }
 }
