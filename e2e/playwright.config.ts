@@ -44,6 +44,12 @@ export default defineConfig({
       port: 4000,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
+      // Playwright discards a web server's output by default, and that default cost a long
+      // afternoon: `LocalChromiumPdfRenderer` degrades to a Latin-1 text writer when it
+      // cannot launch a browser and says so with a warning — a warning that went nowhere.
+      // The visible symptom was a signed PDF that was merely *small*, with no clue why.
+      stdout: 'pipe',
+      stderr: 'pipe',
     },
     {
       command: 'npm run dev --workspace @devscribed/web',
@@ -51,6 +57,8 @@ export default defineConfig({
       port: 3000,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
     },
   ],
 });
