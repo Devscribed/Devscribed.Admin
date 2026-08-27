@@ -10,7 +10,7 @@ name: Deploy
 # Tags are how prod moves, and `release-it` is what makes them: `npm run release` bumps the
 # version, tags it `v<version>`, pushes, and this workflow does the rest. A release is
 # therefore a deliberate act with a version number on it, while `main` flows to the stand
-# on its own. See the Deployment section of README.md.
+# on its own. See docs/deployment.md.
 #
 # **The suite is a gate, not a neighbour.** `test.yml` is called from here and `deploy`
 # needs it, so nothing reaches an environment on a red run. That is the difference this
