@@ -1,14 +1,32 @@
 /**
- * LOCAL DEVELOPMENT AFFORDANCE — not part of the product.
+ * TEST-SUPPORT FIXTURES — not part of the product.
  *
- * Everything in this file exists because signup always creates an `admin` and there is no
- * invite flow. **user-management spec 04 retires the whole file**: once an invitation can
- * issue a role, the honest fixture is to invite the member, and this — together with the
- * roles panel of `/dev` — is deleted.
+ * Everything in this file exists because the product cannot yet build its own E2E
+ * preconditions: signup always creates an `admin` of a brand-new organization, there is no
+ * invite flow, and a test cannot advance the clock. **user-management spec 04 retires the
+ * role and membership halves**: once an invitation can put a person into an organization
+ * with a role, the honest fixture is to invite them and both routes are deleted.
+ *
+ * Every write here is fenced twice — `assertFixturesOpen` for the environment,
+ * `resolveFixtureScope` for the caller — and answers 404 to everything else. Read the
+ * comment at the top of `fixture-gate.ts` before changing either.
  */
-import { Body, Controller, Get, HttpCode, NotFoundException, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  HttpCode,
+  NotFoundException,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
+import type { Request } from 'express';
 import { normalizeRole } from '@devscribed/validation';
 import { PrismaService } from '../prisma.service';
+import { SessionService } from '../auth/session.service';
+import { assertFixturesOpen, assertLocalOnly, resolveFixtureScope } from './fixture-gate';
 
 interface SetRoleDto {
   email?: string;
@@ -16,34 +34,43 @@ interface SetRoleDto {
 }
 
 /**
- * Sets a membership's role, so an E2E run can sign in as a manager, a user, or a viewer.
+ * Sets the role of somebody already in the caller's organization, so an E2E run can sign
+ * in as a manager, a user, or a viewer.
  *
- * This exists only because there is no invite flow yet: today the sole way to get a
- * membership is signup, which always creates an `admin`. **user-management spec 04
- * retires this controller** — the moment invitations can issue a role, the honest
- * fixture is to invite the member and this file is deleted.
- *
- * Fenced exactly the way `mail/test-mail.controller.ts` is: 404 whenever NODE_ENV is
- * production, so a real deployment cannot be privilege-escalated through it.
+ * Where the route is exposed at all — a deployment — the target is looked up **within the
+ * caller's own organization**, never globally. That is the difference between a fixture and
+ * an escalation endpoint: the address in the body selects among people the caller already
+ * administers, and names nobody outside.
  */
 @Controller('api/test/role')
 export class TestRoleController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sessions: SessionService,
+  ) {}
 
   @Post()
   @HttpCode(200)
-  async setRole(@Body() dto: SetRoleDto) {
-    if (process.env.NODE_ENV === 'production') throw new NotFoundException();
+  async setRole(
+    @Body() dto: SetRoleDto,
+    @Req() request: Request,
+    @Headers('authorization') authorization?: string,
+  ) {
+    assertFixturesOpen(authorization);
+    const scope = await resolveFixtureScope(this.prisma, this.sessions, request);
 
     const email = (dto?.email ?? '').trim().toLowerCase();
     // Normalized rather than stored raw: the same closed set capability checks use, so
     // a typo in a fixture fails loudly here instead of silently granting `viewer`.
     const role = normalizeRole(dto?.role);
 
-    const account = await this.prisma.account.findUnique({ where: { email } });
-    if (!account) throw new NotFoundException('No account for that address');
-
-    const membership = await this.prisma.membership.findFirst({ where: { accountId: account.id } });
+    const membership = await this.prisma.membership.findFirst({
+      // Scoped to the caller's organization wherever there is one to scope to. `null` is
+      // a developer's machine, where the address is the whole selector and the `/dev`
+      // console reaches organizations it is not signed in to on purpose.
+      where: { ...(scope === null ? {} : { organizationId: scope }), account: { email } },
+      select: { id: true },
+    });
     if (!membership) throw new NotFoundException('No membership for that address');
 
     await this.prisma.membership.update({ where: { id: membership.id }, data: { role } });
@@ -52,25 +79,39 @@ export class TestRoleController {
   }
 }
 
+interface MoveMembershipDto {
+  orgId?: string;
+  email?: string;
+  role?: string;
+}
+
 /**
- * The read half of the same affordance: who is there to switch.
+ * The membership half: read for the `/dev` console, write for the E2E suite.
  *
- * `POST /api/test/role` takes an email, which is fine for a fixture that already knows one
- * and useless for a UI — a free-text box for an address that must already exist is a
- * typo generator. This lets `/dev` offer the real people in an organization instead.
- *
- * A separate class only because Nest binds one path prefix per controller; it shares the
- * single fence (404 whenever NODE_ENV is production) and the same retirement — spec 04
- * deletes both. Read-only, and it deliberately returns no tokens, hashes, or profile
- * details: it is a picker, not an export.
+ * The two halves are fenced differently on purpose, and the asymmetry is the point — see
+ * `assertLocalOnly`.
  */
 @Controller('api/test/memberships')
 export class TestMembershipsController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sessions: SessionService,
+  ) {}
 
+  /**
+   * Who is there to switch.
+   *
+   * `POST /api/test/role` takes an email, which is fine for a fixture that already knows
+   * one and useless for a UI — a free-text box for an address that must already exist is a
+   * typo generator. This lets `/dev` offer the real people in an organization instead.
+   *
+   * Local only, and **not** openable by the fixture token: with no `orgId` it enumerates
+   * every organization in the environment. Read-only, and it deliberately returns no
+   * tokens, hashes, or profile details: it is a picker, not an export.
+   */
   @Get()
   async list(@Query('orgId') orgId?: string) {
-    if (process.env.NODE_ENV === 'production') throw new NotFoundException();
+    assertLocalOnly();
 
     const wanted = (orgId ?? '').trim();
 
@@ -109,5 +150,130 @@ export class TestMembershipsController {
         status: m.status,
       })),
     };
+  }
+
+  /**
+   * Puts a second person into the caller's organization — the precondition every test
+   * about two members looking at each other's contract details is impossible without.
+   *
+   * It **moves** rather than adds, because `Membership.accountId` is `@unique` in
+   * `schema.prisma`: an account holds exactly one membership, so the account registered a
+   * moment ago is carried out of the throwaway organization signup gave it and into this
+   * one. The invite flow will do the same thing in one step when spec 04 lands.
+   *
+   * Until this existed the suite ran the same `UPDATE` from the test process with its own
+   * Prisma client, which quietly required a route to the database — so every test that
+   * needed it failed against a deployment, where there is none. A fixture that only works
+   * where the database is exposed is a fixture that stops testing the thing it was written
+   * for exactly where that thing matters most.
+   */
+  @Post()
+  @HttpCode(200)
+  async move(
+    @Body() dto: MoveMembershipDto,
+    @Req() request: Request,
+    @Headers('authorization') authorization?: string,
+  ) {
+    assertFixturesOpen(authorization);
+    const destination = await resolveFixtureScope(
+      this.prisma,
+      this.sessions,
+      request,
+      (dto?.orgId ?? '').trim() || undefined,
+    );
+    // Unlike the other two, this one cannot fall back to "unscoped": there is no such
+    // thing as moving a membership into no organization.
+    if (destination === null) throw new NotFoundException('No organization to move into');
+
+    const email = (dto?.email ?? '').trim().toLowerCase();
+    const account = await this.prisma.account.findUnique({
+      where: { email },
+      select: { id: true, firstName: true, lastName: true },
+    });
+    if (!account) throw new NotFoundException('No account for that address');
+
+    const existing = await this.prisma.membership.findFirst({
+      where: { accountId: account.id },
+      select: { id: true },
+    });
+    if (!existing) throw new NotFoundException('No membership for that address');
+
+    // The role is written only when the caller names one. Leaving it alone otherwise keeps
+    // "which role is this test about" in the test body, where `POST /api/test/role` puts
+    // it, rather than half here and half there.
+    const role = dto?.role === undefined ? undefined : normalizeRole(dto.role);
+
+    const membership = await this.prisma.membership.update({
+      where: { id: existing.id },
+      data: {
+        organizationId: destination,
+        status: 'active',
+        ...(role === undefined ? {} : { role }),
+      },
+      select: { id: true, role: true },
+    });
+
+    return {
+      membershipId: membership.id,
+      accountId: account.id,
+      email,
+      name: `${account.firstName} ${account.lastName}`,
+      role: membership.role,
+    };
+  }
+}
+
+interface ExpireEnvelopeDto {
+  orgId?: string;
+  envelopeId?: string;
+}
+
+/**
+ * Moves one of the caller's envelopes past its expiry.
+ *
+ * A test cannot advance the clock and the product offers no way to shorten an expiry, so
+ * TC-02-E2E-07 — lazy expiry is authoritative even while the stored status still says
+ * `sent` — has no precondition without this. The suite used to write the column directly,
+ * with the same consequence as above.
+ *
+ * It writes exactly one column, on one envelope, in the caller's own organization, and
+ * deliberately does **not** run the sweep afterwards: the whole point of the test is that
+ * the read path is right before anything has swept.
+ */
+@Controller('api/test/envelopes')
+export class TestEnvelopeExpiryController {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sessions: SessionService,
+  ) {}
+
+  @Post('expire')
+  @HttpCode(200)
+  async expire(
+    @Body() dto: ExpireEnvelopeDto,
+    @Req() request: Request,
+    @Headers('authorization') authorization?: string,
+  ) {
+    assertFixturesOpen(authorization);
+    const scope = await resolveFixtureScope(
+      this.prisma,
+      this.sessions,
+      request,
+      (dto?.orgId ?? '').trim() || undefined,
+    );
+
+    const envelopeId = (dto?.envelopeId ?? '').trim();
+    const envelope = await this.prisma.envelope.findFirst({
+      // Scoped by the caller's organization wherever there is one; never by the id alone
+      // on a deployment.
+      where: { id: envelopeId, ...(scope === null ? {} : { organizationId: scope }) },
+      select: { id: true },
+    });
+    if (!envelope) throw new NotFoundException('No envelope with that id');
+
+    const expiresAt = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    await this.prisma.envelope.update({ where: { id: envelope.id }, data: { expiresAt } });
+
+    return { envelopeId: envelope.id, expiresAt: expiresAt.toISOString() };
   }
 }

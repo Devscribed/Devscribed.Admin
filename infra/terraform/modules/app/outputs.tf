@@ -91,10 +91,10 @@ output "migrate_log_group_name" {
   value       = aws_cloudwatch_log_group.migrate.name
 }
 
-output "test_mail_sink_parameter" {
+output "test_fixture_parameter" {
   description = <<-EOT
-    SSM parameter holding the token that reads `/api/test/mail`, or empty where the sink is
-    shut. `make e2e-dev` fetches it; nothing else should.
+    SSM parameter holding the token that opens `/api/test/*`, or empty where the fixtures
+    are shut. `make e2e-dev` fetches it; nothing else should.
   EOT
-  value       = try(aws_ssm_parameter.test_mail_sink_secret[0].name, "")
+  value       = try(aws_ssm_parameter.test_fixture_secret[0].name, "")
 }

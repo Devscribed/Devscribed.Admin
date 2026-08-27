@@ -128,21 +128,23 @@ resource "aws_ssm_parameter" "internal_task_secret" {
   value       = random_password.internal_task_secret.result
 }
 
-# The token that opens the mail sink, created only where the sink is open. Its own secret
-# rather than a reuse of INTERNAL_TASK_SECRET: the two protect different things, and a
-# token that leaks through a test path must not also hand over the sweep endpoint.
-resource "random_password" "test_mail_sink_secret" {
-  count   = var.test_mail_sink_enabled ? 1 : 0
+# The token that opens the `/api/test/*` fixtures — the mail sink an E2E run reads a
+# signing link from, the role switch, the membership move, and the envelope-expiry write.
+# Created only where the fixtures are open. Its own secret rather than a reuse of
+# INTERNAL_TASK_SECRET: the two protect different things, and a token that leaks through a
+# test path must not also hand over the sweep endpoint.
+resource "random_password" "test_fixture_secret" {
+  count   = var.test_fixtures_enabled ? 1 : 0
   length  = 64
   special = false
 }
 
-resource "aws_ssm_parameter" "test_mail_sink_secret" {
-  count       = var.test_mail_sink_enabled ? 1 : 0
-  name        = "/${var.prefix}/TEST_MAIL_SINK_SECRET"
-  description = "Reads /api/test/mail on this environment. Holding it means reading every signing link."
+resource "aws_ssm_parameter" "test_fixture_secret" {
+  count       = var.test_fixtures_enabled ? 1 : 0
+  name        = "/${var.prefix}/TEST_FIXTURE_SECRET"
+  description = "Opens /api/test/* on this environment. Holding it means reading every signing link."
   type        = "SecureString"
-  value       = random_password.test_mail_sink_secret[0].result
+  value       = random_password.test_fixture_secret[0].result
 }
 
 # ---------------------------------------------------------------------------------------

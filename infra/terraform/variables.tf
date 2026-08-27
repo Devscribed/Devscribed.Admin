@@ -292,19 +292,24 @@ variable "log_retention_days" {
   type        = number
 }
 
-variable "test_mail_sink_enabled" {
+variable "test_fixtures_enabled" {
   description = <<-EOT
-    Whether this environment simulates mail instead of sending it: messages are recorded in
-    the API's memory and a token holder can read them back through `/api/test/mail`.
+    Whether this environment carries the `/api/test/*` fixtures an E2E run needs, and with
+    them simulated mail: messages are recorded in the API's memory rather than sent, and a
+    token holder can read them back.
 
-    **True on the dev stand only.** The product has no mail provider yet — SES is in the
-    sandbox with an unverified identity — so a deployed E2E run has no mailbox to read a
-    signing link from, and the signing link exists nowhere else by design. Simulating the
-    mailbox is what makes the signing flow testable against a real deployment at all.
+    **True on the dev stand only.** The suite cannot build its own preconditions through
+    the product yet. There is no mail provider — SES is in the sandbox with an unverified
+    identity — and the signing link exists nowhere but inside the message, so without a
+    simulated mailbox the signing flow cannot be exercised against a deployment at all.
+    There is likewise no invite flow, so putting a second person into an organization and
+    giving them a role are fixtures too; the suite used to do both by writing to the
+    database directly, which only ever worked where the database was reachable.
 
     It is not free. This environment stops exercising SES entirely, and anyone holding the
     token can read every signing link it has issued. It also pins the API to a single task,
-    because an in-memory outbox is per-process. Retire it the day real mail works.
+    because an in-memory outbox is per-process. Retire it the day real mail works and spec
+    04 lands.
   EOT
   type        = bool
   default     = false

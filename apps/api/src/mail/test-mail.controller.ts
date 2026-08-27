@@ -1,5 +1,5 @@
 import { Controller, Get, Headers, NotFoundException, Query } from '@nestjs/common';
-import { timingSafeEqual } from 'node:crypto';
+import { assertFixturesOpen } from '../test-support/fixture-gate';
 import { InMemoryMailService, RecordedMail } from './in-memory-mail.service';
 import { MAIL_MESSAGE_TYPES, MailMessageType, MailService } from './mail.service';
 
@@ -13,21 +13,19 @@ import { MAIL_MESSAGE_TYPES, MailMessageType, MailService } from './mail.service
  *
  * Lets an E2E run read a link the way a recipient would, without a mailbox.
  *
- * This endpoint hands out live reset and signing tokens, so it is fenced hard, and the
- * fence is worth reading before changing:
+ * This endpoint hands out live reset and signing tokens, so it is fenced hard:
  *
  *  1. It answers only when the sink transport is actually in use. Under a real transport
  *     there is nothing to read and the route does not exist.
- *  2. Outside production that is the whole gate — a developer's machine is not a target.
- *  3. **In production it additionally requires a bearer token**, and refuses outright if
- *     no token is configured. That third case exists for one reason: the deployed `dev`
- *     environment is a real deployment, so `NODE_ENV` is `production` there, and until
- *     this product has a mail provider an E2E run against it has no mailbox to read from.
- *     `MAIL_TRANSPORT=memory` plus a token lets the suite read what was "sent".
+ *  2. Then `assertFixturesOpen` — the same environment fence every test-support route
+ *     uses. Read the comment at the top of `test-support/fixture-gate.ts`.
  *
- * Understand what enabling it costs before doing so: anyone holding the token can read
- * every signing link that environment has issued. `prod` sets no token, so gate 3 is shut
- * there and no value of any other variable can open it.
+ * It takes no third gate, unlike the fixtures that write. Those require a session that
+ * already administers the organization being changed; this one cannot, because the whole
+ * reason it exists is to be read on behalf of a **signer**, who has no session at all and
+ * belongs to no organization. The token is therefore the only thing standing in front of
+ * it, and anyone holding it can read every signing link the environment has issued.
+ * `prod` creates no token, so the route is shut there and no other variable can open it.
  */
 @Controller('api/test/mail')
 export class TestMailController {
@@ -41,22 +39,10 @@ export class TestMailController {
    */
   private readableSink(authorization?: string): InMemoryMailService {
     if (!(this.mail instanceof InMemoryMailService)) throw new NotFoundException();
-    const sink = this.mail;
-    if (process.env.NODE_ENV !== 'production') return sink;
-
-    const expected = process.env.TEST_MAIL_SINK_SECRET;
-    // Unset means shut, and shut is the default everywhere it is not deliberately opened.
-    if (!expected) throw new NotFoundException();
-
-    const offered = (authorization ?? '').replace(/^Bearer /i, '');
-    // Length first: timingSafeEqual throws on a mismatch rather than returning false, and
-    // the length is not the secret.
-    if (offered.length !== expected.length) throw new NotFoundException();
-    if (!timingSafeEqual(Buffer.from(offered), Buffer.from(expected))) {
-      throw new NotFoundException();
-    }
-
-    return sink;
+    // The environment fence, shared with every other test-support route so that opening
+    // one of them can never quietly open a different one on a different rule.
+    assertFixturesOpen(authorization);
+    return this.mail;
   }
 
   /**

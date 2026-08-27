@@ -141,20 +141,23 @@ variable "api_port" {
   type        = number
 }
 
-variable "test_mail_sink_enabled" {
+variable "test_fixtures_enabled" {
   description = <<-EOT
-    Whether this environment records outbound mail in memory and lets a token holder read
-    it back through `/api/test/mail`. **False everywhere except the dev stand**, and false
-    by default so that opening it is always an explicit act.
+    Whether this environment carries the `/api/test/*` fixtures — the in-memory mail sink,
+    the role switch, the membership move, the envelope-expiry write — and creates the token
+    that opens them. **False everywhere except the dev stand**, and false by default so
+    that opening them is always an explicit act.
 
-    It exists because the product has no mail provider yet: SES is in the sandbox with an
-    unverified identity, so a deployed E2E run has no mailbox to read a signing link from.
-    Simulating the mailbox is the only way to exercise the signing flow against a real
-    deployment today, and it retires the moment real mail works.
+    They exist because the product cannot yet build an E2E run's preconditions: no mail
+    provider (SES is in the sandbox with an unverified identity, and the signing link lives
+    only inside the message), no invite flow, and no way to age an envelope. They retire as
+    those arrive.
 
     Two consequences, both real. Mail genuinely stops being sent, so this environment no
     longer exercises SES at all. And anyone holding the token can read every signing link
-    the environment has issued.
+    the environment has issued — the write fixtures additionally demand a session that
+    already administers the organization, but the sink cannot, since it is read on behalf
+    of signers who have no session at all.
   EOT
   type        = bool
   default     = false

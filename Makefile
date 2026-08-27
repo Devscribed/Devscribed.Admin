@@ -8,6 +8,7 @@
 #   make infra-dev          apply infrastructure without rebuilding images
 #   make migrate-dev        run prisma migrate deploy inside the VPC
 #   make e2e-dev            run the Playwright suite against the deployed environment
+#   make seed-dev           build a demo organization to click through by hand
 #   make url-dev            print the address people open
 #   make logs-dev-api       tail the API's logs
 #   make stop-dev           scale both services to zero (stops the Fargate bill)
@@ -42,13 +43,13 @@ TF_VARS  = -var-file=environments/$(1).tfvars
         plan-dev plan-prod infra-dev infra-prod \
         deploy-dev deploy-dev-api deploy-dev-web \
         deploy-prod deploy-prod-api deploy-prod-web \
-        migrate-dev migrate-prod url-dev url-prod output-dev output-prod e2e-dev \
+        migrate-dev migrate-prod url-dev url-prod output-dev output-prod e2e-dev seed-dev \
         logs-dev-api logs-dev-web logs-prod-api logs-prod-web \
         stop-dev start-dev stop-prod start-prod \
         destroy-dev destroy-prod
 
 help:
-	@sed -n '3,20p' $(MAKEFILE_LIST)
+	@sed -n '3,21p' $(MAKEFILE_LIST)
 
 # ---------------------------------------------------------------------------------------
 # Once per account
@@ -119,19 +120,32 @@ deploy-prod-web:
 
 # Runs the Playwright suite against a deployed environment rather than local dev servers.
 #
-# The token is fetched here and kept nowhere: `/api/test/mail` hands out live signing links
-# and sits on a public host, so it is closed without one. Where mail is real there is no
-# token and no sink, and the mail-dependent tests say so instead of pretending.
+# The token is fetched here and kept nowhere. It opens the `/api/test/*` fixtures on a
+# public host — the mail sink hands out live signing links — so they are closed without one.
+# Where the fixtures are off there is no token, and the tests that need them say so instead
+# of pretending.
 e2e-dev:
 	$(call TF_INIT,dev)
 	@URL="$$($(TF) -chdir=$(TF_DIR) output -raw app_url)"; \
-	PARAM="$$($(TF) -chdir=$(TF_DIR) output -raw test_mail_sink_parameter 2>/dev/null || true)"; \
+	PARAM="$$($(TF) -chdir=$(TF_DIR) output -raw test_fixture_parameter 2>/dev/null || true)"; \
 	TOKEN=""; \
 	if [ -n "$$PARAM" ]; then \
 	  TOKEN="$$(MSYS_NO_PATHCONV=1 aws ssm get-parameter --name "$$PARAM" --with-decryption --query Parameter.Value --output text)"; \
 	fi; \
 	echo "suite target: $$URL"; \
-	cd e2e && E2E_BASE_URL="$$URL" E2E_MAIL_SINK_TOKEN="$$TOKEN" npx playwright test
+	cd e2e && E2E_BASE_URL="$$URL" E2E_FIXTURE_TOKEN="$$TOKEN" npx playwright test
+
+# Builds a demo organization on the deployed environment — people with contract details,
+# published templates, and envelopes in four different states, one of them already signed —
+# so that somebody can sign in and walk the product without setting anything up first.
+#
+# It uses the same fixture token `e2e-dev` does, and for the same two reasons: there is no
+# invite flow, so a second person can only be put into an organization through a fixture,
+# and the signing link exists only inside the email. Everything else it does goes through
+# the public API exactly as the browser would.
+seed-dev:
+	$(call TF_INIT,dev)
+	@URL="$$($(TF) -chdir=$(TF_DIR) output -raw app_url)"; 	PARAM="$$($(TF) -chdir=$(TF_DIR) output -raw test_fixture_parameter 2>/dev/null || true)"; 	TOKEN=""; 	if [ -n "$$PARAM" ]; then 	  TOKEN="$$(MSYS_NO_PATHCONV=1 aws ssm get-parameter --name "$$PARAM" --with-decryption --query Parameter.Value --output text)"; 	fi; 	node scripts/seed-demo.mjs --url "$$URL" --token "$$TOKEN"
 
 migrate-dev:
 	$(call TF_INIT,dev)

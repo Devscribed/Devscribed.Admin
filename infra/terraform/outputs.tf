@@ -125,10 +125,10 @@ output "log_groups" {
   }
 }
 
-output "test_mail_sink_parameter" {
+output "test_fixture_parameter" {
   description = <<-EOT
-    SSM parameter holding the token that reads `/api/test/mail`, or empty where mail is
-    real. `make e2e-<env>` fetches it; nothing else should.
+    SSM parameter holding the token that opens `/api/test/*`, or empty where the fixtures
+    are off. `make e2e-<env>` fetches it; nothing else should.
   EOT
-  value       = module.app.test_mail_sink_parameter
+  value       = module.app.test_fixture_parameter
 }

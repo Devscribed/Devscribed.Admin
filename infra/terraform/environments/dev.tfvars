@@ -49,14 +49,17 @@ alarm_email = "ivan.demchenko.dev@gmail.com"
 
 log_retention_days = 14
 
-# Mail is simulated here, not sent: the product has no provider yet, and the signing link
-# lives only inside the message. Without this the deployed suite cannot reach a link at all.
+# The E2E fixtures are open here. Mail is simulated rather than sent — the product has no
+# provider yet, and the signing link lives only inside the message — and the suite can move
+# a person into an organization, set their role, and age an envelope, none of which the
+# product itself can do yet. Without them the deployed suite cannot reach a signing link at
+# all, and a third of it cannot build its preconditions.
 #
 # Costs, stated so nobody has to rediscover them: this environment no longer exercises SES,
 # the API is pinned to one task (the outbox is in process memory), and whoever holds
-# /devscribed-dev/TEST_MAIL_SINK_SECRET can read every signing link this stand has issued.
-# Turn it off the day real mail works.
-test_mail_sink_enabled = true
+# /devscribed-dev/TEST_FIXTURE_SECRET can read every signing link this stand has issued.
+# Turn it off the day real mail works and spec 04 lands.
+test_fixtures_enabled = true
 
 # ---------------------------------------------------------------------------------------
 # CI/CD — provisioned, and off by default. See .github/workflows/deploy.yml.

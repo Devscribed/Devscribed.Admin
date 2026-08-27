@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { request as apiContexts, type APIRequestContext, type Page } from '@playwright/test';
 
 /**
@@ -57,15 +55,19 @@ export async function fillSignup(page: Page, values: SignupValues): Promise<void
 export const API = process.env.E2E_API_URL ?? process.env.E2E_BASE_URL ?? 'http://localhost:4000';
 
 /**
- * Headers for the mail sink.
+ * Headers for every `/api/test/*` fixture — the mail sink, the role switch, the membership
+ * move, and the envelope-expiry write.
  *
- * Empty locally, where the sink is open to anyone who can reach the dev server. Against a
- * deployment the sink is closed unless a token is presented — it hands out live signing
- * links, and that endpoint is on a public host — so `make e2e-<env>` fetches the token from
- * SSM and puts it here. No token, no read, and the suite says so rather than pretending.
+ * Empty locally, where the fixtures are open to anyone who can reach the dev server.
+ * Against a deployment they are shut unless a token is presented, so `make e2e-<env>`
+ * fetches it from SSM and puts it here. No token, no fixtures, and the suite fails saying
+ * so rather than pretending.
+ *
+ * One header set rather than one per route, because they are one fence: see
+ * `apps/api/src/test-support/fixture-gate.ts`.
  */
-const MAIL_SINK_HEADERS: Record<string, string> = process.env.E2E_MAIL_SINK_TOKEN
-  ? { authorization: `Bearer ${process.env.E2E_MAIL_SINK_TOKEN}` }
+const FIXTURE_HEADERS: Record<string, string> = process.env.E2E_FIXTURE_TOKEN
+  ? { authorization: `Bearer ${process.env.E2E_FIXTURE_TOKEN}` }
   : {};
 
 /** Registers an account straight through the API — a precondition, not the thing under test. */
@@ -92,7 +94,7 @@ export async function latestResetToken(
 ): Promise<string> {
   const response = await request.get(`${API}/api/test/mail/latest`, {
     params: { email },
-    headers: MAIL_SINK_HEADERS,
+    headers: FIXTURE_HEADERS,
   });
   if (!response.ok()) {
     throw new Error(`No reset mail for ${email} (${response.status()})`);
@@ -146,7 +148,10 @@ export async function setMembershipRole(
   email: string,
   role: 'admin' | 'manager' | 'user' | 'viewer',
 ): Promise<void> {
-  const response = await request.post(`${API}/api/test/role`, { data: { email, role } });
+  const response = await request.post(`${API}/api/test/role`, {
+    data: { email, role },
+    headers: FIXTURE_HEADERS,
+  });
   if (!response.ok()) {
     throw new Error(`Precondition failed: could not set ${email} to ${role} (${response.status()})`);
   }
@@ -356,7 +361,7 @@ export async function latestMail(
   if (type) params.type = type;
   const response = await request.get(`${API}/api/test/mail/latest`, {
     params,
-    headers: MAIL_SINK_HEADERS,
+    headers: FIXTURE_HEADERS,
   });
   if (response.status() === 404) return null;
   if (!response.ok()) {
@@ -443,46 +448,35 @@ export async function waitForSignedPdf(
 }
 
 /**
- * Moves an envelope's expiry into the past, writing the column directly.
+ * Moves an envelope's expiry into the past.
  *
- * There is no UI or API for this and a test cannot advance the clock, so this is the one
- * precondition in the suite that goes around the product — the same exception the spec's
- * own TC-02-INT-17 takes. The sweep is deliberately *not* run afterwards: the point of
- * TC-02-E2E-07 is that lazy expiry is authoritative even when the stored status still
- * says `sent` (requirement 34).
+ * There is no UI or API for this and a test cannot advance the clock, so this goes around
+ * the product — the same exception the spec's own TC-02-INT-17 takes. It goes around it
+ * through a fenced fixture route rather than a Prisma client of the suite's own, which is
+ * what lets the test run against a deployment: the database there has no route from
+ * outside its VPC, and a precondition that needs one is a precondition that quietly
+ * un-tests the environment it matters most in.
+ *
+ * The sweep is deliberately *not* run afterwards: the point of TC-02-E2E-07 is that lazy
+ * expiry is authoritative even when the stored status still says `sent` (requirement 34).
  */
-export async function expireEnvelope(envelopeId: string): Promise<void> {
-  const { PrismaClient } = (await import('@prisma/client')) as {
-    PrismaClient: new (options: {
-      datasources: { db: { url: string } };
-    }) => {
-      envelope: { update(args: unknown): Promise<unknown> };
-      $disconnect(): Promise<void>;
-    };
-  };
-
-  const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl() } } });
-  try {
-    await prisma.envelope.update({
-      where: { id: envelopeId },
-      data: { expiresAt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-    });
-  } finally {
-    await prisma.$disconnect();
+export async function expireEnvelope(
+  request: APIRequestContext,
+  orgId: string,
+  envelopeId: string,
+): Promise<void> {
+  const response = await request.post(`${API}/api/test/envelopes/expire`, {
+    data: { orgId, envelopeId },
+    headers: FIXTURE_HEADERS,
+  });
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not expire ${envelopeId} ` +
+        `(${response.status()} ${await response.text()})`,
+    );
   }
 }
 
-/**
- * The API's own database, read from its `.env` rather than from `process.env`: Playwright
- * starts the API as a child process that loads that file itself, and a suite that guessed
- * a connection string could silently edit a different database than the one under test.
- */
-function databaseUrl(): string {
-  const file = join(__dirname, '..', '..', 'apps', 'api', '.env');
-  const match = /^\s*DATABASE_URL\s*=\s*"?([^"\r\n]+)"?/m.exec(readFileSync(file, 'utf8'));
-  if (!match) throw new Error(`No DATABASE_URL in ${file}`);
-  return match[1];
-}
 
 /* ------------------------------------------------------------------ *
  * Spec 03 — field autofill.
@@ -520,23 +514,27 @@ export interface SeededMember {
  * invite flow will do in one step when user-management spec 04 lands. The organization
  * signup made along the way is left behind unused; nothing reads it.
  *
- * Two details that are load-bearing rather than incidental:
+ * Three details that are load-bearing rather than incidental:
  *
  *  - The signup runs in its **own** `APIRequestContext`. `POST /api/signup` issues a
  *    session cookie, and running it in the caller's context would silently replace the
  *    admin session that every precondition after this one depends on.
+ *  - The move itself runs in the **caller's** context, because the fixture route behind it
+ *    requires a session that already administers `orgId` — the token alone is not
+ *    authority over an organization. `orgId` is passed for readability and checked against
+ *    that session server-side; it is never a selector.
  *  - The role is deliberately *not* set here. `POST /api/test/role` is this suite's one
  *    way to say what a membership may do, and leaving it to the caller keeps every test's
  *    role visible in the test itself rather than buried in a fixture.
  */
 export async function addMemberToOrganization(
+  request: APIRequestContext,
   orgId: string,
   seed: OrganizationMemberSeed,
 ): Promise<SeededMember> {
   const email = seed.email ?? uniqueEmail('member');
 
   const context = await apiContexts.newContext();
-  let accountId: string;
   try {
     const response = await context.post(`${API}/api/signup`, {
       data: {
@@ -553,37 +551,28 @@ export async function addMemberToOrganization(
         `Precondition failed: could not register ${email} (${response.status()} ${await response.text()})`,
       );
     }
-    accountId = (await response.json()).account.id as string;
   } finally {
     await context.dispose();
   }
 
-  const { PrismaClient } = (await import('@prisma/client')) as {
-    PrismaClient: new (options: {
-      datasources: { db: { url: string } };
-    }) => {
-      membership: { update(args: unknown): Promise<{ id: string }> };
-      $disconnect(): Promise<void>;
-    };
-  };
-
-  const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl() } } });
-  try {
-    const membership = await prisma.membership.update({
-      // `accountId` is unique, which is also why the membership has to be moved rather
-      // than duplicated.
-      where: { accountId },
-      data: { organizationId: orgId, status: 'active' },
-    });
-    return {
-      membershipId: membership.id,
-      accountId,
-      email,
-      name: `${seed.firstName} ${seed.lastName}`,
-    };
-  } finally {
-    await prisma.$disconnect();
+  const moved = await request.post(`${API}/api/test/memberships`, {
+    data: { orgId, email },
+    headers: FIXTURE_HEADERS,
+  });
+  if (!moved.ok()) {
+    throw new Error(
+      `Precondition failed: could not move ${email} into ${orgId} ` +
+        `(${moved.status()} ${await moved.text()})`,
+    );
   }
+
+  const membership = (await moved.json()) as { membershipId: string; accountId: string };
+  return {
+    membershipId: membership.membershipId,
+    accountId: membership.accountId,
+    email,
+    name: `${seed.firstName} ${seed.lastName}`,
+  };
 }
 
 /** The eight contract-detail columns, as `PUT .../profile` takes them. */

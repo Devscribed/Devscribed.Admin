@@ -137,7 +137,7 @@ module "app" {
   signing_token_ttl_days = var.signing_token_ttl_days
   envelope_expiry_days   = var.envelope_expiry_days
 
-  test_mail_sink_enabled = var.test_mail_sink_enabled
+  test_fixtures_enabled = var.test_fixtures_enabled
 }
 
 module "sweep" {

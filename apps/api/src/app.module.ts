@@ -21,6 +21,7 @@ import { MembersController } from './members/members.controller';
 import { SignupController } from './signup/signup.controller';
 import { SignupService } from './signup/signup.service';
 import {
+  TestEnvelopeExpiryController,
   TestMembershipsController,
   TestRoleController,
 } from './test-support/test-role.controller';
@@ -69,8 +70,12 @@ import {
     MemberProfileController,
     TestMailController,
     TestRoleController,
-    // Read side of the same development-only affordance; both go with spec 04.
+    // The membership fixtures: the `/dev` console's picker, and the move that puts a
+    // second person into an organization. Both go with spec 04.
     TestMembershipsController,
+    // The one fixture spec 04 does not retire — nothing it brings lets a test age an
+    // envelope, and no product feature should.
+    TestEnvelopeExpiryController,
   ],
   providers: [SignupService, LoginService, PasswordResetService, MemberProfileService],
 })

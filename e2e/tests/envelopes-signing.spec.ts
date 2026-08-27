@@ -396,7 +396,7 @@ test.describe('Envelopes and signing', () => {
     // written directly. The sweep is *not* run afterwards, on purpose: the case exists to
     // show that lazy expiry is authoritative (requirement 34) while the stored status
     // still says `sent`.
-    await expireEnvelope(fixture.envelopeId);
+    await expireEnvelope(request, fixture.orgId, fixture.envelopeId);
 
     const signerPage = await openSigningLink(browser, link1);
     const expired = signerPage.getByTestId('signing-state-expired');

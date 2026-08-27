@@ -64,7 +64,7 @@ data "aws_iam_policy_document" "execution_secrets" {
         aws_ssm_parameter.session_secret.arn,
         aws_ssm_parameter.internal_task_secret.arn,
       ],
-      aws_ssm_parameter.test_mail_sink_secret[*].arn,
+      aws_ssm_parameter.test_fixture_secret[*].arn,
     )
   }
 

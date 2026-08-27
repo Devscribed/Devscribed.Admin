@@ -142,7 +142,7 @@ async function seed(
   const adminEmail = uniqueEmail(prefix);
   const { orgId } = await registerOrganization(request, adminEmail, 'Devscribed LLC');
 
-  const subject = await addMemberToOrganization(orgId, {
+  const subject = await addMemberToOrganization(request, orgId, {
     firstName: options.subjectName?.firstName ?? 'Alex',
     lastName: options.subjectName?.lastName ?? 'Kaminski',
     email: uniqueEmail(`${prefix}-subject`),
@@ -413,7 +413,7 @@ test.describe('Field autofill', () => {
 
   test('TC-03-E2E-05: Manager sees masked values', async ({ page, request }) => {
     const fixture = await seed(request, 'af-mask', { profile: ALEX_PROFILE });
-    const manager = await addMemberToOrganization(fixture.orgId, {
+    const manager = await addMemberToOrganization(request, fixture.orgId, {
       firstName: 'Greta',
       lastName: 'Manager',
       email: uniqueEmail('af-mask-manager'),
@@ -513,7 +513,7 @@ test.describe('Field autofill', () => {
     request,
   }) => {
     const fixture = await seed(request, 'af-other', { profile: ALEX_PROFILE });
-    const outsider = await addMemberToOrganization(fixture.orgId, {
+    const outsider = await addMemberToOrganization(request, fixture.orgId, {
       firstName: 'Pavel',
       lastName: 'Regular',
       email: uniqueEmail('af-other-user'),

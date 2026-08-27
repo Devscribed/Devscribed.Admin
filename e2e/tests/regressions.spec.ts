@@ -266,7 +266,7 @@ test.describe('Regressions', () => {
   }) => {
     const adminEmail = uniqueEmail('rgx-subject');
     const { orgId } = await registerOrganization(request, adminEmail);
-    const member = await addMemberToOrganization(orgId, {
+    const member = await addMemberToOrganization(request, orgId, {
       firstName: 'Alina',
       lastName: 'Subject',
     });
@@ -308,7 +308,7 @@ test.describe('Regressions', () => {
   }) => {
     const adminEmail = uniqueEmail('rgx-detail-subject');
     const { orgId } = await registerOrganization(request, adminEmail);
-    const member = await addMemberToOrganization(orgId, {
+    const member = await addMemberToOrganization(request, orgId, {
       firstName: 'Bogdan',
       lastName: 'Subject',
     });

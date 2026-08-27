@@ -59,9 +59,9 @@ alarm_email = "ivan.demchenko.dev@gmail.com"
 log_retention_days = 365
 
 # Never here, and written out rather than left to the default so that the choice is visible
-# in the file a reader opens. With it false no token is created, so the third gate on
-# /api/test/mail cannot open no matter what else is set.
-test_mail_sink_enabled = false
+# in the file a reader opens. With it false no token is created, so every /api/test/* route
+# answers 404 no matter what else is set.
+test_fixtures_enabled = false
 
 # ---------------------------------------------------------------------------------------
 # CI/CD
