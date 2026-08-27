@@ -46,7 +46,15 @@ export async function fillSignup(page: Page, values: SignupValues): Promise<void
   }
 }
 
-export const API = 'http://localhost:4000';
+/**
+ * Where the suite's own HTTP calls go.
+ *
+ * Locally that is the API's dev server, reached directly. Against a deployment it is the
+ * *web* address: the API has no public one, and `/api/*` is proxied there by the rewrite in
+ * next.config.mjs — so pointing at the web host is not a shortcut, it is the only route in,
+ * and using it means these calls travel the same path a browser's do.
+ */
+export const API = process.env.E2E_API_URL ?? process.env.E2E_BASE_URL ?? 'http://localhost:4000';
 
 /** Registers an account straight through the API — a precondition, not the thing under test. */
 export async function registerAccount(

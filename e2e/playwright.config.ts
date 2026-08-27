@@ -1,6 +1,21 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const WEB = 'http://localhost:3000';
+/**
+ * Where the suite points.
+ *
+ * Unset, it is the local pair of dev servers this config starts below — the hermetic run
+ * that CI and a fresh clone get. Set to a deployed environment's address, it runs the same
+ * tests against that deployment and starts nothing:
+ *
+ *   E2E_BASE_URL=https://<host> npm run test:e2e
+ *
+ * Note what that second mode really tests. Locally the browser talks to :3000 and the
+ * suite talks to :4000 directly; against a deployment there is only one address, because
+ * the API has no public one and every /api/* call goes through the web app's rewrite. So a
+ * remote run exercises the proxy path too, which the local run cannot.
+ */
+const REMOTE = process.env.E2E_BASE_URL;
+const WEB = REMOTE ?? 'http://localhost:3000';
 
 export default defineConfig({
   testDir: './tests',
@@ -15,7 +30,8 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
-  webServer: [
+  // Nothing to start when the target is a deployment.
+  webServer: REMOTE ? [] : [
     {
       command: 'npm run dev --workspace @devscribed/api',
       cwd: '..',
