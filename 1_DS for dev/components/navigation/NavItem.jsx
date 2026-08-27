@@ -1,6 +1,6 @@
 import React from 'react';
 
-export function NavItem({ icon, label, active, badge, arrow, style, ...rest }) {
+export function NavItem({ icon, label, active, badge, badgeTestId, arrow, style, ...rest }) {
   return (
     <a href="#" {...rest} style={{
       display: 'flex', alignItems: 'center',
@@ -18,7 +18,7 @@ export function NavItem({ icon, label, active, badge, arrow, style, ...rest }) {
       {icon && <span style={{ display: 'flex', marginRight: 12, color: active ? 'var(--accent)' : 'var(--text-faint)', width: 20 }}>{icon}</span>}
       <span>{label}</span>
       {badge != null && (
-        <span style={{
+        <span data-testid={badgeTestId} style={{
           marginLeft: 'auto', minWidth: 18, height: 18, padding: '0 5px',
           borderRadius: 'var(--radius-md)', background: 'var(--accent)', color: 'var(--on-accent)',
           fontFamily: 'var(--font-text)', fontSize: 'var(--fs-11)', fontWeight: 600,

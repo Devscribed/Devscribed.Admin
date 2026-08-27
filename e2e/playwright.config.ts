@@ -19,10 +19,24 @@ const WEB = REMOTE ?? 'http://localhost:3000';
 
 export default defineConfig({
   testDir: './tests',
-  fullyParallel: false,
+
+  /**
+   * Parallel, and safe to be: every test mints its own account, and signup creates a
+   * fresh organization with it, so no test can see another's data. That isolation was
+   * always the design — it just was not being spent.
+   *
+   * It is worth spending now because the suite tripled when the user-management area
+   * landed: ~124 cases at one worker is twelve minutes, which is long enough that people
+   * stop running it before pushing, which is the only way a suite really fails.
+   *
+   * Four locally. Two on CI, where the runner has two cores and more workers than cores
+   * makes a browser-driving suite slower, not faster — and where a flake costs a rerun of
+   * everything.
+   */
+  fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  workers: 1,
+  workers: process.env.CI ? 2 : 4,
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list']],
   use: {
     baseURL: WEB,

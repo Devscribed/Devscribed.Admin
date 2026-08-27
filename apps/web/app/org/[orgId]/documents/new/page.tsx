@@ -29,16 +29,21 @@ import { ToastProvider, useToast } from '@/documents/toast';
 /**
  * `/api/organizations/{orgId}/members` — the subject picker's source (spec 03 autofill).
  *
- * `?forSubjectPicker=true` is the spec's documented flag: it returns active members plus
- * removed ones flagged `isRemoved`, so the picker can show a former member without
- * offering them by default (requirement 13). An API that does not know the flag yet
- * simply returns the plain list, and the picker degrades to actives only.
+ * It used to ask for `?forSubjectPicker=true`, a flag this screen invented because the
+ * members list of the day returned actives only. Spec 04 brought a real one with
+ * `?showRemoved=true`, which answers the same question for the Members screen, so the
+ * flag is gone and this reads the product's list like everything else. Requirement 13
+ * wants a former member listed and marked, not filtered out — hence `showRemoved`.
  */
+/** One row of that list, as spec 04's `MemberListItem` shapes it. */
 interface MemberRow {
   id: string;
-  name: string;
+  fullName: string;
   status: string;
-  isRemoved?: boolean;
+}
+
+interface MemberListResponse {
+  members: MemberRow[];
 }
 
 export default function NewDocumentPage({ params }: { params: Promise<{ orgId: string }> }) {
@@ -97,17 +102,18 @@ function NewDocumentScreen({ orgId }: { orgId: string }) {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const result = await apiRequest<MemberRow[]>(
-        `/api/organizations/${orgId}/members?forSubjectPicker=true`,
+      // `showRemoved=true` rather than a picker-specific flag: requirement 13 wants
+      // removed members listed and marked, not filtered out, and spec 04's own list
+      // already answers exactly that question for the Members screen.
+      const result = await apiRequest<MemberListResponse>(
+        `/api/organizations/${orgId}/members?showRemoved=true`,
       );
       if (cancelled || !result.ok) return;
       setMembers(
-        result.data.map((member) => ({
+        result.data.members.map((member) => ({
           id: member.id,
-          name: member.name,
-          // Either signal is enough: the documented flag, or the status the list has
-          // always carried. Requirement 13 wants them listed and marked, not filtered out.
-          isRemoved: member.isRemoved === true || member.status === 'removed',
+          name: member.fullName,
+          isRemoved: member.status === 'removed',
         })),
       );
     })();

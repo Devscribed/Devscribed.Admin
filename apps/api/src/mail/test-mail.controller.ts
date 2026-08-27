@@ -1,15 +1,20 @@
 import { Controller, Get, Headers, NotFoundException, Query } from '@nestjs/common';
 import { assertFixturesOpen } from '../test-support/fixture-gate';
-import { InMemoryMailService, RecordedMail } from './in-memory-mail.service';
+import { InMemoryMailService } from './in-memory-mail.service';
+import { describeMail } from './outbox-view';
 import { MAIL_MESSAGE_TYPES, MailMessageType, MailService } from './mail.service';
 
 /**
- * LOCAL DEVELOPMENT AFFORDANCE — not part of the product.
+ * TEST-SUPPORT ROUTE — not part of the product.
  *
- * The `list` route below exists only because local mail goes to an in-memory sink, so a
- * second signer's magic link has nowhere to be read. **A real mail transport retires it**:
- * once messages land in an actual mailbox, this route and `/dev`'s outbox panel are dead
- * weight and should be deleted with the sink.
+ * The `list` route below exists only because mail without a provider goes to an in-memory
+ * sink, so a second signer's magic link has nowhere to be read. **A real mail transport
+ * retires it**: once messages land in an actual mailbox, this route is dead weight and
+ * should be deleted with the sink.
+ *
+ * A person reading simulated mail wants the Outbox screen, not this: it is org-scoped,
+ * needs no token, and shows the same rows. This is what a *program* reads — the E2E suite,
+ * which has no session and needs every organization's mail.
  *
  * Lets an E2E run read a link the way a recipient would, without a mailbox.
  *
@@ -67,7 +72,7 @@ export class TestMailController {
     const wanted = type === undefined ? undefined : MAIL_MESSAGE_TYPES.find((k) => k === type);
     if (type !== undefined && wanted === undefined) return [];
 
-    return sink.allRecords(email, wanted).map(describe);
+    return sink.allRecords(email, wanted).map(describeMail);
   }
 
   @Get('latest')
@@ -91,47 +96,6 @@ export class TestMailController {
     // inferring the type from which fields happen to be present.
     return { type: record.type, ...record.message };
   }
-}
-
-/**
- * Subject-ish labels. The application has no subject lines — copy lives in the transport,
- * not in the payload — so the outbox needs a human name per type from somewhere, and the
- * discriminator is the only honest source. Kept here rather than in `mail.service.ts`
- * because it is presentation for a dev screen, not part of the mail contract.
- */
-const SUBJECTS: Record<MailMessageType, string> = {
-  password_reset: 'Reset your password',
-  signing_invitation: 'A document is waiting for your signature',
-  signing_reminder: 'Reminder: a document is waiting for your signature',
-  envelope_completed: 'Your document is complete',
-  envelope_declined: 'A signer declined the document',
-  envelope_voided: 'A document was voided',
-};
-
-/**
- * Flattens one record into the row `/dev` shows: who, what, when, and the one link the
- * message carries. `link` is the whole point of the panel — it is what a recipient would
- * click — so each type contributes whichever URL it defines, and the two messages that
- * carry none say so with `null` rather than being omitted.
- */
-function describe(record: RecordedMail) {
-  // Read through an index signature rather than narrowing on `type` six ways: the three
-  // URL fields are mutually exclusive across the union, so the first one present is the
-  // link, and a message type added later needs no change here to keep working.
-  const message = record.message as unknown as Record<string, unknown>;
-  const link =
-    (message.signingUrl as string | undefined) ??
-    (message.resetUrl as string | undefined) ??
-    (message.downloadUrl as string | undefined) ??
-    null;
-
-  return {
-    type: record.type,
-    to: message.to as string,
-    subject: SUBJECTS[record.type],
-    sentAt: record.sentAt.toISOString(),
-    link,
-  };
 }
 
 function parseMessageType(value: string): MailMessageType {

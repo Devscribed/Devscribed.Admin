@@ -11,10 +11,12 @@ export interface TableColumn<Row = any> {
   render?: (row: Row) => React.ReactNode;
 }
 
-export interface TableProps<Row = any> {
+export interface TableProps<Row = any> extends Omit<React.HTMLAttributes<HTMLDivElement>, 'style'> {
   columns: TableColumn<Row>[];
-  rows: (Row & { id?: string | number; dim?: boolean })[];
+  rows: (Row & { id?: string | number; dim?: boolean; testId?: string })[];
   style?: React.CSSProperties;
+  /** Makes every row clickable (cursor: pointer) and calls back with the row's data. */
+  onRowClick?: (row: Row) => void;
 }
 
 /** Simple flex table — uppercase Grotesk header, hover-tinted body rows. */

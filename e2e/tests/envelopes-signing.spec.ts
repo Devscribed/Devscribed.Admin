@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext, type Browser, type Page } from '@playwright/test';
 import {
   API,
+  addMemberToOrganization,
   createEnvelope,
   createTemplate,
   expireEnvelope,
@@ -627,11 +628,15 @@ test.describe('Envelopes and signing', () => {
 
   test('TC-02-E2E-12: Regular user has no access to documents', async ({ page, request }) => {
     const fixture = await seed(request, 'env-user');
-    // Demoted after the envelope exists: `ManageEnvelopes` is what the test is about
-    // losing, so it has to be spent before it is taken away.
-    await setMembershipRole(request, fixture.adminEmail, 'user');
+    // A second person rather than the admin demoting themselves — the zero-admin guard
+    // refuses that, correctly. The envelope already exists, made by the admin, which is
+    // the state this case is about looking at without `ViewEnvelopes`.
+    const member = await addMemberToOrganization(request, fixture.orgId, {
+      firstName: 'Ulad',
+      lastName: 'User',
+    });
 
-    await signIn(page, fixture.adminEmail);
+    await signIn(page, member.email);
 
     // No dead controls: the group is not drawn for a role the route behind it would 404.
     await expect(page.getByTestId('app-sidebar')).toBeVisible();

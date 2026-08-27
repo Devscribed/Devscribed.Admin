@@ -1,5 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import {
+  addMemberToOrganization,
   createEnvelope,
   createTemplate,
   registerOrganization,
@@ -24,6 +25,23 @@ const TEMPLATES = (orgId: string) => `/org/${orgId}/documents/templates`;
 
 /** The autosave debounce is 2 s, so the indicator needs a window wider than that. */
 const SAVED = { timeout: 15_000 };
+
+/**
+ * Waits for an edit to have actually reached the server.
+ *
+ * Not `save-state` reading "Saved": the editor *starts* in that state, because on load
+ * there is nothing to save. Waiting for it therefore matches the instant the assertion
+ * runs and proves nothing — a race that was invisible while the suite ran one test at a
+ * time and surfaced the moment it ran four.
+ *
+ * The success toast is the honest signal: it is shown by the save itself, only after the
+ * response comes back. The indicator settling on "Saved" afterwards is then a real
+ * transition rather than the initial value.
+ */
+async function savedToServer(page: Page): Promise<void> {
+  await expect(page.getByTestId('toast-template-saved')).toBeVisible(SAVED);
+  await expect(page.getByTestId('template-save-state')).toHaveText('Saved', SAVED);
+}
 
 test.describe('Document templates', () => {
   test('TC-01-E2E-01: Admin creates and publishes a template', async ({ page, request }) => {
@@ -66,7 +84,7 @@ test.describe('Document templates', () => {
 
     // Publish is guarded while a save is in flight, so the test waits for the same
     // signal an author would: the indicator settling on "Saved".
-    await expect(page.getByTestId('template-save-state')).toHaveText('Saved', SAVED);
+    await savedToServer(page);
     await page.getByTestId('template-publish-btn').click();
 
     await expect(page.getByTestId('toast-template-published')).toHaveText('Template published');
@@ -89,7 +107,7 @@ test.describe('Document templates', () => {
     await page.goto(`${TEMPLATES(orgId)}/${templateId}`);
 
     await page.getByTestId('template-body-editor').fill('<p>AGREEMENT No. {{contract_number}}</p>');
-    await expect(page.getByTestId('template-save-state')).toHaveText('Saved', SAVED);
+    await savedToServer(page);
 
     await page.getByTestId('template-publish-btn').click();
 
@@ -114,7 +132,7 @@ test.describe('Document templates', () => {
     await page
       .getByTestId('template-body-editor')
       .fill('<script>window.__x=1</script><p>Clause 1</p>');
-    await expect(page.getByTestId('template-save-state')).toHaveText('Saved', SAVED);
+    await savedToServer(page);
 
     await page.reload();
 
@@ -148,8 +166,12 @@ test.describe('Document templates', () => {
     // A published version is frozen, so the editor asks before spawning draft v2 — the
     // "Edit" affordance from the spec's States table.
     await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    // Wait for the unlock before typing into it. A click that lands before the page has
+    // hydrated is simply dropped, and the fill then goes into a read-only textarea and
+    // silently does nothing — which is what this looked like under a parallel run.
+    await expect(page.getByTestId('template-body-editor')).not.toHaveAttribute('readonly', '');
     await page.getByTestId('template-body-editor').fill('<p>REVISED for {{contractor_full_name}}</p>');
-    await expect(page.getByTestId('template-save-state')).toHaveText('Saved', SAVED);
+    await savedToServer(page);
 
     await expect(page.getByTestId('template-version-summary')).toHaveText('v1 published · v2 draft');
 
@@ -195,19 +217,25 @@ test.describe('Document templates', () => {
   });
 
   test('TC-01-E2E-06: Manager sees templates read-only', async ({ page, request }) => {
-    const email = uniqueEmail('tpl-manager');
-    const { orgId } = await registerOrganization(request, email);
-    // Seeded while the account is still an admin — `ManageDocumentTemplates` is what the
-    // test is about losing, so it has to be spent before it is taken away.
+    const adminEmail = uniqueEmail('tpl-admin');
+    const { orgId } = await registerOrganization(request, adminEmail);
     const templateId = await createTemplate(request, orgId, {
       name: 'Contractor agreement BY',
       bodyHtml: '<p>AGREEMENT with {{contractor_full_name}}</p>',
       fields: [{ key: 'contractor_full_name', label: 'Full name', required: true }],
       publish: true,
     });
-    await setMembershipRole(request, email, 'manager');
 
-    await signIn(page, email);
+    // A second person, invited as a manager, rather than the admin demoting themselves:
+    // the zero-admin guard refuses that, correctly, and a test should not need a state
+    // the product forbids.
+    const manager = await addMemberToOrganization(request, orgId, {
+      firstName: 'Marina',
+      lastName: 'Manager',
+    });
+    await setMembershipRole(request, orgId, manager.email, 'manager');
+
+    await signIn(page, manager.email);
     await page.goto(TEMPLATES(orgId));
 
     await expect(page.getByTestId('templates-table')).toBeVisible();
@@ -229,17 +257,22 @@ test.describe('Document templates', () => {
   });
 
   test('TC-01-E2E-07: Regular user has no access', async ({ page, request }) => {
-    const email = uniqueEmail('tpl-user');
-    const { orgId } = await registerOrganization(request, email);
+    const adminEmail = uniqueEmail('tpl-admin');
+    const { orgId } = await registerOrganization(request, adminEmail);
     const templateId = await createTemplate(request, orgId, {
       name: 'Contractor agreement BY',
       bodyHtml: '<p>AGREEMENT with {{contractor_full_name}}</p>',
       fields: [{ key: 'contractor_full_name', label: 'Full name', required: true }],
       publish: true,
     });
-    await setMembershipRole(request, email, 'user');
 
-    await signIn(page, email);
+    // Invited as a plain user — see the note in TC-01-E2E-06 about the zero-admin guard.
+    const member = await addMemberToOrganization(request, orgId, {
+      firstName: 'Ulad',
+      lastName: 'User',
+    });
+
+    await signIn(page, member.email);
 
     // No dead controls: the Documents group is not drawn for a role that would only get
     // a 404 from the route behind it.

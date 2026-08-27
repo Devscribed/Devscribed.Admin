@@ -2,9 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { ConsoleMailService } from './console-mail.service';
 import {
   AnyMailMessage,
+  EmailChangeConfirmationEmail,
+  EmailChangeNotificationEmail,
   EnvelopeCompletedEmail,
   EnvelopeDeclinedEmail,
   EnvelopeVoidedEmail,
+  InvitationEmail,
   MailMessageType,
   MailMessages,
   PasswordResetEmail,
@@ -30,14 +33,17 @@ export interface RecordedMail<T extends MailMessageType = MailMessageType> {
  *
  * It is the password-reset shape intersected with every other message's fields made
  * optional, rather than a discriminated union, for one concrete reason: the
- * password-reset tests predate the signing messages and read `mail.sent[0].token`
- * directly. A union would stop those compiling, and the area README is explicit that no
- * existing test should need editing for this change. Read a field only when `type` says
- * the message defines it; `lastFor(email, type)` is the typed way to do that.
+ * password-reset tests predate every other message and read `mail.sent[0].token`
+ * directly. A union would stop those compiling, and no existing test should need editing
+ * to add a message type. Read a field only when `type` says the message defines it;
+ * `lastFor(email, type)` is the typed way to do that.
  */
 export type SentMail = { type: MailMessageType } & PasswordResetEmail &
   Partial<
-    SigningInvitationEmail &
+    InvitationEmail &
+      EmailChangeConfirmationEmail &
+      EmailChangeNotificationEmail &
+      SigningInvitationEmail &
       SigningReminderEmail &
       EnvelopeCompletedEmail &
       EnvelopeDeclinedEmail &
@@ -46,12 +52,21 @@ export type SentMail = { type: MailMessageType } & PasswordResetEmail &
 
 /**
  * The test mail sink. Keeps every message in memory so integration and E2E tests can read
- * a link the way a recipient would, without a real mailbox.
+ * a link the way a recipient would, without a real mailbox, and so the dev outbox has
+ * something to show on an environment with no mail provider.
  *
  * It extends the console transport rather than reimplementing it, which makes "the sink
  * is a strict superset of the console transport" structural instead of a promise — every
  * message it records is also logged, so it can be the non-production default without
  * costing a developer the clickable URL.
+ *
+ * **One list, not one array per message type.** The user-management area kept a typed
+ * array per kind (`sentInvitations`, `sentEmailChangeConfirmations`, …) and the documents
+ * area kept a single list with a discriminator; this is the second, with the first
+ * preserved as derived views so every test that reads them keeps reading them. The single
+ * list is what `/api/test/mail`, the `/dev` console, and the outbox screen are built on:
+ * they ask for "everything, newest first, optionally narrowed", and per-type arrays cannot
+ * answer that without knowing every type in advance.
  */
 @Injectable()
 export class InMemoryMailService extends ConsoleMailService {
@@ -66,9 +81,45 @@ export class InMemoryMailService extends ConsoleMailService {
     return this.records.map((record) => ({ type: record.type, ...record.message }) as SentMail);
   }
 
+  /* ---------------------------------------------------------------- *
+   * Per-type views, kept because the user-management suites read them by name. Derived
+   * rather than stored: a second list is a second thing to remember to clear.
+   * ---------------------------------------------------------------- */
+
+  get sentInvitations(): InvitationEmail[] {
+    return this.messagesOf('invitation');
+  }
+
+  get sentEmailChangeConfirmations(): EmailChangeConfirmationEmail[] {
+    return this.messagesOf('email_change_confirmation');
+  }
+
+  get sentEmailChangeNotifications(): EmailChangeNotificationEmail[] {
+    return this.messagesOf('email_change_notification');
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Sending
+   * ---------------------------------------------------------------- */
+
   async sendPasswordReset(message: PasswordResetEmail): Promise<void> {
     this.record('password_reset', message);
     await super.sendPasswordReset(message);
+  }
+
+  async sendInvitation(message: InvitationEmail): Promise<void> {
+    this.record('invitation', message);
+    await super.sendInvitation(message);
+  }
+
+  async sendEmailChangeConfirmation(message: EmailChangeConfirmationEmail): Promise<void> {
+    this.record('email_change_confirmation', message);
+    await super.sendEmailChangeConfirmation(message);
+  }
+
+  async sendEmailChangeNotification(message: EmailChangeNotificationEmail): Promise<void> {
+    this.record('email_change_notification', message);
+    await super.sendEmailChangeNotification(message);
   }
 
   async sendSigningInvitation(message: SigningInvitationEmail): Promise<void> {
@@ -109,18 +160,37 @@ export class InMemoryMailService extends ConsoleMailService {
     this.records.length = 0;
   }
 
+  /* ---------------------------------------------------------------- *
+   * Reading
+   * ---------------------------------------------------------------- */
+
   /**
    * Most recent message for an address — what a test would open.
    *
    * The single-argument form keeps its original meaning, a password reset, so the
    * password-reset tests read exactly as before and still get a `PasswordResetEmail`
    * rather than a union they would have to narrow. The two-argument form is the
-   * discriminator the signing tests need.
+   * discriminator every later message needs.
    */
   lastFor(email: string): PasswordResetEmail | undefined;
   lastFor<T extends MailMessageType>(email: string, type: T): MailMessages[T] | undefined;
   lastFor(email: string, type: MailMessageType = 'password_reset'): AnyMailMessage | undefined {
     return this.latestFor(email, type)?.message;
+  }
+
+  /** Most recent invitation for an address — what a test, or an admin, would open. */
+  lastInvitationFor(email: string): InvitationEmail | undefined {
+    return this.lastFor(email, 'invitation');
+  }
+
+  /** Most recent email-change confirmation for the NEW address — carries the token. */
+  lastEmailChangeConfirmationFor(email: string): EmailChangeConfirmationEmail | undefined {
+    return this.lastFor(email, 'email_change_confirmation');
+  }
+
+  /** Most recent email-change notification sent to the OLD address. */
+  lastEmailChangeNotificationFor(email: string): EmailChangeNotificationEmail | undefined {
+    return this.lastFor(email, 'email_change_notification');
   }
 
   /**
@@ -155,6 +225,13 @@ export class InMemoryMailService extends ConsoleMailService {
           (type === undefined || record.type === type) &&
           (wanted === undefined || record.message.to.trim().toLowerCase() === wanted),
       );
+  }
+
+  /** Oldest first, matching the per-type arrays these views replaced. */
+  private messagesOf<T extends MailMessageType>(type: T): MailMessages[T][] {
+    return this.records
+      .filter((record) => record.type === type)
+      .map((record) => record.message as MailMessages[T]);
   }
 
   private record<T extends MailMessageType>(type: T, message: MailMessages[T]): void {

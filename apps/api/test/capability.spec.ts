@@ -4,11 +4,23 @@ import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma.service';
+import { setRole, signup } from './envelope-fixtures';
 
 /**
- * The test-only role affordance E2E depends on, and the guard behaviour that is easier
- * to pin here than through a template: that the capability check reads the *live*
- * membership rather than the session cookie.
+ * The one guard behaviour that is easier to pin here than through a template: the
+ * capability check reads the **live membership**, not the role baked into the session
+ * cookie. A demotion therefore takes effect on the next request rather than the next
+ * sign-in, which is the same reasoning that makes `SessionGuard` re-read the security
+ * stamp.
+ *
+ * This file used to also cover `POST /api/test/role`, a fixture that existed because
+ * signup created an `admin` and nothing could change that. Spec 04's invitation flow and
+ * spec 05's `PUT .../members/:memberId` retired it, and its tests went with it — what is
+ * left is the guard property, which was always the part worth having.
+ *
+ * The role is moved with a direct write rather than through the API on purpose: the
+ * subject here is the guard, and routing through `PUT` would put role-authority rules,
+ * the zero-admin guard, and a second session in front of the thing being asserted.
  *
  * TC-01-INT-11 itself lives in document-templates.spec.ts, alongside the endpoints it
  * covers.
@@ -16,17 +28,6 @@ import { PrismaService } from '../src/prisma.service';
 describe('Capability plumbing', () => {
   let app: INestApplication;
   let prisma: PrismaService;
-
-  const signup = async (email: string, orgName: string) => {
-    const response = await request(app.getHttpServer())
-      .post('/api/signup')
-      .send({ orgName, firstName: 'Pat', lastName: 'Owner', email, password: 'Passw0rd' })
-      .expect(201);
-    return {
-      cookies: response.headers['set-cookie'] as unknown as string[],
-      organizationId: response.body.organization.id,
-    };
-  };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -41,6 +42,9 @@ describe('Capability plumbing', () => {
   });
 
   beforeEach(async () => {
+    // Envelopes first: `Envelope.templateVersionId` is `Restrict`, so a template cannot
+    // go while anything built from it is still standing.
+    await prisma.envelope.deleteMany();
     await prisma.documentTemplate.updateMany({ data: { currentVersionId: null } });
     await prisma.documentTemplate.deleteMany();
     await prisma.membership.deleteMany();
@@ -48,64 +52,27 @@ describe('Capability plumbing', () => {
     await prisma.account.deleteMany();
   });
 
-  it('sets a membership role through POST /api/test/role', async () => {
-    await signup('admin@acme.com', 'Acme Inc');
-
-    const response = await request(app.getHttpServer())
-      .post('/api/test/role')
-      .send({ email: 'admin@acme.com', role: 'manager' })
-      .expect(200);
-    expect(response.body).toEqual({ email: 'admin@acme.com', role: 'manager' });
-
-    const membership = await prisma.membership.findFirstOrThrow();
-    expect(membership.role).toBe('manager');
-  });
-
-  it('normalizes the legacy member value on the way in', async () => {
-    await signup('admin@acme.com', 'Acme Inc');
-
-    await request(app.getHttpServer())
-      .post('/api/test/role')
-      .send({ email: 'admin@acme.com', role: 'member' })
-      .expect(200);
-
-    const membership = await prisma.membership.findFirstOrThrow();
-    expect(membership.role).toBe('user');
-  });
-
-  it('404s for an address with no account', async () => {
-    await request(app.getHttpServer())
-      .post('/api/test/role')
-      .send({ email: 'nobody@acme.com', role: 'manager' })
-      .expect(404);
-  });
-
-  it('404s entirely in production', async () => {
-    await signup('admin@acme.com', 'Acme Inc');
-    const previous = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
-    try {
-      await request(app.getHttpServer())
-        .post('/api/test/role')
-        .send({ email: 'admin@acme.com', role: 'manager' })
-        .expect(404);
-    } finally {
-      process.env.NODE_ENV = previous;
-    }
-  });
-
   it('applies a demotion to the very next request, without a new sign-in', async () => {
-    const admin = await signup('admin@acme.com', 'Acme Inc');
+    const admin = await signup(app, 'admin@acme.com', 'Acme Inc');
     const list = `/api/organizations/${admin.organizationId}/document-templates`;
 
     await request(app.getHttpServer()).get(list).set('Cookie', admin.cookies).expect(200);
 
-    await request(app.getHttpServer())
-      .post('/api/test/role')
-      .send({ email: 'admin@acme.com', role: 'viewer' })
-      .expect(200);
+    await setRole(prisma, 'admin@acme.com', 'viewer');
 
     // Same cookie, same session — the role is read from the membership, not the token.
+    await request(app.getHttpServer()).get(list).set('Cookie', admin.cookies).expect(403);
+  });
+
+  it('normalizes the legacy member value, so a stored `member` cannot widen access', async () => {
+    const admin = await signup(app, 'admin@acme.com', 'Acme Inc');
+    const list = `/api/organizations/${admin.organizationId}/document-templates`;
+
+    // `member` is the value today's database actually holds, and it normalizes to `user`
+    // — which has no template capability at all. A check that read the column raw would
+    // fall through to a default and let it past.
+    await setRole(prisma, 'admin@acme.com', 'member');
+
     await request(app.getHttpServer()).get(list).set('Cookie', admin.cookies).expect(403);
   });
 });

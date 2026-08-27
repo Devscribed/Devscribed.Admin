@@ -1412,11 +1412,11 @@ export class EnvelopesService {
    * real value. Calling `maskProfileValue` here would put `***4567` into a signed
    * agreement.
    *
-   * `member.jobTitle` passes `null` because `Membership.jobTitle` **does not exist**: it is
-   * user-management spec 05's column, and this spec must not add it. The source stays in
-   * the catalogue and resolves to the empty string, which requirement 7 already makes
-   * legal — so a template bound to it today starts working the day spec 05 ships, with no
-   * template migration.
+   * `member.jobTitle` reads `Membership.jobTitle`. It passed `null` while that column did
+   * not exist — the source stayed in the catalogue and resolved to the empty string, which
+   * requirement 7 makes legal — and the promise made here was that a template bound to it
+   * would start working the day the column shipped, with no template migration. Spec 05
+   * shipped it; this is that day, and nothing about the templates changed.
    *
    * The timezone is the *creating account's*, not the organization's, and that is a
    * documented approximation: requirement 2 says `today` is the server date in the
@@ -1449,7 +1449,7 @@ export class EnvelopesService {
               firstName: subject.account.firstName,
               lastName: subject.account.lastName,
               email: subject.account.email,
-              jobTitle: null,
+              jobTitle: subject.jobTitle,
               joinedAt: subject.joinedAt,
               addressLine: subject.profile?.addressLine ?? null,
               city: subject.profile?.city ?? null,

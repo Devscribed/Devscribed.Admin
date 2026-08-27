@@ -347,23 +347,24 @@ describe('Member contract details', () => {
         data: { status: 'removed' },
       });
 
+      // The subject picker reads spec 04's members list with `showRemoved`, not a flag
+      // of its own: requirement 13 wants a former member listed and marked, and that is
+      // the question `showRemoved` already answers for the Members screen.
       const base = `/api/organizations/${admin.organizationId}/members`;
       const plain = await request(app.getHttpServer())
         .get(base)
         .set('Cookie', admin.cookies)
         .expect(200);
-      // Requirement: no existing response shape changes.
-      expect(plain.body.every((m: Record<string, unknown>) => !('isRemoved' in m))).toBe(true);
+      expect(
+        plain.body.members.some((m: { id: string }) => m.id === alex.membershipId),
+      ).toBe(false);
 
       const picker = await request(app.getHttpServer())
-        .get(`${base}?forSubjectPicker=true`)
+        .get(`${base}?showRemoved=true`)
         .set('Cookie', admin.cookies)
         .expect(200);
-      const listed = picker.body.find((m: { id: string }) => m.id === alex.membershipId);
-      expect(listed.isRemoved).toBe(true);
-      expect(picker.body.find((m: { id: string }) => m.id !== alex.membershipId).isRemoved).toBe(
-        false,
-      );
+      const listed = picker.body.members.find((m: { id: string }) => m.id === alex.membershipId);
+      expect(listed.status).toBe('removed');
     });
   });
 });

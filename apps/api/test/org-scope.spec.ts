@@ -64,8 +64,9 @@ describe('GET /api/organizations/:orgId/members', () => {
     const response = await members(mine.organizationId, mine.cookies);
 
     expect(response.status).toBe(200);
-    expect(response.body).toHaveLength(1);
-    expect(response.body[0]).toMatchObject({ email: 'pat@acme.com', role: 'admin' });
+    expect(response.body.members).toHaveLength(1);
+    expect(response.body.members[0]).toMatchObject({ email: 'pat@acme.com', role: 'admin' });
+    expect(response.body.callerRole).toBe('admin');
   });
 
   it('answers 404 for an organization the session does not belong to', async () => {

@@ -109,10 +109,14 @@ test.describe('Dev outbox', () => {
     request,
   }) => {
     const fixture = await seedSentEnvelope(request, 'ob-user');
-    // Demoted after the envelope exists: sending is what the test is about losing.
-    await setMembershipRole(request, fixture.adminEmail, 'user');
+    // A second person rather than a demotion: the sole admin cannot be demoted, and the
+    // envelope has to have been sent by somebody for there to be an outbox to hide.
+    const member = await addMemberToOrganization(request, fixture.orgId, {
+      firstName: 'Ulad',
+      lastName: 'User',
+    });
 
-    await signIn(page, fixture.adminEmail);
+    await signIn(page, member.email);
 
     await expect(page.getByTestId('app-sidebar')).toBeVisible();
     await expect(page.getByTestId('nav-outbox')).toHaveCount(0);
@@ -158,12 +162,19 @@ test.describe('Dev outbox', () => {
       firstName: 'Marina',
       lastName: 'Kovaleva',
     });
-    await setMembershipRole(request, manager.email, 'manager');
+    await setMembershipRole(request, fixture.orgId, manager.email, 'manager');
 
     await signIn(page, manager.email);
     await page.goto(OUTBOX(fixture.orgId));
 
     await expect(page.getByTestId('outbox-page')).toBeVisible();
+    // Two messages, not one: inviting the manager sent them an invitation, and an
+    // invitation belongs to the organization that sent it, so the outbox shows it. That
+    // is the point of the screen rather than an accident of the fixture — an admin with
+    // no mail provider reaches an accept link the same way they reach a signing one.
+    await page.getByTestId('outbox-type-filter').click();
+    await page.getByRole('option', { name: 'Signing invitations' }).click();
     await expect(page.getByTestId('outbox-row')).toHaveCount(1);
+    await expect(page.getByTestId('outbox-row').first()).toContainText(fixture.title);
   });
 });

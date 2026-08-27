@@ -1,8 +1,25 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useSession } from './session-context';
+
+/** Shared treatment for every item in the account menu card (Account settings, Log out). */
+const MENU_ITEM_STYLE: React.CSSProperties = {
+  display: 'block',
+  width: '100%',
+  textAlign: 'left',
+  padding: '8px 12px',
+  background: 'transparent',
+  border: 'none',
+  borderRadius: 'var(--radius-md)',
+  cursor: 'pointer',
+  fontFamily: 'var(--font-text)',
+  fontSize: 'var(--fs-14)',
+  color: 'var(--text-sub)',
+  textDecoration: 'none',
+};
 
 /**
  * The template's top bar also carries a tracker chip and a light/dark switch. Neither
@@ -109,24 +126,27 @@ export function Topbar() {
               zIndex: 10,
             }}
           >
+            <Link
+              href="/account/settings"
+              role="menuitem"
+              data-testid="account-settings-menu-link"
+              onClick={() => setOpen(false)}
+              style={MENU_ITEM_STYLE}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--hover-bg-tint)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+              }}
+            >
+              Account settings
+            </Link>
             <button
               type="button"
               role="menuitem"
               data-testid="logout-button"
               onClick={logout}
-              style={{
-                display: 'block',
-                width: '100%',
-                textAlign: 'left',
-                padding: '8px 12px',
-                background: 'transparent',
-                border: 'none',
-                borderRadius: 'var(--radius-md)',
-                cursor: 'pointer',
-                fontFamily: 'var(--font-text)',
-                fontSize: 'var(--fs-14)',
-                color: 'var(--text-sub)',
-              }}
+              style={MENU_ITEM_STYLE}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = 'var(--hover-bg-tint)';
               }}

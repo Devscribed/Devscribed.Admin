@@ -10,6 +10,10 @@ export interface SelectProps {
   placeholder?: string;
   error?: string;
   disabled?: boolean;
+  /** Native tooltip on the trigger button — `Select.jsx` already forwards unknown
+   * props (including this) onto the button via `...rest`; this type only catches up
+   * to that. Used by spec 05's role picker for the zero-admin-guard explanation. */
+  title?: string;
   style?: React.CSSProperties;
   wrapperStyle?: React.CSSProperties;
 }

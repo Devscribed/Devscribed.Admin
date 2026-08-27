@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@devscribed/validation": "*",
+    "libphonenumber-js": "^1.13.11",
     "next": "^15.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

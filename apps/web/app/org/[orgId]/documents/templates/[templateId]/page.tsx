@@ -137,17 +137,37 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
     }
 
     const data = result.data;
-    const source = data.draftVersion ?? data.currentVersion;
     setDetail(data);
+
+    /**
+     * Seed the editable buffer only while there is nothing in it worth keeping.
+     *
+     * `load` runs from an effect, and an effect can run more than once — React's
+     * StrictMode double-invokes them in development, and a remount re-runs them anywhere.
+     * A second resolution arriving after the author has typed used to overwrite the
+     * buffer, reset `saveState` to `saved`, and re-lock a published template they had
+     * just unlocked: the edit vanished, nothing looked dirty, so nothing was ever saved.
+     * It reads as "my change did not stick" and it is the same shape of bug as the two
+     * fixed on this screen already — late state clobbering live state.
+     *
+     * `revision.current` is the count of local edits, so zero means the buffer is exactly
+     * what the server last gave us and re-seeding it is free.
+     */
+    // Version numbers and validation describe the server's state, not the author's, so
+    // they are always adopted — a reload after publishing has to be able to say so.
+    setPublishedVersion(data.currentVersion?.versionNumber ?? null);
+    setDraftVersion(data.draftVersion?.versionNumber ?? null);
+    setValidation(data.validation);
+
+    if (revision.current > 0) return;
+
+    const source = data.draftVersion ?? data.currentVersion;
     setBody(data.draftVersion?.bodyHtml ?? data.currentVersion?.bodyHtml ?? '');
     setFields(source?.fields ?? []);
     setSigners(
       source?.signerRoles && source.signerRoles.length === 2 ? source.signerRoles : EMPTY_SIGNERS,
     );
     setRowVersion(data.draftVersion?.rowVersion ?? 0);
-    setPublishedVersion(data.currentVersion?.versionNumber ?? null);
-    setDraftVersion(data.draftVersion?.versionNumber ?? null);
-    setValidation(data.validation);
     setSaveState('saved');
     setEditUnlocked(false);
     setPublishError(null);
@@ -337,6 +357,10 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
       message: TEMPLATE_MESSAGES.toast.published,
       tone: 'success',
     });
+    // The buffer is no longer ahead of the server — publishing flushed it on the way in —
+    // so the reload below is allowed to seed from the freshly published version. Without
+    // this the editor keeps showing a draft that no longer exists.
+    revision.current = 0;
     await load();
   }
 
@@ -357,6 +381,8 @@ function EditorScreen({ orgId, templateId }: { orgId: string; templateId: string
       message: TEMPLATE_MESSAGES.toast.archived,
       tone: 'success',
     });
+    // Archiving freezes the template; whatever was in the buffer is moot.
+    revision.current = 0;
     await load();
   }
 

@@ -1,6 +1,9 @@
 import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
 import { Injectable, Logger } from '@nestjs/common';
 import {
+  EmailChangeConfirmationEmail,
+  EmailChangeNotificationEmail,
+  InvitationEmail,
   EnvelopeCompletedEmail,
   EnvelopeDeclinedEmail,
   EnvelopeVoidedEmail,
@@ -48,6 +51,45 @@ export class SesMailService extends MailService {
       `<p>Hi ${escape(message.firstName)},</p>` +
         `<p>Use the link below to choose a new password.</p>` +
         button(message.resetUrl, 'Reset password'),
+    );
+  }
+
+  /* ---------------------------------------------------------------- *
+   * User management — specs 03 and 06. Added here because `MailService` declares a
+   * method per message and this class must acknowledge each one; a transport that
+   * silently dropped an invitation would be a member who never joins.
+   * ---------------------------------------------------------------- */
+
+  async sendInvitation(message: InvitationEmail): Promise<void> {
+    await this.send(
+      message.to,
+      `You have been invited to join ${message.organizationName}`,
+      `<p>You have been invited to join <strong>${escape(message.organizationName)}</strong> ` +
+        `as ${escape(message.role)}.</p>` +
+        button(message.acceptUrl, 'Accept invitation'),
+    );
+  }
+
+  async sendEmailChangeConfirmation(message: EmailChangeConfirmationEmail): Promise<void> {
+    await this.send(
+      message.to,
+      'Confirm your new email address',
+      `<p>Hi ${escape(message.firstName)},</p>` +
+        `<p>Confirm this address to finish changing the email on your account.</p>` +
+        button(message.confirmUrl, 'Confirm email address'),
+    );
+  }
+
+  async sendEmailChangeNotification(message: EmailChangeNotificationEmail): Promise<void> {
+    // No link, deliberately: this one goes to the *old* address to tell somebody their
+    // account is moving. If it is a surprise to them, the thing to do is sign in and stop
+    // it, not to click something in the mail that announced it.
+    await this.send(
+      message.to,
+      'Your email address is being changed',
+      `<p>Hi ${escape(message.firstName)},</p>` +
+        `<p>A request was made to change the email address on your account. If this was ` +
+        `not you, sign in and change your password.</p>`,
     );
   }
 

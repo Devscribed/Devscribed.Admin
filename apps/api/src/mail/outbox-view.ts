@@ -17,6 +17,9 @@ import { MailMessageType } from './mail.service';
  */
 export const MAIL_SUBJECTS: Record<MailMessageType, string> = {
   password_reset: 'Reset your password',
+  invitation: 'You have been invited to join an organization',
+  email_change_confirmation: 'Confirm your new email address',
+  email_change_notification: 'Your email address is being changed',
   signing_invitation: 'A document is waiting for your signature',
   signing_reminder: 'Reminder: a document is waiting for your signature',
   envelope_completed: 'Your document is complete',
@@ -49,6 +52,8 @@ export function describeMail(record: RecordedMail): OutboxRow {
   const link =
     (message.signingUrl as string | undefined) ??
     (message.resetUrl as string | undefined) ??
+    (message.acceptUrl as string | undefined) ??
+    (message.confirmUrl as string | undefined) ??
     (message.downloadUrl as string | undefined) ??
     null;
 

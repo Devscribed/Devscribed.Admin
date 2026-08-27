@@ -7,6 +7,39 @@ export interface PasswordResetEmail {
   resetUrl: string;
 }
 
+/** Spec 03. */
+export interface InvitationEmail {
+  to: string;
+  organizationName: string;
+  /**
+   * The organization that invited them. Same purpose as on `EnvelopeEmailBase`: it is
+   * what lets the dev outbox show an admin their own organization's invitations — and an
+   * accept link is exactly as sensitive as a signing one, so it must not be shown wider.
+   */
+  organizationId: string;
+  role: string;
+  /** The raw token — this is the only place outside the email that ever holds it. */
+  token: string;
+  /** Fully-formed link the recipient clicks. */
+  acceptUrl: string;
+}
+
+/** Spec 06 — confirmation link, sent to the NEW address. */
+export interface EmailChangeConfirmationEmail {
+  to: string;
+  firstName: string;
+  /** The raw token — this is the only place outside the email that ever holds it. */
+  token: string;
+  /** Fully-formed link the recipient clicks. */
+  confirmUrl: string;
+}
+
+/** Spec 06 — informational notice, sent to the OLD address (requirement 2). */
+export interface EmailChangeNotificationEmail {
+  to: string;
+  firstName: string;
+}
+
 /** Fields every signing message shares. Kept separate so a new message cannot forget one. */
 export interface EnvelopeEmailBase {
   to: string;
@@ -73,6 +106,13 @@ export interface EnvelopeVoidedEmail extends EnvelopeEmailBase {
  */
 export interface MailMessages {
   password_reset: PasswordResetEmail;
+  // Spec 03 and spec 06 arrived with the user-management area and are recorded here for
+  // the same reason the signing messages are: a message the sink cannot name is a message
+  // no test can read and no outbox can show. An invitation link, in particular, is the
+  // one thing an admin needs to reach while there is no mail provider.
+  invitation: InvitationEmail;
+  email_change_confirmation: EmailChangeConfirmationEmail;
+  email_change_notification: EmailChangeNotificationEmail;
   signing_invitation: SigningInvitationEmail;
   signing_reminder: SigningReminderEmail;
   envelope_completed: EnvelopeCompletedEmail;
@@ -86,6 +126,9 @@ export type AnyMailMessage = MailMessages[MailMessageType];
 
 export const MAIL_MESSAGE_TYPES: readonly MailMessageType[] = [
   'password_reset',
+  'invitation',
+  'email_change_confirmation',
+  'email_change_notification',
   'signing_invitation',
   'signing_reminder',
   'envelope_completed',
@@ -108,6 +151,9 @@ export const MAIL_MESSAGE_TYPES: readonly MailMessageType[] = [
  */
 export abstract class MailService {
   abstract sendPasswordReset(message: PasswordResetEmail): Promise<void>;
+  abstract sendInvitation(message: InvitationEmail): Promise<void>;
+  abstract sendEmailChangeConfirmation(message: EmailChangeConfirmationEmail): Promise<void>;
+  abstract sendEmailChangeNotification(message: EmailChangeNotificationEmail): Promise<void>;
 
   /** Requirement 10: the invitation to the signer whose turn it is. */
   abstract sendSigningInvitation(message: SigningInvitationEmail): Promise<void>;

@@ -149,7 +149,7 @@ async function seed(
   });
   // The subject is a plain member of this organization; nothing in these cases depends on
   // what the *subject* may do, only on what the viewer may.
-  await setMembershipRole(request, subject.email, 'user');
+  await setMembershipRole(request, orgId, subject.email, 'user');
 
   if (options.profile) await setMemberProfile(request, orgId, subject.membershipId, options.profile);
 
@@ -234,6 +234,10 @@ test.describe('Field autofill', () => {
     // Reached the way an admin reaches it — through the members list — rather than by
     // typing the detail address, because the row is the only route the product offers.
     await page.getByTestId(`member-row-${fixture.subject.membershipId}`).click();
+    // The detail screen has to be there before its tabs are worth clicking: the row is a
+    // client-side navigation now (spec 05), so a click sent the instant the row is hit
+    // lands on a page that is still being replaced and is simply lost.
+    await expect(page.getByTestId('member-detail')).toBeVisible();
     await page.getByTestId('member-detail-tab-contract-details').click();
 
     await expect(page.getByTestId('member-contract-details')).toBeVisible();
@@ -418,7 +422,7 @@ test.describe('Field autofill', () => {
       lastName: 'Manager',
       email: uniqueEmail('af-mask-manager'),
     });
-    await setMembershipRole(request, manager.email, 'manager');
+    await setMembershipRole(request, fixture.orgId, manager.email, 'manager');
     const signer1 = uniqueEmail('af-mask-company');
     const signer2 = uniqueEmail('af-mask-contractor');
 
@@ -479,6 +483,10 @@ test.describe('Field autofill', () => {
     // them) looking at their own row, which is the matrix's "user (own)" column.
     await signIn(page, fixture.subject.email);
     await page.getByTestId(`member-row-${fixture.subject.membershipId}`).click();
+    // The detail screen has to be there before its tabs are worth clicking: the row is a
+    // client-side navigation now (spec 05), so a click sent the instant the row is hit
+    // lands on a page that is still being replaced and is simply lost.
+    await expect(page.getByTestId('member-detail')).toBeVisible();
     await page.getByTestId('member-detail-tab-contract-details').click();
 
     // The permission matrix's "user (own)" column: full values, and the right to edit.
@@ -518,7 +526,7 @@ test.describe('Field autofill', () => {
       lastName: 'Regular',
       email: uniqueEmail('af-other-user'),
     });
-    await setMembershipRole(request, outsider.email, 'user');
+    await setMembershipRole(request, fixture.orgId, outsider.email, 'user');
 
     await signIn(page, outsider.email);
 

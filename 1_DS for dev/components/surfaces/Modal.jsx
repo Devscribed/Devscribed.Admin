@@ -6,7 +6,7 @@ const Close = () => (
   </svg>
 );
 
-export function Modal({ open, title, onClose, actions, children, width = 420, style }) {
+export function Modal({ open, title, onClose, actions, children, width = 420, style, ...rest }) {
   if (!open) return null;
   return (
     <div style={{
@@ -14,12 +14,17 @@ export function Modal({ open, title, onClose, actions, children, width = 420, st
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: 20, zIndex: 100,
     }} onClick={onClose}>
-      <div onClick={(e) => e.stopPropagation()} style={{
-        width: '100%', maxWidth: width,
-        background: 'var(--bg-panel)', border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-2xl)', boxShadow: 'var(--shadow-modal)',
-        padding: '24px 26px', ...style,
-      }}>
+      <div
+        {...rest}
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '100%', maxWidth: width,
+          background: 'var(--bg-panel)', border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-2xl)', boxShadow: 'var(--shadow-modal)',
+          padding: '24px 26px', ...style,
+        }}>
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           marginBottom: 18,

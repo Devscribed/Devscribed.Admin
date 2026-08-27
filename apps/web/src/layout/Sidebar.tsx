@@ -1,17 +1,21 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { hasCapability } from '@devscribed/validation';
+import { can, hasCapability, type Role } from '@devscribed/validation';
 import { NavItem, SectionLabel } from '@/ds';
 import { DocumentsIcon } from '@/documents/icons';
-import { PeopleIcon } from './icons';
+import { InboxIcon, PeopleIcon } from './icons';
 import { useSession, type SessionFeatures } from './session-context';
+import { usePendingRequests } from './requests-badge-context';
 
 interface NavEntry {
   testId: string;
   label: string;
   href: string;
   icon: React.ReactNode;
+  /** Optional count pill (spec 10 Requests row). Hidden when `undefined`/0. */
+  badge?: number;
+  badgeTestId?: string;
 }
 
 interface NavGroup {
@@ -22,31 +26,48 @@ interface NavGroup {
 /**
  * Only destinations that exist today. The Meridian template carries seven groups from
  * the wider product (Timesheets, Reports, Time off…); shipping them as dead links
- * would promise screens no spec has yet defined. Entries arrive as their specs land —
- * Requests (spec 10) is the next one, and it is role-gated.
+ * would promise screens no spec has yet defined. Entries arrive as their specs land.
  *
- * Documents is the first capability-gated group. A `user` or `viewer` gets a 404 from
- * the route itself, so rendering the entry for them would be a dead control pointing at
- * a wall — the repository rule is that a control the caller cannot use is never drawn.
+ * Every row here is gated by what the caller may actually do, and each one is *omitted*
+ * rather than rendered-then-hidden — a control the caller cannot use is never drawn:
+ *
+ *  - **Requests** (spec 10) needs `view-requests`, so `user` and `viewer` never see it.
+ *    Its badge carries the shared pending count and disappears at 0.
+ *  - **Documents** and **Templates** are separately gated because the two capabilities
+ *    are separately granted: spec 02 gives a `manager` the full envelope set while spec
+ *    01 leaves them read-only on templates. The group is assembled from whichever rows
+ *    survive, and disappears entirely when none do.
+ *  - **Outbox** needs two things at once — an environment that simulates mail, and a role
+ *    allowed to see signing links, which is the same set that decides who signs.
  */
-function navigation(orgId: string, role: string, features: SessionFeatures): NavGroup[] {
-  const groups: NavGroup[] = [
+function navigation(
+  orgId: string,
+  role: string,
+  pendingCount: number,
+  features: SessionFeatures,
+): NavGroup[] {
+  const people: NavEntry[] = [
     {
-      label: 'People',
-      entries: [
-        {
-          testId: 'nav-members',
-          label: 'Members',
-          href: `/org/${orgId}/members`,
-          icon: <PeopleIcon />,
-        },
-      ],
+      testId: 'nav-members',
+      label: 'Members',
+      href: `/org/${orgId}/members`,
+      icon: <PeopleIcon />,
     },
   ];
 
-  // The two entries are separately gated because the two capabilities are separately
-  // granted: spec 02 gives a `manager` the full envelope set while spec 01 leaves them
-  // read-only on templates, so the group is assembled from whichever rows survive.
+  if (can(role as Role, 'view-requests')) {
+    people.push({
+      testId: 'sidebar-requests-link',
+      label: 'Requests',
+      href: `/org/${orgId}/requests`,
+      icon: <InboxIcon />,
+      badge: pendingCount || undefined,
+      badgeTestId: 'sidebar-requests-badge',
+    });
+  }
+
+  const groups: NavGroup[] = [{ label: 'People', entries: people }];
+
   const documents: NavEntry[] = [];
 
   if (hasCapability(role, 'ViewEnvelopes')) {
@@ -67,10 +88,6 @@ function navigation(orgId: string, role: string, features: SessionFeatures): Nav
     });
   }
 
-  // Where mail is simulated there is somewhere to read it, and reading it is how a person
-  // reaches a signing link at all. Two conditions, both needed: the environment has to
-  // have an outbox, and the caller has to be one of the roles allowed to see signing
-  // links — which is the same set that decides who signs in the first place.
   if (features.mailOutbox && hasCapability(role, 'ManageEnvelopes')) {
     documents.push({
       testId: 'nav-outbox',
@@ -91,7 +108,8 @@ export function Sidebar({ orgId }: { orgId: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const { role, features } = useSession();
-  const groups = navigation(orgId, role, features);
+  const { pendingCount } = usePendingRequests();
+  const groups = navigation(orgId, role, pendingCount, features);
 
   /**
    * `/documents` is a prefix of `/documents/templates`, so a plain `startsWith` would
@@ -132,6 +150,8 @@ export function Sidebar({ orgId }: { orgId: string }) {
                   }}
                   icon={entry.icon}
                   active={active}
+                  badge={entry.badge}
+                  badgeTestId={entry.badgeTestId}
                   title={entry.label}
                   data-testid={entry.testId}
                   aria-current={active ? 'page' : undefined}

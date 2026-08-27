@@ -152,6 +152,18 @@ Every test case in the specs has a test named after it, so `TC-02-INT-14` in
 `specs/documents/02-envelopes-and-signing.md` and the `describe` that proves it are one
 search apart. `.github/workflows/test.yml` runs all three tiers on every pull request.
 
+`test:e2e` runs **four browsers at once** locally, two on CI. Every test mints its own
+account, and signup creates a fresh organization with it, so no test can see another's
+data — that isolation was always the design and the suite simply was not spending it. It
+matters now that the suite is around 120 cases: twelve minutes is long enough that people
+stop running it before pushing, which is the only way a suite really fails. Three minutes
+is not.
+
+Parallelism is also a better test than serial. It found a hydration race in the template
+editor, one in the member detail screen, and an address generator that handed two workers
+the same account — none of which were parallelism's fault; all of them were real, and all
+three were invisible while one thing happened at a time.
+
 `test:int` resets `devscribed_test` before it starts, so a failed run never poisons the
 next one. `test:e2e` starts the two dev servers itself and reuses them if they are
 already up — which is worth knowing, because a stale server left on port 3000 gets
