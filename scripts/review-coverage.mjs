@@ -135,6 +135,18 @@ if (asJson) {
   } else {
     console.log('## Every file in the diff has been opened by at least one review.');
   }
+  /* The pass that is running right now is the highest-numbered one, and it is the number a
+     reviewer needs before deciding whether it may stop. Reported separately because "45 of 83
+     files have been opened by someone, ever" and "you have opened 27" answer different
+     questions, and only the second is actionable while a pass is in flight. */
+  if (attempt) {
+    const mine = rows.filter((r) => r.attempts.includes(attempt));
+    const pct = rows.length ? Math.round((mine.length / rows.length) * 100) : 0;
+    console.log(`\n## This pass (review ${attempt}) has opened ${mine.length} of ${rows.length} files — ${pct}%`);
+    console.log('Coverage is the pass you are in, not the sum of every pass. Report it in your');
+    console.log('verdict, and keep reading while the fuse allows.');
+  }
+
   const opened = rows.filter((r) => r.attempts.length);
   if (opened.length) {
     console.log(`\n## Already opened — ${opened.length} file(s)`);

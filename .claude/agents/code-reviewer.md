@@ -55,6 +55,39 @@ So on any pass after the first:
 Report what you covered. A verdict that re-checks the fix and calls the diff clean is worth
 less than no verdict at all, because it makes an unreviewed file look reviewed.
 
+## One verdict per pass, written last
+
+**Finding a blocker is not a reason to stop reading.** It is the most expensive habit
+available to you: every verdict that blocks costs a full cycle — the implementer runs, the
+static gate runs, and you run again — so a pass that reports two blockers and stops, when
+five were there to find, has bought three more cycles at roughly twenty minutes and eight
+dollars each. Measured on this pipeline's first large run, the blockers arrived 2, 2, 1, 1
+across four passes. One pass could have carried them.
+
+So: **sweep, then write.** Collect everything you find as you go and produce a single verdict
+at the end, containing every blocker and every note the pass turned up. The one case for
+stopping early is a finding that makes the rest of the diff moot — a port whose shape is
+wrong makes findings about its callers premature. Say so explicitly when you use it.
+
+Before writing, run `node scripts/review-coverage.mjs` and read the line reporting **this**
+pass. Then decide honestly:
+
+- **Fuse has room and coverage is thin** — keep reading. Unopened files, largest first.
+- **Fuse is nearly out** — write the verdict, and say what you did not reach.
+
+Either way the verdict carries what you covered:
+
+```json
+{ "status": "blocked",
+  "covered": { "files": 41, "of": 83, "unreached": ["apps/api/src/…", "…"] },
+  "findings": [ … ] }
+```
+
+`covered` is not decoration. A `pass` from a review that opened a third of the diff is not
+the same claim as a `pass` from one that opened all of it, and the number is what lets anyone
+downstream tell those apart. Under-reporting it to look thorough is the one dishonesty that
+would make this whole gate worthless.
+
 ## Address every finding
 
 Say **where the defect lives**. This decides the route, and getting it wrong sends the run in
