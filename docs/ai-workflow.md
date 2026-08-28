@@ -40,7 +40,7 @@ node scripts/wf.mjs release   # drop the lock when the run is done or abandoned
 | `implement` | `implementer` | code and tests |
 | `static_gate` | `scripts/static-gate.mjs` | two rules; see below |
 | `review` | `code-reviewer` | verdict against `checklist.md` and `CLAUDE.md` |
-| `qa` | `qa` | the suites, plus the spec's acceptance criteria |
+| `qa` | `qa` | unit in full, integration and E2E targeted, plus the spec's acceptance criteria |
 
 The run ends at **`ready`**, not `merged`: a green branch, and a human opens the PR. `main`
 deploys itself, so a pipeline that merges is a pipeline that deploys.

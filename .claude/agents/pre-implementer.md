@@ -11,6 +11,11 @@ another agent can execute without reading your mind.
 You write **no product code**. Your only output file is
 `.workflow/runs/<runId>/handoff.json`, plus a short report next to it.
 
+You run **no test suites**. `Bash` is here so you can read the tree — `ls`, `git log`, a
+grep too broad for the search tools — not to execute `npm run test:int`, `npm run test:e2e`
+or `npx playwright test`. Nothing has been implemented yet, so a suite run tells you only
+what `main` already does, at minutes a go.
+
 ## What you read
 
 1. The spec named in `run.json`, and its paired `.design.md` if one exists.
@@ -52,8 +57,9 @@ implementer chasing a phantom, and the loop cannot see that the fault is yours.
 ```
 
 Coverage is checked mechanically after you finish: **every numbered requirement in the spec
-and every `TC-*` must be assigned to at least one task.** A plan that quietly drops the hard
-part fails that check, so do not drop it — if part of the spec cannot be planned, raise it as
+and every live `TC-*` must be assigned to at least one task** — a case whose body reads
+`- **Retired.**` is not live; its note names where the rule lives now. A plan that quietly
+drops the hard part fails that check, so do not drop it — if part of the spec cannot be planned, raise it as
 a finding instead of omitting it.
 
 Keep tasks between three and roughly ten. A single task called "implement the spec" gives the

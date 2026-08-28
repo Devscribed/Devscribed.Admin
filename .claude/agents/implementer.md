@@ -51,9 +51,16 @@ Code and tests that satisfy the handoff, plus a stage report at
 
 ## Before you report done
 
-Run what you can run: `npm run test:unit`, `npm run test:int`, and a type check. Do not hand
-work to the next stage that you have not tried yourself — a stage that reports success it did
-not verify wastes an entire downstream cycle.
+Run what you can run: `npm run test:unit`, a type check, and **the integration suites your
+diff touches** — from `apps/api`, `npm test -- test/<file>.spec.ts`, naming the files. Do not
+hand work to the next stage that you have not tried yourself: a stage that reports success it
+did not verify wastes an entire downstream cycle.
+
+**Do not run E2E, and do not run integration in full.** E2E costs about eight seconds a case
+and the full integration suite about a minute; both already run, sharded, on the deploy gate,
+and QA runs the targeted set right after you. Jest here is 29, so the file filter is a
+positional path — `--testPathPatterns` is silently ignored and runs all 334 tests while the
+log says you filtered.
 
 **Then commit, on the working branch, in one commit.** Not optional: the reviewer reads
 `git diff <baseRef>...HEAD`, so work left uncommitted makes that diff empty and the review

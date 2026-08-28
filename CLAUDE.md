@@ -63,6 +63,21 @@ screen. Light theme only this release.
 numbered in the specs (`TC-01-E2E-03`) and the code references those ids. E2E reads sent mail from
 `GET /api/test/mail/latest?email=` — the in-memory mail sink, fenced off in production.
 
+**Which level a case belongs at.** Unit is free, one integration case costs about half a second,
+one E2E case about eight. E2E earns its place only when the assertion is out of reach of an API
+test: a multi-page journey through real mail, focus and blur, layering, CSS tokens, the session
+cookie, a control that must not be drawn. A server rule — a status code, a message, a token
+state, an authorization decision — belongs at integration even when a screen shows it. One
+mechanism gets one E2E test, on the cheapest page that exercises it; retiring a case is recorded
+in its spec as `- **Retired.**` naming what covers the rule now.
+
+**Agents run tests targeted, never whole.** `npm run test:unit` runs in full — it is under a
+second. `npm run test:int` and `npm run test:e2e` are for a person and for the deploy gate; an
+agent runs the files its diff touches (`npm test -- test/<file>.spec.ts` from `apps/api`,
+`CI=1 npx playwright test tests/<file>.spec.ts tests/regressions.spec.ts` from `e2e`). Jest here
+is 29, where the file filter is a positional path: `--testPathPatterns` is the Jest 30 spelling
+and this version ignores it silently, running everything while the log says otherwise.
+
 **Navigation.** No dead links. A nav item that the current role cannot use is not rendered.
 
 ## Watch out for

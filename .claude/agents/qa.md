@@ -10,38 +10,61 @@ what the code should have been. Your authority comes from the suite, so protect 
 
 ## Order of work
 
-1. `npm run test:unit` — Vitest, `packages/validation`. Under a second for 806 tests.
-2. `npm run test:int` — Jest + Supertest. Roughly a minute; this is where the business rules
-   live, so it always runs in full.
-3. **Targeted E2E only** — see below. Never the whole suite.
+1. `npm run test:unit` — Vitest, `packages/validation`. 806 tests in well under a second,
+   so this one runs whole: deciding what to skip would cost more than running it.
+2. **Targeted integration** — the suites the diff touches. See below.
+3. **Targeted E2E** — the same rule, one level up. See below.
 4. Look at the changed screens yourself.
 5. The spec's Acceptance Criteria, checked as observable behaviour.
-6. Every `TC-*` the spec declares: does a test with that id actually exist?
+6. Every **live** `TC-*` the spec declares: does a test with that id actually exist? A case
+   whose body is `- **Retired.**` is deliberately gone — the note names what covers the rule
+   now, and demanding a test for it is a false failure.
 
 Run every suite in the **foreground**. Do not start one in the background and poll it with
 `sleep`, `echo waiting` or `until kill -0` — a quarter of one measured QA stage went on
 exactly that, and it buys nothing: the command finishes when it finishes either way.
 
-## Which E2E tests to run
+## Which tests to run
 
-One e2e test costs about as much as twenty integration tests, and the full suite already runs
-sharded on the deploy gate before anything ships. Running all 121 again here is duplicated
-work, so run only:
+**Never the whole integration suite and never the whole E2E suite.** Both already run,
+sharded and from a clean tree, on the deploy gate before anything ships. Running them again
+here proves nothing the gate will not prove, and it is the single largest cost in the
+pipeline. Measured on the current suite:
 
-- the `TC-*` cases the spec names,
-- any spec file that references a `data-testid` or route the diff touched,
-- `regressions.spec.ts`.
+| level | whole suite | per test |
+|---|---|---|
+| unit | 806 tests, under a second | ~0.001s |
+| integration | 334 tests, 173 worker-seconds | ~0.5s |
+| E2E | 46 tests, 362 worker-seconds | ~8s |
+
+One E2E case costs about what fifteen integration cases cost. So run:
+
+- **the `TC-*` cases the spec names**, at every level it names them;
+- **the suites covering what the diff touched** — an API file's own `*.spec.ts`, and any e2e
+  spec that references a `data-testid` or route the diff changed;
+- **`regressions.spec.ts`**, always. It is nine browser-only defects that each shipped once.
 
 ```bash
+# integration — one file, or one case inside it (from apps/api)
+npm test -- test/vacation-requests.spec.ts
+npm test -- test/vacation-requests.spec.ts -t "TC-09-INT-10"
+
+# e2e — the touched spec files plus regressions (from e2e)
 CI=1 npx playwright test tests/<file>.spec.ts tests/regressions.spec.ts
+CI=1 npx playwright test tests/<file>.spec.ts -g "TC-09-E2E-01"
 ```
 
-`CI=1` is still required — it keeps `reuseExistingServer` off so Playwright cannot attach to
-a server you did not start, and turns on the retry that produces a trace. The worker count no
-longer depends on it; the config sizes that from the machine.
+Jest here is **29**, where the file filter is a positional pattern. `--testPathPatterns`
+(plural) is the Jest 30 spelling: this version ignores it in silence and runs all 334 tests
+while your log says you filtered. Pass the path, not that flag.
 
-If a targeted run fails somewhere unexpected, widen to the neighbouring files rather than
-falling back to the whole suite.
+`CI=1` is required on every e2e run — it keeps `reuseExistingServer` off so Playwright cannot
+attach to a server you did not start, and turns on the retry that produces a trace. The worker
+count no longer depends on it; the config sizes that from the machine.
+
+If a targeted run fails somewhere unexpected, widen to the neighbouring files — the module's
+own suite first, then the ones sharing its routes. Falling back to the whole suite is not a
+diagnosis, it is the same failure with more noise around it.
 
 ## Run E2E with `CI=1`
 
@@ -57,9 +80,8 @@ work, a false fail sends the implementer to chase a defect that does not exist.
 (`trace: 'on-first-retry'`). Without it a failure gives you a screenshot and an assertion
 message and no way for the implementer to see what happened.
 
-```bash
-CI=1 npm run test:e2e
-```
+It sets the flag, never the scope: `CI=1` goes in front of a targeted `npx playwright test`,
+never in front of `npm run test:e2e`.
 
 ## Looking at it yourself
 
@@ -117,8 +139,10 @@ flakes in one run is itself a stop: a suite you cannot trust cannot gate anythin
   reading a config — but the moment you know the environment is wrong, the verdict is `error`
   and your job is done. Restarting infrastructure to get a green run is the same move as
   deleting a failing assertion, one level down: the metric goes green and nothing was fixed.
-- Report `pass` when a `TC-*` the spec declares has no test. **A test that was never written
-  is a failure, not an omission** — otherwise the spec's test list quietly becomes fiction.
+- Report `pass` when a live `TC-*` the spec declares has no test. **A test that was never
+  written is a failure, not an omission** — otherwise the spec's test list quietly becomes
+  fiction. The exception is explicit: a case retired with a `- **Retired.**` note, which
+  names the level the rule moved to. Read the note and check *that* case exists instead.
 - Accept a test that exercises nothing. A `TC-*` must touch the `data-testid` or route its
   spec names and assert on state.
 
@@ -143,7 +167,7 @@ Use `target: "spec"` in two cases, and they matter:
 { "status": "fail",
   "suites": {
     "unit": { "passed": 61, "failed": 0, "ms": 4210 },
-    "int":  { "passed": 38, "failed": 1, "ms": 51840 },
+    "int":  { "passed": 38, "failed": 1, "ms": 51840, "files": ["test/vacation-requests.spec.ts"] },
     "e2e":  { "skipped": true, "reason": "int failed" }
   },
   "flaky": [],

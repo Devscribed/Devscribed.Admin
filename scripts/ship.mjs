@@ -113,7 +113,8 @@ function promptFor(stage, run, verdictPath) {
     case 'review':
       return `${head}\nReview \`git diff ${run.baseRef}...HEAD\` against the spec and the handoff.${back}`;
     case 'qa':
-      return `${head}\nRun the suites and check the spec's acceptance criteria. Run E2E with \`CI=1\`.${back}`;
+      return `${head}\nRun unit in full, then the integration and E2E suites the diff touches — never either one whole; `
+        + `both already run on the deploy gate. Run E2E with \`CI=1\`, targeted. Then check the spec's acceptance criteria.${back}`;
     default:
       throw new Error(`no prompt for stage ${stage}`);
   }
