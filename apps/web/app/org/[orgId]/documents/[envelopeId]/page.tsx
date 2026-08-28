@@ -249,11 +249,27 @@ function EnvelopeScreen({ orgId, envelopeId }: { orgId: string; envelopeId: stri
                 Completion, bound into the document, or the provider's audit page
                 (requirement 28). Two formats coexist in an organization that has
                 switched, and the Known Gaps table accepts that only because the detail
-                screen says which one this document has. There is deliberately no link
-                and no testid: the certificate is not a separate artefact to fetch, and
-                an id for a control this spec did not name is not this screen's to coin. */}
+                screen says which one this document has.
+
+                `envelope-certificate-link` is the spec's own id and it is spelled its
+                way. It goes on this element, and only when our certificate is the one
+                issued, because that is what makes TC-04-E2E-05's "no Certificate of
+                Completion is listed" a real assertion rather than one that passes
+                because nothing anywhere carries the id.
+
+                It is text and not an anchor, and that is not a shortcut: the
+                certificate is bound into the signed PDF by `assembleCompletedDocument`
+                rather than stored beside it, so there is one file under either
+                provider and nothing separate to link to. Rendering a second download
+                would put two documents in the record for one act — the thing
+                requirement 28 refuses. `envelope-download-btn` is what fetches it. */}
             {detail.provider && canDownload && (
-              <span style={{ fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}>
+              <span
+                data-testid={
+                  detail.provider.certificateIssued ? 'envelope-certificate-link' : undefined
+                }
+                style={{ fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}
+              >
                 {SIGNING_PROVIDER_MESSAGES.envelope.documentIncludes(
                   detail.provider.name,
                   detail.provider.certificateIssued,

@@ -17,8 +17,44 @@ import type {
  *
  * Abstract class rather than interface: Nest uses the class as the DI token.
  */
+/**
+ * Requirement 26 — the lookup that runs **before** a create is repeated.
+ *
+ * `POST /documents` is not idempotent on their side, so a create that failed in a way
+ * that could still have landed must not simply be sent again: the second attempt would
+ * produce a second live document for one envelope, with the real counterparties on it and
+ * an `embedded_signing_url` each, which is the duplicate this requirement exists to
+ * prevent. The answer is this: page the list, compare `metadata.envelope_id` in our own
+ * code, and hand back the match if there is one.
+ *
+ * It is a parameter and not an option, so a caller cannot forget it. There is exactly one
+ * route in this client that is unsafe to repeat, and this is how it says so.
+ */
+export type AdoptExisting = () => Promise<SignWellDocument | null>;
+
+/**
+ * Thrown by the guard when the lookup found the document the failed create had already
+ * made, and caught by `createDocument` a few frames up. Control flow rather than an error:
+ * it is how the retry loop is stopped from *inside* the pause between attempts without
+ * teaching that loop what a document is, or inventing a response that never came from the
+ * network.
+ */
+class AdoptedExisting extends Error {
+  constructor(readonly document: SignWellDocument) {
+    super('adopted an existing SignWell document');
+    this.name = 'AdoptedExisting';
+  }
+}
+
 export abstract class SignWellHttpClient {
-  abstract createDocument(body: SignWellCreateDocumentBody): Promise<SignWellDocument>;
+  /**
+   * The one route that is unsafe to repeat. `adoptExisting` is consulted before every
+   * retry whose failure could have created a document — requirement 26.
+   */
+  abstract createDocument(
+    body: SignWellCreateDocumentBody,
+    adoptExisting: AdoptExisting,
+  ): Promise<SignWellDocument>;
   abstract getDocument(id: string): Promise<SignWellDocument | null>;
   /** One page of `GET /documents`. Its filters are silently ignored — see requirement 26. */
   abstract listDocuments(page: number): Promise<SignWellDocumentList>;
@@ -154,17 +190,41 @@ export class HttpSignWellClient extends SignWellHttpClient {
    * The API surface
    * -------------------------------------------------------------- */
 
-  async createDocument(body: SignWellCreateDocumentBody): Promise<SignWellDocument> {
-    const response = await this.call('create-document', {
-      method: 'POST',
-      path: '/documents',
-      body,
-      organizationId: body.metadata.organization_id,
-    });
-    if (response.status !== 200 && response.status !== 201) {
-      throw this.failure('createDocument', response);
+  async createDocument(
+    body: SignWellCreateDocumentBody,
+    adoptExisting: AdoptExisting,
+  ): Promise<SignWellDocument> {
+    try {
+      const response = await this.call('create-document', {
+        method: 'POST',
+        path: '/documents',
+        body,
+        organizationId: body.metadata.organization_id,
+        /*
+         * Requirement 26, at the only place it can be honoured: between two attempts at a
+         * create. The scan runs on the `read` lane and the create holds the organization
+         * lane, so the two do not serialize against each other — if this ever moved onto
+         * the same key it would deadlock against the very call it is protecting.
+         */
+        beforeUnsafeRetry: async () => {
+          const existing = await adoptExisting();
+          if (existing) throw new AdoptedExisting(existing);
+        },
+      });
+      if (response.status !== 200 && response.status !== 201) {
+        throw this.failure('createDocument', response);
+      }
+      return this.json<SignWellDocument>(response);
+    } catch (error) {
+      if (error instanceof AdoptedExisting) {
+        this.log.warn(
+          `Adopting SignWell document ${error.document.id} rather than repeating a create ` +
+            'that may already have landed',
+        );
+        return error.document;
+      }
+      throw error;
     }
-    return this.json<SignWellDocument>(response);
   }
 
   async getDocument(id: string): Promise<SignWellDocument | null> {
@@ -251,7 +311,13 @@ export class HttpSignWellClient extends SignWellHttpClient {
 
   private async call(
     family: RouteFamily,
-    request: { method: string; path: string; body?: unknown; organizationId?: string },
+    request: {
+      method: string;
+      path: string;
+      body?: unknown;
+      organizationId?: string;
+      beforeUnsafeRetry?: () => Promise<void>;
+    },
   ): Promise<SignWellRawResponse> {
     // Serialized per organization. Calls with no organization in scope (the settings
     // screen's connection check) share one lane, which is what keeps a health check from
@@ -278,7 +344,12 @@ export class HttpSignWellClient extends SignWellHttpClient {
 
   private async attempt(
     family: RouteFamily,
-    request: { method: string; path: string; body?: unknown },
+    request: {
+      method: string;
+      path: string;
+      body?: unknown;
+      beforeUnsafeRetry?: () => Promise<void>;
+    },
   ): Promise<SignWellRawResponse> {
     if (this.breakerIsOpen()) {
       // Fails fast, without a network attempt: the same observable outcome as a timeout,
@@ -287,9 +358,30 @@ export class HttpSignWellClient extends SignWellHttpClient {
     }
 
     let lastError: unknown = null;
+    /*
+     * Whether the failure we are about to retry could have been *processed* despite
+     * failing — requirement 26, and the whole reason this flag exists.
+     *
+     * A timeout or a socket error is the plain case: the request may have arrived, been
+     * committed, and lost its answer on the way back. A 5xx is the same case wearing a
+     * status code, because a gateway that times out behind a proxy answers 502 or 504
+     * after the write it was fronting has already landed. A 429 is neither: the limiter
+     * refuses the request before anything is done with it, so it is the one failure a
+     * create may be repeated on without asking anybody anything.
+     */
+    let couldHaveLanded = false;
 
     for (let attempt = 0; attempt < this.options.maxAttempts; attempt++) {
-      if (attempt > 0) await this.options.sleep(this.backoffMs(attempt));
+      if (attempt > 0) {
+        await this.options.sleep(this.backoffMs(attempt));
+        /*
+         * After the backoff rather than before it, deliberately: a create that landed a
+         * moment ago has had the pause to become visible in the list, and a lookup that
+         * ran first would be the one most likely to miss it and repeat the create anyway.
+         * A found document throws out of this loop and is returned by the caller.
+         */
+        if (couldHaveLanded && request.beforeUnsafeRetry) await request.beforeUnsafeRetry();
+      }
 
       try {
         const response = await this.transport({
@@ -306,14 +398,18 @@ export class HttpSignWellClient extends SignWellHttpClient {
 
         this.readRateLimit(family, response.headers);
 
-        // 429 is the one status worth retrying on its own: the budget refills.
+        // 429 is the one status worth retrying on its own: the budget refills, and the
+        // limiter refused the request rather than processing it.
         if (response.status === 429) {
           lastError = new ProviderUnavailableError('provider_unavailable', 'rate_limited');
+          couldHaveLanded = false;
           continue;
         }
-        // A 5xx is a provider fault and is retried on the same budget.
+        // A 5xx is a provider fault and is retried on the same budget — but it may have
+        // been answered by something in front of a write that already succeeded.
         if (response.status >= 500) {
           lastError = new ProviderUnavailableError('provider_unavailable', `status_${response.status}`);
+          couldHaveLanded = true;
           this.recordFailure();
           continue;
         }
@@ -321,9 +417,11 @@ export class HttpSignWellClient extends SignWellHttpClient {
         this.recordSuccess();
         return response;
       } catch (error) {
-        // A timeout or a socket error. Indistinguishable from "the request never arrived",
-        // which is exactly the case requirement 26's orphan recovery exists for.
+        // A timeout or a socket error, indistinguishable from "the request never arrived"
+        // — and from "it arrived, was committed, and the answer was lost", which is the
+        // case requirement 26 exists for and the reason the flag goes up here.
         lastError = error;
+        couldHaveLanded = true;
         this.recordFailure();
         if (this.breakerIsOpen()) break;
       }

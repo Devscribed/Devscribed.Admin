@@ -191,9 +191,24 @@ export class SignWellSigningProvider
     }
 
     try {
-      return await this.http.createDocument(body);
+      /*
+       * The scan is handed to the client rather than only wrapped around it, and that is
+       * requirement 26 taken literally: "**before** retrying a create that failed without
+       * a response, the client looks for a document already carrying this envelope's id".
+       * The client retries five times, so a check that only ran after all five had failed
+       * would be four repeats too late — and each repeat can create a live document with
+       * the real counterparties and a working signing link on it. Passing it in means the
+       * lookup happens between attempts, which is the only place that prevents the
+       * duplicate rather than describing it afterwards.
+       */
+      return await this.http.createDocument(body, () => this.findOrphan(envelopeId));
     } catch (error) {
       if (!(error instanceof ProviderUnavailableError)) throw error;
+      /*
+       * The last attempt has no "before the next retry" to run in, so the scan runs once
+       * more here. It is not redundant with the guard above: a create that landed on the
+       * fifth attempt was never followed by a sixth.
+       */
       this.log.warn(
         `Creating a SignWell document for envelope ${envelopeId} failed; looking for an orphan`,
       );

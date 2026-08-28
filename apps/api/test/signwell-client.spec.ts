@@ -35,6 +35,13 @@ const CREATE_BODY: SignWellCreateDocumentBody = {
   allow_reassign: false,
 };
 
+/**
+ * The lookup requirement 26 makes a parameter of `createDocument`. These three cases are
+ * about the retry machinery rather than about adoption, so theirs finds nothing — which
+ * is exactly what they were assuming before the parameter existed.
+ */
+const NO_EXISTING_DOCUMENT = async () => null;
+
 interface Harness {
   client: HttpSignWellClient;
   requests: SignWellRawRequest[];
@@ -84,7 +91,7 @@ describe('SignWell HTTP client', () => {
           : ok({ id: 'sw-1', status: 'Created' }),
       );
 
-      const document = await client.createDocument(CREATE_BODY);
+      const document = await client.createDocument(CREATE_BODY, NO_EXISTING_DOCUMENT);
 
       expect(document.id).toBe('sw-1');
       expect(requests).toHaveLength(4);
@@ -102,7 +109,7 @@ describe('SignWell HTTP client', () => {
         body: Buffer.alloc(0),
       }));
 
-      await expect(client.createDocument(CREATE_BODY)).rejects.toBeInstanceOf(
+      await expect(client.createDocument(CREATE_BODY, NO_EXISTING_DOCUMENT)).rejects.toBeInstanceOf(
         ProviderUnavailableError,
       );
       const spent = requests.length;
@@ -121,7 +128,7 @@ describe('SignWell HTTP client', () => {
         failing ? { status: 500, headers: {}, body: Buffer.alloc(0) } : ok({ id: 'sw-2' }),
       );
 
-      await expect(client.createDocument(CREATE_BODY)).rejects.toBeInstanceOf(
+      await expect(client.createDocument(CREATE_BODY, NO_EXISTING_DOCUMENT)).rejects.toBeInstanceOf(
         ProviderUnavailableError,
       );
       const spent = requests.length;
@@ -133,6 +140,85 @@ describe('SignWell HTTP client', () => {
 
       expect(await client.getDocument('sw-2')).toMatchObject({ id: 'sw-2' });
       expect(requests.length).toBeGreaterThan(spent);
+    });
+  });
+
+  /**
+   * **TC-04-INT-03, at the layer that can see it.**
+   *
+   * The case also exists in `signwell-send.spec.ts`, where it proves the send adopts
+   * rather than creating twice. It has to exist here as well, and the reason is precisely
+   * why the defect survived that one: there, `SignWellHttpClient` itself is stubbed, so
+   * one adapter call is one stub call and the five-attempt retry loop inside the real
+   * client never runs at all. Everything below is about what happens *between* those five
+   * attempts, which is the only place a duplicate can be created.
+   */
+  describe('TC-04-INT-03: A create that failed without a response adopts the existing document', () => {
+    it('does not repeat a create that may have landed, and adopts what it finds', async () => {
+      const landed = { id: 'sw-landed', status: 'Created', metadata: { envelope_id: 'env-1' } };
+      const { client, requests, delays } = harness(() => {
+        // The 10s deadline in `fetchTransport` firing after SignWell committed the
+        // document: the answer is lost, the document is not.
+        const timeout = new Error('The operation was aborted due to timeout');
+        timeout.name = 'TimeoutError';
+        return timeout;
+      });
+
+      let lookups = 0;
+      const document = await client.createDocument(CREATE_BODY, async () => {
+        lookups += 1;
+        return landed;
+      });
+
+      // The document that already exists, not a second one.
+      expect(document.id).toBe('sw-landed');
+      // One POST and no more: the retry was stopped before it could create a duplicate
+      // carrying the real counterparties and a working signing link.
+      expect(requests.filter((r) => r.method === 'POST')).toHaveLength(1);
+      expect(requests).toHaveLength(1);
+      expect(lookups).toBe(1);
+      // And the lookup ran after the backoff, not instead of it.
+      expect(delays).toHaveLength(1);
+    });
+
+    it('still retries when the lookup shows the create never landed', async () => {
+      const { client, requests } = harness((attempt) =>
+        attempt === 1
+          ? { status: 502, headers: {}, body: Buffer.alloc(0) }
+          : ok({ id: 'sw-1', status: 'Created' }),
+      );
+
+      let lookups = 0;
+      const document = await client.createDocument(CREATE_BODY, async () => {
+        lookups += 1;
+        return null;
+      });
+
+      // A 5xx may have been answered in front of a write that landed, so it is asked
+      // about; nothing was there, so the create is repeated and succeeds.
+      expect(document.id).toBe('sw-1');
+      expect(requests).toHaveLength(2);
+      expect(lookups).toBe(1);
+    });
+
+    it('does not spend a lookup on a 429, which the limiter refused before processing', async () => {
+      const { client, requests } = harness((attempt) =>
+        attempt <= 2
+          ? { status: 429, headers: { 'x-ratelimit-remaining': '0' }, body: Buffer.alloc(0) }
+          : ok({ id: 'sw-1', status: 'Created' }),
+      );
+
+      let lookups = 0;
+      const document = await client.createDocument(CREATE_BODY, async () => {
+        lookups += 1;
+        return null;
+      });
+
+      expect(document.id).toBe('sw-1');
+      expect(requests).toHaveLength(3);
+      // Reads are a hundred and twenty a minute and creates are ten, but a rejection that
+      // was never processed cannot have created anything, so none is spent here.
+      expect(lookups).toBe(0);
     });
   });
 });
