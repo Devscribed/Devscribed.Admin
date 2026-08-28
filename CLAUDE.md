@@ -90,3 +90,18 @@ numbered in the specs (`TC-01-E2E-03`) and the code references those ids. E2E re
 
 Use the `spec` skill (`/spec`). Every spec covers edge cases, blast radius, backward compatibility,
 acceptance criteria, and test cases through E2E. Specs are written in English.
+
+Investigate a defect with the `bug` skill (`/bug`). It writes `specs/bugs/BUG-NNN-slug.md` and
+ends in one of three verdicts — the code is wrong, the spec is wrong, or the spec is silent —
+which is what decides whether anything may be fixed yet.
+
+## Implementing specs
+
+Use the `ship` skill (`/ship`) to run a spec through pre-implement → implement → static gate →
+review → QA. Routing lives in `scripts/wf.mjs`, not in a prompt: every finding names where the
+defect lives, only findings addressed to `code` are ever retried, and a finding the implementer
+contests halts the run for a person instead of spending another attempt. The runbook is
+[docs/ai-workflow.md](docs/ai-workflow.md).
+
+The pipeline stops at a green branch. It never merges and never pushes — see the note about
+`main` above.
