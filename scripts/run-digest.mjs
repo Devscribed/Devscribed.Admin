@@ -102,14 +102,30 @@ const journal = existsSync(join(dir, 'events.jsonl'))
       .filter(Boolean)
   : [];
 
+
+/**
+ * The journal records every tool call made while a run holds the lock — including the
+ * operator's own, from the session driving the pipeline. Those are not the run's work and
+ * must not be counted as it: in the two runs of spec 04 they were 6% and 12% of all calls.
+ * For coverage they would be worse than noise, since an operator grepping a file would be
+ * credited to a review that never opened it.
+ *
+ * An agent's calls carry `agentType`, but not from the very first event of an invocation, so
+ * the discriminator is the session rather than the field: any session that ever announces an
+ * agent is an agent's, and everything else belongs to whoever started the run.
+ */
+function agentEventsOnly(events) {
+  const agentSessions = new Set(events.filter((e) => e.agentType).map((e) => e.sessionId));
+  return events.filter((e) => agentSessions.has(e.sessionId));
+}
+
 /**
  * One agent invocation per block. A gap over three minutes is always a boundary: a verdict
  * is written and the router runs in between, and no agent idles that long mid-attempt.
  */
 const blocks = [];
 let cur = null;
-for (const e of journal) {
-  if (e.event !== 'tool') continue;
+for (const e of agentEventsOnly(journal.filter((e) => e.event === 'tool'))) {
   const gap = cur ? new Date(e.ts) - new Date(cur.lastTs) : 0;
   if (!cur || cur.stage !== e.stage || gap > 180_000) {
     if (cur) blocks.push(cur);

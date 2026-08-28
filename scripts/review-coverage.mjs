@@ -14,6 +14,10 @@
  * counts as unopened, which sends the next reviewer back to it. Under-crediting is the safe
  * direction here.
  *
+ * The diff is measured against the working tree's current HEAD, which is what a review needs
+ * while its run is live. Pointed at a finished run whose branch has moved on it will report
+ * that run's base against today's code, which is a different question and not a useful one.
+ *
  *   node scripts/review-coverage.mjs [runId] [--json]
  */
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
@@ -72,11 +76,27 @@ const journal = existsSync(journalPath)
  * a verdict gets written and the router runs in between, and no agent pauses that long
  * mid-attempt.
  */
+
+/**
+ * The journal records every tool call made while a run holds the lock — including the
+ * operator's own, from the session driving the pipeline. Those are not the run's work and
+ * must not be counted as it: in the two runs of spec 04 they were 6% and 12% of all calls.
+ * For coverage they would be worse than noise, since an operator grepping a file would be
+ * credited to a review that never opened it.
+ *
+ * An agent's calls carry `agentType`, but not from the very first event of an invocation, so
+ * the discriminator is the session rather than the field: any session that ever announces an
+ * agent is an agent's, and everything else belongs to whoever started the run.
+ */
+function agentEventsOnly(events) {
+  const agentSessions = new Set(events.filter((e) => e.agentType).map((e) => e.sessionId));
+  return events.filter((e) => agentSessions.has(e.sessionId));
+}
+
 const openedIn = new Map(); // path -> Set(attempt)
 let attempt = 0;
 let last = null;
-for (const e of journal) {
-  if (e.stage !== 'review' || e.event !== 'tool') continue;
+for (const e of agentEventsOnly(journal.filter((e) => e.stage === 'review' && e.event === 'tool'))) {
   if (!last || new Date(e.ts) - new Date(last) > 180_000) attempt++;
   last = e.ts;
 
