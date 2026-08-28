@@ -76,6 +76,16 @@ function git(...args) {
   return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' }).trim();
 }
 
+/**
+ * Path out of one `git status --porcelain` line. The status column is two characters, but
+ * a leading space is lost the moment the output passes through anything that trims, so this
+ * tolerates one or two. A rename reads `R old -> new`; the new path is the one that exists.
+ */
+function porcelainPath(line) {
+  const rest = line.replace(/^\s*\S{1,2}\s+/, '').replace(/^"|"$/g, '');
+  return rest.includes(' -> ') ? rest.split(' -> ').pop() : rest;
+}
+
 function fail(msg) {
   process.stderr.write(`wf: ${msg}\n`);
   process.exit(1);
@@ -368,8 +378,15 @@ function cmdPreflight() {
     : [];
   add('migration-baseline', true, `${migrations.length} migrations recorded as the baseline`);
 
-  const clean = git('status', '--porcelain') === '';
-  add('worktree-clean', clean, clean ? 'no uncommitted changes' : 'uncommitted changes present');
+  /* The run's own bookkeeping does not count as dirt: `init` writes run.json before
+     preflight runs, so a naive check fails on the files the run just created. What matters
+     is that no *unrelated* change is in flight to be attributed to this run's diff. */
+  const dirty = git('status', '--porcelain').split('\n')
+    .filter(Boolean)
+    .map(porcelainPath)
+    .filter((p) => p && !p.startsWith('.workflow/'));
+  add('worktree-clean', dirty.length === 0,
+    dirty.length ? `${dirty.length} uncommitted change(s): ${dirty.slice(0, 3).join(', ')}` : 'nothing in flight outside .workflow/');
 
   run.preflight = { at: now(), checks, migrations };
   const failed = checks.filter((c) => !c.ok);
