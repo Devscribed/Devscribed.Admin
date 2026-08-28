@@ -1,0 +1,38 @@
+{
+  "status": "pass",
+  "stage": "pre_implement",
+  "spec": "specs/documents/04-signature-providers.md",
+  "handoff": ".workflow/runs/2026-08-28T13-48-53_documents-04-signature-providers/handoff.json",
+  "findings": [
+    {
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/conflicting-test-id",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "Required data-testid Attributes / TC-04-E2E-05",
+      "claim": "Spec 04 names the envelope-detail download control `envelope-download-button`, while spec 02 defines that same control as `envelope-download-btn` and a shipped E2E test asserts the shipped spelling. Renaming it would edit an existing test, which requirement 10 forbids; keeping it leaves TC-04-E2E-05's selector list wrong.",
+      "witness": {
+        "kind": "rule",
+        "source": "specs/documents/04-signature-providers.md:1118 (\"**Envelope detail:** `envelope-provider`, `envelope-test-badge`, `envelope-download-button`, `envelope-certificate-link` (asserted absent under SignWell)\") and :1513 (TC-04-E2E-05 selectors) versus specs/documents/02-envelopes-and-signing.md:1435 (\"Header actions: `envelope-void-btn`, `envelope-download-btn` (visible only when `canDownload`)\"), the shipped attribute at apps/web/app/org/[orgId]/documents/[envelopeId]/page.tsx:234, and the assertion at e2e/tests/field-autofill.spec.ts:436 (`await expect(page.getByTestId('envelope-download-btn')).toBeEnabled();`).",
+        "detail": "There is exactly one download control on that screen and the two specs spell its id differently. An implementer following spec 04's required list renames the attribute and e2e/tests/field-autofill.spec.ts fails, which spec 04 requirement 10 (\"the existing spec 02 test suite passing unchanged... A test that has to be edited is a defect of this spec's implementation\") and the area README's backward-compatibility item 5 both forbid. An implementer following spec 02 writes TC-04-E2E-05 against a selector spec 04 does not list. The handoff takes the second path — T11 keeps `envelope-download-btn` and TC-04-E2E-05 asserts that id — because it is the only one that does not edit a shipped test. Recorded rather than blocking: the choice is forced, so nothing downstream has to guess, but the spec's list is still wrong and should be corrected rather than left to be rediscovered."
+      },
+      "suggestedFix": "Change `envelope-download-button` to `envelope-download-btn` in spec 04's Required data-testid Attributes list and in TC-04-E2E-05's selectors. While there, note that `envelope-certificate-link` has never existed on that screen, so \"asserted absent\" is vacuously true — either drop it or say which control it would be if a certificate were offered."
+    },
+    {
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/omitted-blast-radius",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "Infrastructure / Blast Radius / TC-04-E2E-02",
+      "claim": "The spec requires an iframe from www.signwell.com on `/sign/{token}`, but `/sign/*` carries a Content-Security-Policy whose `frame-src` is `'self'`, so the browser refuses that frame outright. The spec's Infrastructure and Blast Radius sections do not mention the policy, and widening it is a change to a mitigation the area README lists as required.",
+      "witness": {
+        "kind": "rule",
+        "source": "apps/web/next.config.mjs, headers() for `source: '/sign/:path*'` — the policy array contains `\"frame-src 'self'\"`, alongside the comment \"A restrictive CSP on `/sign/*` and nowhere else.\" specs/documents/README.md, Security surface item 1, lists \"a restrictive CSP on `/sign/*`\" as one of four required mitigations for author-controlled HTML on that page. specs/documents/04-signature-providers.md:1488 (TC-04-E2E-02 expected result 3, \"The frame's `src` is the URL the provider returned\").",
+        "detail": "As the code stands, `<iframe src=\"https://www.signwell.com/docs/...\">` on `/sign/{token}` is blocked by the CSP: TC-04-E2E-02 fails and no counterparty could ever sign through the widget in any environment. The fix is unambiguous and the handoff carries it (T10: widen `frame-src` to `'self'` plus the embed origin, from a build-time variable, changing nothing else in the policy — `headers()` resolves during `next build` exactly like `rewrites()`, so a runtime variable would do nothing, silently). It is recorded rather than blocking because there is only one way forward, but a security control on the product's only session-less, author-HTML-rendering page is being loosened and the spec should say so on the record. The related decision — a plain iframe with our own origin-checked `postMessage` listener rather than SignWell's `SignWellEmbed` SDK, so that `script-src` is NOT widened — is stated in the handoff; the spec's flow text names `SignWellEmbed` while its UI table, TC-04-E2E-02 and edge case 20 all describe our own frame and our own listener."
+      },
+      "suggestedFix": "Add a row to Blast Radius naming the `/sign/*` CSP, the `frame-src` widening the embedded surface requires, and the fact that `script-src` is deliberately not widened because no vendor script is loaded. State in requirement 15 or in the Screens section whether the widget is hosted in our own `<iframe>` with our own `postMessage` listener (which the UI table and edge case 20 imply) or through SignWell's `SignWellEmbed` SDK (which the 'First signer signs' flow, step 5, names), since only the first keeps third-party script off that page."
+    }
+  ]
+}

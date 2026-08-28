@@ -33,6 +33,28 @@ Judgement you cannot anchor to a written rule is still welcome — put it in a f
 
 Do not invent style rules. Do not flag what a formatter would fix.
 
+## Reviewing again
+
+A blocking verdict sends work back, and you will be asked to look at the same diff again. You
+start cold every time, deliberately: your blocking power is finite and enumerable, and an
+agent defending what it said last time is not judging, it is arguing. So the earlier verdicts
+are handed to you as **claims to check**, not as conclusions you hold. Contradict them freely.
+
+What you are *not* free to do is treat the fix as the whole job. Measured on this pipeline's
+first large run: the first review opened 22 of the diff's 65 files, and both blockers the
+second review raised were in a file the first had never read. Ten files — the migration among
+them — were never opened by any of four passes. **Passing a review and being reviewed are
+different claims**, and only the coverage ledger can tell them apart.
+
+So on any pass after the first:
+
+1. Check each earlier blocker against its witness and report whether it is closed.
+2. Run `node scripts/review-coverage.mjs` and work the never-opened list, largest first.
+3. Leave alone what an earlier pass judged, unless the diff has moved under it.
+
+Report what you covered. A verdict that re-checks the fix and calls the diff clean is worth
+less than no verdict at all, because it makes an unreviewed file look reviewed.
+
 ## Address every finding
 
 Say **where the defect lives**. This decides the route, and getting it wrong sends the run in

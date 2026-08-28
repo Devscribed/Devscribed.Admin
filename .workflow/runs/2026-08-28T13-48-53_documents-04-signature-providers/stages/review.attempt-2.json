@@ -1,0 +1,133 @@
+{
+  "status": "blocked",
+  "findings": [
+    {
+      "id": "F1",
+      "target": "code",
+      "severity": "blocker",
+      "rule": "spec/requirement-33",
+      "file": "apps/api/src/organizations/signing-settings.service.ts",
+      "symbol": "inFlightCount",
+      "line": 141,
+      "claim": "the confirmation count includes drafts, which do not stay on the old provider, so the modal that gates the provider change tells the admin something the spec says is false",
+      "witness": {
+        "kind": "rule",
+        "detail": "Requirement 33 reads: 'Changing the provider shows a confirmation naming the count of in-flight envelopes **that will stay on the old provider**' (specs/documents/04-signature-providers.md:454). Edge case 14 says the opposite of a draft: 'A draft created before a provider switch is sent after it | It goes out on the **new** provider: the provider is read at send, not at creation (requirement 1)' (:554), and TC-04-INT-17 pins it - the shipped test at apps/api/test/signing-settings.spec.ts:177-192 creates a draft, switches to signwell, sends, and asserts providerKey === 'signwell'. The query counts draft alongside sent and partially_signed (signing-settings.service.ts:141-151) and the count is rendered verbatim into SIGNING_PROVIDER_MESSAGES.settings.inFlight (ChangeProviderModal.tsx:69). Scenario: an organization on internal with two drafts and no sent envelopes opens /org/{orgId}/settings/signing, selects SignWell and presses Save. The modal reads '2 documents are currently in flight. They stay with the built-in provider until they complete, decline, or expire. Nothing about them changes.' Both drafts will go out on SignWell the moment they are sent and no envelope at all stays behind, so the one sentence the deliberate confirmation exists to say is wrong and nothing on the screen corrects it. Nothing pins the current behaviour: a grep for inFlightCount across apps/api/test and e2e finds no assertion, and TC-04-E2E-01 seeds a sent envelope, so it reads 1 under either definition.",
+        "source": "specs/documents/04-signature-providers.md:454 (requirement 33) and :554 (edge case 14)"
+      },
+      "suggestedFix": "Count only EnvelopeStatus.sent and EnvelopeStatus.partially_signed - the envelopes that actually stay with the old provider - and correct the comment above the query, which currently justifies the draft row with 'those are the ones that stay with the old provider'."
+    },
+    {
+      "id": "F2",
+      "target": "code",
+      "severity": "blocker",
+      "rule": "checklist/partial-failure",
+      "file": "apps/api/src/documents/provider-reconciler.service.ts",
+      "symbol": "openNextTurn",
+      "line": 472,
+      "claim": "the reconciler records an email_accepted event inside the convergence transaction and only afterwards hands the invitation to the transport, swallowing a rejection, so the trail and the envelope screen claim a message was accepted that SES refused",
+      "witness": {
+        "kind": "scenario",
+        "detail": "A two-signer SignWell envelope, signer 1 signs, the webhook lands. converge -> applyState -> openNextTurn mints signer 2's token, sets them notified, and calls events.record({ type: 'email_accepted', signerId: next.id }) at provider-reconciler.service.ts:470-477, all inside the transaction, which then commits. notifyNextTurn runs after the commit (:279) through safeMail (:544-551), which catches every error and only logs it. If SES rejects the address - suppression list, throttle, an invalid counterparty address - signer 2 never receives a link, nothing retries, and the envelope detail shows their email status as accepted, because present() derives that status from the last of email_accepted / email_delivered / email_bounced per signer (apps/api/src/documents/envelopes.service.ts:1605-1617). Both other writers of this event agree with the rule and disagree with this one: the send path awaits this.mail.sendSigningInvitation and records email_accepted only after it resolves, rolling the whole transaction back on a rejection (envelopes.service.ts:929-967), and the internal next-turn path deliberately sends outside the failure boundary and records no event at all (apps/api/src/signing/signing.service.ts:476-489). The reconciler is the only place that writes the claim before the attempt.",
+        "source": ".claude/skills/spec/references/checklist.md:26 - 'Partial failure rolls back - nothing is half-applied and no status claims something that did not happen.'"
+      },
+      "suggestedFix": "Send first and record second: return the mail closure from the transaction as the internal path does, await it after the commit, and write email_accepted in its own small transaction only when the transport accepted - or drop the event entirely and match the internal next-turn path, which records nothing. The token and the notified status can stay where they are, since both are true regardless of the mailbox."
+    },
+    {
+      "id": "N1",
+      "target": "code",
+      "severity": "note",
+      "rule": "spec/webhook-429-empty-body",
+      "file": "apps/api/src/webhooks/webhook-rate-limit.guard.ts",
+      "symbol": "WebhookRateLimitGuard.canActivate",
+      "line": 58,
+      "claim": "the rate-limited webhook answers 429 with a JSON envelope rather than the empty body the API contract specifies",
+      "witness": {
+        "kind": "rule",
+        "detail": "throw new HttpException('', 429) reaches Nest's default exception layer, which renders a non-object response as { statusCode, message }, so the body on the wire is {\"statusCode\":429,\"message\":\"\"} rather than nothing. There is no global filter (a grep for useGlobalFilters across apps/api/src returns nothing) and WebhookHashRejectedFilter catches only WebhookHashRejected. The 401 path solved exactly this problem the right way: signwell-webhook.guard.ts:70-95 defines a marker exception and a filter that calls response.status(401).end(), with a comment explaining that a JSON envelope is a shape an attacker can compare against. The same reasoning applies one status code over. A note rather than a blocker because the line it contradicts sits in the API Contracts section rather than in a numbered requirement, and the shape it leaks says nothing about which documents we hold.",
+        "source": "specs/documents/04-signature-providers.md:1007 - '- `429` empty body - rate limit'"
+      },
+      "suggestedFix": "Give the 429 the same treatment as the 401: a marker exception plus a filter that ends the response with no body, or extend WebhookHashRejectedFilter to cover both."
+    },
+    {
+      "id": "N2",
+      "target": "code",
+      "severity": "note",
+      "rule": "checklist/idempotent-paths",
+      "file": "apps/api/src/documents/provider-reconciler.service.ts",
+      "symbol": "applyState",
+      "line": 276,
+      "claim": "convergence has three concurrent triggers and takes no row lock, so two overlapping convergences of one envelope can write the same transition twice and fork the event hash chain",
+      "witness": {
+        "kind": "scenario",
+        "detail": "converge() is reachable from the webhook job (runJob, :113), from any read of a stale envelope (convergeIfStale, called synchronously in EnvelopesService.get at envelopes.service.ts:398) and from the sweep (sweepStale, :157). Its transaction at provider-reconciler.service.ts:276 takes no SELECT ... FOR UPDATE, unlike the send and void paths (envelopes.service.ts:854 and :1328). Scenario: signer 1 signs; SignWell posts document_signed; at the same moment the sender refreshes the envelope page and providerSyncedAt is older than 120 seconds. Both convergences load the envelope with signer 1 still notified, both fetchState and see 'signed', so both write a signed event, both mint a token for signer 2, both write email_accepted and both send an invitation. The two events read the same predecessor, so both carry the same previousEventHash, and verifyChain (packages/validation/src/envelopes.ts:609-628) walks the trail in occurredAt order and reports it broken at the second one - the envelope's own audit tab then says the trail does not verify. Recorded rather than blocking because the codebase already accepts this class of race: the shipped download path writes a downloaded event in a transaction with no envelope lock (envelopes.service.ts:490-497), so two clicks on Download fork the chain the same way today, and holding this diff to a stricter bar than the code it extends would be inventing a standard. It is worth a human's attention because the reconciler is the first writer whose duplicate trigger is the product's own - a webhook overlapping a page load - rather than a user double-clicking.",
+        "source": ".claude/skills/spec/references/checklist.md:20 - 'Every path reachable twice is idempotent, with the mechanism named and a concurrency test.' and :24 - 'Concurrent access to the same row states its locking strategy.'"
+      },
+      "suggestedFix": "Take the same SELECT id FROM \"Envelope\" ... FOR UPDATE the send and void paths take as the first statement of applyState's transaction, and re-read the signers inside it. The provider call already happens before the transaction opens, so invariant 11 is unaffected."
+    },
+    {
+      "id": "N3",
+      "target": "code",
+      "severity": "note",
+      "rule": "spec/TC-04-E2E-02",
+      "file": "e2e/tests/signature-providers.spec.ts",
+      "symbol": "FIELDS",
+      "line": 39,
+      "claim": "the returning finding is fixed: the E2E template no longer declares a signer-owned field, so no SignWell send in the suite can abort on document_fields_not_materialized",
+      "witness": {
+        "kind": "rule",
+        "detail": "contractor_bank is now { filledBy: 'sender' } (e2e/tests/signature-providers.spec.ts:41-48) and FIELD_VALUES fills both keys (:57-60), so renderEnvelopeDocument substitutes both placeholders and prepareSend's signerOwnedFields is empty (envelopes.service.ts:1113-1120). translateToTextTags then finds no residual {{...}} and emits exactly one signature tag per signer from the signature blocks the renderer appends (signwell-text-tags.ts:155-170, envelope-renderer.ts:190-196), so expectedFields is two required signature fields bound to recipients '1' and '2' - byte for byte what StubSignWellHttpClient.createDocument materializes (stub-signwell-http-client.ts:109-118: one required signature per recipient, recipient_id = String(order)). verifyMaterialized claims both and reports nothing missing. The choice is documented at the head of the file with its reason and with pointers to where the signer-owned tag path is proved instead (TC-04-INT-01, -03a, -03b and TC-04-UNIT-01..03), which is the right level for it.",
+        "source": "e2e/tests/signature-providers.spec.ts:29-48 and apps/api/src/signature/signwell/stub-signwell-http-client.ts:24-28"
+      },
+      "suggestedFix": "None - recorded so the fix is on the record rather than inferred from the absence of the finding."
+    },
+    {
+      "id": "N4",
+      "target": "code",
+      "severity": "note",
+      "rule": "spec/edge-case-4",
+      "file": "apps/api/src/documents/envelopes.service.ts",
+      "symbol": "abandonSession",
+      "line": 1005,
+      "claim": "the returning finding is fixed: a session the send could not pin is now deleted, and one it could not delete either is marked so the next send adopts it",
+      "witness": {
+        "kind": "rule",
+        "detail": "The catch around the send transaction now calls abandonSession (envelopes.service.ts:955-958), which refuses to touch a document a winning send pinned (the count at :1013-1018 guards the double-click loser against deleting the winner's document), calls provider.cancel, and only if that fails records providerError = ORPHANED_SESSION on the still-draft envelope (:1035-1041). The next send reads the marker and passes adoptExisting (:836-838), and createOrAdopt now searches before creating rather than only after a create that threw (signwell-signing-provider.ts:152-172), so the second send adopts the leftover by metadata.envelope_id instead of opening a second live contract. The double-click half is covered too: the losing send throws notDraft inside the transaction, its own document is not the pinned one, so it is deleted rather than orphaned. One residual window remains and is worth knowing rather than fixing blind: if the provider delete fails and the envelope is no longer draft (the double-click loser), the updateMany at :1035 matches nothing and the leftover survives with only a log line - no marker, and no draft left for a later send to adopt from. That is a double failure, and the cheap alternative would overwrite the winner's providerError, which the code deliberately refuses to do.",
+        "source": "specs/documents/04-signature-providers.md:544 (edge case 4) and :404-417 (requirement 26)"
+      },
+      "suggestedFix": "None required. If the residual window is ever worth closing it wants a place to record an orphan that is not the envelope's own providerError column - a row of its own, or something shaped like the ProviderWebhookEvent forensics table."
+    },
+    {
+      "id": "N5",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/internal-contradiction",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "Backward Compatibility item 6",
+      "line": 1164,
+      "claim": "backward-compatibility item 6 and the area README's shared-rule table both say providerKey is written at creation and never changes, which requirement 1 and invariant 7 contradict outright",
+      "witness": {
+        "kind": "rule",
+        "detail": "Requirement 1: 'Organization.signatureProviderKey is what the send path reads; Envelope.providerKey is written in the same transaction that flips the envelope to sent' (:147-150), and 'At send and not at creation, deliberately, because the difference is observable' (:152). Invariant 7 agrees: 'written at send ... On a draft it is a default the send overwrites' (:664-667). Backward compatibility 6 then says 'Mechanism: invariant 7 - providerKey is written once at creation and no code path updates it' (:1164), and specs/documents/README.md:57 carries the same stale sentence as a cross-spec shared rule binding spec 02. The implementation follows requirement 1 - creation writes the organization's current key as a display default (envelopes.service.ts:616) and the send overwrites it (:889) - and TC-04-INT-17 pins that reading, so nothing downstream is ambiguous. The guarantee item 6 states (switching never touches an in-flight envelope) does hold; only its mechanism sentence is wrong. A note rather than a halt because the contradiction has exactly one resolution and the code took it.",
+        "source": "specs/documents/04-signature-providers.md:147-152 and :664-667 versus :1164 and specs/documents/README.md:57"
+      },
+      "suggestedFix": "Rewrite item 6's mechanism as 'invariant 7 - providerKey is written at send and no code path updates it afterwards; a draft carries a display default the send overwrites', and correct the README row to 'Envelope.providerKey is written at send and never changes afterwards'."
+    },
+    {
+      "id": "N6",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/requirement-10",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "requirement 10 / Data Model New Enums",
+      "line": 249,
+      "claim": "requirement 10 forbids editing a spec 02 test while the Data Model requires two new EnvelopeEventType values that a spec 02 unit test counts, so one shipped assertion had to change",
+      "witness": {
+        "kind": "rule",
+        "detail": "Requirement 10: 'The rewrite is verified by the existing spec 02 test suite passing unchanged. A test that has to be edited to accommodate the new port is a signal that behaviour moved, and is a defect of this spec's implementation, not of the test' (:249-251). The Data Model: 'EnvelopeEventType gains provider_synced, provider_error' (:628-630). TC-02-UNIT-02 asserts the enum has exactly fifteen members, so the diff edits it to seventeen (packages/validation/src/envelopes.test.ts:401-412, the only pre-existing assertion this diff changes). No implementation satisfies both sentences. The edit made is the right one - it keeps the count assertion meaningful and names the two additions explicitly - and acceptance criterion 2 narrows the promise to 'Spec 02's integration and E2E suites pass unedited' (:1136), which is what the code delivers: no shipped integration or E2E assertion is touched. Recorded so the next reader does not have to re-derive that the edited unit case is sanctioned.",
+        "source": "specs/documents/04-signature-providers.md:249-251 versus :628-630, and packages/validation/src/envelopes.test.ts:401-412"
+      },
+      "suggestedFix": "Scope requirement 10 the way acceptance criterion 2 already does - the integration and E2E suites pass unedited - and add a clause noting that the enum-count unit assertion moves with the Data Model's two additive values."
+    }
+  ]
+}

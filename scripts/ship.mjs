@@ -16,6 +16,8 @@
  *
  * Options:
  *   --branch <name>    create and switch to this branch first
+ *   --from <ref>       measure the diff from this ref instead of HEAD — for a run that
+ *                      continues work already committed, after a spec defect was fixed
  *   --resume           continue the active run instead of starting a new one
  *   --skip <stages>    comma-separated stages to skip (e.g. --skip qa)
  *   --permission-mode  passed to claude; default acceptEdits
@@ -110,8 +112,34 @@ function promptFor(stage, run, verdictPath) {
     case 'implement':
       return `${head}\nImplement \`.workflow/runs/${run.id}/handoff.json\`. Write your stage report to `
         + `\`.workflow/runs/${run.id}/stages/implement.attempt-${(run.stages.implement.attempts ?? 0) + 1}.md\`.${back}`;
-    case 'review':
-      return `${head}\nReview \`git diff ${run.baseRef}...HEAD\` against the spec and the handoff.${back}`;
+    case 'review': {
+      const done = run.stages.review.attempts ?? 0;
+      if (!done) {
+        return `${head}\nReview \`git diff ${run.baseRef}...HEAD\` against the spec and the handoff.${back}`;
+      }
+      const priors = Array.from({ length: done }, (_, i) =>
+        `  - \`.workflow/runs/${run.id}/stages/review.attempt-${i + 1}.json\``).join('\n');
+      return `${head}
+Review \`git diff ${run.baseRef}...HEAD\` against the spec and the handoff. **This diff has been reviewed ${done} time(s) before.**
+
+## What earlier passes concluded
+
+Read every one of these in full, notes included:
+
+${priors}
+
+They are claims to check, not conclusions to trust. If you disagree with an earlier pass, say so — your verdict is the one that counts.
+
+## What has and has not been looked at
+
+Run \`node scripts/review-coverage.mjs\` and read the ledger. It is derived from what earlier reviews actually opened, not from what they claimed, and it is the plan for this pass:
+
+1. **Confirm each earlier blocker is closed** by checking its witness against the code. Say so per finding.
+2. **Then go to the files no review has ever opened**, largest first. A previous pass is not proof of absence — on the first run of this spec, review 1 opened 22 of 65 files, and both blockers review 2 raised were in a file review 1 never read.
+3. **Do not re-derive a file an earlier pass already judged** unless the diff since that pass touches it.
+
+A review that only re-checks the fix and reports clean has not reviewed this diff.${back}`;
+    }
     case 'qa':
       return `${head}\nRun unit in full, then the integration and E2E suites the diff touches — never either one whole; `
         + `both already run on the deploy gate. Run E2E with \`CI=1\`, targeted. Then check the spec's acceptance criteria.${back}`;
@@ -153,6 +181,20 @@ function runAgentStage(stage, run) {
     '--permission-mode', permissionMode, '--output-format', 'json'];
   if (model) args.push('--model', model);
 
+  /* The implementer resumes its own session between attempts; every other agent starts cold.
+     The asymmetry is the point. Converging on working code is helped by remembering what you
+     already tried — and three gates downstream catch it if the memory carries a mistake. A
+     reviewer's judgement is not helped by remembering what it already ruled: it would be
+     defending a position rather than re-deriving one, and two passes over the same diff must
+     be able to disagree. See `code-reviewer.md`, "Reviewing again". */
+  const resume = stage === 'implement' && run.stages[stage].attempts > 0
+    ? lastSessionId(run, stage)
+    : null;
+  if (resume) {
+    args.push('--resume', resume);
+    note(`resuming session ${resume.slice(0, 8)} — the implementer keeps what it already learned`);
+  }
+
   note(`claude -p --agent ${agent}${model ? ` --model ${model}` : ''}  (fuse ${timeoutMin}m)`);
   if (dryRun) return { status: 'pass', findings: [], dryRun: true };
 
@@ -184,6 +226,21 @@ function runAgentStage(stage, run) {
 
   note(`verdict written after ${secs}s`);
   return readVerdict(abs, `${agent} wrote a verdict that is not valid JSON`);
+}
+
+/** The session of a stage's most recent invocation, so the next attempt can continue it. */
+function lastSessionId(run, stage) {
+  const journal = join(run.dir, 'events.jsonl');
+  if (!existsSync(journal)) return null;
+  let id = null;
+  for (const line of readFileSync(journal, 'utf8').split('\n')) {
+    if (!line.includes('"sessionId"')) continue;
+    try {
+      const e = JSON.parse(line);
+      if (e.stage === stage && e.sessionId) id = e.sessionId;
+    } catch { /* a truncated last line is normal while a run is live */ }
+  }
+  return id;
 }
 
 /**
@@ -227,7 +284,8 @@ function main() {
       process.exit(1);
     }
     step(`init ${specArg}`);
-    if (wf('init', '--spec', specArg) !== 0) process.exit(1);
+    const from = opt('from');
+    if (wf('init', '--spec', specArg, ...(from ? ['--from', from] : [])) !== 0) process.exit(1);
     step('preflight');
     if (wf('preflight') !== 0) process.exit(2);
   }

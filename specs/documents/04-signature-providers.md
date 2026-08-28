@@ -224,9 +224,15 @@ unchanged.
    hashing, the `/sign/{token}` route, consent capture, drawn and typed signatures, the
    pre-signature document-hash check, single-use tokens, the Certificate of Completion, and the
    hash-chained trail. **This spec changes no observable behaviour of an `internal` envelope.**
-10. The rewrite is verified by the existing spec 02 test suite passing unchanged. A test that has
-    to be edited to accommodate the new port is a signal that behaviour moved, and is a defect of
-    this spec's implementation, not of the test.
+10. The rewrite is verified by the existing spec 02 test suite passing unchanged. A test that
+    has to be edited to accommodate the new port is a signal that behaviour moved, and is a
+    defect of this spec's implementation, not of the test.
+
+    **One exception, and it is enumerated rather than left to judgement.** The Data Model adds
+    two `EnvelopeEventType` values, and `TC-02-UNIT-02` asserts the enum has exactly fifteen
+    members — a test that counts a set must change when the set grows, and no implementation
+    can avoid it. That single assertion may be updated to seventeen. Nothing else in spec 02's
+    suite may be touched, and any other edit is the defect this requirement describes.
 
 ### The SignWell provider
 
@@ -283,6 +289,14 @@ unchanged.
 
 15. `signerAccess` calls `GET /documents/{id}` and returns the current
     `recipients[n].embedded_signing_url` for the signer whose turn it is. It is never persisted.
+
+    The URL is hosted in **our own `<iframe>`, with our own `message` listener that checks
+    `event.origin` against the embed host** before reading anything (edge case 19). SignWell's
+    `SignWellEmbed` SDK is deliberately **not** loaded. The difference is not ergonomic: `/sign`
+    is the one session-less page in the product, and it renders author-controlled HTML. The area
+    README lists a restrictive CSP there as one of four required mitigations for exactly that,
+    and pulling a vendor script onto it would spend a security control to save a `postMessage`
+    handler. `frame-src` is widened; `script-src` is not.
 16. A signer whose turn has not started gets our existing "not your turn yet" screen, decided
     from our own rows before any call to SignWell is made.
 
@@ -509,12 +523,15 @@ unchanged.
     before send, then `sent` for the recipient whose turn is open and `waiting` for the rest.
     Convergence maps `waiting` → our `pending`, `sent` → `notified`, and takes `viewed`,
     `signed` and `declined` at face value.
-40. **Voiding is delete-then-converge, and the race is resolved in favour of the truth.** The
-    order is: call `DELETE`, then re-read. A `404` on the re-read is the expected outcome and
-    confirms the void. A `204` followed by a *successful* read is impossible and is treated as a
-    provider fault. If the `DELETE` itself returns `404`, the document is already gone — either
-    someone deleted it in SignWell's UI or it never committed — and the envelope is voided
-    locally with `providerError` set, because our void must not be blocked by their state.
+40. **Voiding is delete-then-settle.** The order is: call `DELETE`, then mark the envelope
+    voided. There is **no re-read** — `204` is the confirmation, and requirements 41 and 42 say
+    why asking again would be wrong: the document is gone, so a read can only produce the `404`
+    we already expect, and the reconciler is required to stop calling. An earlier draft of this
+    requirement asked for that re-read and contradicted both.
+
+    If the `DELETE` itself returns `404`, the document is already gone — someone deleted it in
+    SignWell's UI, or it never committed — and the envelope is voided locally with
+    `providerError` set, because our void must not be blocked by their state.
 
     If the last signer signs between our decision and the `DELETE` landing, the delete still
     succeeds and the completed document is destroyed. This is a real and accepted loss: a void
@@ -1113,12 +1130,18 @@ All of these live in `packages/validation` so web and API cannot disagree.
 `toast-signing-provider-saved`, `signing-test-mode-banner`
 
 **Signing page:** `sign-embedded-frame`, `sign-embedded-loading`, `sign-embedded-error`,
-`sign-embedded-retry`, `sign-test-badge`, `sign-signature-canvas` (asserted absent under SignWell)
+`sign-embedded-retry`, `sign-test-badge`, `signing-signature-canvas` (asserted absent under SignWell)
 
-**Envelope detail:** `envelope-provider`, `envelope-test-badge`, `envelope-download-button`,
+**Envelope detail:** `envelope-provider`, `envelope-test-badge`, `envelope-download-btn`,
 `envelope-certificate-link` (asserted absent under SignWell)
 
 **Application shell:** `nav-settings` (asserted absent for `user` and `viewer`)
+
+> Two ids here are spec 02's and are spelled its way on purpose: `envelope-download-btn` and
+> `signing-signature-canvas`. An earlier draft of this spec coined its own spellings for the
+> same two controls, which no implementation could satisfy — requirement 10 forbids editing
+> spec 02's suite, so the shipped spelling wins by construction.
+> **An id for a control that already exists is not this spec's to name.**
 
 `signing-provider-missing-{key}` is deliberately **not** in this list. The unconfigured state is a
 server decision, proved at integration by TC-04-INT-18; asserting it again in a browser would
@@ -1133,6 +1156,7 @@ spend a whole E2E case re-reading a string the API already decided.
 | **`envelope-completion.ts`** | Two sources of PDF bytes instead of one. | The content-addressed key and the `updateMany` guard are unchanged; only the byte source is chosen earlier. |
 | **`/sign/{token}`** | The route now has two bodies. Its guards, token validation and `viewed` recording stay common. | `surface` is decided server-side and the client renders one of two bodies; the access rules are not duplicated. |
 | **The event chain** | A second writer (the reconciler) joins the controllers. | It writes through `EnvelopeEventsService` like everything else, so invariant 4 holds by construction. |
+| **The CSP on `/sign/*`** | `frame-src` is `'self'`, so the embedded widget is refused by the browser outright — TC-04-E2E-02 fails and no counterparty can sign anywhere. This is a mitigation the area README lists as required against author-controlled HTML on a session-less page, and the embedded surface cannot exist without loosening it. | `frame-src` gains the embed origin and nothing else, from a **build-time** variable — `headers()` resolves during `next build` exactly as `rewrites()` does, so a runtime value would silently do nothing. `script-src` is deliberately untouched: requirement 15 hosts the widget in our own iframe with our own origin-checked listener rather than loading SignWell's SDK, so no third-party script reaches that page. |
 | **Public attack surface** | A new unauthenticated POST endpoint. | Hash verification, a replay store, a rate limit, no state written from the body, and a response that is identical for known and unknown references. |
 | **Outbound network from the API** | The API now makes outbound HTTPS calls in the request path. A hung provider could exhaust the request pool. | Hard 10s timeout per call, five attempts with backoff **outside** any transaction (invariant 11), and a circuit breaker that fails fast for 60s after five consecutive failures. |
 | **Secrets** | An API key that can create and destroy real contracts. | SSM `SecureString`, injected by ECS — the store this repository already uses. Terraform creates the parameter and the IAM policy, never the value, so no secret reaches the state file. |
@@ -1148,11 +1172,25 @@ spend a whole E2E case re-reading a string the API already decided.
 2. **Every existing organization keeps the in-house engine.** *Mechanism:*
    `Organization.signatureProviderKey String @default("internal")` — a new column with a default,
    so existing rows read as `internal` without being written.
-3. **The migration is additive and safe in either deploy order.** New columns with defaults, one
-   new table, two new enum values. No renames, no drops, no new `NOT NULL`. *Mechanism:* the
-   repository rule that `make deploy-<env>` rolls services out **before** `prisma migrate deploy`
-   is only sound for additive migrations, and this one is additive — new code tolerates the old
-   schema because every added column has a default it can assume.
+3. **The migration is additive, so a rollback needs no schema change.** New columns with
+   defaults, one new table, two new enum values. No renames, no drops, no new `NOT NULL`.
+   *Mechanism:* nothing is removed or narrowed, so the old schema remains a superset-compatible
+   target for the previous release.
+
+   **It is not safe in either deploy order, and an earlier draft claimed it was.** `make
+   deploy-<env>` rolls services out *before* `prisma migrate deploy`, and the generated Prisma
+   client enumerates columns in its `SELECT` rather than using `SELECT *`. So between the
+   rollout and the migration the new API asks for `Envelope.providerTestMode`,
+   `providerStatus`, `providerSyncedAt`, `providerError`, `EnvelopeSigner.providerRef` and
+   `Organization.signatureProviderKey` — none of which exist yet — and every read fails with
+   `42703` instead of reading a default. The document list and detail screens return 500 for
+   that window. A column default protects a row that is written, not a query that names a
+   column which is absent.
+
+   *Mechanism for the window:* it is a release-procedure concern, not a schema one — either the
+   runbook covers it, or this migration runs before the rollout, which is safe precisely because
+   it is additive. The choice belongs in [docs/deployment.md](../../docs/deployment.md), and the
+   repository rule that migrations must be additive is what leaves it open at all.
 4. **A code rollback needs no database rollback.** The previous release ignores the new columns
    entirely. *Mechanism:* nothing in the old code reads `providerTestMode`, `providerStatus`,
    `providerSyncedAt`, or `ProviderWebhookEvent`; a SignWell envelope rolled back would stall
@@ -1160,8 +1198,10 @@ spend a whole E2E case re-reading a string the API already decided.
 5. **Spec 02's observable behaviour is unchanged for `internal` envelopes.** *Mechanism:*
    requirement 10 — the existing suite passes unedited, which is a checkable statement rather than
    an intention.
-6. **Switching an organization's provider never touches an in-flight envelope.** *Mechanism:*
-   invariant 7 — `providerKey` is written once at creation and no code path updates it.
+6. **Switching an organization's provider never touches an envelope that has been sent.**
+   *Mechanism:* invariant 7 — `providerKey` is written at send and no code path updates it
+   afterwards. A draft is deliberately not covered: it has no provider yet, and edge case 14
+   and TC-04-INT-17 pin that it goes out on whichever provider is current when it is sent.
 7. **Turning the SignWell provider off cannot orphan a document.** *Mechanism:* the adapter is
    registered whenever its configuration is present, independently of which provider the
    organization has selected, so envelopes already on SignWell keep reconciling after an admin
@@ -1486,7 +1526,7 @@ shows it, and E2E is spent only where the assertion is out of reach of an API te
 - **Preconditions:** a sent SignWell envelope; signer 1's link; the provider stubbed to return a known embed URL.
 - **Steps:** 1. Open `/sign/{token}`. 2. Wait for the frame.
 - **Expected Result:** 1. The browser URL stays on our origin. 2. `sign-embedded-loading` appears and is replaced by `sign-embedded-frame`. 3. The frame's `src` is the URL the provider returned. 4. The test badge is visible. 5. Our own signature canvas is not rendered.
-- **Selectors:** `sign-embedded-loading`, `sign-embedded-frame`, `sign-test-badge`, `sign-signature-canvas` (asserted absent)
+- **Selectors:** `sign-embedded-loading`, `sign-embedded-frame`, `sign-test-badge`, `signing-signature-canvas` (asserted absent)
 
 ### TC-04-E2E-03: An unreachable provider keeps the link usable
 
@@ -1510,4 +1550,4 @@ shows it, and E2E is spent only where the assertion is out of reach of an API te
 - **Preconditions:** admin signed in; one completed SignWell test-mode envelope seeded through the API.
 - **Steps:** 1. Open `/org/{orgId}/documents/{envelopeId}`.
 - **Expected Result:** 1. The provider row reads "Signed via SignWell". 2. The test badge is visible. 3. The download control is offered. 4. No Certificate of Completion is listed.
-- **Selectors:** `envelope-provider`, `envelope-test-badge`, `envelope-download-button`, `envelope-certificate-link` (asserted absent)
+- **Selectors:** `envelope-provider`, `envelope-test-badge`, `envelope-download-btn`, `envelope-certificate-link` (asserted absent)

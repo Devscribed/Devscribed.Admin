@@ -54,7 +54,7 @@ profile on top of that mechanism.
 | Capability checks run on the normalized role (see role-enum note below) | 01 | 02, 03 |
 | Submit CTA is never disabled for validation (inherited from user-management spec 01) | user-management/01 | 01, 02, 04 |
 | A provider's state is read from the provider, never from a notification body | 04 | 02 |
-| `Envelope.providerKey` is written at creation and never changes | 04 | 02 |
+| `Envelope.providerKey` is written at send and never changes afterwards; a draft has no provider yet | 04 | 02 |
 | No provider call runs inside a database transaction | 04 | 02 |
 | A contract field value never reaches a provider-forensics row, a log, or the audit trail | 02 (req 40), 04 (req 35–37) | 03 |
 
