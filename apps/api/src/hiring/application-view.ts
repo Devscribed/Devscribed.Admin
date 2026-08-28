@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client';
 import type {
   CancellationFacts,
   CriterionType,
+  CvVersion,
   ScheduleActor,
   ScheduleEntry,
   ScheduleEventType,
@@ -61,6 +62,13 @@ export const CARD_APPLICATION = {
     orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
     include: { actorAccount: { select: { firstName: true, lastName: true } } },
   },
+  /*
+   * Every version of the CV, newest first — the timeline's second source, which the card
+   * merges with the log at render (07 §11.52). Sent whole rather than as a count: the
+   * oldest row is the document the booking carried and is not a replacement, and that
+   * rule belongs in one place rather than being re-derived per surface.
+   */
+  cvVersions: { orderBy: [{ uploadedAt: 'desc' }, { id: 'asc' }] },
   // `satisfies` rather than `as const`: Prisma's `include` takes a mutable `orderBy`
   // array, and the literal still narrows for the row type below.
 } satisfies Prisma.ApplicationInclude;
@@ -76,6 +84,14 @@ export interface StoredScheduleEvent {
   reason: string | null;
   createdAt: Date;
   actorAccount: { firstName: string; lastName: string } | null;
+}
+
+/** A stored CV version, as the timeline and the card's CV row read it. */
+export interface StoredCvVersion {
+  id: string;
+  fileName: string;
+  sizeBytes: number | null;
+  uploadedAt: Date;
 }
 
 /** The row every presenter below reads — exactly what `CARD_APPLICATION` produces. */
@@ -96,6 +112,7 @@ export interface StoredCardApplication {
   interviewer: { id: string; firstName: string; lastName: string; email: string };
   criteria: StoredAssessment[];
   scheduleEvents: StoredScheduleEvent[];
+  cvVersions: StoredCvVersion[];
 }
 
 export interface StoredAssessment {
@@ -152,11 +169,26 @@ export function presentCardApplication(application: StoredCardApplication) {
       presentScheduleEvent(event, application.submittedName),
     ),
     /**
+     * The other half of that history. Kept apart on the wire because they are genuinely
+     * two records — a version carries a filename and a size that have no place in an
+     * event row (07 §11.52) — and merged into one list only where it is rendered.
+     */
+    cvVersions: application.cvVersions.map(presentCvVersion),
+    /**
      * Denormalized from the log for the one thing the log is not asked to answer: who
      * called this off. `isCancelled` remains the flag; this is only its attribution
      * (07 §11.51).
      */
     cancellation: cancellationOf(application.scheduleEvents, application.submittedName),
+  };
+}
+
+export function presentCvVersion(version: StoredCvVersion): CvVersion {
+  return {
+    id: version.id,
+    fileName: version.fileName,
+    sizeBytes: version.sizeBytes,
+    uploadedAt: version.uploadedAt.toISOString(),
   };
 }
 

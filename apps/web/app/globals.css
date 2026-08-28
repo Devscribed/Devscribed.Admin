@@ -435,6 +435,22 @@ a {
 }
 
 /* The reschedule pickers, which replace the booking Card in place. */
+/*
+ * The CV line and its Replace control (07 design, Screens). The chooser expands beneath
+ * the row rather than beside it, so the row's geometry does not move when it opens.
+ */
+.manage-cv {
+  display: grid;
+  gap: var(--sp-6);
+}
+
+.manage-cv-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-6);
+}
+
 .manage-reschedule {
   display: grid;
   gap: var(--sp-10);

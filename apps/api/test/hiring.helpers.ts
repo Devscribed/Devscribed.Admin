@@ -38,6 +38,7 @@ export async function bootHiringApp(): Promise<Harness> {
 export async function resetDatabase(prisma: PrismaService): Promise<void> {
   await prisma.applicationCriterion.deleteMany();
   await prisma.applicationScheduleEvent.deleteMany();
+  await prisma.applicationCv.deleteMany();
   await prisma.application.deleteMany();
   await prisma.candidate.deleteMany();
   await prisma.criterionValue.deleteMany();

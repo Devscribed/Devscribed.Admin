@@ -14,7 +14,7 @@ import {
   MANAGE_LIMITS,
   POSITION_STEP,
   alreadyBookedMessage,
-  cvExtension,
+  cvStorageKey,
   formatBookedWhen,
   isValidTimeZone,
   managePath,
@@ -170,14 +170,18 @@ export class BookingService {
 
     const submittedName = `${firstName} ${lastName}`;
 
-    // The ids are minted here so the storage key can be `{applicationId}{extension}` —
-    // opaque, application-generated, never derived from the uploaded filename — and so
-    // the invite can carry a link to the candidate's card, which needs their id before
-    // the row exists. Reading the candidate is not writing one; the upsert below is
-    // still the first thing this booking changes.
+    // The ids are minted here so the storage key can be `{cvId}{extension}` — opaque,
+    // application-generated, never derived from the uploaded filename — and so the
+    // invite can carry a link to the candidate's card, which needs their id before the
+    // row exists. Reading the candidate is not writing one; the upsert below is still
+    // the first thing this booking changes.
     const applicationId = randomUUID();
     const candidateId = await this.candidateIdFor(vacancy.organizationId, email);
-    const cvKey = `${applicationId}${cvExtension(cv!.originalname)}`;
+    // The **CV's** own id, not the application's. This document is the first of
+    // however many the candidate goes on to submit, and a key built from the
+    // application would be a single slot with no room for the second (07 §07.35).
+    const cvId = randomUUID();
+    const cvKey = cvStorageKey(cvId, cv!.originalname);
     // Minted here for the same reason as the ids: the event body has to carry it, and
     // the body is written before the row exists. Plaintext, frozen for the life of the
     // row, and the only thing that addresses this booking from outside (07 §03.10).
@@ -223,6 +227,7 @@ export class BookingService {
       await this.writeBooking({
         applicationId,
         candidateId,
+        cvId,
         organizationId: vacancy.organizationId,
         vacancyId: vacancy.id,
         interviewerAccountId: vacancy.interviewerAccountId,
@@ -313,6 +318,7 @@ export class BookingService {
   private async writeBooking(input: {
     applicationId: string;
     candidateId: string;
+    cvId: string;
     organizationId: string;
     vacancyId: string;
     interviewerAccountId: string;
@@ -388,6 +394,21 @@ export class BookingService {
           actor: 'candidate',
           toStart: input.start,
           timeZone: input.timeZone,
+        },
+      });
+
+      // Version one, in the same transaction for the same reason. The denormalized
+      // `cv*` columns above hold the **current** CV and this row holds every version of
+      // it (07 §07.34); an application whose first version was missing would look like
+      // one whose candidate had already replaced something.
+      await tx.applicationCv.create({
+        data: {
+          id: input.cvId,
+          applicationId: input.applicationId,
+          key: input.cvKey,
+          fileName: input.cvFileName,
+          contentType: input.cvContentType,
+          sizeBytes: input.cvSizeBytes,
         },
       });
     });

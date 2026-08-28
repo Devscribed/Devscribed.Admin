@@ -421,6 +421,73 @@ export async function latestManageLink(request: APIRequestContext): Promise<Mana
   return { slug: match[1], token: match[2], path: match[0] };
 }
 
+/**
+ * A second document, plainly not the one the booking carried — the CV a replacement
+ * puts in place of it (07 §07).
+ */
+export const REPLACEMENT_CV = {
+  name: 'corrected-cv.docx',
+  mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  buffer: Buffer.from('a corrected CV, in a different format'),
+};
+
+/**
+ * Moves a booking through the candidate's own public routes — a precondition, not the
+ * thing under test.
+ *
+ * It reads the picker's own list rather than computing a slot, so a seeded move is one
+ * the page would actually have offered: the application's duration, the booked
+ * interviewer's mailbox, and its own event excluded (07 §05).
+ */
+export async function rescheduleBooking(
+  request: APIRequestContext,
+  slug: string,
+  token: string,
+): Promise<{ startUtc: string }> {
+  const record = await request.get(`${API}/api/manage/${slug}/${token}`);
+  if (!record.ok()) {
+    throw new Error(`Precondition failed: manage answered ${record.status()}`);
+  }
+  const current = (await record.json()).booking?.startUtc as string | undefined;
+
+  const availability = await request.get(`${API}/api/manage/${slug}/${token}/availability`, {
+    params: { timeZone: 'UTC' },
+  });
+  if (!availability.ok()) {
+    throw new Error(`Precondition failed: availability answered ${availability.status()}`);
+  }
+
+  const dates: Record<string, string[]> = (await availability.json()).dates ?? {};
+  const startUtc = Object.keys(dates)
+    .sort()
+    .flatMap((date) => dates[date])
+    .find((slot) => slot !== current);
+  if (!startUtc) throw new Error('Precondition failed: nowhere to move this interview to');
+
+  const moved = await request.post(`${API}/api/manage/${slug}/${token}/reschedule`, {
+    data: { startUtc, timeZone: 'UTC' },
+  });
+  if (!moved.ok()) {
+    throw new Error(`Precondition failed: reschedule answered ${moved.status()}`);
+  }
+  return { startUtc };
+}
+
+/** Replaces a booking's CV through the candidate's own route — a precondition. */
+export async function replaceCv(
+  request: APIRequestContext,
+  slug: string,
+  token: string,
+  file: { name: string; mimeType: string; buffer: Buffer } = REPLACEMENT_CV,
+): Promise<void> {
+  const response = await request.post(`${API}/api/manage/${slug}/${token}/cv`, {
+    multipart: { cv: file },
+  });
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: CV replacement answered ${response.status()}`);
+  }
+}
+
 /** Moves an application to another board column — a precondition, not the thing tested. */
 export async function setApplicationStatus(
   request: APIRequestContext,

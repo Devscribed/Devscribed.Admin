@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { bookedDurationMinutes, isLiveBooking } from '@devscribed/validation';
 import { PrismaService } from '../prisma.service';
+import type { UploadedCv } from './booking.service';
+import { CvReplacementService } from './cv-replacement.service';
 import {
   CANDIDATE,
   InterviewSchedulingService,
@@ -88,6 +90,7 @@ export class ManageService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly scheduling: InterviewSchedulingService,
+    private readonly cv: CvReplacementService,
   ) {}
 
   async view(slug: string, token: string): Promise<ManageView> {
@@ -136,6 +139,25 @@ export class ManageService {
       vacancy: { title: vacancy.title, status: vacancy.status },
       cancelled: true as const,
     };
+  }
+
+  /**
+   * A new CV, and nothing else about the booking touched.
+   *
+   * **Not gated behind rescheduling** and not a precondition of it: a candidate who
+   * spotted a typo in their CV must not have to move their interview to fix it, and a
+   * candidate who only wants a different Tuesday must not be interrogated about their CV
+   * (07 §07.32).
+   *
+   * The answer is the same body `GET` gives, which names no file — `hasCv` is all it
+   * carries about the CV, for the same reason the live record withholds the filename in
+   * the first place (07 §04.21). The page that just uploaded it already knows what it
+   * sent.
+   */
+  async replaceCv(slug: string, token: string, cv: UploadedCv | undefined): Promise<ManageView> {
+    const { vacancy, application } = await this.live(slug, token);
+    const stored = await this.cv.replace(application, cv);
+    return this.present(vacancy, { ...application, cvFileName: stored.fileName });
   }
 
   /* ---------------------------------------------------------------- *

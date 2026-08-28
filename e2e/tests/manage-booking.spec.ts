@@ -1,12 +1,15 @@
 import { expect, test, type Page } from '@playwright/test';
 import {
   CV_FILE,
+  REPLACEMENT_CV,
   bookInterview,
   columnCards,
   createVacancy,
   latestInviteLink,
   latestManageLink,
   registerOrganization,
+  replaceCv,
+  rescheduleBooking,
   setApplicationStatus,
   signIn,
   uniqueEmail,
@@ -235,6 +238,133 @@ test.describe('Manage booking', () => {
     await expect(history.getByRole('listitem').first()).toContainText('←');
     await expect(history.getByRole('listitem').first()).toContainText('Jane Doe');
     await expect(history).toContainText('Booked');
+  });
+
+  /**
+   * The candidate replaces their own CV, from the page they already have (07 §07).
+   *
+   * Not gated behind rescheduling and not a precondition of it: nothing here moves the
+   * interview, and the record beneath is the same one the candidate arrived on.
+   */
+  test('replaces the CV in place, naming no file at any point', async ({ page, request }) => {
+    const org = await registerOrganization(request, uniqueEmail('manage-cv-owner'));
+    const vacancy = await createVacancy(request, org, { title: 'Senior React Engineer' });
+    const candidate = uniqueEmail('manage-cv-candidate');
+    await bookInterview(request, vacancy.publicSlug, {
+      firstName: 'Jane',
+      lastName: 'Doe',
+      email: candidate,
+    });
+
+    const manage = await latestManageLink(request);
+    const invite = await latestInviteLink(request);
+    await page.goto(manage.path);
+
+    const when = page.getByTestId('manage-booking-when');
+    const before = (await when.textContent())!;
+
+    // A CV is acknowledged and never named — the link is forwardable, and the filename
+    // is usually built from the candidate's own name (07 §04.21, §07.31).
+    await expect(page.getByTestId('manage-cv-present')).toHaveText('CV attached');
+    await expect(page.locator('body')).not.toContainText(CV_FILE.name);
+    // The chooser is behind the affordance, not on screen from the start.
+    await expect(page.getByTestId('manage-cv-replace-input')).toHaveCount(0);
+
+    await page.getByTestId('manage-cv-replace-button').click();
+
+    // The chooser expands in place and the row's Replace button hides while it is open:
+    // the chooser is the control now (07 design, States).
+    await expect(page.getByTestId('manage-cv-replace-input')).toBeAttached();
+    await expect(page.getByTestId('manage-cv-replace-button')).toHaveCount(0);
+    await expect(page.getByText('PDF, DOC, DOCX, RTF or TXT. Up to 10 MB.')).toBeVisible();
+
+    // Choosing a file uploads immediately — there is no second Save, because a chosen
+    // file with an unpressed button is a change the candidate believes they have made.
+    await page.getByTestId('manage-cv-replace-input').setInputFiles(REPLACEMENT_CV);
+
+    await expect(page.getByTestId('manage-cv-replace-button')).toBeVisible();
+    await expect(page.getByTestId('manage-cv-present')).toHaveText('CV attached');
+    await expect(page.getByTestId('manage-error-banner')).toHaveCount(0);
+    // Still the interview it was: replacing a CV is not rescheduling one (07 §07.32).
+    await expect(when).toHaveText(before);
+    // The new name is no more on this page than the old one was.
+    await expect(page.locator('body')).not.toContainText(REPLACEMENT_CV.name);
+
+    await page.reload();
+    await expect(page.getByTestId('manage-cv-present')).toHaveText('CV attached');
+    await expect(page.locator('body')).not.toContainText(REPLACEMENT_CV.name);
+
+    // The team's card names the current version, which is the one just uploaded, and
+    // both of its actions point at the authenticated endpoint (04 §07.33).
+    await signIn(page, org.email);
+    await page.goto(invite.path);
+    await expect(page.getByTestId('card-cv-name')).toContainText(REPLACEMENT_CV.name);
+    await expect(page.getByTestId('card-cv-download')).toHaveAttribute(
+      'href',
+      `/api/organizations/${org.organizationId}/hiring/applications/${invite.applicationId}/cv`,
+    );
+  });
+
+  /** TC-H07-E2E-04 */
+  test('keeps the scheduling history team-only, and collapsed', async ({ page, request }) => {
+    const org = await registerOrganization(request, uniqueEmail('manage-history-owner'));
+    const vacancy = await createVacancy(request, org, { title: 'Senior React Engineer' });
+    const candidate = uniqueEmail('manage-history-candidate');
+    await bookInterview(request, vacancy.publicSlug, {
+      firstName: 'Jane',
+      lastName: 'Doe',
+      email: candidate,
+    });
+
+    const manage = await latestManageLink(request);
+    const invite = await latestInviteLink(request);
+
+    // Two moves and one CV replacement, in that order, so the newest entry is the
+    // replacement and the timeline has to interleave its two sources correctly.
+    await rescheduleBooking(request, manage.slug, manage.token);
+    await rescheduleBooking(request, manage.slug, manage.token);
+    await replaceCv(request, manage.slug, manage.token);
+
+    await signIn(page, org.email);
+    await page.goto(invite.path);
+
+    // One collapsed line, not four rows: a candidate who moved five times must not add
+    // five permanent rows to a section that already needed collapsing (07 §11.54).
+    const toggle = page.getByTestId(`application-history-toggle-${invite.applicationId}`);
+    await expect(toggle).toContainText('Rescheduled 2 times');
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(page.getByTestId(`application-history-${invite.applicationId}`)).toHaveCount(0);
+    // The summary counts moves. A CV replacement is on the list, not in the count.
+    await expect(toggle).not.toContainText('CV replaced');
+
+    await toggle.click();
+    const history = page.getByTestId(`application-history-${invite.applicationId}`);
+    await expect(history).toBeVisible();
+
+    // Newest first: the replacement, both moves, then the original booking — one list
+    // merged from two records (07 §11.52).
+    const rows = history.getByRole('listitem');
+    await expect(rows).toHaveCount(4);
+    await expect(rows.nth(0)).toContainText(`CV replaced · ${REPLACEMENT_CV.name}`);
+    await expect(rows.nth(1)).toContainText('←');
+    await expect(rows.nth(2)).toContainText('←');
+    await expect(rows.nth(3)).toContainText('Booked');
+
+    // Each attributed — and every one of these is the candidate's, because a member
+    // cannot replace a CV from any surface (07 §07.37).
+    for (const index of [0, 1, 2, 3]) {
+      await expect(rows.nth(index)).toContainText('Jane Doe');
+    }
+
+    // And none of it on the candidate's own page. They already know what they did, and a
+    // tally of their own reschedules reads as a reprimand (07 §11.53).
+    await page.goto(manage.path);
+    await expect(page.getByTestId('manage-booking-when')).toBeVisible();
+    await expect(page.getByText(/scheduling history/i)).toHaveCount(0);
+    await expect(page.locator('body')).not.toContainText('CV replaced');
+    await expect(page.locator('body')).not.toContainText('Rescheduled');
+    await expect(page.locator('body')).not.toContainText(REPLACEMENT_CV.name);
+    await expect(page.locator('body')).not.toContainText(CV_FILE.name);
   });
 
   /** The blurred state, from a link that never named anything. */

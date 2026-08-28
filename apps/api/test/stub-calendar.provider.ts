@@ -1,4 +1,5 @@
 import {
+  CalendarAttachment,
   CalendarEventChange,
   CalendarEventDraft,
   CalendarProvider,
@@ -34,6 +35,9 @@ export class StubCalendarProvider extends CalendarProvider {
   /** A move the calendar refuses — the booking must survive it untouched. */
   failOnUpdate = false;
 
+  /** An attachment swap the calendar refuses — the CV on file must not change. */
+  failOnAttach = false;
+
   /** A cancellation the calendar refuses — the booking must survive it untouched. */
   failOnCancel = false;
 
@@ -56,6 +60,15 @@ export class StubCalendarProvider extends CalendarProvider {
 
   /** Every move, in order, so a suite can assert the mailbox and the times it got. */
   readonly updated: Array<{ id: EventId; mailbox: string; change: CalendarEventChange }> = [];
+
+  /**
+   * Every attachment swap, in order.
+   *
+   * Recorded beside the event's own draft because the two answer different questions: a
+   * suite asking "is the interviewer holding the current CV?" reads the draft, and one
+   * asking "was the swap issued once, or once per retry?" reads this.
+   */
+  readonly attachments: Array<{ id: EventId; mailbox: string; fileName: string }> = [];
 
   private sequence = 0;
 
@@ -126,6 +139,30 @@ export class StubCalendarProvider extends CalendarProvider {
   }
 
   /**
+   * The current CV in place of whatever was attached, leaving the event otherwise
+   * untouched — same id, same times, same body, same attendee.
+   */
+  async replaceAttachment(
+    mailbox: MailboxRef,
+    eventId: EventId,
+    attachment: CalendarAttachment,
+  ): Promise<void> {
+    if (this.failOnAttach) throw new Error('stub: the calendar refused the attachment');
+    this.attachments.push({
+      id: eventId,
+      mailbox: mailbox.address,
+      fileName: attachment.fileName,
+    });
+
+    const existing = this.events.get(eventId);
+    if (!existing) return;
+    this.events.set(eventId, {
+      mailbox: existing.mailbox,
+      draft: { ...existing.draft, attachment },
+    });
+  }
+
+  /**
    * Idempotent, like the real one: cancelling an event that is already gone is a
    * success, which is what lets a caller retry after a database failure without a
    * compensating step (07 Alt flow).
@@ -155,12 +192,14 @@ export class StubCalendarProvider extends CalendarProvider {
     };
     this.failOnCreate = false;
     this.failOnUpdate = false;
+    this.failOnAttach = false;
     this.failOnCancel = false;
     this.failOnBusy = false;
     this.events.clear();
     this.cancelled.length = 0;
     this.cancellations.length = 0;
     this.updated.length = 0;
+    this.attachments.length = 0;
     this.sequence = 0;
   }
 }

@@ -11,11 +11,12 @@ import {
   formatShortDate,
   formatShortWhen,
   isLiveBooking,
+  mergeTimeline,
   scheduleEntryAriaLabel,
   scheduleEntryLabel,
   scheduleSummary,
   type ApplicationStatus,
-  type ScheduleEntry,
+  type TimelineEntry,
 } from '@devscribed/validation';
 import { Badge, Button, Card, SectionLabel, Select, Tooltip } from '@/ds';
 import { CancelInterviewDialog } from '@/hiring/CancelInterviewDialog';
@@ -261,7 +262,15 @@ export function ApplicationSection({
           <div className="card-section-body">
             <SchedulingHistory
               applicationId={application.id}
-              entries={application.scheduleEvents}
+              /*
+               * Two records, one list, merged here and only here — a CV version is not
+               * an event, and folding it into the log would have put a filename and a
+               * size in a row that has no place for either (07 §11.52).
+               */
+              entries={mergeTimeline(application.scheduleEvents, application.cvVersions, {
+                submittedName: application.submittedName,
+                timeZone: application.bookedTimeZone,
+              })}
               viewerTimeZone={viewerTimeZone}
             />
 
@@ -390,13 +399,18 @@ function Chevron({ expanded }: { expanded: boolean }) {
 }
 
 /**
- * Every reschedule, the cancellation and the original booking, newest first — collapsed
- * to one line until somebody asks for the sequence.
+ * Every reschedule, every CV replacement, the cancellation and the original booking,
+ * newest first — collapsed to one line until somebody asks for the sequence.
  *
  * Collapsed by default because a candidate who moved five times must not add five
  * permanent rows to a section that already needed collapsing (07 §11.54). And expansion
  * never scrolls: a member reading a card must not have the notes field move under their
  * cursor.
+ *
+ * A replacement is always the candidate's: internal members cannot replace or delete a
+ * CV from any surface, so a row reading "CV replaced" is never a member's doing
+ * (07 §07.37). The team sees it because a CV that changed silently between booking and
+ * interview, after the interviewer read the first one, is a bad surprise (07 §07.38).
  *
  * **Team-only.** It appears here and on no candidate-facing surface (07 §11.53) — the
  * candidate already knows what they did, and showing them a tally of their own
@@ -409,7 +423,7 @@ function SchedulingHistory({
   viewerTimeZone,
 }: {
   applicationId: string;
-  entries: ScheduleEntry[];
+  entries: TimelineEntry[];
   viewerTimeZone: string;
 }) {
   const [expanded, setExpanded] = useState(false);

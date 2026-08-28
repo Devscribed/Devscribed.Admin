@@ -10,6 +10,7 @@ import {
   cancelledTooltip,
   currentTimeMessage,
   excludeOwnBooking,
+  mergeTimeline,
   formatHistoryWhen,
   generateSlots,
   interviewMovedToast,
@@ -24,6 +25,7 @@ import {
   teamCancelConfirmMessage,
   validateCancelReason,
   type BusyInterval,
+  type CvVersion,
   type ScheduleEntry,
   type WorkingHoursSpec,
 } from './index';
@@ -178,6 +180,126 @@ describe('the scheduling history', () => {
     // The times are absolute; the zone is only ever a lens on them.
     expect(formatHistoryWhen(at('2026-08-25T11:00:00.000Z'), 'Europe/Minsk')).toBe('25 Aug 14:00');
     expect(formatHistoryWhen(at('2026-08-25T11:00:00.000Z'), 'UTC')).toBe('25 Aug 11:00');
+  });
+});
+
+/**
+ * The card's history has two sources and one list (07 §11.52). CV versions are not
+ * events — a filename, a size and a content type have no place in an event row — so the
+ * two are stored apart and merged where they are rendered.
+ */
+describe('the merged timeline', () => {
+  const application = { submittedName: 'Jane Doe', timeZone: 'UTC' };
+
+  const version = (overrides: Partial<CvVersion> = {}): CvVersion => ({
+    id: 'v1',
+    fileName: 'jane-doe-cv.pdf',
+    sizeBytes: 1024,
+    uploadedAt: '2026-08-12T10:00:00.000Z',
+    ...overrides,
+  });
+
+  const booked = entry({ id: 'booked', createdAt: '2026-08-12T10:00:00.000Z' });
+
+  /**
+   * Every booking stores a CV, so the first version is the one the booking carried —
+   * which the `booked` entry already accounts for. Rendering it again would tell the
+   * team a candidate swapped a document they had only ever submitted once.
+   */
+  it('does not read the original CV as a replacement', () => {
+    const merged = mergeTimeline([booked], [version()], application);
+
+    expect(merged).toHaveLength(1);
+    expect(merged[0].id).toBe('booked');
+  });
+
+  it('reads every version after the first as one', () => {
+    const merged = mergeTimeline(
+      [booked],
+      [
+        version({ id: 'v1', uploadedAt: '2026-08-12T10:00:00.000Z' }),
+        version({ id: 'v2', fileName: 'corrected.docx', uploadedAt: '2026-08-14T09:00:00.000Z' }),
+        version({ id: 'v3', fileName: 'final.pdf', uploadedAt: '2026-08-15T09:00:00.000Z' }),
+      ],
+      application,
+    );
+
+    expect(merged.map((row) => row.id)).toEqual(['v3', 'v2', 'booked']);
+  });
+
+  /** The card expands newest-first, whichever source a row came from (07 §11.54). */
+  it('interleaves the two sources by when each happened', () => {
+    const moved = entry({
+      id: 'moved',
+      type: 'rescheduled',
+      fromStartUtc: '2026-08-25T11:00:00.000Z',
+      toStartUtc: '2026-08-27T11:00:00.000Z',
+      createdAt: '2026-08-13T09:00:00.000Z',
+    });
+
+    const merged = mergeTimeline(
+      [moved, booked],
+      [
+        version({ id: 'v1', uploadedAt: '2026-08-12T10:00:00.000Z' }),
+        version({ id: 'v2', uploadedAt: '2026-08-12T18:00:00.000Z' }),
+      ],
+      application,
+    );
+
+    expect(merged.map((row) => row.id)).toEqual(['moved', 'v2', 'booked']);
+  });
+
+  /**
+   * Internal members cannot replace or delete a CV, from any surface (07 §07.37), so a
+   * replacement is the candidate's by construction rather than by lookup.
+   */
+  it('attributes every replacement to the candidate, by the name they submitted', () => {
+    const [replacement] = mergeTimeline(
+      [],
+      [version({ id: 'v1' }), version({ id: 'v2', uploadedAt: '2026-08-14T09:00:00.000Z' })],
+      application,
+    );
+
+    expect(replacement).toMatchObject({ actor: 'candidate', actorName: 'Jane Doe' });
+  });
+
+  it('names the file it replaced with, which no candidate-facing surface does', () => {
+    const [replacement] = mergeTimeline(
+      [],
+      [
+        version({ id: 'v1' }),
+        version({ id: 'v2', fileName: 'corrected.docx', uploadedAt: '2026-08-14T09:00:00.000Z' }),
+      ],
+      application,
+    );
+
+    expect(scheduleEntryLabel(replacement)).toBe('CV replaced · corrected.docx');
+    expect(scheduleEntryAriaLabel(replacement, 'UTC')).toBe(
+      'CV replaced, corrected.docx, by Jane Doe, 14 Aug',
+    );
+  });
+
+  /**
+   * The summary counts moves and nothing else (07 design, Copy). A replacement is on the
+   * expanded list, but a candidate correcting a typo has not rescheduled anything.
+   */
+  it('leaves the collapsed summary counting reschedules alone', () => {
+    const merged = mergeTimeline(
+      [booked],
+      [version({ id: 'v1' }), version({ id: 'v2', uploadedAt: '2026-08-14T09:00:00.000Z' })],
+      application,
+    );
+
+    expect(scheduleSummary(merged, 'UTC')).toBe('Booked 12 Aug');
+  });
+
+  it('is the log alone when no CV was ever replaced', () => {
+    expect(mergeTimeline([booked], [], application)).toEqual([booked]);
+  });
+
+  /** An application booked before the CV table existed and whose file was lost. */
+  it('is the log alone when there is no version at all', () => {
+    expect(mergeTimeline([booked], [], application).map((row) => row.type)).toEqual(['booked']);
   });
 });
 

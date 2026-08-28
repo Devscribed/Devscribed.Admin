@@ -345,7 +345,7 @@ export interface ScheduleEntry {
  * already needed collapsing (07 §11.54), so the count is stated and the sequence is
  * behind a toggle.
  */
-export function scheduleSummary(entries: readonly ScheduleEntry[], timeZone: string): string {
+export function scheduleSummary(entries: readonly TimelineEntry[], timeZone: string): string {
   const booked = entries.find((entry) => entry.type === 'booked');
   const moves = entries.filter((entry) => entry.type === 'rescheduled').length;
   const bookedOn = booked ? formatHistoryDate(new Date(booked.createdAt), timeZone) : null;
@@ -356,8 +356,15 @@ export function scheduleSummary(entries: readonly ScheduleEntry[], timeZone: str
   return `Rescheduled ${moves} times · ${tail}`;
 }
 
-/** `25 Aug 14:00 ← 24 Aug 11:00` · `Booked 21 Aug 09:00` · `Cancelled`. */
-export function scheduleEntryLabel(entry: ScheduleEntry): string {
+/**
+ * `25 Aug 14:00 ← 24 Aug 11:00` · `Booked 21 Aug 09:00` · `Cancelled` ·
+ * `CV replaced · jane-doe-cv.docx`.
+ *
+ * Takes a `TimelineEntry` rather than a `ScheduleEntry`, so the one row shape the card
+ * renders covers both sources the timeline merges (07 §11.52). Every `ScheduleEntry` is
+ * one, which is why nothing that only holds log rows had to change.
+ */
+export function scheduleEntryLabel(entry: TimelineEntry): string {
   const to = entry.toStartUtc ? formatHistoryWhen(new Date(entry.toStartUtc), entry.timeZone) : '';
   switch (entry.type) {
     case 'booked':
@@ -370,6 +377,10 @@ export function scheduleEntryLabel(entry: ScheduleEntry): string {
       }`;
     case 'cancelled':
       return 'Cancelled';
+    case CV_REPLACED:
+      // The filename is here and on no candidate-facing surface: the manage page states
+      // that a CV is attached and never which one (07 §04.21).
+      return `${HIRING_MESSAGES.manage.cvReplacedEntry} · ${entry.fileName ?? ''}`;
   }
 }
 
@@ -377,7 +388,7 @@ export function scheduleEntryLabel(entry: ScheduleEntry): string {
  * What a screen reader hears: the same facts as the row, in a sentence, because the
  * row's `←` is a layout device and reads as nothing at all.
  */
-export function scheduleEntryAriaLabel(entry: ScheduleEntry, timeZone: string): string {
+export function scheduleEntryAriaLabel(entry: TimelineEntry, timeZone: string): string {
   const on = formatHistoryDate(new Date(entry.createdAt), timeZone);
   const by = `by ${entry.actorName}`;
 
@@ -390,7 +401,89 @@ export function scheduleEntryAriaLabel(entry: ScheduleEntry, timeZone: string): 
     const to = formatHistoryWhen(new Date(entry.toStartUtc), entry.timeZone);
     return `Booked ${to}, ${by}, ${on}`;
   }
+  if (entry.type === CV_REPLACED) {
+    return `${HIRING_MESSAGES.manage.cvReplacedEntry}, ${entry.fileName ?? ''}, ${by}, ${on}`;
+  }
   return `Cancelled, ${by}, ${on}`;
+}
+
+/* ------------------------------------------------------------------ *
+ * CV versions, and the timeline that merges them in — 07 §07, §11.52
+ * ------------------------------------------------------------------ */
+
+/** One stored version of a candidate's CV, as the card reads it back. */
+export interface CvVersion {
+  id: string;
+  fileName: string;
+  /** Null on a version back-filled from a row that predates the size column. */
+  sizeBytes: number | null;
+  uploadedAt: string;
+}
+
+/**
+ * The fourth row shape, and the one that is **not** an event.
+ *
+ * CV versions live in `ApplicationCv`, which carries a filename, a size and a content
+ * type that have no place in an event row — so `ScheduleEventType` keeps the three
+ * values the column actually stores, and this one exists only for the merged row
+ * (07 §11.52). Nothing writes it anywhere.
+ */
+export const CV_REPLACED = 'cv_replaced';
+
+export type TimelineEntryType = ScheduleEventType | typeof CV_REPLACED;
+
+/**
+ * One row of the card's history, from either source.
+ *
+ * A superset of `ScheduleEntry`, deliberately: every log row is already a timeline row,
+ * so the merge adds shapes without forking the label, the aria label or the summary.
+ */
+export interface TimelineEntry extends Omit<ScheduleEntry, 'type'> {
+  type: TimelineEntryType;
+  /** The document's name — `cv_replaced` rows only, and team-only wherever it renders. */
+  fileName?: string | null;
+}
+
+/**
+ * The scheduling log and the CV versions, as one sequence, newest first.
+ *
+ * **The oldest version is not a replacement.** Every booking stores a CV, so the first
+ * row in `ApplicationCv` is the document the booking carried — which the `booked` entry
+ * already accounts for, and rendering it again as "CV replaced" would tell the team a
+ * candidate swapped a file they had only ever submitted once. Everything after it is a
+ * replacement, and each one is the candidate's: internal members cannot replace or
+ * delete a CV, from any surface (07 §07.37).
+ *
+ * Merged here rather than on the server because the two sources are genuinely two
+ * tables, and the card is the only place they are ever one list (07 §11.52).
+ */
+export function mergeTimeline(
+  events: readonly ScheduleEntry[],
+  versions: readonly CvVersion[],
+  application: { submittedName: string; timeZone: string },
+): TimelineEntry[] {
+  const replacements = [...versions]
+    .sort((a, b) => Date.parse(a.uploadedAt) - Date.parse(b.uploadedAt))
+    .slice(1)
+    .map((version): TimelineEntry => ({
+      id: version.id,
+      type: CV_REPLACED,
+      actor: 'candidate',
+      actorName: application.submittedName,
+      fromStartUtc: null,
+      toStartUtc: null,
+      // The zone the booking is in. A version row records no zone of its own, and the
+      // entry states no time of its own either — only the date it is stamped with,
+      // which the card renders in the reader's zone like every other row's.
+      timeZone: application.timeZone,
+      reason: null,
+      fileName: version.fileName,
+      createdAt: version.uploadedAt,
+    }));
+
+  return [...events, ...replacements].sort(
+    (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
+  );
 }
 
 /* ------------------------------------------------------------------ *

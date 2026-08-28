@@ -97,6 +97,12 @@ export const HIRING_MESSAGES = {
       unsupportedType: 'Unsupported file type. Accepted: .pdf, .doc, .docx, .rtf, .txt',
       tooLarge: 'File is too large (max 10 MB)',
       empty: 'The attached file is empty',
+      /**
+       * Stated before a file is chosen rather than after one is rejected, and shared
+       * with the manage page's replacement chooser (07 design, Copy) — one chooser's
+       * constraints must not read differently from the other's.
+       */
+      hint: 'PDF, DOC, DOCX, RTF or TXT. Up to 10 MB.',
     },
     note: {
       tooLong: 'Please keep this under 2000 characters',
@@ -242,6 +248,26 @@ export const HIRING_MESSAGES = {
      */
     reasonPlaceholder: 'Shared with the candidate in the cancellation notice',
     reasonTooLong: 'Please keep this under 500 characters',
+    /**
+     * The live state states only that a CV is on file, never which one: a candidate
+     * replacing a document knows what they submitted, and naming it would hand a
+     * forwarded link a filename the rest of this page withholds (07 §04.21, §07.31).
+     */
+    cvAttached: 'CV attached',
+    cvReplaceAction: 'Replace',
+    /**
+     * Announced, never drawn. A replacement changes nothing visible on the card — the
+     * page names no filename — so the polite region is the only acknowledgement there
+     * is, and the accessibility contract asks for one on every action (07 §16.72).
+     */
+    cvReplaced: 'Your CV has been replaced.',
+    /**
+     * The card's history row, completed with the filename (07 design, Copy). Team-only,
+     * like the rest of the timeline: the candidate already knows what they replaced
+     * (07 §11.53).
+     */
+    cvReplacedEntry: 'CV replaced',
+    cvReplaceFailed: "We couldn't replace your CV. Please try again.",
   },
   toast: {
     vacancyCreated: 'Vacancy created',
@@ -603,6 +629,19 @@ export function cvExtension(fileName: string): string {
   const dot = (fileName ?? '').lastIndexOf('.');
   return dot === -1 ? '' : fileName.slice(dot).toLowerCase();
 }
+
+/**
+ * `{cvId}{extension}` — opaque, application-generated, and never derived from what the
+ * candidate called their file (00 §03.17).
+ *
+ * The id is the **CV's own**, not the application's. The original shape was
+ * `{applicationId}{extension}`, which is a single slot: one document per application,
+ * so it cannot hold two versions of one candidate's CV — which is exactly what a
+ * replacement produces (07 §07.35). Files written under the old shape keep the keys
+ * they have; the migration back-fills a row per application and moves nothing.
+ */
+export const cvStorageKey = (cvId: string, fileName: string): string =>
+  `${cvId}${cvExtension(fileName)}`;
 
 /**
  * Order matters: an unsupported type is reported before a size problem, so a 20 MB

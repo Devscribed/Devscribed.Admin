@@ -201,6 +201,45 @@ export class TenantAppOnlyProvider extends CalendarProvider {
   }
 
   /**
+   * The new CV on, the old ones off — in that order.
+   *
+   * Adding before removing is what makes a half-failed replacement leave the interviewer
+   * with **two** CVs rather than none: the first is recoverable by looking at the dates,
+   * the second is a candidate's document silently missing from the meeting they are
+   * about to attend. The ids are read before the upload for the same reason — deleting
+   * "whatever is attached now" after the upload would delete the file just added.
+   *
+   * `Calendars.ReadWrite` already covers all three calls, so this needs no new Graph
+   * permission and no new consent.
+   */
+  async replaceAttachment(
+    mailbox: MailboxRef,
+    eventId: EventId,
+    attachment: CalendarAttachment,
+  ): Promise<void> {
+    const path = `${this.userPath(mailbox)}/events/${encodeURIComponent(eventId)}/attachments`;
+
+    const listed = await this.call(`${path}?$select=id`, { operation: 'listAttachments' });
+    const superseded = (((await listed.json()) as { value?: Array<{ id?: string }> }).value ?? [])
+      .map((item) => item.id)
+      .filter((id): id is string => Boolean(id));
+
+    await this.attach(mailbox, eventId, attachment);
+
+    for (const id of superseded) {
+      // A removal that fails leaves a stale copy beside a correct one, which is worth a
+      // log and not worth failing a replacement that has already landed.
+      await this.call(`${path}/${encodeURIComponent(id)}`, {
+        operation: 'deleteAttachment',
+        method: 'DELETE',
+        allow: [404],
+      }).catch((error) =>
+        this.logger.warn(`Could not remove attachment ${id} from ${eventId}: ${String(error)}`),
+      );
+    }
+  }
+
+  /**
    * The event has attendees by the time anything can go wrong, so this cancels rather
    * than deletes: Microsoft then tells the candidate the interview is off instead of
    * leaving them holding an invite to nothing. A delete is the fallback, because a

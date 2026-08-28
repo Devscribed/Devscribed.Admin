@@ -1,4 +1,17 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Query,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { BOOKING_LIMITS } from '@devscribed/validation';
+import type { UploadedCv } from './booking.service';
 import type { ManageAvailabilityQuery, RescheduleDto } from './manage.service';
 import { ManageService } from './manage.service';
 
@@ -53,5 +66,26 @@ export class ManageController {
   @HttpCode(200)
   cancel(@Param('slug') slug: string, @Param('token') token: string) {
     return this.manage.cancel(slug, token);
+  }
+
+  /**
+   * The candidate's own CV, replaced by the candidate and by nobody else — there is no
+   * team-side counterpart to this route anywhere in the product (07 §07.37).
+   *
+   * Unlimited, like everything else behind this token: 07 §15.70 records that a holder
+   * of one manage link can upload 10 MB repeatedly and that nothing is ever deleted,
+   * rather than implying a limiter exists.
+   */
+  @Post(':slug/:token/cv')
+  @HttpCode(200)
+  // Multer's own limit is a memory guard, set above the product rule so an oversized CV
+  // still gets the spec's "File is too large" message rather than a bare 413.
+  @UseInterceptors(FileInterceptor('cv', { limits: { fileSize: BOOKING_LIMITS.cvMaxBytes * 2 } }))
+  replaceCv(
+    @Param('slug') slug: string,
+    @Param('token') token: string,
+    @UploadedFile() cv?: UploadedCv,
+  ) {
+    return this.manage.replaceCv(slug, token, cv);
   }
 }

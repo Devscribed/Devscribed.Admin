@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
+  CV_ACCEPT,
   HIRING_MESSAGES,
   MANAGE_BOOKED_PARAM,
   cancelConfirmMessage,
@@ -11,9 +12,19 @@ import {
   isoDateInZone,
   movedMessage,
   retainSelection,
+  validateCv,
   zoneLabel,
 } from '@devscribed/validation';
-import { BookingLayout, Button, Card, InfoBanner, Modal, SectionLabel, Skeleton } from '@/ds';
+import {
+  BookingLayout,
+  Button,
+  Card,
+  FileInput,
+  InfoBanner,
+  Modal,
+  SectionLabel,
+  Skeleton,
+} from '@/ds';
 import { formatDuration, formatWhen } from '@/hiring/format';
 import { SlotPicker, readTimeFormat, writeTimeFormat } from '@/hiring/SlotPicker';
 import { useAvailability } from '@/hiring/useAvailability';
@@ -84,6 +95,10 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
   const [justBooked, setJustBooked] = useState(false);
   /** Set only by a move this visit made — the same species of receipt (07 §05.27). */
   const [justMoved, setJustMoved] = useState(false);
+  /** The inline chooser, open only once Replace has been pressed (07 design, States). */
+  const [replacingCv, setReplacingCv] = useState(false);
+  const [cvError, setCvError] = useState<string | null>(null);
+  const [uploadingCv, setUploadingCv] = useState(false);
   // Named so the dialog opens on it. Focus returns to whatever invoked the dialog on
   // its own, which `Modal` handles for every caller.
   const dismiss = useRef<HTMLButtonElement>(null);
@@ -232,6 +247,70 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
     }
   }
 
+  /**
+   * Choosing a file uploads it, immediately: a chosen file with an unpressed Save button
+   * is a change the candidate believes they have made (07 design, Interactions).
+   *
+   * Never a precondition of anything, and never gated behind a reschedule. A candidate
+   * who spotted a typo in their CV must not have to move their interview to fix it
+   * (07 §07.32).
+   */
+  async function replaceCv(file: File | null): Promise<void> {
+    if (!file || uploadingCv) return;
+
+    // 02's rules, run here so an unsupported type is refused without a round trip. The
+    // server re-runs all of them, which is the gate.
+    const check = validateCv({ fileName: file.name, sizeBytes: file.size });
+    if (!check.valid) {
+      setCvError(check.error);
+      return;
+    }
+
+    setCvError(null);
+    setUploadingCv(true);
+    setBanner(null);
+
+    try {
+      const form = new FormData();
+      form.append('cv', file);
+      const response = await fetch(`/api/manage/${slug}/${token}/cv`, {
+        method: 'POST',
+        body: form,
+      });
+      const body = await response.json().catch(() => ({}));
+
+      if (response.ok) {
+        setPage({ state: 'ready', view: body });
+        setReplacingCv(false);
+        // The record cannot show this happened — the page names no file — so the polite
+        // region is the whole acknowledgement (07 §16.72).
+        setAnnouncement(HIRING_MESSAGES.manage.cvReplaced);
+        return;
+      }
+      // The booking stopped being live while the chooser was open. Same answer as a
+      // reload, and the same one every other action gives.
+      if (response.status === 404) {
+        setReplacingCv(false);
+        setPage((current) =>
+          current.state === 'ready'
+            ? { state: 'ready', view: { ...current.view, booking: null } }
+            : current,
+        );
+        return;
+      }
+      // A field error belongs on the field; anything else is the page's banner.
+      if (body.error === 'validation' && body.fields?.cv) {
+        setCvError(body.fields.cv);
+        return;
+      }
+      setBanner(body.message ?? HIRING_MESSAGES.manage.cvReplaceFailed);
+    } catch {
+      setBanner(HIRING_MESSAGES.manage.cvReplaceFailed);
+    } finally {
+      setUploadingCv(false);
+    }
+  }
+
   async function cancelInterview(): Promise<void> {
     if (cancelling) return;
     setCancelling(true);
@@ -299,6 +378,59 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
 
   const { organizationName, vacancy } = page.view;
   const picking = rescheduling && booking !== null;
+
+  /*
+   * Built once and rendered by whichever branch is on screen, which is what "present in
+   * the live state and carried into the reschedule flow, never a precondition of
+   * anything" means in practice (07 §07.32): a candidate correcting a typo in their CV
+   * does not have to move their interview, and one who only wants a different Tuesday is
+   * not interrogated about their CV. One instance at a time, so the test ids stay unique.
+   *
+   * It states that a CV is on file and never which one. A candidate replacing a document
+   * knows what they submitted, and the filename would hand a forwarded link a name the
+   * rest of this page is at pains to withhold (07 §04.21, §07.31).
+   */
+  const cvRow = booking?.hasCv ? (
+    <div className="manage-cv">
+      <div className="manage-cv-row">
+        <p
+          data-testid="manage-cv-present"
+          style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}
+        >
+          {HIRING_MESSAGES.manage.cvAttached}
+        </p>
+        {/* Hidden while the chooser is open — the chooser is the control now. */}
+        {!replacingCv && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setCvError(null);
+              setReplacingCv(true);
+            }}
+            data-testid="manage-cv-replace-button"
+          >
+            {HIRING_MESSAGES.manage.cvReplaceAction}
+          </Button>
+        )}
+      </div>
+      {replacingCv && (
+        <FileInput
+          // No micro-label: the row above already says what this replaces, and the
+          // control still needs a name of its own for anyone who never sees that row.
+          aria-label={`${HIRING_MESSAGES.manage.cvReplaceAction} CV`}
+          accept={CV_ACCEPT}
+          hint={HIRING_MESSAGES.booking.cv.hint}
+          error={cvError ?? undefined}
+          disabled={uploadingCv}
+          // No second Save: a chosen file with an unpressed button is a change the
+          // candidate believes they have already made (07 design, Interactions).
+          onSelect={(file) => void replaceCv(file)}
+          data-testid="manage-cv-replace-input"
+        />
+      )}
+    </div>
+  ) : null;
 
   return (
     <BookingLayout data-testid="manage-page" wordmark={<Wordmark name={organizationName} />}>
@@ -399,6 +531,8 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
               }}
             />
 
+            {cvRow}
+
             <div className="manage-reschedule-actions">
               <Button
                 variant="ghost"
@@ -476,9 +610,10 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
                 *dead* link confirming that a particular person booked an interview — a
                 live one that named them outright would have given away more, to more
                 people (07 §04.21). What is left says an interview exists and when, which
-                is all its holder needs in order to move or call it off.
+                is all its holder needs in order to move it, replace the CV on it, or call
+                it off.
               */}
-              {booking.hasCv && (
+              {cvRow && (
                 <>
                   <hr
                     style={{
@@ -487,12 +622,7 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
                       borderTop: '1px solid var(--divider)',
                     }}
                   />
-                  <p
-                    data-testid="manage-cv-present"
-                    style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}
-                  >
-                    CV attached
-                  </p>
+                  {cvRow}
                 </>
               )}
 

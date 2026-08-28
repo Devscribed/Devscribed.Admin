@@ -99,6 +99,23 @@ export abstract class CalendarProvider {
   ): Promise<void>;
 
   /**
+   * Swaps the event's file attachment for the current CV, leaving everything else alone.
+   *
+   * Storage is the permanent record and every version of it is kept; the attachment is a
+   * **convenience copy of what is current**, so this replaces rather than accumulates
+   * (07 §07.36). A candidate who corrected a typo must not leave the interviewer opening
+   * the wrong one of two documents five minutes before the interview.
+   *
+   * Never called by a reschedule: moving an interview keeps the attachment it already
+   * has, which is half of why a move is a `PATCH` and not a re-booking (07 §12.57).
+   */
+  abstract replaceAttachment(
+    mailbox: MailboxRef,
+    eventId: EventId,
+    attachment: CalendarAttachment,
+  ): Promise<void>;
+
+  /**
    * Cancels rather than deletes, so the attendees are told rather than left holding an
    * invite to a meeting that is no longer there.
    *

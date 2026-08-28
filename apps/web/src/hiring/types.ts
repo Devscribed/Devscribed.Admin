@@ -9,6 +9,7 @@ import type {
   ApplicationStatus,
   CancellationFacts,
   CriterionType,
+  CvVersion,
   ScheduleEntry,
 } from '@devscribed/validation';
 
@@ -171,6 +172,11 @@ export interface CardApplication {
   criteria: CardCriterion[];
   /** Newest first. Team-only, and on no candidate-facing surface (07 §11.53). */
   scheduleEvents: ScheduleEntry[];
+  /**
+   * Every version of the CV, newest first — the timeline's second source (07 §11.52).
+   * The oldest is the document the booking carried, not a replacement.
+   */
+  cvVersions: CvVersion[];
   /** Who called the interview off, when, and — for a member — why. */
   cancellation: CancellationFacts | null;
 }

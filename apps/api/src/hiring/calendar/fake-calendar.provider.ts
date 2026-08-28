@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { cancelNoticeComment } from '@devscribed/validation';
 import {
+  CalendarAttachment,
   CalendarEventChange,
   CalendarEventDraft,
   CalendarProvider,
@@ -109,6 +110,30 @@ export class FakeCalendarProvider extends CalendarProvider {
       },
     });
     this.logger.log(`updateEvent ${eventId} in ${mailbox.address}`);
+  }
+
+  /**
+   * The current CV, in place of whatever was there. Everything else about the event is
+   * left exactly as it is — the attachment is a convenience copy of what is current,
+   * and a replacement is not a re-booking (07 §07.36).
+   */
+  async replaceAttachment(
+    mailbox: MailboxRef,
+    eventId: EventId,
+    attachment: CalendarAttachment,
+  ): Promise<void> {
+    // An id this process never created — the map resets with the process — attaches
+    // nothing and is not an error, for the same reason `updateEvent` is forgiving.
+    const existing = this.events.get(eventId);
+    if (!existing) return;
+    this.events.set(eventId, {
+      mailbox: existing.mailbox,
+      draft: { ...existing.draft, attachment },
+    });
+    // The name, never the bytes (00 §05.23).
+    this.logger.log(
+      `replaceAttachment ${eventId} in ${mailbox.address}: ${attachment.fileName}`,
+    );
   }
 
   async cancelEvent(mailbox: MailboxRef, eventId: EventId, comment?: string): Promise<void> {

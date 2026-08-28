@@ -132,8 +132,25 @@ describe('Hiring — booking', () => {
     // 60-minute vacancy, 60 minutes booked.
     expect(applications[0].end.getTime() - applications[0].start.getTime()).toBe(60 * 60_000);
 
-    // The stored key is opaque and application-generated — never the uploaded name.
-    expect(applications[0].cvKey).toBe(`${applications[0].id}.pdf`);
+    // The stored key is opaque and application-generated — never the uploaded name, and
+    // since 07 §07.35 never the application's id either: that shape is a single slot,
+    // and this document is only the first the candidate may submit.
+    const [version] = await prisma.applicationCv.findMany({
+      where: { applicationId: applications[0].id },
+    });
+    expect(applications[0].cvKey).toBe(`${version.id}.pdf`);
+    expect(applications[0].cvKey).not.toContain(applications[0].id);
+    expect(applications[0].cvKey).not.toContain('jane');
+
+    // Version one is written with the booking, in the same transaction: an application
+    // whose first version was missing would read as one already replaced.
+    expect(version).toMatchObject({
+      key: applications[0].cvKey,
+      fileName: 'jane-doe-cv.pdf',
+      contentType: 'application/pdf',
+      sizeBytes: CV_BYTES.length,
+    });
+
     const stored = await storage.get(applications[0].cvKey!);
     expect(stored?.bytes.equals(CV_BYTES)).toBe(true);
     expect(stored?.contentType).toBe('application/pdf');

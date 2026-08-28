@@ -39,6 +39,7 @@ import { CriteriaService } from './hiring/criteria.service';
 import { ApplicationsController, CandidatesController } from './hiring/candidates.controller';
 import { CandidatesService } from './hiring/candidates.service';
 import { CvController } from './hiring/cv.controller';
+import { CvReplacementService } from './hiring/cv-replacement.service';
 import { TestCalendarController } from './hiring/calendar/test-calendar.controller';
 import { HiringManageGuard } from './hiring/hiring-manage.guard';
 import { InterviewSchedulingService } from './hiring/interview-scheduling.service';
@@ -168,6 +169,7 @@ const calendarProvider = {
     AvailabilityService,
     BookingService,
     InterviewSchedulingService,
+    CvReplacementService,
     ManageService,
     ApplicationSchedulingService,
     ViewerTimeZoneService,

@@ -651,9 +651,9 @@ organization somebody already administers.
 
 ### Manage booking
 
-A candidate can move their interview or call it off, from a second public page reached by a
-per-booking link ([07](specs/hiring/07-manage-booking.md)). The team's own copy of both actions and
-CV replacement follow; what is below is what ships with the first two.
+A candidate can move their interview, replace their CV or call it off, from a second public page
+reached by a per-booking link ([07](specs/hiring/07-manage-booking.md)). The team has its own copy
+of the first and the last, from the candidate card and from My interviews, over the same rules.
 
 **A completed booking lands here, and that is why this page exists at two doors.** `/book/{slug}`
 has no confirmation view of its own: it navigates to `/manage/{slug}/{token}` and the live record is
@@ -805,6 +805,43 @@ moving it, re-upload the CV on every move, and leave a tombstone in the intervie
 time. Nobody who is not the interviewer is notified of a change; they learn of it by opening the
 board or the card, and that is recorded rather than solved — there is no notification system in the
 product, and building one for this feature would be larger than this feature.
+
+**A CV is replaced by the candidate, and by nobody else.** Internal members cannot replace or delete
+one from any surface, and no endpoint offers it: "the candidate corrected their own CV" and
+"somebody in the organization swapped it" are very different facts about a hiring record, and only
+the first is available. Replacement is **not gated behind rescheduling** — somebody who spotted a
+typo in their CV must not have to move their interview to fix it, and somebody who only wants a
+different Tuesday must not be interrogated about their CV — so the affordance sits in the live state
+and is carried into the reschedule flow rather than living inside it. The page still names no file:
+it says a CV is attached, never which one, because the filename is usually built from the
+candidate's own name and this link is forwardable.
+
+**Nothing is deleted, so every version is kept.** `ApplicationCv` holds them all and the
+`Application.cv*` columns hold the current one, which is what leaves the authenticated CV endpoint
+and the candidate card untouched by any of this. The record is permanent, and what the candidate
+submitted at booking is evidence the interviewer may already have read. Storage keys moved from
+`{applicationId}{extension}` to `{cvId}{extension}` for that reason alone: the old shape is a single
+slot and cannot hold two versions. Files written under it **keep the keys they have** — the
+migration back-fills one row per application that has a CV and moves, copies and renames nothing.
+The consequence is unbounded storage per booking, since the replacement endpoint is unauthenticated
+and unthrottled like everything else behind this token; that is recorded in
+[07 §15](specs/hiring/07-manage-booking.md) rather than mitigated.
+
+**The calendar event's attachment is swapped, not accumulated.** Storage is the permanent record and
+the attachment is a convenience copy of what is current, so a replacement adds the new file and
+removes the old one — in that order, because a half-failed swap that leaves the interviewer with two
+CVs is recoverable by looking at the dates, where one that leaves them with none is a candidate's
+document missing from a meeting they are about to attend. Storage, then the calendar, then the row:
+everything before the transaction is retryable and leaves nothing behind, and a failure after the
+calendar has taken the new attachment fails the request and logs the divergence rather than
+compensating, exactly as a move does.
+
+**The card's timeline merges two records at render.** CV versions are deliberately not events — a
+filename, a size and a content type have no place in an `ApplicationScheduleEvent` row — so the two
+are stored apart, sent apart, and combined only where they are drawn. The oldest version is the
+document the booking carried and is never read as a replacement; the `booked` entry already accounts
+for it. A CV that changed silently between booking and interview, after the interviewer read the
+first one, is a bad surprise, which is the whole reason the team sees these at all.
 
 `/book/{slug}` and `/manage/{slug}/{token}` are the product's two public routes. The slug carries 72
 bits of entropy, which is why neither needs an organization segment, and it is frozen at creation so

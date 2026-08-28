@@ -227,11 +227,48 @@ model Application {
   interviewer    Account                    @relation("ApplicationInterviewer", fields: [interviewerAccountId], references: [id])
   criteria       ApplicationCriterion[]
   scheduleEvents ApplicationScheduleEvent[]
+  cvVersions     ApplicationCv[]
 
   @@index([organizationId])
   @@index([candidateId])
   @@index([vacancyId, status, position])
   @@index([interviewerAccountId])
+}
+
+/// Every version of a candidate's CV, oldest first (hiring 07 §07.33).
+///
+/// **Nothing is ever deleted.** The record is permanent (04 §07.35), and what the
+/// candidate submitted at booking is evidence the interviewer may already have read — so
+/// a replacement adds a row and supersedes nothing on disk. Storage per booking is
+/// therefore unbounded, which 07 §15.70 records rather than limits.
+///
+/// It is not an event, and deliberately not folded into `ApplicationScheduleEvent`: a
+/// filename, a size and a content type have no place in an event row (07 §11.52). The
+/// candidate card merges the two sources into one timeline at render.
+///
+/// Scope travels through `Application`, exactly as `ApplicationCriterion`'s does.
+model ApplicationCv {
+  id            String   @id @default(uuid())
+  applicationId String
+  /// Opaque and application-generated: `{cvId}{extension}`, never derived from what the
+  /// candidate called their file (00 §03.17). Rows written by the migration keep the
+  /// `{applicationId}{extension}` key their file is actually stored under — the old
+  /// shape is a single slot, and no file was moved to fix it.
+  key           String
+  /// The name the candidate uploaded it under. Team-only: it is on the card and on no
+  /// candidate-facing surface, which is why the manage page says only that a CV is
+  /// attached (07 §04.21).
+  fileName      String
+  contentType   String
+  /// Null on a version back-filled from a row that predates `Application.cvSizeBytes`,
+  /// which the card already renders as a filename with no size.
+  sizeBytes     Int?
+  uploadedAt    DateTime @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  /// The card reads one application's versions, newest first, beside its log.
+  @@index([applicationId, uploadedAt])
 }
 
 /// Every change to when an interview is, append-only (hiring 07 §11).

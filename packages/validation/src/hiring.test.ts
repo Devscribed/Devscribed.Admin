@@ -7,6 +7,7 @@ import {
   SLUG_SUFFIX_LENGTH,
   generateVacancySlug,
   slugifyTitle,
+  cvStorageKey,
   validateCv,
   validateDurationMinutes,
   validateVacancyDescription,
@@ -128,6 +129,36 @@ describe('validateCv', () => {
       valid: false,
       error: HIRING_MESSAGES.booking.cv.required,
     });
+  });
+});
+
+/**
+ * The key shape a CV is stored under (00 §03.17), which moved off the application's id
+ * in 07 §07.35 so that a second version of one candidate's CV can exist at all.
+ */
+describe('cvStorageKey', () => {
+  it("is the CV's own id and the file's extension, and nothing of the filename", () => {
+    expect(cvStorageKey('c0ffee', 'Jane Doe — CV (final).pdf')).toBe('c0ffee.pdf');
+  });
+
+  it('is built from the CV id, never the application id — one slot could hold one CV', () => {
+    const first = cvStorageKey('cv-1', 'cv.pdf');
+    const second = cvStorageKey('cv-2', 'cv.pdf');
+    expect(first).not.toBe(second);
+  });
+
+  it('lowercases the extension, so one document has one key however it was typed', () => {
+    expect(cvStorageKey('cv-1', 'CV.PDF')).toBe('cv-1.pdf');
+  });
+
+  it('keeps only the last extension of a doubled one', () => {
+    expect(cvStorageKey('cv-1', 'cv.tar.docx')).toBe('cv-1.docx');
+  });
+
+  it('is the bare id when the file has no extension at all', () => {
+    // Unreachable through the product — `validateCv` refuses it — so this states that
+    // the key is still a key rather than something with a trailing dot.
+    expect(cvStorageKey('cv-1', 'cv')).toBe('cv-1');
   });
 });
 
