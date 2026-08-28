@@ -154,14 +154,19 @@ A review that only re-checks the fix and reports clean has not reviewed this dif
 /** The blockers from whichever verdict last sent work back, so the next agent sees them. */
 function lastBlockers(run) {
   for (const stage of ['qa', 'review', 'static_gate']) {
-    const attempts = run.stages[stage]?.attempts ?? 0;
-    for (let n = attempts; n >= 1; n--) {
-      const p = join(run.dir, 'stages', `${stage}.attempt-${n}.json`);
-      if (!existsSync(p)) continue;
-      const v = JSON.parse(readFileSync(p, 'utf8'));
-      const blockers = (v.findings ?? []).filter((f) => f.severity !== 'note');
-      if (blockers.length) return blockers;
-    }
+    /* Only the stage's most recent verdict. An earlier version walked attempts backwards
+       until it found one with blockers, which meant a gate that blocked, was satisfied, and
+       then passed still handed its old findings to the next stage: QA opened its first run
+       being told to address a defect review had already signed off two attempts earlier, and
+       spent its time re-verifying a closed finding. A verdict that supersedes another is the
+       whole point of running the stage again. */
+    const n = run.stages[stage]?.attempts ?? 0;
+    if (!n) continue;
+    const p = join(run.dir, 'stages', `${stage}.attempt-${n}.json`);
+    if (!existsSync(p)) continue;
+    const v = JSON.parse(readFileSync(p, 'utf8'));
+    const blockers = (v.findings ?? []).filter((f) => f.severity !== 'note');
+    if (blockers.length) return blockers;
   }
   return [];
 }
