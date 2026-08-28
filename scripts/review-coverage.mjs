@@ -50,7 +50,10 @@ const run = JSON.parse(readFileSync(join(dir, 'run.json'), 'utf8'));
 
 /** Every file the diff touches, with how much of it there is to read. */
 const sizes = new Map();
-for (const line of git('diff', '--numstat', `${run.baseRef}...HEAD`).trim().split('\n')) {
+/* The same scope the review prompt uses. The run's own verdicts and digests are committed,
+   so they land in the diff — but they are the pipeline's record of the work, not the work,
+   and a ledger that ranks them by size sends a reviewer to read 8,000 lines of its own JSON. */
+for (const line of git('diff', '--numstat', `${run.baseRef}...HEAD`, '--', '.', ':(exclude).workflow').trim().split('\n')) {
   const [added, removed, path] = line.split('\t');
   if (!path) continue;
   sizes.set(path, (Number(added) || 0) + (Number(removed) || 0));
