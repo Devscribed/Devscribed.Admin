@@ -1,0 +1,42 @@
+{
+  "stage": "pre_implement",
+  "status": "pass",
+  "findings": [
+    {
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/design-decision-deferred",
+      "file": "specs/user-management/README.md",
+      "symbol": "Design Layer — InfoBanner tone triplets",
+      "claim": "Preserving the eight literals exactly — which the stated acceptance requires — leaves the palette with two pairs of near-duplicate scale steps. A designer, not a refactor, should decide whether they both survive.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Resolved to sRGB: InfoBanner's error background oklch(0.96 0.03 25) = #FFEBE8, while the existing --error-100 oklch(0.95 0.04 25) = #FFE5E1 — 6 units apart on two channels. Success background oklch(0.96 0.03 160) = #E1F8EB against --success-100 oklch(0.95 0.04 160) = #D9F7E5 — 8 units apart. Both are visible on a full-width banner fill, so they cannot be folded into the existing step without changing what renders, and the two mockups that are the declared visual acceptance target (specs/user-management/02-authentication-login.mock.html lines 102-105 and specs/user-management/01-organization-creation.mock.html line 92) spell out the banner values verbatim while scripts/static-gate.mjs rule 1 forbids this run from editing them. The plan therefore adds --error-50 and --success-50 beside --error-100 and --success-100. That is the only choice available to an implementation run, and it is correct for this run, but a palette carrying two indistinguishable steps per hue is a design-system decision a human should ratify or reverse deliberately — in the spec and the mockups together, which only a human can change.",
+        "source": "1_DS for dev/components/feedback/InfoBanner.jsx lines 4-7; 1_DS for dev/tokens/colors.css lines 48, 53; specs/user-management/02-authentication-login.mock.html lines 102-105"
+      },
+      "suggestedFix": "After this run merges, decide in specs/user-management/README.md's Design Layer section whether the banner backgrounds keep their own scale steps or snap to --error-100 / --success-100 / --violet-200, and update both mockups in the same deliberate change if they snap."
+    },
+    {
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-status-claim",
+      "file": "specs/user-management/README.md",
+      "symbol": "Design Layer — Select dropdown scroll",
+      "claim": "The README records the Select dropdown-scroll fix as 'fixed', but the fix only reached the component source, not the bundle the design-system specimen pages render from.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "1_DS for dev/components/forms/Select.jsx lines 41 and 99-100 carry maxHeight and overflowY: 'auto'. grep for maxHeight or overflowY in 1_DS for dev/_ds_bundle.js returns nothing, and 1_DS for dev/components/forms/forms.card.html loads the component from that bundle via <script src=\"../../_ds_bundle.js\">. So the Select specimen card still demonstrates the clipped, unscrollable dropdown the README says was fixed, and the bundle's sourceHashes entry \"components/forms/Select.jsx\":\"a6ad2bab040c\" no longer describes the file it names. Found while planning the InfoBanner chore, which touches the same bundle; deliberately not folded into this run.",
+        "source": "1_DS for dev/components/forms/Select.jsx lines 41, 99-100; 1_DS for dev/_ds_bundle.js; specs/user-management/README.md line 64"
+      },
+      "suggestedFix": "Either sync Select into _ds_bundle.js in its own change, or soften the README's 'fixed' to say the specimen bundle still shows the old behaviour."
+    }
+  ],
+  "handoff": ".workflow/runs/2026-08-28T08-08-40_ds-infobanner-tokens/handoff.json",
+  "notes": [
+    "The chore compiles into an unambiguous plan. Seven tasks, seven synthesised requirements (the chore is prose and carries no numbered requirements and no TC-* list), one minted test case TC-DS-BANNER-E2E-01.",
+    "Acceptance, stated for the reviewer: no raw colour remains in 1_DS for dev/components/feedback/InfoBanner.jsx, and all four tones render identically to the exact sRGB value in both themes. The eight before/after values are tabulated in stages/pre_implement.md.",
+    "No Prisma migration and no database change in this run."
+  ]
+}

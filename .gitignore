@@ -54,3 +54,5 @@ docker-compose.override.yml
 .workflow/runs/*/blobs/
 .workflow/runs/*/thinking/
 .workflow/runs/*/.pending.json
+.workflow/runs/*/stages/*.log
+.workflow/runs/*/*.verdict.json.raw
