@@ -136,6 +136,38 @@ for (const e of agentEventsOnly(journal.filter((e) => e.event === 'tool'))) {
 }
 if (cur) blocks.push(cur);
 
+/**
+ * What an invocation reported about itself. `--output-format json` puts the session, the cost
+ * and the token usage in the agent's own output, which ship keeps as the stage log — and none
+ * of it is in the journal, so a digest built only from tool calls cannot see what a stage
+ * cost. One implement attempt on this branch was $18.88.
+ */
+function agentReport(dir, stage, attempt) {
+  const log = join(dir, 'stages', `${stage}.attempt-${attempt}.log`);
+  if (!existsSync(log)) return null;
+  const raw = readFileSync(log, 'utf8');
+  const m = raw.match(/^\s*(\{[\s\S]*?\})\s*$/m);
+  try {
+    const j = JSON.parse(m ? m[1] : raw);
+    return {
+      sessionId: j.session_id ?? null,
+      costUsd: typeof j.total_cost_usd === 'number' ? +j.total_cost_usd.toFixed(2) : null,
+      apiMs: j.duration_api_ms ?? null,
+      stopReason: j.stop_reason ?? null,
+      tokens: j.usage
+        ? {
+            input: j.usage.input_tokens ?? 0,
+            output: j.usage.output_tokens ?? 0,
+            cacheRead: j.usage.cache_read_input_tokens ?? 0,
+            cacheWrite: j.usage.cache_creation_input_tokens ?? 0,
+          }
+        : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 const readJson = (p) => {
   try {
     return JSON.parse(readFileSync(p, 'utf8'));
@@ -178,12 +210,17 @@ const agents = blocks.map((b) => {
 
   const verdict = readJson(join(dir, 'stages', `${b.stage}.attempt-${attempt}.json`));
   const findings = verdict?.findings ?? [];
+  const report = agentReport(dir, b.stage, attempt);
 
   return {
     stage: b.stage,
     attempt,
     agent: agentFor(b),
-    sessionId: b.sessionId,
+    sessionId: report?.sessionId ?? b.sessionId,
+    costUsd: report?.costUsd ?? null,
+    apiSec: report?.apiMs ? Math.round(report.apiMs / 1000) : null,
+    stopReason: report?.stopReason ?? null,
+    tokens: report?.tokens ?? null,
     startedAt: b.firstTs,
     wallSec: Math.round(wallMs / 1000),
     toolSec: Math.round(toolMs / 1000),
@@ -224,6 +261,7 @@ const totals = {
   wallSec: agents.reduce((a, s) => a + s.wallSec, 0),
   toolSec: agents.reduce((a, s) => a + s.toolSec, 0),
   calls: agents.reduce((a, s) => a + s.calls, 0),
+  costUsd: +agents.reduce((a, s) => a + (s.costUsd ?? 0), 0).toFixed(2),
 };
 totals.thinkingPct = totals.wallSec ? Math.round(100 - (totals.toolSec / totals.wallSec) * 100) : null;
 
@@ -231,11 +269,12 @@ totals.thinkingPct = totals.wallSec ? Math.round(100 - (totals.toolSec / totals.
 const byAgent = {};
 for (const a of agents) {
   const k = a.agent;
-  const r = (byAgent[k] ??= { invocations: 0, wallSec: 0, toolSec: 0, calls: 0 });
+  const r = (byAgent[k] ??= { invocations: 0, wallSec: 0, toolSec: 0, calls: 0, costUsd: 0 });
   r.invocations++;
   r.wallSec += a.wallSec;
   r.toolSec += a.toolSec;
   r.calls += a.calls;
+  r.costUsd = +(r.costUsd + (a.costUsd ?? 0)).toFixed(2);
 }
 for (const r of Object.values(byAgent)) {
   r.thinkingPct = r.wallSec ? Math.round(100 - (r.toolSec / r.wallSec) * 100) : null;
@@ -265,7 +304,7 @@ writeFileSync(out, JSON.stringify(digest, null, 2) + '\n');
 const kb = (statSync(out).size / 1024).toFixed(0);
 console.log(`${out}  (${kb} KB from ${journal.length} journal events)`);
 console.log(`  pipeline ${digest.pipeline.fingerprint}`);
-console.log(`  ${totals.wallSec}s wall · ${totals.toolSec}s tools · ${totals.calls} calls · ${totals.thinkingPct}% thinking`);
+console.log(`  ${totals.wallSec}s wall · ${totals.toolSec}s tools · ${totals.calls} calls · ${totals.thinkingPct}% thinking · $${totals.costUsd}`);
 for (const [k, v] of Object.entries(byAgent)) {
-  console.log(`  ${k.padEnd(16)} ${String(v.invocations).padStart(2)}× · ${String(v.wallSec).padStart(5)}s wall · ${String(v.toolSec).padStart(4)}s tools · ${String(v.calls).padStart(4)} calls · ${v.thinkingPct}% thinking`);
+  console.log(`  ${k.padEnd(16)} ${String(v.invocations).padStart(2)}× · ${String(v.wallSec).padStart(5)}s wall · ${String(v.toolSec).padStart(4)}s tools · ${String(v.calls).padStart(4)} calls · ${String(v.thinkingPct).padStart(2)}% thinking · $${String(v.costUsd).padStart(6)}`);
 }

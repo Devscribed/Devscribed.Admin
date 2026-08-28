@@ -231,19 +231,29 @@ function runAgentStage(stage, run) {
   return readVerdict(abs, `${agent} wrote a verdict that is not valid JSON`);
 }
 
-/** The session of a stage's most recent invocation, so the next attempt can continue it. */
+/**
+ * The session of a stage's most recent invocation, so the next attempt can continue it.
+ *
+ * Read from the agent's own output, which `--output-format json` gives us and which this
+ * function's predecessor did not use. That one scanned the run journal for the last
+ * `sessionId` on the stage — but the journal records every tool call made while the run holds
+ * the lock, the operator's shell included, and the hook stamps each with whichever stage is
+ * currently running rather than with whoever made the call. So an operator who ran one
+ * command during an implement attempt was indistinguishable from the implementer, and the
+ * next attempt was handed the operator's own conversation to resume. Filtering on `agentType`
+ * did not save it: exactly one of the operator's twenty-two calls had been stamped
+ * `implementer`, and one is enough.
+ *
+ * The agent's own report of its session is not a heuristic and cannot be contaminated.
+ */
 function lastSessionId(run, stage) {
-  const journal = join(run.dir, 'events.jsonl');
-  if (!existsSync(journal)) return null;
-  let id = null;
-  for (const line of readFileSync(journal, 'utf8').split('\n')) {
-    if (!line.includes('"sessionId"')) continue;
-    try {
-      const e = JSON.parse(line);
-      if (e.stage === stage && e.sessionId) id = e.sessionId;
-    } catch { /* a truncated last line is normal while a run is live */ }
+  for (let n = run.stages[stage].attempts ?? 0; n >= 1; n--) {
+    const log = join(run.dir, 'stages', `${stage}.attempt-${n}.log`);
+    if (!existsSync(log)) continue;
+    const m = readFileSync(log, 'utf8').match(/"session_id"\s*:\s*"([0-9a-fA-F-]{36})"/);
+    if (m) return m[1];
   }
-  return id;
+  return null;
 }
 
 /**
