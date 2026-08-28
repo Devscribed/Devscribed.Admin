@@ -19,6 +19,9 @@ Functional specifications for the user-management surface of Devscribed.Admin. E
 | 10 | [Organization Requests Page](10-organization-requests-page.md) | [design](10-organization-requests-page.design.md) | requests-page, sidebar, badge, status-filter, organization-wide |
 | 11 | [Projects](11-projects.md) | [mockup](11-projects.mock.html) | project, project-member, assignment, archive, restore, sidebar, projects-page |
 | 12 | [Time Tracking](12-time-tracking.md) | [mockup](12-time-tracking.mock.html) | time-tracking, timer, time-entry, running-timer, daily-view, weekly-view, monthly-view, calendar, topbar-indicator |
+| 13 | [Kanban Board & Tasks](13-kanban-board.md) | [design](13-kanban-board.design.md) · [mockup](13-kanban-board.mock.html) | kanban, tasks, board, project-management |
+| 14 | [Task Collaboration](14-task-collaboration.md) | [design](14-task-collaboration.design.md) · [mockup](14-task-collaboration.mock.html) | labels, comments, watchers, activity-log, tasks, collaboration |
+| 15 | [Time Tracking ↔ Tasks Integration](15-time-tracking-tasks.md) | [design](15-time-tracking-tasks.design.md) · [mockup](15-time-tracking-tasks.mock.html) | time-tracking, tasks, kanban, task-selector, time-logged |
 
 ## Shared Rules
 
@@ -68,6 +71,9 @@ Two DS-level items surfaced while building spec 07's currency picker (details in
 | Inviter removed | 04 | Pending invitations invalidated | 03 |
 | Financials updated | 07 | Snapshot created (EffectiveFrom = today) | 07 |
 | Project archived | 11 | Existing time entries preserved; project hidden from selectors | 12 |
+| Project archived | 11 | Board and tasks read-only for admin/manager | 13 |
+| Task deleted | 13 | Children orphaned (parentId set to null) | 13 |
+| Task deleted | 13 | taskId on TimeEntry/RunningTimer set to null; task text preserved | 15 |
 | Member removed | 04 | Project assignments cascade-deleted | 11 |
 | Member removed | 04 | Running timer cascade-deleted (no entry created) | 12 |
 | Timer stopped | 12 | TimeEntry created from RunningTimer | 12 |
@@ -92,5 +98,9 @@ Two DS-level items surfaced while building spec 07's currency picker (details in
 │             └─► 09 (removal cascades)
 │
 11 Projects
-└─► 12 Time Tracking
+├─► 12 Time Tracking
+│    └─► 15 Time Tracking ↔ Tasks Integration
+└─► 13 Kanban Board & Tasks
+     ├─► 14 Task Collaboration
+     └─► 15 Time Tracking ↔ Tasks Integration
 ```

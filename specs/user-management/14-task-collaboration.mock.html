@@ -1,0 +1,797 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>14 — Task Collaboration · Meridian mockup</title>
+<link rel="stylesheet" href="../../1_DS%20for%20dev/styles.css">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-text)}
+
+  .page{padding:var(--sp-16) var(--sp-8);display:flex;flex-direction:column;gap:var(--sp-24);align-items:center}
+  .legend{width:100%;max-width:1200px;font-family:var(--font-text);font-size:var(--fs-14);
+          line-height:var(--lh-loose);color:var(--text-sub)}
+  .legend h1{font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-27);
+             letter-spacing:var(--ls-tighter);color:var(--text);margin:0 0 var(--sp-2)}
+  .legend code{font-family:var(--font-mono);font-size:var(--fs-13);color:var(--accent)}
+
+  .state{width:100%;max-width:1200px;display:flex;flex-direction:column;gap:var(--sp-6)}
+  .state-label{font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-11);
+               letter-spacing:var(--ls-uppercase);text-transform:uppercase;color:var(--text-faint)}
+  .stage{background:var(--bg);border:1px solid var(--divider);border-radius:var(--radius-2xl);
+         overflow:hidden;padding:28px}
+  .stage.narrow{max-width:420px;padding:20px}
+
+  /* ---- Buttons ---- */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;
+       padding:0 16px;border-radius:var(--radius-lg);border:1.5px solid var(--accent);
+       background:var(--accent);color:var(--on-accent);font-family:var(--font-display);
+       font-weight:var(--fw-semibold);font-size:var(--fs-14);box-shadow:var(--lip-accent);
+       cursor:pointer;transition:filter var(--duration-slow) var(--easing-standard)}
+  .btn:hover{filter:brightness(1.08)}
+  .btn-sm{height:32px;padding:0 12px;font-size:var(--fs-13)}
+  .btn-ghost{background:transparent;color:var(--text-sub);border-color:var(--border-strong);box-shadow:none}
+  .btn-ghost:hover{background:var(--hover-bg-tint)}
+  .btn-danger{background:var(--error-500);border-color:var(--error-500);box-shadow:var(--lip-error);color:#fff}
+  .btn[disabled]{opacity:.45;cursor:default;box-shadow:none}
+
+  .icon-btn{width:30px;height:30px;border-radius:var(--radius-sm);border:none;background:transparent;
+            color:var(--text-muted);cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .icon-btn:hover{background:var(--hover-bg-tint);color:var(--text)}
+  .icon-btn.danger:hover{color:var(--error-500);background:var(--error-100)}
+
+  /* ---- Avatars ---- */
+  .avatar{border-radius:50%;background:var(--accent-soft);color:var(--accent);
+          display:inline-flex;align-items:center;justify-content:center;font-family:var(--font-display);
+          font-weight:var(--fw-semibold);flex-shrink:0}
+  .avatar-32{width:32px;height:32px;font-size:var(--fs-13)}
+  .avatar-26{width:26px;height:26px;font-size:var(--fs-11);border:2px solid var(--bg-panel)}
+  .avatar-24{width:24px;height:24px;font-size:var(--fs-10)}
+
+  /* ==== TASK CARDS (board fragment) ==== */
+  .board-row{display:flex;gap:16px;align-items:flex-start}
+  .board-col{width:230px;flex-shrink:0}
+  .col-head{display:flex;justify-content:space-between;align-items:center;padding:0 4px 10px;
+            font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-13);
+            color:var(--text-sub)}
+  .col-count{color:var(--text-faint);font-weight:var(--fw-medium)}
+  .task-card{background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radius-xl);
+             padding:12px 14px;margin-bottom:10px;box-shadow:var(--shadow-card);cursor:pointer}
+  .task-card-top{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+  .type-icon{width:16px;height:16px;flex-shrink:0}
+  .task-key{font-family:var(--font-mono);font-size:var(--fs-11);color:var(--text-faint)}
+  .task-title{font-family:var(--font-display);font-weight:var(--fw-medium);font-size:var(--fs-14);
+              color:var(--text);margin-bottom:8px;line-height:1.3}
+  .task-meta{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .prio{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-display);
+        font-weight:var(--fw-medium);font-size:var(--fs-12);color:var(--text-sub)}
+  .prio-dot{width:8px;height:8px;border-radius:50%}
+  .prio-high{background:var(--error-500)}
+  .prio-med{background:var(--amber-500)}
+  .prio-low{background:var(--success-500)}
+
+  /* ---- Label chips (shared everywhere) ---- */
+  .chip-row{display:flex;flex-wrap:wrap;gap:6px}
+  .lbl-chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px 0 8px;
+            border-radius:var(--radius-pill);border:1px solid;font-family:var(--font-display);
+            font-weight:var(--fw-medium);font-size:var(--fs-12);white-space:nowrap}
+  .lbl-chip.lg{height:26px;font-size:var(--fs-13);padding:0 8px 0 8px}
+  .lbl-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .lbl-overflow{background:var(--bg-sunken);border:1px solid var(--border);color:var(--text-muted)}
+  .lbl-x{width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;
+        border-radius:50%;color:currentColor;opacity:.55;cursor:pointer}
+  .lbl-x:hover{opacity:1;background:rgba(0,0,0,.06)}
+
+  /* DS gap: label colors are arbitrary per-project hex; each triad below is a derived
+     background/border/ink set computed from one source hex (see design.md § Label chip anatomy).
+     No --label-* tokens exist yet — hardcoded oklch per swatch, recorded as a DS gap. */
+  .lbl-red{background:oklch(0.95 0.05 25);border-color:oklch(0.72 0.15 25);color:oklch(0.42 0.18 25)}
+  .lbl-blue{background:oklch(0.95 0.04 250);border-color:oklch(0.68 0.13 250);color:oklch(0.4 0.15 250)}
+  .lbl-violet{background:oklch(0.95 0.035 292);border-color:oklch(0.72 0.12 292);color:oklch(0.42 0.16 292)}
+  .lbl-green{background:oklch(0.95 0.05 150);border-color:oklch(0.68 0.13 150);color:oklch(0.38 0.13 150)}
+  .lbl-amber{background:oklch(0.96 0.05 74);border-color:oklch(0.75 0.12 74);color:oklch(0.42 0.12 74)}
+  .lbl-pink{background:oklch(0.95 0.04 340);border-color:oklch(0.72 0.12 340);color:oklch(0.42 0.15 340)}
+  .lbl-teal{background:oklch(0.95 0.04 180);border-color:oklch(0.65 0.1 180);color:oklch(0.38 0.11 180)}
+  .lbl-gray{background:var(--bg-sunken);border-color:var(--border-strong);color:var(--text-sub)}
+  .dot-red{background:oklch(0.6 0.2 25)}
+  .dot-blue{background:oklch(0.55 0.16 250)}
+  .dot-violet{background:oklch(0.58 0.16 292)}
+  .dot-green{background:oklch(0.56 0.15 150)}
+  .dot-amber{background:oklch(0.68 0.14 74)}
+  .dot-pink{background:oklch(0.6 0.15 340)}
+  .dot-teal{background:oklch(0.52 0.11 180)}
+
+  /* ==== TASK DETAIL LAYOUT ==== */
+  .detail{display:flex;gap:28px;align-items:flex-start}
+  .detail-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:22px}
+  .detail-side{width:280px;flex-shrink:0;display:flex;flex-direction:column;gap:18px}
+  .side-field label{display:block;font-family:var(--font-display);font-weight:var(--fw-semibold);
+                    font-size:var(--fs-11);letter-spacing:var(--ls-wider);text-transform:uppercase;
+                    color:var(--text-muted);margin-bottom:8px}
+  .task-crumb{display:flex;align-items:center;gap:8px;font-family:var(--font-display);
+             font-weight:var(--fw-medium);font-size:var(--fs-13);color:var(--text-muted);margin-bottom:6px}
+  .detail-title{font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-22);
+               letter-spacing:-.4px;margin:0}
+
+  .section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
+  .section-title{font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-16);
+                 letter-spacing:-.2px;margin:0}
+
+  /* ---- Comments ---- */
+  .comment-list{display:flex;flex-direction:column;gap:12px}
+  .comment-card{background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radius-xl);
+               padding:14px 16px}
+  .comment-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .comment-author{font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-14);
+                  color:var(--text)}
+  .comment-dot{color:var(--text-faint)}
+  .comment-time{font-family:var(--font-display);font-size:var(--fs-12);color:var(--text-faint)}
+  .comment-edited{font-family:var(--font-text);font-size:var(--fs-12);color:var(--text-faint);font-style:italic}
+  .comment-actions{margin-left:auto;display:flex;gap:2px}
+  .comment-body{font-family:var(--font-text);font-size:var(--fs-14);line-height:var(--lh-loose);color:var(--text-sub)}
+  .comment-body p{margin:0 0 8px}
+  .comment-body p:last-child{margin-bottom:0}
+  .comment-body strong{font-weight:var(--fw-semibold);color:var(--text)}
+  .comment-body h3{font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-15);
+                   color:var(--text);margin:0 0 6px}
+  .comment-body ol,.comment-body ul{margin:0 0 8px;padding-left:20px}
+  .comment-body li{margin-bottom:2px}
+  .comment-body code{font-family:var(--font-mono);font-size:var(--fs-13);background:var(--bg-sunken);
+                     padding:2px 6px;border-radius:var(--radius-xs);color:var(--text)}
+
+  .composer-wrap{display:flex;flex-direction:column;gap:10px}
+  .composer{min-height:88px;border:1.5px solid var(--border-strong);border-radius:var(--radius-lg);
+           padding:12px 14px;font-family:var(--font-text);font-size:var(--fs-14);color:var(--text);
+           background:var(--bg-field);outline:none;resize:vertical;line-height:var(--lh-loose)}
+  .composer:focus{border-color:var(--accent);box-shadow:var(--shadow-glow-accent)}
+  .composer::placeholder{color:var(--text-faint)}
+  .composer-footer{display:flex;justify-content:flex-end}
+
+  /* edit-in-place */
+  .comment-edit-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
+
+  /* ---- Watchers ---- */
+  .watchers-head{display:flex;align-items:center;justify-content:space-between}
+  .watch-toggle{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;
+               border-radius:var(--radius-lg);font-family:var(--font-display);font-weight:var(--fw-medium);
+               font-size:var(--fs-13);cursor:pointer;border:1.5px solid}
+  .watch-toggle.on{background:var(--accent-soft);border-color:var(--accent-border);color:var(--accent)}
+  .watch-toggle.off{background:var(--bg-panel);border-color:var(--border-strong);color:var(--text-sub)}
+  .avatar-stack{display:flex;align-items:center;margin-top:10px}
+  .avatar-stack .avatar-26{margin-left:-8px}
+  .avatar-stack .avatar-26:first-child{margin-left:0}
+  .avatar-stack .lbl-overflow{width:26px;height:26px;border-radius:50%;margin-left:-8px;
+                              display:flex;align-items:center;justify-content:center;
+                              font-family:var(--font-display);font-weight:var(--fw-semibold);
+                              font-size:var(--fs-10);border:2px solid var(--bg-panel)}
+
+  /* ---- Activity log ---- */
+  .activity-list{display:flex;flex-direction:column;max-height:400px;overflow-y:auto;
+                 border:1px solid var(--border);border-radius:var(--radius-xl);
+                 background:var(--bg-panel);padding:4px 16px}
+  .activity-row{display:flex;gap:12px;padding:12px 0;position:relative}
+  .activity-row:not(:last-child)::after{content:'';position:absolute;left:11px;top:34px;bottom:-4px;
+                                        width:1px;background:var(--divider)}
+  .activity-icon{width:24px;height:24px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;
+                 justify-content:center;z-index:1}
+  .act-accent{background:var(--accent-soft);color:var(--accent)}
+  .act-neutral{background:var(--bg-sunken);color:var(--text-muted)}
+  .act-error{background:var(--error-100);color:var(--error-500)}
+  .act-success{background:var(--success-100);color:var(--success-700)}
+  .activity-body{flex:1;min-width:0;padding-top:1px}
+  .activity-line1{font-family:var(--font-text);font-size:var(--fs-14);color:var(--text-sub)}
+  .activity-line1 b{font-weight:var(--fw-semibold);color:var(--text);font-family:var(--font-display)}
+  .activity-line2{font-family:var(--font-display);font-size:var(--fs-12);color:var(--text-faint);margin-top:2px}
+  .activity-diff{color:var(--text-sub)}
+
+  /* ---- Board settings labels ---- */
+  .modal-backdrop{position:relative;padding:40px;background:rgba(74,55,20,.15);
+                  display:flex;justify-content:center;align-items:flex-start}
+  .modal{width:460px;background:var(--bg-panel);border:1px solid var(--border);
+         border-radius:var(--radius-2xl);box-shadow:var(--shadow-modal);padding:22px}
+  .modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+  .modal-title{font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-18);margin:0}
+  .modal-close{width:28px;height:28px;border-radius:var(--radius-sm);border:none;background:transparent;
+              color:var(--text-muted);cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .subsection-title{font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-13);
+                    letter-spacing:.2px;color:var(--text-sub);margin:18px 0 8px}
+  .label-list{border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}
+  .label-row{display:flex;align-items:center;gap:10px;height:44px;padding:0 12px;
+            border-bottom:1px solid var(--divider);background:var(--bg-panel)}
+  .label-row:last-child{border-bottom:none}
+  .label-swatch{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+  .label-row-name{flex:1;font-family:var(--font-display);font-weight:var(--fw-medium);font-size:var(--fs-14)}
+  .label-row-hex{font-family:var(--font-mono);font-size:var(--fs-12);color:var(--text-faint)}
+  .label-row-actions{display:flex;gap:2px}
+  .label-row.editing{background:var(--bg-panel-2)}
+  .mini-input{height:32px;border:1.5px solid var(--border-strong);border-radius:var(--radius-sm);
+             padding:0 10px;font-family:var(--font-text);font-size:var(--fs-13);color:var(--text);
+             background:var(--bg-field);outline:none}
+  .mini-input:focus{border-color:var(--accent)}
+  .swatch-picker{display:flex;gap:6px;align-items:center}
+  .swatch-dot{width:20px;height:20px;border-radius:50%;cursor:pointer;border:2px solid transparent}
+  .swatch-dot.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--bg-panel),0 0 0 3px var(--accent)}
+
+  /* ---- Label picker popover ---- */
+  .picker-anchor{position:relative;display:inline-block}
+  .popover{position:absolute;top:calc(100% + 8px);left:0;width:260px;background:var(--bg-panel);
+          border:1px solid var(--border);border-radius:var(--radius-xl);box-shadow:var(--shadow-modal);
+          padding:10px;z-index:5}
+  .popover-head{font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-11);
+               letter-spacing:var(--ls-wider);text-transform:uppercase;color:var(--text-faint);
+               padding:4px 8px 8px}
+  .picker-row{display:flex;align-items:center;gap:8px;height:36px;padding:0 8px;border-radius:var(--radius-sm);
+             cursor:pointer;font-family:var(--font-text);font-size:var(--fs-14);color:var(--text-sub)}
+  .picker-row:hover{background:var(--hover-bg-tint)}
+  .picker-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .picker-divider{height:1px;background:var(--divider);margin:6px 0}
+  .picker-create{color:var(--accent);font-weight:var(--fw-medium)}
+
+  /* ---- confirm dialog ---- */
+  .confirm-modal{width:380px;background:var(--bg-panel);border:1px solid var(--border);
+                border-radius:var(--radius-2xl);box-shadow:var(--shadow-modal);padding:22px}
+  .confirm-title{font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-16);margin:0 0 8px}
+  .confirm-body{font-family:var(--font-text);font-size:var(--fs-14);color:var(--text-sub);
+               line-height:var(--lh-loose);margin:0}
+  .confirm-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+
+  /* ---- mobile ---- */
+  .m-accordion{border:1px solid var(--border);border-radius:var(--radius-xl);overflow:hidden;background:var(--bg-panel)}
+  .m-accordion-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;cursor:pointer}
+  .m-accordion-title{font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-14)}
+  .m-chevron{transition:transform var(--duration-slow) var(--easing-standard)}
+  .m-accordion-body{padding:0 16px 16px;border-top:1px solid var(--divider)}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="legend">
+    <h1>14 — Task Collaboration</h1>
+    <p>Static visual target for the task-collaboration surfaces that extend
+    <code>/org/{orgId}/projects/{projectId}/tasks/{taskId}</code> (spec 13's task detail page and Board
+    Settings modal). Covers labels (chip anatomy, task-card display, Board Settings management, the
+    add-label picker), comments (populated thread, composing, inline edit, delete confirmation),
+    watchers (watching / not-watching states), and the activity log. No new route — every state below is
+    a fragment of spec 13's existing pages. Pairs with <code>14-task-collaboration.md</code>.</p>
+  </div>
+
+  <!-- ══════════ 01 · TASK CARDS WITH LABELS ══════════ -->
+  <section class="state">
+    <div class="state-label">01 · Task cards with labels — board fragment</div>
+    <div class="stage">
+      <div class="board-row">
+        <div class="board-col">
+          <div class="col-head">To Do <span class="col-count">3</span></div>
+          <div class="task-card">
+            <div class="task-card-top">
+              <svg class="type-icon" viewBox="0 0 20 20" fill="none" stroke="var(--error-500)" stroke-width="1.6"><circle cx="10" cy="10" r="7"/></svg>
+              <span class="task-key">MOB-5</span>
+            </div>
+            <div class="task-title">Fix login bug</div>
+            <div class="task-meta">
+              <span class="prio"><span class="prio-dot prio-high"></span>High</span>
+              <span class="avatar avatar-24">AK</span>
+            </div>
+            <div class="chip-row">
+              <span class="lbl-chip lbl-red"><span class="lbl-dot dot-red"></span>Bug</span>
+              <span class="lbl-chip lbl-violet"><span class="lbl-dot dot-violet"></span>Frontend</span>
+            </div>
+          </div>
+          <div class="task-card">
+            <div class="task-card-top">
+              <svg class="type-icon" viewBox="0 0 20 20" fill="none" stroke="var(--error-500)" stroke-width="1.6"><circle cx="10" cy="10" r="7"/></svg>
+              <span class="task-key">MOB-7</span>
+            </div>
+            <div class="task-title">API 500 error on checkout</div>
+            <div class="task-meta">
+              <span class="prio"><span class="prio-dot prio-high"></span>Critical</span>
+              <span></span>
+            </div>
+            <div class="chip-row">
+              <span class="lbl-chip lbl-red"><span class="lbl-dot dot-red"></span>Bug</span>
+              <span class="lbl-chip lbl-amber"><span class="lbl-dot dot-amber"></span>Urgent</span>
+              <span class="lbl-chip lbl-overflow">+2</span>
+            </div>
+          </div>
+        </div>
+        <div class="board-col">
+          <div class="col-head">In Progress <span class="col-count">2</span></div>
+          <div class="task-card">
+            <div class="task-card-top">
+              <svg class="type-icon" viewBox="0 0 20 20" fill="none" stroke="var(--success-500)" stroke-width="1.6"><rect x="4" y="4" width="12" height="12" rx="2"/></svg>
+              <span class="task-key">MOB-3</span>
+            </div>
+            <div class="task-title">Add dashboard widgets</div>
+            <div class="task-meta">
+              <span class="prio"><span class="prio-dot prio-med"></span>Medium</span>
+              <span class="avatar avatar-24">JD</span>
+            </div>
+            <div class="chip-row">
+              <span class="lbl-chip lbl-violet"><span class="lbl-dot dot-violet"></span>Frontend</span>
+            </div>
+          </div>
+          <div class="task-card">
+            <div class="task-card-top">
+              <svg class="type-icon" viewBox="0 0 20 20" fill="none" stroke="var(--accent)" stroke-width="1.6"><path d="M4 6h12M4 10h12M4 14h8"/></svg>
+              <span class="task-key">MOB-4</span>
+            </div>
+            <div class="task-title">User stories for onboarding</div>
+            <div class="task-meta">
+              <span class="prio"><span class="prio-dot prio-low"></span>Low</span>
+              <span class="avatar avatar-24">AK</span>
+            </div>
+            <div class="chip-row">
+              <span class="lbl-chip lbl-teal"><span class="lbl-dot dot-teal"></span>Needs Design</span>
+              <span class="lbl-chip lbl-green"><span class="lbl-dot dot-green"></span>Docs</span>
+            </div>
+          </div>
+        </div>
+        <div class="board-col">
+          <div class="col-head">Done <span class="col-count">1</span></div>
+          <div class="task-card">
+            <div class="task-card-top">
+              <svg class="type-icon" viewBox="0 0 20 20" fill="none" stroke="var(--success-500)" stroke-width="1.6"><rect x="4" y="4" width="12" height="12" rx="2"/></svg>
+              <span class="task-key">MOB-1</span>
+            </div>
+            <div class="task-title">Setup CI/CD pipeline</div>
+            <div class="task-meta">
+              <span class="prio">&nbsp;</span>
+              <span class="avatar avatar-24">JD</span>
+            </div>
+            <div class="chip-row"><!-- no labels assigned --></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ 02 · COMMENTS POPULATED ══════════ -->
+  <section class="state">
+    <div class="state-label">02 · Task detail — comments section populated</div>
+    <div class="stage">
+      <div class="detail">
+        <div class="detail-main" style="flex:1">
+          <div>
+            <div class="section-head"><h2 class="section-title">Comments (5)</h2></div>
+          </div>
+          <div class="comment-list">
+            <div class="comment-card">
+              <div class="comment-head">
+                <span class="avatar avatar-32">AK</span>
+                <span class="comment-author">Alex K.</span>
+                <span class="comment-dot">·</span>
+                <span class="comment-time">Aug 26, 10:03 AM</span>
+              </div>
+              <div class="comment-body"><p>Repro steps confirmed on Safari. The bug only shows up when the email field contains a <code>+</code> character.</p></div>
+            </div>
+
+            <div class="comment-card">
+              <div class="comment-head">
+                <span class="avatar avatar-32">JD</span>
+                <span class="comment-author">Jane D.</span>
+                <span class="comment-dot">·</span>
+                <span class="comment-time">Aug 26, 11:20 AM</span>
+                <span class="comment-edited">(edited)</span>
+              </div>
+              <div class="comment-body">
+                <h3>Steps to reproduce</h3>
+                <ol>
+                  <li>Open the login form</li>
+                  <li>Type an email containing a <code>+</code> char</li>
+                </ol>
+                <p><strong>Confirmed</strong> against the regex in <code>validateEmail()</code>.</p>
+              </div>
+            </div>
+
+            <div class="comment-card">
+              <div class="comment-head">
+                <span class="avatar avatar-32">JD</span>
+                <span class="comment-author">John D.</span>
+                <span class="comment-dot">·</span>
+                <span class="comment-time">Aug 27, 8:45 AM</span>
+              </div>
+              <div class="comment-body"><p>Assigning to Alex — regex fix is on him this sprint.</p></div>
+            </div>
+
+            <div class="comment-card">
+              <div class="comment-head">
+                <span class="avatar avatar-32">AK</span>
+                <span class="comment-author">You</span>
+                <span class="comment-dot">·</span>
+                <span class="comment-time">Aug 27, 9:15 AM</span>
+                <span class="comment-actions">
+                  <button class="icon-btn" aria-label="Edit comment"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 3l3 3-9 9-4 1 1-4 9-9z"/></svg></button>
+                  <button class="icon-btn danger" aria-label="Delete comment"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 6h10M8 6V4h4v2M6 6l1 10h6l1-10"/></svg></button>
+                </span>
+              </div>
+              <div class="comment-body"><p><strong>Fixed</strong> in commit <code>abc123</code>. Escaping the <code>+</code> before validation.</p></div>
+            </div>
+
+            <div class="comment-card">
+              <div class="comment-head">
+                <span class="avatar avatar-32">AK</span>
+                <span class="comment-author">You</span>
+                <span class="comment-dot">·</span>
+                <span class="comment-time">Aug 28, 8:00 AM</span>
+                <span class="comment-actions">
+                  <button class="icon-btn" aria-label="Edit comment"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 3l3 3-9 9-4 1 1-4 9-9z"/></svg></button>
+                  <button class="icon-btn danger" aria-label="Delete comment"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 6h10M8 6V4h4v2M6 6l1 10h6l1-10"/></svg></button>
+                </span>
+              </div>
+              <div class="comment-body"><p>Verified on staging. Closing.</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ 03 · NEW COMMENT COMPOSER FOCUSED ══════════ -->
+  <section class="state">
+    <div class="state-label">03 · Task detail — new comment textarea focused, empty</div>
+    <div class="stage">
+      <div class="composer-wrap" style="max-width:640px">
+        <label for="c-new" style="position:absolute;width:1px;height:1px;overflow:hidden">Comment</label>
+        <textarea id="c-new" class="composer" style="border-color:var(--accent);box-shadow:var(--shadow-glow-accent)" placeholder="Write a comment… (Markdown supported)"></textarea>
+        <div class="composer-footer">
+          <button class="btn" disabled>Comment</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ 04 · EDITING OWN COMMENT ══════════ -->
+  <section class="state">
+    <div class="state-label">04 · Task detail — editing own comment (inline)</div>
+    <div class="stage">
+      <div class="comment-card" style="max-width:640px">
+        <div class="comment-head">
+          <span class="avatar avatar-32">AK</span>
+          <span class="comment-author">You</span>
+          <span class="comment-dot">·</span>
+          <span class="comment-time">Aug 27, 9:15 AM</span>
+        </div>
+        <textarea class="composer" style="width:100%;border-color:var(--accent);box-shadow:var(--shadow-glow-accent)">**Fixed** in commit `abc123`. Escaping the `+` before validation.</textarea>
+        <div class="comment-edit-footer">
+          <button class="btn btn-ghost btn-sm">Cancel</button>
+          <button class="btn btn-sm">Save</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ 05 · WATCHERS — WATCHING ══════════ -->
+  <section class="state">
+    <div class="state-label">05 · Task detail — watchers section, currently watching</div>
+    <div class="stage">
+      <div class="side-field" style="max-width:280px">
+        <div class="watchers-head">
+          <label style="margin:0">Watchers (4)</label>
+          <button class="watch-toggle on">
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><path d="M10 4c-5 0-8 6-8 6s3 6 8 6 8-6 8-6-3-6-8-6zm0 9a3 3 0 110-6 3 3 0 010 6z"/></svg>
+            Watching
+          </button>
+        </div>
+        <div class="avatar-stack">
+          <span class="avatar avatar-26">JD</span>
+          <span class="avatar avatar-26">AK</span>
+          <span class="avatar avatar-26">JD</span>
+          <span class="lbl-overflow">+1</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ 06 · WATCHERS — NOT WATCHING ══════════ -->
+  <section class="state">
+    <div class="state-label">06 · Task detail — watchers section, not watching</div>
+    <div class="stage">
+      <div class="side-field" style="max-width:280px">
+        <div class="watchers-head">
+          <label style="margin:0">Watchers (3)</label>
+          <button class="watch-toggle off">
+            <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 3l14 14M6 6.3C4 7.6 2 10 2 10s3 6 8 6c1.5 0 2.8-.5 3.9-1.2M9 4.1C9.3 4 9.6 4 10 4c5 0 8 6 8 6s-.7 1.3-2 2.7"/></svg>
+            Watch
+          </button>
+        </div>
+        <div class="avatar-stack">
+          <span class="avatar avatar-26">JD</span>
+          <span class="avatar avatar-26">AK</span>
+          <span class="avatar avatar-26">JD</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ 07 · ACTIVITY LOG ══════════ -->
+  <section class="state">
+    <div class="state-label">07 · Task detail — activity log, chronological</div>
+    <div class="stage">
+      <div style="max-width:640px">
+        <div class="section-head"><h2 class="section-title">Activity</h2></div>
+        <div class="activity-list" style="margin-top:10px">
+          <div class="activity-row">
+            <span class="activity-icon act-accent"><svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><path d="M10 4v12M4 10h12"/></svg></span>
+            <div class="activity-body">
+              <div class="activity-line1"><b>John D.</b> created this task</div>
+              <div class="activity-line2">Aug 25, 9:00 AM</div>
+            </div>
+          </div>
+          <div class="activity-row">
+            <span class="activity-icon act-neutral"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 3l3 3-9 9-4 1 1-4 9-9z"/></svg></span>
+            <div class="activity-body">
+              <div class="activity-line1"><b>Alex K.</b> changed Priority</div>
+              <div class="activity-line2"><span class="activity-diff">Medium → High</span> · Aug 25, 2:30 PM</div>
+            </div>
+          </div>
+          <div class="activity-row">
+            <span class="activity-icon" style="background:oklch(0.95 0.05 25);color:oklch(0.5 0.18 25)"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6h8M6 4v8M4.5 4.5l7 7"/></svg></span>
+            <div class="activity-body">
+              <div class="activity-line1"><b>Alex K.</b> added label &quot;Bug&quot;</div>
+              <div class="activity-line2">Aug 25, 2:31 PM</div>
+            </div>
+          </div>
+          <div class="activity-row">
+            <span class="activity-icon act-neutral"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 3l3 3-9 9-4 1 1-4 9-9z"/></svg></span>
+            <div class="activity-body">
+              <div class="activity-line1"><b>Alex K.</b> changed Status</div>
+              <div class="activity-line2"><span class="activity-diff">To Do → In Progress</span> · Aug 26, 9:00 AM</div>
+            </div>
+          </div>
+          <div class="activity-row">
+            <span class="activity-icon act-accent"><svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><path d="M3 4h14v9H8l-4 3v-3H3V4z"/></svg></span>
+            <div class="activity-body">
+              <div class="activity-line1"><b>Alex K.</b> commented</div>
+              <div class="activity-line2">Aug 26, 10:03 AM</div>
+            </div>
+          </div>
+          <div class="activity-row">
+            <span class="activity-icon act-success"><svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><path d="M10 4c-5 0-8 6-8 6s3 6 8 6 8-6 8-6-3-6-8-6zm0 9a3 3 0 110-6 3 3 0 010 6z"/></svg></span>
+            <div class="activity-body">
+              <div class="activity-line1"><b>Alex K.</b> started watching</div>
+              <div class="activity-line2">Aug 26, 10:03 AM</div>
+            </div>
+          </div>
+          <div class="activity-row">
+            <span class="activity-icon act-accent"><svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><path d="M3 4h14v9H8l-4 3v-3H3V4z"/></svg></span>
+            <div class="activity-body">
+              <div class="activity-line1"><b>Jane D.</b> commented</div>
+              <div class="activity-line2">Aug 26, 11:20 AM</div>
+            </div>
+          </div>
+          <div class="activity-row">
+            <span class="activity-icon act-neutral"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 3l3 3-9 9-4 1 1-4 9-9z"/></svg></span>
+            <div class="activity-body">
+              <div class="activity-line1"><b>John D.</b> changed Assignee</div>
+              <div class="activity-line2"><span class="activity-diff">Unassigned → Alex K.</span> · Aug 27, 8:45 AM</div>
+            </div>
+          </div>
+          <div class="activity-row">
+            <span class="activity-icon act-success"><svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><path d="M10 4c-5 0-8 6-8 6s3 6 8 6 8-6 8-6-3-6-8-6zm0 9a3 3 0 110-6 3 3 0 010 6z"/></svg></span>
+            <div class="activity-body">
+              <div class="activity-line1"><b>Alex K.</b> started watching</div>
+              <div class="activity-line2">Aug 27, 8:45 AM</div>
+            </div>
+          </div>
+          <div class="activity-row">
+            <span class="activity-icon act-accent"><svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><path d="M3 4h14v9H8l-4 3v-3H3V4z"/></svg></span>
+            <div class="activity-body">
+              <div class="activity-line1"><b>Alex K.</b> commented</div>
+              <div class="activity-line2">Aug 27, 9:15 AM</div>
+            </div>
+          </div>
+          <div class="activity-row">
+            <span class="activity-icon act-neutral"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 3l3 3-9 9-4 1 1-4 9-9z"/></svg></span>
+            <div class="activity-body">
+              <div class="activity-line1"><b>Alex K.</b> changed Description</div>
+              <div class="activity-line2">Aug 27, 9:16 AM</div>
+            </div>
+          </div>
+          <div class="activity-row" style="padding-bottom:14px">
+            <span class="activity-icon act-accent"><svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor"><path d="M3 4h14v9H8l-4 3v-3H3V4z"/></svg></span>
+            <div class="activity-body">
+              <div class="activity-line1"><b>You</b> commented</div>
+              <div class="activity-line2">Aug 28, 8:00 AM</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ 08 · BOARD SETTINGS LABELS SECTION ══════════ -->
+  <section class="state">
+    <div class="state-label">08 · Board Settings — Labels section</div>
+    <div class="stage" style="display:flex;justify-content:center">
+      <div class="modal-backdrop" style="padding:0;background:transparent">
+        <div class="modal">
+          <div class="modal-header">
+            <h2 class="modal-title">Board Settings</h2>
+            <button class="modal-close" aria-label="Close"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 5l10 10M15 5L5 15"/></svg></button>
+          </div>
+
+          <div class="subsection-title" style="margin-top:0">Columns</div>
+          <div class="label-list">
+            <div class="label-row"><span class="label-row-name">To Do</span></div>
+            <div class="label-row"><span class="label-row-name">In Progress</span></div>
+            <div class="label-row"><span class="label-row-name">Done</span></div>
+          </div>
+
+          <div class="subsection-title">Labels</div>
+          <div class="label-list">
+            <div class="label-row">
+              <span class="label-swatch" style="background:oklch(0.6 0.2 25)"></span>
+              <span class="label-row-name">Bug</span>
+              <span class="label-row-hex">#E11D48</span>
+              <span class="label-row-actions">
+                <button class="icon-btn" aria-label="Edit label Bug"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 3l3 3-9 9-4 1 1-4 9-9z"/></svg></button>
+                <button class="icon-btn danger" aria-label="Delete label Bug"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 6h10M8 6V4h4v2M6 6l1 10h6l1-10"/></svg></button>
+              </span>
+            </div>
+            <div class="label-row editing">
+              <input class="mini-input" value="Frontend" style="width:110px">
+              <div class="swatch-picker">
+                <span class="swatch-dot sel" style="background:oklch(0.58 0.16 292)"></span>
+                <span class="swatch-dot" style="background:oklch(0.55 0.16 250)"></span>
+                <span class="swatch-dot" style="background:oklch(0.68 0.14 74)"></span>
+                <span class="swatch-dot" style="background:oklch(0.56 0.15 150)"></span>
+                <input class="mini-input" value="#3B82F6" style="width:78px;font-family:var(--font-mono);font-size:var(--fs-12)">
+              </div>
+              <span class="label-row-actions" style="margin-left:auto">
+                <button class="icon-btn" aria-label="Save label" style="color:var(--success-700)"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 10l4 4 8-8"/></svg></button>
+                <button class="icon-btn" aria-label="Cancel edit"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 5l10 10M15 5L5 15"/></svg></button>
+              </span>
+            </div>
+            <div class="label-row">
+              <span class="label-swatch" style="background:oklch(0.55 0.11 180)"></span>
+              <span class="label-row-name">Needs Design</span>
+              <span class="label-row-hex">#0D9488</span>
+              <span class="label-row-actions">
+                <button class="icon-btn" aria-label="Edit label Needs Design"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 3l3 3-9 9-4 1 1-4 9-9z"/></svg></button>
+                <button class="icon-btn danger" aria-label="Delete label Needs Design"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 6h10M8 6V4h4v2M6 6l1 10h6l1-10"/></svg></button>
+              </span>
+            </div>
+            <div class="label-row">
+              <span class="label-swatch" style="background:oklch(0.68 0.14 74)"></span>
+              <span class="label-row-name">Urgent</span>
+              <span class="label-row-hex">#D97706</span>
+              <span class="label-row-actions">
+                <button class="icon-btn" aria-label="Edit label Urgent"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 3l3 3-9 9-4 1 1-4 9-9z"/></svg></button>
+                <button class="icon-btn danger" aria-label="Delete label Urgent"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 6h10M8 6V4h4v2M6 6l1 10h6l1-10"/></svg></button>
+              </span>
+            </div>
+            <div class="label-row">
+              <span class="label-swatch" style="background:oklch(0.56 0.15 150)"></span>
+              <span class="label-row-name">Docs</span>
+              <span class="label-row-hex">#16A34A</span>
+              <span class="label-row-actions">
+                <button class="icon-btn" aria-label="Edit label Docs"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 3l3 3-9 9-4 1 1-4 9-9z"/></svg></button>
+                <button class="icon-btn danger" aria-label="Delete label Docs"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 6h10M8 6V4h4v2M6 6l1 10h6l1-10"/></svg></button>
+              </span>
+            </div>
+            <div class="label-row">
+              <span class="label-swatch" style="background:oklch(0.6 0.15 340)"></span>
+              <span class="label-row-name">Nice to have</span>
+              <span class="label-row-hex">#DB2777</span>
+              <span class="label-row-actions">
+                <button class="icon-btn" aria-label="Edit label Nice to have"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 3l3 3-9 9-4 1 1-4 9-9z"/></svg></button>
+                <button class="icon-btn danger" aria-label="Delete label Nice to have"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 6h10M8 6V4h4v2M6 6l1 10h6l1-10"/></svg></button>
+              </span>
+            </div>
+          </div>
+          <div style="margin-top:10px">
+            <button class="btn btn-ghost btn-sm">+ Add Label</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ 09 · LABEL PICKER POPOVER ══════════ -->
+  <section class="state">
+    <div class="state-label">09 · Label picker popover — opened from task detail</div>
+    <div class="stage" style="min-height:260px">
+      <div class="picker-anchor">
+        <button class="btn btn-ghost btn-sm">
+          <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path d="M10 4v12M4 10h12"/></svg>
+          Add label
+        </button>
+        <div class="popover">
+          <div class="popover-head">Add label</div>
+          <div class="picker-row"><span class="picker-dot" style="background:oklch(0.68 0.14 74)"></span>Urgent</div>
+          <div class="picker-row"><span class="picker-dot" style="background:oklch(0.56 0.15 150)"></span>Docs</div>
+          <div class="picker-row"><span class="picker-dot" style="background:oklch(0.6 0.15 340)"></span>Nice to have</div>
+          <div class="picker-divider"></div>
+          <div class="picker-row picker-create">
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path d="M10 4v12M4 10h12"/></svg>
+            Create new label
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ 10 · DELETE COMMENT CONFIRMATION ══════════ -->
+  <section class="state">
+    <div class="state-label">10 · Comment — delete confirmation dialog</div>
+    <div class="stage" style="display:flex;justify-content:center;padding:60px 40px;background:rgba(74,55,20,.06)">
+      <div class="confirm-modal">
+        <h3 class="confirm-title">Delete this comment?</h3>
+        <p class="confirm-body">This action cannot be undone.</p>
+        <div class="confirm-actions">
+          <button class="btn btn-ghost">Cancel</button>
+          <button class="btn btn-danger">Delete</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ M-01 · MOBILE — COMMENTS STACKED ══════════ -->
+  <section class="state">
+    <div class="state-label">M-01 · Mobile — comments section stacked, composer at bottom</div>
+    <div class="stage narrow">
+      <div class="section-head"><h2 class="section-title" style="font-size:var(--fs-15)">Comments (2)</h2></div>
+      <div class="comment-list" style="margin-top:10px;margin-bottom:14px">
+        <div class="comment-card">
+          <div class="comment-head">
+            <span class="avatar avatar-32">AK</span>
+            <span class="comment-author">Alex K.</span>
+          </div>
+          <div class="comment-time" style="margin-bottom:8px;display:block">Aug 26, 10:03 AM</div>
+          <div class="comment-body"><p>Repro steps confirmed on Safari.</p></div>
+        </div>
+        <div class="comment-card">
+          <div class="comment-head">
+            <span class="avatar avatar-32">AK</span>
+            <span class="comment-author">You</span>
+          </div>
+          <div class="comment-time" style="margin-bottom:8px;display:block">Aug 28, 8:00 AM</div>
+          <div class="comment-body"><p>Verified on staging. Closing.</p></div>
+        </div>
+      </div>
+      <div class="composer-wrap">
+        <textarea class="composer" style="min-height:64px" placeholder="Write a comment…"></textarea>
+        <div class="composer-footer"><button class="btn" style="width:100%;height:44px">Comment</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ M-02 · MOBILE — WATCHERS ACCORDION ══════════ -->
+  <section class="state">
+    <div class="state-label">M-02 · Mobile — watchers as a collapsed / expanded accordion</div>
+    <div class="stage narrow" style="display:flex;flex-direction:column;gap:12px">
+      <div class="m-accordion">
+        <div class="m-accordion-head">
+          <span class="m-accordion-title">Watchers (4)</span>
+          <svg class="m-chevron" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 5l4 4 4-4"/></svg>
+        </div>
+      </div>
+      <div class="m-accordion">
+        <div class="m-accordion-head">
+          <span class="m-accordion-title">Watchers (4)</span>
+          <svg class="m-chevron" style="transform:rotate(180deg)" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 5l4 4 4-4"/></svg>
+        </div>
+        <div class="m-accordion-body">
+          <div class="watchers-head" style="padding-top:12px">
+            <span></span>
+            <button class="watch-toggle on" style="height:38px">
+              <svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><path d="M10 4c-5 0-8 6-8 6s3 6 8 6 8-6 8-6-3-6-8-6zm0 9a3 3 0 110-6 3 3 0 010 6z"/></svg>
+              Watching
+            </button>
+          </div>
+          <div class="avatar-stack" style="margin-top:12px">
+            <span class="avatar avatar-26">JD</span>
+            <span class="avatar avatar-26">AK</span>
+            <span class="avatar avatar-26">JD</span>
+            <span class="lbl-overflow">+1</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
