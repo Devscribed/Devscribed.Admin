@@ -492,7 +492,26 @@ export type MemberCapability =
   | 'cancel-own-vacation-request'
   | 'cancel-any-vacation-request'
   /** Spec 10 addition — view the organization-wide Requests page (admin, manager). */
-  | 'view-requests';
+  | 'view-requests'
+  /**
+   * Spec 11 additions — the Projects capabilities.
+   * `manage-projects`: create/edit/archive/restore projects and manage members (admin, manager).
+   * `list-assigned-projects`: see assigned active projects in time-entry selectors (admin, manager, user).
+   */
+  | 'manage-projects'
+  | 'list-assigned-projects'
+  /**
+   * Spec 12 additions — the Time Tracking capabilities (spec 12 Roles & Permission
+   * Matrix / "New Capabilities").
+   * `view-time-tracking`: view the Time Tracking page and own entries (admin, manager, user).
+   * `manage-own-time-entries`: create/edit/delete own time entries (admin, manager, user).
+   * `manage-all-time-entries`: view/create/edit/delete any member's entries (admin, manager).
+   * `use-timer`: start/stop/discard own timer (admin, manager, user).
+   */
+  | 'view-time-tracking'
+  | 'manage-own-time-entries'
+  | 'manage-all-time-entries'
+  | 'use-timer';
 
 /**
  * Pure lookup against spec 04's Roles & Permission Matrix (TC-04-UNIT-05), widened by
@@ -516,6 +535,12 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'cancel-own-vacation-request': true,
     'cancel-any-vacation-request': true,
     'view-requests': true,
+    'manage-projects': true,
+    'list-assigned-projects': true,
+    'view-time-tracking': true,
+    'manage-own-time-entries': true,
+    'manage-all-time-entries': true,
+    'use-timer': true,
   },
   manager: {
     'view-list': true,
@@ -531,6 +556,12 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'cancel-own-vacation-request': true,
     'cancel-any-vacation-request': true,
     'view-requests': true,
+    'manage-projects': true,
+    'list-assigned-projects': true,
+    'view-time-tracking': true,
+    'manage-own-time-entries': true,
+    'manage-all-time-entries': true,
+    'use-timer': true,
   },
   user: {
     'view-list': true,
@@ -546,6 +577,12 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'cancel-own-vacation-request': true,
     'cancel-any-vacation-request': false,
     'view-requests': false,
+    'manage-projects': false,
+    'list-assigned-projects': true,
+    'view-time-tracking': true,
+    'manage-own-time-entries': true,
+    'manage-all-time-entries': false,
+    'use-timer': true,
   },
   viewer: {
     'view-list': true,
@@ -561,6 +598,12 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'cancel-own-vacation-request': false,
     'cancel-any-vacation-request': false,
     'view-requests': false,
+    'manage-projects': false,
+    'list-assigned-projects': false,
+    'view-time-tracking': false,
+    'manage-own-time-entries': false,
+    'manage-all-time-entries': false,
+    'use-timer': false,
   },
 };
 
@@ -1796,6 +1839,646 @@ export const REQUESTS_PAGE_MESSAGES = {
   emptyPending: 'No pending requests.',
   emptyOther: (status: string) => `No ${status} requests.`,
 } as const;
+
+// ---------------------------------------------------------------------------
+// Spec 11 — Projects
+// ---------------------------------------------------------------------------
+// Pure, isomorphic helpers for the Projects feature: project-name validation
+// (shared by the API's POST/PUT and the web modal), the `status` query-param
+// parser for the project list, the bulk add-members empty-array guard, and the
+// one source of truth for every project message/toast string. Capabilities
+// (`manage-projects`, `list-assigned-projects`) live in `CAPABILITY_MATRIX`
+// above and are gated via `can(...)`.
+
+/**
+ * Exact strings from spec 11's Error Messages table, verbatim. Shared by the API
+ * (400/403/404/409 bodies), the web form (inline errors + toasts), and any
+ * client-side pre-validation so the wording lives in exactly one place.
+ *
+ * NB: `nameInvalidChars` is NOT present in spec 11's Error Messages table — it is a
+ * genuine spec gap we fill to satisfy TC-11-INT-17, which requires a `<script>…`
+ * payload to be rejected with a validation error on `name` via the allowed-character
+ * class. Every other key is byte-for-byte from the spec's table.
+ */
+export const PROJECT_MESSAGES = {
+  nameRequired: 'Project name is required',
+  nameTooLong: 'Project name must be at most 100 characters',
+  /** Spec gap — not in spec 11's Error Messages table; added for TC-11-INT-17 (see above). */
+  nameInvalidChars: 'Project name contains invalid characters',
+  nameDuplicate: 'A project with this name already exists',
+  alreadyArchived: 'Project is already archived',
+  alreadyActive: 'Project is already active',
+  membersEmpty: 'At least one member is required',
+  membersInvalid: 'One or more members not found or not active',
+  forbidden: 'You do not have permission to manage projects',
+  notFound: 'Project not found',
+  toastCreated: 'Project created',
+  toastUpdated: 'Project updated',
+  toastArchived: 'Project archived',
+  toastRestored: 'Project restored',
+  toastMembersAdded: 'Members added',
+  toastMemberRemoved: 'Member removed from project',
+  archiveConfirm:
+    'Archive this project? Members will no longer be able to log time against it.',
+  genericError: 'Something went wrong. Please try again.',
+  emptyState: 'No projects yet. Create your first project to start tracking time.',
+} as const;
+
+/** Max length of a project name in Unicode codepoints (spec 11 Validation Rule 1). */
+export const PROJECT_NAME_MAX = 100;
+
+/**
+ * Allowed character class for a project name (spec 11 requirement 2): letters of any
+ * script (`\p{L}`), digits (`\p{N}`), spaces, hyphens, ampersands, periods, and
+ * parentheses. Anchored + `u` flag so a `<`/`>` (or any other character) fails.
+ */
+const PROJECT_NAME_PATTERN = /^[\p{L}\p{N} \-&.()]+$/u;
+
+/**
+ * Project name (spec 11 Validation Rules 1 / TC-11-UNIT-01, TC-11-INT-17): trim first,
+ * then check required → too long → invalid chars → valid. Length is measured in Unicode
+ * codepoints (`[...name].length`) rather than UTF-16 code units, matching the
+ * codepoint-safety approach used elsewhere in this file (see `getAvatarInitials`), so a
+ * name of astral-plane characters is counted by visible character, not surrogate pairs.
+ */
+export function validateProjectName(name: string): FieldResult {
+  const value = (name ?? '').trim();
+  if (value.length === 0) return fail(PROJECT_MESSAGES.nameRequired);
+  if ([...value].length > PROJECT_NAME_MAX) return fail(PROJECT_MESSAGES.nameTooLong);
+  if (!PROJECT_NAME_PATTERN.test(value)) return fail(PROJECT_MESSAGES.nameInvalidChars);
+  return ok(value);
+}
+
+/** The three valid values of the projects `status` query parameter (`active` is default). */
+export type ProjectStatusFilter = 'active' | 'archived' | 'all';
+
+export const PROJECT_STATUS_FILTERS: readonly ProjectStatusFilter[] = [
+  'active',
+  'archived',
+  'all',
+];
+
+/**
+ * Parse the `status` query parameter (GET .../projects?status=...). Returns the value
+ * when it is one of the three valid filters (case-sensitive, lowercase); otherwise
+ * falls back to the default `'active'` — covering `undefined`, empty string, and any
+ * unknown value. Mirrors `parseRequestStatusFilter` (spec 10).
+ */
+export function parseProjectStatusFilter(value: string | undefined): ProjectStatusFilter {
+  return PROJECT_STATUS_FILTERS.includes(value as ProjectStatusFilter)
+    ? (value as ProjectStatusFilter)
+    : 'active';
+}
+
+/**
+ * Bulk add-members payload guard (spec 11 requirement / POST .../members contract):
+ * at least one membership id is required. A non-array or empty array is rejected with
+ * `membersEmpty`. This is the pure "empty array" rule only — the deep checks that every
+ * id exists, is active, and belongs to the caller's org are the API's job against the DB.
+ */
+export function validateMembershipIds(
+  ids: unknown,
+): { valid: true; value: string[] } | { valid: false; error: string } {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return { valid: false, error: PROJECT_MESSAGES.membersEmpty };
+  }
+  return { valid: true, value: ids as string[] };
+}
+
+// ===========================================================================
+// spec 12 — Time Tracking
+// ---------------------------------------------------------------------------
+// Pure, isomorphic helpers for time entries and the running timer: duration
+// computation from an HH:MM range, elapsed-time / duration formatting for the
+// UI, the timer-stop minute computation (from milliseconds so it stays pure),
+// the core create/edit entry validator, the list-query range validator, the
+// timer-metadata validator, and the one source of truth for every spec-12
+// message/toast string. Capabilities (`view-time-tracking`,
+// `manage-own-time-entries`, `manage-all-time-entries`, `use-timer`) live in
+// `CAPABILITY_MATRIX` above and are gated via `can(...)`.
+//
+// Every function that needs "today" takes it as a 'YYYY-MM-DD' argument so it
+// stays deterministic on both the API (which passes the member's today) and the
+// web app — none of these helpers reads the wall clock.
+// ===========================================================================
+
+/** Max length of a time-entry / timer task in Unicode codepoints (Rules 8, 12). */
+export const TIME_ENTRY_TASK_MAX = 200;
+/** Max length of a time-entry / timer description in Unicode codepoints (Rules 9, 13). */
+export const TIME_ENTRY_DESCRIPTION_MAX = 500;
+/** Duration bounds in minutes (Rules 4, 5). */
+export const DURATION_MINUTES_MIN = 1;
+export const DURATION_MINUTES_MAX = 1440;
+/** Back-dating window (Rule 3) and list-range window (Rule 11), both in days. */
+export const MAX_BACKDATE_DAYS = 90;
+export const MAX_RANGE_DAYS = 31;
+
+/**
+ * Every string from spec 12's Error Messages table (verbatim), plus the toasts,
+ * confirmations, and empty-state copy. Shared by the API (400/403/404/409 bodies)
+ * and the web form/toasts so the wording lives in exactly one place.
+ *
+ * The templated "Timer stopped — {duration} logged" row is exposed as the
+ * `timerStoppedToast(durationHuman)` builder below rather than a static key, since
+ * it interpolates the formatted duration; `toastTimerStoppedTemplate` documents the
+ * raw template. NB: that toast uses an em-dash (` — `), matching the spec
+ * byte-for-byte — a plain hyphen would fail downstream assertions.
+ */
+export const TIME_TRACKING_MESSAGES = {
+  // Entry validation (Error Messages table + Validation Rules 1–9).
+  dateRequired: 'Date is required',
+  dateInvalid: 'Invalid date',
+  dateFuture: 'Date cannot be in the future',
+  dateTooOld: 'Date cannot be more than 90 days in the past',
+  durationRequired: 'Duration is required',
+  durationMin: 'Duration must be at least 1 minute',
+  durationMax: 'Duration cannot exceed 24 hours',
+  endTimeRequired: 'End time is required when start time is provided',
+  endBeforeStart: 'End time must be after start time',
+  taskTooLong: 'Task must be at most 200 characters',
+  descriptionTooLong: 'Description must be at most 500 characters',
+  projectInvalid: 'Project not found or archived',
+  forbiddenEdit: 'You do not have permission to edit this time entry',
+  forbiddenDelete: 'You do not have permission to delete this time entry',
+  // Timer errors (API contract error bodies).
+  timerAlreadyRunning: 'A timer is already running. Stop it before starting a new one.',
+  timerNotRunning: 'No timer is currently running',
+  // List-query validation (Validation Rule 11 + range/order rules).
+  queryFromRequired: 'From date is required',
+  queryToRequired: 'To date is required',
+  queryRangeTooLarge: 'Date range cannot exceed 31 days',
+  queryInvalidRange: 'From date must be before or equal to to date',
+  // Page access.
+  viewForbidden: 'You do not have access to time tracking',
+  // Toasts.
+  toastEntrySaved: 'Time entry saved',
+  toastEntryDeleted: 'Time entry deleted',
+  toastTimerStarted: 'Timer started',
+  /** Documented raw template; build the real string with `timerStoppedToast(...)`. */
+  toastTimerStoppedTemplate: 'Timer stopped — {duration} logged',
+  toastTimerDiscarded: 'Timer discarded',
+  // Confirmations.
+  deleteConfirm: 'Delete this time entry? This action cannot be undone.',
+  discardConfirm: 'Discard this timer? No time entry will be saved.',
+  // Network/server error.
+  genericError: 'Something went wrong. Please try again.',
+  // Empty states.
+  emptyPeriod: 'No time entries for this period.',
+  emptyToday: 'No time logged today. Start a timer or add an entry.',
+} as const;
+
+/** "Timer stopped — {duration} logged" (Toast row, templated). */
+export function timerStoppedToast(durationHuman: string): string {
+  return `Timer stopped — ${durationHuman} logged`;
+}
+
+/** Strict `HH:MM` (00:00–23:59). */
+const HHMM_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/** Parse `HH:MM` into minutes-since-midnight, or `NaN` when malformed. */
+function parseHHMM(input: string): number {
+  const match = HHMM_PATTERN.exec((input ?? '').trim());
+  if (!match) return NaN;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+/**
+ * Duration in minutes between two same-day `HH:MM` times (spec FR-3, TC-12-UNIT-01).
+ * Parses both to minutes-since-midnight and subtracts; the result is rounded UP to
+ * the nearest whole minute (whole-minute inputs give the exact difference, so `ceil`
+ * is a no-op here). Same-day only — no overnight handling (FR-6). This is the value
+ * the API stores on the created entry.
+ *
+ * Verified: 09:00→11:30 = 150; 09:00→09:01 = 1; 00:00→23:59 = 1439.
+ */
+export function computeDurationFromRange(startHHMM: string, endHHMM: string): number {
+  const start = parseHHMM(startHHMM);
+  const end = parseHHMM(endHHMM);
+  return Math.ceil(end - start);
+}
+
+/**
+ * Format elapsed seconds as zero-padded `HH:MM:SS` (spec FR-21, TC-12-UNIT-02). Hours
+ * are NOT capped at 24 — a 25-hour timer shows "25:00:00" — but are padded to at least
+ * two digits. Used by the topbar indicator and the running-timer panel (both compute
+ * elapsed client-side from `startedAt`).
+ *
+ * Verified: 0 → "00:00:00"; 3661 → "01:01:01"; 86399 → "23:59:59".
+ */
+export function formatElapsed(totalSeconds: number): string {
+  const whole = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(whole / 3600);
+  const minutes = Math.floor((whole % 3600) / 60);
+  const seconds = whole % 60;
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+}
+
+/**
+ * Minutes to log when a timer is stopped (spec FR-14 / API contract, TC-12-UNIT-03):
+ * `ceil(elapsedMs / 60000)`, minimum 1. Takes milliseconds — the API computes
+ * `now - startedAt` and passes the ms — so this stays pure and deterministic. The
+ * client's displayed elapsed time is decorative; the server never reads it back.
+ *
+ * Verified: 30_000 → 1 (minimum); 61_000 → 2; 7_200_000 → 120.
+ */
+export function computeTimerStopMinutes(elapsedMs: number): number {
+  return Math.max(1, Math.ceil(elapsedMs / 60000));
+}
+
+/**
+ * Format a whole-minute duration as `"Xh Ym"` (daily-view rows + the
+ * "Timer stopped — {duration} logged" toast). Hours = floor(minutes / 60),
+ * minutes = minutes % 60. Verified: 150 → "2h 30m"; 60 → "1h 0m"; 5 → "0h 5m".
+ */
+export function formatDurationHuman(minutes: number): string {
+  const whole = Math.max(0, Math.floor(minutes));
+  const hours = Math.floor(whole / 60);
+  const mins = whole % 60;
+  return `${hours}h ${mins}m`;
+}
+
+/**
+ * Format a whole-minute duration as total hours to one decimal (calendar/weekly cells).
+ * Verified: 480 → "8.0"; 150 → "2.5"; 0 → "0.0".
+ */
+export function formatHoursOneDecimal(minutes: number): string {
+  return (Math.max(0, minutes) / 60).toFixed(1);
+}
+
+/** Codepoint length (astral-safe), matching the idiom used by `validateProjectName`. */
+function codepointLength(s: string): number {
+  return [...s].length;
+}
+
+/** Whole-day difference `later - earlier` for two valid 'YYYY-MM-DD' strings. */
+function diffInDays(earlier: string, later: string): number {
+  return Math.round(
+    (parseUtcDate(later).getTime() - parseUtcDate(earlier).getTime()) / 86400000,
+  );
+}
+
+/** Coerce a JSON number or form string to a number; blanks/nullish → `NaN`. */
+function toDurationNumber(input: number | string | null | undefined): number {
+  if (typeof input === 'number') return input;
+  if (typeof input === 'string' && input.trim().length > 0) return Number(input.trim());
+  return NaN;
+}
+
+/** The raw request-body shape a time entry arrives as (create/edit). */
+export interface TimeEntryInput {
+  date?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  durationMinutes?: number | string | null;
+  task?: string | null;
+  description?: string | null;
+}
+
+/** The normalized entry the API persists once validation passes. */
+export interface NormalizedTimeEntry {
+  date: string;
+  startTime: string | null;
+  endTime: string | null;
+  durationMinutes: number;
+  task: string | null;
+  description: string | null;
+}
+
+export type TimeEntryValidation =
+  | { valid: true; value: NormalizedTimeEntry }
+  | { valid: false; errors: Record<string, string> };
+
+/**
+ * Core time-entry validator (spec 12 Validation Rules 1–9, TC-12-INT-09/28). Enforces
+ * every field rule with the EXACT Error Messages strings and collects ALL applicable
+ * errors (never stops at the first) so the UI can show every field error at once —
+ * matching the collect-all convention of `validateMemberFinancials`/`validateSignup`.
+ *
+ * `opts.today` ('YYYY-MM-DD') is supplied by the caller (the member's today) so this
+ * stays pure and deterministic. Error keys are the `field-error-{name}` testids:
+ * `date`, `startTime`, `endTime`, `durationMinutes`, `task`, `description`.
+ *
+ * Two input modes (FR-3):
+ *  - **Time range** (`startTime` present): `endTime` required; both `HH:MM`; end after
+ *    start; `durationMinutes` auto-computed via `computeDurationFromRange` (any submitted
+ *    duration is ignored — the API contract says the range wins).
+ *  - **Duration only** (`startTime` absent): `durationMinutes` required, integer, 1–1440.
+ *
+ * On success `value` carries the normalized entry: trimmed task/description (empty → null),
+ * `startTime`/`endTime` null in duration mode, and the stored `durationMinutes`.
+ */
+export function validateTimeEntry(
+  input: TimeEntryInput,
+  opts: { today: string },
+): TimeEntryValidation {
+  const errors: Record<string, string> = {};
+  const today = opts.today;
+
+  // --- date (Rules 1–3) ---
+  const rawDate = typeof input.date === 'string' ? input.date.trim() : '';
+  if (rawDate.length === 0) {
+    errors.date = TIME_TRACKING_MESSAGES.dateRequired;
+  } else if (!isValidDateString(rawDate)) {
+    errors.date = TIME_TRACKING_MESSAGES.dateInvalid;
+  } else if (rawDate > today) {
+    errors.date = TIME_TRACKING_MESSAGES.dateFuture;
+  } else if (diffInDays(rawDate, today) > MAX_BACKDATE_DAYS) {
+    errors.date = TIME_TRACKING_MESSAGES.dateTooOld;
+  }
+
+  // --- mode selection ---
+  const hasStart = typeof input.startTime === 'string' && input.startTime.trim().length > 0;
+  const hasEnd = typeof input.endTime === 'string' && input.endTime.trim().length > 0;
+
+  let normalizedStart: string | null = null;
+  let normalizedEnd: string | null = null;
+  let durationMinutes = NaN;
+
+  if (hasStart) {
+    // --- Mode A: time range (Rules 6, 7) ---
+    const startStr = (input.startTime as string).trim();
+    const startMin = parseHHMM(startStr);
+    if (!hasEnd) {
+      errors.endTime = TIME_TRACKING_MESSAGES.endTimeRequired;
+    } else {
+      const endStr = (input.endTime as string).trim();
+      const endMin = parseHHMM(endStr);
+      // A malformed or not-after end fails Rule 7 (there is no distinct message for a
+      // malformed HH:MM in the spec, so the "after start" message covers it).
+      if (!(Number.isFinite(startMin) && Number.isFinite(endMin) && endMin > startMin)) {
+        errors.endTime = TIME_TRACKING_MESSAGES.endBeforeStart;
+      } else {
+        normalizedStart = startStr;
+        normalizedEnd = endStr;
+        durationMinutes = computeDurationFromRange(startStr, endStr);
+      }
+    }
+  } else {
+    // --- Mode B: duration only (Rules 4, 5) ---
+    const raw = input.durationMinutes;
+    const isMissing =
+      raw === null || raw === undefined || (typeof raw === 'string' && raw.trim().length === 0);
+    if (isMissing) {
+      errors.durationMinutes = TIME_TRACKING_MESSAGES.durationRequired;
+    } else {
+      const value = toDurationNumber(raw);
+      if (!Number.isInteger(value) || value < DURATION_MINUTES_MIN) {
+        errors.durationMinutes = TIME_TRACKING_MESSAGES.durationMin;
+      } else if (value > DURATION_MINUTES_MAX) {
+        errors.durationMinutes = TIME_TRACKING_MESSAGES.durationMax;
+      } else {
+        durationMinutes = value;
+      }
+    }
+  }
+
+  // --- task (Rule 8) & description (Rule 9): trimmed, codepoint-counted ---
+  const task = (input.task ?? '').trim();
+  if (codepointLength(task) > TIME_ENTRY_TASK_MAX) {
+    errors.task = TIME_TRACKING_MESSAGES.taskTooLong;
+  }
+  const description = (input.description ?? '').trim();
+  if (codepointLength(description) > TIME_ENTRY_DESCRIPTION_MAX) {
+    errors.description = TIME_TRACKING_MESSAGES.descriptionTooLong;
+  }
+
+  if (Object.keys(errors).length > 0) {
+    return { valid: false, errors };
+  }
+
+  return {
+    valid: true,
+    value: {
+      date: rawDate,
+      startTime: normalizedStart,
+      endTime: normalizedEnd,
+      durationMinutes,
+      task: task.length > 0 ? task : null,
+      description: description.length > 0 ? description : null,
+    },
+  };
+}
+
+export type TimeEntryRangeValidation =
+  | { valid: true }
+  | { valid: false; error?: string; errors?: Record<string, string>; message?: string };
+
+/**
+ * List-query range validator (spec 12 GET /time-entries contract, Validation Rule 11,
+ * TC-12-INT-26). `from`/`to` are required and must be valid 'YYYY-MM-DD' dates, `from`
+ * must be on or before `to`, and the inclusive span may not exceed 31 days.
+ *
+ * The return shape mirrors the API's error bodies so the service layer can map cleanly
+ * (see how `requests.service.ts` consumes spec 10's `parseRequestStatusFilter`):
+ *  - missing `from`/`to` → `{ errors: { from | to } }` (→ `400 { errors: {...} }`).
+ *  - `from` after `to`, or a malformed date → `{ error: 'invalid_range', message }`.
+ *  - span > 31 days inclusive → `{ error: 'range_too_large', message }`.
+ */
+export function validateTimeEntryRange(from?: string, to?: string): TimeEntryRangeValidation {
+  const rawFrom = typeof from === 'string' ? from.trim() : '';
+  const rawTo = typeof to === 'string' ? to.trim() : '';
+
+  const errors: Record<string, string> = {};
+  if (rawFrom.length === 0) errors.from = TIME_TRACKING_MESSAGES.queryFromRequired;
+  if (rawTo.length === 0) errors.to = TIME_TRACKING_MESSAGES.queryToRequired;
+  if (Object.keys(errors).length > 0) return { valid: false, errors };
+
+  if (!isValidDateString(rawFrom) || !isValidDateString(rawTo) || rawFrom > rawTo) {
+    return {
+      valid: false,
+      error: 'invalid_range',
+      message: TIME_TRACKING_MESSAGES.queryInvalidRange,
+    };
+  }
+
+  // Inclusive span: a 31-day window (diff of 30) is allowed; 32 days (diff of 31) is not.
+  if (diffInDays(rawFrom, rawTo) + 1 > MAX_RANGE_DAYS) {
+    return {
+      valid: false,
+      error: 'range_too_large',
+      message: TIME_TRACKING_MESSAGES.queryRangeTooLarge,
+    };
+  }
+
+  return { valid: true };
+}
+
+/** The raw timer start/update metadata body (all fields optional; `projectId` is a DB concern). */
+export interface TimerMetaInput {
+  task?: string | null;
+  description?: string | null;
+}
+
+export type TimerMetaValidation =
+  | { valid: true; value: { task: string | null; description: string | null } }
+  | { valid: false; errors: Record<string, string> };
+
+/**
+ * Timer start/update metadata validator (spec 12 Validation Rules 12–13). `task` (≤200)
+ * and `description` (≤500) are both optional and trimmed; length is measured in Unicode
+ * codepoints. `projectId` validity (exists / active / same-org) is a DB concern enforced
+ * by the API, NOT here. Collects all errors, keyed by `task`/`description`.
+ */
+export function validateTimerMeta(input: TimerMetaInput): TimerMetaValidation {
+  const errors: Record<string, string> = {};
+
+  const task = (input.task ?? '').trim();
+  if (codepointLength(task) > TIME_ENTRY_TASK_MAX) {
+    errors.task = TIME_TRACKING_MESSAGES.taskTooLong;
+  }
+  const description = (input.description ?? '').trim();
+  if (codepointLength(description) > TIME_ENTRY_DESCRIPTION_MAX) {
+    errors.description = TIME_TRACKING_MESSAGES.descriptionTooLong;
+  }
+
+  if (Object.keys(errors).length > 0) return { valid: false, errors };
+
+  return {
+    valid: true,
+    value: {
+      task: task.length > 0 ? task : null,
+      description: description.length > 0 ? description : null,
+    },
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * Spec 12 (change) — timezone helpers (isomorphic; shared by api + web)
+ * ------------------------------------------------------------------ */
+
+/**
+ * The effective-timezone rule for Time Tracking: entry `startTime`/`endTime` are absolute
+ * UTC instants in the DB; the wall-clock the viewer sees — and the wall-clock the composer
+ * types — is interpreted in the session/viewer's `Account.timezone`, or `'UTC'` when that
+ * is null/empty. Every helper below treats an empty / unknown / `'UTC'` zone as a pure
+ * identity, so the pre-change behavior (UTC wall-clock everywhere) is preserved exactly.
+ *
+ * These are pure and take every "now" as an argument — the validation package never calls
+ * `new Date()` / `Date.now()` itself, so the API and the web app share ONE tested
+ * implementation and the two sides can never drift.
+ */
+
+interface WallClockParts {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+/** UTC calendar/clock components of an instant — the identity fallback for an unset zone. */
+function utcParts(instant: Date): WallClockParts {
+  return {
+    year: instant.getUTCFullYear(),
+    month: instant.getUTCMonth() + 1,
+    day: instant.getUTCDate(),
+    hour: instant.getUTCHours(),
+    minute: instant.getUTCMinutes(),
+    second: instant.getUTCSeconds(),
+  };
+}
+
+/**
+ * The calendar/clock components of `instant` as seen in `tz`, via the standard
+ * `Intl.DateTimeFormat` "format-then-read-parts" trick (hourCycle `'h23'` so a 24:00 never
+ * appears). An empty / unknown / `'UTC'` zone — or any `Intl` failure — falls back to UTC.
+ */
+function wallClockParts(instant: Date, tz: string): WallClockParts {
+  if (!tz || tz === 'UTC') return utcParts(instant);
+  try {
+    const dtf = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      hourCycle: 'h23',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+    const map: Record<string, number> = {};
+    for (const part of dtf.formatToParts(instant)) {
+      if (part.type !== 'literal') map[part.type] = Number(part.value);
+    }
+    if (!Number.isFinite(map.year)) return utcParts(instant);
+    // hourCycle 'h23' still emits an hour of 24 at midnight in some engines — normalize.
+    const hour = map.hour === 24 ? 0 : map.hour;
+    return {
+      year: map.year,
+      month: map.month,
+      day: map.day,
+      hour,
+      minute: map.minute,
+      second: map.second,
+    };
+  } catch {
+    return utcParts(instant);
+  }
+}
+
+/**
+ * The offset in minutes of `tz` at `instant` (Europe/Berlin in summer → +120,
+ * America/New_York in summer → -240). `'UTC'`, an empty string, or an unknown zone → 0.
+ */
+export function tzOffsetMinutes(tz: string, instant: Date): number {
+  if (!tz || tz === 'UTC') return 0;
+  const p = wallClockParts(instant, tz);
+  const asUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+  return Math.round((asUtc - instant.getTime()) / 60000);
+}
+
+/**
+ * Interpret `${dateISO}T${hhmm}:00` as wall-clock in `tz` and return the absolute UTC
+ * instant. Compute a first guess from the offset at the naive-UTC instant, then do ONE
+ * refinement pass with the offset at that guess (handling DST boundaries). An empty /
+ * `'UTC'` / unknown zone yields the identity (`09:00` → `…T09:00:00.000Z`).
+ */
+export function zonedWallClockToUtc(dateISO: string, hhmm: string, tz: string): Date {
+  const t0 = Date.parse(`${dateISO}T${hhmm}:00Z`);
+  if (!Number.isFinite(t0)) return new Date(NaN);
+  let guess = t0 - tzOffsetMinutes(tz, new Date(t0)) * 60000;
+  guess = t0 - tzOffsetMinutes(tz, new Date(guess)) * 60000;
+  return new Date(guess);
+}
+
+/** `"HH:MM"` (24h, zero-padded) of the instant `instantISO` as seen in `tz`. */
+export function formatWallClockInTz(instantISO: string, tz: string): string {
+  const p = wallClockParts(new Date(instantISO), tz);
+  return `${pad2(p.hour)}:${pad2(p.minute)}`;
+}
+
+/** Minutes since local midnight of `instantISO` in `tz` (grid block positioning). */
+export function minutesOfDayInTz(instantISO: string, tz: string): number {
+  const p = wallClockParts(new Date(instantISO), tz);
+  return p.hour * 60 + p.minute;
+}
+
+/** The `YYYY-MM-DD` local date of `instantISO` in `tz` (timer-stop date + effective "today"). */
+export function localDateInTz(instantISO: string, tz: string): string {
+  const p = wallClockParts(new Date(instantISO), tz);
+  return `${p.year}-${pad2(p.month)}-${pad2(p.day)}`;
+}
+
+/**
+ * A short GMT-offset label for `tz` at the reference `instant`: `"GMT+2"`, `"GMT-5"`,
+ * `"GMT+5:30"`, or `"UTC"` when the offset is zero. The instant is passed in (DST shifts the
+ * offset) so the helper stays pure and testable — never an argless `new Date()` inside.
+ */
+export function gmtLabel(tz: string, instant: Date): string {
+  const offset = tzOffsetMinutes(tz, instant);
+  if (offset === 0) return 'UTC';
+  const sign = offset > 0 ? '+' : '-';
+  const abs = Math.abs(offset);
+  const hours = Math.floor(abs / 60);
+  const mins = abs % 60;
+  return `GMT${sign}${hours}${mins > 0 ? `:${pad2(mins)}` : ''}`;
+}
 
 /* ------------------------------------------------------------------ *
  * Documents area — specs/documents

@@ -32,6 +32,8 @@ export class MeController {
         firstName: membership.account.firstName,
         lastName: membership.account.lastName,
         timezone: membership.account.timezone,
+        // Spec 06 preference — drives the week start for the spec-12 calendar/weekly views.
+        firstDayOfWeek: membership.account.firstDayOfWeek,
       },
       organization: { id: membership.organization.id, name: membership.organization.name },
       role: membership.role,

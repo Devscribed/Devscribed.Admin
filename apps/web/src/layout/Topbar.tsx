@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useSession } from './session-context';
+import { TopbarTimerIndicator } from './TopbarTimerIndicator';
 
 /** Shared treatment for every item in the account menu card (Account settings, Log out). */
 const MENU_ITEM_STYLE: React.CSSProperties = {
@@ -60,7 +61,11 @@ export function Topbar() {
   }
 
   return (
-    <header className="shell-topbar">
+    <header className="shell-topbar" style={{ gap: 'var(--sp-8)' }}>
+      {/* Running-timer chip — sits to the left of the account button, only while a timer
+          runs (spec 12). Fed by the shared RunningTimerProvider. */}
+      <TopbarTimerIndicator />
+
       <div ref={container} style={{ position: 'relative' }}>
         <button
           type="button"

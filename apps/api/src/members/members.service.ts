@@ -203,6 +203,18 @@ export class MembersService {
       // removal (past approved requests are left untouched).
       await this.vacationRequests.cancelActiveForRemoval(tx, target.id, session.accountId);
 
+      // Spec 11 requirement 15 — cascade-delete the member's project assignments.
+      // Removal is a soft-delete (status → 'removed'), so the ProjectMember → Membership
+      // FK cascade never fires; delete the rows explicitly, atomically with the removal,
+      // so no assignment outlives the membership (TC-11-INT-13 — no orphan row).
+      await tx.projectMember.deleteMany({ where: { membershipId: target.id } });
+
+      // Spec 12 FR-19 / TC-12-INT-30 — discard the removed member's running timer (if any).
+      // Removal is a soft-delete, so the RunningTimer → Membership FK cascade never fires;
+      // delete the row explicitly, atomically with the removal. TimeEntry rows are historical
+      // and are deliberately NOT deleted — they survive removal (spec 12 §Concurrency 25 note).
+      await tx.runningTimer.deleteMany({ where: { membershipId: target.id } });
+
       return target.id;
     });
 

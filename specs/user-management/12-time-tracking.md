@@ -4,7 +4,7 @@ title: Time Tracking
 routes: ["/org/{orgId}/time-tracking"]
 api: ["GET .../timer", "POST .../timer/start", "PUT .../timer", "POST .../timer/stop", "DELETE .../timer", "GET .../time-entries", "POST .../time-entries", "PUT .../time-entries/{id}", "DELETE .../time-entries/{id}"]
 entities: [TimeEntry, RunningTimer]
-tags: [time-tracking, timer, time-entry, running-timer, daily-view, weekly-view, monthly-view, calendar, topbar-indicator, duration, manual-entry]
+tags: [time-tracking, timer, time-entry, running-timer, daily-view, weekly-view, monthly-view, calendar, time-grid, first-day-of-week, topbar-indicator, duration, manual-entry, timezone]
 depends-on: ["11"]
 ---
 
@@ -12,7 +12,7 @@ depends-on: ["11"]
 
 ## Summary
 
-Members log time spent on projects by starting a **running timer** or adding **manual time entries**. The Time Tracking page lives in the sidebar and offers three views: a monthly **calendar grid** (default), a weekly **project × day table**, and a daily **chronological list**. A running timer persists server-side and shows a live indicator in the app shell's topbar on every page. There is no approval flow — entries save immediately. `admin` and `manager` can view and edit all members' entries; `user` sees only their own. `viewer` has no access.
+Members log time spent on projects by starting a **running timer** or adding **manual time entries**. The Time Tracking page lives in the sidebar and offers three views: a monthly **calendar grid** (default), a weekly **time grid** over the week's seven days, and a daily **time grid** for one day. The weekly and daily views are Outlook-style hour grids on which timed entries render as positioned blocks. A running timer persists server-side and shows a live indicator in the app shell's topbar on every page. There is no approval flow — entries save immediately. `admin` and `manager` can view and edit all members' entries; `user` sees only their own. `viewer` has no access.
 
 **Depends on:** Spec 11 (Project, ProjectMember).
 
@@ -61,7 +61,7 @@ Members log time spent on projects by starting a **running timer** or adding **m
 13. Starting a timer when one is already running returns **409 Conflict**. The user must stop or discard the existing timer first.
 14. **Stopping** a timer:
     - Computes `durationMinutes = ceil((now − startedAt) / 60000)`. Minimum: **1 minute**. If less than 1 minute has elapsed, duration is rounded up to 1.
-    - Creates a `TimeEntry` with the computed duration, `startTime = startedAt`, `endTime = now`, `date` = calendar date of `startedAt` in the member's timezone (falls back to UTC if no timezone set on Account).
+    - Creates a `TimeEntry` with the computed duration, `startTime = startedAt`, `endTime = now`, `date` = calendar date of `startedAt` in the caller's `Account.timezone` (spec 06), falling back to `'UTC'` when the account has no timezone set.
     - Deletes the `RunningTimer` record.
 15. If the timer spans **midnight**, the resulting entry is assigned to the date when the timer was started, with the full duration. No splitting across days in v1.
 16. **Discarding** a timer deletes the `RunningTimer` without creating a `TimeEntry`.
@@ -89,6 +89,18 @@ Members log time spent on projects by starting a **running timer** or adding **m
 
 30. The Time Tracking page shows a **member filter** dropdown for `admin` and `manager`. By default it shows the caller's own entries. Selecting a member loads that member's entries.
 31. `admin` and `manager` can create entries on behalf of another member by specifying `membershipId` in the create request.
+
+### Calendar Views & Week Start
+
+32. The calendar week start follows the caller's **`firstDayOfWeek`** account preference (spec 06 — **"Monday"** by default, or **"Sunday"**). It governs: the **monthly** grid's first column, its weekday-header order, and which 6-week window is shown; and the **weekly** view's seven-day column order and its week-range label. `/api/me` now carries `firstDayOfWeek` so the client resolves the preference on load without an extra request. See spec 06 (Account Settings) for how the preference is set.
+33. **Weekends are not visually muted.** Saturday and Sunday columns (weekly view) and cells (monthly view) render as regular available days — some members work weekends — so the weekday name (Sat/Sun) is the only weekend cue. Weekends are fully interactive, exactly like weekdays.
+
+### Timezone
+
+34. Entry times render in the **viewer's account timezone** (`Account.timezone`, spec 06), falling back to `'UTC'` when the account has no timezone set. `startTime`/`endTime` are stored as absolute UTC instants; the effective timezone is the viewer's, resolved from `/api/me`.
+35. Manual `HH:MM` input is interpreted as **wall-clock time in the effective timezone** and converted to a UTC instant on save. The daily/weekly grids format `startTime`/`endTime`, position blocks, and draw the now-line in that timezone; the timer-stop `date` and the not-future / 90-day-past validation "today" use the timezone-local date.
+36. The daily/weekly grid's gutter label shows the effective zone as a **GMT offset** (e.g. "GMT+2", or "UTC" when the offset is 0), not a hardcoded "UTC".
+37. When an `admin`/`manager` creates an entry for another member, the `HH:MM` input is composed as wall-clock in the **creating caller's** effective timezone.
 
 ## Data Model
 
@@ -150,18 +162,18 @@ Members log time spent on projects by starting a **running timer** or adding **m
 │    Tracking  │  │                               1     2    │    │
 │              │  │                               —     —    │    │
 │              │  │  3     4     5     6     7     8     9    │    │
-│              │  │ 8.0   7.5   8.0   6.0   8.0   —     —    │    │
+│              │  │ 8h 0m 7h 30m8h 0m 6h 0m 8h 0m —     —    │    │
 │              │  │ 10    11    12    13    14    15    16    │    │
-│              │  │ 8.0   8.0   4.0   8.0   8.0   —     —    │    │
+│              │  │ 8h 0m 8h 0m 4h 0m 8h 0m 8h 0m —     —    │    │
 │              │  │ 17    18    19    20    21    22    23    │    │
-│              │  │ 7.5   8.0   8.0   6.5   8.0   —     —    │    │
+│              │  │ 7h 30m8h 0m 8h 0m 6h 30m8h 0m —     —    │    │
 │              │  │ 24    25    26    27    28    29    30    │    │
-│              │  │ 8.0   8.0   ●     —     —     —     —    │    │
+│              │  │ 8h 0m 8h 0m ●     —     —     —     —    │    │
 │              │  │ 31                                        │    │
 │              │  │ —                                         │    │
 │              │  └──────────────────────────────────────────┘    │
 │              │                                                   │
-│              │  Total: 157.5 hours                               │
+│              │  Total: 157h 30m                                  │
 │              │                                                   │
 │              │  ┌─ Timer ─────────────────────────────────┐     │
 │              │  │ [ Project ▾ ]  [ Task         ]         │     │
@@ -173,8 +185,8 @@ Members log time spent on projects by starting a **running timer** or adding **m
 └──────────────┴──────────────────────────────────────────────────┘
 ```
 
-- Calendar grid cells show day number and total hours (one decimal). `●` marks today.
-- Cells with hours use background intensity proportional to logged hours (more hours = deeper shade). Weekend columns are visually muted.
+- Calendar grid cells show day number and total hours in `Xh Ym` format (e.g. "8h 0m"). `●` marks today.
+- Cells with hours use background intensity proportional to logged hours (more hours = deeper shade). Weekend cells are **not** muted — they render as regular available days.
 - Click on a day cell → switches to daily view for that date.
 - `<` and `>` arrows navigate months. Month/year label shown between them.
 - Member filter dropdown (admin/manager only): shows all active org members. Default: "My time".
@@ -185,25 +197,31 @@ Members log time spent on projects by starting a **running timer** or adding **m
 ┌──────────────────────────────────────────────────────────────┐
 │  [ Daily ]  [● Weekly ]  [ Monthly ]    [< Aug 24–30, 2026 >]│
 │                                                               │
-│  ┌──────────────────────────────────────────────────────┐    │
-│  │ Project         Mon   Tue   Wed   Thu   Fri   Total  │    │
-│  │ ─────────────────────────────────────────────────────  │    │
-│  │ Project Alpha    4.0   3.0   4.0   2.0   4.0   17.0  │    │
-│  │ Project Beta     4.0   4.5   4.0   4.0   4.0   20.5  │    │
-│  │ (no project)     —     —     —     2.0   —      2.0  │    │
-│  │ ─────────────────────────────────────────────────────  │    │
-│  │ Day total        8.0   7.5   8.0   8.0   8.0   39.5  │    │
-│  └──────────────────────────────────────────────────────┘    │
+│  ┌──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┐   │
+│  │ GMT+2│ Mon  │ Tue  │ Wed  │ Thu  │ Fri  │ Sat  │ Sun  │   │
+│  │      │  24  │  25  │  26  │  27  │  28  │  29  │  30  │   │
+│  │      │ 8h 0m│7h 30m│ 8h 0m│ 8h 0m│ 8h 0m│  —   │  —   │   │
+│  ├──────┼──────┼──────┼──────┼──────┼──────┼──────┼──────┤   │
+│  │ 09:00│ ┌──┐ │      │ ┌──┐ │      │      │      │      │   │
+│  │ 10:00│ │Al│ │ ┌──┐ │ │Al│ │ ┌──┐ │ ┌──┐ │      │      │   │
+│  │ 11:00│ └──┘ │ │Be│ │ └──┘ │ │Al│ │ │Be│ │      │      │   │
+│  │ 12:00│      │ └──┘ │      │ └──┘ │ └──┘ │      │      │   │
+│  │  …   │      │      │──now→│      │      │      │      │   │
+│  ├──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┤   │
+│  │ Duration-only:  [Mon · Alpha · 1h 0m]                │   │
+│  └──────────────────────────────────────────────────────┘   │
 │                                                               │
-│  Sat: —   Sun: —                                             │
+│  Total this week  39h 30m                                    │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-- Rows: projects with logged time that week. "(no project)" row for entries without a project.
-- Columns: weekdays (Mon–Fri). Weekend totals shown separately if non-zero.
-- Bottom row: day totals. Right column: project totals for the week.
-- Click a cell → switches to daily view for that date (optionally filtered to that project).
-- `<` and `>` arrows navigate weeks. Date range label shown.
+- An **hour gutter** on the left plus **seven day columns**, ordered from the caller's `firstDayOfWeek` (see FR-32). Weekend columns (Sat/Sun) render as regular available days — not muted (FR-33). The gutter label shows the viewer's timezone as a GMT offset (e.g. "GMT+2", or "UTC" when the offset is 0; see FR-34–36).
+- Each day-column header shows the weekday, the date, and that **day's total** in `Xh Ym` format. Today's header is tinted.
+- **Timed entries** (both start/end set) render as **positioned blocks** on the hour grid — top and height derived from the entry's start/end times, formatted and positioned in the viewer's account timezone (FR-34–36). Overlapping entries pack side-by-side into lanes. Each block is colour-coded per project, always paired with the project name in text.
+- **Duration-only entries** (no start/end) render as chips in a **strip below the grid**, each labelled with its weekday.
+- A **now-line** marks the current time in today's column.
+- Clicking a block (or a duration-only chip) → switches to daily view for that date.
+- `<` and `>` arrows navigate weeks. Date range label shown. The **week total** appears below the grid.
 
 ### Time Tracking Page — Daily View
 
@@ -211,30 +229,30 @@ Members log time spent on projects by starting a **running timer** or adding **m
 ┌──────────────────────────────────────────────────────────────┐
 │  [● Daily ]  [ Weekly ]  [ Monthly ]  [< Tue, Aug 25, 2026 >]│
 │                                                               │
-│  ┌──────────────────────────────────────────────────────┐    │
-│  │  09:00 – 11:30  (2h 30m)                              │    │
-│  │  Project Alpha · API development                       │    │
-│  │  "Working on endpoints"                    [ ✎ ] [ 🗑 ] │    │
-│  ├──────────────────────────────────────────────────────┤    │
-│  │  12:00 – 15:00  (3h 0m)                               │    │
-│  │  Project Beta · Frontend work                          │    │
-│  │  "Building calendar component"             [ ✎ ] [ 🗑 ] │    │
-│  ├──────────────────────────────────────────────────────┤    │
-│  │  15:30 – 17:30  (2h 0m)                               │    │
-│  │  Project Alpha · Code review                           │    │
-│  │  "Reviewing PR #42"                        [ ✎ ] [ 🗑 ] │    │
-│  ├──────────────────────────────────────────────────────┤    │
-│  │  (no time)  1h 0m                                      │    │
-│  │  (no project) · Team meeting               [ ✎ ] [ 🗑 ] │    │
+│  ┌──────┬───────────────────────────────────────────────┐    │
+│  │ GMT+2│ Tue, Aug 25, 2026 · Today    Total logged 8h30m│    │
+│  ├──────┼───────────────────────────────────────────────┤    │
+│  │ 09:00│ ┌───────────────────────────────────┐         │    │
+│  │ 10:00│ │ 09:00 – 11:30 · 2h 30m       [✎][🗑]│         │    │
+│  │ 11:00│ │ Project Alpha · API development    │         │    │
+│  │      │ └───────────────────────────────────┘         │    │
+│  │ 12:00│ ┌───────────────────────────────────┐         │    │
+│  │ 13:00│ │ 12:00 – 15:00 · 3h 0m        [✎][🗑]│         │    │
+│  │ 14:00│ │ Project Beta · Frontend work       │         │    │
+│  │      │ └───────────────────────────────────┘         │    │
+│  │  …   │ ─────────── now ──────────────────            │    │
+│  ├──────┴───────────────────────────────────────────────┤    │
+│  │ Duration-only (no time set):  [(no project) · Team… ]│    │
 │  └──────────────────────────────────────────────────────┘    │
 │                                                               │
-│  Total: 8h 30m                                                │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-- Chronological list sorted by `startTime` ascending. Duration-only entries (no time) appear at the bottom.
-- Each entry shows: time range (or "(no time)"), duration in `Xh Ym` format, project name (or "(no project)"), task, description (truncated with ellipsis if long).
-- Edit and delete buttons: visible on own entries for all roles, and on any entry for admin/manager.
+- A single wide day column over an **hour gutter**. Timed entries render as **positioned blocks** whose top/height derive from their start/end times, formatted and positioned in the viewer's account timezone (FR-34–36); overlapping entries pack side-by-side into lanes. The gutter label shows that timezone as a GMT offset.
+- Each block shows: time range, duration in `Xh Ym`, project name (or "(no project)") · task, and a truncated description line. Blocks are colour-coded per project, always paired with the project name in text.
+- **Duration-only entries** (no start/end) render as chips in a **strip below the grid**, under a "Duration-only (no time set)" label.
+- A **now-line** marks the current time when viewing today. The **day total** appears in the column header.
+- Edit and delete controls: revealed on a block (own entries for all roles, any entry for admin/manager). Clicking a block opens its editor.
 - Day navigation: `<` and `>` arrows.
 
 ### Timer Panel (on TT page) — idle state
@@ -708,7 +726,7 @@ Server-side validation: all rules enforced regardless of UI state.
 ### Time Tracking Page Layout
 
 - Route: `/org/{orgId}/time-tracking`.
-- Sidebar section: **TIME**, row: **Time Tracking**. Visible to `admin`, `manager`, `user`.
+- Sidebar section: **TIME**, row: **Time Tracking**. Visible to `admin`, `manager`, `user`. The **TIME** group **leads the sidebar nav** (above PEOPLE and PROJECTS), as the daily-driver surface; it stays gated on `view-time-tracking`, so a `viewer` never sees it and lands on PEOPLE first.
 - Page header: "Time Tracking" (no action button — timer and add entry are in the content area).
 - Below the header: member filter (admin/manager only) and period navigation on the same row.
 - View toggle: Daily / Weekly / Monthly tabs.
@@ -731,27 +749,27 @@ Server-side validation: all rules enforced regardless of UI state.
 
 ### Monthly View Details
 
-- Standard calendar grid: 7 columns (Mon–Sun), rows for weeks.
-- Each cell: day number (top-left), total hours (center, one decimal, e.g. "8.0"). Empty days show "—".
-- Today's cell has a distinct visual indicator (dot or border).
-- Weekend columns have a muted background.
+- Standard calendar grid: 7 columns, rows for weeks. The **first column and weekday-header order follow the caller's `firstDayOfWeek`** (Mon–Sun by default, or Sun–Sat when set to "Sunday"); see FR-32.
+- Each cell: day number (top-left), total hours (bottom-right, in `Xh Ym` format, e.g. "8h 0m"). Empty days show "—".
+- Today's cell has a distinct visual indicator (outline). Cell backgrounds use a heat tint proportional to logged hours; the numeric hours always accompany the tint (colour is never the sole signal).
+- Weekend (Sat/Sun) cells are **not** muted — they render as regular available days (some members work weekends).
 - Month total displayed below the grid.
 - Clicking a day cell switches to daily view for that date.
 
 ### Weekly View Details
 
-- Table with projects as rows and days (Mon–Sun) as columns.
-- Hours displayed per cell (one decimal). Empty cells show "—".
-- Bottom row: day totals. Rightmost column: project totals. Bottom-right: week total.
-- "(no project)" row for entries without a project assignment.
-- Clicking a cell switches to daily view for that day.
+- An **Outlook-style time grid** over the week's seven days — an hour gutter plus one column per day. The **column order follows the caller's `firstDayOfWeek`** (see FR-32).
+- **Timed entries** render as positioned blocks (top/height from start/end times, formatted and positioned in the viewer's account timezone — see §Timezone / FR-34–36); overlapping entries pack side-by-side. **Duration-only entries** render as chips in a strip below the grid.
+- Blocks are **colour-coded per project**, with the project name always shown as text alongside the colour (accessibility — colour is never the sole signal).
+- Each day-column header carries that day's total (`Xh Ym`); the week total appears below the grid. The daily, weekly, and monthly totals all use the same `Xh Ym` format. A now-line marks the current time in today's column.
+- Clicking a block (or duration-only chip) switches to daily view for that day.
 
 ### Daily View Details
 
-- Entries sorted by `startTime` ascending. Duration-only entries at the bottom.
-- Each entry card shows: time range or "(no time)", duration (`Xh Ym`), project name or "(no project)", task, description (first line, truncated).
-- Edit (pencil) and delete (trash) icons on each entry. For `user`: visible only on own entries. For admin/manager: visible on all entries.
-- Day total displayed at the bottom.
+- An **Outlook-style time grid** for one day — an hour gutter plus a single wide day column. Timed entries render as positioned blocks; **duration-only** entries render as chips in a strip below the grid.
+- Each block shows: time range, duration (`Xh Ym`), project name or "(no project)" · task, description (first line, truncated). Blocks are **colour-coded per project** with the project name always shown as text (colour is never the sole signal).
+- Edit (pencil) and delete (trash) controls revealed on each block. For `user`: only on own entries. For admin/manager: on all entries. Clicking a block opens its editor.
+- Day total shown in the column header. A now-line marks the current time when viewing today.
 
 ### Timer Panel
 
@@ -772,7 +790,7 @@ Server-side validation: all rules enforced regardless of UI state.
 | State | Behavior |
 |---|---|
 | **Loading** | Skeleton matching the active view layout. |
-| **Empty (no entries)** | "No time entries for this period." / "No time logged today. Start a timer or add an entry." (for today). |
+| **Empty (no entries)** | The active view still renders — the monthly calendar / weekly grid / daily grid is shown with empty days and "0h 0m" totals (not a full-view replacement). A modest `tt-empty-state` note appears beneath it: "No time entries for this period." (or, on today's daily view, "No time logged today. Start a timer or add an entry."). |
 | **Default** | Active view with entries. |
 | **Timer running** | Timer panel in running state. Topbar indicator visible. |
 | **Saving (modal/timer)** | Save/Start/Stop button disabled with loading indicator. |
@@ -853,8 +871,7 @@ Breakpoints follow the app shell (spec 00). The Time Tracking page has three lay
 
 **Weekly view:**
 - `tt-weekly-grid`
-- `tt-weekly-cell-{projectId}-{YYYY-MM-DD}` (use `none` for no-project row)
-- `tt-weekly-project-total-{projectId}`
+- `tt-weekly-entry-{id}` (on each entry block and duration-only chip)
 - `tt-weekly-day-total-{YYYY-MM-DD}`
 - `tt-week-total`
 
@@ -928,7 +945,7 @@ The API is the security boundary. The UI hides what a caller cannot do; the serv
 15. All text output is rendered as React text nodes — no `dangerouslySetInnerHTML`. Stored XSS via task/description is not possible on the web client.
 16. `projectId` in create/edit is validated: exists, belongs to the same org, is `active`. Exception: when editing an existing entry, the entry's existing archived project is allowed to remain (see FR-7). Attempting to **switch to** an archived project is rejected.
 17. `date` is parsed strictly as `YYYY-MM-DD`. Out-of-range or malformed values are rejected before hitting the DB.
-18. `startTime` / `endTime` are parsed as `HH:MM` within the entry's `date`. The server converts to full timestamps using the member's account timezone (falls back to UTC).
+18. `startTime` / `endTime` are parsed as `HH:MM` wall-clock within the entry's `date` and converted to absolute UTC instants on save (`zonedWallClockToUtc`), interpreting the wall-clock in the creating caller's `Account.timezone` (spec 06), falling back to `'UTC'` when unset. Stored values are always absolute UTC instants; display re-projects them into the viewer's effective timezone (see §Timezone / FR-34–36).
 19. Query enums (`?status=...`, view mode) are whitelisted server-side.
 
 ### Range query bounding
@@ -1384,16 +1401,17 @@ The API is the security boundary. The UI hides what a caller cannot do; the serv
   6. Verify switches to daily view for that date. Verify entries shown.
 - **Selectors:** `tt-view-monthly`, `tt-calendar-grid`, `tt-calendar-cell-{date}`, `tt-calendar-hours-{date}`, `tt-period-prev`, `tt-period-next`, `tt-period-label`, `tt-view-daily`, `tt-daily-list`.
 
-### TC-12-E2E-04: Weekly view — project rows with hours
+### TC-12-E2E-04: Weekly view — time grid with entry blocks
 
 - **Level:** E2E
-- **Preconditions:** logged in as user with entries on multiple projects this week.
+- **Preconditions:** logged in as user with timed entries on multiple projects this week.
 - **Steps:**
   1. Switch to weekly view.
-  2. Verify table shows project rows with hours per day.
-  3. Verify day totals in bottom row. Verify project totals in right column.
-  4. Verify week total shown.
-- **Selectors:** `tt-view-weekly`, `tt-weekly-grid`, `tt-weekly-day-total-{date}`, `tt-weekly-project-total-{projectId}`, `tt-week-total`.
+  2. Verify the time grid renders (`tt-weekly-grid`) with the week's day columns.
+  3. Verify each timed entry renders as a block (`tt-weekly-entry-{id}`).
+  4. Verify per-day totals in the day-column headers (`tt-weekly-day-total-{date}`).
+  5. Verify the week total is shown (`tt-week-total`).
+- **Selectors:** `tt-view-weekly`, `tt-weekly-grid`, `tt-weekly-entry-{id}`, `tt-weekly-day-total-{date}`, `tt-week-total`.
 
 ### TC-12-E2E-05: Daily view — edit and delete entries
 

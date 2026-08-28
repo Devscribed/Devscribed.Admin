@@ -1120,6 +1120,148 @@ export async function reviewVacationRequestViaApi(
 }
 
 /**
+ * Creates a project straight through the API — a spec 12 precondition (the timer/entry
+ * project selectors, weekly-view project rows). Requires `request`'s cookie jar to be
+ * authenticated as an admin/manager of the org. Returns the new project's id and name.
+ */
+export async function createProjectViaApi(
+  request: APIRequestContext,
+  organizationId: string,
+  name: string,
+): Promise<{ id: string; name: string }> {
+  const response = await request.post(`${API}/api/organizations/${organizationId}/projects`, {
+    data: { name },
+  });
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: could not create project "${name}" (${response.status()})`);
+  }
+  const body = await response.json();
+  return { id: body.id as string, name: body.name as string };
+}
+
+/**
+ * Assigns members to a project straight through the API — a spec 12 precondition so a
+ * `user` sees the project in the assignment-filtered selectors (spec 11 ProjectMember).
+ * Requires an admin/manager cookie jar.
+ */
+export async function assignProjectMembersViaApi(
+  request: APIRequestContext,
+  organizationId: string,
+  projectId: string,
+  membershipIds: string[],
+): Promise<void> {
+  const response = await request.post(
+    `${API}/api/organizations/${organizationId}/projects/${projectId}/members`,
+    { data: { membershipIds } },
+  );
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not assign members to project ${projectId} (${response.status()})`,
+    );
+  }
+}
+
+export interface TimeEntryInput {
+  /** Target member (admin/manager creating for another). Omitted = caller's own membership. */
+  membershipId?: string;
+  projectId?: string | null;
+  task?: string;
+  description?: string;
+  date: string;
+  startTime?: string;
+  endTime?: string;
+  durationMinutes?: number;
+}
+
+export interface CreatedTimeEntry {
+  id: string;
+  membershipId: string;
+  projectId: string | null;
+  date: string;
+  durationMinutes: number;
+}
+
+/**
+ * Creates a time entry straight through the API — the spec 12 fixture workhorse for
+ * "a user with entries this period". Creates for the caller's own membership unless
+ * `membershipId` is supplied (admin/manager creating on another's behalf, TC-12-INT-19).
+ * Returns the created entry so a test can target its row/edit/delete testids by id.
+ */
+export async function createTimeEntryViaApi(
+  request: APIRequestContext,
+  organizationId: string,
+  input: TimeEntryInput,
+): Promise<CreatedTimeEntry> {
+  const response = await request.post(
+    `${API}/api/organizations/${organizationId}/time-entries`,
+    { data: input },
+  );
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not create time entry on ${input.date} (${response.status()})`,
+    );
+  }
+  return (await response.json()) as CreatedTimeEntry;
+}
+
+/**
+ * Starts the caller's running timer straight through the API — a spec 12 precondition
+ * (e.g. a timer already running before the page loads). Requires `request`'s cookie jar
+ * to be authenticated as the member; the server owns `startedAt`.
+ */
+export async function startTimerViaApi(
+  request: APIRequestContext,
+  organizationId: string,
+  body: { projectId?: string | null; task?: string; description?: string } = {},
+): Promise<void> {
+  const response = await request.post(
+    `${API}/api/organizations/${organizationId}/timer/start`,
+    { data: body },
+  );
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: could not start timer (${response.status()})`);
+  }
+}
+
+/**
+ * Updates the caller's own account settings straight through the API — a spec 06/12
+ * precondition (e.g. flipping `firstDayOfWeek` to "Sunday" so the calendar re-orders).
+ * `PUT /api/account/settings` validates the WHOLE settings object, so this first reads the
+ * current settings and merges the patch over them (mapping the nullable phone fields to
+ * empty strings). Requires `request`'s cookie jar to be authenticated as that account.
+ */
+export async function updateAccountSettingsViaApi(
+  request: APIRequestContext,
+  patch: Partial<{
+    firstName: string;
+    lastName: string;
+    phoneCountryCode: string;
+    phoneNumber: string;
+    timezone: string;
+    firstDayOfWeek: string;
+  }>,
+): Promise<void> {
+  const current = await request.get(`${API}/api/account/settings`);
+  if (!current.ok()) {
+    throw new Error(`Precondition failed: could not read account settings (${current.status()})`);
+  }
+  const s = await current.json();
+  const body = {
+    firstName: s.firstName,
+    lastName: s.lastName,
+    phoneCountryCode: s.phoneCountryCode ?? '',
+    phoneNumber: s.phoneNumber ?? '',
+    timezone: s.timezone ?? '',
+    firstDayOfWeek: s.firstDayOfWeek,
+    ...patch,
+  };
+  const response = await request.put(`${API}/api/account/settings`, { data: body });
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: could not update account settings (${response.status()})`);
+  }
+}
+
+/**
  * Soft-deletes a member straight through the API — a precondition (e.g. for
  * TC-02-E2E-04's "removed member tries to log in"), not the thing under test.
  * Requires `request`'s cookie jar to be authenticated as an admin/manager.

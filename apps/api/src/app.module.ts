@@ -26,10 +26,14 @@ import { MemberProfileController } from './members/member-profile.controller';
 import { MemberProfileService } from './members/member-profile.service';
 import { MembersController } from './members/members.controller';
 import { MembersService } from './members/members.service';
+import { ProjectsController } from './projects/projects.controller';
+import { ProjectsService } from './projects/projects.service';
 import { RequestsController } from './requests/requests.controller';
 import { RequestsService } from './requests/requests.service';
 import { SignupController } from './signup/signup.controller';
 import { SignupService } from './signup/signup.service';
+import { TimeTrackingController } from './time-tracking/time-tracking.controller';
+import { TimeTrackingService } from './time-tracking/time-tracking.service';
 import { TestFixturesController } from './test/test-fixtures.controller';
 import { TestEnvelopeExpiryController } from './test-support/envelope-expiry.controller';
 import { VacationController } from './vacation/vacation.controller';
@@ -84,6 +88,8 @@ import { VacationService } from './vacation/vacation.service';
     AccountController,
     VacationController,
     RequestsController,
+    ProjectsController,
+    TimeTrackingController,
     AccrualController,
     // Spec 03's contract details. Flat here rather than in `DocumentsModule`: the
     // member profile is a member-management resource that the documents area reads,
@@ -112,6 +118,8 @@ import { VacationService } from './vacation/vacation.service';
     VacationService,
     VacationRequestsService,
     RequestsService,
+    ProjectsService,
+    TimeTrackingService,
     AccrualService,
   ],
 })

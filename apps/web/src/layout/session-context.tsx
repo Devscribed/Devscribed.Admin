@@ -8,6 +8,9 @@ export interface SessionAccount {
   firstName: string;
   lastName: string;
   timezone: string | null;
+  /** Spec 06 preference: "Monday" (default) or "Sunday" — the week start for the
+   * spec-12 calendar/weekly views. */
+  firstDayOfWeek: string;
 }
 
 export interface SessionOrganization {

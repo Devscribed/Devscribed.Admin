@@ -4,7 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { can, hasCapability, type Role } from '@devscribed/validation';
 import { NavItem, SectionLabel } from '@/ds';
 import { DocumentsIcon } from '@/documents/icons';
-import { InboxIcon, PeopleIcon } from './icons';
+import { ClockIcon, FolderIcon, InboxIcon, PeopleIcon } from './icons';
 import { useSession, type SessionFeatures } from './session-context';
 import { usePendingRequests } from './requests-badge-context';
 
@@ -26,13 +26,19 @@ interface NavGroup {
 /**
  * Only destinations that exist today. The Meridian template carries seven groups from
  * the wider product (Timesheets, Reports, Time off…); shipping them as dead links
- * would promise screens no spec has yet defined. Entries arrive as their specs land.
+ * would promise screens no spec has yet defined. Groups arrive as their specs land — a
+ * group with no visible rows is dropped entirely (both its label and its rows), so
+ * `user`/`viewer` never see an empty PROJECTS or DOCUMENTS heading.
  *
  * Every row here is gated by what the caller may actually do, and each one is *omitted*
  * rather than rendered-then-hidden — a control the caller cannot use is never drawn:
  *
+ *  - **Time Tracking** (spec 12) needs `view-time-tracking` and leads the menu — it is the
+ *    daily-driver surface, so it sits above PEOPLE. Omitted for `viewer`, who therefore
+ *    sees PEOPLE first.
  *  - **Requests** (spec 10) needs `view-requests`, so `user` and `viewer` never see it.
  *    Its badge carries the shared pending count and disappears at 0.
+ *  - **Projects** (spec 11) needs `manage-projects` (admin/manager).
  *  - **Documents** and **Templates** are separately gated because the two capabilities
  *    are separately granted: spec 02 gives a `manager` the full envelope set while spec
  *    01 leaves them read-only on templates. The group is assembled from whichever rows
@@ -46,6 +52,22 @@ function navigation(
   pendingCount: number,
   features: SessionFeatures,
 ): NavGroup[] {
+  const groups: NavGroup[] = [];
+
+  if (can(role as Role, 'view-time-tracking')) {
+    groups.push({
+      label: 'Time',
+      entries: [
+        {
+          testId: 'nav-time-tracking',
+          label: 'Time Tracking',
+          href: `/org/${orgId}/time-tracking`,
+          icon: <ClockIcon />,
+        },
+      ],
+    });
+  }
+
   const people: NavEntry[] = [
     {
       testId: 'nav-members',
@@ -66,7 +88,21 @@ function navigation(
     });
   }
 
-  const groups: NavGroup[] = [{ label: 'People', entries: people }];
+  groups.push({ label: 'People', entries: people });
+
+  if (can(role as Role, 'manage-projects')) {
+    groups.push({
+      label: 'Projects',
+      entries: [
+        {
+          testId: 'nav-projects',
+          label: 'Projects',
+          href: `/org/${orgId}/projects`,
+          icon: <FolderIcon />,
+        },
+      ],
+    });
+  }
 
   const documents: NavEntry[] = [];
 
@@ -101,7 +137,7 @@ function navigation(
     groups.push({ label: 'Documents', entries: documents });
   }
 
-  return groups;
+  return groups.filter((group) => group.entries.length > 0);
 }
 
 export function Sidebar({ orgId }: { orgId: string }) {
