@@ -55,6 +55,48 @@ Run what you can run: `npm run test:unit`, `npm run test:int`, and a type check.
 work to the next stage that you have not tried yourself — a stage that reports success it did
 not verify wastes an entire downstream cycle.
 
+**Then commit, on the working branch, in one commit.** Not optional: the reviewer reads
+`git diff <baseRef>...HEAD`, so work left uncommitted makes that diff empty and the review
+silently falls back to the whole worktree — every unrelated edit on the machine included. A
+verdict about the wrong set of files is worse than no verdict.
+
+On a retry, amend rather than stack: one run, one commit, so the diff the reviewer reads is
+always the finished state and never a history of attempts. Never `git push` — the pipeline
+stops at a green branch and a person opens the PR.
+
+## Your verdict
+
+Write one every time, to the path the prompt names. You are not judging your own work — the
+gates that follow do that — so the normal verdict is a bare pass:
+
+```json
+{ "status": "pass", "findings": [] }
+```
+
+Two other cases exist:
+
+- **`"status": "error"`** when the environment stopped you: a container down, a port bound by
+  something else, a missing dependency. This is retried without spending a code attempt, so
+  classify honestly — reporting a broken environment as a pass sends a phantom diff to review.
+- **A finding with `"target": "spec"`** when a requirement cannot be implemented as written:
+  two requirements contradict each other, or one has two readings that produce different code.
+  You are the first party to read every requirement closely enough to hit this, and it halts
+  the run for a person rather than making you guess. It needs a witness, like any blocker:
+
+```json
+{ "status": "blocked",
+  "findings": [ { "id": "I1", "target": "spec", "severity": "blocker",
+    "rule": "spec/contradiction", "file": "specs/…/03-user-invitation.md", "symbol": "req-12",
+    "claim": "the shared CTA rule and TC-03-E2E-04 require opposite behaviour",
+    "witness": { "kind": "test", "test": "TC-03-E2E-04",
+      "detail": "CLAUDE.md says a submit button is never disabled for validation; TC-03-E2E-04 asserts the invite submit is disabled until the form is valid. No implementation satisfies both.",
+      "source": "CLAUDE.md" } } ] }
+```
+
+`spec` is the only address you may use. You may not address `code` — that is the gates' job —
+and you may not address `handoff`; if the plan is wrong, say so in your stage report and let
+the reviewer route it.
+
 ## Contesting a finding
 
 You may reject a finding **once**, and only with a counter-witness — a reason another party

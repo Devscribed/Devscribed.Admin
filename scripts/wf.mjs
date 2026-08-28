@@ -58,6 +58,10 @@ const STAGES = ['preflight', 'pre_implement', 'implement', 'static_gate', 'revie
 const AUTHORITY = {
   preflight:     ['self'],
   pre_implement: ['spec', 'self'],
+  /* The implementer normally passes — the gates that follow judge its work, not it. But it
+     is the first party to read every requirement closely enough to hit a contradiction, and
+     a run that makes it implement something impossible anyway is a run nobody wanted. */
+  implement:     ['spec'],
   static_gate:   ['code', 'self'],
   review:        ['code', 'handoff', 'spec'],
   qa:            ['code', 'spec'],
@@ -384,6 +388,21 @@ function cmdPreflight() {
     'apps/api/.env exists (untracked — a fresh worktree does not get one)');
 
   add('node-modules-present', existsSync(join(ROOT, 'node_modules')), 'dependencies installed');
+
+  /* Ports 3000 and 4000 are fixed in e2e/playwright.config.ts. Anything already listening on
+     them is a server this run did not start, and with CI=1 Playwright refuses to attach —
+     so QA cannot run at all. Catching it here costs a millisecond; catching it in QA costs
+     the unit and integration suites first, and then a stage that reports nothing about the
+     code. This is the one preflight check that a long run should repeat before QA. */
+  const held = [3000, 4000].filter((port) => {
+    try {
+      return execFileSync('netstat', ['-ano'], { encoding: 'utf8' })
+        .split('\n').some((l) => /LISTENING/.test(l) && new RegExp(`[:.]${port}\\s`).test(l));
+    } catch { return false; }
+  });
+  add('e2e-ports-free', held.length === 0,
+    held.length ? `${held.join(' and ')} already listening — stop that server or QA cannot run`
+      : '3000 and 4000 are free for the e2e suite');
   add('prisma-client-generated', existsSync(join(ROOT, 'node_modules/.prisma/client')),
     'prisma client generated (postinstall runs it from apps/api)');
 
@@ -514,22 +533,175 @@ function cmdStatus(args) {
   if (run.contested.length) process.stdout.write(`contested ${run.contested.map((c) => c.key).join(', ')}\n`);
   if (run.notes.length) process.stdout.write(`notes   ${run.notes.length} non-blocking finding(s) for the human\n`);
   if (run.halt) process.stdout.write(`\nhalt    ${run.halt.reason}\n        ${run.halt.detail}\n`);
+
+  /* "Where is it now" is the question status is actually asked, and a stage name does not
+     answer it while an agent has been working for four minutes. Show the last few calls. */
+  const events = readEvents(run);
+  const agentEvents = events.filter((e) => e.agentType);
+  const recent = (agentEvents.length ? agentEvents : events).slice(-5);
+  if (recent.length) {
+    const last = Date.parse(events[events.length - 1].ts);
+    const idle = Math.round((Date.now() - last) / 1000);
+    process.stdout.write(`\nlast activity (${idle}s ago)\n`);
+    for (const e of recent) process.stdout.write(`  ${formatEvent(e)}\n`);
+  }
+  const tools = agentEvents.filter((e) => e.event === 'tool');
+  if (tools.length) {
+    const ms = tools.reduce((a, e) => a + (e.durationMs ?? 0), 0);
+    process.stdout.write(`\n${tools.length} agent tool call(s), ${(ms / 1000).toFixed(0)}s of tool time\n`);
+  }
+}
+
+/** One readable line per event. The raw record is always in events.jsonl; this is the view. */
+function formatEvent(e) {
+  const time = e.ts.slice(11, 19);
+  const who = (e.agentType ?? (e.agentId ? 'agent' : 'main')).slice(0, 15).padEnd(15);
+
+  if (e.event !== 'tool') {
+    const detail = e.reason ? `${e.reason} — ${e.detail ?? ''}`
+      : e.to ? `→ ${e.to}${e.why ? ` (${e.why})` : ''}`
+      : e.name ?? e.key ?? e.spec ?? '';
+    return `${time}  ${who} ${e.event.padEnd(12)} ${String(detail).slice(0, 90)}`;
+  }
+
+  const i = e.input ?? {};
+  const what = i.redacted ? '[redacted]'
+    : i.command ?? i.file_path ?? i.path ?? i.pattern ?? (i.text ? i.text.slice(0, 60) : '');
+  const ms = e.durationMs != null ? `${String(e.durationMs).padStart(6)}ms` : '         ';
+  const mark = e.ok === false ? ' FAILED' : '';
+  return `${time}  ${who} ${String(e.tool ?? '').padEnd(12)}${ms}${mark}  ${String(what).replace(/\s+/g, ' ').slice(0, 74)}`;
+}
+
+function readEvents(run) {
+  const p = join(runDir(run.runId), 'events.jsonl');
+  if (!existsSync(p)) return [];
+  return readFileSync(p, 'utf8').trim().split('\n').filter(Boolean)
+    .map((l) => { try { return JSON.parse(l); } catch { return null; } })
+    .filter(Boolean);
 }
 
 function cmdLog(args) {
   const run = loadRun();
-  const p = join(runDir(run.runId), 'events.jsonl');
-  if (!existsSync(p)) return;
-  const lines = readFileSync(p, 'utf8').trim().split('\n').filter(Boolean);
-  const tail = args.tail ? lines.slice(-Number(args.tail)) : lines;
-  for (const l of tail) {
-    const e = JSON.parse(l);
-    const rest = Object.entries(e)
-      .filter(([k]) => !['ts', 'runId', 'event'].includes(k))
-      .map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : v}`)
-      .join(' ');
-    process.stdout.write(`${e.ts.slice(11, 19)}  ${String(e.event).padEnd(14)} ${rest}\n`);
+  let events = readEvents(run);
+  if (args.agents) events = events.filter((e) => e.agentType);
+  if (args.stage) events = events.filter((e) => e.stage === args.stage);
+  const tail = args.tail ? events.slice(-Number(args.tail)) : events;
+
+  for (const e of tail) {
+    process.stdout.write(args.full ? `${JSON.stringify(e)}\n` : `${formatEvent(e)}\n`);
   }
+  if (!args.full && tail.length) {
+    process.stdout.write(`\n${tail.length} of ${events.length} event(s). --full for raw, --agents to drop this session's own calls.\n`);
+  }
+}
+
+/**
+ * Emit one line per meaningful change, for a monitor to consume. Not a log tail: a stage
+ * that starts, an attempt that is spent, a verdict, a halt. Silence is reported too — a run
+ * that stopped making progress looks exactly like a run that is thinking, and only the clock
+ * tells them apart.
+ */
+function cmdWatch(args) {
+  const every = Number(args.interval ?? 15) * 1000;
+  const stallAfter = Number(args.stall ?? 8) * 60_000;
+  let prev = null;
+  let lastActivity = Date.now();
+  let stallReported = 0;
+
+  const t = () => new Date().toTimeString().slice(0, 8);
+  const emit = (s) => process.stdout.write(`${s}\n`);
+
+  const tick = () => {
+    let run;
+    try { run = loadRun(); } catch { return; } // mid-write; try again next tick
+
+    const events = readEvents(run);
+    const now = { status: run.status, halt: run.halt?.reason ?? null, budget: { ...run.budget } };
+    for (const s of STAGES) now[s] = `${run.stages[s].status}/${run.stages[s].attempts}`;
+
+    if (events.length !== (prev?.events ?? 0)) { lastActivity = Date.now(); stallReported = 0; }
+    now.events = events.length;
+
+    if (prev) {
+      const budgetMoved = ['codeAttempts', 'infra', 'handoffReplans']
+        .some((k) => now.budget[k] !== prev.budget[k]);
+
+      for (const s of STAGES) {
+        if (now[s] === prev[s]) continue;
+        const [status, attempts] = now[s].split('/');
+        const spent = attempts !== prev[s].split('/')[1];
+        emit(`${t()} ${s} → ${status}${spent ? ` (attempt ${attempts})` : ''}`);
+
+        /* The runaway signature: the same stage starts again with nothing else in between
+           and no budget spent. Every legitimate repeat costs something — a code attempt, an
+           infra retry, a replan — so a free repeat means the driver and the router disagree
+           about what happened, and the loop will keep paying for a full agent each lap. */
+        if (spent && s === prev.lastStarted && !budgetMoved) {
+          now.freeRestarts = (prev.freeRestarts ?? 0) + 1;
+          /* One free restart is ordinary: an operator stopped a stage and resumed, or a
+             process was killed before it could report. The runaway does it every lap, so the
+             warning waits for the second — a monitor that cries wolf gets read as noise, and
+             then it is worth nothing on the lap that matters. */
+          if (now.freeRestarts >= 2) {
+            emit(`${t()} LOOP? ${s} restarted ${now.freeRestarts}× with no budget spent — the router is not accepting the verdict`);
+          }
+        } else if (spent) {
+          now.freeRestarts = 0;
+        }
+        if (spent) now.lastStarted = s;
+      }
+      /* Both survive a tick in which nothing changed; without this the counter resets to zero
+         on the first quiet poll and the second free restart never looks like the second. */
+      now.lastStarted ??= prev.lastStarted;
+      now.freeRestarts ??= prev.freeRestarts ?? 0;
+      if (now.budget.codeAttempts !== prev.budget.codeAttempts) {
+        emit(`${t()} code attempt ${now.budget.codeAttempts} spent`);
+      }
+      if (now.budget.infra !== prev.budget.infra) {
+        emit(`${t()} environment failure ${now.budget.infra} — attempt not counted`);
+      }
+      if (now.budget.handoffReplans !== prev.budget.handoffReplans) {
+        emit(`${t()} plan rejected — replanning`);
+      }
+      const failures = events.filter((e) => e.ok === false).length;
+      if (failures > (prev.failures ?? 0)) {
+        const last = events.filter((e) => e.ok === false).pop();
+        emit(`${t()} tool failed: ${last.tool} — ${String(last.input?.command ?? last.input?.file_path ?? '').slice(0, 70)}`);
+      }
+      now.failures = failures;
+    } else {
+      now.failures = events.filter((e) => e.ok === false).length;
+      emit(`${t()} watching ${run.runId} — at ${run.status}`);
+    }
+
+    const idle = Date.now() - lastActivity;
+    if (idle > stallAfter && idle - stallReported > stallAfter) {
+      stallReported = idle;
+      /* An event is only written when a tool call *finishes*, so one long command — the e2e
+         suite is twelve minutes of it — looks exactly like a hang. The PreToolUse hook already
+         records start times in .pending.json, so distinguish the two rather than crying hang
+         at every slow command: a monitor that is wrong about this teaches you to ignore it. */
+      const inFlight = (() => {
+        try {
+          const m = JSON.parse(readFileSync(join(runDir(run.runId), '.pending.json'), 'utf8'));
+          const newest = Object.values(m).map(Date.parse).filter(Number.isFinite).sort().pop();
+          return newest && newest > lastActivity ? newest : null;
+        } catch { return null; }
+      })();
+
+      emit(inFlight
+        ? `${t()} ${run.status}: a tool call has been in flight ${Math.round((Date.now() - inFlight) / 60000)}m — working, not hung`
+        : `${t()} no activity for ${Math.round(idle / 60000)}m at ${run.status}`);
+    }
+
+    prev = now;
+
+    if (run.status === 'ready') { emit(`${t()} READY — ${run.branch} is green, open the PR yourself`); process.exit(0); }
+    if (run.status === 'halted') { emit(`${t()} HALTED ${run.halt.reason} — ${run.halt.detail}`); process.exit(2); }
+  };
+
+  tick();
+  setInterval(tick, every);
 }
 
 function cmdRelease() {
@@ -552,6 +724,7 @@ switch (cmd) {
   case 'abort':     cmdAbort(args); break;
   case 'status':    cmdStatus(args); break;
   case 'log':       cmdLog(args); break;
+  case 'watch':     cmdWatch(args); break;
   case 'release':   cmdRelease(); break;
   default:
     process.stdout.write(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('*/')[0].replace(/^\/\*\*?/, '').replace(/^ \* ?/gm, ''));

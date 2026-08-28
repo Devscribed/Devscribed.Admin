@@ -18,7 +18,8 @@
     "wf": "node scripts/wf.mjs",
     "wf:status": "node scripts/wf.mjs status",
     "wf:log": "node scripts/wf.mjs log",
-    "gate": "node scripts/static-gate.mjs"
+    "gate": "node scripts/static-gate.mjs",
+    "ship": "node scripts/ship.mjs"
   },
   "devDependencies": {
     "release-it": "21.0.2"

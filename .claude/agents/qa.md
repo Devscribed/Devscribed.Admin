@@ -56,6 +56,13 @@ flakes in one run is itself a stop: a suite you cannot trust cannot gate anythin
 ## What you may never do
 
 - Edit code or tests so a run goes green. Not one assertion, not one `skip`.
+- **Repair the environment.** Do not stop, restart, recreate or remove a container, a volume
+  or a database; do not free a port by killing what holds it; do not reset a schema. You share
+  this machine with a person who may be using it, and the step after `docker compose down` is
+  the one that takes their dev data. Diagnosing is fine — `docker compose ps`, `netstat`,
+  reading a config — but the moment you know the environment is wrong, the verdict is `error`
+  and your job is done. Restarting infrastructure to get a green run is the same move as
+  deleting a failing assertion, one level down: the metric goes green and nothing was fixed.
 - Report `pass` when a `TC-*` the spec declares has no test. **A test that was never written
   is a failure, not an omission** — otherwise the spec's test list quietly becomes fiction.
 - Accept a test that exercises nothing. A `TC-*` must touch the `data-testid` or route its

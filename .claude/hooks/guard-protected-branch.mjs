@@ -72,6 +72,31 @@ async function main() {
       }
     }
 
+    /* Shared infrastructure is not a stage's to repair. A gate that restarts the database to
+       get a green run is doing the same thing as one that deletes a failing assertion, one
+       level down — and the next step from `compose down` is `compose down -v`, which takes
+       the developer's dev data with it. The correct move for a broken environment is a
+       verdict of `error`, which is retried without spending an attempt. */
+    if (/^docker(?:-|\s+)compose\s+(?:down|stop|rm|restart|kill)\b/.test(part)
+        || /^docker\s+(?:rm|kill|stop)\b/.test(part)
+        || /^docker\s+volume\s+(?:rm|prune)\b/.test(part)
+        || /^docker\s+system\s+prune\b/.test(part)) {
+      deny(
+        'Refused: this stops or removes shared infrastructure other work depends on, and the '
+        + 'next step from here takes the dev database with it. A broken environment is not a '
+        + 'finding about the code — return `{"status": "error", "error": "<what is wrong>"}` '
+        + 'instead. That is retried without spending an attempt, and a person fixes the cause.',
+      );
+    }
+
+    if (/^(?:npx\s+)?prisma\s+migrate\s+reset\b/.test(part) || /^dropdb\b/.test(part)) {
+      deny(
+        'Refused: this drops a database. Tests truncate the tables they touch; nothing in the '
+        + 'pipeline needs a reset. If the schema is genuinely wrong, that is a verdict of '
+        + '`error` for a person to look at.',
+      );
+    }
+
     if (/^git\s+tag\b/.test(part) && /\bv\d/.test(part)) {
       deny(
         'Refused: a v* tag on main triggers the production deploy. Release tags come from '

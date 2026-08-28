@@ -1,100 +1,60 @@
 ---
 name: ship
-description: Run a specification or a bug report through the implementation pipeline — pre-implement, implement, static gate, code review, QA — with routing, retries and a run journal. Use when asked to implement a spec, ship a spec, run the pipeline, or fix a bug that already has an investigation report.
+description: Run a specification or a bug report through the implementation pipeline — pre-implement, implement, static gate, code review, QA. Use when asked to implement a spec, ship a spec, run the pipeline, or fix a bug that already has an investigation report.
 ---
 
-# Driving the pipeline
+# Shipping a spec
 
-You are the driver. You do not implement, review or test — you invoke the stage agents, hand
-each verdict to `scripts/wf.mjs`, and do what it tells you next. **Every routing decision
-belongs to `wf`, not to you.** If you find yourself deciding whether something deserves
-another attempt, stop: that decision is already written down, and overriding it is how a
-pipeline quietly becomes a conversation again.
-
-## Start
+One command. The orchestrator is `scripts/ship.mjs`, not you:
 
 ```bash
-git switch -c spec/<slug>                          # never run on main; main deploys itself
-node scripts/wf.mjs init --spec specs/<area>/NN-name.md
-node scripts/wf.mjs preflight
+node scripts/ship.mjs specs/<area>/NN-name.md --branch spec/<slug>
 ```
 
-`init` refuses to start on a protected branch or while another run holds the lock. Runs share
-ports, both databases, the mail sink and `.local-storage`, so they are serialised on purpose.
+It runs preflight, spawns each agent stage as a headless `claude -p --agent <name>`, runs the
+static gate, hands every verdict to `scripts/wf.mjs`, and follows whatever `wf` decides —
+until the run reaches `ready` or halts. The loop is mechanical, so a script runs it.
 
-If preflight fails, fix the environment and re-run it. Do not proceed past a failed preflight:
-every check it makes is something that, left broken, makes a later stage *lie* rather than
-fail — a missing `apps/api/.env` surfaces as a Prisma error, a bound port surfaces as a test
-result about somebody else's code.
-
-## The loop
-
-Read `node scripts/wf.mjs status` to learn the current stage, then run that stage:
-
-| Stage | What you do |
-|---|---|
-| `pre_implement` | Delegate to the `pre-implementer` agent. It writes `handoff.json`. |
-| `implement` | Delegate to the `implementer` agent with the handoff and, on a retry, the findings from the stage that sent it back. |
-| `static_gate` | `node scripts/static-gate.mjs --out .workflow/runs/<runId>/gate.json` |
-| `review` | Delegate to the `code-reviewer` agent. |
-| `qa` | Delegate to the `qa` agent. |
-
-After each stage, feed the verdict in and obey the answer:
+Useful variants:
 
 ```bash
-node scripts/wf.mjs stage <name> --start      # before delegating
-node scripts/wf.mjs verdict <name> --file <verdict.json>
+node scripts/ship.mjs <spec> --skip qa      # small change, you will run the suites yourself
+node scripts/ship.mjs --resume              # continue the active run
+node scripts/ship.mjs <spec> --dry-run      # print what each stage would run, change nothing
 ```
 
-`verdict` prints one of: `goto <stage>`, `retry-stage`, `ready`, or `halt`. That is the
-instruction. Follow it literally.
+## Your part
 
-## What the router will do, so you are not surprised
+**Do not drive the stages by hand and do not second-guess the router.** If you find yourself
+deciding whether something deserves another attempt, stop — that decision is written down in
+`wf`, and overriding it turns the pipeline back into a conversation.
 
-Every finding carries a **target** naming where the defect lives, and the target decides the
-route — not the severity, not how many times it has happened.
+What you do is the part either side of the run:
 
-- `code` → back to the implementer. The only address that retries.
-- `handoff` → back to the pre-implementer to replan, once per run.
-- `spec` → **halt.** The spec wins in this repository and changing it is deliberate. A spec
-  defect found here is the most valuable thing the pipeline produces; it is not a failure.
-- `self` → halt. A gate rule is wrong; fix the rule, not the code.
+- **Before** — make sure the spec exists and the branch is not `main`. `ship` refuses both, but
+  saying so first is faster than reading a refusal.
+- **After** — read the outcome and explain it.
 
-Three things also halt the run: a **contested** finding, a finding that **survived two
-attempts**, and an exhausted budget. In each case the answer is a person, not another attempt.
+## Reading the outcome
 
-A finding without a witness never blocks — it is demoted to a note and collected for the human
-at the end. You do not need to police this; `wf` does it when it ingests the verdict.
+`ready` means the branch is green. Summarise what changed, which `TC-*` now exist, and any
+notes the run collected. **Open no pull request and push nothing** unless asked: the pipeline
+stops at a green branch because `main` deploys itself.
 
-## When it halts
+A halt is not a crash, and most halts are the pipeline working:
 
-Do not restart the loop, do not "try once more", and do not edit the spec to make the run
-proceed. Write up what happened and hand it over:
+| Halt | What it means | What helps |
+|---|---|---|
+| `spec-defect`, `spec-ambiguity` | A requirement has two readings, or two rules contradict each other | Draft the wording that removes the ambiguity, with the `spec` skill. This is the most valuable thing the pipeline produces |
+| `contested`, `stuck-finding` | The implementer and a gate disagree about a fact | Show both sides — the finding's witness and the counter-witness — and let the person choose |
+| `gate-rule-defect` | A gate rule is wrong | Fix the rule in `scripts/static-gate.mjs`, not the code |
+| `infra-error` | The environment failed twice | Fix the environment and re-run; nothing about the code is known yet |
+| `budget-exhausted` | Five code attempts without converging | Read `wf:log`; if the detectors above never fired, the feedback was probably too vague to act on |
 
 ```bash
-node scripts/wf.mjs status
-node scripts/wf.mjs log --tail 40
+npm run wf:status
+npm run wf:log -- --tail 30 --agents
+node scripts/wf.mjs release        # drop the lock when the run is done or abandoned
 ```
 
-For a `spec-defect`, `spec-ambiguity` or `stuck-finding` halt, the useful handover is the
-finding's witness plus a proposed wording that removes the ambiguity. Use the `spec` skill to
-draft the change; a human decides whether to take it.
-
-## Finishing
-
-When `wf` says `ready`, the branch is green. Summarise for the human: what changed, which
-`TC-*` now exist, the notes collected along the way, and the run id. **Open no pull request
-and push nothing** unless asked — the pipeline stops at a green branch by design, because
-`main` deploys itself.
-
-Release the lock when the run is done or abandoned:
-
-```bash
-node scripts/wf.mjs release
-```
-
-## Turning stages off
-
-`.claude/ai-workflow.config.json` has an `enabled` flag per stage. Skipping `qa` on a
-one-line change is reasonable; skipping `static_gate` is not, because it is the only thing
-standing between the loop and a weakened test suite.
+The runbook is [docs/ai-workflow.md](../../../docs/ai-workflow.md).
