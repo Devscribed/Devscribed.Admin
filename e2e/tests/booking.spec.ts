@@ -68,14 +68,25 @@ test.describe('Booking page', () => {
     await expect(submit).toBeEnabled();
     await submit.click();
 
-    const confirmation = page.getByTestId('booking-confirmation');
-    await expect(confirmation).toBeVisible();
-    await expect(confirmation).toContainText('Senior React Engineer');
-    await expect(confirmation).toContainText('60 minutes');
-    await expect(page.getByTestId('booking-confirmation-zone')).toHaveText('UTC');
-    await expect(page.getByTestId('booking-confirmation-email')).toContainText('jane@example.com');
+    /*
+     * No confirmation view: booking navigates to the manage link, which is a URL the
+     * candidate can reload, bookmark, and come back to. The confirmation it replaces was
+     * component state, and a refresh put an empty booking form in front of somebody who
+     * had already booked (02 §10.41).
+     */
+    await page.waitForURL(new RegExp(`/manage/${vacancy.publicSlug}/[A-Za-z0-9_-]{22}$`));
+    const durable = page.url();
 
-    const when = await page.getByTestId('booking-confirmation-when').textContent();
+    // Still public, still no session, and the record states everything the confirmation
+    // used to — with Reschedule and Cancel on it, which the confirmation never had.
+    await expect(page.getByTestId('manage-page')).toBeVisible();
+    await expect(page.getByTestId('manage-vacancy-title')).toHaveText('Senior React Engineer');
+    await expect(page.getByTestId('manage-duration')).toHaveText('60 minutes');
+    await expect(page.getByTestId('manage-booking-email')).toContainText('jane@example.com');
+    await expect(page.getByTestId('manage-booking-zone')).toContainText('UTC');
+    await expect(page.getByRole('link', { name: /sign in|log in/i })).toHaveCount(0);
+
+    const when = await page.getByTestId('manage-booking-when').textContent();
     expect(when).toContain(
       new Date(startUtc).toLocaleTimeString('en-GB', {
         hour: '2-digit',
@@ -85,24 +96,26 @@ test.describe('Booking page', () => {
       }),
     );
 
-    // The form is gone, replaced by the confirmation.
-    await expect(submit).toHaveCount(0);
-
-    /*
-     * The manage link, which supersedes this test's earlier assertion that there was
-     * none: 07 gives the candidate a way to fix a mistyped choice before they close the
-     * tab, and 02 §10.43 puts a copy of it here. This copy is deliberately lost on
-     * refresh — the durable one travels in the calendar invite.
-     */
-    const manageLink = page.getByTestId('booking-confirmation-manage-link');
-    await expect(manageLink).toBeVisible();
-    expect(await manageLink.getAttribute('href')).toMatch(
-      new RegExp(`^/manage/${vacancy.publicSlug}/[A-Za-z0-9_-]{22}$`),
+    // The one fact the record cannot state for itself. It matters because the product
+    // sends no mail of its own — Microsoft's invite is all the candidate ever gets.
+    await expect(page.getByTestId('manage-booked')).toContainText(
+      'A calendar invite is on its way to jane@example.com.',
     );
 
-    // Following it opens the live page for this booking, still with no session.
-    await manageLink.click();
-    await expect(page.getByTestId('manage-booking-email')).toContainText('jane@example.com');
+    // The flag comes off the address bar, so what they are left holding is the link
+    // their invite carries — not a variant of it.
+    expect(durable).not.toContain('?');
+
+    /*
+     * The whole reason this navigates. A refresh used to discard the confirmation and
+     * render an empty booking form; now it re-reads the record.
+     */
+    await page.reload();
+    await expect(page.getByTestId('manage-booking-when')).toHaveText(when!);
+    await expect(page.getByTestId('booking-submit-button')).toHaveCount(0);
+    // The notice is a receipt for an action, not a state of the record (07 §04.19).
+    await expect(page.getByTestId('manage-booked')).toHaveCount(0);
+
     await expect(page.getByTestId('manage-cancel-button')).toBeVisible();
   });
 
@@ -294,7 +307,7 @@ test.describe('Booking page', () => {
     await page.goto(`/book/${vacancy.publicSlug}`);
     await expect(firstSlot(page)).toBeVisible();
     await fill();
-    await expect(page.getByTestId('booking-confirmation')).toBeVisible();
+    await page.waitForURL(/\/manage\//);
 
     await page.goto(`/book/${vacancy.publicSlug}`);
     await expect(firstSlot(page)).toBeVisible();
@@ -306,7 +319,8 @@ test.describe('Booking page', () => {
     await expect(banner).toBeVisible();
     await expect(banner).toContainText('You already have an interview for this position on');
     await expect(page.getByTestId('field-error-email')).toHaveCount(0);
-    await expect(page.getByTestId('booking-confirmation')).toHaveCount(0);
+    // A refused booking does not navigate: only a 201 leaves this page.
+    await expect(page).toHaveURL(new RegExp(`/book/${vacancy.publicSlug}$`));
     // The form keeps what was typed — there is nothing to retype.
     await expect(page.getByTestId('booking-first-name-input')).toHaveValue('Jane');
     await expect(page.getByTestId('booking-email-input')).toHaveValue('jane@example.com');

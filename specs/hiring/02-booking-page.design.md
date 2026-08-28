@@ -83,7 +83,6 @@ calendar and slot list side by side, where `AuthLayout`'s 480px card is not.
 | Server error | `InfoBanner` | `tone="error"` | `booking-error-banner` |
 | Availability error | `InfoBanner` | `tone="warning"` + retry `Button` | `calendar-error` · `slot-list-error` |
 | Loading | `Spinner` | — | `calendar-loading` · `slot-list-loading` |
-| Confirmation | `Card` | — | `booking-confirmation` |
 | Closed / not found | `Card` | — | `booking-closed-message` · `booking-not-found` |
 
 Inline field errors come from `Input`'s own `error` prop; the message node carries
@@ -117,8 +116,6 @@ Validation messages are **not** here — they belong to
 | Slot list empty | No times available on this date — please pick another. |
 | Window empty | No times are available in the next month. |
 | Availability retry | Try again |
-| Confirmation title | You're booked |
-| Confirmation mail line | A calendar invite is on its way to {email}. |
 | Closed | This position is no longer accepting applications. |
 | Not found | This link doesn't lead anywhere. |
 
@@ -167,8 +164,11 @@ Press on the submit: `translateY(1px)`, lip shrinks to `--lip-accent-press`. Tra
   values are retained.
 - **Duplicate rejection** — renders in `booking-error-banner`, not as a field error, because it is
   a statement about the booking rather than about the email field.
-- **Success** — the two panels and the form Card are replaced in place by the confirmation Card;
-  the URL does not change and no navigation occurs.
+- **Success** — the page **navigates** to `/manage/{slug}/{token}`, whose live state is the
+  confirmation ([07 §04](07-manage-booking.md)). There is no confirmation Card here to design.
+  **Book keeps its loading state until the navigation lands**, and is never released back to its
+  rest state on this screen: an enabled Book for the length of a page transition invites a second
+  press against a booking that already exists.
 
 ## Responsive
 

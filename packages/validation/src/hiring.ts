@@ -176,6 +176,17 @@ export const HIRING_MESSAGES = {
     cancelDialogDismiss: 'Keep it',
     cancelAction: 'Cancel interview',
     /**
+     * Completed by `justBookedMessage` — the one line the live card cannot say for
+     * itself (07 §04.16a).
+     *
+     * It used to be the booking page's, on a confirmation view that no longer exists:
+     * booking now lands on this page, whose record already states the title, the length,
+     * the time, the zone, the name, the email and the CV. The only fact left over is
+     * that an invite is coming — which matters because the product sends no mail of its
+     * own, so Microsoft's invite is the only thing the candidate will ever receive.
+     */
+    justBooked: 'A calendar invite is on its way to {email}.',
+    /**
      * The move, and the one primary action in the whole spec. There is no confirmation
      * dialog behind it: a candidate who chose Thursday 14:00 does not need to be asked
      * whether they meant Thursday 14:00, and the action is reversible at will

@@ -81,8 +81,15 @@ for a move as well as for a booking. See §12.
 13. The manage URL pairs the token with the vacancy's public slug: `/manage/{slug}/{token}`. The
     slug is what lets every not-found state still render the organization's wordmark, the vacancy
     title, and a working "New booking" — see §04.
-14. The link reaches the candidate in **the calendar event body**, and on the booking confirmation
-    view. There is no other channel, because the release sends no mail (§12).
+14. The link reaches the candidate in **the calendar event body**, and by **landing on it**: a
+    completed booking navigates here rather than rendering a confirmation of its own
+    ([02 §10](02-booking-page.md)). There is no other channel, because the release sends no mail
+    (§12). The event body is the durable copy — a candidate who closes the tab still has the link
+    in their calendar.
+
+    This replaces an earlier arrangement in which the booking page rendered a confirmation
+    carrying the link. That confirmation was component state, so a refresh discarded it and put an
+    empty booking form in front of somebody who had already booked.
 15. **The interviewer therefore receives the candidate's manage link too**, because one event has
     one body. This is a deliberate departure from [00 §04.19](00-integrations.md), recorded in the
     README. It grants the interviewer no capability they lack — they can already cancel and
@@ -99,6 +106,29 @@ for a move as well as for a booking. See §12.
     | **Live** | The booking, its CV, and the Reschedule and Cancel actions |
     | **Just cancelled** | A confirmation of what was just done, and "New booking" |
     | **Everything else** | "We couldn't find your booking." and "New booking" |
+
+16a. The live state may additionally carry a **just-booked notice**: "A calendar invite is on its
+    way to {email}." It is a **modifier on the live state, not a fourth rendering** — it draws only
+    where `booking` is non-null, so no flag can make it appear over the blurred screen and confirm
+    that a dead token was once real (§04.18).
+
+    It states the one fact the record cannot state for itself. Everything else the old confirmation
+    said — the title, the length, the time, the zone, the name, the email, the CV — is already on
+    the card, and repeating it would read as a bug. It matters because the release sends no mail of
+    its own (§12), so Microsoft's invite is the only thing the candidate ever receives, and
+    somebody who does not know to expect it reads its absence as a failed booking.
+
+    It is also the announcement [02 §12.48](02-booking-page.md) requires. A navigation announces
+    nothing on its own — both routes render the same `<h1>` — so this notice carries the success
+    into the page's polite live region.
+
+    The notice is carried by a `?booked=1` flag on the URL the booking page navigates to. The flag
+    is **bare**: the notice needs the candidate's email and the page already has it from the record
+    it fetched, so nothing about the booking travels in a query string. The page **strips the flag
+    from the address bar on its first paint**, so what the candidate is left holding is
+    byte-identical to the link in their invite — one URL for this booking, not a variant of it in
+    their history. A reload therefore shows the record without the notice, which is §04.19's rule
+    applied to the other receipt: a receipt for an action, not a state of the record.
 
 17. **"Everything else" is one screen, not four.** A revisited cancellation, a passed interview, a
     token that never existed, and a malformed token are indistinguishable to the visitor. This is
@@ -325,9 +355,16 @@ for a move as well as for a booking. See §12.
 
 ### Manage page — live booking
 
+Arrived at from the invite, or straight from a completed booking — in which case the notice above
+the panel is present on that first view only (§04.16a).
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Teammerly●                               │
+│                                                                 │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │  ℹ  A calendar invite is on its way to jane@example.com.  │  │
+│  └───────────────────────────────────────────────────────────┘  │
 │                                                                 │
 │                  Senior React Engineer                          │
 │                       60 minutes                                │
@@ -593,6 +630,7 @@ updated application. Errors as the public cancel route.
 
 | Context | Message |
 |---|---|
+| Just booked | "A calendar invite is on its way to {email}." |
 | Booking not resolvable — any cause | "We couldn't find your booking." |
 | Just cancelled | "Your interview has been cancelled." |
 | Slot taken | "That time was just booked. Please choose another." |
@@ -618,6 +656,7 @@ CV validation messages are [02](02-booking-page.md)'s and must match its table e
   destructive control is never adjacent to a field that autosaves.
 - Required `data-testid` attributes:
   - `manage-page`, `manage-org-wordmark`, `manage-vacancy-title`, `manage-duration`
+  - `manage-booked`
   - `manage-booking-when`, `manage-booking-zone`, `manage-booking-email`, `manage-cv-filename`
   - `manage-reschedule-button`, `manage-cancel-button`, `manage-cv-replace-input`
   - `manage-reschedule-submit`, `manage-reschedule-cancel`, `manage-current-time`

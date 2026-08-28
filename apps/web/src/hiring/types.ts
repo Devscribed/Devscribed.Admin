@@ -94,9 +94,9 @@ export interface BookingConfirmation {
   email: string;
   cvFileName: string;
   /**
-   * The candidate's handle on this booking. The confirmation's copy of the link is a
-   * convenience and is lost on refresh by design; the durable one is in the invite
-   * (02 §10.43).
+   * The candidate's handle on this booking, and what the page builds its redirect from:
+   * a booking navigates to the manage link rather than rendering a confirmation of its
+   * own (02 §10.41). The durable copy travels in the invite.
    */
   manageToken: string;
 }

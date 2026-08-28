@@ -250,8 +250,10 @@ export class BookingService {
 
     // No application id, no candidate id, no internal link (02 API contract). The
     // manage token is the one exception, and it is not internal: it is the candidate's
-    // own handle on their own booking, so they can fix a mistyped choice before closing
-    // the tab (02 §10.43). The durable copy is in the invite.
+    // own handle on their own booking, and it is what the page redirects to, since a
+    // booking has no confirmation view of its own (02 §10.41). Every other field is
+    // echoed back for that redirect's sake alone — the destination re-reads all of them
+    // from the record. The durable copy of the link is in the invite.
     return {
       vacancyTitle: vacancy.title,
       durationMinutes: vacancy.durationMinutes,

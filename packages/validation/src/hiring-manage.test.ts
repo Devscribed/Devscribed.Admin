@@ -10,6 +10,9 @@ import {
   formatHistoryWhen,
   generateSlots,
   isLiveBooking,
+  justBookedMessage,
+  justBookedPath,
+  managePath,
   planReschedule,
   scheduleEntryAriaLabel,
   scheduleEntryLabel,
@@ -356,3 +359,32 @@ describe('currentTimeMessage', () => {
     );
   });
 });
+
+/* ------------------------------------------------------------------ *
+ * Landing here from a booking — 07 §04.16a
+ * ------------------------------------------------------------------ */
+
+describe('the just-booked landing', () => {
+  it('is the manage link with a bare flag on it', () => {
+    // Bare on purpose: the notice needs the candidate's email and the page already has
+    // it from the record it fetched, so nothing about the booking is in the URL.
+    expect(justBookedPath('senior-react-engineer-a1b2', 'tok')).toBe(
+      '/manage/senior-react-engineer-a1b2/tok?booked=1',
+    );
+  });
+
+  it("differs from the invite's link only by that flag", () => {
+    const [path, query] = justBookedPath('slug', 'tok').split('?');
+    // The page strips the query on its first paint, so the two converge on the URL the
+    // candidate is left holding.
+    expect(path).toBe(managePath('slug', 'tok'));
+    expect(query).toBe('booked=1');
+  });
+
+  it('names the address the invite is going to', () => {
+    expect(justBookedMessage('jane@example.com')).toBe(
+      'A calendar invite is on its way to jane@example.com.',
+    );
+  });
+});
+

@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import {
   HIRING_MESSAGES,
+  MANAGE_BOOKED_PARAM,
   cancelConfirmMessage,
   currentTimeMessage,
   formatLongDate,
   formatSlotTime,
   isoDateInZone,
+  justBookedMessage,
   retainSelection,
   zoneLabel,
 } from '@devscribed/validation';
@@ -40,6 +42,15 @@ type Page =
  * URL yields the blurred screen, which is correct: it is a receipt for an action, not a
  * state of the record (07 §04.19).
  *
+ * It is also where a **completed booking** lands, which is why `/book/{slug}` has no
+ * confirmation view of its own: this page is one the candidate can reload, bookmark and
+ * come back to, where a confirmation rendered from component state was thrown away by
+ * the first refresh. The record already states everything that confirmation did, and can
+ * act on all of it. The one fact it cannot state for itself — that an invite is coming —
+ * arrives as a notice, which is a **modifier on the live state and not a fourth
+ * rendering**: it is drawn only where there is a live record to draw it over, so the
+ * blur is untouched by it (07 §04.16a).
+ *
  * Rescheduling replaces the booking Card in place rather than navigating: the URL does
  * not change, and **Keep current time** puts the record back with nothing altered.
  * Choosing a slot *is* the confirmation — there is no second dialog, because a candidate
@@ -65,6 +76,8 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
    */
   const [timeZone, setTimeZone] = useState('UTC');
   const [hour12, setHour12] = useState(false);
+  /** Arrived here straight from booking, rather than from an invite opened later. */
+  const [justBooked, setJustBooked] = useState(false);
   // Named so the dialog opens on it. Focus returns to whatever invoked the dialog on
   // its own, which `Modal` handles for every caller.
   const dismiss = useRef<HTMLButtonElement>(null);
@@ -78,8 +91,29 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
   }, []);
 
   useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has(MANAGE_BOOKED_PARAM)) return;
+    setJustBooked(true);
+    /*
+     * The flag comes off the address bar immediately, so what the candidate is left
+     * holding is byte-identical to the link in their calendar invite — one URL for this
+     * booking, not a variant of it in their history. A reload therefore shows the record
+     * without the notice, which is the posture this page already takes for the
+     * cancellation receipt: a receipt for an action, not a state of the record
+     * (07 §04.19).
+     */
+    window.history.replaceState(null, '', window.location.pathname);
+  }, []);
+
+  useEffect(() => {
     if (booking) setTimeZone(booking.timeZone);
   }, [booking?.timeZone]);
+
+  // The notice is also the announcement 02 §12.48 asks for: a navigation on its own
+  // tells a screen-reader user nothing, and this page's own heading is the same one the
+  // booking page had.
+  useEffect(() => {
+    if (justBooked && booking) setAnnouncement(justBookedMessage(booking.email));
+  }, [justBooked, booking?.email]);
 
   useEffect(() => {
     let cancelled = false;
@@ -227,7 +261,7 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
       <BookingLayout data-testid="manage-page">
         <div style={COLUMN}>
           <Card>
-          <Skeleton rows={3} data-testid="manage-loading-skeleton" />
+            <Skeleton rows={3} data-testid="manage-loading-skeleton" />
           </Card>
         </div>
       </BookingLayout>
@@ -377,76 +411,94 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
             </div>
           </div>
         ) : (
-          <Card>
-            <SectionLabel>{HIRING_MESSAGES.manage.panelLabel}</SectionLabel>
+          <>
+            {/*
+              A modifier on the live state, never a rendering of its own: it is inside
+              this branch, so there is no path on which it draws over the blurred screen
+              and confirms that a dead token was once real (07 §04.16a).
 
-            <p
-              data-testid="manage-booking-when"
-              style={{
-                margin: 'var(--sp-8) 0 0',
-                fontFamily: 'var(--font-display)',
-                fontSize: 'var(--fs-22)',
-                fontVariantNumeric: 'tabular-nums',
-                color: 'var(--text)',
-              }}
-            >
-              {formatWhen(booking.startUtc, booking.timeZone)}
-            </p>
-            <span
-              data-testid="manage-booking-zone"
-              style={{ fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}
-            >
-              {zoneLabel(booking.timeZone, new Date(booking.startUtc))}
-            </span>
-
-            <hr
-              style={{
-                margin: 'var(--sp-8) 0',
-                border: 0,
-                borderTop: '1px solid var(--divider)',
-              }}
-            />
-
-            <p
-              data-testid="manage-booking-email"
-              style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}
-            >
-              {booking.firstName} {booking.lastName} · {booking.email}
-            </p>
-            {booking.cvFileName && (
-              <p
-                style={{
-                  margin: 'var(--sp-4) 0 0',
-                  fontSize: 'var(--fs-14)',
-                  color: 'var(--text-sub)',
-                }}
-              >
-                CV: <span data-testid="manage-cv-filename">{booking.cvFileName}</span>
-              </p>
+              The one fact the record beneath cannot state. Everything else the old
+              confirmation said — the title, the length, the time, the zone, the name,
+              the email, the CV — is already on the card, and repeating it would read as
+              a bug.
+            */}
+            {justBooked && (
+              <InfoBanner tone="info" data-testid="manage-booked">
+                {justBookedMessage(booking.email)}
+              </InfoBanner>
             )}
 
-            {/*
-              No primary action anywhere in the live state: the page's default posture is
-              that nothing needs to change, and a violet CTA would contradict it. Cancel
-              is pushed to the trailing end, away from anything benign.
-            */}
-            <div className="manage-actions">
-              <Button
-                variant="secondary"
-                onClick={startRescheduling}
-                data-testid="manage-reschedule-button"
+            <Card>
+              <SectionLabel>{HIRING_MESSAGES.manage.panelLabel}</SectionLabel>
+
+              <p
+                data-testid="manage-booking-when"
+                style={{
+                  margin: 'var(--sp-8) 0 0',
+                  fontFamily: 'var(--font-display)',
+                  fontSize: 'var(--fs-22)',
+                  fontVariantNumeric: 'tabular-nums',
+                  color: 'var(--text)',
+                }}
               >
-                {HIRING_MESSAGES.manage.rescheduleAction}
-              </Button>
-              <Button
-                variant="danger"
-                onClick={() => setConfirming(true)}
-                data-testid="manage-cancel-button"
+                {formatWhen(booking.startUtc, booking.timeZone)}
+              </p>
+              <span
+                data-testid="manage-booking-zone"
+                style={{ fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}
               >
-                {HIRING_MESSAGES.manage.cancelAction}
-              </Button>
-            </div>
-          </Card>
+                {zoneLabel(booking.timeZone, new Date(booking.startUtc))}
+              </span>
+
+              <hr
+                style={{
+                  margin: 'var(--sp-8) 0',
+                  border: 0,
+                  borderTop: '1px solid var(--divider)',
+                }}
+              />
+
+              <p
+                data-testid="manage-booking-email"
+                style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}
+              >
+                {booking.firstName} {booking.lastName} · {booking.email}
+              </p>
+              {booking.cvFileName && (
+                <p
+                  style={{
+                    margin: 'var(--sp-4) 0 0',
+                    fontSize: 'var(--fs-14)',
+                    color: 'var(--text-sub)',
+                  }}
+                >
+                  CV: <span data-testid="manage-cv-filename">{booking.cvFileName}</span>
+                </p>
+              )}
+
+              {/*
+                No primary action anywhere in the live state: the page's default posture is
+                that nothing needs to change, and a violet CTA would contradict it. Cancel
+                is pushed to the trailing end, away from anything benign.
+              */}
+              <div className="manage-actions">
+                <Button
+                  variant="secondary"
+                  onClick={startRescheduling}
+                  data-testid="manage-reschedule-button"
+                >
+                  {HIRING_MESSAGES.manage.rescheduleAction}
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={() => setConfirming(true)}
+                  data-testid="manage-cancel-button"
+                >
+                  {HIRING_MESSAGES.manage.cancelAction}
+                </Button>
+              </div>
+            </Card>
+          </>
         )}
       </div>
 

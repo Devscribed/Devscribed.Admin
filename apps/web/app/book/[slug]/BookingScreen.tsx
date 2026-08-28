@@ -1,12 +1,13 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import {
   CV_ACCEPT,
   HIRING_MESSAGES,
   formatLongDate,
   formatSlotTime,
-  managePath,
+  justBookedPath,
   retainSelection,
   validateBooking,
   validateBookingNote,
@@ -28,7 +29,7 @@ import {
   Textarea,
 } from '@/ds';
 import { errorNode, focusByTestId, hintNode } from '@/field-error';
-import { detectTimeZone, formatDuration, formatWhen } from '@/hiring/format';
+import { detectTimeZone, formatDuration } from '@/hiring/format';
 import { SlotPicker, readTimeFormat, writeTimeFormat } from '@/hiring/SlotPicker';
 import { useAvailability } from '@/hiring/useAvailability';
 import type { BookingConfirmation, PublicVacancy } from '@/hiring/types';
@@ -61,12 +62,20 @@ type Page =
 
 /**
  * The public booking page: the vacancy, the interviewer's real availability as a month
- * grid and a list of times, the candidate's details, and the confirmation.
+ * grid and a list of times, and the candidate's details.
  *
  * Two rules shape almost everything here. Times are absolute instants and the zone is
  * only ever a lens on them, so changing the zone re-renders and never refetches a
  * different set of facts. And an availability failure is its own state — never an empty
  * month, never a disabled Book with no explanation.
+ *
+ * **There is no confirmation view.** A successful booking navigates to the manage page,
+ * which is a URL the candidate can reload, bookmark and come back to — where a
+ * confirmation rendered from component state was thrown away by the first refresh,
+ * putting an empty booking form in front of somebody who had already booked (02 §10.41).
+ * The record that page shows is the confirmation: it already states the title, the
+ * length, the time, the zone, the name, the email and the CV, and it can act on all of
+ * them.
  */
 export function BookingScreen({ slug }: { slug: string }) {
   const [page, setPage] = useState<Page>({ state: 'loading' });
@@ -79,7 +88,7 @@ export function BookingScreen({ slug }: { slug: string }) {
   const [banner, setBanner] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [confirmation, setConfirmation] = useState<BookingConfirmation | null>(null);
+  const router = useRouter();
 
   // Read after mount: both are browser facts, and rendering them on the server would
   // hand every visitor the same zone and then correct it under them.
@@ -205,12 +214,19 @@ export function BookingScreen({ slug }: { slug: string }) {
     form.set('timeZone', timeZone);
     form.set('cv', cv!);
 
+    // Set only by the success path, which is the one outcome that must *not* release
+    // the button: it holds its loading state until the navigation unmounts this screen.
+    // Releasing it would put an enabled **Book** on screen for the length of a page
+    // transition, inviting a second press against a booking that already exists.
+    let booked = false;
+
     try {
       const response = await fetch(`/api/book/${slug}`, { method: 'POST', body: form });
       const body = await response.json().catch(() => ({}));
 
       if (response.status === 201) {
-        setConfirmation(body);
+        booked = true;
+        router.push(justBookedPath(slug, (body as BookingConfirmation).manageToken));
         return;
       }
       if (body.error === 'validation' && body.fields) {
@@ -226,7 +242,7 @@ export function BookingScreen({ slug }: { slug: string }) {
     } catch {
       setBanner(HIRING_MESSAGES.booking.failed);
     } finally {
-      setSubmitting(false);
+      if (!booked) setSubmitting(false);
     }
   }
 
@@ -310,8 +326,6 @@ export function BookingScreen({ slug }: { slug: string }) {
             {HIRING_MESSAGES.booking.vacancyClosed}.
           </p>
         </Card>
-      ) : confirmation ? (
-        <Confirmation confirmation={confirmation} slug={slug} />
       ) : (
         <div style={{ display: 'grid', gap: 'var(--sp-12)' }}>
           <SlotPicker
@@ -442,71 +456,6 @@ const SR_ONLY: CSSProperties = {
   clip: 'rect(0 0 0 0)',
   whiteSpace: 'nowrap',
 };
-
-function Confirmation({
-  confirmation,
-  slug,
-}: {
-  confirmation: BookingConfirmation;
-  slug: string;
-}) {
-  return (
-    <Card data-testid="booking-confirmation">
-      <h2
-        style={{
-          margin: 0,
-          fontFamily: 'var(--font-display)',
-          fontWeight: 600,
-          fontSize: 'var(--fs-22)',
-          color: 'var(--text)',
-        }}
-      >
-        You&rsquo;re booked
-      </h2>
-      <dl style={{ margin: 'var(--sp-10) 0 0', display: 'grid', gap: 'var(--sp-4)' }}>
-        <div style={{ fontSize: 'var(--fs-15)' }}>
-          {confirmation.vacancyTitle} · {formatDuration(confirmation.durationMinutes)}
-        </div>
-        <div data-testid="booking-confirmation-when" style={{ fontSize: 'var(--fs-15)' }}>
-          {formatWhen(confirmation.startUtc, confirmation.timeZone)}
-        </div>
-        <div
-          data-testid="booking-confirmation-zone"
-          style={{ fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}
-        >
-          {confirmation.timeZone}
-        </div>
-        <div style={{ fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}>
-          {confirmation.firstName} {confirmation.lastName} · {confirmation.email}
-        </div>
-        <div style={{ fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}>
-          CV: {confirmation.cvFileName}
-        </div>
-      </dl>
-      <p
-        data-testid="booking-confirmation-email"
-        style={{ marginTop: 'var(--sp-10)', marginBottom: 0, fontSize: 'var(--fs-14)' }}
-      >
-        A calendar invite is on its way to {confirmation.email}.
-      </p>
-      {/*
-        The manage link, so a candidate who mistyped their choice can fix it before
-        closing the tab (02 §10.43). This copy is lost on refresh by design — the
-        durable one is in the calendar invite, which is where 07 §03.14 puts it.
-      */}
-      <p style={{ marginTop: 'var(--sp-6)', marginBottom: 0, fontSize: 'var(--fs-14)' }}>
-        Need to change it?{' '}
-        <a
-          href={managePath(slug, confirmation.manageToken)}
-          data-testid="booking-confirmation-manage-link"
-        >
-          Reschedule or cancel your interview
-        </a>
-        .
-      </p>
-    </Card>
-  );
-}
 
 /** A text wordmark, never an image: this release uploads and renders no logo. */
 function Wordmark({ name }: { name: string }) {

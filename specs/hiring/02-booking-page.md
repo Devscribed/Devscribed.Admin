@@ -37,7 +37,8 @@ stranger with a link into a scheduled interview.
 
 1. Top to bottom: the organization wordmark, the vacancy title, the interview length, the vacancy
    description, then the booking area (Calendar Control, Time Slot Picker, candidate form), then
-   the Book action, then the confirmation view once booked.
+   the Book action. There is nothing after it: a completed booking leaves this page for the manage
+   link (§10).
 2. The organization is rendered as a **text wordmark**, not a logo. `Organization.logoKey` is
    reserved by 01's migration but no image is uploaded or displayed in this release — the design
    system has no logo file and its wordmark is plain type.
@@ -185,7 +186,7 @@ stranger with a link into a scheduled interview.
     answers forgot-password neutrally regardless of whether the account exists. The departure is
     deliberate: reaching this check costs an unguessable link, a name, a valid slot selection, and
     a CV upload, which is not the cheap oracle a single-field form is — and a neutral response
-    would cost every honest candidate the on-page confirmation with their time on it.
+    would cost every honest candidate the confirmation of their time, wherever it is rendered.
 40. A candidate who books by mistake corrects it themselves, through the manage link in their
     invite — see [07 §01](07-manage-booking.md). Earlier revisions of this spec said they must
     contact the organization; that was true only while reschedule and cancel were deferred.
@@ -194,14 +195,22 @@ stranger with a link into a scheduled interview.
 
 ### 10. Confirmation
 
-41. On success the page replaces the booking area with a confirmation showing the vacancy title,
-    the length, the date and time in the booked zone with the zone named, and the candidate's
-    submitted details.
-42. The confirmation states that a calendar invite has been sent to the candidate's email address.
-43. It carries the **manage link** for this booking — `/manage/{slug}/{token}` — so a candidate who
-    mistypes their choice can fix it before closing the tab. The same link is written into the
-    calendar event body, which is the durable copy; the confirmation's is a convenience, and is
-    lost on refresh by design ([07 §03](07-manage-booking.md)).
+41. On success the page **navigates to the manage link for the booking it just made** —
+    `/manage/{slug}/{token}`. There is no confirmation view of its own; that page is the
+    confirmation ([07 §04](07-manage-booking.md)), and the `201` carries `manageToken` so the
+    redirect can be built from it.
+42. This is a correction, not a preference. A confirmation rendered from component state was
+    thrown away by the first refresh, which put an **empty booking form** in front of somebody who
+    had already booked — the one reading of that screen the product must never offer. A URL
+    survives a refresh, a bookmark, and a return three weeks later.
+43. It also removes a duplicate. The manage page's live state already states the vacancy title,
+    the length, the date and time in the booked zone with the zone named, the candidate's submitted
+    details and their CV — every fact the confirmation carried — and unlike the confirmation it can
+    **act** on them, offering Reschedule and Cancel where the confirmation offered a link to a page
+    that does. The one fact it cannot state for itself, that a calendar invite is coming, rides
+    there as a notice specified in [07 §04.16a](07-manage-booking.md). It matters because this
+    release sends no mail of its own, so Microsoft's invite is the only thing the candidate ever
+    receives, and somebody who does not know to expect it reads its absence as a failed booking.
 
 ### 11. Abuse Exposure
 
@@ -225,8 +234,11 @@ stranger with a link into a scheduled interview.
 47. On wide viewports the calendar, slot picker, and form may sit side by side; on narrow ones they
     stack. The page body never scrolls horizontally at any supported width.
 48. Fully operable by keyboard and screen reader. Form fields have real labels, required-state
-    indication, and inline errors announced to assistive technology. Booking success and failure
-    are announced via a polite live region.
+    indication, and inline errors announced to assistive technology. Booking **failure** is
+    announced via a polite live region. Booking **success** navigates, and a navigation announces
+    nothing on its own — both routes render the same `<h1>` — so the destination announces instead,
+    through the notice in [07 §04.16a](07-manage-booking.md). The requirement is unchanged; only
+    the page that satisfies it has moved.
 49. The controls carry their own accessibility requirements — see
     [controls/calendar-control.md](controls/calendar-control.md) and
     [controls/time-slot-picker-control.md](controls/time-slot-picker-control.md).
@@ -271,22 +283,9 @@ stranger with a link into a scheduled interview.
 
 ### Confirmation
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Teammerly●                               │
-│                                                                 │
-│                    You're booked                                │
-│                                                                 │
-│   Senior React Engineer · 60 minutes                            │
-│   Tuesday, 25 August 2026 at 14:00                              │
-│   (UTC+03:00) Minsk                                             │
-│                                                                 │
-│   Jane Doe · jane@example.com                                   │
-│   CV: jane-doe-cv.pdf                                           │
-│                                                                 │
-│   A calendar invite is on its way to jane@example.com.          │
-└─────────────────────────────────────────────────────────────────┘
-```
+There is no confirmation screen. A successful booking navigates to
+[`/manage/{slug}/{token}`](07-manage-booking.md), whose live state is the confirmation — see 07's
+*Manage page — live booking*.
 
 ### Closed vacancy
 
@@ -389,11 +388,15 @@ Success `201`:
   "vacancyTitle": "Senior React Engineer", "durationMinutes": 60,
   "startUtc": "2026-08-25T11:00:00.000Z", "timeZone": "Europe/Minsk",
   "firstName": "Jane", "lastName": "Doe", "email": "jane@example.com",
-  "cvFileName": "jane-doe-cv.pdf"
+  "cvFileName": "jane-doe-cv.pdf",
+  "manageToken": "9f2Kd1x0QpR7mVzA3bYt5w"
 }
 ```
 
-The response carries no application id, no candidate id, and no internal link.
+The response carries no application id, no candidate id, and no internal link. `manageToken` is the
+one identifier that crosses, and it is not internal: it is the candidate's own handle on their own
+booking, and it is what the page builds its redirect from (§10.41). Every other field is echoed
+back for that redirect's sake alone — the destination re-reads all of them from the record.
 
 Errors:
 - `404` — unknown slug.
@@ -454,8 +457,6 @@ Errors:
   - `booking-first-name-input`, `booking-last-name-input`, `booking-email-input`,
     `booking-cv-input`, `booking-cv-filename`, `booking-note-input`
   - `booking-submit-button`, `booking-error-banner`
-  - `booking-confirmation`, `booking-confirmation-when`, `booking-confirmation-zone`,
-    `booking-confirmation-email`, `booking-manage-link`
   - `field-error-firstName`, `field-error-lastName`, `field-error-email`, `field-error-cv`,
     `field-error-note`
   - control test ids are owned by the control specs.
@@ -646,8 +647,11 @@ Errors:
   1. The page renders with no sign-in prompt; the wordmark, title, and length are visible.
   2. The first available date is selected; no slot is selected.
   3. Book is disabled until the time and all required fields are present.
-  4. The confirmation shows the title, the date and time, the named zone, and the email, and carries the manage link for this booking. Following it opens the live manage page for the interview just booked.
-- **Selectors:** `booking-page`, `booking-vacancy-title`, `booking-submit-button`, `booking-confirmation`, `booking-confirmation-when`, `booking-confirmation-zone`, `booking-manage-link`.
+  4. The browser lands on `/manage/{slug}/{token}` for the interview just booked, showing its live state — the title, the date and time, the named zone, the email and the CV — with Reschedule and Cancel available on it.
+  5. A notice states that a calendar invite is on its way to the address given.
+  6. The address bar holds the bare manage link, with no query string on it: what the candidate is left holding is the link their invite carries.
+  7. **Reloading that URL shows the interview again, never the booking form.** This is the whole reason the page navigates rather than rendering a confirmation.
+- **Selectors:** `booking-page`, `booking-vacancy-title`, `booking-submit-button`, `manage-page`, `manage-booked`, `manage-booking-when`, `manage-booking-zone`, `manage-reschedule-button`, `manage-cancel-button`.
 
 ### TC-H02-E2E-02: Times default to 24-hour and the toggle is remembered
 - **Level:** E2E
@@ -694,7 +698,7 @@ Errors:
   2. Press Book.
 - **Expected Result:**
   1. An error states the existing date, time, and zone.
-  2. No confirmation appears; the form retains its values.
+  2. **The browser does not navigate** — a refused booking stays on the form, which retains its values. Only a `201` leaves this page.
 - **Selectors:** `booking-submit-button`, `booking-error-banner`.
 
 ### TC-H02-E2E-06: A closed vacancy explains itself instead of 404-ing

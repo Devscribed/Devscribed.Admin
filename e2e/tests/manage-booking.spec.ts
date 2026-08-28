@@ -107,7 +107,11 @@ test.describe('Manage booking', () => {
     await page.getByTestId('booking-submit-button').click();
 
     // No `already_booked`: a cancelled candidate is still a live applicant (07 §01.2).
-    await expect(page.getByTestId('booking-confirmation')).toBeVisible();
+    // The rebooking lands on its own manage page, under a token that is not the
+    // cancelled one — a new application, not a restoration of the old (07 §02.9).
+    await page.waitForURL(new RegExp(`/manage/${vacancy.publicSlug}/[A-Za-z0-9_-]{22}$`));
+    expect(page.url()).not.toContain(manage.token);
+    await expect(page.getByTestId('manage-booking-email')).toContainText(candidate);
 
     // The cancelled card kept the column the manager put it in; the rebooking is a new
     // card at the top of Scheduled, because it is fresh intent (07 §02.9).

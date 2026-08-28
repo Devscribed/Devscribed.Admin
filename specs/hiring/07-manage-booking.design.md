@@ -60,6 +60,10 @@ candidate arriving from their invite must recognise the page they booked on.
   misclick waiting to happen.
 - **No primary action anywhere in the live state.** The page's default posture is that nothing needs
   to change, and a violet CTA would contradict it.
+- Arriving **straight from a booking**, an `InfoBanner tone="info"` sits above the Card at the same
+  560px width with `--sp-8` between them — the same composition the cancelled and not-found states
+  use. First view only; the flag is stripped from the URL on the first paint. `info` rather than
+  `success`, because the record beneath is the celebration and this page is meant to read calm.
 
 ## Layout — rescheduling
 
@@ -137,6 +141,7 @@ Both states are the same composition, differing only in banner tone and wording.
 | Cancel dialog | `Modal` | `title`, `actions`, `width={420}` | `manage-cancel-dialog` |
 | Confirm cancel | `Button` | `variant="danger"`, `loading` | `manage-cancel-confirm` |
 | Dismiss | `Button` | `variant="ghost"` | `manage-cancel-dismiss` |
+| Just-booked notice | `InfoBanner` | `tone="info"` | `manage-booked` |
 | Cancelled notice | `InfoBanner` | `tone="info"` | `manage-cancelled` |
 | Not-found notice | `InfoBanner` | `tone="warning"` | `manage-not-found` |
 | New booking | `Button` | `variant="primary"`, `size="lg"`, `as="a"` | `manage-new-booking-button` |
@@ -182,6 +187,7 @@ Validation and error messages are **not** here — they belong to
 
 | Slot | Text |
 |---|---|
+| Just-booked notice | A calendar invite is on its way to {email}. |
 | Panel label | YOUR INTERVIEW |
 | Reschedule action | Reschedule |
 | Cancel action · candidate | Cancel interview |
@@ -253,6 +259,7 @@ Every value is a token; nothing here is a literal.
 | **CV · error** | `FileInput error` — `--error-500` border, message beneath, focus ring `--shadow-glow-error` |
 | **Dialog · open** | `Modal` — `--shadow-modal`, ink-tinted scrim, focus trapped |
 | **Dialog · destructive** | Confirm is `danger`; **focus opens on the dismiss control**, never on Confirm |
+| **Just-booked notice** | `InfoBanner tone="info"`, above the Card, first view only. Not `success`: the page's posture is calm, and the record beneath is the celebration |
 | **Cancelled notice** | `InfoBanner tone="info"` |
 | **Not-found notice** | `InfoBanner tone="warning"` |
 | **Server error** | `InfoBanner tone="error"`, above the Card, values retained |
@@ -268,6 +275,10 @@ Transitions run at `--duration-base` on `--easing-standard`. Nothing bounces.
 
 - **On load** — the live state renders, or one of the two notices. Nothing is focused beyond the
   document.
+- **Arriving from a booking** — the live state renders with the just-booked notice above it, and the
+  polite region announces it, because a navigation announces nothing on its own. The `?booked=1`
+  flag is stripped from the address bar on the first paint, so the URL left in history is the one
+  the invite carries; reloading shows the record without the notice.
 - **Reschedule** — replaces the booking Card in place with the two picker Cards. The URL does not
   change. Pressing **Keep current time** restores the booking Card with nothing altered.
 - **Selecting a slot** — enables Move interview. No dialog follows: choosing the time *is* the

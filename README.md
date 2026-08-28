@@ -655,6 +655,20 @@ A candidate can move their interview or call it off, from a second public page r
 per-booking link ([07](specs/hiring/07-manage-booking.md)). The team's own copy of both actions and
 CV replacement follow; what is below is what ships with the first two.
 
+**A completed booking lands here, and that is why this page exists at two doors.** `/book/{slug}`
+has no confirmation view of its own: it navigates to `/manage/{slug}/{token}` and the live record is
+the confirmation. The old confirmation was component state, so a refresh threw it away and put an
+empty booking form in front of somebody who had already booked — the one reading that screen must
+never offer. It was also a duplicate: the manage page already states the title, the length, the
+time, the zone, the name, the email and the CV, and unlike the confirmation it can act on them. The
+one fact it cannot state for itself — that Microsoft's invite is coming, which matters because the
+product sends no mail of its own — arrives as a notice above the card, carried by a bare `?booked=1`
+flag that the page strips from the address bar on its first paint. What the candidate is left
+holding is byte-identical to the link in their invite, and a reload shows the record without the
+notice: a receipt for an action, not a state of the record, which is the same rule the cancellation
+receipt already followed. The notice draws only over a live booking, so no flag can make it appear
+on the blurred screen and confirm that a dead token was once real.
+
 **Two spec deferrals are now superseded, and this is where they are recorded.**
 [02 §09.40](specs/hiring/02-booking-page.md) said a candidate who books by mistake "must contact
 the organization", and [05 §07.24](specs/hiring/05-board.md) said nothing set

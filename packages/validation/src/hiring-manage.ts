@@ -44,6 +44,26 @@ export const MANAGE_LIMITS = {
 /** The URL the invite carries. The slug is what makes every dead end renderable (07 §03.13). */
 export const managePath = (slug: string, token: string): string => `/manage/${slug}/${token}`;
 
+/**
+ * The flag that tells the manage page it is being arrived at straight from a booking,
+ * rather than from an invite opened later (07 §04.16a).
+ *
+ * A bare marker, carrying nothing: the notice needs the candidate's email, and the page
+ * already has it from the record it fetched. Nothing about the booking travels in the
+ * query string.
+ */
+export const MANAGE_BOOKED_PARAM = 'booked';
+
+/**
+ * Where a completed booking lands.
+ *
+ * Deliberately not what the invite carries — `managePath` is that, and the page strips
+ * this flag off the address bar on its first paint so the two converge immediately. What
+ * the candidate is left holding is the durable link, which is the whole point of sending
+ * them here rather than rendering a confirmation that a refresh would throw away.
+ */
+export const justBookedPath = (slug: string, token: string): string =>
+  `${managePath(slug, token)}?${MANAGE_BOOKED_PARAM}=1`;
 
 /* ------------------------------------------------------------------ *
  * Liveness — 07 §14
@@ -169,6 +189,16 @@ export function excludeOwnBooking(
       ),
   );
 }
+
+/**
+ * "A calendar invite is on its way to jane@example.com."
+ *
+ * Shown once, over a live record, and never over a dead one: a notice drawn on the
+ * blurred screen would confirm that this token was real, which is exactly what the blur
+ * exists to withhold (07 §04.18).
+ */
+export const justBookedMessage = (email: string): string =>
+  HIRING_MESSAGES.manage.justBooked.replace('{email}', email);
 
 /** "Currently Tuesday, 25 August 2026 at 14:00" — stated, never pre-selected. */
 export const currentTimeMessage = (start: Date, timeZone: string): string =>
