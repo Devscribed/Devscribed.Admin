@@ -1,0 +1,211 @@
+{
+  "runId": "2026-08-28T08-08-40_ds-infobanner-tokens",
+  "spec": "specs/user-management/README.md",
+  "specSha": "995df5825c22130ca661273688b81c159b7535214b443fd2eb774898ac3fc601",
+  "task": "ds-infobanner-tokens",
+  "branch": "spec/ds-infobanner-tokens",
+  "baseRef": "d4b6afcd6daa45e558eb39e087cbbf11b5a6c76c",
+  "status": "ready",
+  "createdAt": "2026-08-28T08:08:40.592Z",
+  "updatedAt": "2026-08-28T09:22:56.745Z",
+  "stages": {
+    "preflight": {
+      "status": "passed",
+      "attempts": 1
+    },
+    "pre_implement": {
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-08-28T08:08:40.747Z",
+      "endedAt": "2026-08-28T08:25:07.438Z",
+      "lastVerdict": "pass"
+    },
+    "implement": {
+      "status": "passed",
+      "attempts": 2,
+      "startedAt": "2026-08-28T08:41:26.037Z",
+      "endedAt": "2026-08-28T08:47:06.829Z",
+      "lastVerdict": "pass"
+    },
+    "static_gate": {
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-08-28T08:47:13.976Z",
+      "endedAt": "2026-08-28T08:47:14.108Z",
+      "lastVerdict": "pass"
+    },
+    "review": {
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-08-28T08:47:14.199Z",
+      "endedAt": "2026-08-28T08:53:18.235Z",
+      "lastVerdict": "pass"
+    },
+    "qa": {
+      "status": "passed",
+      "attempts": 3,
+      "startedAt": "2026-08-28T09:05:05.451Z",
+      "endedAt": "2026-08-28T09:22:56.695Z",
+      "lastVerdict": "pass"
+    }
+  },
+  "budget": {
+    "codeAttempts": 0,
+    "handoffReplans": 0,
+    "infra": 0
+  },
+  "findingHistory": {},
+  "contested": [],
+  "notes": [
+    {
+      "stage": "pre_implement",
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/design-decision-deferred",
+      "file": "specs/user-management/README.md",
+      "symbol": "Design Layer — InfoBanner tone triplets",
+      "claim": "Preserving the eight literals exactly — which the stated acceptance requires — leaves the palette with two pairs of near-duplicate scale steps. A designer, not a refactor, should decide whether they both survive.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Resolved to sRGB: InfoBanner's error background oklch(0.96 0.03 25) = #FFEBE8, while the existing --error-100 oklch(0.95 0.04 25) = #FFE5E1 — 6 units apart on two channels. Success background oklch(0.96 0.03 160) = #E1F8EB against --success-100 oklch(0.95 0.04 160) = #D9F7E5 — 8 units apart. Both are visible on a full-width banner fill, so they cannot be folded into the existing step without changing what renders, and the two mockups that are the declared visual acceptance target (specs/user-management/02-authentication-login.mock.html lines 102-105 and specs/user-management/01-organization-creation.mock.html line 92) spell out the banner values verbatim while scripts/static-gate.mjs rule 1 forbids this run from editing them. The plan therefore adds --error-50 and --success-50 beside --error-100 and --success-100. That is the only choice available to an implementation run, and it is correct for this run, but a palette carrying two indistinguishable steps per hue is a design-system decision a human should ratify or reverse deliberately — in the spec and the mockups together, which only a human can change.",
+        "source": "1_DS for dev/components/feedback/InfoBanner.jsx lines 4-7; 1_DS for dev/tokens/colors.css lines 48, 53; specs/user-management/02-authentication-login.mock.html lines 102-105"
+      },
+      "suggestedFix": "After this run merges, decide in specs/user-management/README.md's Design Layer section whether the banner backgrounds keep their own scale steps or snap to --error-100 / --success-100 / --violet-200, and update both mockups in the same deliberate change if they snap."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-status-claim",
+      "file": "specs/user-management/README.md",
+      "symbol": "Design Layer — Select dropdown scroll",
+      "claim": "The README records the Select dropdown-scroll fix as 'fixed', but the fix only reached the component source, not the bundle the design-system specimen pages render from.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "1_DS for dev/components/forms/Select.jsx lines 41 and 99-100 carry maxHeight and overflowY: 'auto'. grep for maxHeight or overflowY in 1_DS for dev/_ds_bundle.js returns nothing, and 1_DS for dev/components/forms/forms.card.html loads the component from that bundle via <script src=\"../../_ds_bundle.js\">. So the Select specimen card still demonstrates the clipped, unscrollable dropdown the README says was fixed, and the bundle's sourceHashes entry \"components/forms/Select.jsx\":\"a6ad2bab040c\" no longer describes the file it names. Found while planning the InfoBanner chore, which touches the same bundle; deliberately not folded into this run.",
+        "source": "1_DS for dev/components/forms/Select.jsx lines 41, 99-100; 1_DS for dev/_ds_bundle.js; specs/user-management/README.md line 64"
+      },
+      "suggestedFix": "Either sync Select into _ds_bundle.js in its own change, or soften the README's 'fixed' to say the specimen bundle still shows the old behaviour."
+    },
+    {
+      "stage": "review",
+      "id": "F1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-status-claim",
+      "file": "specs/user-management/README.md",
+      "symbol": "Design Layer — InfoBanner tone triplets",
+      "line": 60,
+      "claim": "the spec still records this chore as outstanding, and the seventeen new tokens are recorded in the design system's own README rather than in a design spec's \"DS gaps\" table — both are spec-side edits this run is forbidden to make",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/user-management/README.md:60 reads 'InfoBanner hardcodes its four tone triplets as literal oklch(...) values rather than tokens ... promoting them to tokens is the outstanding design-system chore before spec 03 adds more banners.' After this diff InfoBanner.jsx holds no literal at all (grep -rn 'oklch(' '1_DS for dev/components/' returns nothing), so that sentence describes a state that no longer exists. Line 54 of the same file says 'DS gaps — anything missing from the design system is added to the design system, not improvised per screen, and recorded in that design spec's \"DS gaps\" table'; the five scale steps and twelve --banner-* tokens are recorded only in '1_DS for dev/README.md' line 88. Neither can be fixed here: scripts/static-gate.mjs rule 1 (pipeline/spec-immutable, scripts/static-gate.mjs:57-67) halts any run that edits a file under specs/. This is the deliberate design — the spec changes first, by a person — so it is a note, not a block. It sits with the pre-implement notes P1 and P2, which the same edit can close.",
+        "source": "specs/user-management/README.md:60"
+      },
+      "suggestedFix": "in a separate, human-authored change: replace the line-60 paragraph with the closed state, and record the five scale steps and the twelve --banner-* tokens in the DS gaps table of the design spec that owns the banner (02-authentication-login.design.md)"
+    },
+    {
+      "stage": "review",
+      "id": "F2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/test-case-not-in-a-spec",
+      "file": "e2e/tests/ds-info-banner-tones.spec.ts",
+      "symbol": "TC-DS-BANNER-E2E-01",
+      "line": 79,
+      "claim": "the new e2e case carries an id that appears in no spec, because the handoff minted it",
+      "witness": {
+        "kind": "rule",
+        "detail": "CLAUDE.md:62-63 — 'Test cases are numbered in the specs (`TC-01-E2E-03`) and the code references those ids.' git grep 'TC-DS-BANNER-E2E-01' matches only e2e/tests/ds-info-banner-tones.spec.ts and this run's own .workflow files; no spec numbers it. The handoff says so itself ('The id is minted by this handoff because the chore carries no TC list', handoff.json T6). The alternative available to the implementer was to ship no guard at all, which would leave requirement 2 — every rendered pixel unchanged — pinned by nothing, so the test is the better of the two. The convention is still unmet, and only a spec edit can meet it.",
+        "source": "CLAUDE.md:62"
+      },
+      "suggestedFix": "when F1's spec edit lands, number this case in the design spec that owns InfoBanner so the id has a home, or rename it to that spec's numbering"
+    },
+    {
+      "stage": "review",
+      "id": "F3",
+      "target": "code",
+      "severity": "note",
+      "rule": "review/diff-not-committed",
+      "file": ".workflow/runs/2026-08-28T08-08-40_ds-infobanner-tokens/run.json",
+      "symbol": "baseRef",
+      "claim": "the branch carries no commit: HEAD is the base ref, so `git diff <baseRef>...HEAD` is empty and this review was performed against the working tree",
+      "witness": {
+        "kind": "scenario",
+        "detail": "git log --oneline -1 on spec/ds-infobanner-tokens prints d4b6afc, which is exactly run.json's baseRef, and `git diff d4b6afc...HEAD --stat` prints nothing. The whole change is staged/unstaged in the worktree instead ('1_DS for dev/tokens/colors.css', InfoBanner.jsx, _ds_bundle.js, _adherence.oxlintrc.json, _ds_manifest.json, 1_DS for dev/README.md, e2e/tests/ds-info-banner-tones.spec.ts). I reviewed `git diff d4b6afc` (base against worktree), which is the same content; QA and anything else that reads base...HEAD will see an empty diff and could report a vacuous pass.",
+        "source": "run.json:baseRef"
+      },
+      "suggestedFix": "commit the change on spec/ds-infobanner-tokens before QA reads the diff"
+    },
+    {
+      "stage": "review",
+      "id": "F4",
+      "target": "code",
+      "severity": "note",
+      "rule": "review/out-of-plan-files-in-worktree",
+      "file": "scripts/wf.mjs",
+      "symbol": "worktree",
+      "claim": "the worktree also carries pipeline changes that are in none of the seven planned tasks, so a PR cut from this branch would ship them with the token promotion",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Beyond the seven planned files, `git status` shows package.json (adds the 'ship' script), scripts/ship.mjs (new, 273 lines), scripts/wf.mjs (+154: a `wf watch` command, richer status/log, and AUTHORITY.implement = ['spec']), .claude/agents/implementer.md (+33) and .claude/skills/ship/SKILL.md (110 changed). Preflight at 08:08:40 recorded 'worktree-clean — nothing in flight outside .workflow/', so they arrived during the run. I checked them for gate weakening and found none: scripts/static-gate.mjs is untouched, and in 1_DS for dev/_adherence.oxlintrc.json the plugins, rules and overrides objects are byte-identical to the base while x-omelette.tokens and tokenKinds are insertion-only (162 -> 179, every prior entry kept with its original value). They read as the human's own pipeline work rather than the implementer's, which is why this is a note; whoever opens the PR should still decide whether they belong on this branch.",
+        "source": "run.json:preflight.checks[worktree-clean]"
+      },
+      "suggestedFix": "split the pipeline tooling into its own commit or branch before opening the PR for the token promotion"
+    }
+  ],
+  "halt": null,
+  "preflight": {
+    "at": "2026-08-28T08:08:40.692Z",
+    "checks": [
+      {
+        "name": "branch-not-protected",
+        "ok": true,
+        "detail": "on \"spec/ds-infobanner-tokens\""
+      },
+      {
+        "name": "spec-unchanged",
+        "ok": true,
+        "detail": "spec sha256 matches the one recorded at init"
+      },
+      {
+        "name": "api-env-present",
+        "ok": true,
+        "detail": "apps/api/.env exists (untracked — a fresh worktree does not get one)"
+      },
+      {
+        "name": "node-modules-present",
+        "ok": true,
+        "detail": "dependencies installed"
+      },
+      {
+        "name": "prisma-client-generated",
+        "ok": true,
+        "detail": "prisma client generated (postinstall runs it from apps/api)"
+      },
+      {
+        "name": "migration-baseline",
+        "ok": true,
+        "detail": "9 migrations recorded as the baseline"
+      },
+      {
+        "name": "worktree-clean",
+        "ok": true,
+        "detail": "nothing in flight outside .workflow/"
+      }
+    ],
+    "migrations": [
+      "20260724114549_init",
+      "20260824080000_documents_templates",
+      "20260824090000_documents_envelopes",
+      "20260824100000_documents_member_profile",
+      "20260826121829_add_invitations_and_job_title",
+      "20260827090541_spec_06_account_settings",
+      "20260827093348_spec_07_member_financials",
+      "20260827120241_spec_08_vacation_reserve",
+      "20260827123444_spec_09_vacation_requests"
+    ]
+  }
+}

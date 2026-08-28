@@ -29,6 +29,7 @@
   --char-sub:#A69C8A;
 
   /* ---- Accent: Violet (primary action, focus, "live") ---- */
+  --violet-100:oklch(0.97 0.02 292);
   --violet-200:oklch(0.95 0.035 292);
   --violet-400:oklch(0.85 0.06 292);
   --violet-500:oklch(0.68 0.17 292);   /* dark accent */
@@ -45,12 +46,16 @@
   --amber-800:oklch(0.5 0.1 74);
 
   /* ---- Success: green ---- */
+  --success-50:oklch(0.96 0.03 160);
   --success-100:oklch(0.95 0.04 160);
+  --success-300:oklch(0.8 0.08 160);
   --success-500:oklch(0.58 0.11 160);
   --success-700:oklch(0.45 0.1 160);
 
   /* ---- Error: red ---- */
+  --error-50:oklch(0.96 0.03 25);
   --error-100:oklch(0.95 0.04 25);
+  --error-300:oklch(0.8 0.1 25);
   --error-400:oklch(0.7 0.12 25);
   --error-500:oklch(0.55 0.2 25);
   --error-600:oklch(0.5 0.18 25);
@@ -90,6 +95,22 @@
   --status-inactive-bg:var(--error-100);
   --status-inactive-ink:var(--error-600);
   --status-inactive-dot:var(--error-500);
+
+  /* InfoBanner tones — promoted out of the component so every banner names a token.
+     --banner-info-ink aliases --accent (not --violet-700) because --accent is
+     redefined under [data-theme="dark"] and the component followed it. */
+  --banner-info-bg:var(--violet-100);
+  --banner-info-border:var(--violet-400);
+  --banner-info-ink:var(--accent);
+  --banner-warning-bg:var(--amber-100);
+  --banner-warning-border:var(--amber-300);
+  --banner-warning-ink:var(--amber-800);
+  --banner-error-bg:var(--error-50);
+  --banner-error-border:var(--error-300);
+  --banner-error-ink:var(--error-500);
+  --banner-success-bg:var(--success-50);
+  --banner-success-border:var(--success-300);
+  --banner-success-ink:var(--success-700);
 }
 
 [data-theme="dark"]{

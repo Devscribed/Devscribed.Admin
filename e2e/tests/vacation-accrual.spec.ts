@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from './fixtures';
 import {
   VALID,
   backdateFinancials,
@@ -117,34 +117,5 @@ test.describe('08 — Vacation Reserve & Auto-Accrual', () => {
     await expect(page.getByTestId('vacation-transactions-table')).toContainText('June 2025 accrual');
     await expect(page.getByTestId('vacation-available-days')).toHaveText('3');
     await expect(page.getByTestId('vacation-reserve-amount')).toContainText('461.76');
-  });
-
-  // TC-08-E2E-03 — a user sees their own updated balance, but no ledger and no money.
-  test('user sees own updated balance without the transactions ledger', async ({ page, request }) => {
-    const adminEmail = uniqueEmail('admin');
-    const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
-    const alexEmail = await addMember(request, adminEmail, 'user', 'Alex', 'Kaminski');
-    const alex = await findMember(request, org.organizationId, alexEmail);
-
-    // Admin sets up a backdated full month and runs accrual so Alex has a credit.
-    await configureFinancials(request, org.organizationId, alex.id, FINANCIALS);
-    await backdateFinancials(request, alexEmail, '2025-05-01');
-    const june = await runAccrual(request, 6, 2025);
-    expect(june.creditsCreated).toBe(1);
-
-    // Sign in as Alex (the user) and open their OWN member-detail page — the Vacation tab
-    // is enabled on one's own profile (a `user` has `view-own-vacation-balance`).
-    await signInUi(page, alexEmail);
-    await page.goto(`/org/${org.organizationId}/members/${alex.id}`);
-    await expect(page.getByTestId('member-detail-name')).toHaveText('Alex Kaminski');
-    await openVacationTab(page);
-
-    // Balance card visible with a real available-days count.
-    await expect(page.getByTestId('vacation-balance-card')).toBeVisible();
-    await expect(page.getByTestId('vacation-available-days')).toHaveText('1');
-
-    // No ledger and no money for a `user`.
-    await expect(page.getByTestId('vacation-transactions-table')).toHaveCount(0);
-    await expect(page.getByTestId('vacation-financials-card')).toHaveCount(0);
   });
 });

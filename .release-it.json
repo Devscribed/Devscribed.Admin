@@ -1,0 +1,35 @@
+{
+  "$schema": "https://unpkg.com/release-it@21/schema/release-it.json",
+  "git": {
+    "requireBranch": "main",
+    "requireCleanWorkingDir": true,
+    "requireUpstream": true,
+    "commit": true,
+    "commitMessage": "Release v${version}",
+    "tag": true,
+    "tagName": "v${version}",
+    "tagAnnotation": "Release v${version}",
+    "push": true,
+    "pushArgs": [
+      "--follow-tags"
+    ],
+    "changelog": "node scripts/changelog.mjs --print"
+  },
+  "npm": {
+    "publish": false
+  },
+  "github": {
+    "release": true,
+    "releaseName": "v${version}",
+    "autoGenerate": false,
+    "releaseNotes": "node scripts/changelog.mjs --print"
+  },
+  "hooks": {
+    "before:init": [
+      "npm run test:unit"
+    ],
+    "after:bump": [
+      "node scripts/changelog.mjs ${version}"
+    ]
+  }
+}

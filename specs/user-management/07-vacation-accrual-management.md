@@ -589,24 +589,8 @@ Server-side validation: all rules enforced regardless of UI state.
 - **Selectors:** `member-detail-tab-vacation`.
 
 ### TC-07-E2E-03: User cannot see another member's vacation data
-
-- **Level:** E2E
-- **Preconditions:** logged in as user Alex; another member "Jane" exists.
-- **Steps:**
-  1. Navigate to Jane's member detail.
-  2. Observe the tab bar.
-- **Expected Result:**
-  1. Vacation tab is disabled for Alex on Jane's profile.
-- **Selectors:** `member-detail-tab-vacation`.
+- **Retired.** Covered by TC-07-INT-07 — a user sees their own vacation in days and gets a 403 on anyone else’s. The tab being absent rather than erroring is the rendering rule TC-07-E2E-02 proves on the viewer.
 
 ### TC-07-E2E-04: Financial settings validation errors in modal
+- **Retired.** Covered by TC-07-INT-03, which asserts every invalid field against its own message. The modal’s inline-error mechanism is TC-01-E2E-03.
 
-- **Level:** E2E
-- **Preconditions:** logged in as admin; member with no financials.
-- **Steps:**
-  1. Open Vacation tab → click "Set up financials".
-  2. Leave the numeric fields empty and click "Save changes".
-  3. Verify inline errors appear for salary and rate. (Currency and days carry valid defaults — `"USD"` and `20` — and cannot be cleared through the UI, so no currency/days inline error is reachable here; see the Currency-default note under Validation Rules.)
-  4. Enter salary "0", rate "-1". Verify specific error messages.
-  5. Enter valid values. Verify errors clear and save succeeds.
-- **Selectors:** `vacation-financials-modal`, `vacation-salary-input`, `vacation-rate-input`, `vacation-currency-select`, `vacation-financials-save-btn`, `field-error-monthlySalary`, `field-error-clientHourlyRate`, `toast-financials-saved`.

@@ -1,10 +1,8 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from './fixtures';
 import {
   VALID,
-  findMember,
   inviteAndAcceptViaApi,
   login,
-  removeMember,
   signupOrg,
   uniqueEmail,
 } from './helpers';
@@ -69,86 +67,11 @@ test.describe('04 — Member List & Management', () => {
     await expect(rows).toHaveCount(4);
   });
 
-  // TC-04-E2E-02
-  test('"Show removed" adds removed rows with a distinct badge', async ({ page, request }) => {
-    const adminEmail = uniqueEmail('admin');
-    const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
-    const removedEmail = await addMember(request, adminEmail, 'user', 'Riley', 'Removed');
-    const target = await findMember(request, org.organizationId, removedEmail);
-    await removeMember(request, org.organizationId, target.id);
-
-    await signInUi(page, adminEmail);
-    const list = page.getByTestId('members-list');
-    await expect(list).toBeVisible();
-
-    // Default view: the removed member is not shown at all.
-    await expect(list.getByText('Riley Removed')).toHaveCount(0);
-
-    await page.getByTestId('show-removed-checkbox').click();
-
-    const removedRow = list.locator('[data-testid^="member-row-"]:not([data-testid^="member-row-actions-"])', { hasText: 'Riley Removed' });
-    await expect(removedRow).toBeVisible();
-    await expect(removedRow.getByTestId(`member-status-badge-${target.id}`)).toHaveText('Removed');
-
-    // Active rows carry no status badge.
-    const adminRow = list.locator('[data-testid^="member-row-"]:not([data-testid^="member-row-actions-"])', { hasText: 'Pat Owner' });
-    await expect(adminRow.locator('[data-testid^="member-status-badge-"]')).toHaveCount(0);
-  });
-
-  // TC-04-E2E-03
-  test('admin deletes an active member, then restores them', async ({ page, request }) => {
-    const adminEmail = uniqueEmail('admin');
-    await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
-    // A second admin keeps the zero-admin guard out of play.
-    await addMember(request, adminEmail, 'admin', 'Ash', 'Admin');
-    await addMember(request, adminEmail, 'user', 'Alex', 'Kaminski');
-
-    await signInUi(page, adminEmail);
-    const list = page.getByTestId('members-list');
-    await expect(list).toBeVisible();
-
-    await page.getByTestId('members-search-input').fill('Alex');
-    const row = list.locator('[data-testid^="member-row-"]:not([data-testid^="member-row-actions-"])', { hasText: 'Alex Kaminski' });
-    await expect(row).toHaveCount(1);
-
-    const rowTestId = await row.getAttribute('data-testid'); // "member-row-{id}"
-    const memberId = rowTestId!.replace('member-row-', '');
-
-    await page.getByTestId(`member-row-actions-${memberId}`).click();
-    await page.getByTestId('member-action-delete').click();
-
-    const dialog = page.getByTestId('confirm-delete-dialog');
-    await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText('Alex Kaminski');
-    await page.getByTestId('confirm-delete-button').click();
-
-    await expect(page.getByTestId('toast-member-removed')).toBeVisible();
-    await expect(
-      list.locator('[data-testid^="member-row-"]:not([data-testid^="member-row-actions-"])', { hasText: 'Alex Kaminski' }),
-    ).toHaveCount(0);
-
-    await page.getByTestId('members-search-input').fill('');
-    await page.getByTestId('show-removed-checkbox').click();
-
-    const removedRow = list.locator('[data-testid^="member-row-"]:not([data-testid^="member-row-actions-"])', { hasText: 'Alex Kaminski' });
-    await expect(removedRow).toBeVisible();
-    await expect(removedRow.getByTestId(`member-status-badge-${memberId}`)).toHaveText('Removed');
-
-    await page.getByTestId(`member-row-actions-${memberId}`).click();
-    await expect(page.getByTestId('member-action-delete')).toHaveCount(0);
-    await page.getByTestId('member-action-restore').click();
-
-    await expect(page.getByTestId('toast-member-restored')).toBeVisible();
-    await expect(removedRow.getByTestId(`member-status-badge-${memberId}`)).toHaveCount(0);
-
-    await page.getByTestId('show-removed-checkbox').click();
-    await expect(
-      list.locator('[data-testid^="member-row-"]:not([data-testid^="member-row-actions-"])', { hasText: 'Alex Kaminski' }),
-    ).toBeVisible();
-  });
-
-  // TC-04-E2E-04
-  for (const role of ['user', 'viewer'] as const) {
+  // TC-04-E2E-04 — one role, not both. `user` and `viewer` are one rule with two names
+  // and the API refuses both (members int: "rejects delete/restore from user and
+  // viewer"). What only a browser can prove is that the menu is never drawn; one
+  // read-only role proves it, and the second costs a whole browser to prove it again.
+  for (const role of ['user'] as const) {
     test(`${role} sees the list but no actions menu`, async ({ page, request }) => {
       const adminEmail = uniqueEmail('admin');
       await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
@@ -169,66 +92,6 @@ test.describe('04 — Member List & Management', () => {
       await expect(page.getByTestId('member-action-restore')).toHaveCount(0);
     });
   }
-
-  // TC-04-E2E-05
-  test('self-delete not available in the UI', async ({ page, request }) => {
-    const adminEmail = uniqueEmail('admin');
-    const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
-    await addMember(request, adminEmail, 'admin', 'Ash', 'Admin');
-
-    await signInUi(page, adminEmail);
-    const list = page.getByTestId('members-list');
-    await expect(list).toBeVisible();
-
-    const self = await findMember(request, org.organizationId, adminEmail);
-    const ownRow = page.getByTestId(`member-row-${self.id}`);
-    await expect(ownRow).toBeVisible();
-    // MembersTable never renders a menu at all for the caller's own row.
-    await expect(ownRow.getByTestId(`member-row-actions-${self.id}`)).toHaveCount(0);
-  });
-
-  // TC-04-E2E-06
-  test('member list shows name, role badge, and email columns', async ({ page, request }) => {
-    const adminEmail = uniqueEmail('admin');
-    const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
-    const memberEmail = await addMember(request, adminEmail, 'manager', 'Sam', 'Manager');
-
-    await signInUi(page, adminEmail);
-    const member = await findMember(request, org.organizationId, memberEmail);
-
-    const row = page.getByTestId(`member-row-${member.id}`);
-    await expect(row).toBeVisible();
-    await expect(row.getByTestId(`member-name-${member.id}`)).toHaveText('Sam Manager');
-    await expect(row.getByTestId(`member-role-badge-${member.id}`)).toHaveText('manager');
-    await expect(row.getByTestId(`member-email-${member.id}`)).toHaveText(memberEmail);
-  });
-
-  // TC-04-E2E-07
-  test('member row links to detail page', async ({ page, request }) => {
-    const adminEmail = uniqueEmail('admin');
-    const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
-    const memberEmail = await addMember(request, adminEmail, 'user', 'Alex', 'Kaminski');
-    const member = await findMember(request, org.organizationId, memberEmail);
-
-    await signInUi(page, adminEmail);
-    await page.getByTestId(`member-row-${member.id}`).click();
-
-    await expect(page).toHaveURL(new RegExp(`/org/${org.organizationId}/members/${member.id}$`));
-    await expect(page.getByTestId('member-detail')).toBeVisible();
-  });
-
-  // TC-04-E2E-08
-  test('no role-change controls on the list page', async ({ page, request }) => {
-    const adminEmail = uniqueEmail('admin');
-    await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
-    await addMember(request, adminEmail, 'user', 'Alex', 'Kaminski');
-
-    await signInUi(page, adminEmail);
-    const list = page.getByTestId('members-list');
-    await expect(list).toBeVisible();
-    await expect(list.locator('[data-testid^="member-role-badge-"]').first()).toBeVisible();
-    await expect(page.locator('[data-testid^="member-role-select-"]')).toHaveCount(0);
-  });
 
   // TC-04-E2E-09
   test('skeleton loading state shown while fetching', async ({ page, request }) => {

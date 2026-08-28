@@ -783,42 +783,14 @@ Server-side validation: all rules enforced regardless of UI state.
 - **Selectors:** `member-detail-tab-vacation`, `vacation-request-approve-{R1.id}`, `toast-request-approved`, `vacation-request-status-{R1.id}`, `vacation-used-days`, `vacation-pending-days`.
 
 ### TC-09-E2E-03: User cancels own pending request
-
-- **Level:** E2E
-- **Preconditions:** logged in as user Alex; has a pending request R.
-- **Steps:**
-  1. Open own Vacation tab. Click "Cancel" on R.
-  2. Confirm in the dialog.
-  3. Verify toast "Request cancelled". Status changes to ○ Cancelled. Available days restored.
-- **Selectors:** `vacation-request-cancel-{R.id}`, `toast-request-cancelled`, `vacation-request-status-{R.id}`, `vacation-available-days`.
+- **Retired.** Covered by TC-09-INT-09, which additionally asserts that cancelling an own pending request writes no transaction.
 
 ### TC-09-E2E-04: Manager cancels approved request (refund)
-
-- **Level:** E2E
-- **Preconditions:** logged in as manager; member Alex has an approved request R.
-- **Steps:**
-  1. Open Alex's Vacation tab. Click "Cancel" on R.
-  2. Confirm in the dialog (notice: "The reserve will be refunded").
-  3. Verify toast "Request cancelled and reserve refunded". Status → Cancelled. Reserve balance increased. A refund transaction visible in the table.
-- **Selectors:** `vacation-request-cancel-{R.id}`, `toast-request-cancelled`, `vacation-request-status-{R.id}`, `vacation-reserve-amount`, `vacation-transactions-table`.
+- **Retired.** Covered by TC-09-INT-10 (the reserve is refunded). The case also existed verbatim as TC-10-E2E-04 in the requests-page suite: one rule, two browsers.
 
 ### TC-09-E2E-05: Insufficient balance blocks request submission
-
-- **Level:** E2E
-- **Preconditions:** logged in as user Alex; 2 available days.
-- **Steps:**
-  1. Click "Request vacation". Select dates spanning 5 working days.
-  2. Click "Submit request".
-  3. Verify inline error "Insufficient vacation balance. You have 2 day(s) available." Modal stays open.
-- **Selectors:** `vacation-request-btn`, `vacation-request-modal`, `vacation-start-date-input`, `vacation-end-date-input`, `vacation-request-submit-btn`, `vacation-request-error`.
+- **Retired.** Covered by TC-09-INT-02, which asserts the `insufficient_balance` refusal. That the modal stays open on a rejected submit is the shared form-error mechanism TC-02-E2E-02 keeps.
 
 ### TC-09-E2E-06: Self-approval blocked in UI
+- **Retired.** Covered by TC-09-INT-07 — self-approval is refused and the request stays pending. Hiding the control is the same role-gated rendering rule proved once by TC-01-E2E-07 in the documents area.
 
-- **Level:** E2E
-- **Preconditions:** logged in as admin A; A has submitted a pending vacation request R.
-- **Steps:**
-  1. Open own member detail → Vacation tab.
-  2. Observe the pending request R.
-- **Expected Result:**
-  1. The "Approve" and "Reject" buttons are NOT shown on the request (since A is the owner). Only "Cancel" is available. The review must be done by a different admin/manager.
-- **Selectors:** `vacation-request-row-{R.id}`, `vacation-request-approve-{R.id}` (asserted absent), `vacation-request-reject-{R.id}` (asserted absent), `vacation-request-cancel-{R.id}`.

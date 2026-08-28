@@ -12,6 +12,16 @@
     "test:int": "npm run test --workspace @devscribed/api",
     "test:e2e": "npm run test --workspace @devscribed/e2e",
     "dev": "npm run dev --workspace @devscribed/api & npm run dev --workspace @devscribed/web",
-    "build": "npm run build --workspaces --if-present"
+    "build": "npm run build --workspaces --if-present",
+    "release": "release-it",
+    "release:dry": "release-it --dry-run",
+    "wf": "node scripts/wf.mjs",
+    "wf:status": "node scripts/wf.mjs status",
+    "wf:log": "node scripts/wf.mjs log",
+    "gate": "node scripts/static-gate.mjs",
+    "ship": "node scripts/ship.mjs"
+  },
+  "devDependencies": {
+    "release-it": "21.0.2"
   }
 }

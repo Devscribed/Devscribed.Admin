@@ -679,14 +679,7 @@ Accept invitation screen:
 - **Selectors:** `invite-open-button`, `invite-email-input`, `invite-role-select`, `invite-submit-button`, `toast-invite-sent`, `accept-invite-screen`, `accept-invite-org-name`, `accept-first-name-input`, `accept-last-name-input`, `accept-password-input`, `accept-submit-button`, `members-list`, `member-row-{id}`.
 
 ### TC-03-E2E-02: Expired link shows an explicit error
-- **Level:** E2E
-- **Preconditions:** an expired invitation link for `late@acme.com`.
-- **Steps:**
-  1. Open the expired invitation link.
-- **Expected Result:**
-  1. The accept screen shows "This invitation has expired" in `accept-invite-error`.
-  2. No password/accept fields are visible.
-- **Selectors:** `accept-invite-screen`, `accept-invite-error`.
+- **Retired.** Covered by TC-03-INT-02 for the refusal, over the four expiry boundaries `invitation-token.spec.ts` pins (+6d23h, exactly +7d, +7d1m). The accept screen’s error branch is the same one TC-03-E2E-01 leaves unrendered on the happy path.
 
 ### TC-03-E2E-03: Manager invites with non-admin role picker
 - **Level:** E2E
@@ -700,16 +693,7 @@ Accept invitation screen:
 - **Selectors:** `invite-open-button`, `invite-form`, `invite-role-select`.
 
 ### TC-03-E2E-04: Existing user accepts invitation with password confirmation
-- **Level:** E2E
-- **Preconditions:** account `pat@other.com` exists; valid invitation to "Acme Inc" for `pat@other.com`.
-- **Steps:**
-  1. Open the invitation link.
-  2. Verify the accept screen shows "Acme Inc" and a password field (not name/create-account fields).
-  3. Enter the correct password and submit.
-- **Expected Result:**
-  1. The accept screen shows the greeting and password field for identity confirmation.
-  2. After submission, the user is authenticated in "Acme Inc".
-- **Selectors:** `accept-invite-screen`, `accept-invite-org-name`, `accept-password-input`, `accept-submit-button`.
+- **Retired.** Covered by TC-03-INT-09 and TC-03-INT-10 — an existing account accepts with the right password, and is refused, without spending the token, with the wrong one.
 
 ### TC-03-E2E-05: Last admin accepts invite to another org — warning and confirmation shown
 - **Level:** E2E
@@ -726,18 +710,7 @@ Accept invitation screen:
 - **Selectors:** `accept-invite-screen`, `accept-org-switch-warning`, `accept-org-switch-confirm`, `accept-password-input`, `accept-submit-button`.
 
 ### TC-03-E2E-06: Org-switch (non-last-admin) shows warning and requires confirmation
-- **Level:** E2E
-- **Preconditions:** account `user@orgA.com` is a `user` of "Org A" (Org A has other admins); valid invitation to "Org B" for `user@orgA.com`.
-- **Steps:**
-  1. Open the invitation link.
-  2. Verify the org-switch warning banner is displayed.
-  3. Verify the submit button is disabled until "I understand" is checked.
-  4. Check the checkbox, enter password, and submit.
-- **Expected Result:**
-  1. The warning states the user will be removed from "Org A" and data will be deleted.
-  2. No last-admin warning is shown (Org A has other admins).
-  3. After confirming, the user is in "Org B".
-- **Selectors:** `accept-invite-screen`, `accept-org-switch-warning`, `accept-org-switch-confirm`, `accept-password-input`, `accept-submit-button`.
+- **Retired.** Covered by TC-03-INT-04 and TC-03-INT-14 for the rule. The warning banner and its confirmation gate are proved in the browser by TC-03-E2E-05; this case differed from it by one line of copy, for a whole browser.
 
 ### TC-03-E2E-07: New-account accept with inline validation errors
 - **Level:** E2E
@@ -755,23 +728,8 @@ Accept invitation screen:
 - **Selectors:** `accept-invite-screen`, `accept-invite-org-name`, `accept-first-name-input`, `accept-last-name-input`, `accept-password-input`, `accept-submit-button`, `field-error-firstName`, `field-error-password`.
 
 ### TC-03-E2E-08: Invite modal shows server error for already-a-member
-- **Level:** E2E
-- **Preconditions:** logged in as `admin` of "Acme Inc"; `member@acme.com` is already an active member of "Acme Inc".
-- **Steps:**
-  1. Click "Invite member" on the Members screen.
-  2. Enter `member@acme.com`, select role `user`, and submit.
-- **Expected Result:**
-  1. The modal remains open.
-  2. `invite-error-message` shows "This person is already a member of your organization".
-  3. Form fields retain their values; submit button re-enables.
-- **Selectors:** `invite-open-button`, `invite-email-input`, `invite-role-select`, `invite-submit-button`, `invite-error-message`.
+- **Retired.** Covered by TC-03-INT-15 (inviting an active member of the same org is rejected). That the modal survives a server error and stays usable is the shared form-error mechanism TC-02-E2E-02 keeps.
 
 ### TC-03-E2E-09: Used invitation link shows explicit error
-- **Level:** E2E
-- **Preconditions:** an invitation link that has already been accepted (status `used`).
-- **Steps:**
-  1. Open the used invitation link.
-- **Expected Result:**
-  1. The accept screen shows "This invitation is no longer valid" in `accept-invite-error`.
-  2. No password/accept fields are visible.
-- **Selectors:** `accept-invite-screen`, `accept-invite-error`.
+- **Retired.** Covered by TC-03-INT-03 and by `invitation-token.spec.ts` ("rejects a used token"). A used and an expired link differ only in which message the same screen shows.
+

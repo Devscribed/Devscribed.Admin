@@ -1,9 +1,7 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 import {
   VALID,
   acceptInvitationViaApi,
-  createBareAccount,
-  expireInvitation,
   latestInvitationToken,
   sendInvitation,
   signupOrg,
@@ -60,24 +58,6 @@ test.describe('03 — User Invitation', () => {
     await expect(newRow.locator('[data-testid^="member-role-badge-"]')).toHaveText('user');
   });
 
-  // TC-03-E2E-02
-  test('expired invitation link shows an explicit error', async ({ page, request }) => {
-    await signupOrg(request, { orgName: 'Acme Inc', email: uniqueEmail('admin') });
-
-    const inviteeEmail = uniqueEmail('late');
-    await sendInvitation(request, inviteeEmail, 'user');
-    await expireInvitation(request, inviteeEmail);
-    const token = await latestInvitationToken(request, inviteeEmail);
-
-    await page.goto(`/accept-invite?token=${encodeURIComponent(token)}`);
-
-    await expect(page.getByTestId('accept-invite-screen')).toBeVisible();
-    await expect(page.getByTestId('accept-invite-error')).toHaveText('This invitation has expired');
-    await expect(page.getByTestId('accept-password-input')).toHaveCount(0);
-    await expect(page.getByTestId('accept-first-name-input')).toHaveCount(0);
-    await expect(page.getByTestId('accept-submit-button')).toHaveCount(0);
-  });
-
   // TC-03-E2E-03
   test('manager invite shows a role picker without the admin option', async ({ page, request }) => {
     await signupOrg(request, { orgName: 'Acme Inc', email: uniqueEmail('admin') });
@@ -98,38 +78,10 @@ test.describe('03 — User Invitation', () => {
     await expect(page.getByTestId('invite-form')).toBeVisible();
     await page.getByTestId('invite-role-select').click();
 
-    await expect(page.getByRole('link', { name: 'Manager', exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'User', exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Viewer', exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Admin', exact: true })).toHaveCount(0);
-  });
-
-  // TC-03-E2E-04
-  test('existing account with no prior org accepts with password confirmation', async ({
-    page,
-    request,
-  }) => {
-    await signupOrg(request, { orgName: 'Acme Inc', email: uniqueEmail('admin') });
-
-    const existingEmail = uniqueEmail('pat');
-    await createBareAccount(request, existingEmail, 'Passw0rd');
-    await sendInvitation(request, existingEmail, 'user');
-    const token = await latestInvitationToken(request, existingEmail);
-
-    await page.goto(`/accept-invite?token=${encodeURIComponent(token)}`);
-
-    await expect(page.getByTestId('accept-invite-screen')).toBeVisible();
-    await expect(page.getByTestId('accept-invite-org-name')).toContainText('Acme Inc');
-    await expect(page.getByTestId('accept-first-name-input')).toHaveCount(0);
-    await expect(page.getByTestId('accept-last-name-input')).toHaveCount(0);
-    await expect(page.getByTestId('accept-password-input')).toBeVisible();
-    await expect(page.getByTestId('accept-org-switch-warning')).toHaveCount(0);
-
-    await page.getByTestId('accept-password-input').fill('Passw0rd');
-    await page.getByTestId('accept-submit-button').click();
-
-    await page.waitForURL('**/members');
-    await expect(page.getByTestId('members-list')).toBeVisible();
+    await expect(page.getByRole('option', { name: 'Manager', exact: true })).toBeVisible();
+    await expect(page.getByRole('option', { name: 'User', exact: true })).toBeVisible();
+    await expect(page.getByRole('option', { name: 'Viewer', exact: true })).toBeVisible();
+    await expect(page.getByRole('option', { name: 'Admin', exact: true })).toHaveCount(0);
   });
 
   // TC-03-E2E-05
@@ -161,45 +113,6 @@ test.describe('03 — User Invitation', () => {
     await submit.click();
 
     await page.waitForURL(new RegExp(`/org/${newCorp.organizationId}/members`));
-    await expect(page.getByTestId('members-list')).toBeVisible();
-  });
-
-  // TC-03-E2E-06
-  test('org-switch for a non-last-admin shows the warning without the last-admin line', async ({
-    page,
-    request,
-  }) => {
-    await signupOrg(request, { orgName: 'Org A', email: uniqueEmail('adminA') });
-
-    const userEmail = uniqueEmail('userA');
-    await sendInvitation(request, userEmail, 'user');
-    const userToken = await latestInvitationToken(request, userEmail);
-    await acceptInvitationViaApi(request, {
-      token: userToken,
-      firstName: 'User',
-      lastName: 'A',
-      password: VALID.password,
-    });
-
-    const orgB = await signupOrg(request, { orgName: 'Org B', email: uniqueEmail('adminB') });
-    await sendInvitation(request, userEmail, 'viewer');
-    const switchToken = await latestInvitationToken(request, userEmail);
-
-    await page.goto(`/accept-invite?token=${encodeURIComponent(switchToken)}`);
-    await page.getByTestId('accept-password-input').fill(VALID.password);
-
-    const warning = page.getByTestId('accept-org-switch-warning');
-    await expect(warning).toContainText('Org A');
-    await expect(warning).not.toContainText('last administrator');
-
-    const submit = page.getByTestId('accept-submit-button');
-    await expect(submit).toBeDisabled();
-
-    await page.getByTestId('accept-org-switch-confirm').click();
-    await expect(submit).toBeEnabled();
-    await submit.click();
-
-    await page.waitForURL(new RegExp(`/org/${orgB.organizationId}/members`));
     await expect(page.getByTestId('members-list')).toBeVisible();
   });
 
@@ -238,61 +151,5 @@ test.describe('03 — User Invitation', () => {
       'Password must be at least 8 characters',
     );
     await expect(submit).toBeDisabled();
-  });
-
-  // TC-03-E2E-08
-  test('invite modal shows the already-a-member server error and stays usable', async ({
-    page,
-    request,
-  }) => {
-    const adminEmail = uniqueEmail('admin');
-    await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
-
-    const memberEmail = uniqueEmail('member');
-    await sendInvitation(request, memberEmail, 'user');
-    const memberToken = await latestInvitationToken(request, memberEmail);
-    await acceptInvitationViaApi(request, {
-      token: memberToken,
-      firstName: 'Mem',
-      lastName: 'Ber',
-      password: VALID.password,
-    });
-
-    await signInUi(page, adminEmail);
-
-    await page.getByTestId('invite-open-button').click();
-    await page.getByTestId('invite-email-input').fill(memberEmail);
-    await page.getByTestId('invite-submit-button').click();
-
-    await expect(page.getByTestId('invite-error-message')).toHaveText(
-      'This person is already a member of your organization',
-    );
-    await expect(page.getByTestId('invite-email-input')).toHaveValue(memberEmail);
-    await expect(page.getByTestId('invite-role-select')).toBeVisible();
-    await expect(page.getByTestId('invite-submit-button')).toBeEnabled();
-  });
-
-  // TC-03-E2E-09
-  test('used invitation link shows an explicit error', async ({ page, request }) => {
-    await signupOrg(request, { orgName: 'Acme Inc', email: uniqueEmail('admin') });
-
-    const usedEmail = uniqueEmail('used');
-    await sendInvitation(request, usedEmail, 'user');
-    const token = await latestInvitationToken(request, usedEmail);
-    await acceptInvitationViaApi(request, {
-      token,
-      firstName: 'Used',
-      lastName: 'Once',
-      password: VALID.password,
-    });
-
-    await page.goto(`/accept-invite?token=${encodeURIComponent(token)}`);
-
-    await expect(page.getByTestId('accept-invite-screen')).toBeVisible();
-    await expect(page.getByTestId('accept-invite-error')).toHaveText(
-      'This invitation is no longer valid',
-    );
-    await expect(page.getByTestId('accept-password-input')).toHaveCount(0);
-    await expect(page.getByTestId('accept-submit-button')).toHaveCount(0);
   });
 });

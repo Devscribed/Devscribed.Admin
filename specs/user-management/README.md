@@ -23,6 +23,14 @@ Functional specifications for the user-management surface of Devscribed.Admin. E
 | 14 | [Task Collaboration](14-task-collaboration.md) | [design](14-task-collaboration.design.md) · [mockup](14-task-collaboration.mock.html) | labels, comments, watchers, activity-log, tasks, collaboration |
 | 15 | [Time Tracking ↔ Tasks Integration](15-time-tracking-tasks.md) | [design](15-time-tracking-tasks.design.md) · [mockup](15-time-tracking-tasks.mock.html) | time-tracking, tasks, kanban, task-selector, time-logged |
 
+## Related Areas
+
+[`specs/documents/`](../documents/README.md) — contract templates and two-party electronic
+signature. It builds on this area: the token pattern from spec 02, the member list from spec 04,
+and the member detail tabs from spec 05 (it adds a Contract details tab). It also introduces the
+first role-based authorization in the codebase and, until the role enum below is migrated, resolves
+capabilities through a `normalizeRole()` helper that maps the legacy `member` value to `user`.
+
 ## Shared Rules
 
 | Rule | Defined in | Referenced by |

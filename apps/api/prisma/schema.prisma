@@ -1,13 +1,27 @@
 generator client {
   provider = "prisma-client-js"
+
+  // `native` alone is not enough, and the failure it causes is worth spelling out.
+  //
+  // Prisma picks its query-engine binary by *detecting* the OpenSSL version at generate
+  // time. The container image generates in `node:22-bookworm-slim`, which ships no
+  // OpenSSL at all, so detection falls back to `debian-openssl-1.1.x` — and then the
+  // runtime, which does have OpenSSL 3, cannot load it. The application starts, maps
+  // every route, and dies on the first database call with "Unable to require
+  // libquery_engine".
+  //
+  // Naming the target removes the guess. `native` stays first so a developer on Windows
+  // or macOS still gets their own engine.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
-  provider  = "postgresql"
-  // Neon's pooled endpoint in production, a plain local Postgres in dev and tests.
+  provider = "postgresql"
+  // RDS PostgreSQL in a deployed environment, a plain local Postgres in dev and tests.
   url       = env("DATABASE_URL")
-  // Migrations must bypass the pooler — pgbouncer cannot run the advisory locks and
-  // DDL transactions Prisma Migrate needs. Locally both point at the same server.
+  // Prisma Migrate needs advisory locks and DDL transactions, neither of which survives a
+  // pooler, so this must never be a pooled endpoint. There is no pooler in front of RDS,
+  // so deployed environments give it the same value; locally it is the same server.
   directUrl = env("DIRECT_URL")
 }
 
@@ -38,6 +52,13 @@ model Account {
 
   memberships               Membership[]
   passwordResetTokens       PasswordResetToken[]
+  templatesCreated          DocumentTemplate[]           @relation("TemplatesCreated")
+  templatesArchived         DocumentTemplate[]           @relation("TemplatesArchived")
+  templateVersionsCreated   DocumentTemplateVersion[]    @relation("TemplateVersionsCreated")
+  envelopesCreated          Envelope[]                   @relation("EnvelopesCreated")
+  envelopesVoided           Envelope[]                   @relation("EnvelopesVoided")
+  envelopeEventsActed       EnvelopeEvent[]              @relation("EnvelopeEventsActed")
+  memberProfilesUpdated     MemberProfile[]              @relation("MemberProfilesUpdated")
   pendingEmailChanges       PendingEmailChange[]
   financialsUpdated         MemberFinancials[]
   transactionsCreated       VacationReserveTransaction[]
@@ -125,11 +146,13 @@ model Organization {
   name      String
   createdAt DateTime @default(now())
 
-  memberships   Membership[]
-  invitations   Invitation[]
-  projects      Project[]
-  timeEntries   TimeEntry[]
-  runningTimers RunningTimer[]
+  memberships       Membership[]
+  documentTemplates DocumentTemplate[]
+  envelopes         Envelope[]
+  invitations       Invitation[]
+  projects          Project[]
+  timeEntries       TimeEntry[]
+  runningTimers     RunningTimer[]
 }
 
 /// Links an account to its organization. One per account — single-org-per-user (FR-8).
@@ -149,6 +172,9 @@ model Membership {
 
   account             Account                      @relation(fields: [accountId], references: [id], onDelete: Cascade)
   organization        Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  envelopesAsSubject  Envelope[]                   @relation("EnvelopeSubject")
+  signerRecords       EnvelopeSigner[]             @relation("SignerMembership")
+  profile             MemberProfile?
   invitationsSent     Invitation[]
   financials          MemberFinancials?
   financialsSnapshots MemberFinancialsSnapshot[]
@@ -159,6 +185,329 @@ model Membership {
   runningTimer        RunningTimer?
 
   @@index([organizationId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Documents area — spec 01, Document Templates.
+//
+// Strictly additive: none of the four models above changes a column, they only
+// gain back-relations. That is what lets `.github/workflows/migrate.yml` and the
+// Vercel deploy land in either order.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum TemplateStatus {
+  draft
+  published
+  archived
+}
+
+enum TemplateFieldType {
+  text
+  multiline
+  number
+  date
+  email
+  select
+  checkbox
+}
+
+/// A reusable contract. The template itself carries only identity and lifecycle —
+/// every piece of content lives on a version, so that publishing can freeze it.
+model DocumentTemplate {
+  id             String         @id @default(uuid())
+  organizationId String
+  name           String
+  description    String?
+  status         TemplateStatus @default(draft)
+  /// The version new envelopes bind to. Null until the first publish, and only
+  /// ever moved by a successful publish (requirement 4).
+  currentVersionId String?      @unique
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  createdByAccountId String
+  archivedAt     DateTime?
+  archivedByAccountId String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    Account      @relation("TemplatesCreated", fields: [createdByAccountId], references: [id])
+  archivedBy   Account?     @relation("TemplatesArchived", fields: [archivedByAccountId], references: [id])
+  versions     DocumentTemplateVersion[] @relation("TemplateVersions")
+  /// Deliberately not a foreign key back to `versions`: Postgres would need the row
+  /// to exist before the template does. Resolved in the service instead.
+  currentVersion DocumentTemplateVersion? @relation("TemplateCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+
+  /// Uniqueness is case-insensitive per the spec, which a plain @@unique cannot
+  /// express — the migration adds a lower(name) unique index and the service
+  /// checks first so the caller gets the spec's message rather than a 500.
+  @@index([organizationId])
+}
+
+/// Immutable once `publishedAt` is set. Nothing in the application may write to a
+/// published row — requirement 8, asserted by TC-01-INT-05.
+model DocumentTemplateVersion {
+  id            String    @id @default(uuid())
+  templateId    String
+  versionNumber Int
+  bodyHtml      String    @default("")
+  /// Ordered, frozen copy of the field definitions, written at publish. The live
+  /// definitions stay in `fields` so a draft can be edited row by row.
+  fieldsSnapshot Json?
+  /// `[{ key, label, order }]` — exactly two entries once published.
+  signerRoles   Json      @default("[]")
+  publishedAt   DateTime?
+  /// Optimistic lock. Incremented on every draft save; a stale value is a 409.
+  rowVersion    Int       @default(1)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  createdByAccountId String
+
+  template  DocumentTemplate @relation("TemplateVersions", fields: [templateId], references: [id], onDelete: Cascade)
+  createdBy Account          @relation("TemplateVersionsCreated", fields: [createdByAccountId], references: [id])
+  fields    TemplateField[]
+  currentFor DocumentTemplate? @relation("TemplateCurrentVersion")
+  envelopes  Envelope[]
+
+  @@unique([templateId, versionNumber])
+  @@index([templateId])
+}
+
+model TemplateField {
+  id                String            @id @default(uuid())
+  templateVersionId String
+  key               String
+  label             String
+  type              TemplateFieldType
+  required          Boolean           @default(false)
+  /// For `select`: an array of strings. Null for every other type.
+  options           Json?
+  maxLength         Int?
+  /// `sender` or `signer:{roleKey}` — validated against the version's signer roles.
+  filledBy          String            @default("sender")
+  /// Catalogue key from spec 03; null means the value is typed by hand.
+  autofillSource    String?
+  order             Int
+
+  version DocumentTemplateVersion @relation(fields: [templateVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([templateVersionId, key])
+  @@index([templateVersionId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Documents area — spec 02, Envelopes & Signing.
+//
+// Additive again: the models above gain back-relations only. `Envelope` pins
+// `templateVersionId` with Restrict, which is the database half of the guarantee
+// that template maintenance can never alter a document already sent or signed.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum EnvelopeStatus {
+  draft
+  sent
+  partially_signed
+  completed
+  declined
+  voided
+  expired
+}
+
+enum SignerStatus {
+  pending
+  notified
+  viewed
+  signed
+  declined
+}
+
+enum SignatureType {
+  drawn
+  typed
+}
+
+enum PdfStatus {
+  not_required
+  pending
+  ready
+  failed
+}
+
+enum EnvelopeEventType {
+  created
+  sent
+  email_accepted
+  email_delivered
+  email_bounced
+  viewed
+  signed
+  declined
+  reminded
+  voided
+  expired
+  completed
+  downloaded
+  pdf_failed
+  tamper_detected
+}
+
+/// One contract in flight: a pinned template version, the values filled into it,
+/// two signers, and the trail of everything that happened to it.
+model Envelope {
+  id                String         @id @default(uuid())
+  organizationId    String
+  /// Pinned at creation and never changed. `Restrict` rather than `Cascade`: a
+  /// version that backs a document must not be deletable at all.
+  templateVersionId String
+  title             String
+  status            EnvelopeStatus @default(draft)
+  /// Map of field key to value, accumulated from the sender and from each signer.
+  fieldValues       Json           @default("{}")
+  /// Written exactly once, at send, and never again (invariant 5).
+  renderedHtml      String?
+  documentHash      String?
+  signedPdfKey      String?
+  signedPdfHash     String?
+  pdfStatus         PdfStatus      @default(not_required)
+  /// Autofill subject (spec 03). SetNull so deleting a member cannot take an
+  /// executed contract with it.
+  subjectMembershipId String?
+  /// The SignatureProvider port, present from day one so that adding a
+  /// third-party adapter later is a class and an env var, not a migration.
+  providerKey       String         @default("internal")
+  providerRef       String         @default("")
+  expiresAt         DateTime?
+  sentAt            DateTime?
+  completedAt       DateTime?
+  voidedAt          DateTime?
+  voidedByAccountId String?
+  voidReason        String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  createdByAccountId String
+
+  organization    Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  templateVersion DocumentTemplateVersion @relation(fields: [templateVersionId], references: [id], onDelete: Restrict)
+  subject         Membership?             @relation("EnvelopeSubject", fields: [subjectMembershipId], references: [id], onDelete: SetNull)
+  createdBy       Account                 @relation("EnvelopesCreated", fields: [createdByAccountId], references: [id])
+  voidedBy        Account?                @relation("EnvelopesVoided", fields: [voidedByAccountId], references: [id])
+  signers         EnvelopeSigner[]
+  events          EnvelopeEvent[]
+
+  @@index([organizationId, status])
+  @@index([templateVersionId])
+}
+
+model EnvelopeSigner {
+  id                 String         @id @default(uuid())
+  envelopeId         String
+  roleKey            String
+  name               String         @default("")
+  /// Normalized to lowercase. The signature is bound to this address, not to an
+  /// account, which is why removing a member leaves an in-flight envelope alone.
+  email              String         @default("")
+  order              Int
+  status             SignerStatus   @default(pending)
+  membershipId       String?
+  signedAt           DateTime?
+  declinedAt         DateTime?
+  declineReason      String?
+  /// PNG data URI. A typed signature keeps both the rendering and the name.
+  signatureImage     String?
+  signatureType      SignatureType?
+  signatureTypedName String?
+  /// The ESIGN/UETA consent record (requirement 21).
+  consentAcceptedAt  DateTime?
+
+  envelope   Envelope        @relation(fields: [envelopeId], references: [id], onDelete: Cascade)
+  membership Membership?     @relation("SignerMembership", fields: [membershipId], references: [id], onDelete: SetNull)
+  tokens     SigningToken[]
+  events     EnvelopeEvent[]
+
+  @@unique([envelopeId, roleKey])
+  @@unique([envelopeId, order])
+  @@index([envelopeId])
+}
+
+/// Mirrors PasswordResetToken deliberately: the raw token exists only in the
+/// email and the URL, and only its SHA-256 is ever stored.
+model SigningToken {
+  id               String    @id @default(uuid())
+  envelopeSignerId String
+  tokenHash        String    @unique
+  expiresAt        DateTime
+  usedAt           DateTime?
+  /// Set by decline, void, or resend.
+  isInvalidated    Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+
+  signer EnvelopeSigner @relation(fields: [envelopeSignerId], references: [id], onDelete: Cascade)
+
+  @@index([envelopeSignerId])
+}
+
+/// Append-only. The application has no update or delete path, and the rows form a
+/// hash chain so that an edited or deleted row is detectable rather than merely
+/// unlikely (requirements 38-39).
+model EnvelopeEvent {
+  id               String            @id @default(uuid())
+  envelopeId       String
+  envelopeSignerId String?
+  type             EnvelopeEventType
+  actorAccountId   String?
+  actorEmail       String?
+  ipAddress        String?
+  userAgent        String?
+  documentHash     String?
+  /// Never contains field values: the trail records that a document was signed,
+  /// not what was written in it (requirement 40).
+  metadata         Json?
+  /// Lets the chain algorithm evolve without invalidating chains written under
+  /// the old one.
+  schemaVersion    Int               @default(1)
+  occurredAt       DateTime          @default(now())
+  previousEventHash String?
+  eventHash        String
+
+  envelope Envelope        @relation(fields: [envelopeId], references: [id], onDelete: Cascade)
+  signer   EnvelopeSigner? @relation(fields: [envelopeSignerId], references: [id], onDelete: SetNull)
+  actor    Account?        @relation("EnvelopeEventsActed", fields: [actorAccountId], references: [id], onDelete: SetNull)
+
+  @@index([envelopeId, occurredAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Documents area — spec 03, Field Autofill.
+//
+// The only new model the spec needs: `TemplateField.autofillSource` and
+// `Envelope.subjectMembershipId` already exist from specs 01 and 02.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The member data contracts are filled from. One-to-one with `Membership`, and
+/// every column is nullable: a profile is filled in over time, and an incomplete
+/// one must never block a document from being created (spec 03, alt flow
+/// "Incomplete profile").
+///
+/// Four of these columns are PII: `taxId`, `dateOfBirth`, `idDocumentNumber` and
+/// `bankDetails`. Reads are capability-gated, masked for callers without
+/// `ViewMemberProfilePii`, and excluded from logs and from the audit trail.
+/// Column-level encryption is a recorded, accepted gap — see the area README.
+model MemberProfile {
+  id               String    @id @default(uuid())
+  membershipId     String    @unique
+  addressLine      String?
+  city             String?
+  postalCode       String?
+  /// ISO 3166-1 alpha-2.
+  country          String?
+  taxId            String?
+  /// A date with no time component; stored at UTC midnight.
+  dateOfBirth      DateTime?
+  idDocumentNumber String?
+  bankDetails      String?
+  updatedAt        DateTime  @updatedAt
+  updatedByAccountId String?
+
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  updatedBy  Account?   @relation("MemberProfilesUpdated", fields: [updatedByAccountId], references: [id], onDelete: SetNull)
 }
 
 /// Current financial settings for an active membership (spec 07). Exactly one per

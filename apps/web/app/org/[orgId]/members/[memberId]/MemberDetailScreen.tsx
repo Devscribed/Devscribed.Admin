@@ -5,7 +5,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Badge, Button, Card, InfoBanner, Input, Tabs } from '@/ds';
 import { errorNode } from '@/field-error';
 import { useToast } from '@/toast';
-import { MEMBER_MESSAGES, MESSAGES, validateJobTitle, type Role } from '@devscribed/validation';
+import {
+  MEMBER_MESSAGES,
+  MESSAGES,
+  canReadProfile,
+  validateJobTitle,
+  type Role,
+} from '@devscribed/validation';
+import { useSession } from '@/layout/session-context';
+import { ContractDetails } from '@/members/ContractDetails';
+import { ToastProvider as DocumentsToastProvider } from '@/documents/toast';
 import { AvatarInitials } from './AvatarInitials';
 import { ClockIcon, MailIcon } from './icons';
 import { RoleSelect } from './RoleSelect';
@@ -31,6 +40,8 @@ interface MemberDetail {
   /** Spec 07 — server-computed: true when the caller may open the Vacation tab
    * (admin/manager on any active member, or a user on their own active membership). */
   canViewVacation: boolean;
+  /** Whether this record is the caller's own — what the Contract details tab gates on. */
+  isSelf: boolean;
 }
 
 type ScreenState =
@@ -49,25 +60,57 @@ function jobTitleError(value: string): string | null {
  * Built per-render from `detail` — only the Vacation tab is conditionally enabled
  * (spec 07: `disabled: !detail.canViewVacation`, the API decides). The other
  * placeholder tabs stay permanently disabled until their own specs land.
+ *
+ * Contract details (documents spec 03) is not drawn at all rather than drawn disabled:
+ * the rest of these are placeholders for screens nobody can reach yet, whereas this one
+ * exists and is simply not the caller's to read. A control the caller cannot use is never
+ * rendered — the same rule the sidebar follows.
  */
-function buildTabs(canViewVacation: boolean) {
+function buildTabs(canViewVacation: boolean, showContractDetails: boolean) {
   return [
     { value: 'about', label: 'About', testId: 'member-detail-tab-about' },
     { value: 'vacation', label: 'Vacation', disabled: !canViewVacation, testId: 'member-detail-tab-vacation' },
+    ...(showContractDetails
+      ? [
+          {
+            value: 'contract-details',
+            label: 'Contract details',
+            testId: 'member-detail-tab-contract-details',
+          },
+        ]
+      : []),
     { value: 'projects', label: 'Projects', disabled: true, testId: 'member-detail-tab-projects' },
     { value: 'roles', label: 'Roles', disabled: true, testId: 'member-detail-tab-roles' },
     { value: 'payments', label: 'Payments', disabled: true, testId: 'member-detail-tab-payments' },
   ];
 }
 
+/**
+ * `?tab=` opens the screen on a tab, so a tab is addressable — you can send somebody a link
+ * to a member's contract details rather than to the member and a sentence about which tab
+ * to press. Unknown or unreachable values fall back to About.
+ *
+ * Read from `location` once rather than through `useSearchParams`, and that is not a
+ * shortcut. `useSearchParams` subscribes the component to the router, which re-renders it
+ * after hydration — and this screen seeds its form fields from the loaded member on mount,
+ * so an extra mount silently discards whatever the visitor had typed. The Save button then
+ * goes back to disabled because nothing looks dirty any more, which is exactly how it was
+ * found. The tab is an *initial* value; nothing here needs to hear about later changes.
+ */
+function initialTab(): string {
+  if (typeof window === 'undefined') return 'about';
+  return new URLSearchParams(window.location.search).get('tab') ?? 'about';
+}
+
 export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberId: string }) {
+  const session = useSession();
   const { showToast } = useToast();
   const [state, setState] = useState<ScreenState>({ kind: 'loading' });
   const [role, setRole] = useState<Role | null>(null);
   const [jobTitle, setJobTitle] = useState('');
   const [jobTitleErr, setJobTitleErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState('about');
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   const fetchDetail = useCallback(async (): Promise<
     { ok: true; detail: MemberDetail } | { ok: false; message: string }
@@ -161,6 +204,14 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
     setSaving(false);
   }
 
+  const tabs = detail
+    ? buildTabs(detail.canViewVacation, canReadProfile(session.role, detail.isSelf))
+    : [];
+  /** What is actually shown — an unreachable `?tab=` resolves to About. */
+  const shownTab = tabs.some((tab) => tab.value === activeTab && !tab.disabled)
+    ? activeTab
+    : 'about';
+
   const showForm = !!detail && (detail.canEditRole || detail.canEditJobTitle);
   const roleGuarded = !!detail && detail.isLastAdmin && detail.role === 'admin';
 
@@ -203,12 +254,27 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
           <Header detail={detail} />
 
           <div style={{ marginTop: 'var(--sp-10)' }}>
-            <Tabs items={buildTabs(detail.canViewVacation)} value={activeTab} onChange={setActiveTab} />
+            <Tabs items={tabs} value={shownTab} onChange={setActiveTab} />
           </div>
 
           <div style={{ paddingTop: 'var(--sp-10)' }}>
-            {activeTab === 'vacation' ? (
+            {shownTab === 'vacation' ? (
               <VacationPanel orgId={orgId} memberId={memberId} memberName={detail.fullName} />
+            ) : shownTab === 'contract-details' ? (
+              // Wrapped in the documents area's own toast provider, because there are two
+              // in this application: this screen uses `@/toast`, and `ContractDetails`
+              // came from the documents area, which has its own. Unifying them is worth
+              // doing and is not this merge's job — wrapping is the honest minimum, and
+              // leaving the panel to throw "useToast must be used inside a ToastProvider"
+              // is not.
+              <DocumentsToastProvider>
+                <ContractDetails
+                  orgId={orgId}
+                  memberId={detail.id}
+                  role={session.role}
+                  isSelf={detail.isSelf}
+                />
+              </DocumentsToastProvider>
             ) : showForm ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-8)' }}>
                 {detail.canEditRole && (

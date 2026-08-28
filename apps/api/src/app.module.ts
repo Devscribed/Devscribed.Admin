@@ -12,17 +12,20 @@ import {
   ResetPasswordController,
 } from './auth/password-reset.controller';
 import { PasswordResetService } from './auth/password-reset.service';
-import { SessionService } from './auth/session.service';
+import { CoreModule } from './core.module';
+import { DocumentsModule } from './documents/documents.module';
+import { HealthController } from './health.controller';
+import { InternalModule } from './internal/internal.module';
 import { InvitationsController } from './invitations/invitations.controller';
 import { InvitationsService } from './invitations/invitations.service';
-import { ConsoleMailService } from './mail/console-mail.service';
-import { InMemoryMailService } from './mail/in-memory-mail.service';
-import { MailService } from './mail/mail.service';
+import { OutboxController } from './mail/outbox.controller';
 import { TestMailController } from './mail/test-mail.controller';
+import { SigningModule } from './signing/signing.module';
 import { MeController } from './members/me.controller';
+import { MemberProfileController } from './members/member-profile.controller';
+import { MemberProfileService } from './members/member-profile.service';
 import { MembersController } from './members/members.controller';
 import { MembersService } from './members/members.service';
-import { PrismaService } from './prisma.service';
 import { ProjectsController } from './projects/projects.controller';
 import { ProjectsService } from './projects/projects.service';
 import { RequestsController } from './requests/requests.controller';
@@ -32,39 +35,48 @@ import { SignupService } from './signup/signup.service';
 import { TimeTrackingController } from './time-tracking/time-tracking.controller';
 import { TimeTrackingService } from './time-tracking/time-tracking.service';
 import { TestFixturesController } from './test/test-fixtures.controller';
+import { TestEnvelopeExpiryController } from './test-support/envelope-expiry.controller';
 import { VacationController } from './vacation/vacation.controller';
 import { VacationRequestsService } from './vacation/vacation-requests.service';
 import { VacationService } from './vacation/vacation.service';
 
 /**
- * Spec 02 leaves the real transport out of scope, so there are only two stand-ins.
+ * Driver selection used to live here, for mail alone. Documents spec 02 added four more
+ * ports with the same env-var-or-local-default rule, so each port now chooses its own
+ * driver in its own `*.provider.ts` — next to the drivers it chooses between — and
+ * `CoreModule` registers all five globally. The rule itself is unchanged: an explicit
+ * env var always wins, and the local driver is the default whenever `NODE_ENV` is not
+ * `production`. `MAIL_TRANSPORT` is read in `mail/mail.provider.ts`.
  *
- * The sink is the default outside production: it logs the link exactly like the
- * console transport *and* records it, which is what lets an E2E run read the reset
- * mail. Defaulting rather than requiring `MAIL_TRANSPORT=memory` matters because
- * Playwright reuses an already-running dev server — if the sink were opt-in, whether
- * the suite passed would depend on how that server happened to be started.
- *
- * An explicit `MAIL_TRANSPORT` always wins, and `/api/test/mail` stays 404 in
- * production regardless.
+ * `PrismaService`, `SessionService`, and the mail transport are deliberately **not**
+ * listed as providers here even though several controllers below need them. `CoreModule`
+ * is `@Global()` and exports all three; re-providing one would give this module its own
+ * instance — a second connection pool, or a second mail sink writing to a mailbox that
+ * `/api/test/mail` does not read. See the note in core.module.ts.
  */
-const useMailSink =
-  process.env.MAIL_TRANSPORT === 'memory' ||
-  (process.env.MAIL_TRANSPORT === undefined && process.env.NODE_ENV !== 'production');
-
-const mailProvider = {
-  provide: MailService,
-  useClass: useMailSink ? InMemoryMailService : ConsoleMailService,
-};
-
 @Module({
   imports: [
     JwtModule.register({
       global: true,
       secret: process.env.SESSION_SECRET || 'dev-only-insecure-secret',
     }),
+    // Prisma, the session reader, and the five infrastructure ports, shared by every
+    // module rather than duplicated into each one — see the note in core.module.ts.
+    CoreModule,
+    // The first feature module in the codebase. Everything below stays flat; the
+    // documents area brings its own controllers rather than lengthening this list.
+    DocumentsModule,
+    // Two more modules rather than more controllers here, because both have an
+    // authorization model that is not this application's: `SigningModule` is session-less
+    // and authorized by a token, `InternalModule` by a shared secret. Keeping them apart
+    // is what stops a guard from being applied to the wrong half by accident.
+    SigningModule,
+    InternalModule,
   ],
   controllers: [
+    // First, so that a reader looking for "what does the load balancer call" finds it
+    // without reading the rest of the list.
+    HealthController,
     SignupController,
     LoginController,
     LogoutController,
@@ -79,14 +91,27 @@ const mailProvider = {
     ProjectsController,
     TimeTrackingController,
     AccrualController,
+    // Spec 03's contract details. Flat here rather than in `DocumentsModule`: the
+    // member profile is a member-management resource that the documents area reads,
+    // not a documents resource.
+    MemberProfileController,
+    // The dev outbox. A product screen with the ordinary guard stack, not a fixture —
+    // see the note at the top of the controller for why it is not a `/api/test/*` route.
+    OutboxController,
     TestMailController,
+    // Every other test fixture. One controller rather than two: the membership move and
+    // the role switch that used to live beside this were retired by the invitation flow —
+    // a test now invites a person the way a person does.
     TestFixturesController,
+    // The one fixture no product feature retires: nothing lets a test age an envelope,
+    // and nothing should.
+    TestEnvelopeExpiryController,
   ],
   providers: [
-    PrismaService,
     SignupService,
     LoginService,
     PasswordResetService,
+    MemberProfileService,
     InvitationsService,
     MembersService,
     AccountService,
@@ -96,8 +121,6 @@ const mailProvider = {
     ProjectsService,
     TimeTrackingService,
     AccrualService,
-    SessionService,
-    mailProvider,
   ],
 })
 export class AppModule {}

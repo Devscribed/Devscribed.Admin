@@ -1,0 +1,28 @@
+# The build context is the repository root — both images need packages/ and the design
+# system, which live outside the app they belong to. Everything that cannot affect a
+# build is excluded, because the context is uploaded to the daemon on every build.
+node_modules
+**/node_modules
+.git
+.github
+**/dist
+**/.next
+**/.turbo
+*.tsbuildinfo
+
+# Local state and secrets. `.env` in particular must never reach an image layer.
+**/.env
+**/.env.*
+!**/.env.example
+**/.local-storage
+docker-compose.override.yml
+
+# Nothing here is needed to build or run either service. `e2e/package.json` is the one
+# exception: it is a workspace, so package-lock.json names it and `npm ci` fails if the
+# manifest is missing — even though not a single test file is ever copied in.
+e2e
+!e2e/package.json
+specs
+infra
+*.md
+!README.md

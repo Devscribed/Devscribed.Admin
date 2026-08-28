@@ -1,10 +1,10 @@
 import React from 'react';
 
 const tones = {
-  info:    { border: 'oklch(0.85 0.06 292)', bg: 'oklch(0.97 0.02 292)', ink: 'var(--accent)' },
-  warning: { border: 'oklch(0.82 0.09 74)',  bg: 'oklch(0.96 0.04 74)',  ink: 'var(--amber-800)' },
-  error:   { border: 'oklch(0.8 0.1 25)',    bg: 'oklch(0.96 0.03 25)',  ink: 'var(--error-500)' },
-  success: { border: 'oklch(0.8 0.08 160)',  bg: 'oklch(0.96 0.03 160)', ink: 'var(--success-700)' },
+  info:    { border: 'var(--banner-info-border)',    bg: 'var(--banner-info-bg)',    ink: 'var(--banner-info-ink)' },
+  warning: { border: 'var(--banner-warning-border)', bg: 'var(--banner-warning-bg)', ink: 'var(--banner-warning-ink)' },
+  error:   { border: 'var(--banner-error-border)',   bg: 'var(--banner-error-bg)',   ink: 'var(--banner-error-ink)' },
+  success: { border: 'var(--banner-success-border)', bg: 'var(--banner-success-bg)', ink: 'var(--banner-success-ink)' },
 };
 
 const InfoGlyph = ({ color }) => (

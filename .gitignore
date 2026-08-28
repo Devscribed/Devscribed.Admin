@@ -24,6 +24,18 @@ playwright/.cache/
 e2e/playwright-report/
 e2e/test-results/
 
+# Local FileStorage driver — signed documents a developer or a test produced. A signed
+# contract is still a signed contract; none of it belongs in version control.
+.local-storage/
+
+# Terraform — the provider lock file is deliberately NOT ignored: a plan that resolves
+# different provider versions on two machines is not a plan of the same infrastructure.
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
 # misc
 .DS_Store
 *.pem
@@ -31,3 +43,16 @@ e2e/test-results/
 .env
 # Scratch notes that have held live credentials before.
 Info.txt
+docker-compose.override.yml
+
+# AI workflow runs. The summary of a run is worth keeping — it answers "how did this spec
+# become code" in the PR. The raw journal is not: blobs hold whole tool outputs and the
+# transcript snapshots hold reasoning, both measured in hundreds of megabytes per week.
+.workflow/lock
+.workflow/current
+.workflow/runs/*/events.jsonl
+.workflow/runs/*/blobs/
+.workflow/runs/*/thinking/
+.workflow/runs/*/.pending.json
+.workflow/runs/*/stages/*.log
+.workflow/runs/*/*.verdict.json.raw

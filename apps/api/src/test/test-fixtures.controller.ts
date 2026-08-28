@@ -1,17 +1,27 @@
-import { Body, Controller, HttpCode, NotFoundException, Post } from '@nestjs/common';
+import { Body, Controller, Headers, HttpCode, NotFoundException, Post } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { InMemoryMailService } from '../mail/in-memory-mail.service';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma.service';
+import { assertFixturesOpen } from '../test-support/fixture-gate';
 
 /** Cheap on purpose — these hashes never protect a real credential. */
 const BCRYPT_ROUNDS = 4;
 
 /**
  * Test-only fixtures for states an E2E run cannot reach over the public HTTP surface.
- * Fenced exactly like `TestMailController`: both endpoints 404 whenever `NODE_ENV` is
- * production or the app isn't running the in-memory mail sink, so a real deployment
- * never exposes them regardless of how `NODE_ENV` happens to be set.
+ *
+ * Fenced by `assertFixturesOpen`, the one environment gate every `/api/test/*` route
+ * shares — outside production nothing, in production a bearer token, and no token
+ * configured means shut. Sharing it is the point: two fixture surfaces with two fences
+ * is one fence somebody opens without realising they opened the other. It also means
+ * these run against the dev stand, where `NODE_ENV` is `production` and the old
+ * "404 whenever production" rule made every case that needed them unrunnable.
+ *
+ * The sink check stays on top of that, because a fixture that manufactures a state for a
+ * mail-reading test is meaningless where mail is real.
+ *
+ * Read the comment at the top of `test-support/fixture-gate.ts` before changing either.
  */
 @Controller('api/test')
 export class TestFixturesController {
@@ -20,10 +30,9 @@ export class TestFixturesController {
     private readonly mail: MailService,
   ) {}
 
-  private guard(): void {
-    if (process.env.NODE_ENV === 'production' || !(this.mail instanceof InMemoryMailService)) {
-      throw new NotFoundException();
-    }
+  private guard(authorization?: string): void {
+    if (!(this.mail instanceof InMemoryMailService)) throw new NotFoundException();
+    assertFixturesOpen(authorization);
   }
 
   /**
@@ -34,8 +43,11 @@ export class TestFixturesController {
    */
   @Post('invitations/expire')
   @HttpCode(200)
-  async expireInvitation(@Body() body: { email?: unknown }) {
-    this.guard();
+  async expireInvitation(
+    @Body() body: { email?: unknown },
+    @Headers('authorization') authorization?: string,
+  ) {
+    this.guard(authorization);
     const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
     if (!email) throw new NotFoundException();
 
@@ -58,8 +70,11 @@ export class TestFixturesController {
    */
   @Post('email-change/expire')
   @HttpCode(200)
-  async expireEmailChange(@Body() body: { email?: unknown }) {
-    this.guard();
+  async expireEmailChange(
+    @Body() body: { email?: unknown },
+    @Headers('authorization') authorization?: string,
+  ) {
+    this.guard(authorization);
     const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
     if (!email) throw new NotFoundException();
 
@@ -88,8 +103,9 @@ export class TestFixturesController {
       firstName?: unknown;
       lastName?: unknown;
     },
+    @Headers('authorization') authorization?: string,
   ) {
-    this.guard();
+    this.guard(authorization);
     const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
     const password = typeof body?.password === 'string' ? body.password : '';
     if (!email || !password) throw new NotFoundException();
@@ -113,8 +129,11 @@ export class TestFixturesController {
    */
   @Post('financials/backdate')
   @HttpCode(200)
-  async backdateFinancials(@Body() body: { email?: unknown; effectiveFrom?: unknown }) {
-    this.guard();
+  async backdateFinancials(
+    @Body() body: { email?: unknown; effectiveFrom?: unknown },
+    @Headers('authorization') authorization?: string,
+  ) {
+    this.guard(authorization);
     const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
     const effectiveFrom = typeof body?.effectiveFrom === 'string' ? body.effectiveFrom.trim() : '';
     if (!email || !effectiveFrom) throw new NotFoundException();
@@ -143,8 +162,11 @@ export class TestFixturesController {
    */
   @Post('vacation/seed-credit')
   @HttpCode(200)
-  async seedCredit(@Body() body: { email?: unknown; amount?: unknown }) {
-    this.guard();
+  async seedCredit(
+    @Body() body: { email?: unknown; amount?: unknown },
+    @Headers('authorization') authorization?: string,
+  ) {
+    this.guard(authorization);
     const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
     const amount = typeof body?.amount === 'number' ? body.amount : Number(body?.amount);
     if (!email || !Number.isFinite(amount)) throw new NotFoundException();

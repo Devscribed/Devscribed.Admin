@@ -494,12 +494,5 @@ availableDays       = min(floor(reserveBalance / dailySalary),
 - **Selectors:** `member-detail-tab-vacation`, `vacation-balance-card`, `vacation-available-days`, `vacation-reserve-amount`, `vacation-transactions-table`.
 
 ### TC-08-E2E-03: User sees updated balance after admin triggers accrual
+- **Retired.** Covered by TC-07-INT-07 and TC-07-INT-08 — a user sees days and no money, a viewer sees nothing at all, enforced at the endpoint rather than by what the page chooses to draw.
 
-- **Level:** E2E
-- **Preconditions:** logged in as user Alex; financials configured, admin has triggered accrual via the API.
-- **Steps:**
-  1. Open own Vacation tab.
-  2. Verify balance card shows available days > 0.
-  3. Verify no transactions table visible (user view).
-  4. Verify no financial settings card visible.
-- **Selectors:** `member-detail-tab-vacation`, `vacation-balance-card`, `vacation-available-days`, `vacation-transactions-table` (asserted absent), `vacation-financials-card` (asserted absent).

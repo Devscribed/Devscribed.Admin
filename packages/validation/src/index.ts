@@ -2479,3 +2479,16 @@ export function gmtLabel(tz: string, instant: Date): string {
   const mins = abs % 60;
   return `GMT${sign}${hours}${mins > 0 ? `:${pad2(mins)}` : ''}`;
 }
+
+/* ------------------------------------------------------------------ *
+ * Documents area — specs/documents
+ *
+ * Re-exported from the package root so consumers keep importing from
+ * '@devscribed/validation' alone. Nothing above this line changes: these are new
+ * exports, not edits to existing rules or messages.
+ * ------------------------------------------------------------------ */
+
+export * from './roles';
+export * from './documents';
+export * from './envelopes';
+export * from './autofill';

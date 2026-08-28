@@ -128,6 +128,9 @@ export class InvitationsService {
       await this.mail.sendInvitation({
         to: email,
         organizationName: organization.name,
+        // Carried so the dev outbox can scope this message to the organization that sent
+        // it. An accept link is as sensitive as a signing one.
+        organizationId: organization.id,
         role,
         token,
         acceptUrl: this.acceptUrl(token),

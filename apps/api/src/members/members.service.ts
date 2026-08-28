@@ -68,6 +68,8 @@ export interface MemberDetail {
    * own membership and can view their own balance. Never true for a removed target.
    */
   canViewVacation: boolean;
+  /** Whether this record is the caller's own — the Contract details tab gates on it. */
+  isSelf: boolean;
 }
 
 /** Spec 05 — `PUT /members/:memberId` request body. */
@@ -338,6 +340,12 @@ export class MembersService {
       availableRoles,
       callerRole: caller.role,
       canViewVacation,
+      // Already computed above for the vacation rule; returned because the detail screen
+      // needs the same answer for the Contract details tab (documents spec 03), where a
+      // `user` may read their own record and nobody else's. The list has always carried
+      // it, and a client deriving it from the email would be re-deciding an
+      // authorization question the server has already decided.
+      isSelf,
     };
   }
 

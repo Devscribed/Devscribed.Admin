@@ -1,0 +1,39 @@
+{
+  "status": "pass",
+  "suites": {
+    "unit": {
+      "passed": 806,
+      "failed": 0,
+      "ms": 780
+    },
+    "int": {
+      "passed": 323,
+      "failed": 0,
+      "ms": 107819,
+      "note": "Ran with TEST_DATABASE_URL overridden to localhost:5434 (docker-compose.override.yml's local port remap). The default 5433 in apps/api/test/database-url.ts hits a stale-credentialed Postgres volume on this machine and fails P1000 authentication -- a pre-existing local-environment fact, not caused by this diff, and not touched here."
+    },
+    "e2e": {
+      "passed": 119,
+      "failed": 0,
+      "flaky": 2,
+      "ms": 282000,
+      "run": "CI=1 npm run test:e2e"
+    }
+  },
+  "flaky": [
+    {
+      "test": "tests/members-list.spec.ts:164 04 — Member List & Management › user sees the list but no actions menu",
+      "note": "failed in the full parallel run, passed cleanly when rerun alone with the other flaky test (2 passed, 15.7s). Left out of the verdict per policy."
+    },
+    {
+      "test": "tests/outbox.spec.ts:133 Dev outbox › TC-OB-E2E-04: the outbox never shows another organization mail",
+      "note": "same as above -- passed on isolated rerun."
+    }
+  ],
+  "findings": [],
+  "notes": [
+    "handoff.json (this run's actual work order) synthesises 7 requirements and mints one test case, TC-DS-BANNER-E2E-01, from CLAUDE.md and the user-management area's Design Layer rules -- the cited spec, specs/user-management/README.md, records this promotion only as a prose 'outstanding' item, not a numbered TC list.",
+    "TC-DS-BANNER-E2E-01 exists at e2e/tests/ds-info-banner-tones.spec.ts, asserts on real getComputedStyle() values for all twelve --banner-* custom properties and on data-testid=\"login-error-message\", and passed both in the full run and isolated.",
+    "Verified directly: grep -rn \"oklch(\" \"1_DS for dev/components/\" returns nothing (requirement 1); no diff under specs/ (requirement 6); x-omelette.tokens count and the unique names in _ds_manifest.json tokens[] both read 179 (requirement 4); InfoBanner.jsx's tones map now references only var(--banner-*) aliases (requirement 5, no consumer changed)."
+  ]
+}
