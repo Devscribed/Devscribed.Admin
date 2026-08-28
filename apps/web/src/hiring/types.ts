@@ -105,15 +105,19 @@ export interface BookingConfirmation {
  * Manage booking — spec 07
  * ------------------------------------------------------------------ */
 
+/**
+ * **It names nobody, and no file.** The link rides in a calendar event both parties hold
+ * and can forward onward, so a live booking withholds what a dead one does: the
+ * candidate's name, their address, and a CV filename usually built from their name
+ * (07 §04.21). Withheld from the response, not merely unrendered.
+ */
 export interface ManageBooking {
   startUtc: string;
   /** The application's own length, which the vacancy's may since have left behind. */
   durationMinutes: number;
   timeZone: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  cvFileName: string | null;
+  /** Whether a CV is on file — never which one. */
+  hasCv: boolean;
 }
 
 /**

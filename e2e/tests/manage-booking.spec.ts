@@ -56,9 +56,14 @@ test.describe('Manage booking', () => {
     await expect(page.getByTestId('manage-vacancy-title')).toHaveText('Senior React Engineer');
     await expect(page.getByTestId('manage-duration')).toHaveText('60 minutes');
     await expect(page.getByTestId('manage-org-wordmark')).toContainText('Acme Inc');
-    await expect(page.getByTestId('manage-booking-email')).toContainText(candidate);
-    await expect(page.getByTestId('manage-cv-filename')).toHaveText(CV_FILE.name);
     await expect(page.getByRole('link', { name: /sign in|log in/i })).toHaveCount(0);
+
+    // The page names nobody: the link is forwardable, so a live one withholds what the
+    // blur withholds from a dead one (07 §04.21). A CV is acknowledged, never named.
+    await expect(page.getByTestId('manage-cv-present')).toHaveText('CV attached');
+    await expect(page.locator('body')).not.toContainText(candidate);
+    await expect(page.locator('body')).not.toContainText(CV_FILE.name);
+    await expect(page.locator('body')).not.toContainText('Jane');
     // Team-only, and on no candidate-facing surface (07 §11.53).
     await expect(page.getByText(/scheduling history/i)).toHaveCount(0);
 
@@ -111,7 +116,7 @@ test.describe('Manage booking', () => {
     // cancelled one — a new application, not a restoration of the old (07 §02.9).
     await page.waitForURL(new RegExp(`/manage/${vacancy.publicSlug}/[A-Za-z0-9_-]{22}$`));
     expect(page.url()).not.toContain(manage.token);
-    await expect(page.getByTestId('manage-booking-email')).toContainText(candidate);
+    await expect(page.getByTestId('manage-booking-when')).toBeVisible();
 
     // The cancelled card kept the column the manager put it in; the rebooking is a new
     // card at the top of Scheduled, because it is fresh intent (07 §02.9).

@@ -10,7 +10,6 @@ import {
   formatHistoryWhen,
   generateSlots,
   isLiveBooking,
-  justBookedMessage,
   justBookedPath,
   managePath,
   planReschedule,
@@ -381,10 +380,13 @@ describe('the just-booked landing', () => {
     expect(query).toBe('booked=1');
   });
 
-  it('names the address the invite is going to', () => {
-    expect(justBookedMessage('jane@example.com')).toBe(
-      'A calendar invite is on its way to jane@example.com.',
+  it('promises the invite without naming who it is going to', () => {
+    // The page names nobody, and the address is not in the response it reads
+    // (07 §04.21) — so the notice states the fact and stops there.
+    expect(HIRING_MESSAGES.manage.justBooked).toBe(
+      'A calendar invite is on its way to the address you gave.',
     );
+    expect(HIRING_MESSAGES.manage.justBooked).not.toContain('@');
   });
 });
 

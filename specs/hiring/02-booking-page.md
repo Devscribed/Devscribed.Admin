@@ -203,14 +203,17 @@ stranger with a link into a scheduled interview.
     thrown away by the first refresh, which put an **empty booking form** in front of somebody who
     had already booked — the one reading of that screen the product must never offer. A URL
     survives a refresh, a bookmark, and a return three weeks later.
-43. It also removes a duplicate. The manage page's live state already states the vacancy title,
-    the length, the date and time in the booked zone with the zone named, the candidate's submitted
-    details and their CV — every fact the confirmation carried — and unlike the confirmation it can
-    **act** on them, offering Reschedule and Cancel where the confirmation offered a link to a page
-    that does. The one fact it cannot state for itself, that a calendar invite is coming, rides
-    there as a notice specified in [07 §04.16a](07-manage-booking.md). It matters because this
-    release sends no mail of its own, so Microsoft's invite is the only thing the candidate ever
-    receives, and somebody who does not know to expect it reads its absence as a failed booking.
+43. It also removes a duplicate. The manage page's live state already states the vacancy title, the
+    length, and the date and time in the booked zone with the zone named — and unlike the
+    confirmation it can **act** on them, offering Reschedule and Cancel where the confirmation
+    offered a link to a page that does. It deliberately does **not** restate the candidate's own
+    name, address or CV filename: that page's link is forwardable, so it names nobody
+    ([07 §04.21](07-manage-booking.md)). The confirmation did name them, and losing that costs the
+    candidate their one chance to catch a mistyped address — a cost weighed and accepted in §04.21
+    rather than here. What does travel is the fact that an invite is coming, as a notice specified
+    in [07 §04.16a](07-manage-booking.md): this release sends no mail of its own, so Microsoft's
+    invite is the only thing the candidate ever receives, and somebody who does not know to expect
+    it reads its absence as a failed booking.
 
 ### 11. Abuse Exposure
 

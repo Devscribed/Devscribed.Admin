@@ -660,14 +660,26 @@ has no confirmation view of its own: it navigates to `/manage/{slug}/{token}` an
 the confirmation. The old confirmation was component state, so a refresh threw it away and put an
 empty booking form in front of somebody who had already booked — the one reading that screen must
 never offer. It was also a duplicate: the manage page already states the title, the length, the
-time, the zone, the name, the email and the CV, and unlike the confirmation it can act on them. The
-one fact it cannot state for itself — that Microsoft's invite is coming, which matters because the
+time and the zone, and unlike the confirmation it can act on them. It deliberately does **not**
+restate the candidate's name, address or CV filename — see below. The one fact it cannot state for
+itself — that Microsoft's invite is coming, which matters because the
 product sends no mail of its own — arrives as a notice above the card, carried by a bare `?booked=1`
 flag that the page strips from the address bar on its first paint. What the candidate is left
 holding is byte-identical to the link in their invite, and a reload shows the record without the
 notice: a receipt for an action, not a state of the record, which is the same rule the cancellation
 receipt already followed. The notice draws only over a live booking, so no flag can make it appear
 on the blurred screen and confirm that a dead token was once real.
+
+**The manage page names nobody.** Not the interviewer, and — since this release — not the candidate
+either: no name, no email address, no CV filename, withheld from the response rather than merely
+unrendered. The reasoning is the one already used to blur a dead link. That link travels in a
+calendar event both parties hold and can forward onward, and the spec goes to some lengths to stop
+an expired one confirming that a particular person booked an interview and later cancelled it — so a
+live one that answered with a full name, an address and `jane-doe-cv.pdf` was giving away strictly
+more, to whoever the invite reached and whoever they sent it on to. `booking` carries `hasCv`, a
+boolean, so a replacement can still be offered without naming the document. The cost is recorded
+rather than waved away: the page was the candidate's only chance to notice a mistyped email address
+at the moment cancel-and-rebook could still fix it, and a typo now goes unremarked.
 
 **Two spec deferrals are now superseded, and this is where they are recorded.**
 [02 §09.40](specs/hiring/02-booking-page.md) said a candidate who books by mistake "must contact

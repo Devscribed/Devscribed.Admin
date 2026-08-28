@@ -44,8 +44,7 @@ candidate arriving from their invite must recognise the page they booked on.
   │  Tuesday, 25 August 2026 at 14:00              │  ← Grotesk 22, tabular-nums
   │  (UTC+03:00) Minsk                             │  ← Plex 14, --text-muted
   │  ─────────────────────────────────────────     │  ← --divider
-  │  Jane Doe · jane@example.com                   │  ← Plex 14, --text-sub
-  │  CV: jane-doe-cv.pdf              [ Replace ]  │  ← Button ghost sm
+  │  CV attached                      [ Replace ]  │  ← Button ghost sm
   │                                                │
   │  [ Reschedule ]           [ Cancel interview ] │  ← secondary · danger
   └────────────────────────────────────────────────┘
@@ -58,6 +57,9 @@ candidate arriving from their invite must recognise the page they booked on.
 - The action row sits inside the Card, separated by `--sp-8`, Reschedule leading and Cancel
   trailing. They are pushed to opposite ends: a destructive control adjacent to a benign one is a
   misclick waiting to happen.
+- **The panel names nobody.** No candidate name, no email address, no CV filename — the link rides
+  in a calendar event both parties hold and can forward onward ([07 §04.21](07-manage-booking.md)).
+  What is left is the interview and the two actions on it, which is all its holder needs.
 - **No primary action anywhere in the live state.** The page's default posture is that nothing needs
   to change, and a violet CTA would contradict it.
 - Arriving **straight from a booking**, an `InfoBanner tone="info"` sits above the Card at the same
@@ -125,8 +127,7 @@ Both states are the same composition, differing only in banner tone and wording.
 | Panel label | `SectionLabel` | — | — |
 | When | native `<p>` | — | `manage-booking-when` |
 | Zone | native `<span>` | — | `manage-booking-zone` |
-| Who | native `<p>` | — | `manage-booking-email` |
-| CV filename | native `<span>` | — | `manage-cv-filename` |
+| CV present | native `<p>` | — | `manage-cv-present` |
 | Replace CV | `Button` | `variant="ghost"`, `size="sm"` | `manage-cv-replace-button` |
 | CV chooser | `FileInput` | `accept`, `hint`, `error`, `fileName` | `manage-cv-replace-input` |
 | Reschedule | `Button` | `variant="secondary"` | `manage-reschedule-button` |
@@ -187,7 +188,7 @@ Validation and error messages are **not** here — they belong to
 
 | Slot | Text |
 |---|---|
-| Just-booked notice | A calendar invite is on its way to {email}. |
+| Just-booked notice | A calendar invite is on its way to the address you gave. |
 | Panel label | YOUR INTERVIEW |
 | Reschedule action | Reschedule |
 | Cancel action · candidate | Cancel interview |
@@ -255,7 +256,7 @@ Every value is a token; nothing here is a literal.
 | **Reschedule · rest** | `Button secondary` — `--bg-field`, 1.5px `--border-strong` |
 | **Move interview · disabled** | `--bg-sunken` field, `--text-faint`, no lip, `cursor: not-allowed` |
 | **Move interview · loading** | `Button loading` — spinner leads, lip drops, label "Moving" |
-| **CV · replacing** | `FileInput` expands in place beneath the filename row; the row's Replace button hides while it is open |
+| **CV · replacing** | `FileInput` expands in place beneath the "CV attached" row; the row's Replace button hides while it is open |
 | **CV · error** | `FileInput error` — `--error-500` border, message beneath, focus ring `--shadow-glow-error` |
 | **Dialog · open** | `Modal` — `--shadow-modal`, ink-tinted scrim, focus trapped |
 | **Dialog · destructive** | Confirm is `danger`; **focus opens on the dismiss control**, never on Confirm |
@@ -349,6 +350,7 @@ than leaving as an absence:
 
 ## Reference mockup
 
-To be produced as `07-manage-booking.mock.html` — static, token-driven, all four public states plus
-both team dialogs on one page, following `02-booking-page.mock.html`. It is the visual acceptance
+To be produced as `07-manage-booking.mock.html` — static, token-driven, all four public states —
+live, rescheduling, just cancelled, not found — plus the live state's just-booked notice and both
+team dialogs on one page, following `02-booking-page.mock.html`. It is the visual acceptance
 target for this screen.

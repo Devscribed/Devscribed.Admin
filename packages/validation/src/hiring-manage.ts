@@ -190,16 +190,6 @@ export function excludeOwnBooking(
   );
 }
 
-/**
- * "A calendar invite is on its way to jane@example.com."
- *
- * Shown once, over a live record, and never over a dead one: a notice drawn on the
- * blurred screen would confirm that this token was real, which is exactly what the blur
- * exists to withhold (07 §04.18).
- */
-export const justBookedMessage = (email: string): string =>
-  HIRING_MESSAGES.manage.justBooked.replace('{email}', email);
-
 /** "Currently Tuesday, 25 August 2026 at 14:00" — stated, never pre-selected. */
 export const currentTimeMessage = (start: Date, timeZone: string): string =>
   HIRING_MESSAGES.manage.currentTime.replace('{when}', formatBookedWhen(start, timeZone));

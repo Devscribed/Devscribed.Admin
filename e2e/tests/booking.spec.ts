@@ -82,8 +82,11 @@ test.describe('Booking page', () => {
     await expect(page.getByTestId('manage-page')).toBeVisible();
     await expect(page.getByTestId('manage-vacancy-title')).toHaveText('Senior React Engineer');
     await expect(page.getByTestId('manage-duration')).toHaveText('60 minutes');
-    await expect(page.getByTestId('manage-booking-email')).toContainText('jane@example.com');
     await expect(page.getByTestId('manage-booking-zone')).toContainText('UTC');
+    // It names nobody — not even the person who just booked. The link is forwardable
+    // (07 §04.21), and a CV is acknowledged rather than named.
+    await expect(page.getByTestId('manage-cv-present')).toHaveText('CV attached');
+    await expect(page.locator('body')).not.toContainText('jane@example.com');
     await expect(page.getByRole('link', { name: /sign in|log in/i })).toHaveCount(0);
 
     const when = await page.getByTestId('manage-booking-when').textContent();
@@ -97,9 +100,10 @@ test.describe('Booking page', () => {
     );
 
     // The one fact the record cannot state for itself. It matters because the product
-    // sends no mail of its own — Microsoft's invite is all the candidate ever gets.
-    await expect(page.getByTestId('manage-booked')).toContainText(
-      'A calendar invite is on its way to jane@example.com.',
+    // sends no mail of its own — Microsoft's invite is all the candidate ever gets. It
+    // does not name the address, because the page names nobody.
+    await expect(page.getByTestId('manage-booked')).toHaveText(
+      'A calendar invite is on its way to the address you gave.',
     );
 
     // The flag comes off the address bar, so what they are left holding is the link

@@ -19,16 +19,29 @@ import { PrismaService } from '../prisma.service';
 import { AvailabilityService, CalendarUnavailableError } from './availability.service';
 import { CalendarProvider } from './calendar/calendar-provider';
 
-/** What the public page renders when the booking is live. Null in every other case. */
+/**
+ * What the public page renders when the booking is live. Null in every other case.
+ *
+ * **It names nobody, and no file.** The token addresses one booking, and the link that
+ * carries it rides in a calendar event both parties hold and can forward onward
+ * (07 §03.15). A live link therefore has to withhold what a dead one does: §04.17 is at
+ * pains to stop an expired link confirming that a particular person booked an interview,
+ * and a live one that answered with their name, their address and a CV filename usually
+ * built from their name would have given all of it away to whoever the invite reached.
+ *
+ * Withheld from the response rather than merely unrendered, which is the same posture
+ * this route already takes for the interviewer (07 §04.21).
+ */
 export interface ManageBooking {
   startUtc: string;
   /** The application's own length, which the vacancy's may since have left behind. */
   durationMinutes: number;
   timeZone: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  cvFileName: string | null;
+  /**
+   * Whether a CV is on file — never which one. It is what the page needs to offer a
+   * replacement without naming the document it would replace (07 §07).
+   */
+  hasCv: boolean;
 }
 
 export interface ManageView {
@@ -56,7 +69,6 @@ type LiveApplication = {
   isCancelled: boolean;
   graphEventId: string | null;
   cvFileName: string | null;
-  candidate: { firstName: string; lastName: string; email: string };
   interviewer: { email: string };
 };
 
@@ -374,7 +386,6 @@ export class ManageService {
         isCancelled: true,
         graphEventId: true,
         cvFileName: true,
-        candidate: { select: { firstName: true, lastName: true, email: true } },
         interviewer: { select: { email: true } },
       },
     });
@@ -404,16 +415,9 @@ export class ManageService {
         startUtc: application.start.toISOString(),
         durationMinutes: bookedDurationMinutes(application),
         timeZone: application.timeZone,
-        /*
-         * The candidate row's names rather than the frozen `submittedName` split in two:
-         * the split was never recorded, and a name with a space in either half would be
-         * divided in the wrong place. `submittedName` stays frozen for the record the
-         * team reads; this page is showing the candidate themselves.
-         */
-        firstName: application.candidate.firstName,
-        lastName: application.candidate.lastName,
-        email: application.candidate.email,
-        cvFileName: application.cvFileName,
+        // A boolean, not the filename: candidates name their CVs after themselves, so
+        // `jane-doe-cv.pdf` would hand back most of what withholding the name removed.
+        hasCv: application.cvFileName !== null,
       },
     };
   }

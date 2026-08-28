@@ -180,7 +180,7 @@ describe('Hiring — manage booking', () => {
     expect(events[0].toStart?.toISOString()).toBe(booked.startUtc);
   });
 
-  it('renders the live booking, and never the interviewer', async () => {
+  it('renders the live booking, and names nobody at all', async () => {
     const admin = await signup(app, 'pat@acme.com');
     const vacancy = await createVacancy(app, admin);
     const booked = await book(vacancy.slug);
@@ -195,16 +195,29 @@ describe('Hiring — manage booking', () => {
         startUtc: booked.startUtc,
         durationMinutes: 60,
         timeZone: TIME_ZONE,
-        firstName: 'Jane',
-        lastName: 'Doe',
-        email: 'jane@example.com',
-        cvFileName: 'cv.pdf',
+        // A boolean: a CV is on file, and the response does not say which.
+        hasCv: true,
       },
     });
-    // The same public posture 02 takes: the interviewer's name and address are absent
-    // from the response, not merely unrendered (07 §04.21).
-    expect(JSON.stringify(response.body)).not.toContain('pat@acme.com');
-    expect(JSON.stringify(response.body)).not.toContain('Pat Owner');
+
+    /*
+     * Absent from the response, not merely unrendered (07 §04.21) — the interviewer, as
+     * 02's public surface has always withheld them, and now the candidate too. The link
+     * rides in a calendar event both parties hold and can forward onward, and a live one
+     * that answered with a name, an address and `jane-doe-cv.pdf` gave away more than
+     * the blur on a dead link was protecting.
+     */
+    const body = JSON.stringify(response.body);
+    for (const secret of [
+      'pat@acme.com',
+      'Pat Owner',
+      'jane@example.com',
+      'Jane',
+      'Doe',
+      'cv.pdf',
+    ]) {
+      expect(body).not.toContain(secret);
+    }
   });
 
   it('answers 404 only for an unknown slug', async () => {
@@ -464,13 +477,13 @@ describe('Hiring — manage booking', () => {
     const response = await reschedule(vacancy.slug, booked.token, { startUtc: secondStart });
 
     expect(response.status).toBe(200);
-    // The same body as `GET`, carrying the new time.
-    expect(response.body.booking).toMatchObject({
+    // The same body as `GET`, carrying the new time — and naming nobody, as `GET` does
+    // not (07 §04.21).
+    expect(response.body.booking).toEqual({
       startUtc: secondStart,
       durationMinutes: 60,
       timeZone: TIME_ZONE,
-      email: 'jane@example.com',
-      cvFileName: 'cv.pdf',
+      hasCv: true,
     });
 
     // One `updateEvent`, and neither of the two calls that would have told the
@@ -1088,11 +1101,11 @@ describe('Hiring — manage booking', () => {
     expect(token).not.toBe(booked.token);
 
     const live = await view(vacancy.slug, token);
-    expect(live.body.booking).toMatchObject({
+    expect(live.body.booking).toEqual({
       startUtc: firstStart,
       durationMinutes: 60,
       timeZone: TIME_ZONE,
-      cvFileName: 'cv.pdf',
+      hasCv: true,
     });
 
     // Availability comes from the back-filled interviewer's mailbox, which is the only

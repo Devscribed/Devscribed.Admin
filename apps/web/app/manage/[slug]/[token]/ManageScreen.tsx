@@ -9,7 +9,6 @@ import {
   formatLongDate,
   formatSlotTime,
   isoDateInZone,
-  justBookedMessage,
   retainSelection,
   zoneLabel,
 } from '@devscribed/validation';
@@ -112,8 +111,8 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
   // tells a screen-reader user nothing, and this page's own heading is the same one the
   // booking page had.
   useEffect(() => {
-    if (justBooked && booking) setAnnouncement(justBookedMessage(booking.email));
-  }, [justBooked, booking?.email]);
+    if (justBooked && booking) setAnnouncement(HIRING_MESSAGES.manage.justBooked);
+  }, [justBooked, booking]);
 
   useEffect(() => {
     let cancelled = false;
@@ -424,7 +423,7 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
             */}
             {justBooked && (
               <InfoBanner tone="info" data-testid="manage-booked">
-                {justBookedMessage(booking.email)}
+                {HIRING_MESSAGES.manage.justBooked}
               </InfoBanner>
             )}
 
@@ -450,30 +449,30 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
                 {zoneLabel(booking.timeZone, new Date(booking.startUtc))}
               </span>
 
-              <hr
-                style={{
-                  margin: 'var(--sp-8) 0',
-                  border: 0,
-                  borderTop: '1px solid var(--divider)',
-                }}
-              />
-
-              <p
-                data-testid="manage-booking-email"
-                style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}
-              >
-                {booking.firstName} {booking.lastName} · {booking.email}
-              </p>
-              {booking.cvFileName && (
-                <p
-                  style={{
-                    margin: 'var(--sp-4) 0 0',
-                    fontSize: 'var(--fs-14)',
-                    color: 'var(--text-sub)',
-                  }}
-                >
-                  CV: <span data-testid="manage-cv-filename">{booking.cvFileName}</span>
-                </p>
+              {/*
+                No name, no address, no filename. The link rides in a calendar event both
+                parties hold and can forward onward, and §04.17 is at pains to stop a
+                *dead* link confirming that a particular person booked an interview — a
+                live one that named them outright would have given away more, to more
+                people (07 §04.21). What is left says an interview exists and when, which
+                is all its holder needs in order to move or call it off.
+              */}
+              {booking.hasCv && (
+                <>
+                  <hr
+                    style={{
+                      margin: 'var(--sp-8) 0',
+                      border: 0,
+                      borderTop: '1px solid var(--divider)',
+                    }}
+                  />
+                  <p
+                    data-testid="manage-cv-present"
+                    style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}
+                  >
+                    CV attached
+                  </p>
+                </>
               )}
 
               {/*

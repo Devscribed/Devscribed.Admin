@@ -108,7 +108,7 @@ for a move as well as for a booking. See §12.
     | **Everything else** | "We couldn't find your booking." and "New booking" |
 
 16a. The live state may additionally carry a **just-booked notice**: "A calendar invite is on its
-    way to {email}." It is a **modifier on the live state, not a fourth rendering** — it draws only
+    way to the address you gave." It is a **modifier on the live state, not a fourth rendering** — it draws only
     where `booking` is non-null, so no flag can make it appear over the blurred screen and confirm
     that a dead token was once real (§04.18).
 
@@ -144,9 +144,28 @@ for a move as well as for a booking. See §12.
 20. Every state renders the organization wordmark and the vacancy title, because the slug resolves
     even when the token does not. Only an **unknown slug** is a bare `404`, matching
     [02 §02.5](02-booking-page.md).
-21. The page **never names the interviewer**. [02](02-booking-page.md)'s public response withholds
-    the interviewer's name and email, and this page is the same public surface under a different
-    token.
+21. The page **names nobody**, and no file. Not the interviewer, whose name and email
+    [02](02-booking-page.md)'s public response already withholds — this is the same public surface
+    under a different token. And **not the candidate**: not their name, not their email address,
+    and not their CV's filename.
+
+    The candidate's own details were shown here originally, on the reasoning that the page belongs
+    to them. The link does not. It rides in a calendar event **both parties hold and can forward
+    onward** (§03.15), which is the same fact §04.17 uses to justify blurring a dead link so it
+    cannot confirm that a particular person booked an interview and later cancelled it. A live link
+    that answered with a full name, an email address and `jane-doe-cv.pdf` gave away strictly more
+    than the dead one was being protected from, to whoever the invite reached and whoever they sent
+    it on to.
+
+    Withheld **from the response**, not merely unrendered — the same standard this route already
+    holds the interviewer's details to. `booking` carries `hasCv`, a boolean, so the page can offer
+    a replacement (§07) without naming the document it would replace.
+    This costs the candidate one thing, recorded rather than waved away: the page was their only
+    chance to notice they had **mistyped their email address**, at the one moment the remedy —
+    cancel, then book again — was still in front of them. A typo now sends the invite somewhere they
+    will never see, and nothing on screen says so. The exposure withholding buys back is permanent
+    and applies to every booking; the typo is rare and already unrecoverable by the time anyone
+    notices. Editing an address after booking stays out of scope.
 
 ### 05. Candidate reschedule
 
@@ -175,6 +194,9 @@ for a move as well as for a booking. See §12.
 ### 07. CV replacement
 
 31. The candidate may **replace their CV**, from the same page, at any time the booking is live.
+    The page states only that one is attached, never its filename (§04.21) — a candidate replacing
+    a document knows which one they submitted, and naming it would hand a forwarded link a name
+    it otherwise withholds.
 32. Replacement is **not gated behind rescheduling**. A candidate who spotted a typo in their CV must
     not have to move their interview to fix it, and a candidate who only wants a different Tuesday
     must not be interrogated about their CV. It is one optional field, present in the live state and
@@ -363,7 +385,8 @@ the panel is present on that first view only (§04.16a).
 │                        Teammerly●                               │
 │                                                                 │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │  ℹ  A calendar invite is on its way to jane@example.com.  │  │
+│  │  ℹ  A calendar invite is on its way to the address you    │  │
+│  │     gave.                                                 │  │
 │  └───────────────────────────────────────────────────────────┘  │
 │                                                                 │
 │                  Senior React Engineer                          │
@@ -375,8 +398,7 @@ the panel is present on that first view only (§04.16a).
 │  │  Tuesday, 25 August 2026 at 14:00                         │  │
 │  │  (UTC+03:00) Minsk                                        │  │
 │  │                                                           │  │
-│  │  Jane Doe · jane@example.com                              │  │
-│  │  CV: jane-doe-cv.pdf            [ Replace ]               │  │
+│  │  CV attached                    [ Replace ]               │  │
 │  │                                                           │  │
 │  │        [ Reschedule ]      [ Cancel interview ]           │  │
 │  └───────────────────────────────────────────────────────────┘  │
@@ -527,10 +549,7 @@ Public. Response `200`:
     "startUtc": "2026-08-25T11:00:00.000Z",
     "durationMinutes": 60,
     "timeZone": "Europe/Minsk",
-    "firstName": "Jane",
-    "lastName": "Doe",
-    "email": "jane@example.com",
-    "cvFileName": "jane-doe-cv.pdf"
+    "hasCv": true
   }
 }
 ```
@@ -539,8 +558,9 @@ Public. Response `200`:
   token — and the four are indistinguishable in the response (§04.18).
 - `durationMinutes` on `booking` is the application's own length, which may differ from the
   vacancy's (§13.61).
-- The interviewer's name and email are absent, as they are from
-  [02](02-booking-page.md)'s public response.
+- **No person is named.** The interviewer's name and email are absent, as they are from
+  [02](02-booking-page.md)'s public response — and so are the candidate's own name, email and CV
+  filename (§04.21). `hasCv` says a CV is on file without saying which.
 - `404` only for an unknown **slug**.
 
 ### GET /api/manage/{slug}/{token}/availability
@@ -584,7 +604,8 @@ Success `200`:
 
 Public. `multipart/form-data`: `cv`.
 
-Success `200` — the same body as `GET`, carrying the new `cvFileName`.
+Success `200` — the same body as `GET`. The response does not name the file that was just
+uploaded, for the same reason `GET` does not (§04.21); `hasCv` is all it carries about the CV.
 
 Errors: `404`; `422` `{ "error": "validation", "fields": { "cv": "…" } }` using
 [02](02-booking-page.md)'s CV rules unchanged; `503`
@@ -630,7 +651,7 @@ updated application. Errors as the public cancel route.
 
 | Context | Message |
 |---|---|
-| Just booked | "A calendar invite is on its way to {email}." |
+| Just booked | "A calendar invite is on its way to the address you gave." |
 | Booking not resolvable — any cause | "We couldn't find your booking." |
 | Just cancelled | "Your interview has been cancelled." |
 | Slot taken | "That time was just booked. Please choose another." |
@@ -657,7 +678,7 @@ CV validation messages are [02](02-booking-page.md)'s and must match its table e
 - Required `data-testid` attributes:
   - `manage-page`, `manage-org-wordmark`, `manage-vacancy-title`, `manage-duration`
   - `manage-booked`
-  - `manage-booking-when`, `manage-booking-zone`, `manage-booking-email`, `manage-cv-filename`
+  - `manage-booking-when`, `manage-booking-zone`, `manage-cv-present`
   - `manage-reschedule-button`, `manage-cancel-button`, `manage-cv-replace-input`
   - `manage-reschedule-submit`, `manage-reschedule-cancel`, `manage-current-time`
   - `manage-cancel-dialog`, `manage-cancel-confirm`, `manage-cancel-dismiss`
