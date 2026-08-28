@@ -29,6 +29,31 @@ export function InboxIcon() {
 }
 
 /**
+ * Folder/tray glyph for the sidebar "Projects" row (spec 11). Meridian ships no folder
+ * icon, so this is a simple filled folder-with-tab drawn with `currentColor` to sit
+ * alongside `PeopleIcon`/`InboxIcon` — geometric, no strokes.
+ */
+export function FolderIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width={19} height={19} fill="currentColor" aria-hidden>
+      <path d="M2.5 5.5A1.75 1.75 0 0 1 4.25 3.75h2.84c.46 0 .9.18 1.24.51l1.06 1.06c.05.05.11.07.18.07h6.18A1.75 1.75 0 0 1 17.5 7.22V14.5A1.75 1.75 0 0 1 15.75 16.25H4.25A1.75 1.75 0 0 1 2.5 14.5V5.5Zm1.75-.25a.25.25 0 0 0-.25.25V7.5h12.5v-.28A.25.25 0 0 0 15.75 6.97H9.57c-.46 0-.9-.18-1.24-.51L7.27 5.4a.25.25 0 0 0-.18-.07H4.25Z" />
+    </svg>
+  );
+}
+
+/**
+ * Pencil glyph for the "rename project" action (spec 11 — list-row edit + detail rename).
+ * A simple filled pencil drawn with `currentColor` to match the other shell glyphs.
+ */
+export function PencilIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width={16} height={16} fill="currentColor" aria-hidden>
+      <path d="M13.94 2.5a1.75 1.75 0 0 1 1.24.51l1.81 1.81a1.75 1.75 0 0 1 0 2.47l-8.3 8.3a1.75 1.75 0 0 1-.83.46l-4.02.98a.75.75 0 0 1-.91-.9l.98-4.03c.08-.31.24-.6.46-.83l8.3-8.3a1.75 1.75 0 0 1 1.24-.51Zm0 1.5a.25.25 0 0 0-.18.07l-1.06 1.06 2.42 2.42 1.06-1.06a.25.25 0 0 0 0-.36l-1.81-1.81a.25.25 0 0 0-.18-.07l-.25-.25.25.25Zm.12 4.61-2.42-2.42-6.18 6.18a.25.25 0 0 0-.06.12l-.62 2.54 2.54-.62a.25.25 0 0 0 .12-.06l6.18-6.18Z" />
+    </svg>
+  );
+}
+
+/**
  * The row-actions ("⋮") trigger glyph — three stacked dots, lifted verbatim from the
  * `icDots` entry in `MeridianApp.dc.html`'s members-list section (spec 04).
  */
@@ -38,6 +63,76 @@ export function DotsIcon() {
       <circle cx="2" cy="2" r="1.6" />
       <circle cx="2" cy="8" r="1.6" />
       <circle cx="2" cy="14" r="1.6" />
+    </svg>
+  );
+}
+
+/**
+ * Clock glyph for the sidebar "Time Tracking" row (spec 12). The design's carried icon
+ * gap — Meridian ships no clock — so this is the mock's stroked circle-with-hands
+ * (`<circle r=7>` + `M10 6v4l3 2`), drawn with `currentColor` strokes to sit beside the
+ * other shell glyphs.
+ */
+export function ClockIcon() {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      width={19}
+      height={19}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.6}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="10" cy="10" r="7" />
+      <path d="M10 6v4l3 2" />
+    </svg>
+  );
+}
+
+/** Play (▶) triangle — the "Start timer" button glyph (spec 12 timer bar). */
+export function PlayIcon({ size = 13 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 12 12" width={size} height={size} fill="currentColor" aria-hidden>
+      <path d="M2.5 1.6c0-.5.54-.82.98-.57l7 4.4a.67.67 0 0 1 0 1.14l-7 4.4A.67.67 0 0 1 2.5 10.4V1.6Z" />
+    </svg>
+  );
+}
+
+/** Filled square — the "Stop" glyph shared by the timer bar and the topbar indicator. */
+export function StopIcon({ size = 11 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 12 12" width={size} height={size} fill="currentColor" aria-hidden>
+      <rect x="1.5" y="1.5" width="9" height="9" rx="1.5" />
+    </svg>
+  );
+}
+
+/** Trash glyph for the "delete entry" action (spec 12 daily list). */
+export function TrashIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 20 20" width={size} height={size} fill="currentColor" aria-hidden>
+      <path d="M8 2.5a1 1 0 0 0-1 1V4H4.25a.75.75 0 0 0 0 1.5H4.8l.5 9.06A2 2 0 0 0 7.3 16.5h5.4a2 2 0 0 0 2-1.94L15.2 5.5h.55a.75.75 0 0 0 0-1.5H13v-.5a1 1 0 0 0-1-1H8Zm4.5 3H6.3l.49 8.98a.5.5 0 0 0 .5.52h5.42a.5.5 0 0 0 .5-.52L13.7 5.5H12.5Zm-4 1.75a.75.75 0 0 1 1.5 0v5a.75.75 0 0 1-1.5 0v-5Zm3 0a.75.75 0 0 1 1.5 0v5a.75.75 0 0 1-1.5 0v-5Z" />
+    </svg>
+  );
+}
+
+/** Left chevron — the "previous period" control (spec 12 period navigation). */
+export function ChevronLeftIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="currentColor" aria-hidden>
+      <path d="M10.35 3.15c.3.3.3.77 0 1.06L6.56 8l3.79 3.79a.75.75 0 1 1-1.06 1.06L4.97 8.53a.75.75 0 0 1 0-1.06l4.32-4.32c.3-.3.77-.3 1.06 0Z" />
+    </svg>
+  );
+}
+
+/** Right chevron — the "next period" control (spec 12 period navigation). */
+export function ChevronRightIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="currentColor" aria-hidden>
+      <path d="M5.65 3.15c-.3.3-.3.77 0 1.06L9.44 8l-3.79 3.79a.75.75 0 1 0 1.06 1.06l4.32-4.32a.75.75 0 0 0 0-1.06L6.71 3.15c-.3-.3-.77-.3-1.06 0Z" />
     </svg>
   );
 }

@@ -23,10 +23,14 @@ import { MeController } from './members/me.controller';
 import { MembersController } from './members/members.controller';
 import { MembersService } from './members/members.service';
 import { PrismaService } from './prisma.service';
+import { ProjectsController } from './projects/projects.controller';
+import { ProjectsService } from './projects/projects.service';
 import { RequestsController } from './requests/requests.controller';
 import { RequestsService } from './requests/requests.service';
 import { SignupController } from './signup/signup.controller';
 import { SignupService } from './signup/signup.service';
+import { TimeTrackingController } from './time-tracking/time-tracking.controller';
+import { TimeTrackingService } from './time-tracking/time-tracking.service';
 import { TestFixturesController } from './test/test-fixtures.controller';
 import { VacationController } from './vacation/vacation.controller';
 import { VacationRequestsService } from './vacation/vacation-requests.service';
@@ -72,6 +76,8 @@ const mailProvider = {
     AccountController,
     VacationController,
     RequestsController,
+    ProjectsController,
+    TimeTrackingController,
     AccrualController,
     TestMailController,
     TestFixturesController,
@@ -87,6 +93,8 @@ const mailProvider = {
     VacationService,
     VacationRequestsService,
     RequestsService,
+    ProjectsService,
+    TimeTrackingService,
     AccrualService,
     SessionService,
     mailProvider,

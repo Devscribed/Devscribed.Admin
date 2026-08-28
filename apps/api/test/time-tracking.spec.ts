@@ -1,0 +1,836 @@
+import { INestApplication } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import { TIME_TRACKING_MESSAGES, formatWallClockInTz } from '@devscribed/validation';
+import * as bcrypt from 'bcryptjs';
+import cookieParser from 'cookie-parser';
+import request from 'supertest';
+import { AppModule } from '../src/app.module';
+import { InMemoryMailService } from '../src/mail/in-memory-mail.service';
+import { MailService } from '../src/mail/mail.service';
+import { PrismaService } from '../src/prisma.service';
+
+/** Cheap in tests — the policy under bcrypt doesn't depend on the cost factor. */
+const TEST_BCRYPT_ROUNDS = 4;
+
+/** UTC 'YYYY-MM-DD' offset from today (0 = today, -1 = yesterday). */
+const isoDate = (offsetDays: number): string =>
+  new Date(Date.now() + offsetDays * 86400000).toISOString().slice(0, 10);
+
+describe('Time Tracking (spec 12)', () => {
+  let app: INestApplication;
+  let prisma: PrismaService;
+
+  interface Signed {
+    cookies: string[];
+    accountId: string;
+    organizationId: string;
+    membershipId: string;
+    role: string;
+  }
+
+  const server = () => app.getHttpServer();
+
+  const signupAdmin = async (email: string, orgName: string): Promise<Signed> => {
+    const response = await request(server()).post('/api/signup').send({
+      orgName,
+      firstName: 'Pat',
+      lastName: 'Owner',
+      email,
+      password: 'Passw0rd',
+    });
+    const cookies = response.headers['set-cookie'] as unknown as string[];
+    const accountId = response.body.account.id as string;
+    const organizationId = response.body.organization.id as string;
+    const membership = await prisma.membership.findUniqueOrThrow({ where: { accountId } });
+    return { cookies, accountId, organizationId, membershipId: membership.id, role: 'admin' };
+  };
+
+  const login = (email: string, password: string) =>
+    request(server()).post('/api/login').send({ email, password });
+
+  const createMember = async (
+    organizationId: string,
+    opts: {
+      email: string;
+      role: string;
+      firstName?: string;
+      lastName?: string;
+      status?: string;
+      /** Effective tz for compose/backdate rules. Defaults to 'UTC' so the many
+       * `date: today()` (UTC) assertions below are deterministic regardless of run time;
+       * the dedicated tz test passes an explicit non-UTC zone. */
+      timezone?: string;
+    },
+  ): Promise<Signed> => {
+    const password = 'Passw0rd';
+    const passwordHash = await bcrypt.hash(password, TEST_BCRYPT_ROUNDS);
+    const account = await prisma.account.create({
+      data: {
+        email: opts.email,
+        passwordHash,
+        firstName: opts.firstName ?? 'Test',
+        lastName: opts.lastName ?? 'User',
+        timezone: opts.timezone ?? 'UTC',
+      },
+    });
+    const membership = await prisma.membership.create({
+      data: {
+        accountId: account.id,
+        organizationId,
+        role: opts.role,
+        status: opts.status ?? 'active',
+      },
+    });
+    const cookies =
+      opts.status !== 'removed'
+        ? ((await login(opts.email, password)).headers['set-cookie'] as unknown as string[])
+        : [];
+    return {
+      cookies,
+      accountId: account.id,
+      organizationId,
+      membershipId: membership.id,
+      role: opts.role,
+    };
+  };
+
+  const createProject = async (
+    cookies: string[],
+    orgId: string,
+    name: string,
+  ): Promise<string> => {
+    const res = await request(server())
+      .post(`/api/organizations/${orgId}/projects`)
+      .set('Cookie', cookies)
+      .send({ name });
+    return res.body.id as string;
+  };
+
+  const assignMember = (cookies: string[], orgId: string, projectId: string, membershipId: string) =>
+    request(server())
+      .post(`/api/organizations/${orgId}/projects/${projectId}/members`)
+      .set('Cookie', cookies)
+      .send({ membershipIds: [membershipId] });
+
+  const archiveProject = (cookies: string[], orgId: string, projectId: string) =>
+    request(server())
+      .patch(`/api/organizations/${orgId}/projects/${projectId}/archive`)
+      .set('Cookie', cookies);
+
+  // --- Timer helpers ---
+  const getTimer = (cookies: string[], orgId: string) =>
+    request(server()).get(`/api/organizations/${orgId}/timer`).set('Cookie', cookies);
+
+  const startTimer = (cookies: string[], orgId: string, body: object = {}) =>
+    request(server()).post(`/api/organizations/${orgId}/timer/start`).set('Cookie', cookies).send(body);
+
+  const putTimer = (cookies: string[], orgId: string, body: object) =>
+    request(server()).put(`/api/organizations/${orgId}/timer`).set('Cookie', cookies).send(body);
+
+  const stopTimer = (cookies: string[], orgId: string, body: object = {}) =>
+    request(server()).post(`/api/organizations/${orgId}/timer/stop`).set('Cookie', cookies).send(body);
+
+  const discardTimer = (cookies: string[], orgId: string) =>
+    request(server()).delete(`/api/organizations/${orgId}/timer`).set('Cookie', cookies);
+
+  // --- Time-entry helpers ---
+  const listEntries = (cookies: string[], orgId: string, query = '') =>
+    request(server()).get(`/api/organizations/${orgId}/time-entries${query}`).set('Cookie', cookies);
+
+  const createEntry = (cookies: string[], orgId: string, body: object) =>
+    request(server()).post(`/api/organizations/${orgId}/time-entries`).set('Cookie', cookies).send(body);
+
+  const updateEntry = (cookies: string[], orgId: string, entryId: string, body: object) =>
+    request(server())
+      .put(`/api/organizations/${orgId}/time-entries/${entryId}`)
+      .set('Cookie', cookies)
+      .send(body);
+
+  const deleteEntry = (cookies: string[], orgId: string, entryId: string) =>
+    request(server())
+      .delete(`/api/organizations/${orgId}/time-entries/${entryId}`)
+      .set('Cookie', cookies);
+
+  const removeOrgMember = (cookies: string[], orgId: string, membershipId: string) =>
+    request(server())
+      .delete(`/api/organizations/${orgId}/members/${membershipId}`)
+      .set('Cookie', cookies);
+
+  const today = () => isoDate(0);
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(MailService)
+      .useClass(InMemoryMailService)
+      .compile();
+    app = moduleRef.createNestApplication();
+    app.use(cookieParser());
+    await app.init();
+    prisma = app.get(PrismaService);
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  beforeEach(async () => {
+    await prisma.runningTimer.deleteMany();
+    await prisma.timeEntry.deleteMany();
+    await prisma.projectMember.deleteMany();
+    await prisma.project.deleteMany();
+    await prisma.vacationRequest.deleteMany();
+    await prisma.vacationReserveTransaction.deleteMany();
+    await prisma.memberFinancialsSnapshot.deleteMany();
+    await prisma.memberFinancials.deleteMany();
+    await prisma.invitation.deleteMany();
+    await prisma.membership.deleteMany();
+    await prisma.organization.deleteMany();
+    await prisma.account.deleteMany();
+  });
+
+  // TC-12-INT-01
+  it('starts a timer (happy path) and reads it back', async () => {
+    const admin = await signupAdmin('admin1@acme.com', 'Acme');
+    const user = await createMember(admin.organizationId, { email: 'u1@acme.com', role: 'user' });
+    const projectId = await createProject(admin.cookies, admin.organizationId, 'Alpha');
+    await assignMember(admin.cookies, admin.organizationId, projectId, user.membershipId);
+
+    const start = await startTimer(user.cookies, admin.organizationId, { projectId, task: 'Coding' });
+    expect(start.status).toBe(201);
+    expect(start.body).toMatchObject({ projectId, projectName: 'Alpha', task: 'Coding' });
+    expect(start.body.id).toEqual(expect.any(String));
+    expect(start.body.startedAt).toEqual(expect.any(String));
+
+    const get = await getTimer(user.cookies, admin.organizationId);
+    expect(get.status).toBe(200);
+    expect(get.body.timer).toMatchObject({ id: start.body.id, projectId, task: 'Coding' });
+  });
+
+  // TC-12-INT-02
+  it('returns 409 when starting a timer while one is already running', async () => {
+    const admin = await signupAdmin('admin2@acme.com', 'Acme');
+    await startTimer(admin.cookies, admin.organizationId, { task: 'first' });
+
+    const second = await startTimer(admin.cookies, admin.organizationId, {});
+    expect(second.status).toBe(409);
+    expect(second.body).toEqual({
+      error: 'timer_already_running',
+      message: TIME_TRACKING_MESSAGES.timerAlreadyRunning,
+    });
+  });
+
+  // TC-12-INT-03
+  it('stops a timer and creates a time entry with the computed duration', async () => {
+    const admin = await signupAdmin('admin3@acme.com', 'Acme');
+    const projectId = await createProject(admin.cookies, admin.organizationId, 'Alpha');
+
+    await startTimer(admin.cookies, admin.organizationId, { projectId });
+    // Backdate the running timer ~5 minutes so the stop computes a real duration.
+    await prisma.runningTimer.update({
+      where: { membershipId: admin.membershipId },
+      data: { startedAt: new Date(Date.now() - 5 * 60000) },
+    });
+
+    const stop = await stopTimer(admin.cookies, admin.organizationId);
+    expect(stop.status).toBe(200);
+    expect(stop.body.timeEntry).toMatchObject({ projectId, date: today() });
+    expect(stop.body.timeEntry.durationMinutes).toBeGreaterThanOrEqual(5);
+
+    const get = await getTimer(admin.cookies, admin.organizationId);
+    expect(get.body.timer).toBeNull();
+
+    const list = await listEntries(admin.cookies, admin.organizationId, `?from=${today()}&to=${today()}`);
+    expect(list.body.entries.map((e: any) => e.id)).toContain(stop.body.timeEntry.id);
+  });
+
+  // TC-12-INT-04
+  it('returns 404 no_timer when stopping with no running timer', async () => {
+    const admin = await signupAdmin('admin4@acme.com', 'Acme');
+    const stop = await stopTimer(admin.cookies, admin.organizationId);
+    expect(stop.status).toBe(404);
+    expect(stop.body).toEqual({ error: 'no_timer', message: TIME_TRACKING_MESSAGES.timerNotRunning });
+  });
+
+  // TC-12-INT-05
+  it('discards a timer without creating an entry (idempotent)', async () => {
+    const admin = await signupAdmin('admin5@acme.com', 'Acme');
+    await startTimer(admin.cookies, admin.organizationId, {});
+
+    const discard = await discardTimer(admin.cookies, admin.organizationId);
+    expect(discard.status).toBe(200);
+    expect(discard.body).toEqual({ success: true });
+
+    // Idempotent — discarding again is still 200.
+    const again = await discardTimer(admin.cookies, admin.organizationId);
+    expect(again.status).toBe(200);
+
+    expect((await getTimer(admin.cookies, admin.organizationId)).body.timer).toBeNull();
+    const list = await listEntries(admin.cookies, admin.organizationId, `?from=${today()}&to=${today()}`);
+    expect(list.body.entries).toHaveLength(0);
+  });
+
+  // TC-12-INT-06
+  it('updates running timer metadata without changing startedAt', async () => {
+    const admin = await signupAdmin('admin6@acme.com', 'Acme');
+    const p1 = await createProject(admin.cookies, admin.organizationId, 'P1');
+    const p2 = await createProject(admin.cookies, admin.organizationId, 'P2');
+
+    const start = await startTimer(admin.cookies, admin.organizationId, { projectId: p1, task: 'Old' });
+    const startedAt = start.body.startedAt;
+
+    const put = await putTimer(admin.cookies, admin.organizationId, { projectId: p2, task: 'New' });
+    expect(put.status).toBe(200);
+    expect(put.body).toMatchObject({ projectId: p2, projectName: 'P2', task: 'New', startedAt });
+
+    const get = await getTimer(admin.cookies, admin.organizationId);
+    expect(get.body.timer).toMatchObject({ projectId: p2, task: 'New', startedAt });
+  });
+
+  // TC-12-INT-07
+  it('creates a manual entry (duration only)', async () => {
+    const admin = await signupAdmin('admin7@acme.com', 'Acme');
+    const projectId = await createProject(admin.cookies, admin.organizationId, 'Alpha');
+
+    const res = await createEntry(admin.cookies, admin.organizationId, {
+      projectId,
+      task: 'Meeting',
+      date: today(),
+      durationMinutes: 60,
+    });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({
+      durationMinutes: 60,
+      startTime: null,
+      endTime: null,
+      projectName: 'Alpha',
+    });
+  });
+
+  // TC-12-INT-08
+  it('creates a manual entry (time range) with an auto-computed duration', async () => {
+    const admin = await signupAdmin('admin8@acme.com', 'Acme');
+    const projectId = await createProject(admin.cookies, admin.organizationId, 'Alpha');
+
+    const res = await createEntry(admin.cookies, admin.organizationId, {
+      projectId,
+      date: today(),
+      startTime: '09:00',
+      endTime: '11:30',
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.durationMinutes).toBe(150);
+    expect(res.body.startTime).toEqual(expect.any(String));
+    expect(res.body.endTime).toEqual(expect.any(String));
+  });
+
+  // TC-12-INT-09
+  it('rejects invalid entry inputs with 400 and the relevant messages', async () => {
+    const admin = await signupAdmin('admin9@acme.com', 'Acme');
+    const org = admin.organizationId;
+
+    const noDate = await createEntry(admin.cookies, org, { durationMinutes: 60 });
+    expect(noDate.status).toBe(400);
+    expect(noDate.body.errors.date).toBe(TIME_TRACKING_MESSAGES.dateRequired);
+
+    const future = await createEntry(admin.cookies, org, { date: isoDate(1), durationMinutes: 60 });
+    expect(future.status).toBe(400);
+    expect(future.body.errors.date).toBe(TIME_TRACKING_MESSAGES.dateFuture);
+
+    const tooOld = await createEntry(admin.cookies, org, { date: isoDate(-91), durationMinutes: 60 });
+    expect(tooOld.status).toBe(400);
+    expect(tooOld.body.errors.date).toBe(TIME_TRACKING_MESSAGES.dateTooOld);
+
+    const zero = await createEntry(admin.cookies, org, { date: today(), durationMinutes: 0 });
+    expect(zero.status).toBe(400);
+    expect(zero.body.errors.durationMinutes).toBe(TIME_TRACKING_MESSAGES.durationMin);
+
+    const over = await createEntry(admin.cookies, org, { date: today(), durationMinutes: 1441 });
+    expect(over.status).toBe(400);
+    expect(over.body.errors.durationMinutes).toBe(TIME_TRACKING_MESSAGES.durationMax);
+
+    const noEnd = await createEntry(admin.cookies, org, { date: today(), startTime: '09:00' });
+    expect(noEnd.status).toBe(400);
+    expect(noEnd.body.errors.endTime).toBe(TIME_TRACKING_MESSAGES.endTimeRequired);
+
+    const reversed = await createEntry(admin.cookies, org, {
+      date: today(),
+      startTime: '11:00',
+      endTime: '09:00',
+    });
+    expect(reversed.status).toBe(400);
+    expect(reversed.body.errors.endTime).toBe(TIME_TRACKING_MESSAGES.endBeforeStart);
+
+    const longTask = await createEntry(admin.cookies, org, {
+      date: today(),
+      durationMinutes: 60,
+      task: 'a'.repeat(201),
+    });
+    expect(longTask.status).toBe(400);
+    expect(longTask.body.errors.task).toBe(TIME_TRACKING_MESSAGES.taskTooLong);
+  });
+
+  // TC-12-INT-10
+  it('lets the owner edit their own entry', async () => {
+    const admin = await signupAdmin('admin10@acme.com', 'Acme');
+    const created = await createEntry(admin.cookies, admin.organizationId, {
+      date: today(),
+      durationMinutes: 60,
+      task: 'Original',
+    });
+
+    const res = await updateEntry(admin.cookies, admin.organizationId, created.body.id, {
+      date: today(),
+      durationMinutes: 90,
+      task: 'Updated',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ task: 'Updated', durationMinutes: 90 });
+  });
+
+  // TC-12-INT-11
+  it('lets an admin edit another member’s entry', async () => {
+    const admin = await signupAdmin('admin11@acme.com', 'Acme');
+    const user = await createMember(admin.organizationId, { email: 'u11@acme.com', role: 'user' });
+    const created = await createEntry(user.cookies, admin.organizationId, {
+      date: today(),
+      durationMinutes: 60,
+      task: 'User task',
+    });
+
+    const res = await updateEntry(admin.cookies, admin.organizationId, created.body.id, {
+      date: today(),
+      durationMinutes: 60,
+      task: 'Admin edited',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.task).toBe('Admin edited');
+  });
+
+  // TC-12-INT-12
+  it('forbids a user from editing another member’s entry (403)', async () => {
+    const admin = await signupAdmin('admin12@acme.com', 'Acme');
+    const u1 = await createMember(admin.organizationId, { email: 'u12a@acme.com', role: 'user' });
+    const u2 = await createMember(admin.organizationId, { email: 'u12b@acme.com', role: 'user' });
+    const created = await createEntry(u2.cookies, admin.organizationId, {
+      date: today(),
+      durationMinutes: 60,
+    });
+
+    const res = await updateEntry(u1.cookies, admin.organizationId, created.body.id, {
+      date: today(),
+      durationMinutes: 90,
+    });
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: 'forbidden', message: TIME_TRACKING_MESSAGES.forbiddenEdit });
+  });
+
+  // TC-12-INT-13
+  it('lets the owner delete their own entry', async () => {
+    const admin = await signupAdmin('admin13@acme.com', 'Acme');
+    const created = await createEntry(admin.cookies, admin.organizationId, {
+      date: today(),
+      durationMinutes: 60,
+    });
+
+    const del = await deleteEntry(admin.cookies, admin.organizationId, created.body.id);
+    expect(del.status).toBe(200);
+    expect(del.body).toEqual({ success: true });
+
+    const list = await listEntries(admin.cookies, admin.organizationId, `?from=${today()}&to=${today()}`);
+    expect(list.body.entries.map((e: any) => e.id)).not.toContain(created.body.id);
+  });
+
+  // TC-12-INT-14
+  it('forbids a user from deleting another member’s entry (403)', async () => {
+    const admin = await signupAdmin('admin14@acme.com', 'Acme');
+    const u1 = await createMember(admin.organizationId, { email: 'u14a@acme.com', role: 'user' });
+    const u2 = await createMember(admin.organizationId, { email: 'u14b@acme.com', role: 'user' });
+    const created = await createEntry(u2.cookies, admin.organizationId, {
+      date: today(),
+      durationMinutes: 60,
+    });
+
+    const res = await deleteEntry(u1.cookies, admin.organizationId, created.body.id);
+    expect(res.status).toBe(403);
+    expect(res.body).toEqual({ error: 'forbidden', message: TIME_TRACKING_MESSAGES.forbiddenDelete });
+  });
+
+  // TC-12-INT-15
+  it('scopes list to the caller (user) and honors membershipId for admin', async () => {
+    const admin = await signupAdmin('admin15@acme.com', 'Acme');
+    const user = await createMember(admin.organizationId, { email: 'u15@acme.com', role: 'user' });
+    const range = `?from=${today()}&to=${today()}`;
+
+    await createEntry(admin.cookies, admin.organizationId, { date: today(), durationMinutes: 30, task: 'A' });
+    await createEntry(user.cookies, admin.organizationId, { date: today(), durationMinutes: 45, task: 'U' });
+
+    // 1. user sees only own.
+    const uOwn = await listEntries(user.cookies, admin.organizationId, range);
+    expect(uOwn.body.entries.map((e: any) => e.task)).toEqual(['U']);
+
+    // 2. user's membershipId param pointing at admin is ignored — still only own.
+    const uFiltered = await listEntries(
+      user.cookies,
+      admin.organizationId,
+      `${range}&membershipId=${admin.membershipId}`,
+    );
+    expect(uFiltered.body.entries.map((e: any) => e.task)).toEqual(['U']);
+
+    // 3. admin default → own.
+    const aOwn = await listEntries(admin.cookies, admin.organizationId, range);
+    expect(aOwn.body.entries.map((e: any) => e.task)).toEqual(['A']);
+
+    // 4. admin filtered to the user.
+    const aFiltered = await listEntries(
+      admin.cookies,
+      admin.organizationId,
+      `${range}&membershipId=${user.membershipId}`,
+    );
+    expect(aFiltered.body.entries.map((e: any) => e.task)).toEqual(['U']);
+    // memberName present for a manage-all caller.
+    expect(aFiltered.body.entries[0].memberName).toEqual(expect.any(String));
+  });
+
+  // TC-12-INT-16
+  it('forbids a viewer from listing time entries (403)', async () => {
+    const admin = await signupAdmin('admin16@acme.com', 'Acme');
+    const viewer = await createMember(admin.organizationId, { email: 'v16@acme.com', role: 'viewer' });
+
+    const res = await listEntries(viewer.cookies, admin.organizationId, `?from=${today()}&to=${today()}`);
+    expect(res.status).toBe(403);
+  });
+
+  // TC-12-INT-17
+  it('rejects a range exceeding 31 days with 400 range_too_large', async () => {
+    const admin = await signupAdmin('admin17@acme.com', 'Acme');
+    const res = await listEntries(
+      admin.cookies,
+      admin.organizationId,
+      '?from=2026-08-01&to=2026-09-02',
+    );
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      error: 'range_too_large',
+      message: TIME_TRACKING_MESSAGES.queryRangeTooLarge,
+    });
+  });
+
+  // TC-12-INT-18
+  it('keeps a running timer across requests', async () => {
+    const admin = await signupAdmin('admin18@acme.com', 'Acme');
+    const start = await startTimer(admin.cookies, admin.organizationId, { task: 'Persist' });
+
+    const get = await getTimer(admin.cookies, admin.organizationId);
+    expect(get.body.timer.startedAt).toBe(start.body.startedAt);
+    expect(get.body.timer.task).toBe('Persist');
+  });
+
+  // TC-12-INT-19
+  it('lets an admin create an entry for another member', async () => {
+    const admin = await signupAdmin('admin19@acme.com', 'Acme');
+    const user = await createMember(admin.organizationId, { email: 'u19@acme.com', role: 'user' });
+    const projectId = await createProject(admin.cookies, admin.organizationId, 'Alpha');
+
+    const res = await createEntry(admin.cookies, admin.organizationId, {
+      membershipId: user.membershipId,
+      projectId,
+      date: today(),
+      durationMinutes: 60,
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.membershipId).toBe(user.membershipId);
+
+    const list = await listEntries(user.cookies, admin.organizationId, `?from=${today()}&to=${today()}`);
+    expect(list.body.entries.map((e: any) => e.id)).toContain(res.body.id);
+  });
+
+  // TC-12-INT-20
+  it('forbids a user from creating an entry for another member (403)', async () => {
+    const admin = await signupAdmin('admin20@acme.com', 'Acme');
+    const u1 = await createMember(admin.organizationId, { email: 'u20a@acme.com', role: 'user' });
+    const u2 = await createMember(admin.organizationId, { email: 'u20b@acme.com', role: 'user' });
+
+    const res = await createEntry(u1.cookies, admin.organizationId, {
+      membershipId: u2.membershipId,
+      date: today(),
+      durationMinutes: 60,
+    });
+    expect(res.status).toBe(403);
+  });
+
+  // TC-12-INT-21
+  it('rejects starting a timer on an archived project (400 invalid_project)', async () => {
+    const admin = await signupAdmin('admin21@acme.com', 'Acme');
+    const projectId = await createProject(admin.cookies, admin.organizationId, 'Alpha');
+    await archiveProject(admin.cookies, admin.organizationId, projectId);
+
+    const res = await startTimer(admin.cookies, admin.organizationId, { projectId });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      error: 'invalid_project',
+      message: TIME_TRACKING_MESSAGES.projectInvalid,
+    });
+  });
+
+  // TC-12-INT-22
+  it('returns 404 (not 403) for cross-org time-entry access', async () => {
+    const adminA = await signupAdmin('a22@acme.com', 'Acme');
+    const adminB = await signupAdmin('b22@beta.com', 'Beta');
+    const entryB = await createEntry(adminB.cookies, adminB.organizationId, {
+      date: today(),
+      durationMinutes: 60,
+    });
+
+    // 1. GET under A's org returns only A's entries; E not included.
+    const list = await listEntries(adminA.cookies, adminA.organizationId, `?from=${today()}&to=${today()}`);
+    expect(list.status).toBe(200);
+    expect(list.body.entries.map((e: any) => e.id)).not.toContain(entryB.body.id);
+
+    // 2/3. PUT/DELETE B's entry under A's org → 404, identical to a nonexistent id.
+    const put = await updateEntry(adminA.cookies, adminA.organizationId, entryB.body.id, {
+      date: today(),
+      durationMinutes: 90,
+    });
+    expect(put.status).toBe(404);
+
+    const del = await deleteEntry(adminA.cookies, adminA.organizationId, entryB.body.id);
+    expect(del.status).toBe(404);
+
+    const ghost = await deleteEntry(
+      adminA.cookies,
+      adminA.organizationId,
+      '00000000-0000-0000-0000-000000000000',
+    );
+    expect(del.body).toEqual(ghost.body);
+  });
+
+  // TC-12-INT-23
+  it('resolves concurrent timer starts to exactly one 201 and one 409 (DB unique constraint)', async () => {
+    const admin = await signupAdmin('admin23@acme.com', 'Acme');
+
+    const [r1, r2] = await Promise.all([
+      startTimer(admin.cookies, admin.organizationId, {}),
+      startTimer(admin.cookies, admin.organizationId, {}),
+    ]);
+
+    const statuses = [r1.status, r2.status].sort();
+    expect(statuses).toEqual([201, 409]);
+    const conflict = [r1, r2].find((r) => r.status === 409)!;
+    expect(conflict.body.error).toBe('timer_already_running');
+
+    const count = await prisma.runningTimer.count({ where: { membershipId: admin.membershipId } });
+    expect(count).toBe(1);
+  });
+
+  // TC-12-INT-24
+  it('ignores a client-supplied startedAt (set from server NOW)', async () => {
+    const admin = await signupAdmin('admin24@acme.com', 'Acme');
+    const res = await startTimer(admin.cookies, admin.organizationId, {
+      startedAt: '2020-01-01T00:00:00Z',
+      task: 'Backdated',
+    });
+    expect(res.status).toBe(201);
+    const startedMs = new Date(res.body.startedAt).getTime();
+    // Within a few seconds of now, never 2020.
+    expect(Math.abs(Date.now() - startedMs)).toBeLessThan(10000);
+  });
+
+  // TC-12-INT-25
+  it('silently ignores a user’s membershipId filter (no info leak)', async () => {
+    const admin = await signupAdmin('admin25@acme.com', 'Acme');
+    const u1 = await createMember(admin.organizationId, { email: 'u25a@acme.com', role: 'user' });
+    const u2 = await createMember(admin.organizationId, { email: 'u25b@acme.com', role: 'user' });
+    const range = `?from=${today()}&to=${today()}`;
+
+    await createEntry(u1.cookies, admin.organizationId, { date: today(), durationMinutes: 30, task: 'own' });
+    await createEntry(u2.cookies, admin.organizationId, { date: today(), durationMinutes: 45, task: 'other' });
+
+    const withParam = await listEntries(u1.cookies, admin.organizationId, `${range}&membershipId=${u2.membershipId}`);
+    const withoutParam = await listEntries(u1.cookies, admin.organizationId, range);
+    expect(withParam.status).toBe(200);
+    expect(withParam.body).toEqual(withoutParam.body);
+    expect(withParam.body.entries.map((e: any) => e.task)).toEqual(['own']);
+    // No member name leaked to a plain user.
+    expect(withParam.body.entries[0].memberName).toBeUndefined();
+  });
+
+  // TC-12-INT-26
+  it('rejects a year-long range as an exfiltration bound (400 range_too_large)', async () => {
+    const admin = await signupAdmin('admin26@acme.com', 'Acme');
+    const res = await listEntries(admin.cookies, admin.organizationId, '?from=2026-01-01&to=2026-12-31');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('range_too_large');
+  });
+
+  // TC-12-INT-27
+  it('computes stop duration server-side and ignores a client-supplied durationMinutes', async () => {
+    const admin = await signupAdmin('admin27@acme.com', 'Acme');
+
+    await startTimer(admin.cookies, admin.organizationId, {});
+    // ~0s elapsed → ceil to the 1-minute minimum, regardless of any body.
+    const stop = await stopTimer(admin.cookies, admin.organizationId, { durationMinutes: 480 });
+    expect(stop.status).toBe(200);
+    expect(stop.body.timeEntry.durationMinutes).toBe(1);
+  });
+
+  // TC-12-INT-28
+  it('measures task length in codepoints, not bytes (200 emoji ok, 201 rejected)', async () => {
+    const admin = await signupAdmin('admin28@acme.com', 'Acme');
+    const org = admin.organizationId;
+
+    const at = await createEntry(admin.cookies, org, {
+      date: today(),
+      durationMinutes: 60,
+      task: '😀'.repeat(200),
+    });
+    expect(at.status).toBe(201);
+
+    const over = await createEntry(admin.cookies, org, {
+      date: today(),
+      durationMinutes: 60,
+      task: '😀'.repeat(201),
+    });
+    expect(over.status).toBe(400);
+    expect(over.body.errors.task).toBe(TIME_TRACKING_MESSAGES.taskTooLong);
+  });
+
+  // TC-12-INT-29 — deferred: no rate-limit infrastructure exists in this codebase (specs
+  // 08–11 documented identical limits but never implemented or tested them). See spec 12
+  // §Security 27. Kept as an explicit skip so the omission is traceable.
+  it.skip('TC-12-INT-29 timer-start rate limit — deferred, no rate-limit infra (spec 12 §Security 27)', () => {
+    // intentionally empty
+  });
+
+  // TC-12-INT-30
+  it('cascade-discards the running timer when a member is removed; entries survive', async () => {
+    const admin = await signupAdmin('admin30@acme.com', 'Acme');
+    const user = await createMember(admin.organizationId, { email: 'u30@acme.com', role: 'user' });
+
+    await startTimer(user.cookies, admin.organizationId, { task: 'Working' });
+    const entry = await createEntry(user.cookies, admin.organizationId, {
+      date: today(),
+      durationMinutes: 60,
+    });
+
+    const del = await removeOrgMember(admin.cookies, admin.organizationId, user.membershipId);
+    expect(del.status).toBe(200);
+
+    // RunningTimer row gone (spec 12 FR-19).
+    const timers = await prisma.runningTimer.count({ where: { membershipId: user.membershipId } });
+    expect(timers).toBe(0);
+
+    // TimeEntry rows survive removal (historical).
+    const entries = await prisma.timeEntry.count({ where: { id: entry.body.id } });
+    expect(entries).toBe(1);
+  });
+
+  // TC-12-INT-31
+  it('rejects an archived project on a new entry, leaving existing entries untouched', async () => {
+    const admin = await signupAdmin('admin31@acme.com', 'Acme');
+    const projectId = await createProject(admin.cookies, admin.organizationId, 'Alpha');
+
+    // An existing entry on the project before it is archived.
+    const existing = await createEntry(admin.cookies, admin.organizationId, {
+      projectId,
+      date: today(),
+      durationMinutes: 60,
+    });
+    await archiveProject(admin.cookies, admin.organizationId, projectId);
+
+    const res = await createEntry(admin.cookies, admin.organizationId, {
+      projectId,
+      date: today(),
+      durationMinutes: 60,
+    });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      error: 'invalid_project',
+      message: TIME_TRACKING_MESSAGES.projectInvalid,
+    });
+
+    // The pre-existing entry is preserved unchanged (FR-7).
+    const still = await prisma.timeEntry.findUnique({ where: { id: existing.body.id } });
+    expect(still?.projectId).toBe(projectId);
+  });
+
+  // FR-7 exception — an entry already on an archived project may keep it on edit.
+  it('allows editing an entry that references an archived project when projectId is unchanged', async () => {
+    const admin = await signupAdmin('admin31b@acme.com', 'Acme');
+    const projectId = await createProject(admin.cookies, admin.organizationId, 'Alpha');
+    const created = await createEntry(admin.cookies, admin.organizationId, {
+      projectId,
+      date: today(),
+      durationMinutes: 60,
+      task: 'Before archive',
+    });
+    await archiveProject(admin.cookies, admin.organizationId, projectId);
+
+    // Unchanged projectId is allowed even though the project is now archived.
+    const ok = await updateEntry(admin.cookies, admin.organizationId, created.body.id, {
+      projectId,
+      date: today(),
+      durationMinutes: 90,
+      task: 'After archive edit',
+    });
+    expect(ok.status).toBe(200);
+    expect(ok.body).toMatchObject({ projectId, durationMinutes: 90, task: 'After archive edit' });
+  });
+
+  // §4 — spec-11 GET .../projects reports the real non-zero totalHours once time is logged.
+  it('reports non-zero project totalHours after time is logged (spec 12 §4)', async () => {
+    const admin = await signupAdmin('admin-th@acme.com', 'Acme');
+    const projectId = await createProject(admin.cookies, admin.organizationId, 'Alpha');
+    const otherId = await createProject(admin.cookies, admin.organizationId, 'Beta');
+
+    // 90 + 60 = 150 minutes = 2.5 hours on Alpha; none on Beta.
+    await createEntry(admin.cookies, admin.organizationId, { projectId, date: today(), durationMinutes: 90 });
+    await createEntry(admin.cookies, admin.organizationId, { projectId, date: today(), durationMinutes: 60 });
+
+    const list = await request(server())
+      .get(`/api/organizations/${admin.organizationId}/projects`)
+      .set('Cookie', admin.cookies);
+    const alpha = list.body.projects.find((p: any) => p.id === projectId);
+    const beta = list.body.projects.find((p: any) => p.id === otherId);
+    expect(alpha.totalHours).toBe(2.5);
+    expect(beta.totalHours).toBe(0);
+  });
+
+  // Spec 12 change A — a manual time-range entry is composed as wall-clock in the CALLER's
+  // Account.timezone and stored as an absolute UTC instant (schema unchanged). A Europe/
+  // Berlin caller's "09:00" is stored shifted (07:00Z in summer / 08:00Z in winter) yet
+  // round-trips back to "09:00" in Berlin. The API response still returns UTC ISO instants.
+  it('composes a manual time-range entry in the caller timezone (spec 12 change A)', async () => {
+    const admin = await signupAdmin('admin-tz@acme.com', 'Acme TZ');
+    const berlin = await createMember(admin.organizationId, {
+      email: 'berlin-user@acme.com',
+      role: 'user',
+      timezone: 'Europe/Berlin',
+    });
+
+    const res = await createEntry(berlin.cookies, admin.organizationId, {
+      date: today(),
+      startTime: '09:00',
+      endTime: '11:30',
+      task: 'Berlin morning',
+    });
+    expect(res.status).toBe(201);
+
+    // The stored instant is NOT the naive-UTC wall-clock (Berlin is never a zero offset)…
+    const startClockUtc = new Date(res.body.startTime as string).toISOString().slice(11, 16);
+    expect(startClockUtc).not.toBe('09:00');
+    // …but it renders back to exactly "09:00"/"11:30" when read in the caller's tz.
+    expect(formatWallClockInTz(res.body.startTime as string, 'Europe/Berlin')).toBe('09:00');
+    expect(formatWallClockInTz(res.body.endTime as string, 'Europe/Berlin')).toBe('11:30');
+    // Duration is unaffected by the tz (both endpoints shift together).
+    expect(res.body.durationMinutes).toBe(150);
+
+    // A UTC-fallback caller (admin, tz null) stores the same wall-clock unshifted (identity).
+    const utcRes = await createEntry(admin.cookies, admin.organizationId, {
+      date: today(),
+      startTime: '09:00',
+      endTime: '11:30',
+      task: 'UTC morning',
+    });
+    expect(new Date(utcRes.body.startTime as string).toISOString().slice(11, 16)).toBe('09:00');
+  });
+});

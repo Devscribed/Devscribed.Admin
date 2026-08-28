@@ -6,6 +6,7 @@ import { Topbar } from './Topbar';
 import type { Session } from './session-context';
 import { SessionProvider } from './session-context';
 import { RequestsBadgeProvider } from './requests-badge-context';
+import { RunningTimerProvider } from './running-timer-context';
 import './app-shell.css';
 
 /** Sidebar and top bar are fixed; only the content column scrolls. */
@@ -13,13 +14,15 @@ export function AppShell({ session, children }: { session: Session; children: Re
   return (
     <SessionProvider session={session}>
       <RequestsBadgeProvider>
-        <div className="shell">
-          <Sidebar orgId={session.organization.id} />
-          <div className="shell-main">
-            <Topbar />
-            <main className="shell-content">{children}</main>
+        <RunningTimerProvider>
+          <div className="shell">
+            <Sidebar orgId={session.organization.id} />
+            <div className="shell-main">
+              <Topbar />
+              <main className="shell-content">{children}</main>
+            </div>
           </div>
-        </div>
+        </RunningTimerProvider>
       </RequestsBadgeProvider>
     </SessionProvider>
   );

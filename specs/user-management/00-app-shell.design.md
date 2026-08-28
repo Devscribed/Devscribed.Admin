@@ -57,11 +57,13 @@ Sidebar and top bar are fixed. Only the content column scrolls.
 
 ### Planned rows
 
+Rows list top-to-bottom in nav order: the **TIME** group **leads** (the daily-driver surface), then PEOPLE and PROJECTS; the ungrouped Requests row follows.
+
 | Section | Row | Route | Ships with | Visible to |
 |---|---|---|---|---|
+| TIME | Time Tracking | `/org/{orgId}/time-tracking` | spec 12 | admin, manager, user |
 | PEOPLE | Members | `/org/{orgId}/members` | now | all roles |
 | PROJECTS | Projects | `/org/{orgId}/projects` | spec 11 | admin, manager |
-| TIME | Time Tracking | `/org/{orgId}/time-tracking` | spec 12 | admin, manager, user |
 | — | Requests | `/org/{orgId}/requests` | spec 10 | admin, manager |
 
 ## Top bar

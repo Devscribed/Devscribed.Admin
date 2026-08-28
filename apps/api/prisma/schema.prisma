@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
   // Neon's pooled endpoint in production, a plain local Postgres in dev and tests.
   url       = env("DATABASE_URL")
   // Migrations must bypass the pooler — pgbouncer cannot run the advisory locks and
@@ -13,56 +13,59 @@ datasource db {
 
 /// Login credentials + the person behind them.
 model Account {
-  id           String   @id @default(uuid())
+  id               String   @id @default(uuid())
   /// Always stored lowercase; uniqueness is therefore case-insensitive.
-  email        String   @unique
-  passwordHash String
-  firstName    String
-  lastName     String
+  email            String   @unique
+  passwordHash     String
+  firstName        String
+  lastName         String
   /// IANA zone auto-detected from the browser at signup.
-  timezone     String?
+  timezone         String?
   /// ISO 3166-1 alpha-2 country code for the phone number (spec 06); max 5 chars —
   /// Prisma cannot express a length cap, it is enforced in the shared validation layer.
   phoneCountryCode String?
   /// Phone number in the selected country's format (spec 06); informational only,
   /// no uniqueness constraint. Max 20 chars, enforced in the validation layer.
-  phoneNumber  String?
+  phoneNumber      String?
   /// "Monday" (default) or "Sunday" — the source for how dates are displayed to this
   /// user elsewhere (spec 06 requirement 4/6). Max 10 chars, enforced in validation.
-  firstDayOfWeek String @default("Monday")
+  firstDayOfWeek   String   @default("Monday")
   /// Session-revocation token. Carried in every session cookie and re-checked on each
   /// authenticated request; regenerating it invalidates every outstanding cookie at
   /// once (spec 02 requirement 12 — shared with specs 04 and 06).
-  securityStamp String  @default(uuid())
-  createdAt    DateTime @default(now())
+  securityStamp    String   @default(uuid())
+  createdAt        DateTime @default(now())
 
-  memberships        Membership[]
-  passwordResetTokens PasswordResetToken[]
-  pendingEmailChanges PendingEmailChange[]
-  financialsUpdated   MemberFinancials[]
-  transactionsCreated VacationReserveTransaction[]
-  vacationRequestsReviewed  VacationRequest[] @relation("VacationRequestReviewedBy")
-  vacationRequestsCancelled VacationRequest[] @relation("VacationRequestCancelledBy")
+  memberships               Membership[]
+  passwordResetTokens       PasswordResetToken[]
+  pendingEmailChanges       PendingEmailChange[]
+  financialsUpdated         MemberFinancials[]
+  transactionsCreated       VacationReserveTransaction[]
+  vacationRequestsReviewed  VacationRequest[]            @relation("VacationRequestReviewedBy")
+  vacationRequestsCancelled VacationRequest[]            @relation("VacationRequestCancelledBy")
+  projectsCreated           Project[]
+  projectMembersAssigned    ProjectMember[]
+  timeEntriesCreated        TimeEntry[]                  @relation("TimeEntryCreatedBy")
 }
 
 /// Pending email-change confirmation grant (spec 06). The account's email is only
 /// updated once the token emailed to the NEW address is confirmed; a notification also
 /// goes to the OLD address. At most one live record per account (supersession).
 model PendingEmailChange {
-  id        String   @id @default(uuid())
-  accountId String
+  id            String    @id @default(uuid())
+  accountId     String
   /// Normalized (lowercase) target email, max 254 chars.
-  newEmail  String
+  newEmail      String
   /// SHA-256 of the raw token, hex-encoded. The raw token exists only in the email —
   /// a database breach therefore yields nothing usable.
-  tokenHash String   @unique
-  createdAt DateTime @default(now())
+  tokenHash     String    @unique
+  createdAt     DateTime  @default(now())
   /// createdAt + 24 hours. Expiry is exclusive (spec 06 requirement 7).
-  expiresAt DateTime
+  expiresAt     DateTime
   /// Set when the token is consumed; null while unused.
-  usedAt    DateTime?
+  usedAt        DateTime?
   /// Set to true when a newer request supersedes this record (requirement 2).
-  isInvalidated Boolean @default(false)
+  isInvalidated Boolean   @default(false)
 
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
@@ -72,22 +75,22 @@ model PendingEmailChange {
 
 /// Pending, used, or invalidated invitation to join an organization (spec 03).
 model Invitation {
-  id     String @id @default(uuid())
+  id                  String @id @default(uuid())
   /// Normalized (lowercase) invitee email, max 254 chars.
-  email  String
+  email               String
   /// Target role: "admin" | "manager" | "user" | "viewer".
-  role   String
-  organizationId String
+  role                String
+  organizationId      String
   /// The membership of the person who sent the invite.
   inviterMembershipId String
 
   /// SHA-256 hash of the raw token (hex-encoded, lowercase). The raw token is never stored.
-  tokenHash String   @unique
-  createdAt DateTime @default(now())
+  tokenHash String    @unique
+  createdAt DateTime  @default(now())
   /// createdAt + 7 days. Expiry is exclusive (spec 03 requirement 3).
   expiresAt DateTime
   /// "pending" | "used" | "invalidated".
-  status    String   @default("pending")
+  status    String    @default("pending")
   /// Set when the invitation is accepted; null while unused.
   usedAt    DateTime?
 
@@ -100,17 +103,17 @@ model Invitation {
 
 /// Single-use, time-limited password-reset grant (spec 02).
 model PasswordResetToken {
-  id        String   @id @default(uuid())
-  accountId String
+  id            String    @id @default(uuid())
+  accountId     String
   /// SHA-256 of the raw token, hex-encoded. The raw token exists only in the email —
   /// a database breach therefore yields nothing usable.
-  tokenHash String   @unique
-  createdAt DateTime @default(now())
-  expiresAt DateTime
+  tokenHash     String    @unique
+  createdAt     DateTime  @default(now())
+  expiresAt     DateTime
   /// Set when the token is spent; null while unused.
-  usedAt    DateTime?
+  usedAt        DateTime?
   /// Set when a newer request supersedes this token (requirement 8).
-  isInvalidated Boolean @default(false)
+  isInvalidated Boolean   @default(false)
 
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
@@ -122,8 +125,11 @@ model Organization {
   name      String
   createdAt DateTime @default(now())
 
-  memberships Membership[]
-  invitations Invitation[]
+  memberships   Membership[]
+  invitations   Invitation[]
+  projects      Project[]
+  timeEntries   TimeEntry[]
+  runningTimers RunningTimer[]
 }
 
 /// Links an account to its organization. One per account — single-org-per-user (FR-8).
@@ -141,13 +147,16 @@ model Membership {
   /// acceptance (spec 03 requirement 5; spec 05).
   jobTitle       String?
 
-  account      Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  invitationsSent Invitation[]
-  financials         MemberFinancials?
+  account             Account                      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  organization        Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitationsSent     Invitation[]
+  financials          MemberFinancials?
   financialsSnapshots MemberFinancialsSnapshot[]
   transactions        VacationReserveTransaction[]
   vacationRequests    VacationRequest[]
+  projectMemberships  ProjectMember[]
+  timeEntries         TimeEntry[]
+  runningTimer        RunningTimer?
 
   @@index([organizationId])
 }
@@ -155,44 +164,44 @@ model Membership {
 /// Current financial settings for an active membership (spec 07). Exactly one per
 /// membership (one-to-one). Every write also appends a `MemberFinancialsSnapshot`.
 model MemberFinancials {
-  id           String   @id @default(uuid())
+  id                     String   @id @default(uuid())
   /// One-to-one with Membership — a member has at most one live settings record.
-  membershipId String   @unique
+  membershipId           String   @unique
   /// Employee monthly salary. Min 0.01, max 999999.99 (validation layer).
-  monthlySalary          Decimal @db.Decimal(10, 2)
+  monthlySalary          Decimal  @db.Decimal(10, 2)
   /// Hourly rate billed to the client. Min 0.01, max 9999.99 (validation layer).
-  clientHourlyRate       Decimal @db.Decimal(8, 2)
+  clientHourlyRate       Decimal  @db.Decimal(8, 2)
   /// Effective reserve percentage — auto-calculated or the manager's manual value.
-  vacationReservePercent Decimal @db.Decimal(5, 2)
+  vacationReservePercent Decimal  @db.Decimal(5, 2)
   /// true if the manager set the percentage manually; false if auto-calculated.
   isReservePercentManual Boolean
   /// Maximum vacation days per calendar year. Default 20, min 1, max 365.
-  vacationDaysPerYear    Int     @default(20)
+  vacationDaysPerYear    Int      @default(20)
   /// ISO 4217 currency code (e.g. "USD").
-  currency               String  @db.VarChar(3)
+  currency               String   @db.VarChar(3)
   updatedAt              DateTime @updatedAt
   /// Account that last modified these settings.
   updatedByAccountId     String
 
-  membership   Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
-  updatedBy    Account    @relation(fields: [updatedByAccountId], references: [id])
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  updatedBy  Account    @relation(fields: [updatedByAccountId], references: [id])
 }
 
 /// Historical snapshot of a member's financial settings (spec 07 requirements 11–13).
 /// A new row is appended on every create/update; existing rows are never mutated. The
 /// accrual job (spec 08) looks up which values were in effect during a billing month.
 model MemberFinancialsSnapshot {
-  id           String   @id @default(uuid())
-  membershipId String
-  monthlySalary          Decimal @db.Decimal(10, 2)
-  clientHourlyRate       Decimal @db.Decimal(8, 2)
-  vacationReservePercent Decimal @db.Decimal(5, 2)
+  id                     String   @id @default(uuid())
+  membershipId           String
+  monthlySalary          Decimal  @db.Decimal(10, 2)
+  clientHourlyRate       Decimal  @db.Decimal(8, 2)
+  vacationReservePercent Decimal  @db.Decimal(5, 2)
   isReservePercentManual Boolean
   vacationDaysPerYear    Int
-  currency               String  @db.VarChar(3)
+  currency               String   @db.VarChar(3)
   /// Date from which these settings are effective (date-only, the day of the change).
-  effectiveFrom DateTime @db.Date
-  createdAt     DateTime @default(now())
+  effectiveFrom          DateTime @db.Date
+  createdAt              DateTime @default(now())
 
   membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
 
@@ -203,30 +212,30 @@ model MemberFinancialsSnapshot {
 /// summing a membership's transactions within the current calendar year — there is no
 /// mutable balance field. Rows are immutable; corrections are compensating entries.
 model VacationReserveTransaction {
-  id           String   @id @default(uuid())
-  membershipId String
+  id                 String   @id @default(uuid())
+  membershipId       String
   /// 'credit' | 'expiry' | 'debit' | 'refund'. Modeled as a documented string column,
   /// matching the role/status convention on Membership — not a Prisma enum. A `debit`
   /// (negative) is written when a vacation request is approved; a `refund` (positive)
   /// when an approved request is cancelled (spec 09).
-  type         String
+  type               String
   /// Positive for a credit, negative for an expiry.
-  amount       Decimal  @db.Decimal(12, 2)
+  amount             Decimal  @db.Decimal(12, 2)
   /// 1–12; the month of work a credit covers. Null for non-credit transactions.
   billingPeriodMonth Int?
   /// The year of work a credit covers. Null for non-credit transactions.
   billingPeriodYear  Int?
-  description  String?  @db.VarChar(200)
+  description        String?  @db.VarChar(200)
   /// FK to VacationRequest — set on `debit`/`refund` transactions (spec 09).
-  vacationRequestId String?
+  vacationRequestId  String?
   /// true for system-generated monthly credits; false for expiry/manual entries.
-  isAutoGenerated   Boolean
-  createdAt         DateTime @default(now())
+  isAutoGenerated    Boolean
+  createdAt          DateTime @default(now())
   /// Account that created the transaction; null for auto-generated credits.
   createdByAccountId String?
 
-  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
-  createdBy  Account?   @relation(fields: [createdByAccountId], references: [id])
+  membership      Membership       @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  createdBy       Account?         @relation(fields: [createdByAccountId], references: [id])
   vacationRequest VacationRequest? @relation(fields: [vacationRequestId], references: [id])
 
   @@unique([membershipId, billingPeriodMonth, billingPeriodYear])
@@ -237,34 +246,143 @@ model VacationReserveTransaction {
 /// freezes `workingDays` and `deductionAmount`; approval writes a `debit` to the reserve
 /// ledger and cancellation of an approved request writes a compensating `refund`.
 model VacationRequest {
-  id           String   @id @default(uuid())
-  membershipId String
+  id                   String    @id @default(uuid())
+  membershipId         String
   /// First day of vacation, inclusive (date-only).
-  startDate    DateTime @db.Date
+  startDate            DateTime  @db.Date
   /// Last day of vacation, inclusive (date-only).
-  endDate      DateTime @db.Date
+  endDate              DateTime  @db.Date
   /// Count of weekdays (Mon–Fri) in the inclusive range, frozen at submission.
-  workingDays  Int
+  workingDays          Int
   /// workingDays × dailySalary, frozen at submission (the reserve hold / debit amount).
-  deductionAmount Decimal @db.Decimal(12, 2)
+  deductionAmount      Decimal   @db.Decimal(12, 2)
   /// 'pending' | 'approved' | 'rejected' | 'cancelled'.
-  status       String
-  requestedAt  DateTime @default(now())
+  status               String
+  requestedAt          DateTime  @default(now())
   /// When the request was approved or rejected; null while pending.
-  reviewedAt   DateTime?
+  reviewedAt           DateTime?
   /// Account that approved or rejected the request.
-  reviewedByAccountId String?
+  reviewedByAccountId  String?
   /// Optional reviewer comment, max 500 chars (enforced in the validation layer).
-  reviewerComment String? @db.VarChar(500)
+  reviewerComment      String?   @db.VarChar(500)
   /// When the request was cancelled; null otherwise.
-  cancelledAt  DateTime?
+  cancelledAt          DateTime?
   /// Account that cancelled the request.
   cancelledByAccountId String?
 
-  membership   Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
-  reviewedBy   Account?   @relation("VacationRequestReviewedBy", fields: [reviewedByAccountId], references: [id])
-  cancelledBy  Account?   @relation("VacationRequestCancelledBy", fields: [cancelledByAccountId], references: [id])
+  membership   Membership                   @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  reviewedBy   Account?                     @relation("VacationRequestReviewedBy", fields: [reviewedByAccountId], references: [id])
+  cancelledBy  Account?                     @relation("VacationRequestCancelledBy", fields: [cancelledByAccountId], references: [id])
   transactions VacationReserveTransaction[]
 
   @@index([membershipId])
+}
+
+/// A unit of work an organization tracks time against (spec 11). Created by an admin or
+/// manager, soft-deleted via `status = 'archived'` (there is no hard delete). Names are
+/// unique per organization case-insensitively — enforced by a functional UNIQUE index on
+/// `(organizationId, LOWER(name))` added in the migration SQL, NOT a Prisma `@@unique`
+/// (which would be case-sensitive). `createdByAccountId` is an immutable audit field set
+/// from the session, never the request body.
+model Project {
+  id                 String   @id @default(uuid())
+  organizationId     String
+  /// Project name. Unique per org (case-insensitive); 1–100 chars (validation layer).
+  name               String
+  /// 'active' | 'archived'. Documented string column, matching the Membership.status
+  /// convention — not a Prisma enum. Archiving is the soft-delete.
+  status             String   @default("active")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  /// Account that created the project (audit trail; set from the session).
+  createdByAccountId String
+
+  organization  Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy     Account         @relation(fields: [createdByAccountId], references: [id])
+  members       ProjectMember[]
+  timeEntries   TimeEntry[]
+  runningTimers RunningTimer[]
+
+  @@index([organizationId])
+}
+
+/// Assignment of an organization member to a project (spec 11). A member may belong to
+/// many projects and a project to many members; the same member cannot be assigned twice
+/// (`@@unique`). `onDelete: Cascade` on `membershipId` is what makes a member's removal
+/// from the org (spec 04) cascade-delete their assignments (TC-11-INT-13).
+model ProjectMember {
+  id                  String   @id @default(uuid())
+  projectId           String
+  membershipId        String
+  assignedAt          DateTime @default(now())
+  /// Account that performed the assignment (audit trail; set from the session).
+  assignedByAccountId String
+
+  project    Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  assignedBy Account    @relation(fields: [assignedByAccountId], references: [id])
+
+  @@unique([projectId, membershipId])
+}
+
+/// A completed unit of logged work (spec 12). Belongs to a membership and optionally a
+/// project. `organizationId` is denormalized for range queries. Removal of a member is a
+/// soft-delete (Membership.status → 'removed'), so the `onDelete: Cascade` FK never fires
+/// and historical entries survive (spec 12 §Concurrency 25 note / FR-19). `projectId` is
+/// `SetNull` so archived-then-deleted projects don't orphan the entry. `task`/`description`
+/// length caps live in the validation layer, not the DB. `createdByAccountId` is an
+/// immutable audit field set from the session (spec 12 Security 24), never the request body.
+model TimeEntry {
+  id                 String    @id @default(uuid())
+  membershipId       String
+  /// Denormalized org for the `(organizationId, date)` range index (spec 12 Data Model).
+  organizationId     String
+  projectId          String?
+  /// Free-text task label, max 200 codepoints (validation layer).
+  task               String?
+  /// Free-text description, max 500 codepoints (validation layer).
+  description        String?
+  /// Calendar date this entry belongs to (date-only).
+  date               DateTime  @db.Date
+  /// Full start timestamp; null for duration-only entries.
+  startTime          DateTime?
+  /// Full end timestamp; null for duration-only entries.
+  endTime            DateTime?
+  /// Duration in minutes. Always present. Min 1, max 1440 (validation layer).
+  durationMinutes    Int
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  /// Account that created the entry (may differ from the membership for admin-created
+  /// entries — a clean audit trail of who acted for whom, spec 12 Security 24).
+  createdByAccountId String
+
+  membership   Membership   @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdBy    Account      @relation("TimeEntryCreatedBy", fields: [createdByAccountId], references: [id])
+
+  @@index([membershipId, date])
+  @@index([organizationId, date])
+  @@index([projectId])
+}
+
+/// A member's single in-progress timer (spec 12). At most ONE per member — enforced by the
+/// UNIQUE constraint on `membershipId`, which is the race backstop that makes two concurrent
+/// starts resolve to exactly one 201 + one 409 (spec 12 Security 11 / TC-12-INT-23). Removal
+/// of a member cascade-deletes the timer (FR-19 / TC-12-INT-30). `startedAt` is always set
+/// server-side from NOW() — the client cannot supply it (Security 9).
+model RunningTimer {
+  id             String   @id @default(uuid())
+  membershipId   String   @unique
+  organizationId String
+  projectId      String?
+  task           String?
+  description    String?
+  startedAt      DateTime
+
+  membership   Membership   @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
 }
