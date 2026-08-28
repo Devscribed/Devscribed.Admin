@@ -2,17 +2,29 @@
 
 import { notFound, useRouter } from 'next/navigation';
 import { use, useCallback, useEffect, useState } from 'react';
-import { INTERVIEW_MESSAGES, MESSAGES, formatShortWhen } from '@devscribed/validation';
-import { Button, Card, InfoBanner, SectionLabel, Skeleton, Table } from '@/ds';
+import {
+  HIRING_MESSAGES,
+  INTERVIEW_MESSAGES,
+  MESSAGES,
+  formatShortWhen,
+  interviewMovedToast,
+  isLiveBooking,
+} from '@devscribed/validation';
+import { Button, Card, InfoBanner, SectionLabel, Skeleton, Table, Toast } from '@/ds';
 import { PageHeader } from '@/layout/PageHeader';
+import { CancelInterviewDialog } from '@/hiring/CancelInterviewDialog';
+import { RescheduleDialog } from '@/hiring/RescheduleDialog';
 import { StatusBadge } from '@/hiring/StatusBadge';
-import type { MyInterviewRow, MyInterviews } from '@/hiring/types';
+import type { CardApplication, MyInterviewRow, MyInterviews } from '@/hiring/types';
 
 type State =
   | { status: 'loading' }
   | { status: 'ready'; interviews: MyInterviews }
   | { status: 'error' }
   | { status: 'gone' };
+
+/** Which dialog is open, and over which row. Only ever one at a time. */
+type Acting = { row: MyInterviewRow; action: 'reschedule' | 'cancel' } | null;
 
 /**
  * My interviews (spec 03 §06) — a deliberately plain screen, and for a `user`
@@ -26,11 +38,20 @@ type State =
  * A member nobody has assigned an interview gets the not-found state rather than an
  * empty list — the screen's existence is not advertised to people it will never serve.
  * That is the API's 404, rendered here as the same nothing a wrong URL gives.
+ *
+ * It also carries **Reschedule and Cancel as row affordances** (07 §08.40), because for
+ * a `user` who interviews this screen is the whole of hiring and it is the one they
+ * actually live on. Both act in place: the server answers with the updated application,
+ * the row is replaced, and a toast reports it — no reload, and no navigation away from a
+ * list somebody is working down.
  */
 export default function MyInterviewsPage({ params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = use(params);
   const router = useRouter();
   const [state, setState] = useState<State>({ status: 'loading' });
+  const [acting, setActing] = useState<Acting>(null);
+  /** The outcome, and the id 07's design names for it. */
+  const [toast, setToast] = useState<{ message: string; testId: string } | null>(null);
 
   const load = useCallback(async (): Promise<void> => {
     setState({ status: 'loading' });
@@ -57,6 +78,42 @@ export default function MyInterviewsPage({ params }: { params: Promise<{ orgId: 
   useEffect(() => {
     void load();
   }, [load]);
+
+  /**
+   * One row, replaced from what the server just answered with.
+   *
+   * The whole list is not refetched: the row that changed is the only row that changed,
+   * and a member working down a list must not have it reordered under them mid-glance.
+   * A move that pushes an interview past `now` would re-group it on the next load, which
+   * is the honest place for that to happen.
+   */
+  const replaceRow = useCallback((updated: CardApplication): void => {
+    const apply = (rows: MyInterviewRow[]): MyInterviewRow[] =>
+      rows.map((row) =>
+        row.applicationId === updated.id
+          ? {
+              ...row,
+              startUtc: updated.startUtc,
+              endUtc: updated.endUtc,
+              status: updated.status,
+              isCancelled: updated.isCancelled,
+            }
+          : row,
+      );
+
+    setState((current) =>
+      current.status === 'ready'
+        ? {
+            status: 'ready',
+            interviews: {
+              ...current.interviews,
+              upcoming: apply(current.interviews.upcoming),
+              past: apply(current.interviews.past),
+            },
+          }
+        : current,
+    );
+  }, []);
 
   if (state.status === 'gone') notFound();
 
@@ -165,6 +222,14 @@ export default function MyInterviewsPage({ params }: { params: Promise<{ orgId: 
                 align: 'flex-end',
                 render: (row) => <StatusBadge status={row.status} />,
               },
+              {
+                label: 'Actions',
+                flex: 2,
+                align: 'flex-end',
+                render: (row) => (
+                  <RowActions row={row} onAct={(action) => setActing({ row, action })} />
+                ),
+              },
             ]}
           />
         </div>
@@ -196,6 +261,114 @@ export default function MyInterviewsPage({ params }: { params: Promise<{ orgId: 
 
       {past.length > 0 &&
         group(INTERVIEW_MESSAGES.past, past, { dim: true, testId: 'my-interviews-past' })}
+
+      {/*
+        The same two dialogs the candidate card mounts, over the same endpoints — one
+        picker, one confirmation, two hosts (07 design). They are keyed by the row so a
+        second interview opens a fresh picker rather than one carrying the first's month.
+      */}
+      {acting?.action === 'reschedule' && (
+        <RescheduleDialog
+          key={`reschedule-${acting.row.applicationId}`}
+          open
+          orgId={orgId}
+          applicationId={acting.row.applicationId}
+          candidateName={acting.row.candidateName}
+          currentStartUtc={acting.row.startUtc}
+          viewerTimeZone={viewerTimeZone}
+          onClose={() => setActing(null)}
+          onMoved={(updated) => {
+            setActing(null);
+            replaceRow(updated);
+            setToast({
+              message: interviewMovedToast(new Date(updated.startUtc), viewerTimeZone),
+              testId: 'toast-interview-rescheduled',
+            });
+          }}
+        />
+      )}
+
+      {acting?.action === 'cancel' && (
+        <CancelInterviewDialog
+          key={`cancel-${acting.row.applicationId}`}
+          open
+          orgId={orgId}
+          applicationId={acting.row.applicationId}
+          candidateName={acting.row.candidateName}
+          startUtc={acting.row.startUtc}
+          timeZone={viewerTimeZone}
+          onClose={() => setActing(null)}
+          onCancelled={(updated) => {
+            setActing(null);
+            replaceRow(updated);
+            setToast({
+              message: HIRING_MESSAGES.toast.interviewCancelled,
+              testId: 'toast-interview-cancelled',
+            });
+          }}
+        />
+      )}
+
+      {toast && (
+        <Toast tone="success" onDismiss={() => setToast(null)} data-testid={toast.testId}>
+          {toast.message}
+        </Toast>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The row's trailing cell: Reschedule and Cancel, revealed on hover and on keyboard
+ * focus, and always present for the row's own focus order.
+ *
+ * Both are `ghost` on both counts — a `danger` fill repeated down a table of interviews
+ * turns a calm list into an alarm (07 design). They are **absent** once `start` has
+ * passed or the interview has been called off, not disabled: a disabled control with no
+ * explanation is worse than one that is simply not there, and the API refuses a past
+ * interview anyway.
+ *
+ * The cell swallows its own clicks. The `Table` renders a linked row as a real anchor so
+ * middle-click and copy-address keep working, and without this a press on Cancel would
+ * also open the candidate card underneath the dialog.
+ */
+function RowActions({
+  row,
+  onAct,
+}: {
+  row: MyInterviewRow;
+  onAct: (action: 'reschedule' | 'cancel') => void;
+}) {
+  if (!isLiveBooking({ start: new Date(row.startUtc), isCancelled: row.isCancelled }, new Date())) {
+    return null;
+  }
+
+  const act = (action: 'reschedule' | 'cancel') => (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onAct(action);
+  };
+
+  return (
+    <div className="my-interview-actions">
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={act('reschedule')}
+        aria-label={`Reschedule ${row.candidateName}'s interview`}
+        data-testid={`my-interview-reschedule-${row.applicationId}`}
+      >
+        {HIRING_MESSAGES.manage.rescheduleAction}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={act('cancel')}
+        aria-label={`Cancel ${row.candidateName}'s interview`}
+        data-testid={`my-interview-cancel-${row.applicationId}`}
+      >
+        {HIRING_MESSAGES.manage.cancelActionTeam}
+      </Button>
     </div>
   );
 }

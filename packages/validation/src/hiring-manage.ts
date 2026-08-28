@@ -17,7 +17,7 @@
 // re-exports it at the end of its own body and is not.
 import { HIRING_MESSAGES } from './hiring';
 import type { BusyInterval } from './hiring-slots';
-import { formatBookedWhen, formatSlotTime, zonedParts } from './hiring-time';
+import { formatBookedWhen, formatShortDate, formatSlotTime, zonedParts } from './hiring-time';
 
 /* ------------------------------------------------------------------ *
  * The scheduling log — 07 §11
@@ -98,6 +98,85 @@ export const isLiveBooking = (booking: BookingLiveness, now: Date): boolean =>
  */
 export const cancelConfirmMessage = (start: Date, timeZone: string): string =>
   HIRING_MESSAGES.manage.cancelConfirm.replace('{when}', formatBookedWhen(start, timeZone));
+
+/**
+ * "Cancel Jane Doe's interview on Tuesday, 25 August 2026 at 14:00? This can't be
+ * undone."
+ *
+ * The team's dialog names the **candidate** as well as the interview, which the
+ * candidate's own dialog has no need to: a member reaching this from My interviews is
+ * looking at a list of several people, and the row they pressed is no longer on screen
+ * once the dialog is (07 design, Accessibility).
+ */
+export const teamCancelConfirmMessage = (
+  candidateName: string,
+  start: Date,
+  timeZone: string,
+): string =>
+  HIRING_MESSAGES.manage.cancelConfirmTeam
+    .replace('{name}', candidateName)
+    .replace('{when}', formatBookedWhen(start, timeZone));
+
+/** "Interview moved to 25 Aug 2026 at 14:00" — the team's receipt for a move. */
+export const interviewMovedToast = (start: Date, timeZone: string): string =>
+  HIRING_MESSAGES.toast.interviewRescheduled.replace(
+    '{when}',
+    `${formatShortDate(start, timeZone)} at ${formatSlotTime(start, timeZone)}`,
+  );
+
+/* ------------------------------------------------------------------ *
+ * The team's cancellation reason — 07 §10
+ * ------------------------------------------------------------------ */
+
+export type ReasonResult =
+  | { valid: true; value: string | null }
+  | { valid: false; error: string };
+
+/**
+ * Optional, trimmed, at most 500 characters, and **null when it is blank**.
+ *
+ * Null rather than an empty string because the column's emptiness is a fact the card
+ * and the badge tooltip both read: `reason ? … : …` must not be true for a member who
+ * opened the field, thought better of it, and confirmed anyway.
+ *
+ * It is a team-only field. The candidate is never asked to justify withdrawing
+ * (07 §06.29), so there is no candidate-facing path into this validator.
+ */
+export function validateCancelReason(input: unknown): ReasonResult {
+  if (input === undefined || input === null) return { valid: true, value: null };
+  if (typeof input !== 'string') return { valid: false, error: HIRING_MESSAGES.manage.reasonTooLong };
+
+  const value = input.trim();
+  if (value.length === 0) return { valid: true, value: null };
+  if (value.length > MANAGE_LIMITS.reasonMax) {
+    return { valid: false, error: HIRING_MESSAGES.manage.reasonTooLong };
+  }
+  return { valid: true, value };
+}
+
+/**
+ * What Microsoft puts in the cancellation notice both parties receive.
+ *
+ * The reason, when a member gave one, **replaces** the fixed string outright rather than
+ * being appended to it (07 §10.47) — "This interview could not be completed" is correct
+ * for a booking whose database write failed and poor copy for a hiring manager cancelling
+ * on purpose. The two are kept apart here rather than in the provider so that both
+ * sentences are readable in one place.
+ */
+export const CANCELLATION_NOTICE = {
+  /** No reason given: the notice states that the interview is off, and nothing more. */
+  none: 'This interview has been cancelled.',
+  /**
+   * The compensating rollback's, and only its: a booking whose calendar event was
+   * created and whose row was not. Nobody decided this, so it must not read as a
+   * decision.
+   */
+  rollback: 'This interview could not be completed and has been cancelled.',
+} as const;
+
+/** The comment `cancelEvent` carries — the reason, or the bare statement. */
+export const cancelNoticeComment = (reason: string | null | undefined): string =>
+  reason ?? CANCELLATION_NOTICE.none;
 
 /* ------------------------------------------------------------------ *
  * Rescheduling — 07 §02, §05, §13

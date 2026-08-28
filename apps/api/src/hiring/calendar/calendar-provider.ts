@@ -98,5 +98,20 @@ export abstract class CalendarProvider {
     change: CalendarEventChange,
   ): Promise<void>;
 
-  abstract cancelEvent(mailbox: MailboxRef, eventId: EventId): Promise<void>;
+  /**
+   * Cancels rather than deletes, so the attendees are told rather than left holding an
+   * invite to a meeting that is no longer there.
+   *
+   * `comment` rides into the notice Microsoft sends. It is the hiring manager's reason
+   * when they gave one (07 §10.47), and a bare statement that the interview is off when
+   * they did not — never the compensating rollback's wording, which is correct only for
+   * a booking that failed halfway and reads as an apology when a member cancelled on
+   * purpose. Idempotent: an event that is already cancelled is a success, which is what
+   * lets a caller retry after a database failure with no compensating step.
+   */
+  abstract cancelEvent(
+    mailbox: MailboxRef,
+    eventId: EventId,
+    comment?: string,
+  ): Promise<void>;
 }

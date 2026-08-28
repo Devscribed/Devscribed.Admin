@@ -285,7 +285,15 @@ export interface MyInterviewRow {
   candidateName: string;
   vacancyTitle: string;
   startUtc: string;
+  /** The booked end — the row's own length, which the vacancy's may have left behind. */
+  endUtc: string;
   status: ApplicationStatus;
+  /**
+   * **The interview did not take place**, and nothing about the candidate's standing
+   * (07 §01.1). It is what removes the row's two actions, a cancelled interview being no
+   * more actionable than a past one.
+   */
+  isCancelled: boolean;
 }
 
 export interface MyInterviews {

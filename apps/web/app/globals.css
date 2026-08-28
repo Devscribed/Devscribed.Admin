@@ -390,6 +390,50 @@ a {
   }
 }
 
+/*
+ * The team's two actions on the candidate card, beneath the interview facts they change
+ * (07 design, Screens). Reschedule leads and Cancel follows, in that order on every
+ * width — the destructive one is never the first thing a thumb or a Tab reaches.
+ */
+.application-schedule-actions {
+  display: flex;
+  gap: var(--sp-6);
+  margin-top: var(--sp-8);
+}
+
+@media (max-width: 599px) {
+  /* Full width, stacked, Cancel lower — the same rule the public page follows. */
+  .application-schedule-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/*
+ * My interviews: the row's two actions, revealed on hover and on keyboard focus but
+ * always present for the row's own focus order. A `danger` fill repeated down a table of
+ * interviews turns a calm list into an alarm, so both are `ghost` (07 design).
+ */
+.my-interview-actions {
+  display: flex;
+  gap: var(--sp-3);
+  justify-content: flex-end;
+  opacity: 0;
+  transition: opacity var(--duration-base, 200ms) var(--easing-standard, ease);
+}
+
+[data-testid^='my-interview-row-']:hover .my-interview-actions,
+.my-interview-actions:focus-within {
+  opacity: 1;
+}
+
+/* Pointer-coarse devices have no hover to reveal them with. */
+@media (hover: none) {
+  .my-interview-actions {
+    opacity: 1;
+  }
+}
+
 /* The reschedule pickers, which replace the booking Card in place. */
 .manage-reschedule {
   display: grid;

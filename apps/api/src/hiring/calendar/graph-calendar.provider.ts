@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { CANCELLATION_NOTICE, cancelNoticeComment } from '@devscribed/validation';
 import {
   CalendarAttachment,
   CalendarEventChange,
@@ -162,7 +163,10 @@ export class TenantAppOnlyProvider extends CalendarProvider {
         // The event exists and the caller must know its id, or compensation cannot
         // cancel it. Rethrowing after naming the event is what keeps the booking atomic.
         this.logger.error(`Attachment failed for event ${created.id}: ${String(error)}`);
-        await this.cancelEvent(mailbox, created.id).catch(() => undefined);
+        // The rollback's own wording, never the plain one: nobody decided this.
+        await this.cancelEvent(mailbox, created.id, CANCELLATION_NOTICE.rollback).catch(
+          () => undefined,
+        );
         throw error;
       }
     }
@@ -201,13 +205,18 @@ export class TenantAppOnlyProvider extends CalendarProvider {
    * than deletes: Microsoft then tells the candidate the interview is off instead of
    * leaving them holding an invite to nothing. A delete is the fallback, because a
    * failed compensation must still leave no event behind.
+   *
+   * The `comment` is what the notice carries — a hiring manager's reason when they gave
+   * one, and the bare statement otherwise (07 §10.47). Only the compensating rollback
+   * passes the wording that says the interview *could not be completed*, because only
+   * there is that true.
    */
-  async cancelEvent(mailbox: MailboxRef, eventId: EventId): Promise<void> {
+  async cancelEvent(mailbox: MailboxRef, eventId: EventId, comment?: string): Promise<void> {
     try {
       await this.call(`${this.userPath(mailbox)}/events/${encodeURIComponent(eventId)}/cancel`, {
         operation: 'cancelEvent',
         method: 'POST',
-        body: { comment: 'This interview could not be completed and has been cancelled.' },
+        body: { comment: cancelNoticeComment(comment) },
       });
     } catch (error) {
       this.logger.warn(`Cancel failed for ${eventId}, deleting instead: ${String(error)}`);

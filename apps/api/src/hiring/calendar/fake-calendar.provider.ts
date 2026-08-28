@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { cancelNoticeComment } from '@devscribed/validation';
 import {
   CalendarEventChange,
   CalendarEventDraft,
@@ -110,9 +111,14 @@ export class FakeCalendarProvider extends CalendarProvider {
     this.logger.log(`updateEvent ${eventId} in ${mailbox.address}`);
   }
 
-  async cancelEvent(mailbox: MailboxRef, eventId: EventId): Promise<void> {
+  async cancelEvent(mailbox: MailboxRef, eventId: EventId, comment?: string): Promise<void> {
     this.events.delete(eventId);
-    this.logger.log(`cancelEvent ${eventId} in ${mailbox.address}`);
+    // The comment is logged rather than dropped: it is the only part of a cancellation
+    // that reaches the candidate, and a fake that swallowed it would hide a caller
+    // passing the wrong one.
+    this.logger.log(
+      `cancelEvent ${eventId} in ${mailbox.address}: ${cancelNoticeComment(comment)}`,
+    );
   }
 
   /** Test affordance — the suites assert on what a booking actually created. */

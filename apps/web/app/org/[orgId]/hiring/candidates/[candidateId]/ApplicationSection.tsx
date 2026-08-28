@@ -10,6 +10,7 @@ import {
   formatHistoryDate,
   formatShortDate,
   formatShortWhen,
+  isLiveBooking,
   scheduleEntryAriaLabel,
   scheduleEntryLabel,
   scheduleSummary,
@@ -17,7 +18,9 @@ import {
   type ScheduleEntry,
 } from '@devscribed/validation';
 import { Badge, Button, Card, SectionLabel, Select, Tooltip } from '@/ds';
+import { CancelInterviewDialog } from '@/hiring/CancelInterviewDialog';
 import { formatDuration } from '@/hiring/format';
+import { RescheduleDialog } from '@/hiring/RescheduleDialog';
 import type { CardApplication } from '@/hiring/types';
 
 /**
@@ -39,6 +42,7 @@ export function ApplicationSection({
   deepLinked,
   onToggle,
   onStatusChange,
+  onScheduleChange,
   criteria,
   children,
 }: {
@@ -53,12 +57,20 @@ export function ApplicationSection({
   deepLinked: boolean;
   onToggle: () => void;
   onStatusChange: (status: ApplicationStatus) => void;
+  /**
+   * A move or a cancellation landed: the server answered with the whole application, so
+   * the section is replaced in place rather than the page refetched. Nothing on this
+   * screen may reload the notes somebody is still typing.
+   */
+  onScheduleChange: (application: CardApplication, outcome: 'rescheduled' | 'cancelled') => void;
   /** The criteria section, built by the page so it can share the library it fetched. */
   criteria: ReactNode;
   /** The editors, built by the page so the save closures stay in one place. */
   children: ReactNode;
 }) {
   const section = useRef<HTMLDivElement>(null);
+  const [rescheduling, setRescheduling] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     // Only the deep-linked section scrolls, and only on arrival: nothing on this page
@@ -75,6 +87,16 @@ export function ApplicationSection({
   const minutes = Math.round((new Date(application.endUtc).getTime() - start.getTime()) / 60_000);
   const statusLabel = APPLICATION_STATUS_LABELS[application.status];
   const bookedElsewhere = application.bookedTimeZone !== viewerTimeZone;
+  /*
+   * One rule, both actions, both parties: the interview has not started and has not been
+   * called off (07 §14.65). Once `start` has passed the controls are **absent, not
+   * disabled** — a disabled control invites a reader to work out why, and the API refuses
+   * a past interview anyway, so there is nothing here for a disabled button to protect.
+   */
+  const actionable = isLiveBooking(
+    { start, isCancelled: application.isCancelled },
+    new Date(),
+  );
 
   return (
     <div
@@ -130,6 +152,32 @@ export function ApplicationSection({
                     Applied as &ldquo;{application.submittedName}&rdquo;
                   </p>
                 )}
+
+                {/*
+                  Beside the interview facts they change and above the history they
+                  write — never inside the notes area, so a destructive control is never
+                  adjacent to a field that autosaves (07 §08.39, 07 design §UI Notes).
+                */}
+                {actionable && (
+                  <div className="application-schedule-actions">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setRescheduling(true)}
+                      data-testid={`application-reschedule-${application.id}`}
+                    >
+                      {HIRING_MESSAGES.manage.rescheduleAction}
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => setCancelling(true)}
+                      data-testid={`application-cancel-${application.id}`}
+                    >
+                      {HIRING_MESSAGES.manage.cancelActionTeam}
+                    </Button>
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -169,6 +217,45 @@ export function ApplicationSection({
             )}
           </div>
         </div>
+
+        {/*
+          Mounted only while open, so a card with four sections is not four idle
+          availability hooks. Both close by restoring focus to the control that opened
+          them, which `Modal` handles.
+        */}
+        {rescheduling && (
+          <RescheduleDialog
+            open
+            orgId={orgId}
+            applicationId={application.id}
+            candidateName={candidateName}
+            currentStartUtc={application.startUtc}
+            viewerTimeZone={viewerTimeZone}
+            onClose={() => setRescheduling(false)}
+            onMoved={(updated) => {
+              setRescheduling(false);
+              onScheduleChange(updated, 'rescheduled');
+            }}
+          />
+        )}
+
+        {cancelling && (
+          <CancelInterviewDialog
+            open
+            orgId={orgId}
+            applicationId={application.id}
+            candidateName={candidateName}
+            startUtc={application.startUtc}
+            timeZone={viewerTimeZone}
+            onClose={() => setCancelling(false)}
+            onCancelled={(updated) => {
+              setCancelling(false);
+              // The section is marked, never collapsed and never navigated away from
+              // (07 design, Interactions).
+              onScheduleChange(updated, 'cancelled');
+            }}
+          />
+        )}
 
         {expanded && (
           <div className="card-section-body">

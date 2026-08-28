@@ -8,12 +8,18 @@ import {
   HIRING_MESSAGES,
   MESSAGES,
   formatShortDate,
+  interviewMovedToast,
   type ApplicationStatus,
 } from '@devscribed/validation';
 import { Button, Card, InfoBanner, Skeleton, Toast } from '@/ds';
 import { focusByTestId } from '@/field-error';
 import { PageHeader } from '@/layout/PageHeader';
-import type { CandidateCard, CardCriterion, Criterion } from '@/hiring/types';
+import type {
+  CandidateCard,
+  CardApplication,
+  CardCriterion,
+  Criterion,
+} from '@/hiring/types';
 import { ApplicationSection } from './ApplicationSection';
 import { AutosavingField } from './AutosavingField';
 import { CriteriaSection } from './CriteriaSection';
@@ -55,7 +61,13 @@ export default function CandidateCardPage({
 
   const [state, setState] = useState<State>({ status: 'loading' });
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  /**
+   * What just happened, and which test id reports it. A status change, a move and a
+   * cancellation are three different outcomes and 04/07 name a surface for each, so the
+   * id travels with the message rather than being fixed to the one component that shows
+   * them all.
+   */
+  const [toast, setToast] = useState<{ message: string; testId: string } | null>(null);
   /**
    * The org-wide criteria library, fetched once for the whole page rather than per
    * application: it is the same list on every section, and a second copy would be a
@@ -177,7 +189,7 @@ export default function CandidateCardPage({
       try {
         await patch(applicationId, { status });
       } catch {
-        setToast(MESSAGES.generic);
+        setToast({ message: MESSAGES.generic, testId: 'card-status-toast' });
         return;
       }
 
@@ -199,7 +211,10 @@ export default function CandidateCardPage({
 
       // A member who changes the status here stays on the card — this is the middle of
       // an interview, not the end of one.
-      setToast(`Moved to ${APPLICATION_STATUS_LABELS[status]}`);
+      setToast({
+        message: `Moved to ${APPLICATION_STATUS_LABELS[status]}`,
+        testId: 'card-status-toast',
+      });
 
       // The one focus move on this page, and it is a direct answer to what the member
       // just did: an outcome with no reason recorded is the gap this prompts for
@@ -255,6 +270,45 @@ export default function CandidateCardPage({
   // themselves (04 §02.9).
   const candidateName = `${candidate.firstName} ${candidate.lastName}`;
 
+  /**
+   * A move or a cancellation landed. The server answered with the whole application, so
+   * the section is replaced from that rather than the page refetched — a refetch would
+   * replace the text in every open editor, and somebody is on a live call.
+   *
+   * The section is marked, never collapsed and never navigated away from: cancelling an
+   * interview is not a reason to close the notes taken during it (07 design).
+   */
+  const applyScheduleChange = (
+    updated: CardApplication,
+    outcome: 'rescheduled' | 'cancelled',
+  ): void => {
+    setState((current) =>
+      current.status === 'ready'
+        ? {
+            status: 'ready',
+            card: {
+              ...current.card,
+              applications: current.card.applications.map((application) =>
+                application.id === updated.id ? updated : application,
+              ),
+            },
+          }
+        : current,
+    );
+
+    setToast(
+      outcome === 'cancelled'
+        ? {
+            message: HIRING_MESSAGES.toast.interviewCancelled,
+            testId: 'toast-interview-cancelled',
+          }
+        : {
+            message: interviewMovedToast(new Date(updated.startUtc), viewerTimeZone),
+            testId: 'toast-interview-rescheduled',
+          },
+    );
+  };
+
   return (
     <div data-testid="candidate-card">
       <PageHeader
@@ -292,6 +346,7 @@ export default function CandidateCardPage({
                 setExpandedId((current) => (current === application.id ? null : application.id))
               }
               onStatusChange={(status) => void changeStatus(application.id, status)}
+              onScheduleChange={applyScheduleChange}
               criteria={
                 <CriteriaSection
                   orgId={orgId}
@@ -335,8 +390,8 @@ export default function CandidateCardPage({
       )}
 
       {toast && (
-        <Toast tone="success" onDismiss={() => setToast(null)} data-testid="card-status-toast">
-          {toast}
+        <Toast tone="success" onDismiss={() => setToast(null)} data-testid={toast.testId}>
+          {toast.message}
         </Toast>
       )}
     </div>

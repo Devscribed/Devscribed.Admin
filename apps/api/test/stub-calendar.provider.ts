@@ -44,6 +44,16 @@ export class StubCalendarProvider extends CalendarProvider {
 
   readonly cancelled: EventId[] = [];
 
+  /**
+   * Every cancellation with the comment it carried, in order.
+   *
+   * The comment is the only part of a cancellation the candidate ever reads — the
+   * product sends no mail, so Microsoft's notice is the whole message (07 §12.56) — and
+   * a hiring manager's reason rides in it. A stub that recorded only the id could not
+   * tell a reason that reached the candidate from one that was silently dropped.
+   */
+  readonly cancellations: Array<{ id: EventId; mailbox: string; comment?: string }> = [];
+
   /** Every move, in order, so a suite can assert the mailbox and the times it got. */
   readonly updated: Array<{ id: EventId; mailbox: string; change: CalendarEventChange }> = [];
 
@@ -120,9 +130,10 @@ export class StubCalendarProvider extends CalendarProvider {
    * success, which is what lets a caller retry after a database failure without a
    * compensating step (07 Alt flow).
    */
-  async cancelEvent(_mailbox: MailboxRef, eventId: EventId): Promise<void> {
+  async cancelEvent(mailbox: MailboxRef, eventId: EventId, comment?: string): Promise<void> {
     if (this.failOnCancel) throw new Error('stub: cancellation failed');
     this.cancelled.push(eventId);
+    this.cancellations.push({ id: eventId, mailbox: mailbox.address, comment });
     this.events.delete(eventId);
   }
 
@@ -148,6 +159,7 @@ export class StubCalendarProvider extends CalendarProvider {
     this.failOnBusy = false;
     this.events.clear();
     this.cancelled.length = 0;
+    this.cancellations.length = 0;
     this.updated.length = 0;
     this.sequence = 0;
   }

@@ -17,6 +17,8 @@ import { MeController } from './members/me.controller';
 import { MembersController } from './members/members.controller';
 import { MembersService } from './members/members.service';
 import { TestMembersController } from './members/test-members.controller';
+import { ApplicationSchedulingController } from './hiring/application-scheduling.controller';
+import { ApplicationSchedulingService } from './hiring/application-scheduling.service';
 import { AvailabilityService } from './hiring/availability.service';
 import { BoardController, PlacementController } from './hiring/board.controller';
 import { BoardScopeGuard } from './hiring/board-scope.guard';
@@ -39,6 +41,7 @@ import { CandidatesService } from './hiring/candidates.service';
 import { CvController } from './hiring/cv.controller';
 import { TestCalendarController } from './hiring/calendar/test-calendar.controller';
 import { HiringManageGuard } from './hiring/hiring-manage.guard';
+import { InterviewSchedulingService } from './hiring/interview-scheduling.service';
 import { InterviewerScopeGuard } from './hiring/interviewer-scope.guard';
 import { MyInterviewsController } from './hiring/my-interviews.controller';
 import { MyInterviewsService } from './hiring/my-interviews.service';
@@ -140,6 +143,7 @@ const calendarProvider = {
     CandidateDatabaseController,
     MyInterviewsController,
     ApplicationsController,
+    ApplicationSchedulingController,
     BoardController,
     PlacementController,
     TestCalendarController,
@@ -163,7 +167,9 @@ const calendarProvider = {
     CriteriaService,
     AvailabilityService,
     BookingService,
+    InterviewSchedulingService,
     ManageService,
+    ApplicationSchedulingService,
     ViewerTimeZoneService,
     CandidatesService,
     CandidateDatabaseService,

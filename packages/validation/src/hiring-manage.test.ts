@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CANCELLATION_NOTICE,
   HIRING_MESSAGES,
+  MANAGE_LIMITS,
   bookedDurationMinutes,
   cancelConfirmMessage,
+  cancelNoticeComment,
   cancelledBadgeLabel,
   cancelledTooltip,
   currentTimeMessage,
   excludeOwnBooking,
   formatHistoryWhen,
   generateSlots,
+  interviewMovedToast,
   isLiveBooking,
   justBookedPath,
   managePath,
@@ -17,6 +21,8 @@ import {
   scheduleEntryAriaLabel,
   scheduleEntryLabel,
   scheduleSummary,
+  teamCancelConfirmMessage,
+  validateCancelReason,
   type BusyInterval,
   type ScheduleEntry,
   type WorkingHoursSpec,
@@ -409,5 +415,156 @@ describe('the just-moved notice', () => {
     expect(movedMessage(at('2026-08-25T11:00:00.000Z'), 'Europe/Minsk')).toBe(
       'Your interview has been moved to Tuesday, 25 August 2026 at 14:00.',
     );
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * The team's half — 07 §08–§10
+ * ------------------------------------------------------------------ */
+
+describe("the team's cancel confirmation", () => {
+  it('names the candidate as well as the interview', () => {
+    // A member reaching this from My interviews was looking at a list of several
+    // people, and the row they pressed is no longer on screen once the dialog is.
+    expect(
+      teamCancelConfirmMessage('Jane Doe', at('2026-08-25T11:00:00.000Z'), 'Europe/Minsk'),
+    ).toBe("Cancel Jane Doe's interview on Tuesday, 25 August 2026 at 14:00? This can't be undone.");
+  });
+
+  it("differs from the candidate's only by that name", () => {
+    const start = at('2026-08-25T11:00:00.000Z');
+    // Both dialogs state the same interview and the same irreversibility. The team's
+    // adds who it belongs to, and adds nothing else.
+    expect(teamCancelConfirmMessage('Jane Doe', start, 'UTC')).toContain(
+      'on Tuesday, 25 August 2026 at 11:00? This can\'t be undone.',
+    );
+    expect(cancelConfirmMessage(start, 'UTC')).toContain(
+      'on Tuesday, 25 August 2026 at 11:00? This can\'t be undone.',
+    );
+    expect(cancelConfirmMessage(start, 'UTC')).not.toContain('Jane Doe');
+  });
+});
+
+describe('validateCancelReason', () => {
+  /**
+   * Null, not an empty string. The column's emptiness is a fact the card and the badge
+   * tooltip both branch on, so `reason ? … : …` must be false for a member who opened
+   * the field, thought better of it, and confirmed anyway.
+   */
+  it('is null when nothing was given', () => {
+    expect(validateCancelReason(undefined)).toEqual({ valid: true, value: null });
+    expect(validateCancelReason(null)).toEqual({ valid: true, value: null });
+    expect(validateCancelReason('')).toEqual({ valid: true, value: null });
+    expect(validateCancelReason('   \n  ')).toEqual({ valid: true, value: null });
+  });
+
+  it('trims what it keeps', () => {
+    expect(validateCancelReason('  Role filled internally.  ')).toEqual({
+      valid: true,
+      value: 'Role filled internally.',
+    });
+  });
+
+  it('accepts exactly 500 characters and refuses 501', () => {
+    expect(validateCancelReason('r'.repeat(MANAGE_LIMITS.reasonMax))).toEqual({
+      valid: true,
+      value: 'r'.repeat(MANAGE_LIMITS.reasonMax),
+    });
+    expect(validateCancelReason('r'.repeat(MANAGE_LIMITS.reasonMax + 1))).toEqual({
+      valid: false,
+      error: 'Please keep this under 500 characters',
+    });
+  });
+
+  /** The limit is on what is stored, so the trim happens before the count. */
+  it('measures the trimmed value, not the whitespace around it', () => {
+    const padded = `  ${'r'.repeat(MANAGE_LIMITS.reasonMax)}  `;
+    expect(validateCancelReason(padded).valid).toBe(true);
+  });
+
+  it('refuses anything that is not a string', () => {
+    expect(validateCancelReason(42).valid).toBe(false);
+    expect(validateCancelReason({ reason: 'x' }).valid).toBe(false);
+  });
+});
+
+describe('the cancellation notice', () => {
+  /**
+   * The reason **replaces** the fixed string rather than being appended to it
+   * (07 §10.47): "could not be completed" is correct for a booking whose write failed
+   * and is poor copy for a hiring manager cancelling on purpose.
+   */
+  it('carries the reason verbatim when a member gave one', () => {
+    expect(cancelNoticeComment('Role filled internally.')).toBe('Role filled internally.');
+  });
+
+  it('states only that the interview is off when nobody gave a reason', () => {
+    expect(cancelNoticeComment(null)).toBe('This interview has been cancelled.');
+    expect(cancelNoticeComment(undefined)).toBe('This interview has been cancelled.');
+  });
+
+  it("keeps the rollback's wording apart from a deliberate cancellation", () => {
+    // Only a booking that failed halfway is one nobody decided on, and only there does
+    // an apology belong.
+    expect(CANCELLATION_NOTICE.rollback).toBe(
+      'This interview could not be completed and has been cancelled.',
+    );
+    expect(CANCELLATION_NOTICE.none).not.toBe(CANCELLATION_NOTICE.rollback);
+    expect(CANCELLATION_NOTICE.none).not.toMatch(/could not/);
+  });
+});
+
+describe("the team's toasts", () => {
+  it('names the time a move landed on', () => {
+    expect(interviewMovedToast(at('2026-08-25T11:00:00.000Z'), 'Europe/Minsk')).toBe(
+      'Interview moved to 25 Aug 2026 at 14:00',
+    );
+  });
+
+  it('says nothing about who or why when an interview is called off', () => {
+    // The badge and the card's history carry the attribution; a toast is a receipt.
+    expect(HIRING_MESSAGES.toast.interviewCancelled).toBe('Interview cancelled');
+  });
+});
+
+describe("the team's copy", () => {
+  it('uses the short label beside interview facts that already name the interview', () => {
+    expect(HIRING_MESSAGES.manage.cancelActionTeam).toBe('Cancel');
+    // The candidate's page has no surrounding context, so theirs stays long.
+    expect(HIRING_MESSAGES.manage.cancelAction).toBe('Cancel interview');
+  });
+
+  it('says the reason is optional in the label rather than leaving it to be discovered', () => {
+    // A member who believes a reason is required will invent one.
+    expect(HIRING_MESSAGES.manage.reasonLabel).toMatch(/optional/i);
+  });
+
+  it('says where the reason goes, because it leaves the building', () => {
+    expect(HIRING_MESSAGES.manage.reasonPlaceholder).toBe(
+      'Shared with the candidate in the cancellation notice',
+    );
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * One rule, both parties — 07 §14.65
+ * ------------------------------------------------------------------ */
+
+describe('the team is bound by exactly the rule the candidate is', () => {
+  const now = at('2026-08-25T11:00:00.000Z');
+
+  /**
+   * There is no separate internal predicate, and that is the point: the two surfaces
+   * share `isLiveBooking`, so a past interview is unreachable from either side and
+   * cannot become reachable from one of them by a change made to the other.
+   */
+  it('offers nothing on an interview that has started, whoever is asking', () => {
+    const started = { start: at('2026-08-25T10:59:59.999Z'), isCancelled: false };
+    expect(isLiveBooking(started, now)).toBe(false);
+  });
+
+  it('offers nothing on an interview already called off, whoever is asking', () => {
+    const cancelled = { start: at('2026-12-01T09:00:00.000Z'), isCancelled: true };
+    expect(isLiveBooking(cancelled, now)).toBe(false);
   });
 });

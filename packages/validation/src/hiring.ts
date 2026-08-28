@@ -219,6 +219,29 @@ export const HIRING_MESSAGES = {
     cancelledBy: 'Cancelled by',
     cancelledByCandidate: 'Cancelled by candidate',
     historyLabel: 'Scheduling history',
+    /**
+     * The team's control, and deliberately not the candidate's 'Cancel interview': it
+     * sits in an application section that already names the interview, where the longer
+     * label would restate its own heading (07 design, Copy).
+     */
+    cancelActionTeam: 'Cancel',
+    /**
+     * Completed by `teamCancelConfirmMessage`. It names the candidate as well as the
+     * time, because a member cancelling from My interviews is looking at a list of
+     * several people and the dialog must not ask them to confirm a pronoun.
+     */
+    cancelConfirmTeam: "Cancel {name}'s interview on {when}? This can't be undone.",
+    /**
+     * Optional, and said so in the label rather than left to be discovered: a member who
+     * believes a reason is required will invent one (07 §10.46).
+     */
+    reasonLabel: 'Reason (optional)',
+    /**
+     * The placeholder states where the text goes, because it leaves the building: it
+     * rides into Microsoft's cancellation notice, which the candidate reads (07 §10.47).
+     */
+    reasonPlaceholder: 'Shared with the candidate in the cancellation notice',
+    reasonTooLong: 'Please keep this under 500 characters',
   },
   toast: {
     vacancyCreated: 'Vacancy created',
@@ -226,6 +249,9 @@ export const HIRING_MESSAGES = {
     vacancyClosed: 'Vacancy closed',
     vacancyReopened: 'Vacancy reopened',
     linkCopied: 'Booking link copied',
+    /** Completed by `interviewMovedToast` — the new time is the whole point of it. */
+    interviewRescheduled: 'Interview moved to {when}',
+    interviewCancelled: 'Interview cancelled',
   },
 } as const;
 

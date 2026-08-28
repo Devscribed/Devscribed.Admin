@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { randomBytes, randomUUID } from 'crypto';
 import {
+  CANCELLATION_NOTICE,
   HIRING_MESSAGES,
   MANAGE_LIMITS,
   POSITION_STEP,
@@ -413,7 +414,9 @@ export class BookingService {
   }): Promise<void> {
     if (state.eventId) {
       await this.calendar
-        .cancelEvent(state.mailbox, state.eventId)
+        // The rollback's own wording. This is a booking that failed halfway, not a
+        // decision anybody took, and the notice must not read like one (07 §10.47).
+        .cancelEvent(state.mailbox, state.eventId, CANCELLATION_NOTICE.rollback)
         .catch((error) => this.logger.error(`Could not cancel ${state.eventId}: ${String(error)}`));
     }
     if (state.stored) {

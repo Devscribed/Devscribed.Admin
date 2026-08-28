@@ -11,7 +11,18 @@ export interface PresentedInterview {
   candidateName: string;
   vacancyTitle: string;
   startUtc: string;
+  /**
+   * The booked end, so the row's reschedule dialog can state the interview's own length
+   * rather than the vacancy's current one (07 §13.61).
+   */
+  endUtc: string;
   status: string;
+  /**
+   * **The interview did not take place** — and nothing about the candidate's standing
+   * (07 §01.1). It is what removes the row's two actions, since a cancelled interview is
+   * no more actionable than a past one.
+   */
+  isCancelled: boolean;
 }
 
 export interface MyInterviews {
@@ -59,6 +70,7 @@ export class MyInterviewsService {
         status: true,
         start: true,
         end: true,
+        isCancelled: true,
         candidate: { select: { id: true, firstName: true, lastName: true } },
         vacancy: { select: { title: true } },
       },
@@ -91,6 +103,8 @@ function present(application: {
   id: string;
   status: string;
   start: Date;
+  end: Date;
+  isCancelled: boolean;
   candidate: { id: string; firstName: string; lastName: string };
   vacancy: { title: string };
 }): PresentedInterview {
@@ -100,6 +114,8 @@ function present(application: {
     candidateName: `${application.candidate.firstName} ${application.candidate.lastName}`,
     vacancyTitle: application.vacancy.title,
     startUtc: application.start.toISOString(),
+    endUtc: application.end.toISOString(),
     status: application.status,
+    isCancelled: application.isCancelled,
   };
 }
