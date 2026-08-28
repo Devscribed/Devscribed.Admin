@@ -107,7 +107,7 @@ Reconnaissance first, because most of the cost here is not the adapter.
 
 Environment preconditions for the SignWell provider:
 
-1. `SIGNWELL_API_KEY` is present (AWS Secrets Manager → ECS task environment).
+1. `SIGNWELL_API_KEY` is present (SSM `SecureString` → ECS task environment).
 2. `SIGNWELL_API_APPLICATION_ID` is present. *Observed: optional.* Embedded signing works
    without it — a document created with `embedded_signing: true` and no application still
    returns an `embedded_signing_url` for every recipient. The application exists to brand the
@@ -144,10 +144,23 @@ unchanged.
 
 ### The provider port
 
-1. A signature provider is selected per **organization** and pinned per **envelope**.
-   `Organization.signatureProviderKey` decides the provider for a *new* envelope;
-   `Envelope.providerKey` is written at creation and never changes. Changing the organization
-   setting therefore never touches an envelope that already exists, in flight or terminal.
+1. A signature provider is selected per **organization** and pinned per **envelope at send**.
+   `Organization.signatureProviderKey` is what the send path reads; `Envelope.providerKey` is
+   written in the same transaction that flips the envelope to `sent`, and never changes
+   afterwards.
+
+   **At send and not at creation**, deliberately, because the difference is observable. A draft
+   can sit for days, and nothing provider-side exists for it until it is sent — no remote
+   document, no `providerRef` (requirement 5). Pinning earlier would therefore buy no safety,
+   while letting a draft go out through a provider the organization has deliberately left:
+   producing our own Certificate of Completion for an organization whose record of execution is
+   now SignWell's audit page. The property that actually matters is the other one, and
+   invariant 7 states it: an envelope **that has been sent** never changes provider.
+
+   While an envelope is a draft, `providerKey` holds the organization's setting as it stood at
+   creation — `apps/api/src/documents/envelopes.service.ts` writes it there today and continues
+   to, so the draft's detail screen can say which provider it would use. Nothing reads it as
+   authority before send, and the send overwrites it.
 2. Every provider declares a `ProviderCapabilities` record. The envelope service branches on the
    capability, never on the key, so a third provider needs no new `if` in the service:
 
@@ -170,7 +183,6 @@ unchanged.
      abstract signerAccess(r: SignerAccessRequest): Promise<SignerAccess>;
      abstract completedDocument(r: CompletedDocumentRequest): Promise<CompletedDocument>;
      abstract cancel(r: CancelRequest): Promise<void>;
-     abstract remind(r: RemindRequest): Promise<void>;
    }
 
    /** Only when capabilities.signingSurface === 'ours'. */
@@ -290,8 +302,17 @@ unchanged.
     established from `GET /documents/{id}` first; the download is attempted only after that says
     `Completed`, and a `404` at that point is a transient failure to retry, never a terminal
     state.
-18. `remind` is `POST /documents/{id}/remind`, optionally naming recipients; omitting them
-    reminds everyone who has not signed.
+18. **Reminders are ours under every provider**, which is what requirement 13's
+    `reminders: false` exists to guarantee: one reminder policy, not two.
+    `apps/api/src/internal/envelope-sweep.service.ts` sends the halfway reminder through SES
+    with our own `/sign` link, exactly as it does today, and does not consult the provider.
+
+    There is therefore **no `remind` method on the port.** A provider that had to send its own
+    reminders would add a `reminders: ours | provider` capability and a caller that branches on
+    it; inventing the method before such a provider exists would leave a port method with no
+    caller, which is the shape the previous port failed in. For the record, and so the next
+    person does not have to find it again: SignWell's is `POST /documents/{id}/remind`,
+    optionally naming recipients, and omitting them reminds everyone who has not signed.
 
     `cancel` has **no counterpart.** *Observed and confirmed against the endpoint index:*
     SignWell exposes no cancel or void route. `POST /documents/{id}/send` only updates and sends
@@ -416,10 +437,20 @@ unchanged.
 
 31. `/org/{orgId}/settings/signing` shows the current provider, whether it is in test mode, and a
     live connection check. Changing the provider requires `ManageSigningSettings`.
-32. A provider cannot be selected unless it is **configured**: SignWell requires an API key, an API
-    application id, and a registered webhook. An unconfigured provider is listed, disabled, with
-    the reason named — a nav item nobody can use is not hidden here, because the admin needs to
-    know the option exists and what is missing.
+32. A provider cannot be selected unless it is **configured**, and *configured* means
+    configuration is present: for SignWell, `SIGNWELL_API_KEY`, `SIGNWELL_API_APPLICATION_ID`
+    and `SIGNWELL_WEBHOOK_SECRET`. That is the whole gate.
+
+    `reachable` and `webhookRegistered` are **live checks displayed beside the option, never
+    gates on it.** Making a live registration a precondition would make SignWell unselectable in
+    every deployed environment, because none has a public address SignWell can reach — see the
+    Infrastructure section — while the same section says those environments run on convergence
+    alone. A provider whose webhook is unregistered works; it is merely slower, which is
+    precisely the degradation requirement 24 is built to absorb.
+
+    An unconfigured provider is listed, disabled, with the missing items named — a control
+    nobody can use is not hidden here, because the admin needs to know the option exists and
+    what is absent.
 33. Changing the provider shows a confirmation naming the count of in-flight envelopes that will
     stay on the old provider. This is one of the deliberate confirmations `CLAUDE.md` allows a
     disabled submit for: the checkbox gates the button, the validation never does.
@@ -519,24 +550,25 @@ unchanged.
 | 10 | The provider reports fewer signers than we have | Same — `providerError` set, no rows deleted. |
 | 11 | `completed_pdf` returns bytes that are not a PDF | Rejected on the magic-number check, `pdfStatus = pending`, retried. The envelope does not become `completed`. |
 | 12 | `completed_pdf` returns a ZIP | `file_format=pdf` is always sent, so this is a provider fault and is treated as case 11. |
-| 13 | An admin switches provider while a send is in flight | The send already read the organization setting; the envelope keeps the provider it was created with (invariant 7). |
-| 14 | An admin switches away from SignWell with envelopes in flight | Those envelopes keep reconciling: the adapter is registered whenever it is configured, not when it is selected (backward compatibility 7). |
-| 15 | `SIGNWELL_API_KEY` is removed while SignWell envelopes are in flight | The adapter unregisters, reconciliation stops, and the settings screen shows the provider unconfigured. Affected envelopes surface `providerError = provider_unconfigured` on read rather than silently stalling. |
-| 16 | Test mode is switched off with test envelopes in flight | `providerTestMode` was written at creation, so those envelopes stay marked as tests forever. Configuration does not relabel history. |
-| 17 | A signer opens the link after completion | Spec 02 requirement 25 applies unchanged — read-only view plus download. No provider call is made. |
-| 18 | The iframe reports `completed` but no webhook arrives | The page shows our confirmation; the envelope converges on the next read or sweep. A `postMessage` is never written to the database. |
-| 19 | A `postMessage` arrives from an unexpected origin | Ignored. The listener checks `event.origin` against the embed host before reading anything. |
-| 20 | The provider rate-limits us mid-signing | `signerAccess` fails, the signer sees the retry card, and the token is not consumed. |
-| 21 | The circuit breaker is open when a send is attempted | The send fails fast with `provider_unavailable` and the envelope stays `draft` — the same observable outcome as a timeout, without spending a call. |
-| 22 | `POST /documents` returns `201` but the document never leaves `Created` | The send's verification poll (requirement 38) times out after thirty seconds, deletes the document, and leaves the envelope in `draft` with `document_fields_not_materialized`. |
-| 23 | Text tags parse into the wrong count or the wrong recipient | Same outcome as 22. The document is deleted rather than left open, because a contract with a missing signature line is not a document anyone should be able to reach. |
-| 24 | Void races the last signature | The `DELETE` wins and the completed document is destroyed on their side. Accepted (requirement 40); the captured signatures survive in our own trail. |
-| 25 | `DELETE` returns `404` during a void | The document is already gone. The envelope voids locally with `providerError` set — our void is not blocked by their state. |
-| 26 | `GET /documents/{id}` returns `404` on a voided envelope | The settled post-delete state. The reconciler stops calling rather than treating it as an error. |
-| 27 | `GET /documents/{id}` returns `404` on a **non**-voided envelope | A provider fault, not a state. `providerError` is set and the envelope is left alone — we never infer deletion we did not ask for. |
-| 28 | `completed_pdf` returns `404` | Carries no information: an incomplete document and an unknown id answer identically. Status is established from `GET /documents/{id}` first, and a `404` here is retried, never treated as terminal (requirement 17). |
-| 29 | A list filter is silently ignored during orphan recovery | Matching is client-side on `metadata.envelope_id`; an unmatched page is skipped, never adopted (requirement 26). |
-| 30 | `event.time` is far from now | A skewed time produces a different hash and fails verification. A *correct* hash over a skewed time is indistinguishable from a delayed delivery, and convergence makes both harmless. |
+| 13 | An admin switches provider while a send is in flight | The send read the organization setting once, at its start, and finishes on that provider. A switch landing mid-send does not divert an envelope already being created on the other side. |
+| 14 | A draft created before a provider switch is sent after it | It goes out on the **new** provider: the provider is read at send, not at creation (requirement 1). This is the case TC-04-INT-17 pins. |
+| 15 | An admin switches away from SignWell with envelopes in flight | Those envelopes keep reconciling: the adapter is registered whenever it is configured, not when it is selected (backward compatibility 7). |
+| 16 | `SIGNWELL_API_KEY` is removed while SignWell envelopes are in flight | The adapter unregisters, reconciliation stops, and the settings screen shows the provider unconfigured. Affected envelopes surface `providerError = provider_unconfigured` on read rather than silently stalling. |
+| 17 | Test mode is switched off with test envelopes in flight | `providerTestMode` was written at send, alongside `providerKey`, so those envelopes stay marked as tests forever. Configuration does not relabel history. |
+| 18 | A signer opens the link after completion | Spec 02 requirement 25 applies unchanged — read-only view plus download. No provider call is made. |
+| 19 | The iframe reports `completed` but no webhook arrives | The page shows our confirmation; the envelope converges on the next read or sweep. A `postMessage` is never written to the database. |
+| 20 | A `postMessage` arrives from an unexpected origin | Ignored. The listener checks `event.origin` against the embed host before reading anything. |
+| 21 | The provider rate-limits us mid-signing | `signerAccess` fails, the signer sees the retry card, and the token is not consumed. |
+| 22 | The circuit breaker is open when a send is attempted | The send fails fast with `provider_unavailable` and the envelope stays `draft` — the same observable outcome as a timeout, without spending a call. |
+| 23 | `POST /documents` returns `201` but the document never leaves `Created` | The send's verification poll (requirement 38) times out after thirty seconds, deletes the document, and leaves the envelope in `draft` with `document_fields_not_materialized`. |
+| 24 | Text tags parse into the wrong count or the wrong recipient | Same outcome as the row above. The document is deleted rather than left open, because a contract with a missing signature line is not a document anyone should be able to reach. |
+| 25 | Void races the last signature | The `DELETE` wins and the completed document is destroyed on their side. Accepted (requirement 40); the captured signatures survive in our own trail. |
+| 26 | `DELETE` returns `404` during a void | The document is already gone. The envelope voids locally with `providerError` set — our void is not blocked by their state. |
+| 27 | `GET /documents/{id}` returns `404` on a voided envelope | The settled post-delete state. The reconciler stops calling rather than treating it as an error. |
+| 28 | `GET /documents/{id}` returns `404` on a **non**-voided envelope | A provider fault, not a state. `providerError` is set and the envelope is left alone — we never infer deletion we did not ask for. |
+| 29 | `completed_pdf` returns `404` | Carries no information: an incomplete document and an unknown id answer identically. Status is established from `GET /documents/{id}` first, and a `404` here is retried, never treated as terminal (requirement 17). |
+| 30 | A list filter is silently ignored during orphan recovery | Matching is client-side on `metadata.envelope_id`; an unmatched page is skipped, never adopted (requirement 26). |
+| 31 | `event.time` is far from now | A skewed time produces a different hash and fails verification. A *correct* hash over a skewed time is indistinguishable from a delayed delivery, and convergence makes both harmless. |
 
 ## Data Model
 
@@ -555,9 +587,9 @@ values. No renames, no drops, no new `NOT NULL` on an existing table.
 
 | Field | Type | Description |
 |---|---|---|
-| `providerKey` | `String @default("internal")` | **Exists.** Pinned at creation. |
+| `providerKey` | `String @default("internal")` | **Exists.** A display default while the envelope is a draft; written for real at send and never changed after (invariant 7). |
 | `providerRef` | `String @default("")` | **Exists.** SignWell document id. |
-| `providerTestMode` | `Boolean @default(false)` | Recorded per envelope, not read from config at display time — config changes must not relabel history. |
+| `providerTestMode` | `Boolean @default(false)` | Written at send with `providerKey`, and never read from config at display time — a config change must not relabel history. |
 | `providerStatus` | `String?` | The provider's own status string, verbatim (`"Sent"`, `"Pending"`, `"Completed"`…). For support, never for logic. |
 | `providerSyncedAt` | `DateTime?` | Drives lazy convergence (requirement 24a). |
 | `providerError` | `String?` | Last provider-side error, cleared on the next successful sync. |
@@ -584,7 +616,7 @@ writer.
 | `eventTime` | `DateTime` | From the payload. |
 | `relatedSignerEmail` | `String @default("")` | Normalized lowercase. |
 | `hashVerified` | `Boolean` | |
-| `payload` | `Json` | The body as received, for forensics. Never read by logic. |
+| `payload` | `Json` | The body as received, redacted per requirement 35, for forensics. Never read by logic. |
 | `processedAt` | `DateTime?` | Null until the reconciler has converged. |
 | `outcome` | `String?` | `converged` \| `ignored_terminal` \| `unknown_ref` \| `error`. |
 | `receivedAt` | `DateTime @default(now())` | |
@@ -623,8 +655,9 @@ The envelope state machine of spec 02 is **unchanged**. What changes is who caus
 
 Invariants, extending spec 02's six:
 
-7. `Envelope.providerKey` is written at creation and never changes. There is no code path that
-   updates it.
+7. `Envelope.providerKey` is written at send, in the transaction that sets `status = sent`,
+   and never changes after that. No code path updates it on a sent, completed, declined, voided
+   or expired envelope. On a draft it is a default the send overwrites.
 8. Remote state is only ever written by the reconciler, and only from a `fetchState` response.
    No handler writes envelope or signer state from a notification body.
 9. Convergence never moves an envelope out of a terminal state. A late `document_signed` for a
@@ -645,10 +678,10 @@ The AWS topology itself is spec 02's and does not change.
 
 | Variable | Where the value lives | Notes |
 |---|---|---|
-| `SIGNWELL_API_KEY` | AWS Secrets Manager, injected by the ECS task definition | Terraform creates the secret container and the IAM policy that reads it, never the value — so no secret reaches the state file. Rotating it is an out-of-band write plus a task restart. |
+| `SIGNWELL_API_KEY` | SSM Parameter Store, `SecureString`, injected by the ECS task definition | The store the repository already uses for `SESSION_SECRET`, `INTERNAL_TASK_SECRET` and `TEST_FIXTURE_SECRET` — spec 02 records the choice and its reason, and a second secret store for two values would mean a second IAM policy shape for nothing. Terraform creates the parameter and the policy that reads it, never the value, so no secret reaches the state file. Rotating it is an out-of-band write plus a task restart. |
 | `SIGNWELL_API_APPLICATION_ID` | Plain task environment | Not a secret: it names a branding profile. |
 | `SIGNWELL_TEST_MODE` | Plain task environment | Boolean. Malformed values throw at boot (validation rule 6) rather than defaulting, because defaulting to `false` means real money and real contracts on a typo. |
-| `SIGNWELL_WEBHOOK_SECRET` | AWS Secrets Manager | The webhook id. Treated as a secret because it is the only input to hash verification, while being an identifier `GET /api/v1/hooks` will hand to any holder of the API key — see requirement 20. |
+| `SIGNWELL_WEBHOOK_SECRET` | SSM Parameter Store, `SecureString` | The webhook id. Treated as a secret because it is the only input to hash verification, while being an identifier `GET /api/v1/hooks` will hand to any holder of the API key — see requirement 20. |
 | `PROVIDER_SYNC_STALE_SECONDS` | Plain task environment | Default 120. Behaviour-affecting, so it is identical in both environments. |
 
 ### What differs between environments
@@ -831,8 +864,9 @@ Provider unreachable:
 4. `PdfRenderer` produces the PDF from the translated HTML.
 5. `createSession` posts the document with `test_mode`, `embedded_signing`, `apply_signing_order`,
    and `metadata.envelope_id`.
-6. On success, `providerRef`, each signer's `providerRef`, and `providerTestMode` are written in
-   the same transaction that flips the envelope to `sent` and records the `sent` event.
+6. On success, `providerKey`, `providerRef`, each signer's `providerRef`, and `providerTestMode`
+   are written in the same transaction that flips the envelope to `sent` and records the `sent`
+   event.
 7. Our SES invitation goes to signer 1 with a link to our `/sign/{token}`.
 
 ### Flow: First signer signs
@@ -1101,7 +1135,7 @@ spend a whole E2E case re-reading a string the API already decided.
 | **The event chain** | A second writer (the reconciler) joins the controllers. | It writes through `EnvelopeEventsService` like everything else, so invariant 4 holds by construction. |
 | **Public attack surface** | A new unauthenticated POST endpoint. | Hash verification, a replay store, a rate limit, no state written from the body, and a response that is identical for known and unknown references. |
 | **Outbound network from the API** | The API now makes outbound HTTPS calls in the request path. A hung provider could exhaust the request pool. | Hard 10s timeout per call, five attempts with backoff **outside** any transaction (invariant 11), and a circuit breaker that fails fast for 60s after five consecutive failures. |
-| **Secrets** | An API key that can create and cancel real contracts. | Secrets Manager, injected by ECS. Terraform creates the container and the IAM policy, never the value, so no secret reaches the state file. |
+| **Secrets** | An API key that can create and destroy real contracts. | SSM `SecureString`, injected by ECS — the store this repository already uses. Terraform creates the parameter and the IAM policy, never the value, so no secret reaches the state file. |
 | **Cost and rate limits** | Test mode allows 20 requests/minute. `signerAccess` on every page open is the hot path. | Requirement 16 decides the wrong-turn case from our own rows. The circuit breaker prevents a retry storm from consuming the budget. |
 | **Operations** | A dropped webhook is invisible without instrumentation. | `providerSyncedAt` age is a metric; the sweep's converged/failed counts are metrics; `unknown_ref` has its own counter. |
 | **A stale webhook registration** | A registration outlives the address it names. Deliveries carry live `embedded_signing_url` values, so once a development tunnel dies and its hostname is reassigned — which free tunnelling services do by design — SignWell keeps posting working signing links to whoever now answers there. That is not a metadata leak; it is the ability to sign as the recipient. | A registration is deleted the moment its callback address stops being ours, and a development registration is never left standing between sessions. Deployed environments register a hostname we own. `GET /api/v1/hooks` is checked as part of the signing-settings connection check (requirement 31), so a registration pointing somewhere unexpected is visible on the screen rather than only in someone's memory. |
@@ -1292,7 +1326,7 @@ shows it, and E2E is spent only where the assertion is out of reach of an API te
 - **Level:** Integration
 - **Preconditions:** a sent SignWell envelope. The webhook body claims `status: "Completed"`; `GET /documents/{id}` returns `"Sent"`.
 - **Steps:** 1. POST the webhook.
-- **Expected Result:** 1. `200`. 2. The envelope is still `sent`. 3. No `completed` event. 4. The `ProviderWebhookEvent` row records the body verbatim with `outcome = converged`.
+- **Expected Result:** 1. `200`. 2. The envelope is still `sent`. 3. No `completed` event. 4. The `ProviderWebhookEvent` row records the **redacted** body (requirement 35) with `outcome = converged`.
 
 ### TC-04-INT-05: Redelivery is idempotent
 
