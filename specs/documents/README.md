@@ -20,12 +20,18 @@ profile on top of that mechanism.
 | 01 | [Document Templates](01-document-templates.md) | — | template, html, placeholder, field, version, publish, archive, sanitize |
 | 02 | [Envelopes & Signing](02-envelopes-and-signing.md) | — | envelope, signing, magic-link, signature, audit-trail, pdf, void, decline, expiry |
 | 03 | [Field Autofill](03-field-autofill.md) | — | autofill, member-profile, pii, binding, subject |
+| 04 | [Signature Providers & SignWell](04-signature-providers.md) | — | signature-provider, signwell, port, adapter, webhook, embedded-signing, test-mode, idempotency, reconciliation |
 
 ## Product decisions
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| Signature engine | Built in-house behind a `SignatureProvider` port | 80% of the value here is templates, fields, and binding to our own records — that is our code under any provider. The signing transport is the swappable part. Dropbox Sign / Documenso / DocuSign adapters are a later class + env var, not a migration. |
+| Signature engine | Built in-house behind a provider port | 80% of the value here is templates, fields, and binding to our own records — that is our code under any provider. The signing transport is the swappable part. |
+| Shape of that port | **Revised in spec 04.** Session-scoped, asynchronous, with a capability record | The original `SignatureProvider` — `issueInvitation` / `applySignature` / `finalize` — assumed we mint the token, host the page, capture the ink and build the PDF. A real vendor does all four itself. The columns did survive as promised; the interface did not. The revised port's unit of work is the whole signing session, and the envelope service branches on *what a provider does*, never on *which provider it is*. |
+| Provider choice | Per organization, pinned per envelope | An envelope's provider is written once at creation and never changes, so switching can never reach an in-flight contract. A per-envelope choice was rejected: a sender would need a reason to choose, and the product cannot express one. |
+| SignWell signing surface | Embedded widget on our origin | The counterparty stays in our product, the invitation comes from our address, and the link cannot outlive our access control. The cost is that our own signing canvas and consent capture are unused for that provider. |
+| SignWell record of execution | Their completed PDF with their audit page | Two documents claiming to be the evidence is worse than one. Our `EnvelopeEvent` chain keeps running as the operational journal, fed by reconciliation. |
+| Trust in a webhook body | None | SignWell's `event.hash` covers `type@time` only, and its key is the webhook id. Every notification triggers a re-read of the document from the API; nothing is written from a payload. This makes replay, reordering and duplication harmless by construction. |
 | Signature class | Simple Electronic Signature (SES) with a full audit trail | Sufficient for B2B agreements in BY and the US when the contract itself records that the parties accept electronic signature. Note that DocuSign would be the same class in Belarus — only a ГосСУОК/НЦЭУ certificate is a qualified signature there, and no SaaS vendor provides one. |
 | Template format | HTML with `{{placeholders}}`, rendered to PDF server-side | Versions diff as text, the field list is derivable from the body, and substitution is trivial. Uploaded PDF/DOCX templates are out of scope. |
 | External signer | Magic link, no account required | Reuses the existing single-use token pattern; works identically for staff and outside counterparties. |
@@ -46,7 +52,11 @@ profile on top of that mechanism.
 | Signed PDFs are write-once and never re-rendered | 02 | — |
 | All timestamps are stored in UTC; display adds the organization timezone | 02 | — |
 | Capability checks run on the normalized role (see role-enum note below) | 01 | 02, 03 |
-| Submit CTA is never disabled for validation (inherited from user-management spec 01) | user-management/01 | 01, 02 |
+| Submit CTA is never disabled for validation (inherited from user-management spec 01) | user-management/01 | 01, 02, 04 |
+| A provider's state is read from the provider, never from a notification body | 04 | 02 |
+| `Envelope.providerKey` is written at creation and never changes | 04 | 02 |
+| No provider call runs inside a database transaction | 04 | 02 |
+| A contract field value never reaches a provider-forensics row, a log, or the audit trail | 02 (req 40), 04 (req 35–37) | 03 |
 
 ## Role enum debt
 
@@ -105,17 +115,27 @@ the failure and cost characteristics of each service.
 | Envelope voided | 02 | Outstanding tokens invalidated; captured signatures retained in the audit trail | 02 |
 | Member removed (user-management 04) | 02 | In-flight envelopes continue (signature is bound to the email, not the account); UI flags the signer as no longer a member | 02 |
 | Member profile updated | 03 | Affects only envelopes created afterwards — values are snapshotted at envelope creation | 02, 03 |
+| Organization provider changed | 04 | New envelopes bind to the new provider; in-flight envelopes keep the one they were created with | 02 |
+| Envelope sent under a remote provider | 04 | The document is created on the provider before the `sent` transaction; a provider failure leaves the envelope in `draft` | 02 |
+| Provider notification received | 04 | State is re-read from the provider and our rows converge; every difference writes its `EnvelopeEvent` in one transaction | 02 |
+| Remote envelope completes | 04 | The provider's PDF is stored before the envelope is marked complete, and no Certificate of Completion is issued | 02 |
+| Signer-owned placeholder present at send | 04 | Translated into a provider text tag; any residual `{{…}}` aborts the send | 01, 02 |
 
 ## Dependency Graph
 
 ```
 01 Document Templates
 └─► 02 Envelopes & Signing
-     └─► 03 Field Autofill
+     ├─► 03 Field Autofill
+     └─► 04 Signature Providers & SignWell
 ```
 
-Spec 03 depends on both: it binds template fields (01) to member data and applies them when an
-envelope is created (02).
+Spec 03 depends on both 01 and 02: it binds template fields (01) to member data and applies them
+when an envelope is created (02).
+
+Spec 04 depends on 02 for the envelope, its state machine and its audit trail, and on 01 for the
+placeholder syntax it has to translate. It changes no requirement of either — it replaces the port
+behind them and adds a second implementation.
 
 ## Blast Radius
 
@@ -206,10 +226,17 @@ Three genuinely new exposures, each with a named mitigation:
    signal to stop and look.
 6. **The audit format is versioned.** `EnvelopeEvent.SchemaVersion` lets the hash-chain algorithm
    evolve without invalidating chains written under the old one.
-7. **The provider port is present from day one.** `Envelope.ProviderKey` and
-   `Envelope.ProviderRef` exist in the first migration, so adding a Dropbox Sign, Documenso, or
-   DocuSign adapter is a new class plus an environment variable — no migration, no API change, no
-   change to the state machine.
+7. **The provider columns are present from day one.** `Envelope.ProviderKey` and
+   `Envelope.ProviderRef` exist in the first migration, so a third-party adapter needs no
+   migration to carry its foreign identifiers, and no change to the state machine.
+
+   > Corrected by spec 04. This row originally claimed the whole adapter was "a new class plus an
+   > environment variable". The columns held; the *interface* did not. The first real vendor
+   > showed that `issueInvitation` / `applySignature` / `finalize` describe our own engine rather
+   > than a signing transport, because a vendor hosts the page, mints the link, captures the
+   > signature and produces the PDF itself. Spec 04 replaces the port and rewrites the in-house
+   > provider onto it. The columns, the state machine and the audit trail all survived unchanged,
+   > which is the part of the original bet that paid.
 8. **Autofill snapshots rather than binds.** A profile edit never reaches back into an existing
    envelope, so member data can be corrected freely without any risk to documents in flight.
 
