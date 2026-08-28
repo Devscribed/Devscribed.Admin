@@ -14,6 +14,7 @@
  * the route simply does not exist in an environment that talks to the real SignWell.
  */
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -35,6 +36,7 @@ import { assertFixturesOpen, resolveFixtureScope } from './fixture-gate';
 
 interface HealthDto {
   healthy?: boolean;
+  orgId?: string;
 }
 
 interface CompleteDto {
@@ -82,13 +84,39 @@ export class TestSignWellStubController {
   }
 
   /** TC-04-E2E-03 — 503 from every call, then healthy again, without restarting anything. */
+  /**
+   * Makes the provider unreachable, and then reachable again, **for one organization**.
+   *
+   * The organization is required rather than optional, and that is the whole point of the
+   * route: the suite runs `fullyParallel`, so a switch that applied to the stub as a whole
+   * would take the provider away from every case running beside the one that asked. It did,
+   * and TC-04-E2E-02 failed on the error card for a link that was never broken.
+   */
   @Post('health')
   @HttpCode(200)
-  async health(@Body() dto: HealthDto, @Headers('authorization') authorization?: string) {
+  async health(
+    @Body() dto: HealthDto,
+    @Req() request: Request,
+    @Headers('authorization') authorization?: string,
+  ) {
     assertFixturesOpen(authorization);
     const stub = this.stub();
-    stub.setHealthy(dto?.healthy !== false);
-    return { healthy: stub.isHealthy() };
+    const scope = await resolveFixtureScope(
+      this.prisma,
+      this.sessions,
+      request,
+      (dto?.orgId ?? '').trim() || undefined,
+    );
+    // Refused rather than applied globally: a fixture that silently widened its own blast
+    // radius is what this route is being fixed for.
+    if (!scope) {
+      throw new BadRequestException(
+        'An organization is required: provider health is per organization so that one case ' +
+          'cannot take the provider away from another running beside it.',
+      );
+    }
+    stub.setHealthy(scope, dto?.healthy !== false);
+    return { healthy: stub.isHealthy(scope) };
   }
 
   /**

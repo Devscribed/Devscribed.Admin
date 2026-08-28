@@ -1,0 +1,42 @@
+{
+  "status": "error",
+  "suites": {
+    "unit": {
+      "passed": 941,
+      "failed": 0,
+      "ms": 3670
+    },
+    "int": {
+      "skipped": true,
+      "reason": "environment: port 5433 is bound by two processes — Docker's postgres port-proxy (devscribed-postgres, PID 12136) and a native Windows postgres.exe service (PID 6928) — so TCP connections to postgresql://localhost:5433 intermittently hit the wrong server and every Prisma/pg client on that port fails with 'password authentication failed for user devscribed'. Confirmed with `netstat -ano | grep 5433` (two LISTENING entries) and a direct `pg` connect from Node, which succeeds against the same container's other exposed port 5434 but fails against 5433. Port 5434 has devscribed_dev, not devscribed_test, so it cannot substitute. Not repaired per instructions (no killing what holds a port, no touching a shared container)."
+    },
+    "e2e": {
+      "skipped": true,
+      "reason": "int failed to run first; e2e needs the API up against a reachable devscribed_test database, same port-5433 conflict blocks it"
+    }
+  },
+  "flaky": [],
+  "findings": [
+    {
+      "id": "F1",
+      "target": "code",
+      "severity": "info",
+      "rule": "spec/04-signature-providers.md#requirement-26 (prior QA finding)",
+      "file": "apps/api/src/signature/signwell/signwell-http-client.ts",
+      "symbol": "HttpSignWellClient.attempt / createDocument",
+      "line": 383,
+      "claim": "The previously reported defect — POST /documents retried up to five times with the orphan lookup running only after all attempts failed, permitting two live SignWell documents for one envelope — is fixed in commit e1cece1. `createDocument` now requires an `adoptExisting` callback; `attempt()` tracks `couldHaveLanded` (true after a timeout/socket error or a 5xx, false after a 429) and, before repeating an unsafe retry, calls `beforeUnsafeRetry` between attempts (after the backoff, line 383), which invokes the lookup and throws `AdoptedExisting` to stop the loop and return the found document instead of re-POSTing. `SignWellSigningProvider.createOrAdopt` now passes `() => this.findOrphan(envelopeId)` as that callback (signwell-signing-provider.ts:204), so the lookup runs inside the retry loop, not after it throws.",
+      "witness": {
+        "kind": "test",
+        "test": "TC-04-INT-03 (apps/api/test/signwell-client.spec.ts:156-223)",
+        "detail": "Case 'does not repeat a create that may have landed, and adopts what it finds' drives the real HttpSignWellClient with a fake transport that always times out, and asserts exactly one POST was sent (requests.filter(POST).length === 1) and the lookup ran once after the single backoff (delays.length === 1) before returning the adopted document. Two companion cases prove a 5xx with nothing found still retries (2 requests, 1 lookup) and that 429 spends no lookup (0 lookups, 3 requests). Read but not executed this run — see suites.int — because the local Postgres port (5433) is not reliably reachable in this environment; the test body itself directly falsifies the original finding (it fails without the fix per the commit's own description: 'commenting out the guard fails two of that file's six cases')."
+      },
+      "suggestedFix": "none — re-run test/signwell-client.spec.ts and test/signwell-send.spec.ts once the port-5433 conflict is resolved by whoever owns this machine, to get an executed confirmation rather than a read-through."
+    }
+  ],
+  "notes": [
+    "Order of work stopped after unit: apps/api's own Jest globalSetup (prisma migrate deploy) fails against devscribed_test due to the port conflict described above, before any spec file — signwell or otherwise — can run. This is an infrastructure fault on the shared machine, not a product defect, so no fail verdict is issued for tests that never executed.",
+    "Did not attempt to free the port, stop/restart the Docker container, or touch the native Windows postgres service, per the QA agent's environment rules.",
+    "Manual screen review and the spec's TC-* inventory were not performed this pass, since the run is being returned as error before reaching those stages; re-invoke QA once the DB is reachable."
+  ]
+}

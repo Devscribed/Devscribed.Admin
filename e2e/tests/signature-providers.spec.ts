@@ -60,6 +60,13 @@ const FIELD_VALUES = {
   contractor_bank: 'IBAN DE02 1203 0000 0000 2020 51',
 };
 
+/**
+ * Our own origin, derived exactly as `helpers.ts` derives `API` and as playwright.config.ts
+ * derives its `baseURL`. TC-04-E2E-02 needs it as a value rather than as a default, because
+ * the thing it asserts is that the address bar is still ours after the widget loads.
+ */
+const WEB = process.env.E2E_BASE_URL ?? 'http://localhost:3000';
+
 const SIGNING_SETTINGS = (orgId: string) => `/org/${orgId}/settings/signing`;
 
 /** Headers for `/api/test/*`, empty locally exactly as `helpers.ts` builds them. */
@@ -98,11 +105,22 @@ async function useSignWell(request: APIRequestContext, orgId: string): Promise<v
   }
 }
 
-/** TC-04-E2E-03's switch: the stub answers 503 to everything, then recovers. */
-async function setProviderHealth(request: APIRequestContext, healthy: boolean): Promise<void> {
+/**
+ * TC-04-E2E-03's switch: the stub answers 503 for **this organization**, then recovers.
+ *
+ * The organization is named because the suite runs `fullyParallel` and every case seeds its
+ * own: a switch that applied to the whole stub would take the provider away from whatever
+ * else is mid-flight, which is precisely how TC-04-E2E-02 came to open a good link and be
+ * shown the "we can't open this document right now" card.
+ */
+async function setProviderHealth(
+  request: APIRequestContext,
+  orgId: string,
+  healthy: boolean,
+): Promise<void> {
   const response = await request.post(`${API}/api/test/signwell/health`, {
     headers: FIXTURE_HEADERS,
-    data: { healthy },
+    data: { orgId, healthy },
   });
   if (!response.ok()) {
     throw new Error(`Precondition failed: could not set provider health (${response.status()})`);
@@ -151,7 +169,26 @@ test.describe('Spec 04 — signature providers', () => {
     await expect(builtIn).toBeChecked();
     await expect(page.getByTestId('signing-provider-status-signwell')).toContainText(/test mode/i);
 
-    await signwell.check();
+    /*
+     * Clicked the way a person clicks it, and not with `check()`.
+     *
+     * The design system's `Radio` hides the real `<input>` at one pixel with
+     * `pointer-events: none` and draws the control as a `<span>` beside it, so the input
+     * itself can never pass Playwright's actionability check — the pointer event lands on
+     * the decorative span every time, and `check()` retries for its whole timeout. What a
+     * signer or an admin actually clicks is the `<label>` wrapping both, which is what the
+     * browser turns into activation of the control. It is the same reason every checkbox
+     * in this suite is `click()`ed rather than `check()`ed — see
+     * `signing-consent-checkbox` in envelopes-signing.spec.ts.
+     *
+     * The assertion after it is the point of writing it this way: if the row ever stops
+     * being clickable the case fails on "the radio did not turn on", not on a thirty-second
+     * timeout that says only that Playwright gave up.
+     */
+    await page.getByTestId('signing-provider-option-signwell').locator('label').click();
+    await expect(signwell).toBeChecked();
+    await expect(builtIn).not.toBeChecked();
+
     await page.getByTestId('signing-provider-save').click();
 
     const modal = page.getByTestId('signing-change-modal');
@@ -161,7 +198,8 @@ test.describe('Spec 04 — signature providers', () => {
     // The one place a disabled submit is permitted: a deliberate confirmation.
     const submit = page.getByTestId('signing-change-submit');
     await expect(submit).toBeDisabled();
-    await page.getByTestId('signing-change-confirm').check();
+    // The label, for the reason above: the DS checkbox hides its input too.
+    await page.getByTestId('signing-change-confirm').click();
     await expect(submit).toBeEnabled();
     await submit.click();
 
@@ -177,6 +215,10 @@ test.describe('Spec 04 — signature providers', () => {
     request,
     browser,
   }) => {
+    // Whichever case reaches `/sign/{token}` first pays for Next compiling the route, which
+    // is seconds on a cold dev server and nothing at all afterwards. That cost is the run's,
+    // not this assertion's, and it should not be what decides whether the case passes.
+    test.slow();
     const { orgId, templateId } = await seedOrganization(request);
     await useSignWell(request, orgId);
     const counterparty = uniqueEmail('counterparty');
@@ -198,15 +240,68 @@ test.describe('Spec 04 — signature providers', () => {
     const context = await browser.newContext();
     const signer = await context.newPage();
     try {
-      await signer.goto(link);
+      /*
+       * The spec asks this case to see `sign-embedded-loading` appear **and be replaced**,
+       * which is a transition and not a state — and a transition cannot be observed if it is
+       * over before the assertion polls. The skeleton is unmounted by the iframe's own
+       * `load`, and against an in-process stub on the same host that fires within
+       * milliseconds of the frame mounting, so the case was reading a page where the widget
+       * had already arrived and failing on "element(s) not found".
+       *
+       * So the widget is held until this test lets it go, rather than raced with a sleep.
+       * A timing fix would only move the flake: the first `/sign/{token}` of a run also pays
+       * for Next compiling the route, which is seconds, and a delay long enough to cover
+       * that on a cold machine is a delay wasted on every warm one. A gate has no such
+       * number in it — the placeholder is visible because the widget provably cannot have
+       * loaded yet.
+       *
+       * Nothing about what is under test moves: the page still has to render the
+       * placeholder itself, and it still has to replace it with the frame on the widget's
+       * own `load`. A real widget over a real network is slower than the stub, not faster,
+       * so a held one is the more production-like of the two.
+       */
+      let releaseWidget = (): void => undefined;
+      const widgetHeld = new Promise<void>((resolve) => {
+        releaseWidget = resolve;
+      });
+      await signer.route('**/api/test/signwell/widget*', async (route) => {
+        await widgetHeld;
+        await route.continue();
+      });
 
-      await expect(signer.getByTestId('sign-embedded-loading')).toBeVisible();
+      /*
+       * `domcontentloaded`, because the default `load` waits for every subresource — and
+       * this case is deliberately holding one of them. Whether the iframe mounts before or
+       * after `load` depends on how long hydration and the token fetch take, so the default
+       * deadlocked `goto` against the gate on a cold run and resolved fine on a warm one:
+       * a 30s test timeout on the first attempt and 1.6s on the retry.
+       */
+      await signer.goto(link, { waitUntil: 'domcontentloaded' });
+
+      // The skeleton holds the frame's box before the widget arrives, so the page does not
+      // reflow when it does. The generous timeout is the route compile on a cold run, not
+      // the widget: that one is not going anywhere until the line below.
+      await expect(signer.getByTestId('sign-embedded-loading')).toBeVisible({
+        timeout: 30_000,
+      });
+
+      releaseWidget();
       const frame = signer.getByTestId('sign-embedded-frame');
       await expect(frame).toBeVisible();
+      // Replaced, not merely covered.
       await expect(signer.getByTestId('sign-embedded-loading')).toHaveCount(0);
 
-      // The browser never left our origin — the widget is framed, not navigated to.
-      expect(new URL(signer.url()).origin).toBe(new URL(link).origin);
+      /*
+       * The browser never left our origin — the widget is framed, not navigated to.
+       *
+       * Compared against our origin and not against the link, which is a *pathname*:
+       * `signingLinkFor` returns `new URL(...).pathname` so that `goto` resolves it against
+       * the base URL, and `new URL(pathname)` throws. That line could never have run — the
+       * case failed above it every time — which is how it survived to be found by a run that
+       * got further.
+       */
+      expect(new URL(signer.url()).origin).toBe(new URL(WEB).origin);
+      expect(new URL(signer.url()).pathname).toBe(link);
 
       // The frame carries the URL the provider returned, not one this page invented.
       const src = await frame.getAttribute('src');
@@ -244,7 +339,7 @@ test.describe('Spec 04 — signature providers', () => {
     const context = await browser.newContext();
     const signer = await context.newPage();
     try {
-      await setProviderHealth(request, false);
+      await setProviderHealth(request, orgId, false);
       await signer.goto(link);
 
       const error = signer.getByTestId('sign-embedded-error');
@@ -252,7 +347,7 @@ test.describe('Spec 04 — signature providers', () => {
       // The card's whole job: nothing has been lost and the link still works.
       await expect(error).toContainText('your link still works');
 
-      await setProviderHealth(request, true);
+      await setProviderHealth(request, orgId, true);
       await signer.getByTestId('sign-embedded-retry').click();
       await expect(signer.getByTestId('sign-embedded-frame')).toBeVisible();
 
@@ -260,7 +355,7 @@ test.describe('Spec 04 — signature providers', () => {
       await signer.reload();
       await expect(signer.getByTestId('sign-embedded-frame')).toBeVisible();
     } finally {
-      await setProviderHealth(request, true);
+      await setProviderHealth(request, orgId, true);
       await context.close();
     }
   });
@@ -290,6 +385,9 @@ test.describe('Spec 04 — signature providers', () => {
     ).toBeDisabled();
 
     // A `user` gets the not-found page, and no Settings item to reach it with.
+    // Logging out is two clicks: the control lives inside the account menu, which is what
+    // `topbar-account-button` opens — the same two lines app-shell.spec.ts uses.
+    await page.getByTestId('topbar-account-button').click();
     await page.getByTestId('logout-button').click();
     await page.waitForURL('**/login');
     await signIn(page, userEmail);

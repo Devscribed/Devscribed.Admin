@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 /**
  * Jest runs globalSetup in its own process, separate from the one that loads
  * setupFiles, so both need the same answer to "which database do the tests use".
@@ -28,9 +31,6 @@
  */
 function baseFromDotEnv(): string | null {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { readFileSync, existsSync } = require('node:fs') as typeof import('node:fs');
-    const { join } = require('node:path') as typeof import('node:path');
     const envPath = join(__dirname, '..', '.env');
     if (!existsSync(envPath)) return null;
     const line = readFileSync(envPath, 'utf8')

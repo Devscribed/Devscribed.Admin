@@ -8,7 +8,7 @@
   "headAtInit": "38cabfa82dbcae5112c1b7a1b12ede71307f63f9",
   "status": "implement",
   "createdAt": "2026-08-28T17:26:56.047Z",
-  "updatedAt": "2026-08-28T19:02:04.141Z",
+  "updatedAt": "2026-08-28T19:42:36.160Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -23,39 +23,45 @@
     },
     "implement": {
       "status": "running",
-      "attempts": 4,
-      "startedAt": "2026-08-28T19:02:04.140Z",
-      "endedAt": "2026-08-28T18:48:38.137Z",
+      "attempts": 5,
+      "startedAt": "2026-08-28T19:42:36.160Z",
+      "endedAt": "2026-08-28T19:12:27.650Z",
       "lastVerdict": "pass"
     },
     "static_gate": {
       "status": "passed",
-      "attempts": 2,
-      "startedAt": "2026-08-28T18:48:38.235Z",
-      "endedAt": "2026-08-28T18:48:38.393Z",
+      "attempts": 3,
+      "startedAt": "2026-08-28T19:12:27.739Z",
+      "endedAt": "2026-08-28T19:12:27.885Z",
       "lastVerdict": "pass"
     },
     "review": {
-      "status": "blocked",
-      "attempts": 2,
-      "startedAt": "2026-08-28T18:48:38.495Z",
-      "endedAt": "2026-08-28T18:59:00.615Z",
-      "lastVerdict": "blocked"
+      "status": "passed",
+      "attempts": 3,
+      "startedAt": "2026-08-28T19:12:27.970Z",
+      "endedAt": "2026-08-28T19:25:46.730Z",
+      "lastVerdict": "pass"
     },
     "qa": {
-      "status": "pending",
-      "attempts": 0
+      "status": "blocked",
+      "attempts": 2,
+      "startedAt": "2026-08-28T19:28:34.288Z",
+      "endedAt": "2026-08-28T19:42:36.061Z",
+      "lastVerdict": "fail"
     }
   },
   "budget": {
-    "codeAttempts": 1,
+    "codeAttempts": 2,
     "handoffReplans": 1,
-    "infra": 0
+    "infra": 1
   },
   "findingHistory": {
     "specs/documents/04-signature-providers.md - Infrastructure / Configuration@infra/terraform/modules/app/api.tf#api_environment and api_secrets": 1,
     "specs/documents/04-signature-providers.md - State Machine, invariant 11@apps/api/src/signing/signing.service.ts#SigningService.sign": 1,
-    "specs/documents/04-signature-providers.md - requirement 26@apps/api/src/signature/signwell/signwell-http-client.ts#HttpSignWellClient.attempt": 1
+    "specs/documents/04-signature-providers.md - requirement 26@apps/api/src/signature/signwell/signwell-http-client.ts#HttpSignWellClient.attempt": 1,
+    "spec/04-signature-providers.md#TC-04-E2E-01@e2e/tests/signature-providers.spec.ts#TC-04-E2E-01: an admin switches the organization to SignWell": 1,
+    "spec/04-signature-providers.md#TC-04-E2E-02@e2e/tests/signature-providers.spec.ts#TC-04-E2E-02: the signing page hosts the widget on our origin": 1,
+    "spec/04-signature-providers.md#TC-04-E2E-04@e2e/tests/signature-providers.spec.ts#TC-04-E2E-04: a manager sees the setting but cannot change it": 1
   },
   "contested": [],
   "notes": [
@@ -271,6 +277,108 @@
         "source": "specs/documents/04-signature-providers.md:694"
       },
       "suggestedFix": "No code change. If the go-live steps deserve a home outside a tfvars comment, docs/deployment.md is where the rest of the runbook lives."
+    },
+    {
+      "stage": "review",
+      "id": "N1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "specs/documents/04-signature-providers.md - requirement 24a",
+      "file": "apps/api/src/documents/envelopes.service.ts",
+      "symbol": "EnvelopesService.list",
+      "line": 341,
+      "claim": "Carried from review 1 (N1) and still open, though the code has answered half of it. Requirement 24a says any read of a non-terminal envelope triggers a synchronous re-fetch; only EnvelopesService.get at :414 and SigningService.view at :127 call convergeIfStale. The list deliberately does not, and the reason is now written at envelopes.service.ts:341-356 - but it is written in the code, while CLAUDE.md says the spec is what changes when behaviour and spec disagree. A note rather than a blocker because the spec's own acceptance of 24a is envelope-level: TC-04-INT-11 and TC-04-INT-12 both exercise GET /envelopes/{id}, and the alt flow at spec:930 says the next read of the envelope. So any read is loose prose, not a rule the implementation fails.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Requirement 24a: Any read of a non-terminal envelope whose providerKey is remote and whose providerSyncedAt is older than PROVIDER_SYNC_STALE_SECONDS (default 120) triggers a synchronous re-fetch before the response is composed. Applied literally to the list, one page of up to a hundred rows would spend up to a hundred provider calls, serialized per organization under a 10s deadline each, against the 120-per-minute read budget requirement 19 pins - which is why the code refuses, and why the sentence rather than the code is what should move.",
+        "source": "specs/documents/04-signature-providers.md:402"
+      },
+      "suggestedFix": "One sentence in requirement 24a: any read of a single non-terminal envelope - the detail read and the signing page, never the list, which would spend one call per row against the budget requirement 19 names."
+    },
+    {
+      "stage": "review",
+      "id": "N2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "specs/documents/04-signature-providers.md - requirement 38 and the Error Messages table",
+      "file": "apps/api/src/documents/envelopes.service.ts",
+      "symbol": "EnvelopesService.providerSendFailure",
+      "line": 1274,
+      "claim": "Carried from review 1 (N4) and review 2 (N2), unchanged by e1cece1. A text-tag materialization failure is reported to the sender with the provider-unavailable copy - Signing service is unavailable, nothing was sent, try again shortly - but a retry fails identically, because the tags will not parse on the next attempt either. The machine-readable code and the expected and received lists are right; only the sentence is wrong, and the spec supplies no other.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Requirement 38: On mismatch the send deletes the document, leaves the envelope in draft, and reports document_fields_not_materialized naming what was expected and what came back. The Error Messages table at spec:1067-1089 has no row for that case, so the only string available to the handler is SIGNING_PROVIDER_MESSAGES.send.providerUnavailable.",
+        "source": "specs/documents/04-signature-providers.md:513"
+      },
+      "suggestedFix": "Add a row to the Error Messages table for document_fields_not_materialized and put the string in packages/validation beside the others."
+    },
+    {
+      "stage": "review",
+      "id": "N3",
+      "target": "code",
+      "severity": "note",
+      "rule": "not a written rule - judgement",
+      "file": "apps/web/app/sign/[token]/EmbeddedSigning.tsx",
+      "symbol": "EmbeddedSigning",
+      "line": 142,
+      "claim": "The vendor iframe is given allow=camera; microphone; clipboard-write on /sign/{token}, the one session-less page in the product. Nothing in the spec asks for it: the Blast Radius row about this page's policy widens frame-src only and says outright that script-src is deliberately untouched, and requirement 15's whole argument is that no third-party capability is spent to save a postMessage handler. Granting camera and microphone to the embed origin is a capability of exactly that kind, and it is recorded nowhere.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Blast Radius, The CSP on /sign/*: frame-src gains the embed origin and nothing else, from a build-time variable. script-src is deliberately untouched: requirement 15 hosts the widget in our own iframe with our own origin-checked listener rather than loading SignWell's SDK, so no third-party script reaches that page. The iframe attribute grants the frame two device capabilities the same reasoning would not have granted a script.",
+        "source": "specs/documents/04-signature-providers.md:1159"
+      },
+      "suggestedFix": "Drop the allow attribute unless the widget genuinely needs a camera for identity capture; if it does, record that in requirement 15 beside the frame-src decision so the grant is a decision rather than a default."
+    },
+    {
+      "stage": "review",
+      "id": "N4",
+      "target": "code",
+      "severity": "note",
+      "rule": "not a written rule - judgement",
+      "file": "packages/validation/src/envelopes.ts",
+      "symbol": "ENVELOPE_EVENT_TYPES",
+      "line": 114,
+      "claim": "provider_error is added to EnvelopeEventType, to the Prisma enum and to the migration, and nothing ever writes it: the reconciler records failure on Envelope.providerError at provider-reconciler.service.ts:508-513 and writes only provider_synced events. The Data Model does ask for both values, so the code matches the spec - recorded so nobody reads the enum as evidence that provider failures reach the audit trail.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Spec Data Model: EnvelopeEventType gains provider_synced, provider_error. Grepping provider_error across apps and packages returns only the enum declaration, the generated dist copy and the TC-02-UNIT-02 assertion - no writer.",
+        "source": "specs/documents/04-signature-providers.md:646"
+      },
+      "suggestedFix": "Either write a provider_error event where recordProviderError runs, or say in the Data Model row that the value is reserved and unused this release."
+    },
+    {
+      "stage": "review",
+      "id": "N5",
+      "target": "code",
+      "severity": "note",
+      "rule": "not a written rule - judgement",
+      "file": "apps/api/src/signature/signwell/signwell-http-client.ts",
+      "symbol": "HttpSignWellClient.serialize",
+      "line": 330,
+      "claim": "The per-organization serialization map is never pruned: this.queues gains one entry per organization id that ever sends and keeps it, holding a settled promise, for the life of the process. Small and slow, and no rule forbids it, but the API is long-lived and this is the only unbounded map in the client.",
+      "witness": {
+        "kind": "rule",
+        "detail": "serialize() calls this.queues.set(key, next.then(...)) on every request and there is no delete anywhere in the file.",
+        "source": "apps/api/src/signature/signwell/signwell-http-client.ts:335"
+      },
+      "suggestedFix": "Delete the entry in the settled continuation when it is still the current one for that key."
+    },
+    {
+      "stage": "review",
+      "id": "N6",
+      "target": "code",
+      "severity": "note",
+      "rule": "not a written rule - judgement",
+      "file": "scripts/ship.mjs",
+      "symbol": "pipeline files carried in the diff",
+      "line": 1,
+      "claim": "Six pipeline files are in this diff and no handoff task names any of them: scripts/ship.mjs, scripts/wf.mjs, scripts/static-gate.mjs, scripts/review-coverage.mjs, scripts/run-digest.mjs and .claude/ai-workflow.config.json, which also raises maxCodeAttempts from 5 to 8 and infraRetries from 2 to 3. They are the operator's own commits carried in by the run's --from base rather than implementer work, and I read them: they change no product behaviour. Recorded so the diff's size is not read as spec-04 scope creep, and so the retry-budget change is visible to whoever approves this branch.",
+      "witness": {
+        "kind": "rule",
+        "detail": "handoff.json lists tasks T1 to T11 and none names a file under scripts/ or .claude/. git log shows be64d7c, 0f79bd5, 7e79f72 and e981dcd as pipeline commits interleaved with the implement attempts.",
+        "source": ".workflow/runs/2026-08-28T17-26-56_documents-04-signature-providers/handoff.json"
+      },
+      "suggestedFix": "None for the implementer. If the retry-budget change is not meant to ship with this branch, land it separately."
     }
   ],
   "halt": null,

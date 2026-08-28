@@ -33,17 +33,25 @@ export class StubSignWellHttpClient extends SignWellHttpClient {
   private sequence = 0;
 
   /**
-   * TC-04-E2E-03 needs the provider to answer `503` and then be made healthy inside one
-   * test, so the switch is runtime state rather than configuration.
+   * TC-04-E2E-03 needs the provider to answer `503` and then be made healthy **inside one
+   * test**, so the switch is runtime state rather than configuration — and it is keyed by
+   * organization, which is the part that makes "inside one test" true.
+   *
+   * A single boolean here was a global in a suite whose config sets `fullyParallel`, so the
+   * one case that turns the provider off turned it off for every case running beside it.
+   * That is exactly how TC-04-E2E-02 came to fail on the error card: its signer opened a
+   * perfectly good link during the second or two TC-04-E2E-03 had the provider down. Each
+   * case seeds its own organization, so keying on that is what isolates them.
    */
-  private healthy = true;
+  private readonly unhealthy = new Set<string>();
 
-  setHealthy(healthy: boolean): void {
-    this.healthy = healthy;
+  setHealthy(organizationId: string, healthy: boolean): void {
+    if (healthy) this.unhealthy.delete(organizationId);
+    else this.unhealthy.add(organizationId);
   }
 
-  isHealthy(): boolean {
-    return this.healthy;
+  isHealthy(organizationId: string): boolean {
+    return !this.unhealthy.has(organizationId);
   }
 
   /** The fixture that drives an envelope to completion without a human in a widget. */
@@ -67,12 +75,12 @@ export class StubSignWellHttpClient extends SignWellHttpClient {
 
   reset(): void {
     this.documents.clear();
-    this.healthy = true;
+    this.unhealthy.clear();
     this.sequence = 0;
   }
 
   async createDocument(body: SignWellCreateDocumentBody): Promise<SignWellDocument> {
-    this.assertHealthy();
+    this.assertHealthy(body.metadata.organization_id);
     this.sequence += 1;
     const id = `stub-document-${this.sequence}`;
     const now = new Date().toISOString();
@@ -125,7 +133,7 @@ export class StubSignWellHttpClient extends SignWellHttpClient {
   }
 
   async getDocument(id: string): Promise<SignWellDocument | null> {
-    this.assertHealthy();
+    this.assertHealthy(this.organizationOf(id));
     const document = this.documents.get(id);
     if (!document) return null;
     // The parse has landed by the first read, which is what the adapter polls for.
@@ -138,7 +146,6 @@ export class StubSignWellHttpClient extends SignWellHttpClient {
   }
 
   async listDocuments(page: number): Promise<SignWellDocumentList> {
-    this.assertHealthy();
     const all = [...this.documents.values()];
     return {
       documents: page === 1 ? all : [],
@@ -150,14 +157,14 @@ export class StubSignWellHttpClient extends SignWellHttpClient {
   }
 
   async deleteDocument(id: string): Promise<'deleted' | 'not_found'> {
-    this.assertHealthy();
+    this.assertHealthy(this.organizationOf(id));
     if (!this.documents.has(id)) return 'not_found';
     this.documents.delete(id);
     return 'deleted';
   }
 
   async completedPdf(id: string): Promise<Buffer | null> {
-    this.assertHealthy();
+    this.assertHealthy(this.organizationOf(id));
     const document = this.documents.get(id);
     // The same answer the real route gives for both an incomplete document and an unknown
     // id, which is exactly why a 404 here carries no information.
@@ -165,17 +172,32 @@ export class StubSignWellHttpClient extends SignWellHttpClient {
     return Buffer.from(`%PDF-1.4 signwell stub with audit page for ${id}`, 'utf8');
   }
 
+  /*
+   * The account-wide calls, and the settings screen is their only caller. They have no
+   * organization in scope and are deliberately always healthy: the connection check is a
+   * statement about the vendor, not about one tenant, and no case asserts otherwise. The
+   * orphan scan is the same — it pages every document the account holds.
+   */
   async ping(): Promise<boolean> {
-    return this.healthy;
+    return true;
   }
 
   async hooks(): Promise<readonly SignWellHook[]> {
-    this.assertHealthy();
     return [{ id: 'stub-hook', callback_url: 'http://localhost:4000/api/webhooks/signwell' }];
   }
 
-  private assertHealthy(): void {
-    if (!this.healthy) {
+  /**
+   * Which organization a document belongs to, from the metadata the create carried. An
+   * unknown id belongs to nobody, and an unknown organization is healthy — the caller is
+   * about to get a `null` or a `not_found` for it anyway.
+   */
+  private organizationOf(id: string): string {
+    const metadata = (this.documents.get(id)?.metadata ?? {}) as Record<string, unknown>;
+    return typeof metadata.organization_id === 'string' ? metadata.organization_id : '';
+  }
+
+  private assertHealthy(organizationId: string): void {
+    if (!this.isHealthy(organizationId)) {
       throw new ProviderUnavailableError('provider_unavailable', 'stub_unhealthy');
     }
   }
