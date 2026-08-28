@@ -44,3 +44,15 @@ crash.*.log
 # Scratch notes that have held live credentials before.
 Info.txt
 docker-compose.override.yml
+
+# AI workflow runs. The summary of a run is worth keeping — it answers "how did this spec
+# become code" in the PR. The raw journal is not: blobs hold whole tool outputs and the
+# transcript snapshots hold reasoning, both measured in hundreds of megabytes per week.
+.workflow/lock
+.workflow/current
+.workflow/runs/*/events.jsonl
+.workflow/runs/*/blobs/
+.workflow/runs/*/thinking/
+.workflow/runs/*/.pending.json
+.workflow/runs/*/stages/*.log
+.workflow/runs/*/*.verdict.json.raw

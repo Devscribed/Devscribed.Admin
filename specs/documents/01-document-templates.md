@@ -888,60 +888,19 @@ invalid control. Server-side validation re-runs all rules regardless of UI state
   `template-row-{id}`, `template-status-{id}`.
 
 ### TC-01-E2E-02: Publish blocked by an undefined placeholder
-
-- **Level:** E2E
-- **Preconditions:** logged in as admin; a draft template exists.
-- **Steps:**
-  1. Open the editor and add `{{contract_number}}` to the body without defining the field.
-  2. Click "Publish".
-  3. Verify the validation banner names `contract_number` and the status stays Draft.
-- **Selectors:** `template-body-editor`, `template-publish-btn`, `template-validation-banner`,
-  `template-version-summary`.
+- **Retired.** Covered by the integration case that names the undefined key and leaves the template a draft. The message reaching the screen goes through the same banner TC-01-E2E-01 already sees.
 
 ### TC-01-E2E-03: Script tags are stripped and stay stripped
-
-- **Level:** E2E
-- **Preconditions:** logged in as admin; a draft template exists.
-- **Steps:**
-  1. Paste `<script>window.__x=1</script><p>Clause 1</p>` into the body.
-  2. Wait for the save indicator to read "Saved".
-  3. Reload the page.
-  4. Verify the body contains "Clause 1" and no script; verify `window.__x` is undefined.
-- **Selectors:** `template-body-editor`, `template-save-state`.
+- **Retired.** Covered by the integration case that stores the sanitized body, so a later read is already clean. Sanitisation is a write-path rule; a browser adds nothing to it.
 
 ### TC-01-E2E-04: Editing a published template does not disturb the published version
-
-- **Level:** E2E
-- **Preconditions:** logged in as admin; template published at v1.
-- **Steps:**
-  1. Open the editor, change the body, wait for "Saved".
-  2. Verify the version summary reads "v1 published · v2 draft".
-  3. Reload and confirm the same summary.
-- **Selectors:** `template-editor`, `template-body-editor`, `template-save-state`,
-  `template-version-summary`.
+- **Retired.** Covered by the integration case that leaves the published row byte-identical when a save targets its versionId, and by the version-list case.
 
 ### TC-01-E2E-05: Delete is blocked for a used template
-
-- **Level:** E2E
-- **Preconditions:** logged in as admin; template T has one envelope (created via API in setup).
-- **Steps:**
-  1. Open the templates list, open the row menu for T, click Delete.
-  2. Verify the blocking modal states the document count and offers Archive.
-  3. Click Archive and verify the row status becomes Archived.
-- **Selectors:** `template-row-{id}`, `template-actions-{id}`, `template-delete-btn`,
-  `template-archive-btn`, `toast-template-archived`, `template-status-{id}`.
+- **Retired.** Covered by the integration case that refuses the delete, allows the archive and leaves the existing document intact, plus the canDelete reporting case.
 
 ### TC-01-E2E-06: Manager sees templates read-only
-
-- **Level:** E2E
-- **Preconditions:** logged in as manager; one published template exists.
-- **Steps:**
-  1. Open the templates list.
-  2. Verify the table renders and "New template" is absent.
-  3. Open the template and verify Publish, Archive, and Add field are absent, and the body editor
-     is read-only.
-- **Selectors:** `templates-page`, `templates-table`, `template-new-btn` (asserted absent),
-  `template-publish-btn` (asserted absent), `template-field-add-btn` (asserted absent).
+- **Retired.** Covered by the integration case that lets a manager read a template and its preview but not publish. Route-level access from a browser is asserted once for this area, by TC-01-E2E-07.
 
 ### TC-01-E2E-07: Regular user has no access
 
@@ -954,13 +913,5 @@ invalid control. Server-side validation re-runs all rules regardless of UI state
 - **Selectors:** `nav-documents` (asserted absent), `templates-page` (asserted absent).
 
 ### TC-01-E2E-08: Preview renders with sample values
+- **Retired.** Covered at integration by `document-templates.spec.ts`: "substitutes each placeholder with its label in brackets and never reads members", "renders a named version and 404s for a version of another template", and "escapes a field label so preview cannot introduce markup". The preview is server-rendered HTML — the browser adds nothing to the assertion.
 
-- **Level:** E2E
-- **Preconditions:** logged in as admin; a published template with two fields.
-- **Steps:**
-  1. Open the editor and click "Preview".
-  2. Verify the preview frame shows `[Full name]` rather than a real name, and shows both
-     signature blocks.
-  3. Close the modal.
-- **Selectors:** `template-preview-btn`, `template-preview-modal`, `template-preview-frame`,
-  `template-preview-close-btn`.

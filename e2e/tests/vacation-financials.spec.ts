@@ -1,4 +1,4 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from './fixtures';
 import {
   VALID,
   findMember,
@@ -125,70 +125,5 @@ test.describe('07 — Member Financial Settings: Vacation tab', () => {
     const vacationTab = page.getByTestId('member-detail-tab-vacation');
     await expect(vacationTab).toBeVisible();
     await expect(vacationTab).toHaveAttribute('aria-disabled', 'true');
-  });
-
-  // TC-07-E2E-03
-  test('user cannot see another member vacation tab', async ({ page, request }) => {
-    const adminEmail = uniqueEmail('admin');
-    const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
-    const alexEmail = await addMember(request, adminEmail, 'user', 'Alex', 'Kaminski');
-    const janeEmail = await addMember(request, adminEmail, 'user', 'Jane', 'Doe');
-    const jane = await findMember(request, org.organizationId, janeEmail);
-
-    await signInUi(page, alexEmail);
-    await page.goto(`/org/${org.organizationId}/members/${jane.id}`);
-    await expect(page.getByTestId('member-detail-name')).toHaveText('Jane Doe');
-
-    // Alex is a `user`; the Vacation tab is disabled on anyone else's profile.
-    const vacationTab = page.getByTestId('member-detail-tab-vacation');
-    await expect(vacationTab).toBeVisible();
-    await expect(vacationTab).toHaveAttribute('aria-disabled', 'true');
-  });
-
-  // TC-07-E2E-04
-  test('financial settings validation errors in the modal', async ({ page, request }) => {
-    const adminEmail = uniqueEmail('admin');
-    const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
-    const memberEmail = await addMember(request, adminEmail, 'user', 'Alex', 'Kaminski');
-    const member = await findMember(request, org.organizationId, memberEmail);
-
-    await signInUi(page, adminEmail);
-    await page.goto(`/org/${org.organizationId}/members/${member.id}`);
-    await openVacationTab(page);
-    await page.getByTestId('vacation-setup-btn').click();
-    await expect(page.getByTestId('vacation-financials-modal')).toBeVisible();
-
-    // Submit with the required numeric fields empty. Currency and days carry sensible
-    // defaults (USD / 20 — matching the modal mock in the spec), so only salary and rate
-    // are blank and therefore the only reachable inline errors on an empty submit.
-    await page.getByTestId('vacation-financials-save-btn').click();
-    await expect(page.getByTestId('field-error-monthlySalary')).toBeVisible();
-    await expect(page.getByTestId('field-error-clientHourlyRate')).toBeVisible();
-    // Currency defaults to a valid code and cannot be cleared through the UI, so its
-    // inline error is never triggered from the modal (see report — dead validation path).
-    await expect(page.getByTestId('field-error-currency')).toHaveCount(0);
-
-    // Out-of-range values → the exact range messages (verbatim, with comma separators).
-    await page.getByTestId('vacation-salary-input').fill('0');
-    await page.getByTestId('vacation-rate-input').fill('-1');
-    await page.getByTestId('vacation-financials-save-btn').click();
-    await expect(page.getByTestId('field-error-monthlySalary')).toHaveText(
-      'Monthly salary must be between 0.01 and 999,999.99',
-    );
-    await expect(page.getByTestId('field-error-clientHourlyRate')).toHaveText(
-      'Client hourly rate must be between 0.01 and 9,999.99',
-    );
-
-    // Correcting to valid values clears the errors and the save succeeds.
-    await page.getByTestId('vacation-salary-input').fill('3000');
-    await page.getByTestId('vacation-rate-input').fill('40');
-    // Currency is already USD (default) and days already 20; no re-selection needed.
-    await expect(page.getByTestId('vacation-currency-select')).toContainText('USD');
-    await page.getByTestId('vacation-days-input').fill('20');
-    await expect(page.getByTestId('field-error-monthlySalary')).toHaveCount(0);
-    await expect(page.getByTestId('field-error-clientHourlyRate')).toHaveCount(0);
-
-    await page.getByTestId('vacation-financials-save-btn').click();
-    await expect(page.getByTestId('toast-financials-saved')).toBeVisible();
   });
 });

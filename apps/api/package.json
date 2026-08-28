@@ -11,7 +11,8 @@
     "prebuild": "tsc -p ../../packages/validation/tsconfig.json",
     "build": "nest build",
     "start": "node dist/main.js",
-    "test": "jest --runInBand"
+    "test": "jest --maxWorkers=4",
+    "test:serial": "jest --runInBand"
   },
   "dependencies": {
     "@aws-sdk/client-lambda": "^3.1116.0",

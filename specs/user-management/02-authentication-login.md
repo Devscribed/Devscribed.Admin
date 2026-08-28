@@ -486,44 +486,13 @@ Inline validation (shared pattern with spec 01):
 - **Selectors:** `login-forgot-link`, `forgot-form`, `forgot-email-input`, `forgot-submit-button`, `forgot-confirmation-message`, `reset-checking`, `reset-form`, `reset-password-input`, `reset-password-confirm-input`, `reset-submit-button`, `reset-success-message`, `reset-login-link`, `login-email-input`, `login-password-input`, `login-submit-button`, `login-error-message`.
 
 ### TC-02-E2E-04: Removed member login shows deactivation message
-- **Blocked:** nothing can produce a `removed` member until spec 04 ships the removal endpoint, so this case is skipped in the E2E suite with that reason recorded. The rule itself is covered at the API level by TC-02-INT-04 and TC-02-INT-04b; only the amber banner is unproven by an automated test. Un-skip when spec 04 lands.
-- **Level:** E2E
-- **Preconditions:** account `ex@acme.com` with correct password, whose membership status is `removed`.
-- **Steps:**
-  1. Open the login screen.
-  2. Enter `ex@acme.com` and the correct password.
-  3. Submit.
-- **Expected Result:**
-  1. The error area shows "Your account has been deactivated, contact your administrator" (not the generic "Invalid email or password").
-- **Selectors:** `login-form`, `login-email-input`, `login-password-input`, `login-submit-button`, `login-error-message`.
+- **Retired.** Covered by TC-02-INT-10 (a removed member is refused before the password is even checked, and an account with no active membership reads as deactivated) and TC-04-INT-02, which asserts the deactivation message itself. The message text lives in `packages/validation`.
 
 ### TC-02-E2E-05: Expired reset link shows error
-- **Level:** E2E
-- **Preconditions:** a reset token that has expired or been used.
-- **Steps:**
-  1. Navigate to `/reset-password?token={expiredOrUsedToken}`.
-  2. Navigate to `/reset-password?token=not-a-real-token`.
-  3. Navigate to `/reset-password` with no `token` parameter.
-- **Expected Result:**
-  1. In step 1 the checking indicator (`reset-checking`) appears while the validate call is in flight, then disappears.
-  2. The error area shows "This reset link is invalid or has expired".
-  3. The password fields and submit button are not visible.
-  4. A "Back to login" link is shown.
-  5. Steps 2 and 3 reach the same error state; step 3 does so without issuing a validate request.
-- **Selectors:** `reset-checking`, `reset-error-message`, `reset-login-link`, `reset-form`.
+- **Retired.** Covered by TC-02-INT-14 — one indistinguishable body for every unusable token — over the twelve token states `reset-token.spec.ts` enumerates. Which of the reset page’s two branches renders is a single conditional, and TC-02-E2E-03 walks the other one end to end.
 
 ### TC-02-E2E-06: Reset password with confirmation mismatch
-- **Level:** E2E
-- **Preconditions:** active account with a valid reset token.
-- **Steps:**
-  1. Navigate to `/reset-password?token={validToken}`.
-  2. Enter `"NewPass1"` in the password field and `"NewPass2"` in the confirm field.
-  3. Attempt to submit.
-- **Expected Result:**
-  1. An inline error appears: "Passwords do not match".
-  2. Only the confirm field is marked invalid; `field-error-password` is not shown.
-  3. The form is not submitted and the submit button remains enabled.
-- **Selectors:** `reset-form`, `reset-password-input`, `reset-password-confirm-input`, `reset-submit-button`, `field-error-password`, `field-error-password-confirm`.
+- **Retired.** Covered by TC-02-INT-13, which also asserts the token is not spent on a mismatch. Marking only the offending field is the shared form mechanism TC-01-E2E-03 proves once.
 
 ### TC-02-E2E-07: Login submit with an invalid form shows every error and focuses the first
 - **Level:** E2E
@@ -539,17 +508,7 @@ Inline validation (shared pattern with spec 01):
 - **Selectors:** `login-form`, `login-email-input`, `login-password-input`, `login-submit-button`, `field-error-email`, `field-error-password`.
 
 ### TC-02-E2E-08: Forgot-password validates the email client-side
-- **Level:** E2E
-- **Preconditions:** none.
-- **Steps:**
-  1. Open `/forgot-password` and click "Send reset link" with the field empty.
-  2. Enter `pat@acme` and click "Send reset link".
-  3. Correct the email to `pat@acme.com` and submit.
-- **Expected Result:**
-  1. After step 1 `field-error-email` shows "Email is required" and no request is sent.
-  2. After step 2 `field-error-email` shows "Enter a valid email address" and no request is sent.
-  3. Step 3 submits and the neutral confirmation message replaces the form.
-- **Selectors:** `forgot-form`, `forgot-email-input`, `forgot-submit-button`, `field-error-email`, `forgot-confirmation-message`.
+- **Retired.** Covered by TC-02-INT-11 (an empty or whitespace-only email is rejected) and TC-02-INT-05, which pins that the endpoint answers identically either way.
 
 ### TC-02-E2E-09: Password reveal toggle
 - **Level:** E2E
@@ -565,12 +524,5 @@ Inline validation (shared pattern with spec 01):
 - **Selectors:** `login-password-input`, `login-password-toggle`.
 
 ### TC-02-E2E-10: Forgot-password re-entry restores the form
-- **Level:** E2E
-- **Preconditions:** none.
-- **Steps:**
-  1. Open `/forgot-password`, enter `typo@acme.com`, and submit.
-  2. Click "Use a different email".
-- **Expected Result:**
-  1. After step 1 the confirmation message is shown and the form is gone.
-  2. After step 2 the form is back with an empty, focused email field, the confirmation message is gone, and no additional request was sent.
-- **Selectors:** `forgot-form`, `forgot-email-input`, `forgot-submit-button`, `forgot-confirmation-message`, `forgot-retry-link`.
+- **Retired.** Retired without replacement. That the forgot-password form repopulates when the screen is re-entered is a convenience, not a rule: nothing depends on it, no spec requirement is lost if it regresses, and it cost a browser to assert.
+

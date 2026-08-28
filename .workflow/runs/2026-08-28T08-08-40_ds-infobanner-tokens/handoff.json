@@ -1,0 +1,220 @@
+{
+  "spec": {
+    "path": "specs/user-management/README.md",
+    "sha256": "995df5825c22130ca661273688b81c159b7535214b443fd2eb774898ac3fc601",
+    "dependsOn": []
+  },
+  "summary": "InfoBanner is the only component in the Meridian design system that still writes raw colour: its four tone triplets hold eight literal oklch(...) values (four background, four border; the four inks already use var()). Promote all eight to tokens with byte-identical values, so spec 03 can add banners without copying literals. Three of the eight already exist exactly as raw tokens (--violet-400, --amber-300, --amber-100); five do not and are added as new scale steps. On top of those, a --banner-{tone}-{bg,border,ink} semantic layer is added, following the existing --status-active-* / --status-inactive-* triplet precedent, and the component points at that layer only. Acceptance is: no raw colour remains in '1_DS for dev/components/feedback/InfoBanner.jsx', and every rendered pixel of all four tones is unchanged in both themes -- the resolved sRGB values are listed per token in the plan and pinned by one new e2e test. The chore is a prose sentence, not a numbered spec, so requirements 1-7 below are synthesised from CLAUDE.md and the area README's Design Layer rules, and the one test case is minted by this handoff. There is no Prisma migration in this run and no database change of any kind; the diff is one CSS file, one JSX file, three design-system registry files, one README and one new e2e file.",
+  "requirements": [
+    {
+      "n": 1,
+      "text": "No raw colour value remains in 1_DS for dev/components/feedback/InfoBanner.jsx -- every colour it applies is a var(--...) reference.",
+      "source": "CLAUDE.md, Design system: 'No hardcoded colors or sizes'"
+    },
+    {
+      "n": 2,
+      "text": "The rendered result is unchanged for all four tones, in light and in dark, to the exact resolved sRGB value. Any change must be explicitly justified; none is justified here.",
+      "source": "task acceptance; specs/user-management/02-authentication-login.mock.html is the declared visual acceptance target and hardcodes the same eight literals"
+    },
+    {
+      "n": 3,
+      "text": "Values missing from the design system are added to the design system, never improvised per screen, and recorded as DS gaps.",
+      "source": "specs/user-management/README.md, Design Layer, 'DS gaps' bullet"
+    },
+    {
+      "n": 4,
+      "text": "The three token registries stay in agreement: tokens/colors.css, _adherence.oxlintrc.json (x-omelette.tokens AND tokenKinds), _ds_manifest.json (tokens[]). They enumerate exactly the same 162 names today and must enumerate exactly the same 179 after.",
+      "source": "verified by cross-checking the three lists: 162 names each, identical sets"
+    },
+    {
+      "n": 5,
+      "text": "Consumers keep importing from @ds through apps/web/src/ds.ts; no consumer file changes and no per-screen colour is introduced.",
+      "source": "CLAUDE.md, Design system; 1_DS for dev/index.js is the only public entry"
+    },
+    {
+      "n": 6,
+      "text": "No file under specs/ is edited, including the two mockups that hardcode the same literals and the README paragraph that records the chore as outstanding.",
+      "source": "scripts/static-gate.mjs rule 1, pipeline/spec-immutable"
+    },
+    {
+      "n": 7,
+      "text": "Light theme only: no [data-theme=\"dark\"] override is added for any new token.",
+      "source": "specs/user-management/README.md, Design Layer: 'Light theme only this release'"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Add the five missing raw colour scale steps to tokens/colors.css",
+      "files": ["1_DS for dev/tokens/colors.css"],
+      "requirements": [2, 3, 7],
+      "dependsOn": [],
+      "migration": {
+        "additive": true,
+        "note": "No database migration in this run. These are new custom properties inside the existing :root block -- nothing is renamed, removed or redefined, so every existing var() keeps its current value."
+      },
+      "detail": "Insert into the existing scale blocks, keeping each block's descending-lightness order. Violet block (before --violet-200 on line 32): --violet-100:oklch(0.97 0.02 292);  /* #F5F3FF */. Success block: --success-50:oklch(0.96 0.03 160);  /* #E1F8EB */ before --success-100, and --success-300:oklch(0.8 0.08 160);  /* #90CEAC */ between --success-100 and --success-500. Error block: --error-50:oklch(0.96 0.03 25);  /* #FFEBE8 */ before --error-100, and --error-300:oklch(0.8 0.1 25);  /* #F8A49D */ between --error-100 and --error-400. Copy each oklch string character for character out of InfoBanner.jsx -- do not normalise '0.8' to '0.80' and do not round. Do NOT touch the [data-theme=\"dark\"] block. A '50' step has precedent (--paper-50)."
+    },
+    {
+      "id": "T2",
+      "title": "Add the twelve --banner-{tone}-{bg,border,ink} semantic tokens",
+      "files": ["1_DS for dev/tokens/colors.css"],
+      "requirements": [2, 3, 7],
+      "dependsOn": ["T1"],
+      "migration": { "additive": true, "note": "additive custom properties only; no schema change" },
+      "detail": "Append to the '---- Semantic - light ----' block (after --status-inactive-dot, around line 92) as one commented group, following the --status-active-* / --status-inactive-* triplet precedent. Every entry is a var() alias, never a literal: --banner-info-bg:var(--violet-100); --banner-info-border:var(--violet-400); --banner-info-ink:var(--accent); --banner-warning-bg:var(--amber-100); --banner-warning-border:var(--amber-300); --banner-warning-ink:var(--amber-800); --banner-error-bg:var(--error-50); --banner-error-border:var(--error-300); --banner-error-ink:var(--error-500); --banner-success-bg:var(--success-50); --banner-success-border:var(--success-300); --banner-success-ink:var(--success-700). The three values that already had an exact token (--violet-400, --amber-300, --amber-100) are aliased, not duplicated. --banner-info-ink deliberately points at --accent rather than --violet-700, because the component uses var(--accent) today and --accent is redefined under [data-theme=\"dark\"]; aliasing --accent preserves that behaviour exactly. Do NOT add a dark override for any of the twelve -- requirement 7."
+    },
+    {
+      "id": "T3",
+      "title": "Point InfoBanner at the semantic tokens; remove the last raw colour in the design system",
+      "files": ["1_DS for dev/components/feedback/InfoBanner.jsx"],
+      "requirements": [1, 2, 5],
+      "dependsOn": ["T2"],
+      "detail": "Rewrite only the `tones` map so each of the twelve slots is var(--banner-<tone>-<slot>). Change nothing else: not the props, not InfoGlyph, not padding '12px 14px', not gap 10, not border 1px, not the radius, not the font. The px literals are deliberately out of scope -- see dsGaps. Acceptance for this task: `grep -rn \"oklch(\" \"1_DS for dev/components/\"` returns nothing. InfoBanner.d.ts and InfoBanner.prompt.md need no change -- the public API is untouched."
+    },
+    {
+      "id": "T4",
+      "title": "Register the seventeen new tokens in both registry files",
+      "files": ["1_DS for dev/_adherence.oxlintrc.json", "1_DS for dev/_ds_manifest.json"],
+      "requirements": [4],
+      "dependsOn": ["T2"],
+      "detail": "Nothing in the design system is generated from anything else -- _adherence.oxlintrc.json, _ds_manifest.json and _ds_bundle.js are three parallel exports of one upstream source, and they drift if edited singly. Verified today: x-omelette.tokens (162 entries), x-omelette.tokenKinds (162 keys) and the unique names in _ds_manifest.json tokens[] (162 unique of 181 records; the other 19 are dark-theme redefinitions) are the same 162 names. All three must read 179 after. (a) x-omelette.tokens is alphabetically sorted -- insert the 17 names in sorted position. (b) x-omelette.tokenKinds is in token-definition order -- insert each with the value \"color\", beside its scale neighbours. (c) _ds_manifest.json tokens[] is in file-then-definition order -- insert 17 records shaped exactly like the existing ones, e.g. { \"name\": \"--error-50\", \"value\": \"oklch(0.96 0.03 25)\", \"kind\": \"color\", \"definedIn\": \"tokens/colors.css\" }; for the semantic twelve the \"value\" is the var(...) string, matching how --status-active-bg records \"var(--success-100)\". Additions only: do not remove, reorder or relax any existing rule or entry -- a deletion here reads as detector weakening."
+    },
+    {
+      "id": "T5",
+      "title": "Sync the InfoBanner copy inside _ds_bundle.js so the specimen cards render from tokens too",
+      "files": ["1_DS for dev/_ds_bundle.js"],
+      "requirements": [1, 2],
+      "dependsOn": ["T3"],
+      "detail": "_ds_bundle.js carries its own inlined copy of the component (the tone literals sit at lines ~292-311) and it is what 1_DS for dev/components/feedback/feedback.card.html loads via <script src=\"../../_ds_bundle.js\">. That card links ../../styles.css, so the tokens resolve there. Apply the same tones-map change as T3. Then delete the now-wrong \"components/feedback/InfoBanner.jsx\":\"1a6fd57449af\" entry from the sourceHashes object in the @ds-bundle header comment on line 1: every hand-edited component in that bundle (Button, Input, IconButton, Eye, AuthLayout, Spinner) carries no sourceHashes entry, so removing it is the established signal for 'hand-edited, re-import on regeneration'. A stale hash is worse than no hash. Do not try to recompute it -- the algorithm is not in this repo. Scope note: the bundle is already stale for Select (the max-height/overflow-y fix in 1_DS for dev/components/forms/Select.jsx never reached it). Leave that alone; it is recorded as a risk, not widened into this run."
+    },
+    {
+      "id": "T6",
+      "title": "Pin the unchanged rendering with one e2e test (TC-DS-BANNER-E2E-01)",
+      "files": ["e2e/tests/ds-info-banner-tones.spec.ts"],
+      "requirements": [1, 2, 4],
+      "dependsOn": ["T3"],
+      "detail": "New file. The id is minted by this handoff because the chore carries no TC list. Two assertions, both against a real browser. (a) Token resolution: read getComputedStyle(document.documentElement).getPropertyValue() for all twelve --banner-* names and assert each is non-empty -- this catches the one failure a text diff hides, a token defined in a file some route never loads. (apps/web/app/layout.tsx line 4 imports '@ds/styles.css' once, so it should hold on every route; the test is what proves it.) (b) Consumption: drive a failed login so apps/web/app/login/LoginForm.tsx renders <InfoBanner tone=\"error\" data-testid=\"login-error-message\">, then assert its computed backgroundColor and borderColor match. Compare against the value read back from the resolved custom property in the same browser rather than a hand-typed rgb() string, so the test fails on a real regression and not on a colour-serialisation change. Reference sRGB values for the reviewer: error bg #FFEBE8, error border #F8A49D, info bg #F5F3FF, info border #CEC7F3, warning bg #FFEED5, warning border #E7BC82, success bg #E1F8EB, success border #90CEAC. Reuse registerOrganization / signIn / uniqueEmail from e2e/tests/helpers.ts and follow the style of e2e/tests/authentication.spec.ts. Do NOT add this to e2e/tests/regressions.spec.ts -- that file's header states it is only for bugs a person hit by hand."
+    },
+    {
+      "id": "T7",
+      "title": "Record the promotion in the design system README, and leave every spec file alone",
+      "files": ["1_DS for dev/README.md"],
+      "requirements": [3, 6],
+      "dependsOn": ["T3"],
+      "detail": "Add a bullet under 'Intentional additions' naming the five new scale steps and the twelve --banner-* semantic tokens, stating that values were preserved exactly and that _ds_bundle.js was hand-edited to match -- same phrasing as the existing AuthLayout / Spinner bullets. HARD CONSTRAINT: do not edit specs/user-management/README.md, any specs/user-management/*.design.md, specs/user-management/01-organization-creation.mock.html (line 92) or specs/user-management/02-authentication-login.mock.html (lines 102-105), even though all of them record this chore as outstanding and the two mockups hardcode the same literals. scripts/static-gate.mjs rule 1 blocks any diff under specs/ and halts the run. The mockups stay correct with no edit precisely because the values do not change. A human closes the spec-side paragraphs after merge."
+    }
+  ],
+  "reuse": [
+    {
+      "what": "three of the eight literals already exist as exact tokens -- --violet-400 = oklch(0.85 0.06 292) = the info border, --amber-300 = oklch(0.82 0.09 74) = the warning border, --amber-100 = oklch(0.96 0.04 74) = the warning background. Alias these; do not add duplicates.",
+      "where": "1_DS for dev/tokens/colors.css lines 33, 42, 41"
+    },
+    {
+      "what": "the semantic tone-triplet naming precedent -- --status-active-bg / -ink / -dot and --status-inactive-*, each a var() alias of a raw scale step. --banner-{tone}-{bg,border,ink} copies this shape exactly.",
+      "where": "1_DS for dev/tokens/colors.css lines 87-92"
+    },
+    {
+      "what": "precedent for a semantic token holding a literal instead of an alias (--tracker-bg), the fallback shape if a reviewer rejects adding raw scale steps. Not the chosen route, but it still satisfies requirement 1.",
+      "where": "1_DS for dev/tokens/colors.css line 84"
+    },
+    {
+      "what": "the exact record shape to copy for the manifest entries, including how an aliasing token stores its value as the literal string \"var(--success-100)\"",
+      "where": "1_DS for dev/_ds_manifest.json, the tokens[] records for --violet-400 and --status-active-bg"
+    },
+    {
+      "what": "the single client barrel every consumer already imports through, which is why zero consumer files change",
+      "where": "apps/web/src/ds.ts"
+    },
+    {
+      "what": "an already-rendered error-tone InfoBanner with a stable data-testid, so the e2e guard needs no fixture page",
+      "where": "apps/web/app/login/LoginForm.tsx lines 128-137, data-testid=\"login-error-message\""
+    },
+    {
+      "what": "registerOrganization / signIn / uniqueEmail helpers and the failed-login flow the new e2e test drives",
+      "where": "e2e/tests/helpers.ts and e2e/tests/authentication.spec.ts"
+    },
+    {
+      "what": "the byte-level acceptance reference -- the four triplets written out verbatim in the mockup that spec 02 declares its visual acceptance target",
+      "where": "specs/user-management/02-authentication-login.mock.html lines 102-109"
+    },
+    {
+      "what": "the token CSS is already loaded on every route, so no import wiring is needed",
+      "where": "apps/web/app/layout.tsx line 4, import '@ds/styles.css'"
+    },
+    {
+      "what": "the specimen page that renders InfoBanner out of the bundle and links styles.css -- the reason T5 exists",
+      "where": "1_DS for dev/components/feedback/feedback.card.html lines 3, 9, 28-31"
+    },
+    {
+      "what": "the toast layer already renders InfoBanner in two tones through the DS barrel; it needs no change and is the second consumer that benefits from named per-tone tokens",
+      "where": "apps/web/src/toast.tsx"
+    }
+  ],
+  "buildFromZero": [
+    "Five raw colour scale steps with no existing equivalent: --violet-100 (0.97 0.02 292), --error-50 (0.96 0.03 25), --error-300 (0.8 0.1 25), --success-50 (0.96 0.03 160), --success-300 (0.8 0.08 160). Two of them (--error-300, --success-300) have no near neighbour at all; the other three sit 6-12 sRGB units from the nearest existing step, which is exactly why they cannot be folded into it.",
+    "The entire --banner-* semantic namespace -- twelve tokens. No banner-scoped token exists in the design system today.",
+    "Seventeen new entries in each of three registries: x-omelette.tokens (alphabetical), x-omelette.tokenKinds (definition order) and _ds_manifest.json tokens[] (file-then-definition order). 51 insertions in total, and all three must end at the same 179 names.",
+    "e2e/tests/ds-info-banner-tones.spec.ts -- no test anywhere in the repo asserts a computed colour or a resolved CSS custom property today, so there is no in-repo pattern for the assertion itself.",
+    "A README bullet under 'Intentional additions' recording the promotion.",
+    "Nothing else. No component API change, no consumer change, no validation message, no API route, no Prisma migration, and no authorization code -- normalizeRole() and org scoping are not touched by this run."
+  ],
+  "testCases": {
+    "unit": [],
+    "int": [],
+    "e2e": ["TC-DS-BANNER-E2E-01"]
+  },
+  "testIds": ["login-error-message"],
+  "dsGaps": [
+    {
+      "missing": "Dark-theme banner tones. InfoBanner renders light-tinted backgrounds under [data-theme=\"dark\"] today, and the promoted tokens keep that behaviour exactly because no dark override is added.",
+      "resolution": "left as-is on purpose -- 'Light theme only this release' (specs/user-management/README.md, Design Layer). A dark banner palette is a design decision, not a refactor. When it lands it belongs in the [data-theme=\"dark\"] block of 1_DS for dev/tokens/colors.css as overrides of the twelve --banner-* tokens, which is precisely what this semantic layer makes possible in one place."
+    },
+    {
+      "missing": "--error-50 (#FFEBE8) and --error-100 (#FFE5E1) are 6 sRGB units apart; --success-50 (#E1F8EB) and --success-100 (#D9F7E5) are 8 apart. The palette gains two steps a designer may consider redundant.",
+      "resolution": "kept, because collapsing them changes what renders and desyncs the component from specs/user-management/02-authentication-login.mock.html, the declared visual acceptance target, which this run cannot edit. Raised as a non-blocking note so a designer ratifies or collapses them deliberately, in the spec, later."
+    },
+    {
+      "missing": "1_DS for dev/foundations/colors-semantic.card.html does not enumerate the five new scale steps; its header declares viewport=\"700x200\" and the lower grid is fixed at six columns, so adding swatches needs the card re-laid out.",
+      "resolution": "not addressed in this run -- recorded so the next person editing that card adds them rather than rediscovering the omission."
+    },
+    {
+      "missing": "InfoBanner still applies raw px: padding '12px 14px', gap 10, border 1px -- even though --sp-6 (12px), --sp-7 (14px), --sp-5 (10px) and --border-hair (1px) match exactly, and the adherence config's own /\\b\\d+px\\b/ selector flags the padding string.",
+      "resolution": "deliberately out of scope. Unlike colour -- where InfoBanner is the ONLY component in the design system carrying a literal -- px literals are in Button, IconButton, Table, Badge, Checkbox, Input, Radio, SearchField and Select too. Fixing one component's spacing makes it the outlier and widens a colour diff into a spacing diff. It is a separate, system-wide chore."
+    },
+    {
+      "missing": "apps/web/app/org/[orgId]/members/[memberId]/AvatarInitials.tsx builds oklch(0.9 0.07 <hue>) and oklch(0.42 0.14 <hue>) from a computed hue -- the last raw-colour site in application code after this run.",
+      "resolution": "out of scope; a generated per-initial avatar palette cannot be expressed as a fixed token and needs a design decision (a fixed set of avatar tokens, or a documented exception). Recorded, not improvised."
+    }
+  ],
+  "risks": [
+    {
+      "risk": "The implementer 'finishes the job' by ticking the chore off in specs/user-management/README.md, or by updating the two mockups that hold the same literals. scripts/static-gate.mjs rule 1 fires on any diff under specs/ and the run halts.",
+      "mitigation": "T7 states the constraint explicitly and names the four files. The mockups stay correct with no edit because the values do not change -- that is a consequence of requirement 2, not an oversight."
+    },
+    {
+      "risk": "Editing 1_DS for dev/_adherence.oxlintrc.json looks like weakening the checks that judge the change.",
+      "mitigation": "T4 is insertions only, into two allowlists. No rule, selector, message or existing entry may be removed, reordered or loosened. The counter-argument if flagged: the token list is a registry, not a rule, and the diff is pure addition."
+    },
+    {
+      "risk": "Snapping a background to its nearest existing token instead of adding a step -- --violet-200 for info, --error-100 for error, --success-100 for success. It looks like the tidier choice and silently shifts the render by 6-12 sRGB units per channel.",
+      "mitigation": "the exact oklch strings and their sRGB equivalents are written into T1 and T6, and TC-DS-BANNER-E2E-01 compares the rendered banner against the resolved token rather than a hand-typed constant."
+    },
+    {
+      "risk": "The three registries drift because only one is updated. Nothing enforces the invariant: oxlint is not a dependency of any workspace and package.json has no lint script, so _adherence.oxlintrc.json is documentation today, not a gate.",
+      "mitigation": "T4 names all three and the expected count (162 -> 179 in each). A reviewer checks it with one command per file; the counts are the check."
+    },
+    {
+      "risk": "_ds_bundle.js drifts further from source. It is already stale for Select -- the max-height/overflow-y fix that specs/user-management/README.md records as 'fixed' never reached the bundle.",
+      "mitigation": "T5 syncs InfoBanner only and drops its stale sourceHashes entry. The Select drift is recorded here for a human and deliberately not folded into this run."
+    },
+    {
+      "risk": "The e2e guard hardcodes an rgb() string and then fails on a browser colour-serialisation change rather than on a real regression.",
+      "mitigation": "T6 requires the expected value be read back from the resolved custom property in the same browser, so the assertion is 'the component uses the token' plus 'the token is defined' -- which is what actually needs pinning."
+    },
+    {
+      "risk": "A reviewer reads twelve new semantic tokens as over-engineering for one component.",
+      "mitigation": "the chore's stated purpose is 'before spec 03 adds more banners'. Spec 03 uses all four tones (invite-error-message, accept-invite-error, accept-org-switch-warning, toast-invite-sent), and apps/web/src/toast.tsx already renders InfoBanner in two tones. A per-tone semantic name is what those consumers reference; raw steps alone would leave each caller picking scale numbers."
+    }
+  ]
+}

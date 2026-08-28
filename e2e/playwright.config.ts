@@ -1,3 +1,4 @@
+import { cpus } from 'node:os';
 import { defineConfig, devices } from '@playwright/test';
 
 /**
@@ -29,14 +30,28 @@ export default defineConfig({
    * landed: ~124 cases at one worker is twelve minutes, which is long enough that people
    * stop running it before pushing, which is the only way a suite really fails.
    *
-   * Four locally. Two on CI, where the runner has two cores and more workers than cores
-   * makes a browser-driving suite slower, not faster — and where a flake costs a rerun of
-   * everything.
+   * The worker count is sized from the machine, not from CI. Those were one setting until
+   * the pipeline started running the suite with `CI=1` — which it must, so that
+   * `reuseExistingServer` stays off and a trace is produced — and thereby inherited the
+   * two-worker cap written for a two-core GitHub runner. On a fourteen-core workstation
+   * that turned a 135s suite into 282s.
+   *
+   * Measured on this suite, wall time against workers: 2 → 282s, 6 → 205s with no flakes,
+   * 10 → 135s with three, 20 → 213s with about thirty retries. Fastest is not the target,
+   * though. At the high end the machine is saturated and unusable for whoever owns it, the
+   * flake count climbs, and under enough contention the API itself starts answering 500 —
+   * which the page-error guard, correctly, turns into failures.
+   *
+   * So the cap is a quarter of the logical cores, bounded at six: five here, comfortably
+   * under a minute for the suite, and eleven cores still free. Raise it for a one-off with
+   * PW_WORKERS. CI keeps its two, because a two-core runner has nothing to give.
    */
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  workers: process.env.CI ? 2 : 4,
+  workers: process.env.PW_WORKERS
+    ? Number(process.env.PW_WORKERS)
+    : Math.max(2, Math.min(6, Math.floor(cpus().length / 4))),
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list']],
   use: {
     baseURL: WEB,

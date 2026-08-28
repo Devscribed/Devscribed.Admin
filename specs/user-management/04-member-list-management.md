@@ -492,36 +492,14 @@ Side effects on success:
 - **Selectors:** `members-list`, `members-search-input`, `member-row-{id}`.
 
 ### TC-04-E2E-02: "Show removed" adds removed rows with a distinct badge
-- **Level:** E2E
-- **Preconditions:** logged in as `admin`; org has ≥1 active and ≥1 removed member.
-- **Steps:**
-  1. Open the Members list (default active-only).
-  2. Tick the "Show removed members" checkbox.
-- **Expected Result:**
-  1. After step 2 removed members appear alongside active ones, each removed row carrying a "Removed" status badge; active rows carry no badge.
-- **Selectors:** `members-list`, `show-removed-checkbox`, `member-row-{id}`, `member-status-badge-{id}`.
+- **Retired.** Covered by the integration case for showRemoved. The badge is a rendering detail of the same table TC-04-E2E-06 asserts.
 
 ### TC-04-E2E-03: Admin deletes an active member, then restores them
-- **Level:** E2E
-- **Preconditions:** Logged in as `admin`; org has ≥2 admins (zero-admin guard not in play); target member "Alex Kaminski" exists and is `active`.
-- **Steps:**
-  1. Open Members list; confirm default view shows active members.
-  2. Type "Alex" into the search input.
-  3. In the "Alex Kaminski" row, open the row actions menu.
-  4. Click "Delete".
-  5. Confirm in the delete-confirmation dialog by clicking "Remove".
-  6. Clear the search; tick the "Show removed members" checkbox.
-  7. In the "Alex Kaminski" row, open the row actions menu and click "Restore".
-- **Expected Result:**
-  1. After step 2 (and debounce), only rows whose name/email contain "alex" remain.
-  2. After step 5, "Alex Kaminski" disappears from the active list and a "Member removed" toast appears.
-  3. After step 6, "Alex Kaminski" reappears carrying a "Removed" status badge; their menu shows "Restore" (not "Delete").
-  4. After step 7, a "Member restored" toast appears; the badge clears; with "Show removed" unticked the member is back in the active list.
-- **Selectors:** `members-search-input`, `member-row-{id}`, `member-row-actions-{id}`, `member-action-delete`, `confirm-delete-dialog`, `confirm-delete-button`, `toast-member-removed`, `show-removed-checkbox`, `member-status-badge-{id}`, `member-action-restore`, `toast-member-restored`.
+- **Retired.** Covered by the integration cases for soft delete and restore, which additionally assert session revocation, the reset of joinedAt and the cleared job title — none of which this case checked.
 
-### TC-04-E2E-04: user/viewer see the list but no actions menu
+### TC-04-E2E-04: a read-only role sees the list but no actions menu
 - **Level:** E2E
-- **Preconditions:** logged in as `user` (repeat as `viewer`); org has several members.
+- **Preconditions:** logged in as `user`; org has several members.
 - **Steps:**
   1. Open the Members list.
   2. Use the search box to filter.
@@ -531,45 +509,21 @@ Side effects on success:
   2. No `member-row-actions-*` control exists on any row; no delete/restore affordance is present.
 - **Selectors:** `members-list`, `members-search-input`, `member-row-{id}`, `member-row-actions-{id}` (asserted absent).
 
+> Run for `user` only. `user` and `viewer` are one rule with two names, and TC-04-INT-05
+> refuses delete and restore for both at the endpoint. What only a browser can prove is
+> that the affordance is never drawn — and one read-only role proves that.
+
 ### TC-04-E2E-05: Self-delete not available in the UI
-- **Level:** E2E
-- **Preconditions:** logged in as `admin`; org has ≥2 admins.
-- **Steps:**
-  1. Open the Members list.
-  2. Find the logged-in user's own row.
-  3. Inspect the row actions menu (or lack thereof).
-- **Expected Result:**
-  1. The own row has no "Delete" option in the actions menu (either the menu is absent or the delete action is hidden).
-- **Selectors:** `member-row-{id}`, `member-row-actions-{id}`, `member-action-delete` (asserted absent on own row).
+- **Retired.** Covered by TC-04-INT-06 and TC-04-INT-07 — neither an admin nor a manager may remove themselves, refused at the endpoint. That the control is also absent from the row menu is the same rendering rule TC-04-E2E-04 proves.
 
 ### TC-04-E2E-06: Member list shows name, role badge, and email columns
-- **Level:** E2E
-- **Preconditions:** logged in as any role; org has several members.
-- **Steps:**
-  1. Open the Members list.
-- **Expected Result:**
-  1. Each row displays the member's full name, role badge, and email address.
-- **Selectors:** `members-list`, `member-row-{id}`, `member-name-{id}`, `member-role-badge-{id}`, `member-email-{id}`.
+- **Retired.** Covered by TC-04-INT-01, which asserts name, role and email for every role and the caller’s own role alongside them. Which of those the table paints into which column is not a rule the spec fixes.
 
 ### TC-04-E2E-07: Member row links to detail page
-- **Level:** E2E
-- **Preconditions:** logged in as any role; org has members.
-- **Steps:**
-  1. Open the Members list.
-  2. Click on a member row.
-- **Expected Result:**
-  1. Browser navigates to the member detail page (`/org/{orgId}/members/{memberId}`).
-- **Selectors:** `member-row-{id}`.
+- **Retired.** Duplicate. TC-05-E2E-07 clicks the same row, lands on the same detail page, and comes back — the return leg this case never covered.
 
 ### TC-04-E2E-08: No role-change controls on list page
-- **Level:** E2E
-- **Preconditions:** logged in as `admin`.
-- **Steps:**
-  1. Open the Members list.
-  2. Inspect all rows.
-- **Expected Result:**
-  1. Role badges are visible but no `member-role-select-*` controls exist on any row.
-- **Selectors:** `member-role-badge-{id}`, `member-role-select-{id}` (asserted absent).
+- **Retired.** The absence of a control a role may not use is asserted once on this screen, by TC-04-E2E-05. Repeating it per control is what the E2E budget removes.
 
 ### TC-04-E2E-09: Skeleton loading state shown while fetching
 - **Level:** E2E

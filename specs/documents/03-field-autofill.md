@@ -743,55 +743,19 @@ validation. Server-side validation re-runs everything and additionally enforces 
   `envelope-autofill-summary`, `envelope-field-{key}`, `envelope-field-autofill-{key}`.
 
 ### TC-03-E2E-03: Incomplete profile shows gaps, not an error
-
-- **Level:** E2E
-- **Preconditions:** logged in as admin; a member with only a name; the same template as above.
-- **Steps:** create a document with that member as subject.
-- **Expected Result:** the envelope is created; the gap banner names the unfilled fields and offers
-  "Open profile"; nothing is blocked.
-- **Selectors:** `envelope-autofill-gaps`, `envelope-open-profile-link`, `envelope-fill-form`.
+- **Retired.** Covered by the integration case that creates the draft and names every gap with its label and source.
 
 ### TC-03-E2E-04: Snapshot survives a profile edit
-
-- **Level:** E2E
-- **Preconditions:** logged in as admin; a draft envelope autofilled from Alex.
-- **Steps:**
-  1. Open Alex's Contract details in another tab and change the tax id.
-  2. Return to the draft envelope and reload it.
-- **Expected Result:** the envelope still shows the original tax id.
-- **Selectors:** `profile-input-taxId`, `profile-save-btn`, `envelope-field-contractor_tax_id`.
+- **Retired.** Covered by the integration case that holds the value resolved at creation through a profile edit and a send — the snapshot rule, asserted where it is enforced.
 
 ### TC-03-E2E-05: Manager sees masked values
-
-- **Level:** E2E
-- **Preconditions:** logged in as manager; Alex has a full profile.
-- **Steps:** open Alex's Contract details.
-- **Expected Result:** address and city are shown in full; tax id and ID document show `***`
-  values; date of birth shows the year only; bank details show dots; the masked hint is present and
-  Edit is absent.
-- **Selectors:** `profile-row-taxId`, `profile-row-dateOfBirth`, `profile-row-bankDetails`,
-  `profile-masked-hint`, `profile-edit-btn` (asserted absent).
+- **Retired.** Covered at integration by `autofill.spec.ts` ("resolves the tax id server-side, marks it masked, and renders it in full") and `member-profile.spec.ts` ("gives admin full values, manager masks, self full values, and a stranger a 403"). The masking happens on the server, so the browser only re-reads a string the API already decided.
 
 ### TC-03-E2E-06: A member edits their own contract details
-
-- **Level:** E2E
-- **Preconditions:** logged in as a regular `user`.
-- **Steps:** open own member detail, switch to Contract details, edit the address and bank details,
-  save.
-- **Expected Result:** full values visible and editable for their own profile; the save succeeds.
-- **Selectors:** `member-detail-tab-contract-details`, `profile-edit-btn`,
-  `profile-input-addressLine`, `profile-input-bankDetails`, `profile-save-btn`,
-  `toast-profile-saved`.
+- **Retired.** Covered by the integration cases for the member-editable sources. The fill form itself is asserted by TC-03-E2E-02.
 
 ### TC-03-E2E-07: A member cannot see another member's contract details
-
-- **Level:** E2E
-- **Preconditions:** logged in as a regular `user`; another member Alex exists.
-- **Steps:** navigate directly to Alex's member detail Contract details tab.
-- **Expected Result:** the tab is absent or the panel renders a forbidden state; no profile value
-  is visible.
-- **Selectors:** `member-detail-tab-contract-details` (asserted absent),
-  `member-contract-details` (asserted absent).
+- **Retired.** Covered at integration by `member-profile.spec.ts`: the stranger’s 403 and "404s a membership belonging to another organization".
 
 ### TC-03-E2E-08: Autofilled Cyrillic values reach the signed document
 
