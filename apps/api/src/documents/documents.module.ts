@@ -6,6 +6,7 @@ import { EnvelopeCompletionService } from './envelope-completion';
 import { EnvelopeEventsService } from './envelope-events.service';
 import { EnvelopesController } from './envelopes.controller';
 import { EnvelopesService } from './envelopes.service';
+import { ProviderReconcilerService } from './provider-reconciler.service';
 
 /**
  * The first real feature module in this codebase — a deliberate structural precedent,
@@ -32,7 +33,16 @@ import { EnvelopesService } from './envelopes.service';
     EnvelopesService,
     EnvelopeEventsService,
     EnvelopeCompletionService,
+    ProviderReconcilerService,
   ],
-  exports: [EnvelopeEventsService, EnvelopesService, EnvelopeCompletionService],
+  exports: [
+    EnvelopeEventsService,
+    EnvelopesService,
+    EnvelopeCompletionService,
+    // Spec 04 — the second writer of the event chain. Exported for the same reason
+    // `EnvelopeEventsService` is: the two session-less modules converge through this one
+    // rather than through a copy of it.
+    ProviderReconcilerService,
+  ],
 })
 export class DocumentsModule {}

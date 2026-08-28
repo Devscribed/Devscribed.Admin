@@ -401,9 +401,14 @@ describe('TC-02-UNIT-02: State machine transitions', () => {
     }
   });
 
-  it('carries the fifteen event types of the audit trail', () => {
-    expect(ENVELOPE_EVENT_TYPES).toHaveLength(15);
-    expect(new Set(ENVELOPE_EVENT_TYPES).size).toBe(15);
+  it('carries the seventeen event types of the audit trail', () => {
+    // Fifteen from spec 02, plus the two the spec 04 Data Model adds for the reconciler.
+    // Adding values to the enum is additive: existing rows are untouched, and every one of
+    // the original fifteen is still here.
+    expect(ENVELOPE_EVENT_TYPES).toHaveLength(17);
+    expect(new Set(ENVELOPE_EVENT_TYPES).size).toBe(17);
+    expect(ENVELOPE_EVENT_TYPES).toContain('provider_synced');
+    expect(ENVELOPE_EVENT_TYPES).toContain('provider_error');
   });
 });
 

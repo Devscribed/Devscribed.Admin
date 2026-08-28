@@ -29,3 +29,21 @@ export function signingTokenTtlDays(): number {
   const configured = Number(process.env.SIGNING_TOKEN_TTL_DAYS);
   return Number.isFinite(configured) && configured > 0 ? configured : 14;
 }
+
+/**
+ * The `/sign/{token}` link an invitation carries.
+ *
+ * It used to be built inside the old port's `issueInvitation`, which — besides minting a
+ * token — is all that method ever did. Spec 04 removed the method, because a third-party
+ * provider mints nothing of ours, so the three call sites that used to get a link from it
+ * (the send, the next signer's turn, and the sweep's reminder) build it here instead. It
+ * lives beside the token rather than in a service so that every caller, including the
+ * reconciler, gets the same link without importing a service to ask for one.
+ *
+ * The signing page is a **web** route, not an API route — `/sign/{token}` is the first
+ * route in the application with no session at all.
+ */
+export function signingPageUrl(token: string): string {
+  const base = (process.env.APP_PUBLIC_URL || 'http://localhost:3000').replace(/\/+$/, '');
+  return `${base}/sign/${token}`;
+}

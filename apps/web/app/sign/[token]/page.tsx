@@ -4,10 +4,11 @@ import { use, useCallback, useEffect, useRef, useState, type ReactNode } from 'r
 import {
   ENVELOPE_LIMITS,
   ENVELOPE_MESSAGES,
+  SIGNING_PROVIDER_MESSAGES,
   validateReason,
   validateSignature,
 } from '@devscribed/validation';
-import { Button, Card, Checkbox, Input, InfoBanner, Modal, Spinner } from '@/ds';
+import { Badge, Button, Card, Checkbox, Input, InfoBanner, Modal, Spinner } from '@/ds';
 import { apiRequest, failureMessage, type ApiFailure } from '@/documents/api';
 import { DocumentFrame } from '@/documents/DocumentFrame';
 import {
@@ -23,6 +24,7 @@ import {
 import { FieldInput, validateFieldValues } from '@/documents/FieldInput';
 import { SignaturePad, type SignatureMode } from '@/documents/SignaturePad';
 import { ToastProvider, useToast } from '@/documents/toast';
+import { EmbeddedSigning } from './EmbeddedSigning';
 import { SigningLayout } from './SigningLayout';
 
 /** The documented failure bodies carry a little more than the shared shape names. */
@@ -48,6 +50,13 @@ function SigningScreen({ token }: { token: string }) {
   const [payload, setPayload] = useState<SigningPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [rateLimited, setRateLimited] = useState(false);
+  /**
+   * Spec 04. Distinct from every other failure on purpose: the signer's link is still
+   * good and the token was not consumed, so the page says so and offers a retry instead
+   * of the "not valid" panel, which would be both unhelpful and untrue.
+   */
+  const [providerDown, setProviderDown] = useState(false);
+  const [embeddedDone, setEmbeddedDone] = useState(false);
 
   const [values, setValues] = useState<Record<string, string>>({});
   const [consent, setConsent] = useState(false);
@@ -72,6 +81,7 @@ function SigningScreen({ token }: { token: string }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const load = useCallback(async (): Promise<void> => {
+    setProviderDown(false);
     const result = await apiRequest<SigningPayload>(signingUrl(token));
     setLoading(false);
 
@@ -84,6 +94,11 @@ function SigningScreen({ token }: { token: string }) {
     const failure = result.failure as SigningFailure;
     if (failure.status === 429) {
       setRateLimited(true);
+      return;
+    }
+    if (failure.status === 503 || failure.error === 'provider_unavailable') {
+      // Nothing has been lost: the link still works and nothing was consumed.
+      setProviderDown(true);
       return;
     }
     // Every other failure becomes a panel. Note what is *not* branched on: a 404 carries
@@ -117,6 +132,25 @@ function SigningScreen({ token }: { token: string }) {
         >
           <Spinner size={28} />
         </div>
+      </SigningLayout>
+    );
+  }
+
+  // Spec 04 — the provider could not be reached. The shell, the retry card, and nothing
+  // else: we do not know which envelope this is, so the page names no organization.
+  if (providerDown) {
+    return (
+      <SigningLayout>
+        <EmbeddedSigning
+          url={null}
+          error
+          loading={false}
+          onRetry={() => {
+            setLoading(true);
+            void load();
+          }}
+          onCompleted={() => undefined}
+        />
       </SigningLayout>
     );
   }
@@ -414,6 +448,94 @@ function SigningScreen({ token }: { token: string }) {
               </Panel>
             </>
           )}
+        </div>
+      </SigningLayout>
+    );
+  }
+
+  /* ---------------- the embedded surface ---------------- */
+
+  /**
+   * Requirement 15 — our shell, our token, our access rules; SignWell owns only the
+   * widget. The signer never leaves our origin, so the invitation, the link's lifetime,
+   * and every access decision stay ours.
+   *
+   * The branch is on the **surface the server decided**, not on a provider key: the
+   * client is told which body to render and never works it out for itself.
+   */
+  if (payload?.surface === 'embedded') {
+    return (
+      <SigningLayout organizationName={envelope?.senderOrganizationName}>
+        <div data-testid="signing-page" style={{ display: 'grid', gap: 'var(--sp-10)' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 'var(--sp-6)',
+              flexWrap: 'wrap',
+            }}
+          >
+            <h1
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontWeight: 600,
+                fontSize: 'var(--fs-27)',
+                letterSpacing: '-.6px',
+                margin: 0,
+                color: 'var(--text)',
+              }}
+            >
+              {envelope?.title}
+            </h1>
+            {/* A test-mode document has no legal weight and must never be mistaken for
+                one that does, so the badge carries its own words rather than a colour. */}
+            {payload?.testMode && (
+              <Badge tone="warning" data-testid="sign-test-badge">
+                {SIGNING_PROVIDER_MESSAGES.signing.testModeBanner}
+              </Badge>
+            )}
+          </div>
+
+          {embeddedDone ? (
+            // Edge case 19 — our own confirmation, shown because a frame said so. The
+            // message is never written anywhere; the envelope converges on the next read
+            // or sweep whether or not it ever arrived.
+            <Panel testId="signing-state-signed" title="Thank you — your signature has been sent.">
+              <p style={PARAGRAPH}>
+                A copy will be emailed to you once every signer has signed.
+              </p>
+            </Panel>
+          ) : (
+            <EmbeddedSigning
+              url={payload?.embeddedSigningUrl ?? null}
+              error={false}
+              loading={!payload?.embeddedSigningUrl}
+              onRetry={() => {
+                setLoading(true);
+                void load();
+              }}
+              onCompleted={() => setEmbeddedDone(true)}
+            />
+          )}
+
+          <footer
+            style={{
+              display: 'flex',
+              gap: 'var(--sp-8)',
+              flexWrap: 'wrap',
+              fontSize: 'var(--fs-13)',
+              color: 'var(--text-muted)',
+            }}
+          >
+            <span data-testid="sign-provider-attribution">
+              {SIGNING_PROVIDER_MESSAGES.signing.attribution(
+                payload?.providerName ?? '',
+                envelope?.senderOrganizationName ?? '',
+              )}
+            </span>
+            <span>Link expires {formatLongDate(envelope?.expiresAt)}</span>
+          </footer>
         </div>
       </SigningLayout>
     );

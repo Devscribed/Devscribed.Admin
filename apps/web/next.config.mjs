@@ -20,6 +20,24 @@ const designSystem = path.resolve(here, '../../1_DS for dev');
  */
 const apiOrigin = process.env.API_ORIGIN || 'http://localhost:4000';
 
+/**
+ * The origin the embedded signing widget is served from (documents spec 04).
+ *
+ * **Read at build time, for exactly the reason `API_ORIGIN` above is.** `headers()` is
+ * resolved during `next build` and written into `.next/routes-manifest.json` just like
+ * `rewrites()`, so setting this on a running container does nothing at all, silently, and
+ * the browser goes on refusing the frame.
+ *
+ * It exists because `/sign/*` carries a policy whose `frame-src` is `'self'` — see
+ * `headers()` below — and a `<iframe src="https://www.signwell.com/…">` on that page is
+ * refused outright without it. Nothing else in the policy changes: `script-src` in
+ * particular is **not** widened, because no vendor script is loaded. The widget is hosted
+ * in our own frame with our own origin-checked `postMessage` listener, precisely so that
+ * the one page in the product that renders author-controlled HTML without a session never
+ * executes third-party code.
+ */
+const embedOrigin = process.env.SIGNING_EMBED_ORIGIN || 'https://www.signwell.com';
+
 /** @type {import('next').NextConfig} */
 export default {
   /**
@@ -91,7 +109,8 @@ export default {
               "img-src 'self' data: blob:",
               "font-src 'self' data:",
               "connect-src 'self'",
-              "frame-src 'self'",
+              // Widened by exactly one origin, from the build-time variable above.
+              `frame-src 'self' ${embedOrigin}`,
               "object-src 'none'",
               "base-uri 'none'",
               "form-action 'self'",

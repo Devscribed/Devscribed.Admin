@@ -2492,3 +2492,4 @@ export * from './roles';
 export * from './documents';
 export * from './envelopes';
 export * from './autofill';
+export * from './signing-providers';

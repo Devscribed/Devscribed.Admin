@@ -1,12 +1,18 @@
 import { effectiveStatus } from '@devscribed/validation';
 import type { EnvelopeStatus as EnvelopeStatusName } from '@devscribed/validation';
 import { Injectable, Logger } from '@nestjs/common';
-import { EnvelopeStatus, SignerStatus } from '@prisma/client';
+import { EnvelopeStatus, PdfStatus, SignerStatus } from '@prisma/client';
+import { EnvelopeCompletionService } from '../documents/envelope-completion';
 import { EnvelopeEventsService } from '../documents/envelope-events.service';
 import { currentSignerOf } from '../documents/envelopes.service';
+import { ProviderReconcilerService } from '../documents/provider-reconciler.service';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma.service';
-import { SignatureProvider } from '../signature/signature-provider';
+import {
+  generateSigningToken,
+  signingPageUrl,
+  signingTokenTtlDays,
+} from '../signature/signing-token';
 
 /**
  * The hourly sweep (requirement 34).
@@ -26,14 +32,62 @@ export class EnvelopeSweepService {
     private readonly prisma: PrismaService,
     private readonly events: EnvelopeEventsService,
     private readonly mail: MailService,
-    private readonly signature: SignatureProvider,
+    private readonly reconciler: ProviderReconcilerService,
+    private readonly completion: EnvelopeCompletionService,
   ) {}
 
-  async run(now = new Date()): Promise<{ expired: number; remindersSent: number }> {
+  async run(now = new Date()): Promise<{
+    expired: number;
+    remindersSent: number;
+    reconciled: number;
+    reconcileFailures: number;
+    completed: number;
+  }> {
+    const reconciled = await this.reconciler.sweepStale(now);
     return {
       expired: await this.materializeExpired(now),
       remindersSent: await this.sendReminders(now),
+      // Spec 04 requirement 24b — the third pass. The scheduler materializes what is
+      // already true; it is not the source of truth, which is why a stand with no
+      // reachable webhook address is slower rather than wrong.
+      reconciled: reconciled.reconciled,
+      reconcileFailures: reconciled.failed,
+      // Requirement 27's retry: a completed document whose bytes we could not download
+      // leaves `pdfStatus = pending` with `providerError` set, and is picked up here.
+      completed: await this.retryProviderDownloads(),
     };
+  }
+
+  /**
+   * Envelopes the provider has completed but whose PDF is not ours yet. Invariant 10
+   * means such an envelope is deliberately **not** marked complete, so it is found by its
+   * pending PDF rather than by its status.
+   */
+  private async retryProviderDownloads(): Promise<number> {
+    const due = await this.prisma.envelope.findMany({
+      where: {
+        status: { in: [EnvelopeStatus.sent, EnvelopeStatus.partially_signed] },
+        pdfStatus: PdfStatus.pending,
+        providerRef: { not: '' },
+        signedPdfKey: null,
+      },
+      select: { id: true },
+    });
+
+    let completed = 0;
+    for (const envelope of due) {
+      try {
+        const outcome = await this.completion.completeFromProvider(envelope.id);
+        if (outcome.completed) completed += 1;
+      } catch (error) {
+        this.log.error(
+          `Completing envelope ${envelope.id} from its provider failed: ${
+            error instanceof Error ? error.message : error
+          }`,
+        );
+      }
+    }
+    return completed;
   }
 
   /**
@@ -134,14 +188,17 @@ export class EnvelopeSweepService {
       if (alreadyReminded > 0) continue;
 
       try {
-        const invitation = await this.signature.issueInvitation({
-          envelopeId: envelope.id,
-          signerId: signer.id,
-          signerName: signer.name,
-          signerEmail: signer.email,
-        });
+        // Requirement 18 — **reminders are ours under every provider.** That is what
+        // `reminders: false` on the created document exists to guarantee: one reminder
+        // policy, not two. The port has no `remind` method, deliberately, because a
+        // provider that sent its own would need a capability and a caller that branches
+        // on it, and inventing the method first would leave it with no caller at all.
+        const { token, tokenHash } = generateSigningToken();
+        const tokenExpiresAt = new Date(
+          now.getTime() + signingTokenTtlDays() * 24 * 60 * 60 * 1000,
+        );
         const expiresAt =
-          envelope.expiresAt < invitation.expiresAt ? envelope.expiresAt : invitation.expiresAt;
+          envelope.expiresAt < tokenExpiresAt ? envelope.expiresAt : tokenExpiresAt;
 
         await this.prisma.$transaction(async (tx) => {
           await tx.signingToken.updateMany({
@@ -151,7 +208,7 @@ export class EnvelopeSweepService {
           await tx.signingToken.create({
             data: {
               envelopeSignerId: signer.id,
-              tokenHash: invitation.tokenHash,
+              tokenHash,
               expiresAt,
             },
           });
@@ -171,7 +228,8 @@ export class EnvelopeSweepService {
           organizationName: envelope.organization.name,
           organizationId: envelope.organizationId,
           senderName: `${envelope.createdBy.firstName} ${envelope.createdBy.lastName}`.trim(),
-          signingUrl: invitation.signingUrl,
+          // Ours, always, and never a provider link (requirement 12).
+          signingUrl: signingPageUrl(token),
           expiresAt,
           reminderNumber: 1,
         });

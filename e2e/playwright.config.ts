@@ -85,6 +85,17 @@ export default defineConfig({
         JOB_QUEUE: 'inline',
         // Signing links must point at the web server this config starts.
         APP_PUBLIC_URL: WEB,
+        // Spec 04. The stub driver answers every SignWell call from memory and is
+        // refused outright when NODE_ENV is production, so the suite stays hermetic and
+        // spends none of the ten-documents-a-minute create budget. The three
+        // configuration values are named because *registration* is decided by their
+        // presence: without them the provider is unconfigured and TC-04-E2E-01 could
+        // never select it.
+        SIGNWELL_DRIVER: 'stub',
+        SIGNWELL_API_KEY: 'e2e-signwell-api-key',
+        SIGNWELL_API_APPLICATION_ID: 'e2e-signwell-application',
+        SIGNWELL_WEBHOOK_SECRET: 'e2e-signwell-webhook-id',
+        SIGNWELL_TEST_MODE: 'true',
       },
       port: 4000,
       reuseExistingServer: !process.env.CI,

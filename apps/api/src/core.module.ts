@@ -7,8 +7,11 @@ import { PdfRenderer } from './pdf/pdf-renderer';
 import { PrismaService } from './prisma.service';
 import { JobQueue } from './queue/job-queue';
 import { jobQueueProvider } from './queue/queue.provider';
-import { SignatureProvider } from './signature/signature-provider';
-import { signatureProviderProvider } from './signature/signature.provider';
+import { InternalSigningProvider } from './signature/internal-signing-provider';
+import { SigningProviderRegistry } from './signature/provider-registry';
+import { signWellHttpClientProvider } from './signature/signature.provider';
+import { SignWellHttpClient } from './signature/signwell/signwell-http-client';
+import { SignWellSigningProvider } from './signature/signwell/signwell-signing-provider';
 import { FileStorage } from './storage/file-storage';
 import { LocalFilesController } from './storage/local-files.controller';
 import { fileStorageProvider } from './storage/storage.provider';
@@ -24,7 +27,12 @@ import { fileStorageProvider } from './storage/storage.provider';
  * which is what the code assumed all along.
  *
  * Documents spec 02 adds four ports here — `FileStorage`, `PdfRenderer`, `JobQueue`,
- * `SignatureProvider` — and moves `MailService` in beside them. All five are needed by
+ * `SignatureProvider` — and moves `MailService` in beside them. Spec 04 replaces the
+ * fourth with `SigningProviderRegistry`, which resolves an adapter **by key at call
+ * time** instead of one class at boot: an adapter is registered whenever its
+ * configuration is present, independently of which provider any organization has
+ * selected, so an admin switching away from SignWell cannot orphan the envelopes still
+ * reconciling on it (backward compatibility 7). All five are needed by
  * both the envelope module and the root module, and all five must be singletons for the
  * same reason `PrismaService` is: a second `InlineJobQueue` would hold a second handler
  * registry, and a second mail sink would make `/api/test/mail` read a different mailbox
@@ -47,7 +55,10 @@ import { fileStorageProvider } from './storage/storage.provider';
     fileStorageProvider,
     pdfRendererProvider,
     jobQueueProvider,
-    signatureProviderProvider,
+    signWellHttpClientProvider,
+    InternalSigningProvider,
+    SignWellSigningProvider,
+    SigningProviderRegistry,
   ],
   exports: [
     PrismaService,
@@ -56,7 +67,10 @@ import { fileStorageProvider } from './storage/storage.provider';
     FileStorage,
     PdfRenderer,
     JobQueue,
-    SignatureProvider,
+    SignWellHttpClient,
+    InternalSigningProvider,
+    SignWellSigningProvider,
+    SigningProviderRegistry,
   ],
 })
 export class CoreModule {}
