@@ -245,6 +245,21 @@ function EnvelopeScreen({ orgId, envelopeId }: { orgId: string; envelopeId: stri
                 {SIGNING_PROVIDER_MESSAGES.envelope.testDocument}
               </Badge>
             )}
+            {/* Which evidence format the stored PDF carries — our own Certificate of
+                Completion, bound into the document, or the provider's audit page
+                (requirement 28). Two formats coexist in an organization that has
+                switched, and the Known Gaps table accepts that only because the detail
+                screen says which one this document has. There is deliberately no link
+                and no testid: the certificate is not a separate artefact to fetch, and
+                an id for a control this spec did not name is not this screen's to coin. */}
+            {detail.provider && canDownload && (
+              <span style={{ fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}>
+                {SIGNING_PROVIDER_MESSAGES.envelope.documentIncludes(
+                  detail.provider.name,
+                  detail.provider.certificateIssued,
+                )}
+              </span>
+            )}
             {canVoid && (
               <Button variant="danger" data-testid="envelope-void-btn" onClick={() => setVoidOpen(true)}>
                 Void

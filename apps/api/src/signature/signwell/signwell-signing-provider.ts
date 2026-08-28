@@ -5,6 +5,7 @@ import { parseSignWellNotification } from '../../webhooks/signwell-notification'
 import {
   CancelRequest,
   CompletedDocument,
+  ConnectionChecked,
   CompletedDocumentRequest,
   CreateSessionRequest,
   CreatedSession,
@@ -13,6 +14,7 @@ import {
   ProviderFieldsNotMaterializedError,
   ProviderSignerState,
   ProviderSignerStatus,
+  ProviderConnection,
   ProviderState,
   ProviderUnavailableError,
   RawNotification,
@@ -44,7 +46,10 @@ export const ORPHAN_SCAN_PAGE_CAP = 20;
  * that a test rather than an intention.
  */
 @Injectable()
-export class SignWellSigningProvider extends SigningProvider implements RemotelyTracked {
+export class SignWellSigningProvider
+  extends SigningProvider
+  implements RemotelyTracked, ConnectionChecked
+{
   readonly key = 'signwell';
 
   /** Requirement 11, exactly. */
@@ -403,6 +408,32 @@ export class SignWellSigningProvider extends SigningProvider implements Remotely
   }
 
   /**
+   * Requirement 31 and 32 — the two live checks the settings screen shows beside this
+   * option, and which are never a gate on selecting it. Both are best effort: a provider
+   * we cannot reach is still selectable, because no deployed environment has a public
+   * address SignWell can reach and those environments run correctly on convergence alone.
+   *
+   * The hooks read is not tidiness. A registration outlives the address it names, and
+   * every delivery carries a working `embedded_signing_url` per recipient — so a
+   * registration pointing at a hostname that is no longer ours hands the ability to sign
+   * as a recipient to whoever answers there. Reading it here puts that on a screen
+   * instead of in someone's memory.
+   */
+  async checkConnection(): Promise<ProviderConnection> {
+    let reachable = false;
+    let webhookRegistered = false;
+    try {
+      reachable = await this.http.ping();
+      if (reachable) webhookRegistered = (await this.http.hooks()).length > 0;
+    } catch (error) {
+      this.log.warn(
+        `The SignWell connection check failed: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+
+    return { reachable, webhookRegistered, testMode: testModeForDisplay() };
+  }
+  /**
    * The **only** source of remote state (requirement 7). Everything the reconciler writes
    * comes from here and nothing comes from a notification body — which is what makes
    * replay, reordering and duplicate delivery harmless by construction.
@@ -455,6 +486,17 @@ export class SignWellSigningProvider extends SigningProvider implements Remotely
  * the value on the wire is read at the moment it is used rather than captured once. An
  * unset variable is `true` — the safe direction, and what both environments ship.
  */
+/**
+ * The same question asked by a screen rather than by a send, and answered leniently on
+ * purpose. The constructor above already refused to boot on a value that does not parse,
+ * so a malformed one cannot reach here — and if it somehow did, a settings page must not
+ * answer 500 over a badge, and "on" is the safe direction for a badge whose whole job is
+ * to warn that a signature has no legal weight.
+ */
+function testModeForDisplay(): boolean {
+  const value = (process.env.SIGNWELL_TEST_MODE ?? '').trim().toLowerCase();
+  return value !== 'false' && value !== '0';
+}
 export function testModeFromEnvironment(raw = process.env.SIGNWELL_TEST_MODE): boolean {
   const value = (raw ?? '').trim().toLowerCase();
   if (value === '' || value === 'true' || value === '1') return true;

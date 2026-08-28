@@ -16,7 +16,7 @@ import { EnvelopeStatus } from '@prisma/client';
 import type { SessionPayload } from '../auth/session.service';
 import { PrismaService } from '../prisma.service';
 import { SigningProviderRegistry } from '../signature/provider-registry';
-import { SignWellHttpClient } from '../signature/signwell/signwell-http-client';
+import { isConnectionChecked } from '../signature/signing-provider';
 import type { UpdateSigningSettingsDto } from './signing-settings.dto';
 
 export interface ProviderOptionView {
@@ -55,7 +55,6 @@ export class SigningSettingsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly providers: SigningProviderRegistry,
-    private readonly signwell: SignWellHttpClient,
   ) {}
 
   async get(session: SessionPayload) {
@@ -183,9 +182,16 @@ export class SigningSettingsService {
   }
 
   /**
-   * The two checks that are displayed and never enforced. Both are best-effort: a failure
-   * here reports `reachable: false` beside the option and changes nothing about whether it
-   * can be selected.
+   * The checks that are displayed and never enforced — requirement 32. A failure here
+   * reports `reachable: false` beside the option and changes nothing about whether it can
+   * be selected, because no deployed environment has a public address a provider can
+   * reach and those environments run correctly on convergence alone.
+   *
+   * **The provider answers them, not this service.** Asking one vendor's client about
+   * whichever provider is being described would be requirement 2's rule broken at one
+   * remove — the branch on the capability, the call on the key — and a second
+   * webhook-based provider would then be reported reachable because SignWell's `/me`
+   * answered. Nothing in this file knows what SignWell is.
    */
   private async liveChecks(
     key: string,
@@ -197,45 +203,30 @@ export class SigningSettingsService {
     }
 
     const provider = this.providers.find(key);
-    // The in-house engine is the product itself: it is always reachable, never in test
-    // mode, and has no webhook to register.
-    if (!provider || provider.capabilities.notifications !== 'webhook') {
+    // A provider that cannot be asked answers for itself: the in-house engine is the
+    // product, always reachable, never in test mode, with no webhook to register.
+    if (!provider || !isConnectionChecked(provider)) {
       return { reachable: true, testMode: false };
     }
 
-    let reachable = false;
-    let webhookRegistered = false;
     try {
-      reachable = await this.signwell.ping();
-      if (reachable) {
-        const hooks = await this.signwell.hooks();
-        webhookRegistered = hooks.length > 0;
-      }
+      const connection = await provider.checkConnection();
+      return {
+        reachable: connection.reachable,
+        // A statement about what a *new* envelope through this provider would be. An
+        // envelope's own badge never comes from here — it comes from the column written
+        // at its send, so history is not relabelled (edge case 17).
+        testMode: connection.testMode,
+        webhookRegistered: connection.webhookRegistered,
+      };
     } catch (error) {
+      // A screen must not 500 over a badge.
       this.log.warn(
         `The live connection check for ${key} failed: ${
           error instanceof Error ? error.message : error
         }`,
       );
+      return { reachable: false, testMode: false, webhookRegistered: false };
     }
-
-    return {
-      reachable,
-      // Read from configuration for the *option*, which is a statement about what a new
-      // envelope would be. An envelope's own badge never comes from here — it comes from
-      // the column written at its send, so history is not relabelled (edge case 17).
-      testMode: testModeConfigured(),
-      webhookRegistered,
-    };
   }
-}
-
-/**
- * Validation rule 6 lives in the adapter, where a malformed value throws at boot. Here a
- * malformed value must not be able to 500 a settings screen, so it reads as "on" — the
- * safe direction for a badge whose whole job is to warn.
- */
-function testModeConfigured(): boolean {
-  const value = (process.env.SIGNWELL_TEST_MODE ?? '').trim().toLowerCase();
-  return value !== 'false' && value !== '0';
 }

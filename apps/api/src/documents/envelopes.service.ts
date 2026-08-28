@@ -338,6 +338,22 @@ export class EnvelopesService {
    * Reads
    * ---------------------------------------------------------------- */
 
+  /**
+   * **The list deliberately does not converge, and this is where that is written down.**
+   *
+   * Requirement 24a says any read of a non-terminal remote envelope whose sync is stale
+   * re-fetches before the response is composed, and `get` and the signing page both do.
+   * A page here holds up to a hundred envelopes, so obeying it literally would spend up
+   * to a hundred provider calls on one screen — against a create budget of ten a minute
+   * and a read budget of a hundred and twenty, which the spec's own Blast Radius names as
+   * the thing the breaker exists to protect. The first person to open the documents list
+   * on a busy morning would exhaust it for every sender in the organization.
+   *
+   * Nothing is lost by not converging here, which is the whole point of requirement 24:
+   * a stale row costs timeliness and never correctness. The status this list shows is the
+   * last converged one, and it is made current by the three mechanisms that already
+   * exist — the doorbell, the detail read the sender opens next, and the hourly sweep.
+   */
   async list(session: SessionPayload, query: Record<string, string | undefined>) {
     const pageSize = Math.min(Math.max(Number(query.pageSize) || 25, 1), 100);
     const page = Math.max(Number(query.page) || 1, 1);

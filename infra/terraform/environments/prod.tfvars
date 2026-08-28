@@ -64,6 +64,33 @@ log_retention_days = 365
 test_fixtures_enabled = false
 
 # ---------------------------------------------------------------------------------------
+# SignWell — documents spec 04
+# ---------------------------------------------------------------------------------------
+
+# The production branding profile, so a counterparty signing our contract sees our colours and
+# logo rather than SignWell's default. Empty until one is created in the production SignWell
+# account; while it is empty the provider stays listed and disabled with "API application
+# id" among the missing items.
+signwell_api_application_id = ""
+
+# The two secrets the app module creates parameters for and never values. Flip this to true
+# only after both have been written out of band, against the production account:
+#
+#   aws ssm put-parameter --type SecureString --overwrite --value '<the key>' --name /devscribed-prod/SIGNWELL_API_KEY
+#   aws ssm put-parameter --type SecureString --overwrite --value '<the webhook id>' --name /devscribed-prod/SIGNWELL_WEBHOOK_SECRET
+#
+# Until then the API is handed neither, which is the honest state and one the product is
+# built for: the SignWell row on the settings screen is visible, disabled, and names what
+# is absent. Nothing else about the environment depends on it — every organization keeps
+# signing with the in-house engine, which is what they default to anyway.
+#
+# The webhook id comes from a registration made by hand, and there is a real obstacle in
+# front of it: neither stand has a public address SignWell can reach yet. That costs
+# timeliness and not correctness — reads and the hourly sweep converge the same rows — but
+# it is why this cannot be provisioned from here.
+signwell_secrets_provisioned = false
+
+# ---------------------------------------------------------------------------------------
 # CI/CD
 # ---------------------------------------------------------------------------------------
 

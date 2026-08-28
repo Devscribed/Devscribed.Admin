@@ -306,6 +306,50 @@ export class SigningService {
     const ipAddress = clientIp(req);
     const userAgent = userAgentOf(req);
 
+    /* ------------------------------------------------------------------ *
+     * Spec 04 invariant 11 and acceptance criterion 12 — **no provider call while a
+     * database transaction is open**, and that binds every adapter method without
+     * qualification, not only the ones that reach the network.
+     *
+     * An earlier draft of this file kept `applySignature` inside the transaction and
+     * argued the invariant from its stated *reason* — a five-attempt backoff holding a
+     * row lock — which a provider whose signing surface is ours can never incur. That
+     * reasoning was wrong twice over: an invariant is not the argument that motivated
+     * it, and the deviation bought nothing. Every input this call takes is already in
+     * hand here, so it costs nothing to obey the rule as written, and a reader no
+     * longer has to decide whether an exception applies to the provider in front of
+     * them.
+     *
+     * Nothing is *recorded* here. `applySignature` turns ink into an artefact and
+     * returns it — it touches no row, sends no mail and writes no event (requirement 4)
+     * — so the document-hash check, the turn check and the field validation below still
+     * gate every write, in the order spec 02 fixes them. And it cannot fail on input
+     * that reached this line: `validateSignature` above already rejects everything
+     * `InternalSigningProvider.applySignature` would (a drawn signature must be a PNG
+     * data URI whose bytes decode and carry ink, which is strictly stricter than the
+     * renderer's `png|svg` test; a typed one must be a non-empty trimmed name), so no
+     * error precedence moves with the call.
+     * ------------------------------------------------------------------ */
+    const signingSigner = resolved.token.signer;
+    const signingEnvelope = signingSigner.envelope;
+    // The moment the signature was captured, and the one the rows below all record.
+    const signedAt = new Date();
+    // `LocallySigned` narrows the port to providers that declared
+    // `signingSurface: 'ours'` — a provider cannot be asked to turn ink into an artefact
+    // when the ink never reached us.
+    const applied = await this.localProviderFor(signingEnvelope.providerKey).applySignature({
+      envelopeId: signingEnvelope.id,
+      signerId: signingSigner.id,
+      signerName: signingSigner.name,
+      method: signature.value.type,
+      drawnImage: signature.value.type === 'drawn' ? signature.value.image : undefined,
+      typedName: signature.value.type === 'typed' ? signature.value.name : undefined,
+      signedAt,
+      consentAcceptedAt: signedAt,
+      ipAddress,
+      userAgent,
+    });
+
     // Set inside the transaction, awaited after it commits. See the note at the
     // assignment for why the second invitation is not inside the failure boundary.
     let notify: (() => Promise<void>) | null = null;
@@ -382,30 +426,6 @@ export class SigningService {
           if (Object.keys(errors).length > 0) {
             throw new BadRequestException({ message: errors[Object.keys(errors)[0]], errors });
           }
-
-          const signedAt = new Date();
-          // `LocallySigned` narrows the port to providers that declared
-          // `signingSurface: 'ours'` — a provider cannot be asked to turn ink into an
-          // artefact when the ink never reached us.
-          //
-          // It stays **inside** the transaction, deliberately. Invariant 11's stated
-          // reason is a five-attempt backoff holding a row lock for a minute, and a
-          // provider whose surface is ours never touches the network, so the reason
-          // cannot apply; moving it out would also reorder error precedence against
-          // spec 02's suite, which requirement 10 forbids.
-          const locally = this.localProviderFor(envelope.providerKey);
-          const applied = await locally.applySignature({
-            envelopeId: envelope.id,
-            signerId: signer.id,
-            signerName: signer.name,
-            method: signature.value.type,
-            drawnImage: signature.value.type === 'drawn' ? signature.value.image : undefined,
-            typedName: signature.value.type === 'typed' ? signature.value.name : undefined,
-            signedAt,
-            consentAcceptedAt: signedAt,
-            ipAddress,
-            userAgent,
-          });
 
           await tx.envelopeSigner.update({
             where: { id: signer.id },

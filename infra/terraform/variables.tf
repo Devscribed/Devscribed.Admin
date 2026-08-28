@@ -219,6 +219,36 @@ variable "envelope_expiry_days" {
   default     = 30
 }
 
+# Documents spec 04. Behaviour-affecting values — the test-mode flag, the stale threshold,
+# the retry counts, the breaker window, the polling bound — are deliberately NOT variables:
+# they are written once in modules/app/api.tf and both environments read the same line, so
+# dev stays a test of prod. What varies is which account the key belongs to and which
+# branding profile the widget wears, and those are below.
+
+variable "signwell_api_application_id" {
+  description = <<-EOT
+    The SignWell API application whose branding the embedded widget wears. Not a secret; it
+    names a profile. Empty until one exists, which leaves the provider listed and disabled
+    with "API application id" among the missing items.
+  EOT
+  type        = string
+  default     = ""
+}
+
+variable "signwell_secrets_provisioned" {
+  description = <<-EOT
+    Whether the SignWell API key and webhook id have been written to the SSM parameters the
+    app module creates, and so whether the API task is given them.
+
+    False until a human has run `aws ssm put-parameter` for both. Terraform creates the
+    parameters and the policy that reads them and never the values, so there is nothing for
+    it to infer: a parameter awaiting its value holds a placeholder, and a placeholder in
+    the container would make the settings screen report SignWell configured when it is not.
+  EOT
+  type        = bool
+  default     = false
+}
+
 # ---------------------------------------------------------------------------------------
 # Differs between environments
 # ---------------------------------------------------------------------------------------

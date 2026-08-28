@@ -10,9 +10,10 @@ import type { SigningProviderOption } from '@/documents/envelopes';
  * a title, a description, a trailing status pill and a disabled state — so this is
  * composed from the primitives that do exist: `Radio` (which already takes `disabled`)
  * and `Badge` (whose `warning` tone is the DS's own reserved amber), with every spacing
- * and colour value from a token. It is recorded in this spec's DS gaps table rather than
- * improvised silently, so the second screen that needs one promotes it into the design
- * system as an `OptionRow` instead of copying this.
+ * and colour value from a token. The gap is recorded rather than improvised silently —
+ * in the implementing run's handoff (`dsGaps`), because no spec in the documents
+ * area carries a DS gaps table — so the second screen that needs one promotes it into
+ * the design system as an `OptionRow` instead of copying this.
  *
  * An **unconfigured provider is rendered, visible, with its radio disabled and the
  * missing items named.** Deliberately not hidden: the admin needs to know the option

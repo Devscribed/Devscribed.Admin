@@ -114,6 +114,19 @@ export const SIGNING_PROVIDER_MESSAGES = {
     testDocument: 'Test document — no legal effect',
     /** "Signed via SignWell" on the envelope detail. */
     signedVia: (provider: string): string => `Signed via ${provider}`,
+    /**
+     * The Screens section's Document row — which evidence format the stored PDF carries.
+     *
+     * The Known Gaps table is what makes this load-bearing rather than decorative: two
+     * evidence formats coexist in one organization once an admin switches, and what keeps
+     * that acceptable is stated there as "the envelope detail names which one it is". A
+     * document signed before the switch carries our Certificate of Completion bound into
+     * the PDF; one signed after carries the provider's audit page (requirement 28).
+     */
+    documentIncludes: (provider: string, certificateIssued: boolean): string =>
+      certificateIssued
+        ? 'Includes our Certificate of Completion'
+        : `Includes the ${provider} audit page`,
     unconfiguredInFlight:
       'This document is waiting on a signing provider that is no longer configured.',
   },

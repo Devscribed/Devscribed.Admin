@@ -147,7 +147,8 @@ export function EmbeddedSigning({
 }
 
 /**
- * The DS ships no Skeleton primitive — a carried gap, recorded in this spec's DS gaps
+ * The DS ships no Skeleton primitive — a carried gap, recorded in the implementing run's
+ * handoff (`dsGaps`), because no spec in the documents area carries a DS gaps
  * table. Static token-coloured blocks, the same shape the members screen uses, rather
  * than a per-screen shimmer nobody specified.
  */

@@ -212,9 +212,11 @@ export default function SigningSettingsPage({
 }
 
 /**
- * The design system ships no Skeleton primitive — a carried gap, recorded in this spec's
- * DS gaps table and already used by five other screens. Static token-coloured blocks,
- * with no animation invented here.
+ * The design system ships no Skeleton primitive — a carried gap, already composed the
+ * same way by five other screens. No spec in the documents area carries a DS gaps table,
+ * so the gap is recorded in the implementing run's handoff (`dsGaps`) rather than in a
+ * section of the spec that does not exist. Static token-coloured blocks, with no
+ * animation invented here.
  */
 function LoadingRows() {
   return (

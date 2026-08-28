@@ -63,11 +63,11 @@ export abstract class SigningProvider {
  * Implemented only when `capabilities.signingSurface === 'ours'`, so a provider cannot be
  * asked to turn ink into an artefact when the ink never reached us.
  *
- * This is the one call that runs **inside** a transaction, and deliberately: a provider
- * whose signing surface is ours never touches the network, so invariant 11's stated
- * reason — a five-attempt backoff holding a row lock for a minute — cannot apply. Moving
- * it out would also reorder error precedence against spec 02's suite, which requirement
- * 10 forbids.
+ * Like every other method here it is called **outside** any transaction (invariant 11,
+ * acceptance criterion 12), which bind every adapter method without qualification and not
+ * only the ones that reach the network. `SigningService.sign` computes the artefact before
+ * it opens the transaction and writes the result inside — the call records nothing, so
+ * hoisting it moves no check and no error ahead of the ones spec 02 orders.
  */
 export interface LocallySigned {
   applySignature(request: SignatureRequest): Promise<AppliedSignature>;
@@ -89,6 +89,45 @@ export interface RemotelyTracked {
   fetchState(providerRef: string): Promise<ProviderState>;
 }
 
+/**
+ * Implemented by a provider that can be asked, live, whether we can still reach it and
+ * whether the notification it would ring us on is registered.
+ *
+ * Optional on purpose, and the reason is requirement 32: both answers are **displayed
+ * beside an option and are never a gate on it**, so a provider that cannot answer is not
+ * thereby unselectable. The in-house engine implements nothing here — it is the product
+ * itself, always reachable, with no webhook to register.
+ *
+ * It exists so the settings screen can ask *the provider* rather than reaching for one
+ * vendor's client and pointing it at whatever provider it happens to be describing. A
+ * second webhook-based provider would otherwise be reported reachable on the strength of
+ * SignWell's `/me` answering, which is requirement 2's rule broken at one remove: the
+ * branch was on the capability, but the call was on the key.
+ */
+export interface ConnectionChecked {
+  checkConnection(): Promise<ProviderConnection>;
+}
+
+export interface ProviderConnection {
+  /** Whether the provider answered at all. Displayed; never a gate. */
+  reachable: boolean;
+  /** Whether a notification callback is registered with them. Displayed; never a gate. */
+  webhookRegistered: boolean;
+  /**
+   * Whether a document sent through this provider *now* would be a test. It rides with
+   * the two above because it is the same question — what would a new envelope through
+   * this provider be — and because it is the provider that knows. An envelope's own
+   * badge never comes from here: that reads the column written at its send, so switching
+   * test mode off cannot relabel history (edge case 17).
+   */
+  testMode: boolean;
+}
+
+export function isConnectionChecked(
+  provider: SigningProvider,
+): provider is SigningProvider & ConnectionChecked {
+  return typeof (provider as Partial<ConnectionChecked>).checkConnection === 'function';
+}
 export function isLocallySigned(provider: SigningProvider): provider is SigningProvider &
   LocallySigned {
   return typeof (provider as Partial<LocallySigned>).applySignature === 'function';

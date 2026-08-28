@@ -38,8 +38,9 @@ import {
  *   2. `finalize` became `completedDocument`. The certificate assembly moved to
  *      `documents/certificate-of-completion.ts` verbatim and is rendered here, so the
  *      method returns bytes like every other provider's.
- *   3. `applySignature` moved onto `LocallySigned`, unchanged, and still runs inside the
- *      signing transaction — see the note on that interface for why that is deliberate.
+ *   3. `applySignature` moved onto `LocallySigned`, unchanged. It is called before the
+ *      signing transaction opens, like every other method on the port (invariant 11); it
+ *      records nothing, so `SigningService` writes what it returns inside.
  */
 @Injectable()
 export class InternalSigningProvider extends SigningProvider implements LocallySigned {
