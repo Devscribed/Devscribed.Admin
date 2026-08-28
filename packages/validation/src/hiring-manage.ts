@@ -16,6 +16,7 @@
 // Sibling modules only, so this one is safe to read at module-eval time — `./index`
 // re-exports it at the end of its own body and is not.
 import { HIRING_MESSAGES } from './hiring';
+import type { BusyInterval } from './hiring-slots';
 import { formatBookedWhen, formatSlotTime, zonedParts } from './hiring-time';
 
 /* ------------------------------------------------------------------ *
@@ -42,6 +43,7 @@ export const MANAGE_LIMITS = {
 
 /** The URL the invite carries. The slug is what makes every dead end renderable (07 §03.13). */
 export const managePath = (slug: string, token: string): string => `/manage/${slug}/${token}`;
+
 
 /* ------------------------------------------------------------------ *
  * Liveness — 07 §14
@@ -76,6 +78,101 @@ export const isLiveBooking = (booking: BookingLiveness, now: Date): boolean =>
  */
 export const cancelConfirmMessage = (start: Date, timeZone: string): string =>
   HIRING_MESSAGES.manage.cancelConfirm.replace('{when}', formatBookedWhen(start, timeZone));
+
+/* ------------------------------------------------------------------ *
+ * Rescheduling — 07 §02, §05, §13
+ * ------------------------------------------------------------------ */
+
+/** The three facts a reschedule is allowed to move, and nothing else. */
+export interface BookedInterview {
+  start: Date;
+  end: Date;
+  timeZone: string;
+}
+
+/**
+ * The interview's own length, from the row rather than from the vacancy.
+ *
+ * `Vacancy.durationMinutes` is what the *next* booking will be, and 01's
+ * *future bookings only* rule means an interview keeps the length it was booked at. A
+ * slot grid generated from the vacancy's current setting would offer a candidate
+ * 30-minute slots for the 60-minute interview they already hold, and the move would
+ * then either shorten their interview or be rejected as never offered (07 §13.61).
+ */
+export const bookedDurationMinutes = (booking: { start: Date; end: Date }): number =>
+  Math.round((booking.end.getTime() - booking.start.getTime()) / 60_000);
+
+/**
+ * The whole of what a reschedule writes: `start`, `end`, `timeZone`.
+ *
+ * Deliberately a patch rather than a row. `status` and `position` are the hiring
+ * manager's own ordering — they dragged that card where it sits — and a design that
+ * replaced the row would let a candidate nudging their interview by thirty minutes
+ * silently re-insert their card at the top of `Scheduled`, reordering the team's board
+ * from outside the building (07 §02.7).
+ */
+export interface RescheduleChange {
+  start: Date;
+  end: Date;
+  timeZone: string;
+}
+
+/**
+ * What to write for a move to `startUtc`, or **null when there is nothing to write**.
+ *
+ * Rescheduling to the time the interview already has is accepted and is a no-op: the
+ * calendar is not touched and no `rescheduled` entry is written, because moving an
+ * interview to the time it already has is not a reschedule (07 validation rule 3). The
+ * zone rides along with a real move and is not a move of its own — a candidate reading
+ * the page from an airport has not changed their interview by looking at it.
+ *
+ * The new `end` follows the interview's own duration, so a move never silently
+ * lengthens or shortens it.
+ */
+export function planReschedule(
+  booking: BookedInterview,
+  to: { startUtc: Date; timeZone: string },
+): RescheduleChange | null {
+  if (to.startUtc.getTime() === booking.start.getTime()) return null;
+  return {
+    start: to.startUtc,
+    end: new Date(to.startUtc.getTime() + bookedDurationMinutes(booking) * 60_000),
+    timeZone: to.timeZone,
+  };
+}
+
+/**
+ * The busy list with the interview's **own** event taken out of it.
+ *
+ * Without this a candidate trying to move thirty minutes later collides with
+ * themselves: the event they are moving is in the interviewer's calendar, so it blocks
+ * its own slot and every slot near it, and the page reads as fully booked around the
+ * one time the candidate is trying to leave (07 §05.25).
+ *
+ * Identity is the interval, because that is all a free/busy read returns — no event id
+ * crosses the `CalendarProvider` boundary in that direction. An unrelated meeting
+ * occupying exactly this interview's start and end would therefore be dropped too. It
+ * is the interviewer's own mailbox and the interview is already in it, so a second
+ * event on precisely the same boundaries is one they double-booked themselves; the
+ * cost is one slot offered that the submit-time check then refuses honestly, rather
+ * than a candidate who cannot move at all.
+ */
+export function excludeOwnBooking(
+  busy: readonly BusyInterval[],
+  own: BusyInterval,
+): BusyInterval[] {
+  return busy.filter(
+    (block) =>
+      !(
+        block.startUtc.getTime() === own.startUtc.getTime() &&
+        block.endUtc.getTime() === own.endUtc.getTime()
+      ),
+  );
+}
+
+/** "Currently Tuesday, 25 August 2026 at 14:00" — stated, never pre-selected. */
+export const currentTimeMessage = (start: Date, timeZone: string): string =>
+  HIRING_MESSAGES.manage.currentTime.replace('{when}', formatBookedWhen(start, timeZone));
 
 /* ------------------------------------------------------------------ *
  * Cancellation, as the team reads it — 05 design, 07 design

@@ -1,14 +1,25 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import {
   CV_FILE,
   bookInterview,
   columnCards,
   createVacancy,
+  latestInviteLink,
   latestManageLink,
   registerOrganization,
   setApplicationStatus,
+  signIn,
   uniqueEmail,
 } from './helpers';
+
+/** The dates the grid is offering, in the order they appear. */
+async function availableDates(page: Page): Promise<string[]> {
+  const cells = page.locator('[data-testid^="calendar-day-"]:not([disabled])');
+  await expect(cells.first()).toBeVisible();
+  return (
+    await cells.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-date')))
+  ).filter((date): date is string => date !== null);
+}
 
 /**
  * The candidate's own page for a booking they already made (spec 07), through the
@@ -108,6 +119,102 @@ test.describe('Manage booking', () => {
     expect(rescheduled).toHaveLength(1);
     expect(rescheduled[0].applicationId).not.toBe(scheduled.applicationId);
     expect(rescheduled[0].isCancelled).toBe(false);
+  });
+
+  /** TC-H07-E2E-01 */
+  test('moves an interview, and the card says who moved it', async ({ page, request }) => {
+    const org = await registerOrganization(request, uniqueEmail('manage-move-owner'));
+    const vacancy = await createVacancy(request, org, { title: 'Senior React Engineer' });
+    const candidate = uniqueEmail('manage-move-candidate');
+    await bookInterview(request, vacancy.publicSlug, {
+      firstName: 'Jane',
+      lastName: 'Doe',
+      email: candidate,
+    });
+
+    const manage = await latestManageLink(request);
+    const invite = await latestInviteLink(request);
+
+    await page.goto(manage.path);
+    const before = (await page.getByTestId('manage-booking-when').textContent())!;
+
+    await page.getByTestId('manage-reschedule-button').click();
+
+    // The current time is stated, and never rendered as a selected date or slot:
+    // pre-selecting it would make the candidate's first click a deselection.
+    await expect(page.getByTestId('manage-current-time')).toHaveText(`Currently ${before}`);
+    await expect(page.getByTestId('manage-booking-when')).toHaveCount(0);
+    await expect(page.locator('[data-testid^="slot-option-"][aria-pressed="true"]')).toHaveCount(0);
+
+    // The one primary action in this spec, disabled until a slot is chosen.
+    const submit = page.getByTestId('manage-reschedule-submit');
+    await expect(submit).toBeDisabled();
+
+    // Keep current time restores the record with nothing altered.
+    await page.getByTestId('manage-reschedule-cancel').click();
+    await expect(page.getByTestId('manage-booking-when')).toHaveText(before);
+
+    await page.getByTestId('manage-reschedule-button').click();
+
+    // Another date, and a time on it. The interview's own slot is offered back — its own
+    // event does not block its own move — so the test takes a different day to be sure
+    // the assertion is about a real change.
+    const dates = await availableDates(page);
+    const another = dates[1] ?? dates[0];
+    await page.getByTestId(`calendar-day-${another}`).click();
+
+    const slot = page.locator('[data-testid^="slot-option-"]').first();
+    await expect(slot).toBeVisible();
+    const startUtc = (await slot.getAttribute('data-testid'))!.replace('slot-option-', '');
+    await slot.click();
+    await expect(slot).toHaveAttribute('aria-pressed', 'true');
+
+    await expect(submit).toBeEnabled();
+    await submit.click();
+
+    // Back to the live state naming the new time. The old one is not shown.
+    const when = page.getByTestId('manage-booking-when');
+    await expect(when).toBeVisible();
+    await expect(when).not.toHaveText(before);
+    await expect(page.getByTestId('manage-booking-zone')).toContainText('UTC');
+    await expect(page.getByTestId('manage-current-time')).toHaveCount(0);
+
+    const after = (await when.textContent())!;
+    expect(after).toContain(
+      new Date(startUtc).toLocaleTimeString('en-GB', {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'UTC',
+      }),
+    );
+
+    // A reload reads it back off the record, not out of this visit's state.
+    await page.reload();
+    await expect(page.getByTestId('manage-booking-when')).toHaveText(after);
+
+    // And the card carries the move, attributed to the candidate, in a history that was
+    // one line until now.
+    await signIn(page, org.email);
+    await page.goto(invite.path);
+    await expect(page.getByTestId(`application-when-${invite.applicationId}`)).toContainText(
+      new Date(startUtc).toLocaleTimeString('en-GB', {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'UTC',
+      }),
+    );
+
+    const toggle = page.getByTestId(`application-history-toggle-${invite.applicationId}`);
+    await expect(toggle).toContainText('Rescheduled once');
+    await toggle.click();
+
+    const history = page.getByTestId(`application-history-${invite.applicationId}`);
+    await expect(history).toBeVisible();
+    // New ← old, by the candidate. "The team moved this" would read the same way, with
+    // the member's name (07 §11.55).
+    await expect(history.getByRole('listitem').first()).toContainText('←');
+    await expect(history.getByRole('listitem').first()).toContainText('Jane Doe');
+    await expect(history).toContainText('Booked');
   });
 
   /** The blurred state, from a link that never named anything. */

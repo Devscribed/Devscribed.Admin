@@ -175,6 +175,20 @@ export const HIRING_MESSAGES = {
      */
     cancelDialogDismiss: 'Keep it',
     cancelAction: 'Cancel interview',
+    /**
+     * The move, and the one primary action in the whole spec. There is no confirmation
+     * dialog behind it: a candidate who chose Thursday 14:00 does not need to be asked
+     * whether they meant Thursday 14:00, and the action is reversible at will
+     * (07 §05.26).
+     */
+    rescheduleAction: 'Reschedule',
+    rescheduleSubmit: 'Move interview',
+    rescheduleSubmitting: 'Moving',
+    /** Not "Cancel": inside this feature that word already means calling the interview off. */
+    rescheduleDismiss: 'Keep current time',
+    /** Completed by `currentTimeMessage` — the time they came here to change. */
+    currentTime: 'Currently {when}',
+    rescheduleFailed: "We couldn't move your interview. Please try again.",
     newBooking: 'New booking',
     panelLabel: 'Your interview',
     /** The board badge and the card's mark, completed by `cancelledBadgeLabel`. */

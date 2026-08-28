@@ -1,4 +1,5 @@
 import {
+  CalendarEventChange,
   CalendarEventDraft,
   CalendarProvider,
   EventId,
@@ -30,6 +31,9 @@ export class StubCalendarProvider extends CalendarProvider {
 
   failOnCreate = false;
 
+  /** A move the calendar refuses — the booking must survive it untouched. */
+  failOnUpdate = false;
+
   /** A cancellation the calendar refuses — the booking must survive it untouched. */
   failOnCancel = false;
 
@@ -39,6 +43,9 @@ export class StubCalendarProvider extends CalendarProvider {
   readonly events = new Map<EventId, { mailbox: string; draft: CalendarEventDraft }>();
 
   readonly cancelled: EventId[] = [];
+
+  /** Every move, in order, so a suite can assert the mailbox and the times it got. */
+  readonly updated: Array<{ id: EventId; mailbox: string; change: CalendarEventChange }> = [];
 
   private sequence = 0;
 
@@ -83,6 +90,32 @@ export class StubCalendarProvider extends CalendarProvider {
   }
 
   /**
+   * In place: same id, same body, same mailbox, new times. The stored draft moves with
+   * it, so the slot the interview left reads as free on the next availability call and
+   * the one it took reads as busy — which is what makes a second reschedule behave.
+   */
+  async updateEvent(
+    mailbox: MailboxRef,
+    eventId: EventId,
+    change: CalendarEventChange,
+  ): Promise<void> {
+    if (this.failOnUpdate) throw new Error('stub: the calendar refused the move');
+    this.updated.push({ id: eventId, mailbox: mailbox.address, change });
+
+    const existing = this.events.get(eventId);
+    if (!existing) return;
+    this.events.set(eventId, {
+      mailbox: existing.mailbox,
+      draft: {
+        ...existing.draft,
+        startUtc: change.startUtc,
+        endUtc: change.endUtc,
+        timeZone: change.timeZone,
+      },
+    });
+  }
+
+  /**
    * Idempotent, like the real one: cancelling an event that is already gone is a
    * success, which is what lets a caller retry after a database failure without a
    * compensating step (07 Alt flow).
@@ -110,10 +143,12 @@ export class StubCalendarProvider extends CalendarProvider {
       timeZone: 'UTC',
     };
     this.failOnCreate = false;
+    this.failOnUpdate = false;
     this.failOnCancel = false;
     this.failOnBusy = false;
     this.events.clear();
     this.cancelled.length = 0;
+    this.updated.length = 0;
     this.sequence = 0;
   }
 }

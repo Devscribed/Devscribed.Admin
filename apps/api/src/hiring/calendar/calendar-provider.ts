@@ -51,6 +51,18 @@ export interface CalendarEventDraft {
   attachment?: CalendarAttachment;
 }
 
+/**
+ * A move of an existing event. Only the time — the subject, the body, the attendee and
+ * the attachment all stay exactly as they were, because a reschedule changes when the
+ * interview is and nothing else about it (07 §02.6).
+ */
+export interface CalendarEventChange {
+  startUtc: Date;
+  endUtc: Date;
+  /** The zone the acting party was working in, carried so the event can name it. */
+  timeZone: string;
+}
+
 export type EventId = string;
 
 export abstract class CalendarProvider {
@@ -69,6 +81,22 @@ export abstract class CalendarProvider {
 
   /** Adds the candidate as an attendee, which is what delivers the invite (00 §02.10). */
   abstract createEvent(mailbox: MailboxRef, event: CalendarEventDraft): Promise<EventId>;
+
+  /**
+   * Moves an existing event in place, which is what makes Microsoft send both parties a
+   * meeting-updated notice.
+   *
+   * A reschedule is **never** a cancellation followed by a fresh booking (00 §02.4).
+   * That would tell the candidate their interview is cancelled as the first half of
+   * moving it — under 07 §01.1 the one message this feature must never send — while
+   * also re-uploading the CV attachment on every move and leaving a tombstone in the
+   * interviewer's calendar each time.
+   */
+  abstract updateEvent(
+    mailbox: MailboxRef,
+    eventId: EventId,
+    change: CalendarEventChange,
+  ): Promise<void>;
 
   abstract cancelEvent(mailbox: MailboxRef, eventId: EventId): Promise<void>;
 }

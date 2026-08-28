@@ -1,15 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import {
   HIRING_MESSAGES,
+  bookedDurationMinutes,
   cancelConfirmMessage,
   cancelledBadgeLabel,
   cancelledTooltip,
+  currentTimeMessage,
+  excludeOwnBooking,
   formatHistoryWhen,
+  generateSlots,
   isLiveBooking,
+  planReschedule,
   scheduleEntryAriaLabel,
   scheduleEntryLabel,
   scheduleSummary,
+  type BusyInterval,
   type ScheduleEntry,
+  type WorkingHoursSpec,
 } from './index';
 
 const at = (iso: string): Date => new Date(iso);
@@ -169,6 +176,183 @@ describe('cancelConfirmMessage', () => {
   it('names the interview being called off rather than gesturing at it', () => {
     expect(cancelConfirmMessage(at('2026-08-25T11:00:00.000Z'), 'Europe/Minsk')).toBe(
       "Cancel your interview on Tuesday, 25 August 2026 at 14:00? This can't be undone.",
+    );
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Rescheduling — 07 §02, §05, §13
+ * ------------------------------------------------------------------ */
+
+/** Mon–Fri 09:00–17:00 UTC, the same hours the integration suite's calendar reports. */
+const OFFICE_HOURS: WorkingHoursSpec = {
+  daysOfWeek: [1, 2, 3, 4, 5],
+  startTime: '09:00',
+  endTime: '17:00',
+  timeZone: 'UTC',
+};
+
+/** A Tuesday, so the day itself is never the reason a slot is missing. */
+const WORKING_DAY = '2026-08-25';
+
+const slotsOn = (input: {
+  durationMinutes: number;
+  busy?: BusyInterval[];
+}): string[] =>
+  generateSlots({
+    workingHours: OFFICE_HOURS,
+    busy: input.busy ?? [],
+    durationMinutes: input.durationMinutes,
+    from: WORKING_DAY,
+    to: WORKING_DAY,
+    displayTimeZone: 'UTC',
+    now: at('2026-08-24T00:00:00.000Z'),
+  }).map((slot) => slot.toISOString().slice(11, 16));
+
+/** TC-H07-UNIT-01 */
+describe('planReschedule', () => {
+  const booking = {
+    start: at('2026-08-25T11:00:00.000Z'),
+    end: at('2026-08-25T12:00:00.000Z'),
+    timeZone: 'Europe/Minsk',
+  };
+
+  it('moves the time and offers nothing else to write', () => {
+    const change = planReschedule(booking, {
+      startUtc: at('2026-08-27T09:00:00.000Z'),
+      timeZone: 'Europe/Minsk',
+    });
+
+    // Three keys. `status` and `position` are the hiring manager's own ordering, and a
+    // candidate nudging their interview must not be able to reach them (07 §02.7).
+    expect(change && Object.keys(change).sort()).toEqual(['end', 'start', 'timeZone']);
+    expect(change!.start.toISOString()).toBe('2026-08-27T09:00:00.000Z');
+  });
+
+  it('leaves everything but the time byte-identical', () => {
+    const application = {
+      ...booking,
+      status: 'maybe',
+      position: 3000,
+      submittedName: 'Jane Doe',
+      cvKey: 'a3f2.pdf',
+      note: 'Available from September.',
+      interviewNotes: 'Strong on hooks.',
+      conclusion: 'Worth a second round.',
+      assessments: [
+        { criterionId: 'c1', valueId: 'v4' },
+        { criterionId: 'c2', valueId: 'v1' },
+      ],
+    };
+
+    const change = planReschedule(application, {
+      startUtc: at('2026-08-27T09:00:00.000Z'),
+      timeZone: 'Europe/Minsk',
+    });
+    const moved = { ...application, ...change };
+
+    const { start, end, timeZone, ...untouched } = moved;
+    const { start: _s, end: _e, timeZone: _z, ...before } = application;
+    expect(untouched).toEqual(before);
+    // The assessments are the same array, not a copy that happens to match: a
+    // reschedule does not rewrite them and has no reason to read them.
+    expect(moved.assessments).toBe(application.assessments);
+    expect(start.toISOString()).toBe('2026-08-27T09:00:00.000Z');
+    expect(end.toISOString()).toBe('2026-08-27T10:00:00.000Z');
+    expect(timeZone).toBe('Europe/Minsk');
+  });
+
+  it('keeps the interview the length it was booked at', () => {
+    // 01's *future bookings only* rule: a vacancy re-timed to 30 minutes does not
+    // shorten an interview already granted at 60 (07 §13.61).
+    const change = planReschedule(booking, {
+      startUtc: at('2026-08-27T09:00:00.000Z'),
+      timeZone: 'UTC',
+    });
+    expect(bookedDurationMinutes(change!)).toBe(60);
+  });
+
+  /** TC-H07-UNIT-04 */
+  it('is a no-op when the new start is the start it already has', () => {
+    // Accepted, and nothing to do: no calendar call and no `rescheduled` entry, because
+    // moving an interview to the time it already has is not a reschedule (rule 3).
+    expect(planReschedule(booking, { startUtc: booking.start, timeZone: 'Europe/Minsk' })).toBeNull();
+    // Not even when the candidate is reading the page from a different zone. Looking at
+    // an interview from an airport has not moved it.
+    expect(planReschedule(booking, { startUtc: booking.start, timeZone: 'UTC' })).toBeNull();
+  });
+
+  it('moves for a difference of one millisecond, because that is a different instant', () => {
+    expect(
+      planReschedule(booking, { startUtc: at('2026-08-25T11:00:00.001Z'), timeZone: 'UTC' }),
+    ).not.toBeNull();
+  });
+});
+
+/** TC-H07-UNIT-02 */
+describe('slot generation for a reschedule', () => {
+  it("uses the application's own duration, never the vacancy's current one", () => {
+    // Booked at 60; the vacancy has since been changed to 30. The interview keeps the
+    // length it was booked at, so the grid is generated from `end - start`.
+    const application = {
+      start: at('2026-08-25T11:00:00.000Z'),
+      end: at('2026-08-25T12:00:00.000Z'),
+    };
+    expect(bookedDurationMinutes(application)).toBe(60);
+
+    expect(slotsOn({ durationMinutes: bookedDurationMinutes(application) })).toEqual([
+      '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00',
+    ]);
+    // What the vacancy's 30 would have produced, and what the candidate must not see.
+    expect(slotsOn({ durationMinutes: 30 })).toHaveLength(16);
+  });
+});
+
+/** TC-H07-UNIT-03 */
+describe('excludeOwnBooking', () => {
+  const own: BusyInterval = {
+    startUtc: at('2026-08-25T14:00:00.000Z'),
+    endUtc: at('2026-08-25T15:00:00.000Z'),
+  };
+
+  it('does not let an interview block its own reschedule', () => {
+    // The only busy block is this application's own event. Every slot is offered —
+    // including 14:00, the one it currently occupies — because a candidate moving
+    // thirty minutes later must not collide with themselves (07 §05.25).
+    expect(slotsOn({ durationMinutes: 60, busy: excludeOwnBooking([own], own) })).toEqual([
+      '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00',
+    ]);
+  });
+
+  it('is what stands between a short move and a collision with itself', () => {
+    // Without the exclusion the interview blocks the whole hour around itself.
+    expect(slotsOn({ durationMinutes: 60, busy: [own] })).not.toContain('14:00');
+  });
+
+  it('keeps every block that is not the interview itself', () => {
+    const someoneElse: BusyInterval = {
+      startUtc: at('2026-08-25T10:00:00.000Z'),
+      endUtc: at('2026-08-25T11:00:00.000Z'),
+    };
+    // An adjoining meeting, and one that merely starts at the same time: neither is
+    // this interview, and both still remove their slot.
+    const overlapping: BusyInterval = {
+      startUtc: at('2026-08-25T14:00:00.000Z'),
+      endUtc: at('2026-08-25T16:00:00.000Z'),
+    };
+
+    expect(excludeOwnBooking([someoneElse, own, overlapping], own)).toEqual([
+      someoneElse,
+      overlapping,
+    ]);
+  });
+});
+
+describe('currentTimeMessage', () => {
+  it('states the time they came to change rather than pre-selecting it', () => {
+    // Pre-selecting it would make the candidate's first click a deselection (07 design).
+    expect(currentTimeMessage(at('2026-08-25T11:00:00.000Z'), 'Europe/Minsk')).toBe(
+      'Currently Tuesday, 25 August 2026 at 14:00',
     );
   });
 });

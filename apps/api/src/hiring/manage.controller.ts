@@ -1,4 +1,5 @@
-import { Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import type { ManageAvailabilityQuery, RescheduleDto } from './manage.service';
 import { ManageService } from './manage.service';
 
 /**
@@ -22,6 +23,30 @@ export class ManageController {
   @Get(':slug/:token')
   view(@Param('slug') slug: string, @Param('token') token: string) {
     return this.manage.view(slug, token);
+  }
+
+  /**
+   * The reschedule picker's times. `404` whenever `GET` would answer `booking: null` —
+   * the availability of an interview that cannot be moved is not a fact this route has
+   * any business answering with.
+   */
+  @Get(':slug/:token/availability')
+  availability(
+    @Param('slug') slug: string,
+    @Param('token') token: string,
+    @Query() query: ManageAvailabilityQuery,
+  ) {
+    return this.manage.availabilityFor(slug, token, query);
+  }
+
+  @Post(':slug/:token/reschedule')
+  @HttpCode(200)
+  reschedule(
+    @Param('slug') slug: string,
+    @Param('token') token: string,
+    @Body() dto: RescheduleDto,
+  ) {
+    return this.manage.reschedule(slug, token, dto);
   }
 
   @Post(':slug/:token/cancel')

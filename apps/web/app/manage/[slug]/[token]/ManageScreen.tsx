@@ -1,9 +1,20 @@
 'use client';
 
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { HIRING_MESSAGES, cancelConfirmMessage, zoneLabel } from '@devscribed/validation';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import {
+  HIRING_MESSAGES,
+  cancelConfirmMessage,
+  currentTimeMessage,
+  formatLongDate,
+  formatSlotTime,
+  isoDateInZone,
+  retainSelection,
+  zoneLabel,
+} from '@devscribed/validation';
 import { BookingLayout, Button, Card, InfoBanner, Modal, SectionLabel, Skeleton } from '@/ds';
 import { formatDuration, formatWhen } from '@/hiring/format';
+import { SlotPicker, readTimeFormat, writeTimeFormat } from '@/hiring/SlotPicker';
+import { useAvailability } from '@/hiring/useAvailability';
 import type { ManageView } from '@/hiring/types';
 
 type Page =
@@ -28,6 +39,12 @@ type Page =
  * The just-cancelled confirmation is deliberately client-side state. Reloading the same
  * URL yields the blurred screen, which is correct: it is a receipt for an action, not a
  * state of the record (07 §04.19).
+ *
+ * Rescheduling replaces the booking Card in place rather than navigating: the URL does
+ * not change, and **Keep current time** puts the record back with nothing altered.
+ * Choosing a slot *is* the confirmation — there is no second dialog, because a candidate
+ * who chose Thursday 14:00 does not need to be asked whether they meant Thursday 14:00,
+ * and the action is reversible at will (07 §05.26).
  */
 export function ManageScreen({ slug, token }: { slug: string; token: string }) {
   const [page, setPage] = useState<Page>({ state: 'loading' });
@@ -37,9 +54,32 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
   const [justCancelled, setJustCancelled] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState('');
+  const [rescheduling, setRescheduling] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [moving, setMoving] = useState(false);
+  /*
+   * The zone the interview was booked in, not the browser's. The live state states the
+   * time in it, and a picker that silently re-expressed the same interview in a
+   * different zone would read as the page having moved it. The Select is right there
+   * for a candidate who has since travelled.
+   */
+  const [timeZone, setTimeZone] = useState('UTC');
+  const [hour12, setHour12] = useState(false);
   // Named so the dialog opens on it. Focus returns to whatever invoked the dialog on
   // its own, which `Modal` handles for every caller.
   const dismiss = useRef<HTMLButtonElement>(null);
+
+  const booking = page.state === 'ready' ? page.view.booking : null;
+
+  // A browser fact, read after mount: rendering it on the server would hand every
+  // visitor the same format and then correct it under them.
+  useEffect(() => {
+    setHour12(readTimeFormat());
+  }, []);
+
+  useEffect(() => {
+    if (booking) setTimeZone(booking.timeZone);
+  }, [booking?.timeZone]);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,6 +107,83 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
       cancelled = true;
     };
   }, [slug, token]);
+
+  const onSlotResolved = useCallback((slot: string | null) => {
+    setSelectedSlot(slot);
+    if (!slot) setAnnouncement('Your selected time is no longer available. Please choose another.');
+  }, []);
+
+  const availability = useAvailability(`/api/manage/${slug}/${token}/availability`, timeZone, {
+    enabled: rescheduling,
+    keepSlot: selectedSlot,
+    // The month holding the interview, as browsing position only — no slot is pressed,
+    // because pre-selecting the time they came to change would make the first click a
+    // deselection (07 design).
+    openOn: booking ? isoDateInZone(new Date(booking.startUtc), timeZone) : null,
+    onSlotResolved,
+  });
+
+  function startRescheduling(): void {
+    setBanner(null);
+    setSelectedSlot(null);
+    setRescheduling(true);
+  }
+
+  function keepCurrentTime(): void {
+    setRescheduling(false);
+    setSelectedSlot(null);
+    setBanner(null);
+  }
+
+  async function moveInterview(): Promise<void> {
+    if (moving || !selectedSlot) return;
+    setMoving(true);
+    setBanner(null);
+
+    try {
+      const response = await fetch(`/api/manage/${slug}/${token}/reschedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ startUtc: selectedSlot, timeZone }),
+      });
+      const body = await response.json().catch(() => ({}));
+
+      if (response.ok) {
+        setPage({ state: 'ready', view: body });
+        setRescheduling(false);
+        setSelectedSlot(null);
+        setAnnouncement(
+          `Your interview has been moved to ${formatWhen(body.booking.startUtc, body.booking.timeZone)}.`,
+        );
+        return;
+      }
+      /*
+       * A 404 means the booking stopped being live between opening the picker and
+       * submitting — it started, or it was cancelled from the team's side. The blurred
+       * screen is the honest answer, and it is the same one a reload would give.
+       */
+      if (response.status === 404) {
+        setRescheduling(false);
+        setPage((current) =>
+          current.state === 'ready'
+            ? { state: 'ready', view: { ...current.view, booking: null } }
+            : current,
+        );
+        return;
+      }
+      if (body.error === 'slot_taken') {
+        // The offer is stale, so it is withdrawn rather than left to be retried. The
+        // booking on file is untouched — nothing was cancelled to attempt the move.
+        setSelectedSlot(null);
+        availability.reload();
+      }
+      setBanner(body.message ?? HIRING_MESSAGES.manage.rescheduleFailed);
+    } catch {
+      setBanner(HIRING_MESSAGES.manage.rescheduleFailed);
+    } finally {
+      setMoving(false);
+    }
+  }
 
   async function cancelInterview(): Promise<void> {
     if (cancelling) return;
@@ -110,7 +227,7 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
       <BookingLayout data-testid="manage-page">
         <div style={COLUMN}>
           <Card>
-            <Skeleton rows={3} data-testid="manage-loading-skeleton" />
+          <Skeleton rows={3} data-testid="manage-loading-skeleton" />
           </Card>
         </div>
       </BookingLayout>
@@ -133,7 +250,8 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
     );
   }
 
-  const { organizationName, vacancy, booking } = page.view;
+  const { organizationName, vacancy } = page.view;
+  const picking = rescheduling && booking !== null;
 
   return (
     <BookingLayout data-testid="manage-page" wordmark={<Wordmark name={organizationName} />}>
@@ -164,13 +282,28 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
               vacancy never moved (07 §13.61). */}
           {formatDuration(booking?.durationMinutes ?? vacancy.durationMinutes)}
         </div>
+        {picking && (
+          // Stated, never rendered as a selected date or slot.
+          <p
+            data-testid="manage-current-time"
+            style={{
+              margin: 'var(--sp-6) 0 0',
+              fontSize: 'var(--fs-15)',
+              color: 'var(--text-muted)',
+            }}
+          >
+            {currentTimeMessage(new Date(booking!.startUtc), timeZone)}
+          </p>
+        )}
       </header>
 
       <div aria-live="polite" style={SR_ONLY}>
         {announcement}
       </div>
 
-      <div style={COLUMN}>
+      {/* The pickers take the full column the booking page uses; the record itself is
+          the narrow one, because it has four lines to state. */}
+      <div style={picking ? WIDE_COLUMN : COLUMN}>
         {banner && (
           <InfoBanner tone="error" role="alert" data-testid="manage-error-banner">
             {banner}
@@ -191,6 +324,58 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
             testId="manage-not-found"
             message={HIRING_MESSAGES.manage.notFound}
           />
+        ) : picking ? (
+          <div className="manage-reschedule">
+            <SlotPicker
+              availability={availability}
+              selected={selectedSlot}
+              onSelect={(slot) => {
+                setSelectedSlot(slot);
+                setAnnouncement(`${formatSlotTime(new Date(slot), timeZone, hour12)} selected.`);
+              }}
+              timeZone={timeZone}
+              onTimeZoneChange={setTimeZone}
+              hour12={hour12}
+              onFormatChange={(twelve) => {
+                setHour12(twelve);
+                writeTimeFormat(twelve);
+              }}
+              onDateChange={(date) => {
+                // Choosing a date always reloads the times, and a time from another date
+                // is not in that list — so the selection clears.
+                setSelectedSlot((current) => retainSelection(current, availability.slotsOn(date)));
+                setAnnouncement(`${formatLongDate(date)} selected.`);
+              }}
+              testIds={{
+                timeZoneSelect: 'manage-timezone-select',
+                timeFormatToggle: 'manage-timeformat-toggle',
+              }}
+            />
+
+            <div className="manage-reschedule-actions">
+              <Button
+                variant="ghost"
+                onClick={keepCurrentTime}
+                data-testid="manage-reschedule-cancel"
+              >
+                {HIRING_MESSAGES.manage.rescheduleDismiss}
+              </Button>
+              {/* The one primary action in this spec, and disabled until a slot is
+                  chosen: choosing the time *is* the confirmation. */}
+              <Button
+                variant="primary"
+                loading={moving}
+                disabled={!selectedSlot}
+                aria-busy={moving || undefined}
+                onClick={() => void moveInterview()}
+                data-testid="manage-reschedule-submit"
+              >
+                {moving
+                  ? HIRING_MESSAGES.manage.rescheduleSubmitting
+                  : HIRING_MESSAGES.manage.rescheduleSubmit}
+              </Button>
+            </div>
+          </div>
         ) : (
           <Card>
             <SectionLabel>{HIRING_MESSAGES.manage.panelLabel}</SectionLabel>
@@ -246,6 +431,13 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
               is pushed to the trailing end, away from anything benign.
             */}
             <div className="manage-actions">
+              <Button
+                variant="secondary"
+                onClick={startRescheduling}
+                data-testid="manage-reschedule-button"
+              >
+                {HIRING_MESSAGES.manage.rescheduleAction}
+              </Button>
               <Button
                 variant="danger"
                 onClick={() => setConfirming(true)}
@@ -345,6 +537,12 @@ function DeadEnd({
 const COLUMN: CSSProperties = {
   maxWidth: 560,
   margin: '0 auto',
+  display: 'grid',
+  gap: 'var(--sp-8)',
+};
+
+/** The pickers are the booking page's, at the booking page's width. */
+const WIDE_COLUMN: CSSProperties = {
   display: 'grid',
   gap: 'var(--sp-8)',
 };

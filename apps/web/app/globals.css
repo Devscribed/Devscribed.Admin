@@ -375,15 +375,36 @@ a {
 .manage-actions {
   display: flex;
   align-items: center;
-  /* Trailing, away from anything benign. Reschedule joins at the leading end and the
-     pair then sits at opposite ends of the row. */
-  justify-content: flex-end;
+  /* Opposite ends: a destructive control adjacent to a benign one is a misclick
+     waiting to happen. Reschedule leads, Cancel trails. */
+  justify-content: space-between;
   gap: var(--sp-8);
   margin-top: var(--sp-10);
 }
 
 @media (max-width: 599px) {
   .manage-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sp-6);
+  }
+}
+
+/* The reschedule pickers, which replace the booking Card in place. */
+.manage-reschedule {
+  display: grid;
+  gap: var(--sp-10);
+}
+
+.manage-reschedule-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-8);
+}
+
+@media (max-width: 599px) {
+  .manage-reschedule-actions {
     flex-direction: column-reverse;
     align-items: stretch;
     gap: var(--sp-6);

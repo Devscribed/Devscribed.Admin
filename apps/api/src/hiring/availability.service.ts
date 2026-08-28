@@ -3,11 +3,13 @@ import {
   DAY_MS,
   type AvailabilityDates,
   type BookingWindow,
+  type BusyInterval,
   type IsoDate,
   type WorkingHoursSpec,
   bookingWindow,
   bucketByDate,
   datesBetween,
+  excludeOwnBooking,
   generateSlots,
   isOfferedSlot,
   monthBounds,
@@ -31,7 +33,8 @@ export class CalendarUnavailableError extends Error {
   }
 }
 
-export interface VacancyAvailability {
+/** One month of the window, keyed by the asking party's own calendar dates. */
+export interface MonthAvailability {
   timeZone: string;
   window: BookingWindow;
   dates: AvailabilityDates;
@@ -88,13 +91,20 @@ export class AvailabilityService {
     return resolved;
   }
 
-  /** Bookable start instants across a date range, in the candidate's display zone. */
+  /**
+   * Bookable start instants across a date range, in the candidate's display zone.
+   *
+   * `exclude` is the one interval the caller already owns — the event a reschedule is
+   * moving. Without it a candidate trying to shift thirty minutes later collides with
+   * themselves and every slot near their own interview reads as taken (07 §05.25).
+   */
   async slots(input: {
     mailbox: MailboxRef;
     durationMinutes: number;
     timeZone: string;
     from: IsoDate;
     to: IsoDate;
+    exclude?: BusyInterval | null;
     now?: Date;
   }): Promise<Date[]> {
     const now = input.now ?? new Date();
@@ -103,7 +113,7 @@ export class AvailabilityService {
 
     return generateSlots({
       workingHours,
-      busy,
+      busy: input.exclude ? excludeOwnBooking(busy, input.exclude) : busy,
       durationMinutes: input.durationMinutes,
       from: input.from,
       to: input.to,
@@ -112,14 +122,23 @@ export class AvailabilityService {
     });
   }
 
-  /** The public availability response: the window, and one entry per date in it. */
-  async forVacancy(input: {
+  /**
+   * The public availability response: the window, and one entry per date in it.
+   *
+   * Named for the **interviewer** rather than the vacancy, because that is all it ever
+   * needed: a mailbox and a length. The booking page passes the vacancy's; a reschedule
+   * passes the application's own — its booked interviewer, its own duration, and its own
+   * event excluded — and the two legitimately differ once a vacancy has been reassigned
+   * or re-timed (07 §13.61, §13.62).
+   */
+  async forInterviewer(input: {
     interviewerEmail: string;
     durationMinutes: number;
     timeZone: string;
     month?: string;
+    exclude?: BusyInterval | null;
     now?: Date;
-  }): Promise<VacancyAvailability> {
+  }): Promise<MonthAvailability> {
     const now = input.now ?? new Date();
     const window = this.window(input.timeZone, now);
     const range = this.monthRange(window, input.month);
@@ -132,6 +151,7 @@ export class AvailabilityService {
       timeZone: input.timeZone,
       from: range.from,
       to: range.to,
+      exclude: input.exclude,
       now,
     });
 
@@ -189,6 +209,48 @@ export class AvailabilityService {
     }
   }
 
+  /**
+   * Whether the mailbox reports a block on **exactly** this interval.
+   *
+   * Exactness is the point: it is the same identity `excludeOwnBooking` uses, and it is
+   * all a free/busy read gives — no event id crosses the `CalendarProvider` boundary in
+   * that direction. It answers one question a reschedule sometimes has to ask: is this
+   * interview's event still where the row says it is?
+   */
+  async holdsExactly(mailbox: MailboxRef, interval: BusyInterval): Promise<boolean> {
+    const blocks = await this.blocksBetween(mailbox, interval.startUtc, interval.endUtc);
+    return blocks.some(
+      (block) =>
+        block.startUtc.getTime() === interval.startUtc.getTime() &&
+        block.endUtc.getTime() === interval.endUtc.getTime(),
+    );
+  }
+
+  /**
+   * `isFree` with one known event ignored: the interview being moved.
+   *
+   * It reads the blocks and filters rather than asking the provider, because `isFree`
+   * answers with a boolean and a boolean cannot be told which event produced it. A move of less than one duration overlaps the interview's own event by
+   * construction, so without this every short shift would be refused as `slot_taken`
+   * against nothing but itself.
+   */
+  async isFreeExcept(
+    mailbox: MailboxRef,
+    startUtc: Date,
+    endUtc: Date,
+    exclude: BusyInterval | null,
+  ): Promise<boolean> {
+    if (!exclude) return this.isFree(mailbox, startUtc, endUtc);
+
+    const blocks = excludeOwnBooking(
+      await this.blocksBetween(mailbox, startUtc, endUtc),
+      exclude,
+    );
+    // Half-open, exactly as the engine and every provider treat it: touching is not
+    // overlapping, so a move may begin the moment another event ends.
+    return !blocks.some((block) => block.startUtc < endUtc && startUtc < block.endUtc);
+  }
+
   private async workingHours(mailbox: MailboxRef): Promise<WorkingHoursSpec> {
     try {
       return await this.calendar.workingHours(mailbox);
@@ -215,6 +277,14 @@ export class AvailabilityService {
       zonedTimeToUtc(end.year, end.month, end.day + 1, 0, 0, timeZone).getTime() + DAY_MS,
     );
 
+    return this.blocksBetween(mailbox, fromUtc, toUtc);
+  }
+
+  private async blocksBetween(
+    mailbox: MailboxRef,
+    fromUtc: Date,
+    toUtc: Date,
+  ): Promise<BusyInterval[]> {
     try {
       return await this.calendar.busy(mailbox, fromUtc, toUtc);
     } catch (error) {

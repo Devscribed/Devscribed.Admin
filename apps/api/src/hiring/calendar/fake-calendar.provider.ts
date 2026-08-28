@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
+  CalendarEventChange,
   CalendarEventDraft,
   CalendarProvider,
   EventId,
@@ -79,6 +80,34 @@ export class FakeCalendarProvider extends CalendarProvider {
     // Never the candidate's details or the CV bytes (00 §05.23).
     this.logger.log(`createEvent ${id} in ${mailbox.address}`);
     return id;
+  }
+
+  /**
+   * In place, keeping the same id and the same body — which is what a reschedule must
+   * look like from outside. The stored draft moves too, so the slot the interview just
+   * left becomes free and the one it took becomes busy, exactly as a real calendar
+   * would report them.
+   */
+  async updateEvent(
+    mailbox: MailboxRef,
+    eventId: EventId,
+    change: CalendarEventChange,
+  ): Promise<void> {
+    // An id this process never created — the map resets with the process — moves
+    // nothing and is not an error. A dev who restarts the API mid-afternoon should
+    // still be able to reschedule the interview they booked before lunch.
+    const existing = this.events.get(eventId);
+    if (!existing) return;
+    this.events.set(eventId, {
+      mailbox: existing.mailbox,
+      draft: {
+        ...existing.draft,
+        startUtc: change.startUtc,
+        endUtc: change.endUtc,
+        timeZone: change.timeZone,
+      },
+    });
+    this.logger.log(`updateEvent ${eventId} in ${mailbox.address}`);
   }
 
   async cancelEvent(mailbox: MailboxRef, eventId: EventId): Promise<void> {

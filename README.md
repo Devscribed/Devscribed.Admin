@@ -651,9 +651,9 @@ organization somebody already administers.
 
 ### Manage booking
 
-A candidate can call their interview off, from a second public page reached by a per-booking link
-([07](specs/hiring/07-manage-booking.md)). Rescheduling, the team's own copy of both actions, and
-CV replacement follow; what is below is what ships with the first of them.
+A candidate can move their interview or call it off, from a second public page reached by a
+per-booking link ([07](specs/hiring/07-manage-booking.md)). The team's own copy of both actions and
+CV replacement follow; what is below is what ships with the first two.
 
 **Two spec deferrals are now superseded, and this is where they are recorded.**
 [02 §09.40](specs/hiring/02-booking-page.md) said a candidate who books by mistake "must contact
@@ -733,11 +733,43 @@ different facts to a hiring manager scanning a column, and the log now distingui
 shows a first name only, because a card is a glance; the tooltip carries the full name, the date and
 — for a member — the reason, and it is the badge's accessible name rather than the truncated form.
 
-**No mail, still.** The calendar is the whole notification mechanism: `cancelEvent` produces
-Microsoft's own cancellation notice, exactly as `createEvent` produces the invite. Nobody who is
-not the interviewer is notified of a change; they learn of it by opening the board or the card, and
-that is recorded rather than solved — there is no notification system in the product, and building
-one for this feature would be larger than this feature.
+**A reschedule updates the row, and moves the event in place.** `start`, `end` and `timeZone`
+change; `status`, `position`, `submittedName`, the CV, the notes and the criteria do not, and the
+board card does not move. That is the whole point of updating rather than replacing: `position` is
+the hiring manager's own ordering, and a candidate nudging their interview by thirty minutes must
+not silently delete their card and re-insert it at the top of `Scheduled`. Reschedules are
+**unlimited** — no counter, no quota, no cooling-off period — and a move to the time the interview
+already has is accepted as a no-op, touching neither the calendar nor the log.
+
+**Availability for a move is about the application, not the vacancy.** Three facts come from the
+row rather than from the position it was booked against: the duration is `end - start`, so a vacancy
+re-timed since keeps its promise to the interview already granted; the mailbox is the one
+`interviewerAccountId` names, so a reassignment does not silently move a candidate to a stranger;
+and the application's **own event is excluded from the busy calculation**, without which a candidate
+trying to move thirty minutes later collides with themselves and every slot near their own interview
+reads as taken. That exclusion matches on the interval, because an interval is all a free/busy read
+returns — no event id crosses the `CalendarProvider` boundary in that direction.
+
+**A failed move always leaves the interview that was already there.** Nothing is cancelled in order
+to attempt one, so a slot claimed between selection and submission answers `409` with the booking
+wholly intact, and a calendar that refuses answers `503` with the row untouched. The one state that
+needs care is a calendar that succeeded followed by a database write that did not: both parties have
+already been told about a move the row does not record, and there is no move back, because a
+notification cannot be recalled. A retry then finds its own displaced event sitting on the target.
+It is told apart from real contention by asking where this interview's event actually is — if the
+calendar no longer holds it where the row says, the blocker is our own — and the retry completes the
+write **without a second calendar call**, which would only send both parties a second notice for a
+move they were already told about. A calendar somebody edited by hand reads the same way; nothing in
+07 reconciles one.
+
+**No mail, still.** The calendar is the whole notification mechanism: `updateEvent` produces
+Microsoft's own meeting-updated notice and `cancelEvent` its cancellation notice, exactly as
+`createEvent` produces the invite. A reschedule is therefore **never** a cancellation followed by a
+fresh booking — that would tell the candidate their interview is cancelled as the first half of
+moving it, re-upload the CV on every move, and leave a tombstone in the interviewer's calendar each
+time. Nobody who is not the interviewer is notified of a change; they learn of it by opening the
+board or the card, and that is recorded rather than solved — there is no notification system in the
+product, and building one for this feature would be larger than this feature.
 
 `/book/{slug}` and `/manage/{slug}/{token}` are the product's two public routes. The slug carries 72
 bits of entropy, which is why neither needs an organization segment, and it is frozen at creation so

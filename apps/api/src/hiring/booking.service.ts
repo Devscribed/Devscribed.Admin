@@ -98,7 +98,7 @@ export class BookingService {
     }
 
     try {
-      return await this.availability.forVacancy({
+      return await this.availability.forInterviewer({
         interviewerEmail: vacancy.interviewer.email,
         durationMinutes: vacancy.durationMinutes,
         timeZone,

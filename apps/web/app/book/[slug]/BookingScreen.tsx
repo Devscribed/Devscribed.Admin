@@ -1,14 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import {
   CV_ACCEPT,
   HIRING_MESSAGES,
   formatLongDate,
   formatSlotTime,
   managePath,
-  monthMatrix,
-  parseYearMonth,
   retainSelection,
   validateBooking,
   validateBookingNote,
@@ -21,19 +19,17 @@ import {
 import {
   BookingLayout,
   Button,
-  Calendar,
   Card,
   FileInput,
   InfoBanner,
   Input,
   SectionLabel,
-  Select,
   Spinner,
   Textarea,
-  Toggle,
 } from '@/ds';
 import { errorNode, focusByTestId, hintNode } from '@/field-error';
-import { detectTimeZone, formatDuration, formatWhen, timeZoneOptions } from '@/hiring/format';
+import { detectTimeZone, formatDuration, formatWhen } from '@/hiring/format';
+import { SlotPicker, readTimeFormat, writeTimeFormat } from '@/hiring/SlotPicker';
 import { useAvailability } from '@/hiring/useAvailability';
 import type { BookingConfirmation, PublicVacancy } from '@/hiring/types';
 
@@ -56,9 +52,6 @@ const FIELD_VALIDATORS = {
   email: validateEmail,
   note: validateBookingNote,
 };
-
-/** Per browser, this page only — it never reaches an admin screen or an invite. */
-const FORMAT_KEY = 'teammerly.booking.timeFormat';
 
 type Page =
   | { state: 'loading' }
@@ -92,11 +85,7 @@ export function BookingScreen({ slug }: { slug: string }) {
   // hand every visitor the same zone and then correct it under them.
   useEffect(() => {
     setTimeZone(detectTimeZone());
-    try {
-      setHour12(window.localStorage.getItem(FORMAT_KEY) === '12h');
-    } catch {
-      // A browser that refuses storage still gets the default 24-hour clock.
-    }
+    setHour12(readTimeFormat());
   }, []);
 
   useEffect(() => {
@@ -133,21 +122,11 @@ export function BookingScreen({ slug }: { slug: string }) {
     if (!slot) setAnnouncement('Your selected time is no longer available. Please choose another.');
   }, []);
 
-  const availability = useAvailability(slug, timeZone, {
+  const availability = useAvailability(`/api/book/${slug}/availability`, timeZone, {
     enabled: open,
     keepSlot: selectedSlot,
     onSlotResolved,
   });
-
-  const slots = availability.slotsOn(availability.selectedDate);
-  const availableDates = useMemo(
-    () => Object.keys(availability.dates).filter((date) => availability.dates[date].length > 0),
-    [availability.dates],
-  );
-  const weeks = useMemo(() => {
-    const parsed = availability.month ? parseYearMonth(availability.month) : null;
-    return parsed ? monthMatrix(parsed.year, parsed.month) : [];
-  }, [availability.month]);
 
   const change = (field: keyof Values) => (value: string) => {
     setValues((previous) => ({ ...previous, [field]: value }));
@@ -180,21 +159,15 @@ export function BookingScreen({ slug }: { slug: string }) {
   };
 
   const chooseDate = (date: string): void => {
-    availability.selectDate(date);
     // Choosing a date always reloads the times, and a time from another date is not in
     // that list — so the selection clears (time-slot-picker §04.20).
     setSelectedSlot((current) => retainSelection(current, availability.slotsOn(date)));
     setAnnouncement(`${formatLongDate(date)} selected.`);
   };
 
-  const chooseFormat = (choice: string): void => {
-    const twelve = choice === '12h';
+  const chooseFormat = (twelve: boolean): void => {
     setHour12(twelve);
-    try {
-      window.localStorage.setItem(FORMAT_KEY, twelve ? '12h' : '24h');
-    } catch {
-      // The choice still applies to this visit; it simply will not be remembered.
-    }
+    writeTimeFormat(twelve);
   };
 
   const ready = useMemo(() => {
@@ -341,74 +314,23 @@ export function BookingScreen({ slug }: { slug: string }) {
         <Confirmation confirmation={confirmation} slug={slug} />
       ) : (
         <div style={{ display: 'grid', gap: 'var(--sp-12)' }}>
-          <div className="booking-panels">
-            <Card title="Date">
-              {availability.status === 'failed' ? (
-                <Failure
-                  testId="calendar-error"
-                  retryTestId="calendar-retry"
-                  onRetry={availability.reload}
-                />
-              ) : !availability.month ? (
-                // The first response is what decides which month to show, so there is
-                // no grid to dim yet — only a wait.
-                <div
-                  data-testid="calendar-loading"
-                  style={{ display: 'flex', justifyContent: 'center', color: 'var(--accent)' }}
-                >
-                  <Spinner size={24} />
-                </div>
-              ) : (
-                <Calendar
-                  month={availability.month}
-                  weeks={weeks}
-                  availableDates={availableDates}
-                  selected={availability.selectedDate}
-                  onSelect={chooseDate}
-                  onMonthChange={availability.showMonth}
-                  minDate={availability.window?.from}
-                  maxDate={availability.window?.to}
-                  today={availability.window?.from ?? null}
-                  loading={availability.status === 'loading'}
-                />
-              )}
-            </Card>
-
-            <Card title="Time">
-              <SlotList
-                status={availability.status}
-                date={availability.selectedDate}
-                slots={slots}
-                selected={selectedSlot}
-                onSelect={(slot) => {
-                  setSelectedSlot(slot);
-                  setAnnouncement(`${formatSlotTime(new Date(slot), timeZone, hour12)} selected.`);
-                }}
-                timeZone={timeZone}
-                hour12={hour12}
-                onRetry={availability.reload}
-              />
-            </Card>
-          </div>
-
-          <div className="booking-controls">
-            <div className="booking-zone">
-              <Select
-                options={timeZoneOptions(timeZone)}
-                value={timeZone}
-                onChange={setTimeZone}
-                data-testid="booking-timezone-select"
-              />
-            </div>
-            <div className="booking-format">
-              <Toggle
-                options={['24h', '12h']}
-                value={hour12 ? '12h' : '24h'}
-                onChange={chooseFormat}
-                data-testid="booking-timeformat-toggle"
-              />
-            </div>
-          </div>
+          <SlotPicker
+            availability={availability}
+            selected={selectedSlot}
+            onSelect={(slot) => {
+              setSelectedSlot(slot);
+              setAnnouncement(`${formatSlotTime(new Date(slot), timeZone, hour12)} selected.`);
+            }}
+            timeZone={timeZone}
+            onTimeZoneChange={setTimeZone}
+            hour12={hour12}
+            onFormatChange={chooseFormat}
+            onDateChange={chooseDate}
+            testIds={{
+              timeZoneSelect: 'booking-timezone-select',
+              timeFormatToggle: 'booking-timeformat-toggle',
+            }}
+          />
 
           <Card>
             <SectionLabel>Your details</SectionLabel>
@@ -520,161 +442,6 @@ const SR_ONLY: CSSProperties = {
   clip: 'rect(0 0 0 0)',
   whiteSpace: 'nowrap',
 };
-
-/**
- * A flat chronological list of bookable starts. There is no disabled slot state,
- * because a time that cannot be booked is simply not listed (time-slot-picker §03.15).
- */
-function SlotList({
-  status,
-  date,
-  slots,
-  selected,
-  onSelect,
-  timeZone,
-  hour12,
-  onRetry,
-}: {
-  status: 'loading' | 'ready' | 'failed';
-  date: string | null;
-  slots: string[];
-  selected: string | null;
-  onSelect: (slot: string) => void;
-  timeZone: string;
-  hour12: boolean;
-  onRetry: () => void;
-}) {
-  const listRef = useRef<HTMLDivElement>(null);
-
-  if (status === 'failed') {
-    return <Failure testId="slot-list-error" retryTestId="slot-list-retry" onRetry={onRetry} />;
-  }
-
-  const focusAt = (index: number): void => {
-    const options = listRef.current?.querySelectorAll<HTMLButtonElement>('[data-slot]');
-    if (!options || options.length === 0) return;
-    const clamped = Math.max(0, Math.min(options.length - 1, index));
-    options[clamped].focus();
-  };
-
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
-    const options = [...(listRef.current?.querySelectorAll<HTMLButtonElement>('[data-slot]') ?? [])];
-    const current = options.findIndex((option) => option === document.activeElement);
-    const moves: Record<string, number> = {
-      ArrowDown: current + 1,
-      ArrowRight: current + 1,
-      ArrowUp: current - 1,
-      ArrowLeft: current - 1,
-      Home: 0,
-      End: options.length - 1,
-    };
-    if (moves[event.key] === undefined) return;
-    event.preventDefault();
-    focusAt(moves[event.key]);
-  };
-
-  return (
-    <div data-testid="slot-list">
-      <div data-testid="slot-list-header" style={{ marginBottom: 'var(--sp-6)' }}>
-        <div
-          data-testid="slot-list-date"
-          style={{ fontSize: 'var(--fs-14)', color: 'var(--text)' }}
-        >
-          {date ? formatLongDate(date) : ' '}
-        </div>
-        <div
-          data-testid="slot-list-timezone"
-          style={{ fontSize: 'var(--fs-12)', color: 'var(--text-muted)' }}
-        >
-          All times in {timeZone}
-        </div>
-      </div>
-
-      {status === 'loading' ? (
-        <div
-          data-testid="slot-list-loading"
-          style={{ display: 'flex', justifyContent: 'center', color: 'var(--accent)' }}
-        >
-          <Spinner size={24} />
-        </div>
-      ) : slots.length === 0 ? (
-        <p
-          data-testid="slot-list-empty"
-          style={{ margin: 0, color: 'var(--text-muted)', fontSize: 'var(--fs-14)' }}
-        >
-          {date
-            ? 'No times available on this date — please pick another.'
-            : 'No times are available in the next month.'}
-        </p>
-      ) : (
-        <div
-          ref={listRef}
-          role="group"
-          aria-label="Available times"
-          className="booking-slots"
-          onKeyDown={onKeyDown}
-        >
-          {slots.map((slot) => {
-            const label = formatSlotTime(new Date(slot), timeZone, hour12);
-            const chosen = selected === slot;
-            return (
-              <Button
-                key={slot}
-                variant="secondary"
-                size="sm"
-                data-slot={slot}
-                data-testid={`slot-option-${slot}`}
-                aria-pressed={chosen}
-                // The name carries the time in the format on screen, plus the zone it
-                // is expressed in — a bare "14:00" means nothing on its own.
-                aria-label={`${label}, ${timeZone}`}
-                onClick={() => onSelect(slot)}
-                style={
-                  chosen
-                    ? {
-                        background: 'var(--accent-soft)',
-                        color: 'var(--accent)',
-                        borderColor: 'var(--accent-border)',
-                        fontVariantNumeric: 'tabular-nums',
-                      }
-                    : { fontVariantNumeric: 'tabular-nums' }
-                }
-              >
-                {label}
-              </Button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Availability could not be loaded — never rendered as a month with nothing free. */
-function Failure({
-  testId,
-  retryTestId,
-  onRetry,
-}: {
-  testId: string;
-  retryTestId: string;
-  onRetry: () => void;
-}) {
-  return (
-    <div data-testid={testId}>
-      <InfoBanner tone="warning">{HIRING_MESSAGES.booking.availabilityFailed}</InfoBanner>
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={onRetry}
-        data-testid={retryTestId}
-        style={{ marginTop: 'var(--sp-6)' }}
-      >
-        Try again
-      </Button>
-    </div>
-  );
-}
 
 function Confirmation({
   confirmation,

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import {
   CalendarAttachment,
+  CalendarEventChange,
   CalendarEventDraft,
   CalendarProvider,
   EventId,
@@ -167,6 +168,32 @@ export class TenantAppOnlyProvider extends CalendarProvider {
     }
 
     return created.id;
+  }
+
+  /**
+   * `PATCH` on the event, carrying only the two times.
+   *
+   * Graph sends the meeting-updated notice to every attendee as a consequence, which is
+   * why this release still needs no mail transport (00 §02.10). The event keeps its id,
+   * its body, its attendee and its attachment — the CV is never re-uploaded to move an
+   * interview — and it stays in the mailbox it was created in (07 §12.58).
+   *
+   * `Calendars.ReadWrite` already covers this, so it needs no new Graph permission and
+   * no new consent.
+   */
+  async updateEvent(
+    mailbox: MailboxRef,
+    eventId: EventId,
+    change: CalendarEventChange,
+  ): Promise<void> {
+    await this.call(`${this.userPath(mailbox)}/events/${encodeURIComponent(eventId)}`, {
+      operation: 'updateEvent',
+      method: 'PATCH',
+      body: {
+        start: { dateTime: this.graphDateTime(change.startUtc), timeZone: 'UTC' },
+        end: { dateTime: this.graphDateTime(change.endUtc), timeZone: 'UTC' },
+      },
+    });
   }
 
   /**
