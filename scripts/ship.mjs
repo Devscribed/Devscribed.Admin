@@ -93,6 +93,9 @@ function runState() {
  * definition under .claude/agents/. Repeating them here would create a second copy to drift.
  */
 function promptFor(stage, run, verdictPath) {
+  /* The run's own verdicts, journal summary and digest are committed, so they land in the
+     diff — and one digest alone is 275 KB of JSON that says nothing about the product. What
+     is under review is the change, not the pipeline's record of reviewing it. */
   const head = `Run id: \`${run.id}\`\nRun directory: \`.workflow/runs/${run.id}/\`\n`
     + `Spec: \`${run.spec}\`\nBranch: \`${run.branch}\`\nDiff base: \`${run.baseRef}\`\n\n`
     + `Write your verdict to \`${verdictPath}\` in the schema from your agent definition. `
@@ -115,12 +118,12 @@ function promptFor(stage, run, verdictPath) {
     case 'review': {
       const done = run.stages.review.attempts ?? 0;
       if (!done) {
-        return `${head}\nReview \`git diff ${run.baseRef}...HEAD\` against the spec and the handoff.${back}`;
+        return `${head}\nReview \`git diff ${run.baseRef}...HEAD -- . ':(exclude).workflow'\` against the spec and the handoff.${back}`;
       }
       const priors = Array.from({ length: done }, (_, i) =>
         `  - \`.workflow/runs/${run.id}/stages/review.attempt-${i + 1}.json\``).join('\n');
       return `${head}
-Review \`git diff ${run.baseRef}...HEAD\` against the spec and the handoff. **This diff has been reviewed ${done} time(s) before.**
+Review \`git diff ${run.baseRef}...HEAD -- . ':(exclude).workflow'\` against the spec and the handoff. **This diff has been reviewed ${done} time(s) before.**
 
 ## What earlier passes concluded
 
