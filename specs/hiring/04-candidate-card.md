@@ -3,9 +3,9 @@ id: "04"
 title: Candidate Card
 routes: ["/org/{orgId}/hiring/candidates/{candidateId}"]
 api: ["GET /api/organizations/{orgId}/hiring/candidates/{candidateId}", "PATCH /api/organizations/{orgId}/hiring/applications/{applicationId}", "PUT /api/organizations/{orgId}/hiring/applications/{applicationId}/criteria/{criterionId}", "DELETE /api/organizations/{orgId}/hiring/applications/{applicationId}/criteria/{criterionId}", "GET /api/organizations/{orgId}/hiring/applications/{applicationId}/cv"]
-entities: [Candidate, Application, ApplicationCriterion]
+entities: [Candidate, Application, ApplicationCriterion, ApplicationScheduleEvent, ApplicationCv]
 tags: [candidate-detail, notes, conclusion, criteria, cv, autosave, interviewer-scope]
-depends-on: ["01", "02", "05", "06"]
+depends-on: ["01", "02", "05", "06", "07"]
 ---
 
 # 04 — Candidate Card
@@ -20,7 +20,7 @@ A candidate may have applied to more than one vacancy. The card shows a section 
 in the common case there is exactly one. Everything the team writes belongs to an **application**,
 not to the person, because it was formed in a specific interview by a specific interviewer.
 
-This is the page the calendar invite links to ([02 §08.31](02-booking-page.md)), which is why it is
+This is the page the calendar invite links to ([02 §08.32](02-booking-page.md)), which is why it is
 a real route and not a modal over the board.
 
 ## Actors & Preconditions
@@ -69,7 +69,13 @@ a real route and not a modal over the board.
     - The **interviewer**.
     - The candidate's **Note**, if they left one.
     - The **status**, which is the board column ([05](05-board.md)).
-    - The cancelled mark, when set.
+    - The cancelled mark, when set, naming who cancelled and when.
+    - The **scheduling history** ([07 §11](07-manage-booking.md)) — every reschedule, the
+      cancellation, the original booking, and each CV replacement, merged into one timeline,
+      newest first, each entry attributed to the candidate or to the member who acted.
+      It renders **collapsed** to a single summary line ("Rescheduled twice · booked 12 Aug"),
+      because a candidate who moved five times must not add five permanent rows to a section that
+      already needed collapsing. It is **team-only** and appears on no candidate-facing surface.
 12. And editable:
     - **Interview notes** (§04).
     - **Conclusion** (§04).
@@ -139,20 +145,25 @@ a real route and not a modal over the board.
 32. The CV is shown by original filename with **view and download**.
 33. It is served through the authenticated endpoint of [00 §03.16](00-integrations.md); the page
     never renders a storage URL.
-34. Internal members **cannot replace or delete** a CV. Nothing in this release can — the candidate
-    has no reschedule flow to replace it with, and the record is permanent.
+34. Internal members **cannot replace or delete** a CV. The **candidate** can, from their manage
+    page ([07 §07](07-manage-booking.md)) — and only they can. "The candidate corrected their own
+    CV" and "somebody in the organization swapped it" are very different facts about a hiring
+    record, and only the first is available anywhere in the product.
+35. Every version is kept; nothing is deleted. The card shows the **current** CV, and the
+    scheduling history (§03.11) names each replacement, so a CV that changed after the interviewer
+    read it is never a silent surprise.
 
 ### 08. States
 
-35. **Loading** — a non-interactive treatment while the record is fetched.
-36. **Error** — a friendly message with a retry; unsaved note text is never silently lost.
-37. **Not found** — for an unknown candidate, or one this caller may not see.
+36. **Loading** — a non-interactive treatment while the record is fetched.
+37. **Error** — a friendly message with a retry; unsaved note text is never silently lost.
+38. **Not found** — for an unknown candidate, or one this caller may not see.
 
 ### 09. Accessibility
 
-38. Fully operable by keyboard and screen reader: the CV actions, both text editors, the criteria
+39. Fully operable by keyboard and screen reader: the CV actions, both text editors, the criteria
     autocomplete and its value controls, and the status control are all properly labelled.
-39. Save outcomes and errors are announced via a polite live region — including autosaves, which
+40. Save outcomes and errors are announced via a polite live region — including autosaves, which
     must not announce so often that they become noise.
 
 ## Screens

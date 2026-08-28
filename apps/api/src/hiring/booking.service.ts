@@ -127,7 +127,7 @@ export class BookingService {
 
     // 2. Field validation, before anything is written or reserved. It runs ahead of the
     //    duplicate and slot checks so an incomplete probe learns nothing about either
-    //    (02 §09.37, TC-H02-INT-05).
+    //    (02 §09.38, TC-H02-INT-05).
     const validation = validateBooking({
       firstName: dto.firstName,
       lastName: dto.lastName,
@@ -143,7 +143,7 @@ export class BookingService {
 
     // 3. The duplicate check, which runs only here — there is no live variant on email
     //    blur, because that would hand out the answer for the price of typing an
-    //    address (02 §09.37).
+    //    address (02 §09.38).
     await this.assertNotAlreadyBooked(vacancy.organizationId, vacancy.id, email);
 
     // 4. The slot, re-checked against the live calendar. Two questions, deliberately
@@ -391,7 +391,7 @@ export class BookingService {
    * Identical content for both parties — one event, one body (00 §04.19). The deep link
    * to the candidate's card is the only internal thing in it: it is authenticated and
    * the ids are UUIDs, so it reveals that an admin tool exists and nothing else, which
-   * 02 §08.32 accepts deliberately.
+   * 02 §08.33 accepts deliberately.
    */
   private eventBody(input: {
     vacancy: { title: string; durationMinutes: number };
@@ -410,7 +410,7 @@ export class BookingService {
     return [
       `${input.vacancy.title} — ${input.vacancy.durationMinutes} minutes`,
       // 24-hour, unconditionally: the page's format toggle is the candidate's, not
-      // ours, and the zone named is the one they booked in (02 §08.34).
+      // ours, and the zone named is the one they booked in (02 §08.35).
       `${formatBookedWhen(input.start, input.timeZone)} (${input.timeZone})`,
       `${input.submittedName} · ${input.email}`,
       input.note ? `Note: ${input.note}` : null,

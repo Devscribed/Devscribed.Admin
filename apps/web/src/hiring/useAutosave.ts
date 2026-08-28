@@ -28,7 +28,7 @@ export interface UseAutosave {
  * The hook owns three things the loop deliberately does not: the value the textarea
  * renders, the time of the last accepted write, and what gets announced aloud.
  *
- * Announcements follow 04 §09.39 — every failure and every explicit save, and no
+ * Announcements follow 04 §09.40 — every failure and every explicit save, and no
  * routine autosave. A live region that spoke every two seconds would talk over the
  * interview it is there to help record; the visible indicator carries that case.
  *

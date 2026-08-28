@@ -21,8 +21,10 @@ delivers the invite to both parties — and one application appears on that vaca
 The link carries the vacancy, so the candidate never chooses a position. Duration comes from the
 vacancy too ([01 §01](01-vacancies.md)), so the page has no interview-type picker.
 
-There is **no way to change or cancel a booking in this release.** Reschedule and cancel are
-deferred (see the README); the consequence is documented in §09 and §11.
+Changing or cancelling a booking is **not** this page's job and never was — it belongs to
+[07-manage-booking.md](07-manage-booking.md), which owns the manage link this page mints, the
+public page it leads to, and the team's equivalent actions. This spec owns one thing: turning a
+stranger with a link into a scheduled interview.
 
 ## Actors & Preconditions
 
@@ -142,54 +144,68 @@ deferred (see the README); the consequence is documented in §09 and §11.
     - `submittedName` — the name exactly as submitted, frozen. The candidate's display name may
       move on; this keeps an accurate record of what went into the invite.
     - `start`, `end`, `timeZone`, `graphEventId`, `cv`, `note`.
-29. Categories, interview notes, conclusions, and criteria are **not** touched by a booking; they
+    - `interviewerAccountId` — the interviewer this booking was actually made with, stamped here
+      rather than resolved later through the vacancy, so a reassignment cannot retroactively rewrite
+      who held an interview that already happened ([07 §13.63](07-manage-booking.md)).
+    - `manageToken` — `randomBytes(16).base64url`, unique, frozen. It is what
+      [07](07-manage-booking.md) addresses this booking by.
+29. **One `ApplicationCv` row** records the CV as submitted, and **one `ApplicationScheduleEvent` of
+    type `booked`** opens the scheduling history, so that history is the whole story rather than
+    only its later deviations.
+30. Categories, interview notes, conclusions, and criteria are **not** touched by a booking; they
     belong to the internal screens and survive repeat bookings.
 
 ### 08. The Invite
 
-30. Exactly **one** calendar event is created, in the interviewer's mailbox, with the candidate as
+31. Exactly **one** calendar event is created, in the interviewer's mailbox, with the candidate as
     an attendee. Microsoft delivers the invite to both.
-31. **Both parties receive identical content.** The body carries the vacancy title, the interview
+32. **Both parties receive identical content.** The body carries the vacancy title, the interview
     length, the date and time in the candidate's booked zone, the candidate's name, email, and Note
     if any, and a **link to that candidate's card** ([04](04-candidate-card.md)).
-32. The candidate therefore sees the internal link. It is authenticated, and ids are UUIDs, so it
+33. The candidate therefore sees the internal link. It is authenticated, and ids are UUIDs, so it
     reveals the existence of an admin tool and nothing else — no count, no ordering, no other
     candidate. This is accepted deliberately.
-33. The CV is attached to the event ([00 §02.11](00-integrations.md)).
-34. Times in the body use the 24-hour clock regardless of the page toggle. The invite *itself* is
+34. The CV is attached to the event ([00 §02.11](00-integrations.md)).
+35. Times in the body use the 24-hour clock regardless of the page toggle. The invite *itself* is
     rendered by each recipient's own calendar client in whatever format they have configured; that
     is not ours to control.
 
 ### 09. Repeat Bookings
 
-35. A booking is rejected when the same email already has a **future** application for the **same
+36. A booking is rejected when the same email already has a **future** application for the **same
     vacancy**. The candidate is told plainly, with the existing date and time.
-36. The check is scoped deliberately:
+37. The check is scoped deliberately:
     - **Same vacancy only.** One person applying to a React role and a .NET role is normal, and the
       candidate database is built on filtering one person's applications by position.
     - **Future only.** Someone who interviewed three months ago is not a duplicate; they are a
       re-interview, and their history is visible on their card regardless.
-37. The check runs **server-side, at submit only** — never live on email blur. A live check would
+38. The check runs **server-side, at submit only** — never live on email blur. A live check would
     hand out the answer for the price of typing an address.
-38. This departs from user-management spec 02's enumeration-safe posture (`TC-02-INT-05`), which
+39. This departs from user-management spec 02's enumeration-safe posture (`TC-02-INT-05`), which
     answers forgot-password neutrally regardless of whether the account exists. The departure is
     deliberate: reaching this check costs an unguessable link, a name, a valid slot selection, and
     a CV upload, which is not the cheap oracle a single-field form is — and a neutral response
     would cost every honest candidate the on-page confirmation with their time on it.
-39. Because there is no cancel or reschedule flow in this release, a candidate who books by mistake
-    cannot correct it themselves and must contact the organization.
+40. A candidate who books by mistake corrects it themselves, through the manage link in their
+    invite — see [07 §01](07-manage-booking.md). Earlier revisions of this spec said they must
+    contact the organization; that was true only while reschedule and cancel were deferred.
+    Cancelling does **not** consume their one future booking: the duplicate check above already
+    excludes cancelled applications, so a candidate who cancels can book this vacancy again.
 
 ### 10. Confirmation
 
-40. On success the page replaces the booking area with a confirmation showing the vacancy title,
+41. On success the page replaces the booking area with a confirmation showing the vacancy title,
     the length, the date and time in the booked zone with the zone named, and the candidate's
     submitted details.
-41. The confirmation states that a calendar invite has been sent to the candidate's email address.
-42. It offers **no** manage, reschedule, or cancel affordance, and no link to one.
+42. The confirmation states that a calendar invite has been sent to the candidate's email address.
+43. It carries the **manage link** for this booking — `/manage/{slug}/{token}` — so a candidate who
+    mistypes their choice can fix it before closing the tab. The same link is written into the
+    calendar event body, which is the durable copy; the confirmation's is a convenience, and is
+    lost on refresh by design ([07 §03](07-manage-booking.md)).
 
 ### 11. Abuse Exposure
 
-43. **There is no rate limiting, CAPTCHA, or other spam or abuse protection on this endpoint**,
+44. **There is no rate limiting, CAPTCHA, or other spam or abuse protection on this endpoint**,
     and this is a deliberate decision rather than an omission. The exposure it leaves open:
     - the endpoint is unauthenticated and accepts a **10 MB** upload;
     - there is **no minimum lead time**, so every slot from now to the window's end is bookable;
@@ -198,17 +214,20 @@ deferred (see the README); the consequence is documented in §09 and §11.
     Anyone holding the link can therefore walk a month of slots with throwaway addresses, filling
     the interviewer's calendar and uploading 10 MB per request. The unguessable slug protects
     against *finding* the page, but the link exists to be shared.
-44. The mitigation, when it is wanted, is a per-IP limit on this POST — see the README's Future
+45. The mitigation, when it is wanted, is a per-IP limit on this POST — see the README's Future
     Improvements. Nothing in this spec should be read as claiming the endpoint is protected.
+46. [07 §15](07-manage-booking.md) extends this exposure rather than narrowing it: the manage
+    routes are unauthenticated on the same terms, and CV replacement is unlimited with nothing ever
+    deleted, so storage per booking is unbounded. The posture there is this one.
 
 ### 12. Responsiveness & Accessibility
 
-45. On wide viewports the calendar, slot picker, and form may sit side by side; on narrow ones they
+47. On wide viewports the calendar, slot picker, and form may sit side by side; on narrow ones they
     stack. The page body never scrolls horizontally at any supported width.
-46. Fully operable by keyboard and screen reader. Form fields have real labels, required-state
+48. Fully operable by keyboard and screen reader. Form fields have real labels, required-state
     indication, and inline errors announced to assistive technology. Booking success and failure
     are announced via a polite live region.
-47. The controls carry their own accessibility requirements — see
+49. The controls carry their own accessibility requirements — see
     [controls/calendar-control.md](controls/calendar-control.md) and
     [controls/time-slot-picker-control.md](controls/time-slot-picker-control.md).
 
@@ -443,7 +462,8 @@ Errors:
 
 ## Out of Scope
 
-- Reschedule, cancel, and any manage-booking link — deferred, see the README.
+- Reschedule, cancel, and CV replacement — owned by [07](07-manage-booking.md). This page **mints**
+  the manage token and renders its link; it does not act on one.
 - Rate limiting, CAPTCHA, email verification — see §11.
 - The candidate choosing a position: the link carries it.
 - The candidate choosing an interview length: the vacancy carries it.

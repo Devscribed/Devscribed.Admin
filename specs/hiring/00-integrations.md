@@ -56,16 +56,25 @@ decision.
      busy(mailbox, fromUtc, toUtc): Promise<Interval[]>
      isFree(mailbox, startUtc, endUtc): Promise<boolean>
      createEvent(mailbox, event): Promise<EventId>
-     cancelEvent(mailbox, eventId): Promise<void>
+     updateEvent(mailbox, eventId, change): Promise<void>
+     cancelEvent(mailbox, eventId, comment?): Promise<void>
    }
    ```
+
+   `updateEvent` moves an existing event in place and is added by
+   [07-manage-booking.md](07-manage-booking.md). A reschedule is **never** a cancellation followed
+   by a fresh booking: that would tell the candidate their interview is cancelled as the first half
+   of moving it, re-upload the CV attachment on every move, and leave a tombstone in the
+   interviewer's calendar each time. `cancelEvent` gains an optional comment so a deliberate
+   cancellation can carry the reason a member gave, instead of the fixed string the compensating
+   rollback uses.
 
 5. **`TenantAppOnlyProvider`** authenticates with the client-credentials flow against a single
    Azure app registration. Application permissions required, admin-consented:
 
    | Permission | Used for |
    |---|---|
-   | `Calendars.ReadWrite` | free/busy reads, event creation and cancellation |
+   | `Calendars.ReadWrite` | free/busy reads, event creation, update, and cancellation |
    | `MailboxSettings.Read` | the interviewer's configured working hours |
    | `User.Read.All` | resolving an email address to a tenant mailbox |
 
@@ -85,7 +94,10 @@ decision.
    generated only within working hours (see [02-booking-page.md](02-booking-page.md) §05); a `free`
    event merely fails to remove one.
 10. **`createEvent` adds the candidate as an attendee.** Microsoft then delivers the calendar
-    invite to both parties. This is why the release needs no mail transport (see §04).
+    invite to both parties. This is why the release needs no mail transport (see §04). The same
+    holds for every later change to that event: `updateEvent` produces a meeting-updated notice and
+    `cancelEvent` a cancellation notice, both delivered by Microsoft to both parties, so
+    [07-manage-booking.md](07-manage-booking.md) introduces no mail either.
 11. The CV is attached to the created event: inline for files under 3 MB, via an upload session
     above that. Graph ignores an `attachments` array supplied at creation time, so the attachment
     is always added after the event exists.
@@ -118,17 +130,41 @@ decision.
     session and the interviewer scope, then streams the bytes from whichever provider is
     configured. Presigned URLs remain available later as an optimisation; they are not the security
     model.
-17. Storage keys are opaque and application-generated (`{applicationId}{extension}`). A key is
+17. Storage keys are opaque and application-generated (`{cvId}{extension}`). A key is
     never derived from user input, and the filesystem implementation additionally rejects any
     character outside `[A-Za-z0-9._-]` before touching the disk.
 
+    The original shape was `{applicationId}{extension}`, which is a **single slot** and cannot hold
+    two versions of one candidate's CV. [07-manage-booking.md](07-manage-booking.md) §07 lets the
+    candidate replace theirs and keeps every version, so the key moved to the CV's own id. Files
+    written under the old shape keep the keys they have — the migration back-fills a row per
+    application and moves nothing.
+
+    **Nothing is ever deleted** except by the booking flow's own compensation (§05.22). A superseded
+    CV stays in storage: the record is permanent, and what a candidate submitted at booking is
+    evidence the interviewer may already have read.
+
 ### 04. Mail
 
-18. **No mail implementation ships in this release.** The only message hiring sends is the
-    interview invite, and Microsoft delivers that as a consequence of §02.10.
+18. **No mail implementation ships in this release.** The only messages hiring sends are the
+    interview invite and the update and cancellation notices that follow it, and Microsoft delivers
+    every one of them as a consequence of §02.10. This survived
+    [07-manage-booking.md](07-manage-booking.md) unchanged: reschedule and cancel notify through
+    the calendar exactly as booking does, so the symmetry that justified deferring a transport still
+    holds.
 19. Both parties receive **identical content** — one event, one body. The body therefore carries no
     interviewer-only material beyond the deep link described in
     [02-booking-page.md](02-booking-page.md) §08.
+
+    **Departure, recorded rather than quietly taken.** Since
+    [07-manage-booking.md](07-manage-booking.md), the body also carries the candidate's
+    per-booking manage link, and one event has one body, so the interviewer receives it too. With
+    no mail transport this is the only channel that reaches the candidate at all, which makes the
+    departure forced rather than chosen. It costs the interviewer no capability they lack — they
+    cancel and reschedule from the candidate card already — and the real cost is attribution: an
+    action taken through that link is logged as the candidate's. When a transport lands, the email
+    becomes the carrier, the body link is dropped, and this requirement is restored without a
+    migration.
 20. When a later release needs to send something that is not an invite, it implements the existing
     `MailService` (user-management `apps/api/src/mail/`). Nothing in hiring should reach for a
     transport directly.

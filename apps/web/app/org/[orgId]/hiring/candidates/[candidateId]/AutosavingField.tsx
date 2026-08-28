@@ -80,7 +80,7 @@ export function AutosavingField({
       {/*
         The announcements, kept apart from the visible indicator on purpose. If the
         indicator itself were the live region, every autosave would be spoken — which
-        over an hour-long interview is the noise 04 §09.39 rules out.
+        over an hour-long interview is the noise 04 §09.40 rules out.
       */}
       <span aria-live="polite" data-testid={`${testId}-announcer`} style={VISUALLY_HIDDEN}>
         {editor.announced ?? ''}

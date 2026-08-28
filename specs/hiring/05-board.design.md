@@ -49,8 +49,18 @@ Visual and interaction specification for the per-vacancy board. Pairs with
 - Hover `--hover-bg-tint`. **Held** — `--shadow-pop`, `translateY(-1px)` and an `--accent-border`
   edge. Only a keyboard-held card ever renders this: a card dragged with a pointer is not drawn at
   all, and what lifts under the cursor is the browser's own drag image.
-- **Cancelled** — the whole card at `opacity: .65` with a `Badge tone="inactive"` reading
-  "Cancelled". Never removed from its column.
+- **Cancelled** — the whole card at `opacity: .65` with a `Badge tone="inactive"` that **names who
+  cancelled**. Never removed from its column.
+
+  | Actor | Badge | `Tooltip` |
+  |---|---|---|
+  | Candidate | Cancelled by candidate | Cancelled by {submittedName} on {date} |
+  | Member | Cancelled by {firstName} | Cancelled by {memberFullName} on {date} — {reason} |
+
+  **First name only** on the badge: a board card is a glance, and the tooltip carries the full name,
+  the date, and the reason when one was given. **"Cancelled by candidate"** rather than the
+  candidate's own name, because their name is already the card's title and repeating it reads as a
+  bug. The badge's accessible name is the full tooltip text, never the truncated form.
 - **Past interview** — the date renders in `--text-faint`. Nothing else changes; the card does not
   move.
 - `⚑` is the missing-conclusion marker, `--tracker` amber, only in `Didn't pass` and `Offer`, with
@@ -66,7 +76,7 @@ Visual and interaction specification for the per-vacancy board. Pairs with
 | Column | **`BoardColumn`** (new) | `status`, `placeholderIndex`, `placeholderHeight`, `onDragOverIndex`, `onDrop` | `board-column-{status}` |
 | Drop placeholder | **`BoardColumn`** (new) | — | `board-placeholder-{status}` |
 | Card | **`BoardCard`** (new) | `draggable`, `lifted`, `onDragStart`, `onDragEnd`, `onKeyDown`, `onOpen` | `board-card-{applicationId}` |
-| Cancelled mark | `Badge` | `tone="inactive"` | `board-card-cancelled-{applicationId}` |
+| Cancelled mark | `Badge` + `Tooltip` | `tone="inactive"` | `board-card-cancelled-{applicationId}` |
 | Missing conclusion | `Tooltip` + inline glyph | — | `board-card-no-conclusion-{applicationId}` |
 | Move failure | `Toast` | `tone="error"` | `toast-move-failed` |
 | Loading | `Skeleton` | — | `board-loading-skeleton` |
@@ -88,7 +98,10 @@ slot means, and what a drop writes are all the screen's.
 | Empty column | Nothing here yet. |
 | Empty board | No candidates yet. Share the booking link to start. |
 | Missing conclusion tooltip | No conclusion recorded |
-| Cancelled badge | Cancelled |
+| Cancelled badge · candidate | Cancelled by candidate |
+| Cancelled badge · member | Cancelled by {firstName} |
+| Cancelled tooltip · candidate | Cancelled by {submittedName} on {date} |
+| Cancelled tooltip · member | Cancelled by {memberFullName} on {date} — {reason} |
 | Keyboard hint (visually hidden) | Press Space to pick up, arrow keys to move, Space to drop. |
 
 ## Interactions

@@ -5,7 +5,7 @@ routes: ["/org/{orgId}/hiring/vacancies/{vacancyId}/board"]
 api: ["GET /api/organizations/{orgId}/hiring/vacancies/{vacancyId}/board", "PATCH /api/organizations/{orgId}/hiring/applications/{applicationId}/placement"]
 entities: [Application]
 tags: [board, kanban, drag-drop, status, position, columns, last-write-wins]
-depends-on: ["01", "02"]
+depends-on: ["01", "02", "07"]
 ---
 
 # 05 — Board
@@ -107,14 +107,22 @@ status that can drift apart.
 
 23. `Application.isCancelled` is a **flag**, not a sixth column. A cancelled card keeps its column
     and its recorded assessment and is visibly marked.
-24. **Nothing sets this flag in this release.** With no candidate-facing cancel and no admin cancel
-    action, the field is specified and dormant; a no-show is handled by dragging the card to
-    `Didn't pass`. It is specified now so that the deferred reschedule flow does not arrive and
-    invent a sixth column that would strand the assessment already recorded.
+24. **The flag is set by [07-manage-booking.md](07-manage-booking.md)**, from either side: the
+    candidate cancels from their manage page, the team from the candidate card or My interviews.
+    Earlier revisions of this spec said nothing set it — that was true only while both flows were
+    deferred, and the field was specified in advance precisely so their arrival could not invent a
+    sixth column and strand the assessment already recorded.
+25. **Cancellation is still never a substitute for a verdict.** It means the interview did not take
+    place and says nothing about the candidate's standing; a cancelled candidate remains a live
+    applicant and may book again. A **no-show remains a drag to `Didn't pass`** — the flag cannot be
+    set retroactively, because both surfaces withdraw their actions once `start` has passed.
+26. The card's cancelled mark **names who cancelled** — see
+    [05-board.design.md](05-board.design.md). "The candidate withdrew" and "we called it off" are
+    different facts to a hiring manager scanning a column, and the record now distinguishes them.
 
 ### 08. Volume
 
-25. No archiving, filtering, or date-bounding of the board ships in this release. Columns scroll
+27. No archiving, filtering, or date-bounding of the board ships in this release. Columns scroll
     independently. After several hiring rounds `Didn't pass` will hold dozens of cards; the fix is
     in the README's Future Improvements, deliberately, rather than a "hide old cards" checkbox
     bolted on here.
