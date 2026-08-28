@@ -455,7 +455,7 @@ Errors:
     `booking-cv-input`, `booking-cv-filename`, `booking-note-input`
   - `booking-submit-button`, `booking-error-banner`
   - `booking-confirmation`, `booking-confirmation-when`, `booking-confirmation-zone`,
-    `booking-confirmation-email`
+    `booking-confirmation-email`, `booking-manage-link`
   - `field-error-firstName`, `field-error-lastName`, `field-error-email`, `field-error-cv`,
     `field-error-note`
   - control test ids are owned by the control specs.
@@ -646,8 +646,8 @@ Errors:
   1. The page renders with no sign-in prompt; the wordmark, title, and length are visible.
   2. The first available date is selected; no slot is selected.
   3. Book is disabled until the time and all required fields are present.
-  4. The confirmation shows the title, the date and time, the named zone, and the email; no reschedule or cancel affordance appears anywhere.
-- **Selectors:** `booking-page`, `booking-vacancy-title`, `booking-submit-button`, `booking-confirmation`, `booking-confirmation-when`, `booking-confirmation-zone`.
+  4. The confirmation shows the title, the date and time, the named zone, and the email, and carries the manage link for this booking. Following it opens the live manage page for the interview just booked.
+- **Selectors:** `booking-page`, `booking-vacancy-title`, `booking-submit-button`, `booking-confirmation`, `booking-confirmation-when`, `booking-confirmation-zone`, `booking-manage-link`.
 
 ### TC-H02-E2E-02: Times default to 24-hour and the toggle is remembered
 - **Level:** E2E

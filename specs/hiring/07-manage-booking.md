@@ -276,6 +276,12 @@ for a move as well as for a booking. See §12.
     the candidate card resolves the interviewer live through `vacancy.interviewer`, so reassigning a
     vacancy today retroactively rewrites the interviewer shown on every past application, including
     interviews somebody else actually conducted.
+
+    The migration back-fills it from each vacancy's **current** interviewer, which is the only
+    answer available — and is wrong for any application booked before a reassignment that already
+    happened. That history was never recorded and cannot be recovered. The column fixes the defect
+    from its migration forward, and the limitation is stated here rather than discovered later by
+    somebody who trusts the column further back than it goes.
 64. **The original mailbox no longer resolves.** This is an availability failure, not a closed
     vacancy and not a missing booking: the page shows the controls' error state with a retry
     ([00 §05.21](00-integrations.md)), and the team resolves it.
@@ -796,6 +802,42 @@ CV validation messages are [02](02-booking-page.md)'s and must match its table e
 - **Expected Result:**
   1. `503 reschedule_failed`.
   2. `start`, `end`, and `graphEventId` are unchanged; no `rescheduled` event exists.
+
+### TC-H07-INT-13: The migration back-fills every application that predates it
+- **Level:** Integration
+- **Preconditions:** three applications created before this release — two on one vacancy, one on another whose interviewer has since been reassigned.
+- **Steps:**
+  1. Run the migration.
+  2. Read all three applications and the scheduling log.
+- **Expected Result:**
+  1. Every application has a `manageToken`; all three differ; each resolves its own application and no other.
+  2. Every application has an `interviewerAccountId` naming its vacancy's **current** interviewer — including the reassigned one, whose original interviewer is unrecoverable and is documented as such (§13.63).
+  3. Exactly one `booked` event exists per application, with `actor: "candidate"`, a null `actorAccountId`, `toStart` equal to the application's `start`, and the application's `timeZone`.
+  4. No application has more than one `booked` event, and re-running the migration adds none.
+
+### TC-H07-INT-14: The CV back-fill moves no files
+- **Level:** Integration
+- **Preconditions:** two applications with CVs stored under the old `{applicationId}{extension}` keys; one application with no CV.
+- **Steps:**
+  1. Run the migration.
+  2. Read every `ApplicationCv` row and fetch each CV through the authenticated endpoint.
+- **Expected Result:**
+  1. One `ApplicationCv` row per application **that has a CV** — two rows, not three.
+  2. Each row's `key` is byte-identical to the `Application.cvKey` it was built from; no key was rewritten to the `{cvId}` shape.
+  3. Both files are still readable at their original keys, with their original bytes and content types. Nothing was copied, renamed, or deleted.
+  4. A CV replaced **after** the migration writes a new row under a `{cvId}{extension}` key, and the original row and its file both remain.
+
+### TC-H07-INT-15: An application booked before this release is fully manageable
+- **Level:** Integration
+- **Preconditions:** an application created before the migration, with a future start.
+- **Steps:**
+  1. `GET` its manage route using the back-filled token.
+  2. Reschedule it.
+  3. Cancel it.
+- **Expected Result:**
+  1. `booking` is present and carries the correct time, duration, and CV filename.
+  2. The reschedule succeeds and reads availability from the back-filled `interviewerAccountId`'s mailbox.
+  3. The cancellation succeeds, and the scheduling log reads `booked` → `rescheduled` → `cancelled` in order despite the first entry having been manufactured by the migration.
 
 ### TC-H07-E2E-01: A candidate moves their interview
 - **Level:** E2E

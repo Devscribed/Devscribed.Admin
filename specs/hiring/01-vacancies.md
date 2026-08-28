@@ -436,7 +436,8 @@ Errors:
 - **Expected Result:**
   1. Success.
   2. Both applications keep their original `graphEventId`, start time, and duration; neither event is cancelled.
-  3. Availability is now computed from S's mailbox.
+  3. Both applications still name **P** in `interviewerAccountId` — the reassignment does not rewrite who held an interview that was already booked, and a reschedule of either will therefore still read P's mailbox ([07 §13.62](07-manage-booking.md)).
+  4. Availability for **new** bookings is computed from S's mailbox.
 
 ### TC-H01-INT-04: Changing duration affects future bookings only
 - **Level:** Integration
