@@ -10,12 +10,38 @@ what the code should have been. Your authority comes from the suite, so protect 
 
 ## Order of work
 
-1. `npm run test:unit` — Vitest, `packages/validation`. Seconds.
-2. `npm run test:int` — Jest + Supertest against `devscribed_test`.
-3. `npm run test:e2e` — **only if 1 and 2 are green.** The suite was sharded to keep the
-   deploy gate near three minutes; do not spend it on a change already known to be broken.
-4. The spec's Acceptance Criteria, checked as observable behaviour.
-5. Every `TC-*` the spec declares: does a test with that id actually exist?
+1. `npm run test:unit` — Vitest, `packages/validation`. Under a second for 806 tests.
+2. `npm run test:int` — Jest + Supertest. Roughly a minute; this is where the business rules
+   live, so it always runs in full.
+3. **Targeted E2E only** — see below. Never the whole suite.
+4. Look at the changed screens yourself.
+5. The spec's Acceptance Criteria, checked as observable behaviour.
+6. Every `TC-*` the spec declares: does a test with that id actually exist?
+
+Run every suite in the **foreground**. Do not start one in the background and poll it with
+`sleep`, `echo waiting` or `until kill -0` — a quarter of one measured QA stage went on
+exactly that, and it buys nothing: the command finishes when it finishes either way.
+
+## Which E2E tests to run
+
+One e2e test costs about as much as twenty integration tests, and the full suite already runs
+sharded on the deploy gate before anything ships. Running all 121 again here is duplicated
+work, so run only:
+
+- the `TC-*` cases the spec names,
+- any spec file that references a `data-testid` or route the diff touched,
+- `regressions.spec.ts`.
+
+```bash
+CI=1 npx playwright test tests/<file>.spec.ts tests/regressions.spec.ts
+```
+
+`CI=1` is still required — it keeps `reuseExistingServer` off so Playwright cannot attach to
+a server you did not start, and turns on the retry that produces a trace. The worker count no
+longer depends on it; the config sizes that from the machine.
+
+If a targeted run fails somewhere unexpected, widen to the neighbouring files rather than
+falling back to the whole suite.
 
 ## Run E2E with `CI=1`
 
@@ -34,6 +60,34 @@ message and no way for the implementer to see what happened.
 ```bash
 CI=1 npm run test:e2e
 ```
+
+## Looking at it yourself
+
+Open the screens the change touched, and the ones its blast radius names. Click through the
+flow. This is not decoration and it is not optional: it is the only stage that can see a
+defect nobody wrote a test for.
+
+The case that matters most is **an error from somewhere else showing up on the screen** — a
+failed request from another module, a stack trace, a toast that should not be there. No
+integration test covers it, because integration tests exercise modules apart and this defect
+only exists once two of them share a page.
+
+**A finding from looking can block**, and the reason is not that you are trusted: it is that
+the claim is checkable. "Open `/org/{id}/members` as an admin with one removed member; a red
+`Failed to load invoices` banner sits above the table" is a `scenario` witness like any other
+— route, role, state, wrong observable result. Anyone can repeat it.
+
+What may not block is a matter of taste: "the spacing looks cramped", "this colour feels
+off". Those are notes. The line is not manual against automated — a flaky test is an
+unreliable automated judgement, and a screenshot of a stack trace is a hard manual fact. The
+line is whether someone else can check the claim.
+
+Two rules keep it honest:
+
+- **Attach the reproduction, not the impression.** A screenshot supports the description; it
+  does not replace it.
+- **Anything you find this way leaves a test behind.** Say which test would have caught it,
+  and at which level. You looked once; a test looks on every run.
 
 ## Three outcomes, not two
 
