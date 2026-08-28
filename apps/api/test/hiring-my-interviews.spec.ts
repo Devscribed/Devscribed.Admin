@@ -5,6 +5,7 @@ import { StubCalendarProvider } from './stub-calendar.provider';
 import {
   addMember,
   bookInterview,
+  bookedApplication,
   bootHiringApp,
   createVacancy,
   firstSlots,
@@ -47,9 +48,9 @@ describe('Hiring — my interviews', () => {
     if (response.status !== 201) {
       throw new Error(`Precondition failed: booking answered ${response.status}`);
     }
-    const application = await prisma.application.findFirstOrThrow({
-      orderBy: { createdAt: 'desc' },
-      select: { id: true, candidateId: true },
+    const application = await bookedApplication(prisma, {
+      startUtc: values.startUtc,
+      email: values.email,
     });
     return { candidateId: application.candidateId, applicationId: application.id };
   }

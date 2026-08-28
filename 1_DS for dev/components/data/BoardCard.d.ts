@@ -10,6 +10,12 @@ export interface BoardCardProps
   past?: boolean;
   cancelled?: boolean;
   cancelledLabel?: string;
+  /**
+   * The whole cancellation — who, when, and why — shown on hover and focus. It also
+   * becomes the badge's accessible name, because the badge itself is deliberately
+   * truncated to a first name.
+   */
+  cancelledTooltip?: string | null;
   /** The marker's reason. Absent means no marker; the text is what `aria-describedby` resolves to. */
   flag?: string | null;
   hasCv?: boolean;

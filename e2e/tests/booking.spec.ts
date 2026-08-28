@@ -85,9 +85,25 @@ test.describe('Booking page', () => {
       }),
     );
 
-    // No manage, reschedule or cancel affordance anywhere — there is none to offer.
-    await expect(page.getByText(/reschedule|cancel booking/i)).toHaveCount(0);
+    // The form is gone, replaced by the confirmation.
     await expect(submit).toHaveCount(0);
+
+    /*
+     * The manage link, which supersedes this test's earlier assertion that there was
+     * none: 07 gives the candidate a way to fix a mistyped choice before they close the
+     * tab, and 02 §10.43 puts a copy of it here. This copy is deliberately lost on
+     * refresh — the durable one travels in the calendar invite.
+     */
+    const manageLink = page.getByTestId('booking-confirmation-manage-link');
+    await expect(manageLink).toBeVisible();
+    expect(await manageLink.getAttribute('href')).toMatch(
+      new RegExp(`^/manage/${vacancy.publicSlug}/[A-Za-z0-9_-]{22}$`),
+    );
+
+    // Following it opens the live page for this booking, still with no session.
+    await manageLink.click();
+    await expect(page.getByTestId('manage-booking-email')).toContainText('jane@example.com');
+    await expect(page.getByTestId('manage-cancel-button')).toBeVisible();
   });
 
   /** TC-H02-E2E-02 */

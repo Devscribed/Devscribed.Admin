@@ -8,6 +8,8 @@ import {
   CONCLUSION_PROMPTING_STATUSES,
   HIRING_MESSAGES,
   MESSAGES,
+  cancelledBadgeLabel,
+  cancelledTooltip,
   formatShortWhen,
   type ApplicationStatus,
 } from '@devscribed/validation';
@@ -342,7 +344,13 @@ export default function BoardPage({
               when={formatShortWhen(start, viewerTimeZone)}
               past={start.getTime() < now}
               cancelled={card.isCancelled}
-              cancelledLabel={HIRING_MESSAGES.board.cancelled}
+              // "The candidate withdrew" and "we called it off" are different facts to
+              // somebody scanning a column, and the record now distinguishes them
+              // (05 §07.26). The badge is a glance; the tooltip carries the whole of it.
+              cancelledLabel={cancelledBadgeLabel(card.cancellation)}
+              cancelledTooltip={
+                card.isCancelled ? cancelledTooltip(card.cancellation, viewerTimeZone) : null
+              }
               flag={flagged ? HIRING_MESSAGES.board.noConclusion : null}
               hasCv={card.hasCv}
               label={`${card.name}, ${APPLICATION_STATUS_LABELS[status]}, ${formatShortWhen(

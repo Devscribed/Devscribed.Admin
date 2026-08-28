@@ -1,15 +1,22 @@
 'use client';
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   APPLICATION_STATUS_LABELS,
   HIRING_MESSAGES,
   applicationStatusOptions,
+  cancelledBadgeLabel,
+  cancelledTooltip,
+  formatHistoryDate,
   formatShortDate,
   formatShortWhen,
+  scheduleEntryAriaLabel,
+  scheduleEntryLabel,
+  scheduleSummary,
   type ApplicationStatus,
+  type ScheduleEntry,
 } from '@devscribed/validation';
-import { Badge, Button, Card, SectionLabel, Select } from '@/ds';
+import { Badge, Button, Card, SectionLabel, Select, Tooltip } from '@/ds';
 import { formatDuration } from '@/hiring/format';
 import type { CardApplication } from '@/hiring/types';
 
@@ -129,9 +136,23 @@ export function ApplicationSection({
 
           <div className="card-section-status">
             {application.isCancelled && (
-              <Badge tone="inactive" data-testid={`application-cancelled-${application.id}`}>
-                Cancelled
-              </Badge>
+              <Tooltip
+                content={cancelledTooltip(application.cancellation, viewerTimeZone)}
+                placement="left"
+                testId={`application-cancelled-tooltip-${application.id}`}
+                style={{ display: 'inline-block' }}
+              >
+                {/* Names who cancelled and when (04 §03.11). The mark says the interview
+                    did not take place and nothing about the candidate's standing — which
+                    is why the section keeps its status control beside it. */}
+                <Badge
+                  tone="inactive"
+                  aria-label={cancelledTooltip(application.cancellation, viewerTimeZone)}
+                  data-testid={`application-cancelled-${application.id}`}
+                >
+                  {cancelledBadgeLabel(application.cancellation)}
+                </Badge>
+              </Tooltip>
             )}
             {expanded && (
               <Select
@@ -151,6 +172,12 @@ export function ApplicationSection({
 
         {expanded && (
           <div className="card-section-body">
+            <SchedulingHistory
+              applicationId={application.id}
+              entries={application.scheduleEvents}
+              viewerTimeZone={viewerTimeZone}
+            />
+
             <CvRow orgId={orgId} application={application} />
 
             {application.note && (
@@ -272,6 +299,97 @@ function Chevron({ expanded }: { expanded: boolean }) {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+/**
+ * Every reschedule, the cancellation and the original booking, newest first — collapsed
+ * to one line until somebody asks for the sequence.
+ *
+ * Collapsed by default because a candidate who moved five times must not add five
+ * permanent rows to a section that already needed collapsing (07 §11.54). And expansion
+ * never scrolls: a member reading a card must not have the notes field move under their
+ * cursor.
+ *
+ * **Team-only.** It appears here and on no candidate-facing surface (07 §11.53) — the
+ * candidate already knows what they did, and showing them a tally of their own
+ * reschedules reads as a reprimand from a page whose whole purpose is to make changing
+ * an interview unremarkable.
+ */
+function SchedulingHistory({
+  applicationId,
+  entries,
+  viewerTimeZone,
+}: {
+  applicationId: string;
+  entries: ScheduleEntry[];
+  viewerTimeZone: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  // An application booked before the log existed has nothing to show, and one empty
+  // summary row on every such card would be worse than none.
+  if (entries.length === 0) return null;
+
+  const listId = `application-history-${applicationId}`;
+
+  return (
+    <div>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => setExpanded((open) => !open)}
+        aria-expanded={expanded}
+        aria-controls={listId}
+        data-testid={`application-history-toggle-${applicationId}`}
+        style={{ paddingLeft: 0, color: 'var(--text-muted)' }}
+      >
+        <span aria-hidden style={{ marginRight: 'var(--sp-3)' }}>{expanded ? '▾' : '▸'}</span>
+        {expanded ? HIRING_MESSAGES.manage.historyLabel : scheduleSummary(entries, viewerTimeZone)}
+      </Button>
+
+      {expanded && (
+        <Card
+          id={listId}
+          data-testid={listId}
+          style={{ background: 'var(--bg-panel-2)', marginTop: 'var(--sp-4)' }}
+        >
+          <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 'var(--sp-4)' }}>
+            {entries.map((entry) => (
+              <li
+                key={entry.id}
+                aria-label={scheduleEntryAriaLabel(entry, viewerTimeZone)}
+                data-testid={`application-history-entry-${entry.id}`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'baseline',
+                  gap: 'var(--sp-6)',
+                  fontSize: 'var(--fs-13)',
+                  color: 'var(--text)',
+                }}
+              >
+                <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                  {scheduleEntryLabel(entry)}
+                </span>
+                <span style={{ color: 'var(--text-sub)' }}>{entry.actorName}</span>
+                {/* The reason a member gave, never on a candidate-facing surface. */}
+                {entry.reason && (
+                  <span style={{ color: 'var(--text-sub)' }}>— {entry.reason}</span>
+                )}
+                <span
+                  style={{
+                    marginLeft: 'auto',
+                    color: 'var(--text-faint)',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {formatHistoryDate(new Date(entry.createdAt), viewerTimeZone)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+    </div>
   );
 }
 

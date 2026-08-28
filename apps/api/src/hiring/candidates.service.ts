@@ -11,7 +11,11 @@ import {
   validateAssessment,
   type ApplicationStatus,
   type AssessmentInput,
+  type CancellationFacts,
   type CriterionType,
+  type ScheduleActor,
+  type ScheduleEntry,
+  type ScheduleEventType,
 } from '@devscribed/validation';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
@@ -84,15 +88,20 @@ export class CandidatesService {
       // the same instant in a stable order across renders.
       orderBy: [{ start: 'desc' }, { id: 'asc' }],
       include: {
-        vacancy: {
-          select: {
-            id: true,
-            title: true,
-            durationMinutes: true,
-            interviewer: { select: { id: true, firstName: true, lastName: true, email: true } },
-          },
-        },
+        vacancy: { select: { id: true, title: true, durationMinutes: true } },
+        /*
+         * The interviewer this application was **booked with**, read from its own
+         * column rather than resolved live through `vacancy.interviewer`. Reassigning a
+         * vacancy used to rewrite the interviewer shown on every past application,
+         * including interviews somebody else actually conducted (07 §13.63).
+         */
+        interviewer: { select: { id: true, firstName: true, lastName: true, email: true } },
         criteria: { orderBy: [{ createdAt: 'asc' }, { criterionId: 'asc' }], include: ASSESSMENT },
+        // Newest first, which is the order the card expands into (07 §11.54).
+        scheduleEvents: {
+          orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+          include: { actorAccount: { select: { firstName: true, lastName: true } } },
+        },
       },
     });
 
@@ -100,7 +109,7 @@ export class CandidatesService {
       candidate: { ...candidate, createdAt: candidate.createdAt.toISOString() },
       viewerTimeZone: await this.viewerTimeZone.forViewer(
         viewerAccountId,
-        applications[0]?.vacancy.interviewer.email,
+        applications[0]?.interviewer.email,
       ),
       applications: applications.map((application) => ({
         id: application.id,
@@ -113,8 +122,8 @@ export class CandidatesService {
           durationMinutes: application.vacancy.durationMinutes,
         },
         interviewer: {
-          accountId: application.vacancy.interviewer.id,
-          fullName: `${application.vacancy.interviewer.firstName} ${application.vacancy.interviewer.lastName}`,
+          accountId: application.interviewer.id,
+          fullName: `${application.interviewer.firstName} ${application.interviewer.lastName}`,
         },
         startUtc: application.start.toISOString(),
         /**
@@ -138,6 +147,21 @@ export class CandidatesService {
          * time a criterion was added mid-interview, and this page moves nothing.
          */
         criteria: application.criteria.map(presentAssessment),
+        /**
+         * The scheduling history, team-only and on no candidate-facing surface
+         * (07 §11.53). The card renders it collapsed; what is sent is the whole
+         * sequence, because expanding it must not cost a request in the middle of an
+         * interview.
+         */
+        scheduleEvents: application.scheduleEvents.map((event) =>
+          presentScheduleEvent(event, application.submittedName),
+        ),
+        /**
+         * Denormalized from the log for the one thing the log is not asked to answer:
+         * who called this off. `isCancelled` remains the flag; this is only its
+         * attribution (07 §11.51).
+         */
+        cancellation: cancellationOf(application.scheduleEvents, application.submittedName),
       })),
     };
   }
@@ -336,6 +360,60 @@ export class CandidatesService {
     });
     return top._min.position === null ? POSITION_STEP : top._min.position - POSITION_STEP;
   }
+}
+
+/** A log row as the timeline reads it: the actor already resolved to a name. */
+interface StoredScheduleEvent {
+  id: string;
+  type: string;
+  actor: string;
+  fromStart: Date | null;
+  toStart: Date | null;
+  timeZone: string;
+  reason: string | null;
+  createdAt: Date;
+  actorAccount: { firstName: string; lastName: string } | null;
+}
+
+function presentScheduleEvent(
+  event: StoredScheduleEvent,
+  submittedName: string,
+): ScheduleEntry {
+  return {
+    id: event.id,
+    type: event.type as ScheduleEventType,
+    actor: event.actor as ScheduleActor,
+    // The candidate is named by what they submitted, a member by their account — the
+    // two are resolved here so no screen has to know which column to reach for.
+    actorName: event.actorAccount
+      ? `${event.actorAccount.firstName} ${event.actorAccount.lastName}`
+      : submittedName,
+    fromStartUtc: event.fromStart?.toISOString() ?? null,
+    toStartUtc: event.toStart?.toISOString() ?? null,
+    timeZone: event.timeZone,
+    reason: event.reason,
+    createdAt: event.createdAt.toISOString(),
+  };
+}
+
+/**
+ * Who cancelled, when, and why — from the newest `cancelled` entry, of which there is
+ * at most one: cancelling is not undoable, so there is never a second.
+ */
+function cancellationOf(
+  events: StoredScheduleEvent[],
+  submittedName: string,
+): CancellationFacts | null {
+  const cancelled = events.find((event) => event.type === 'cancelled');
+  if (!cancelled) return null;
+  return {
+    actor: cancelled.actor as ScheduleActor,
+    byName: cancelled.actorAccount
+      ? `${cancelled.actorAccount.firstName} ${cancelled.actorAccount.lastName}`
+      : submittedName,
+    atUtc: cancelled.createdAt.toISOString(),
+    reason: cancelled.reason,
+  };
 }
 
 /** The criterion and, for a scale, the value row — everything a chip renders. */

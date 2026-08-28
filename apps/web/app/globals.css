@@ -366,3 +366,26 @@ a {
     width: 100%;
   }
 }
+
+/*
+ * Manage booking (hiring 07). One rule, and it is the one that matters: below 600px the
+ * actions go full width with the destructive one **beneath** the benign one, so it is
+ * never adjacent to the thumb's resting position.
+ */
+.manage-actions {
+  display: flex;
+  align-items: center;
+  /* Trailing, away from anything benign. Reschedule joins at the leading end and the
+     pair then sits at opposite ends of the row. */
+  justify-content: flex-end;
+  gap: var(--sp-8);
+  margin-top: var(--sp-10);
+}
+
+@media (max-width: 599px) {
+  .manage-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: var(--sp-6);
+  }
+}

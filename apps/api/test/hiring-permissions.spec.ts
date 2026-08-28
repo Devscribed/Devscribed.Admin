@@ -6,6 +6,7 @@ import { StubCalendarProvider } from './stub-calendar.provider';
 import {
   addMember,
   bookInterview,
+  bookedApplication,
   bootHiringApp,
   createCriterion,
   createVacancy,
@@ -112,9 +113,9 @@ describe('Hiring — the permission matrix', () => {
       email: 'jane@example.com',
       startUtc: first,
     });
-    const application = await prisma.application.findFirstOrThrow({
-      orderBy: { createdAt: 'desc' },
-      select: { id: true, candidateId: true },
+    const application = await bookedApplication(prisma, {
+      startUtc: first,
+      email: 'jane@example.com',
     });
 
     // And one the `user` interviews for, so their own narrow access is real.
@@ -128,9 +129,9 @@ describe('Hiring — the permission matrix', () => {
       email: 'ann@example.com',
       startUtc: second,
     });
-    const theirApplication = await prisma.application.findFirstOrThrow({
-      orderBy: { createdAt: 'desc' },
-      select: { id: true, candidateId: true },
+    const theirApplication = await bookedApplication(prisma, {
+      startUtc: second,
+      email: 'ann@example.com',
     });
 
     const english = await createCriterion(app, admin, { name: 'English', type: 'text' });

@@ -42,6 +42,8 @@ import { HiringManageGuard } from './hiring/hiring-manage.guard';
 import { InterviewerScopeGuard } from './hiring/interviewer-scope.guard';
 import { MyInterviewsController } from './hiring/my-interviews.controller';
 import { MyInterviewsService } from './hiring/my-interviews.service';
+import { ManageController } from './hiring/manage.controller';
+import { ManageService } from './hiring/manage.service';
 import { LocalFsStorage } from './hiring/storage/local-fs.storage';
 import { Storage } from './hiring/storage/storage';
 import { resolveStorageConfig } from './hiring/storage/storage.config';
@@ -132,6 +134,7 @@ const calendarProvider = {
     CategoriesController,
     CriteriaController,
     BookingController,
+    ManageController,
     CvController,
     CandidatesController,
     CandidateDatabaseController,
@@ -160,6 +163,7 @@ const calendarProvider = {
     CriteriaService,
     AvailabilityService,
     BookingService,
+    ManageService,
     ViewerTimeZoneService,
     CandidatesService,
     CandidateDatabaseService,

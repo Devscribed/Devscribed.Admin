@@ -114,6 +114,13 @@ describe('Hiring — vacancy lifecycle', () => {
     // created in, because a Graph event cannot be moved between mailboxes.
     const after = await prisma.application.findMany({ orderBy: { start: 'asc' } });
     expect(after.map((a) => a.graphEventId)).toEqual(before.map((a) => a.graphEventId));
+    // And both still name **Pat**. The reassignment does not rewrite who held an
+    // interview that was already booked, so a reschedule of either will read Pat's
+    // mailbox rather than Sam's (07 §13.62).
+    expect(after.map((a) => a.interviewerAccountId)).toEqual([
+      admin.accountId,
+      admin.accountId,
+    ]);
     expect(after.map((a) => a.start.toISOString())).toEqual(
       before.map((a) => a.start.toISOString()),
     );

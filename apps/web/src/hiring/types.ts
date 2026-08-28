@@ -5,7 +5,12 @@
  * error here rather than a blank cell on a screen.
  */
 
-import type { ApplicationStatus, CriterionType } from '@devscribed/validation';
+import type {
+  ApplicationStatus,
+  CancellationFacts,
+  CriterionType,
+  ScheduleEntry,
+} from '@devscribed/validation';
 
 /** A library entry with the usage count that makes a delete decision answerable. */
 export interface Category {
@@ -88,6 +93,45 @@ export interface BookingConfirmation {
   lastName: string;
   email: string;
   cvFileName: string;
+  /**
+   * The candidate's handle on this booking. The confirmation's copy of the link is a
+   * convenience and is lost on refresh by design; the durable one is in the invite
+   * (02 §10.43).
+   */
+  manageToken: string;
+}
+
+/* ------------------------------------------------------------------ *
+ * Manage booking — spec 07
+ * ------------------------------------------------------------------ */
+
+export interface ManageBooking {
+  startUtc: string;
+  /** The application's own length, which the vacancy's may since have left behind. */
+  durationMinutes: number;
+  timeZone: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  cvFileName: string | null;
+}
+
+/**
+ * `booking` is null for **every** non-live case — cancelled, passed, unknown token,
+ * malformed token — and the four are indistinguishable here as well as on screen
+ * (07 §04.18). The vacancy is always present, because the slug resolves even when the
+ * token does not.
+ */
+export interface ManageView {
+  organizationName: string;
+  vacancy: { title: string; durationMinutes: number; status: 'open' | 'closed' };
+  booking: ManageBooking | null;
+}
+
+export interface ManageCancelled {
+  organizationName: string;
+  vacancy: { title: string; status: 'open' | 'closed' };
+  cancelled: true;
 }
 
 /* ------------------------------------------------------------------ *
@@ -121,6 +165,10 @@ export interface CardApplication {
   conclusion: string;
   /** In the order they were added, so a new chip appends rather than re-sorting. */
   criteria: CardCriterion[];
+  /** Newest first. Team-only, and on no candidate-facing surface (07 §11.53). */
+  scheduleEvents: ScheduleEntry[];
+  /** Who called the interview off, when, and — for a member — why. */
+  cancellation: CancellationFacts | null;
 }
 
 /**
@@ -162,6 +210,8 @@ export interface BoardCardData {
   position: number;
   hasCv: boolean;
   isCancelled: boolean;
+  /** Names who cancelled, for the badge and its tooltip. Null when nobody did. */
+  cancellation: CancellationFacts | null;
   /** Whether one exists — the conclusion itself is never sent to the board. */
   hasConclusion: boolean;
 }

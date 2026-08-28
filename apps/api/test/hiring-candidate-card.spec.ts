@@ -7,6 +7,7 @@ import {
   CV_BYTES,
   addMember,
   bookInterview,
+  bookedApplication,
   bootHiringApp,
   createCriterion,
   createVacancy,
@@ -75,9 +76,9 @@ describe('Hiring — candidate card', () => {
     if (response.status !== 201) {
       throw new Error(`Precondition failed: booking answered ${response.status}`);
     }
-    const application = await prisma.application.findFirstOrThrow({
-      orderBy: { createdAt: 'desc' },
-      select: { id: true, candidateId: true },
+    const application = await bookedApplication(prisma, {
+      startUtc: values.startUtc,
+      email: values.email ?? 'jane@example.com',
     });
     return { candidateId: application.candidateId, applicationId: application.id };
   }
@@ -96,6 +97,57 @@ describe('Hiring — candidate card', () => {
   beforeEach(async () => {
     calendar.reset();
     await resetDatabase(prisma);
+  });
+
+  it('names the interviewer the interview was booked with, not the vacancy\'s current one', async () => {
+    const admin = await signup(app, 'pat@acme.com');
+    const sam = await addMember(prisma, admin.organizationId, {
+      email: 'sam@acme.com',
+      role: 'manager',
+      firstName: 'Sam',
+      lastName: 'Member',
+    });
+    const vacancy = await createVacancy(app, admin);
+    const [startUtc] = await firstSlots(app, vacancy.slug, 1);
+    const { candidateId } = await book(vacancy.slug, { startUtc });
+
+    await request(app.getHttpServer())
+      .patch(`/api/organizations/${admin.organizationId}/hiring/vacancies/${vacancy.id}`)
+      .set('Cookie', admin.cookies)
+      .send({ interviewerAccountId: sam.accountId })
+      .expect(200);
+
+    // The card used to resolve this live through `vacancy.interviewer`, so a
+    // reassignment rewrote the interviewer shown on interviews somebody else had
+    // already conducted. It now reads the column stamped at booking (07 §13.63).
+    const [application] = (await card(admin, candidateId)).body.applications;
+    expect(application.interviewer).toEqual({
+      accountId: admin.accountId,
+      fullName: 'Pat Owner',
+    });
+  });
+
+  it('carries the scheduling history, opened by the booking itself', async () => {
+    const admin = await signup(app, 'pat@acme.com');
+    const vacancy = await createVacancy(app, admin);
+    const [startUtc] = await firstSlots(app, vacancy.slug, 1);
+    const { candidateId } = await book(vacancy.slug, { startUtc });
+
+    const [application] = (await card(admin, candidateId)).body.applications;
+
+    // One entry, so the log is the whole story rather than only its deviations
+    // (07 §11.50). Attributed to the candidate by the name they submitted.
+    expect(application.scheduleEvents).toHaveLength(1);
+    expect(application.scheduleEvents[0]).toMatchObject({
+      type: 'booked',
+      actor: 'candidate',
+      actorName: 'Jane Doe',
+      fromStartUtc: null,
+      toStartUtc: startUtc,
+      timeZone: 'UTC',
+      reason: null,
+    });
+    expect(application.cancellation).toBeNull();
   });
 
   it('answers with the candidate, their applications, and nothing the page cannot use', async () => {

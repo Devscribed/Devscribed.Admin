@@ -12,6 +12,7 @@ import { StubCalendarProvider } from './stub-calendar.provider';
 import {
   addMember,
   bookInterview,
+  bookedApplication,
   bootHiringApp,
   createVacancy,
   firstSlots,
@@ -68,9 +69,9 @@ describe('Hiring — the board', () => {
       if (response.status !== 201) {
         throw new Error(`Precondition failed: booking answered ${response.status}`);
       }
-      const application = await prisma.application.findFirstOrThrow({
-        orderBy: { createdAt: 'desc' },
-        select: { id: true, candidateId: true },
+      const application = await bookedApplication(prisma, {
+        startUtc,
+        email: `cand${index}@example.com`,
       });
       booked.push({
         applicationId: application.id,
@@ -203,8 +204,9 @@ describe('Hiring — the board', () => {
     const vacancy = await createVacancy(app, admin);
     const [first] = await seedApplications(vacancy, 1);
 
-    // Nothing in this release sets the flag (05 §07.24); the board still has to render
-    // it, so the reschedule flow that eventually writes it needs no board change.
+    // Set directly here, which is all this test needs: who sets it and how the badge
+    // names them is the manage suite's (07 §11), and the board's own job is only to
+    // keep the card in its column and mark it.
     await prisma.application.update({
       where: { id: first.applicationId },
       data: { isCancelled: true },

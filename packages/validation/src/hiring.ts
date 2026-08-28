@@ -152,6 +152,36 @@ export const HIRING_MESSAGES = {
     cancelled: 'Cancelled',
     keyboardHint: 'Press Space to pick up, arrow keys to move, Space to drop.',
   },
+  /**
+   * The manage page and the two actions it hosts (07 §Error Messages).
+   *
+   * `notFound` is the whole of the third state: a revisited cancellation, a passed
+   * interview, a token that never existed and a malformed token are one message,
+   * because the link travels in a calendar event both parties hold and can forward
+   * onward — a stale link must not confirm that a particular person booked a
+   * particular interview and later cancelled it (07 §04.17).
+   */
+  manage: {
+    notFound: "We couldn't find your booking.",
+    cancelled: 'Your interview has been cancelled.',
+    cancelFailed: "We couldn't cancel your interview. Please try again.",
+    /** Completed by `cancelConfirmMessage` — the interview being called off is named. */
+    cancelConfirm: "Cancel your interview on {when}? This can't be undone.",
+    cancelDialogTitle: 'Cancel this interview?',
+    /**
+     * "Keep it" rather than "Cancel": a Cancel button inside a cancellation dialog is
+     * genuinely ambiguous, and this is the one dialog in the product where getting it
+     * wrong is irreversible (07 design).
+     */
+    cancelDialogDismiss: 'Keep it',
+    cancelAction: 'Cancel interview',
+    newBooking: 'New booking',
+    panelLabel: 'Your interview',
+    /** The board badge and the card's mark, completed by `cancelledBadgeLabel`. */
+    cancelledBy: 'Cancelled by',
+    cancelledByCandidate: 'Cancelled by candidate',
+    historyLabel: 'Scheduling history',
+  },
   toast: {
     vacancyCreated: 'Vacancy created',
     vacancyUpdated: 'Vacancy updated',

@@ -287,6 +287,7 @@ export function createAdminMembership(input: {
  * ------------------------------------------------------------------ */
 
 export * from './hiring';
+export * from './hiring-manage';
 export * from './hiring-time';
 export * from './hiring-slots';
 export * from './hiring-card';

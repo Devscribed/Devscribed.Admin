@@ -393,12 +393,57 @@ export async function latestInviteLink(request: APIRequestContext): Promise<Invi
   };
 }
 
+export interface ManageLink {
+  slug: string;
+  token: string;
+  /** The path the candidate actually opens. */
+  path: string;
+}
+
+/**
+ * The manage link out of the invite the last booking created.
+ *
+ * Read from the calendar event rather than assembled from a token obtained some other
+ * way, for the same reason `latestInviteLink` is: the invite is the only channel this
+ * release has, so a test that built the URL itself would be testing a link nobody is
+ * ever sent (07 §03.14).
+ */
+export async function latestManageLink(request: APIRequestContext): Promise<ManageLink> {
+  const response = await request.get(`${API}/api/test/calendar/latest`);
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: no calendar event (${response.status()})`);
+  }
+
+  const body = (await response.json()).body as string;
+  const match = body.match(/\/manage\/([A-Za-z0-9_-]+)\/([A-Za-z0-9_-]+)/);
+  if (!match) throw new Error(`Precondition failed: no manage link in the invite:\n${body}`);
+
+  return { slug: match[1], token: match[2], path: match[0] };
+}
+
+/** Moves an application to another board column — a precondition, not the thing tested. */
+export async function setApplicationStatus(
+  request: APIRequestContext,
+  org: Registered,
+  applicationId: string,
+  status: string,
+): Promise<void> {
+  const response = await request.patch(
+    `${API}/api/organizations/${org.organizationId}/hiring/applications/${applicationId}`,
+    { data: { status } },
+  );
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: status change answered ${response.status()}`);
+  }
+}
+
 export interface BoardCard {
   applicationId: string;
   candidateId: string;
   name: string;
   position: number;
   hasConclusion: boolean;
+  isCancelled: boolean;
 }
 
 export interface BoardColumn {

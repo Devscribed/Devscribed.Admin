@@ -27,6 +27,12 @@ export interface ButtonProps
   loading?: boolean;
   /** Filled variants drop to a sunken field with faint ink; outlined ones dim. */
   disabled?: boolean;
+  /**
+   * Declared because React 19 passes `ref` through as an ordinary prop, and this
+   * component spreads its rest onto the element it renders. Callers that need the node
+   * — a dialog naming its initial focus, for one — get it without a `forwardRef` wrapper.
+   */
+  ref?: React.Ref<HTMLButtonElement> | React.Ref<HTMLAnchorElement>;
   children?: React.ReactNode;
 }
 

@@ -30,6 +30,9 @@ export class StubCalendarProvider extends CalendarProvider {
 
   failOnCreate = false;
 
+  /** A cancellation the calendar refuses — the booking must survive it untouched. */
+  failOnCancel = false;
+
   /** An unreachable calendar, which must never be rendered as an empty month. */
   failOnBusy = false;
 
@@ -79,7 +82,13 @@ export class StubCalendarProvider extends CalendarProvider {
     return id;
   }
 
+  /**
+   * Idempotent, like the real one: cancelling an event that is already gone is a
+   * success, which is what lets a caller retry after a database failure without a
+   * compensating step (07 Alt flow).
+   */
   async cancelEvent(_mailbox: MailboxRef, eventId: EventId): Promise<void> {
+    if (this.failOnCancel) throw new Error('stub: cancellation failed');
     this.cancelled.push(eventId);
     this.events.delete(eventId);
   }
@@ -101,6 +110,7 @@ export class StubCalendarProvider extends CalendarProvider {
       timeZone: 'UTC',
     };
     this.failOnCreate = false;
+    this.failOnCancel = false;
     this.failOnBusy = false;
     this.events.clear();
     this.cancelled.length = 0;

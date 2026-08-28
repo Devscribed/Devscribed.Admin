@@ -31,9 +31,13 @@ model Account {
   mailboxVerifiedAt DateTime?
   createdAt         DateTime  @default(now())
 
-  memberships          Membership[]
-  passwordResetTokens  PasswordResetToken[]
-  interviewerVacancies Vacancy[]            @relation("VacancyInterviewer")
+  memberships             Membership[]
+  passwordResetTokens     PasswordResetToken[]
+  interviewerVacancies    Vacancy[]                  @relation("VacancyInterviewer")
+  /// The interviews actually booked with this account, which a later reassignment of
+  /// the vacancy never rewrites (hiring 07 §13.63).
+  interviewerApplications Application[]              @relation("ApplicationInterviewer")
+  scheduleEvents          ApplicationScheduleEvent[] @relation("ScheduleEventActor")
 }
 
 /// Single-use, time-limited password-reset grant (spec 02).
@@ -168,49 +172,100 @@ model Candidate {
 
 /// One candidate against one vacancy: the interview, its outcome, and its board card.
 model Application {
-  id             String   @id @default(uuid())
-  organizationId String
-  candidateId    String
-  vacancyId      String
+  id                   String   @id @default(uuid())
+  organizationId       String
+  candidateId          String
+  vacancyId            String
   /// The board column itself — one field, five values, no mirrored status (hiring 05).
-  status         String   @default("scheduled")
+  status               String   @default("scheduled")
   /// Gap integer scoped to (vacancyId, status); `id` is the stable tiebreak.
-  position       Int
+  position             Int
   /// The name exactly as submitted, frozen — the candidate's display name may move on.
-  submittedName  String
-  start          DateTime
-  end            DateTime
+  submittedName        String
+  start                DateTime
+  end                  DateTime
   /// The IANA zone the candidate booked in, so every screen can name it.
-  timeZone       String
+  timeZone             String
+  /// `randomBytes(16).base64url`, unique, frozen at booking, stored in **plaintext**.
+  ///
+  /// Plaintext follows `Vacancy.publicSlug` rather than `PasswordResetToken.tokenHash`,
+  /// and the difference is not an oversight: hashing protects a credential that grants
+  /// account access, where this addresses one application row that anyone holding the
+  /// database already has. It would buy nothing and would cost the candidate the
+  /// ability to reopen a month-old invite (hiring 07 §03.11).
+  manageToken          String   @unique
+  /// The interviewer this booking was actually made with, stamped here rather than
+  /// resolved later through the vacancy. Reassigning a vacancy must not retroactively
+  /// rewrite who held an interview that already happened (hiring 07 §13.63), and a
+  /// reschedule has to reach the mailbox the event is actually in.
+  interviewerAccountId String
   /// Identifier of the calendar event in the interviewer's mailbox.
-  graphEventId   String?
+  graphEventId         String?
   /// Opaque, application-generated storage key — never a path and never user input.
-  cvKey          String?
-  cvFileName     String?
-  cvContentType  String?
+  cvKey                String?
+  cvFileName           String?
+  cvContentType        String?
   /// Recorded at upload so the card can name the file's size without reading it back
   /// out of storage (hiring 04 §API). Null on any application booked before this
   /// column existed, which the card renders as a filename with no size.
-  cvSizeBytes    Int?
+  cvSizeBytes          Int?
   /// The candidate's own note from the booking form.
-  note           String?
+  note                 String?
   /// Written during the interview (hiring 04). Shared fields, last write wins.
-  interviewNotes String?
-  conclusion     String?
-  /// Specified but dormant: nothing sets it in this release. It exists now so the
-  /// deferred reschedule flow does not arrive and invent a sixth board column.
-  isCancelled    Boolean  @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  interviewNotes       String?
+  conclusion           String?
+  /// **The interview did not take place** — and nothing about the candidate's standing
+  /// (hiring 07 §01.1). Set from either side, never retroactively, and never derived by
+  /// replaying `ApplicationScheduleEvent`: this flag is what the board queries.
+  isCancelled          Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  candidate    Candidate              @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  vacancy      Vacancy                @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
-  criteria     ApplicationCriterion[]
+  organization   Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  candidate      Candidate                  @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  vacancy        Vacancy                    @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  interviewer    Account                    @relation("ApplicationInterviewer", fields: [interviewerAccountId], references: [id])
+  criteria       ApplicationCriterion[]
+  scheduleEvents ApplicationScheduleEvent[]
 
   @@index([organizationId])
   @@index([candidateId])
   @@index([vacancyId, status, position])
+  @@index([interviewerAccountId])
+}
+
+/// Every change to when an interview is, append-only (hiring 07 §11).
+///
+/// The log is the whole story rather than only its deviations, so a `booked` row is
+/// written at booking. It is never replayed to derive board or card state: denormalized
+/// state plus an append-only record is the split, and re-deriving a five-column kanban
+/// from an event stream is not (07 §11.51).
+///
+/// Scope travels through `Application`, exactly as `ApplicationCriterion`'s does.
+model ApplicationScheduleEvent {
+  id             String    @id @default(uuid())
+  applicationId  String
+  /// "booked" | "rescheduled" | "cancelled".
+  type           String
+  /// "candidate" | "member" — attribution runs both ways (07 §11.55).
+  actor          String
+  /// Set when `actor = member`, null otherwise.
+  actorAccountId String?
+  /// Both set on `rescheduled`; `toStart` alone on `booked`; neither on `cancelled`.
+  fromStart      DateTime?
+  toStart        DateTime?
+  /// The zone the acting party was working in, so the entry can be read back in it.
+  timeZone       String
+  /// Team cancellations only (07 §10.48). Never rendered candidate-side.
+  reason         String?
+  createdAt      DateTime  @default(now())
+
+  application  Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  actorAccount Account?    @relation("ScheduleEventActor", fields: [actorAccountId], references: [id])
+
+  /// The card reads one application's whole log, newest first.
+  @@index([applicationId, createdAt])
+  @@index([actorAccountId])
 }
 
 /// Something a candidate is assessed on during an interview: `English`, `AI Skills`,

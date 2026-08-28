@@ -6,6 +6,7 @@ import {
   HIRING_MESSAGES,
   formatLongDate,
   formatSlotTime,
+  managePath,
   monthMatrix,
   parseYearMonth,
   retainSelection,
@@ -337,7 +338,7 @@ export function BookingScreen({ slug }: { slug: string }) {
           </p>
         </Card>
       ) : confirmation ? (
-        <Confirmation confirmation={confirmation} />
+        <Confirmation confirmation={confirmation} slug={slug} />
       ) : (
         <div style={{ display: 'grid', gap: 'var(--sp-12)' }}>
           <div className="booking-panels">
@@ -675,7 +676,13 @@ function Failure({
   );
 }
 
-function Confirmation({ confirmation }: { confirmation: BookingConfirmation }) {
+function Confirmation({
+  confirmation,
+  slug,
+}: {
+  confirmation: BookingConfirmation;
+  slug: string;
+}) {
   return (
     <Card data-testid="booking-confirmation">
       <h2
@@ -714,6 +721,21 @@ function Confirmation({ confirmation }: { confirmation: BookingConfirmation }) {
         style={{ marginTop: 'var(--sp-10)', marginBottom: 0, fontSize: 'var(--fs-14)' }}
       >
         A calendar invite is on its way to {confirmation.email}.
+      </p>
+      {/*
+        The manage link, so a candidate who mistyped their choice can fix it before
+        closing the tab (02 §10.43). This copy is lost on refresh by design — the
+        durable one is in the calendar invite, which is where 07 §03.14 puts it.
+      */}
+      <p style={{ marginTop: 'var(--sp-6)', marginBottom: 0, fontSize: 'var(--fs-14)' }}>
+        Need to change it?{' '}
+        <a
+          href={managePath(slug, confirmation.manageToken)}
+          data-testid="booking-confirmation-manage-link"
+        >
+          Reschedule or cancel your interview
+        </a>
+        .
       </p>
     </Card>
   );

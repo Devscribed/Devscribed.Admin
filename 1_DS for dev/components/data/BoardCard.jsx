@@ -48,6 +48,8 @@ export function BoardCard({
   past = false,
   cancelled = false,
   cancelledLabel = 'Cancelled',
+  /** The whole fact — who, when, why. Becomes the badge's accessible name. */
+  cancelledTooltip = null,
   /** The reason for the marker. Absent means no marker — the common case. */
   flag = null,
   hasCv = false,
@@ -166,11 +168,29 @@ export function BoardCard({
             {cvLabel}
           </span>
         )}
-        {cancelled && (
-          <Badge tone="inactive" data-testid={`board-card-cancelled-${cardId}`}>
-            {cancelledLabel}
-          </Badge>
-        )}
+        {cancelled &&
+          (cancelledTooltip ? (
+            <Tooltip
+              content={cancelledTooltip}
+              placement="top"
+              testId={`board-card-cancelled-tooltip-${cardId}`}
+              style={{ display: 'inline-block' }}
+            >
+              {/* The badge is truncated to a first name by design, so the accessible
+                  name is the tooltip's full text rather than what is drawn. */}
+              <Badge
+                tone="inactive"
+                aria-label={cancelledTooltip}
+                data-testid={`board-card-cancelled-${cardId}`}
+              >
+                {cancelledLabel}
+              </Badge>
+            </Tooltip>
+          ) : (
+            <Badge tone="inactive" data-testid={`board-card-cancelled-${cardId}`}>
+              {cancelledLabel}
+            </Badge>
+          ))}
       </div>
     </div>
   );

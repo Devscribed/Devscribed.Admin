@@ -4,9 +4,9 @@ Implementation of the specs in [`specs/`](specs/). User-management specs 01
 ([Organization Creation](specs/user-management/01-organization-creation.md)) and 02
 ([Authentication & Login](specs/user-management/02-authentication-login.md)) are complete.
 The [hiring specs](specs/hiring/README.md) run from a vacancy through a booking to the card the
-team takes notes on during the interview. Boards, the candidate database and the two libraries are
-still to come. See [Hiring](#hiring) for the capability boundaries and the rules that are easy to
-mistake for omissions.
+team takes notes on during the interview, the board, the candidate database, the two libraries,
+and the page a candidate manages their own booking from. See [Hiring](#hiring) for the capability
+boundaries and the rules that are easy to mistake for omissions.
 
 ## Stack
 
@@ -27,10 +27,12 @@ apps/api/             NestJS: POST /api/signup, /api/login, /api/logout,
                       GET /api/me, GET /api/organizations/{orgId}/members,
                       …/hiring/vacancies, …/hiring/interviewers,
                       …/hiring/candidates/{id}, …/hiring/applications/{id},
-                      …/hiring/applications/{id}/cv, and the public /api/book/{slug}
+                      …/hiring/applications/{id}/cv, and the two public surfaces
+                      /api/book/{slug} and /api/manage/{slug}/{token}
 apps/web/             Next.js: /signup, /login, /org/{orgId}/members,
                       /org/{orgId}/hiring/vacancies,
                       /org/{orgId}/hiring/candidates/{id}, and the public /book/{slug}
+                      and /manage/{slug}/{token}
 e2e/                  Playwright specs, one per TC-*-E2E-* case
 ```
 
@@ -167,9 +169,9 @@ reads it.
 ## Tests
 
 ```bash
-npm run test:unit   # validation rules — TC-01-UNIT-*, TC-H01/H02/H03/H04/H05/H06-UNIT-*
-npm run test:int    # API endpoints — TC-01-INT-*, TC-H00…H06-INT-*, needs Postgres running
-npm run test:e2e    # browser flows — TC-01-E2E-*, TC-H01…H06-E2E-*
+npm run test:unit   # validation rules — TC-01-UNIT-*, TC-H01…H07-UNIT-*
+npm run test:int    # API endpoints — TC-01-INT-*, TC-H00…H07-INT-*, needs Postgres running
+npm run test:e2e    # browser flows — TC-01-E2E-*, TC-H01…H07-E2E-*
 ```
 
 `test:int` resets `devscribed_test` before it starts, so a failed run never poisons the
@@ -647,11 +649,101 @@ eventually will, fenced like `/api/test/mail` and `/api/test/calendar` and one t
 in production, and only behind an `admin`'s own session, so what it can create is bounded by an
 organization somebody already administers.
 
-`/book/{slug}` is the product's only public route. The slug carries 72 bits of entropy, which is
-why it needs no organization segment, and it is frozen at creation so a link already sent keeps
-working. There is **no rate limiting on the booking POST** — see
-[02 §11](specs/hiring/02-booking-page.md), which records the exposure that leaves open rather
-than implying the endpoint is protected.
+### Manage booking
+
+A candidate can call their interview off, from a second public page reached by a per-booking link
+([07](specs/hiring/07-manage-booking.md)). Rescheduling, the team's own copy of both actions, and
+CV replacement follow; what is below is what ships with the first of them.
+
+**Two spec deferrals are now superseded, and this is where they are recorded.**
+[02 §09.40](specs/hiring/02-booking-page.md) said a candidate who books by mistake "must contact
+the organization", and [05 §07.24](specs/hiring/05-board.md) said nothing set
+`Application.isCancelled`. Both were true only while this flow was deferred. `TC-H02-E2E-01` now
+asserts the manage link on the confirmation rather than its absence, and the board's cancelled
+badge has real data behind it.
+
+**The token is plaintext, and that is the considered choice.** It follows `Vacancy.publicSlug`
+rather than `PasswordResetToken.tokenHash`: hashing protects a credential that grants account
+access, where this addresses one application row that anybody holding the database already has. It
+would buy nothing and would cost the candidate the ability to reopen a month-old invite. It carries
+128 bits — twice the slug's 72, because it guards one named person's booking rather than a page
+meant to be shared, and because no rate limit stands behind it either. It has **no expiry of its
+own**: access ends when the interview starts, and a token that died on a timer would strand a
+candidate whose interview is next month.
+
+**The interviewer receives the candidate's manage link, and that is a departure taken on purpose.**
+[00 §04.19](specs/hiring/00-integrations.md) says both parties get identical content, and one event
+has one body — so the only channel that reaches the candidate at all reaches the interviewer too.
+It grants them no capability they lack, since they cancel and reschedule from the card; the real
+cost is attribution, because an action taken through that link is logged as the candidate's. When a
+mail transport lands, the email becomes the carrier, the body line is dropped, and §04.19 is
+restored without a migration.
+
+**Every non-live state is one screen, and one response.** A revisited cancellation, an interview
+that has started, a token that never existed and a token that is not a token all answer `200` with
+`booking: null`, with the organization name and vacancy title present in all four. The blur is
+enforced at the API, not in the client, and the four are indistinguishable in the body as well as
+on screen — because the link travels in a calendar event both parties hold and can forward onward,
+and a stale link must not confirm that a particular person booked a particular interview and later
+cancelled it. Only an unknown **slug** is a bare 404, which is exactly why the URL carries the slug
+as well as the token: without it, the state this route renders most often would have no
+organization, no title, and nowhere for its "New booking" button to lead.
+
+**Cancelling means the interview did not take place**, and says nothing about the candidate's
+standing. The card keeps its column, its position and every assessment on it, and the candidate may
+book the same vacancy again — which produces a **second application** rather than restoring the
+first. A reschedule is continuous intent and updates the row; a rebooking is fresh intent and
+creates one, and the two reach the product through visibly different doors. There is **no undo**:
+the calendar has already told both parties, and a notification cannot be recalled, which is why
+both sides confirm first.
+
+**No lead-time cutoff, on either action, for either party** — one rule, `start > now`. Booking
+itself has no minimum lead time, so a cutoff on cancelling would let somebody take a slot ten
+minutes out and then be told it is too late to release it. And a late cancellation is strictly
+better than a no-show: forbidding it does not produce attendance, it produces an interviewer
+sitting alone. Once `start` has passed the page blurs and the actions are **absent, not disabled** —
+a disabled control invites a reader to work out why. A no-show remains what it always was, a drag
+to `Didn't pass`.
+
+**A closed vacancy changes nothing here.** Closing means "stop accepting new applicants", not
+"renege on the interviews already granted", so the page renders as live and both actions stand.
+After a cancellation, "New booking" lands on the closed-vacancy page — the correct dead end, and an
+honest one.
+
+**`Application.interviewerAccountId` fixes a defect and cannot fix its own history.** The card used
+to resolve the interviewer live through `vacancy.interviewer`, so reassigning a vacancy
+retroactively rewrote the interviewer shown on every past application, including interviews
+somebody else conducted. The column is stamped at booking and read from there. Its migration
+back-fills from each vacancy's **current** interviewer, which is the only answer available and is
+wrong for any application booked before a reassignment that already happened — that history was
+never recorded and cannot be recovered. The column is correct from its migration forward, and this
+is stated here rather than discovered later by somebody who trusts it further back than it goes.
+
+**`ApplicationScheduleEvent` is append-only and never replayed.** `isCancelled` remains the flag the
+board queries; the log is the record beside it. A `booked` entry is written at booking, so the
+history is the whole story rather than only its deviations, and the migration manufactures one for
+every application that predates it. The history is **team-only** — it appears on the candidate card
+and on no candidate-facing surface, because the candidate already knows what they did and a tally
+of their own reschedules reads as a reprimand from a page whose whole purpose is to make changing an
+interview unremarkable. It renders collapsed to one summary line, for the same reason the card's
+sections collapse at all.
+
+**The board badge names who cancelled.** "The candidate withdrew" and "we called it off" are
+different facts to a hiring manager scanning a column, and the log now distinguishes them. The badge
+shows a first name only, because a card is a glance; the tooltip carries the full name, the date and
+— for a member — the reason, and it is the badge's accessible name rather than the truncated form.
+
+**No mail, still.** The calendar is the whole notification mechanism: `cancelEvent` produces
+Microsoft's own cancellation notice, exactly as `createEvent` produces the invite. Nobody who is
+not the interviewer is notified of a change; they learn of it by opening the board or the card, and
+that is recorded rather than solved — there is no notification system in the product, and building
+one for this feature would be larger than this feature.
+
+`/book/{slug}` and `/manage/{slug}/{token}` are the product's two public routes. The slug carries 72
+bits of entropy, which is why neither needs an organization segment, and it is frozen at creation so
+a link already sent keeps working. There is **no rate limiting on either POST** — see
+[02 §11](specs/hiring/02-booking-page.md) and [07 §15](specs/hiring/07-manage-booking.md), which
+record the exposure that leaves open rather than implying the endpoints are protected.
 
 ## Design-system notes
 
@@ -680,6 +772,17 @@ than implying the endpoint is protected.
   disabled state drops to a sunken field with faint ink instead of fading the violet fill
   — a 55%-opacity primary still reads as the primary action, which is the one thing a
   disabled CTA must not do.
+- **`Modal` became a real dialog**: `role="dialog"`, `aria-modal`, `Escape` closes it, focus is
+  trapped while it is open and returned to the invoking control on close, and `initialFocusRef`
+  says what opens focused. That went into the component rather than into its callers because
+  [07's design spec](specs/hiring/07-manage-booking.design.md) refused a second dialog component
+  precisely to stop focus behaviour forking — and a cancellation dialog has to open on its
+  dismissive control, never on the button that cannot be undone. `Button` now declares `ref`,
+  which React 19 passes through as an ordinary prop, so a caller can name that control without a
+  `forwardRef` wrapper.
+- `BoardCard` gained `cancelledTooltip`. The badge is deliberately truncated to a first name
+  because a board card is a glance, so the tooltip carries the whole fact — and is the badge's
+  accessible name rather than what is drawn.
 - `Combobox` is `Select` with the four things a library-backed field needs and `Select` has
   none of: typing, filtering, multi-select, and a `Create "…"` row for what is missing.
   Its filter folds case deliberately — an option that already exists must never hide

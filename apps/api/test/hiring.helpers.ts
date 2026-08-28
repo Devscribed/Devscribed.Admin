@@ -37,6 +37,7 @@ export async function bootHiringApp(): Promise<Harness> {
 /** Every hiring table, then the account tables the rest of the suite already clears. */
 export async function resetDatabase(prisma: PrismaService): Promise<void> {
   await prisma.applicationCriterion.deleteMany();
+  await prisma.applicationScheduleEvent.deleteMany();
   await prisma.application.deleteMany();
   await prisma.candidate.deleteMany();
   await prisma.criterionValue.deleteMany();
@@ -314,4 +315,39 @@ export function bookInterview(
     .field('startUtc', values.startUtc)
     .field('timeZone', TIME_ZONE)
     .attach('cv', CV_BYTES, { filename: 'cv.pdf', contentType: 'application/pdf' });
+}
+
+/**
+ * The application a booking at this instant just created.
+ *
+ * Named by the slot it was booked at rather than by "the newest row in the database".
+ * `createdAt` is millisecond-precision, two bookings in a seeding loop can land inside
+ * the same tick, and `orderBy: { createdAt: 'desc' }` then picks between them
+ * arbitrarily — which silently swaps the ids a suite goes on to assert about, and fails
+ * a test somewhere else entirely. Every caller already knows the slot it asked for, so
+ * there is no reason to guess.
+ */
+export async function bookedApplication(
+  prisma: PrismaService,
+  where: { startUtc: string; email?: string },
+): Promise<{ id: string; candidateId: string }> {
+  return prisma.application.findFirstOrThrow({
+    where: {
+      start: new Date(where.startUtc),
+      ...(where.email ? { candidate: { email: where.email.toLowerCase() } } : {}),
+    },
+    select: { id: true, candidateId: true },
+  });
+}
+
+/** The manage token the last booking minted, read the way the invite carries it. */
+export async function manageTokenFor(
+  prisma: PrismaService,
+  applicationId: string,
+): Promise<string> {
+  const application = await prisma.application.findUniqueOrThrow({
+    where: { id: applicationId },
+    select: { manageToken: true },
+  });
+  return application.manageToken;
 }

@@ -1,6 +1,8 @@
 import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import {
   BOARD_COLUMNS,
+  type CancellationFacts,
+  type ScheduleActor,
   positionBetween,
   rebalancedPositions,
   resolveNeighbours,
@@ -67,7 +69,25 @@ export class BoardService {
         cvKey: true,
         isCancelled: true,
         conclusion: true,
+        submittedName: true,
         candidate: { select: { firstName: true, lastName: true } },
+        /*
+         * Only the cancellation, and only for the badge: "the candidate withdrew" and
+         * "we called it off" are different facts to a hiring manager scanning a column
+         * (05 §07.26). The rest of the log belongs to the card, and shipping every
+         * reschedule on the vacancy to draw one badge would be the wrong grain.
+         */
+        scheduleEvents: {
+          where: { type: 'cancelled' },
+          orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+          take: 1,
+          select: {
+            actor: true,
+            reason: true,
+            createdAt: true,
+            actorAccount: { select: { firstName: true, lastName: true } },
+          },
+        },
       },
     });
 
@@ -97,6 +117,8 @@ export class BoardService {
             position: application.position,
             hasCv: application.cvKey !== null,
             isCancelled: application.isCancelled,
+            /** Who cancelled, for the badge and its tooltip. Null when nobody did. */
+            cancellation: cancellationOf(application),
             /**
              * Whether a conclusion exists, never the conclusion itself: the board's only
              * use for it is the missing-conclusion marker, and shipping every assessment
@@ -206,4 +228,32 @@ export class BoardService {
 
     return positions[index];
   }
+}
+
+/**
+ * The newest `cancelled` entry, of which there is at most one — cancelling is not
+ * undoable, so there is never a second.
+ *
+ * `isCancelled` is still the flag the board queries; this only says who set it. Board
+ * state is never derived by replaying the log (07 §11.51).
+ */
+function cancellationOf(application: {
+  submittedName: string;
+  scheduleEvents: Array<{
+    actor: string;
+    reason: string | null;
+    createdAt: Date;
+    actorAccount: { firstName: string; lastName: string } | null;
+  }>;
+}): CancellationFacts | null {
+  const cancelled = application.scheduleEvents[0];
+  if (!cancelled) return null;
+  return {
+    actor: cancelled.actor as ScheduleActor,
+    byName: cancelled.actorAccount
+      ? `${cancelled.actorAccount.firstName} ${cancelled.actorAccount.lastName}`
+      : application.submittedName,
+    atUtc: cancelled.createdAt.toISOString(),
+    reason: cancelled.reason,
+  };
 }

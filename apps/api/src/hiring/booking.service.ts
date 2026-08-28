@@ -7,14 +7,16 @@ import {
   ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import {
   HIRING_MESSAGES,
+  MANAGE_LIMITS,
   POSITION_STEP,
   alreadyBookedMessage,
   cvExtension,
   formatBookedWhen,
   isValidTimeZone,
+  managePath,
   validateBooking,
 } from '@devscribed/validation';
 import { PrismaService } from '../prisma.service';
@@ -175,6 +177,10 @@ export class BookingService {
     const applicationId = randomUUID();
     const candidateId = await this.candidateIdFor(vacancy.organizationId, email);
     const cvKey = `${applicationId}${cvExtension(cv!.originalname)}`;
+    // Minted here for the same reason as the ids: the event body has to carry it, and
+    // the body is written before the row exists. Plaintext, frozen for the life of the
+    // row, and the only thing that addresses this booking from outside (07 §03.10).
+    const manageToken = randomBytes(MANAGE_LIMITS.tokenBytes).toString('base64url');
 
     let stored = false;
     let eventId: string | null = null;
@@ -193,6 +199,8 @@ export class BookingService {
           organizationId: vacancy.organizationId,
           candidateId,
           applicationId,
+          slug,
+          manageToken,
           submittedName,
           email,
           note,
@@ -216,6 +224,8 @@ export class BookingService {
         candidateId,
         organizationId: vacancy.organizationId,
         vacancyId: vacancy.id,
+        interviewerAccountId: vacancy.interviewerAccountId,
+        manageToken,
         firstName,
         lastName,
         email,
@@ -238,7 +248,10 @@ export class BookingService {
       throw this.bookingFailed();
     }
 
-    // No application id, no candidate id, no internal link (02 API contract).
+    // No application id, no candidate id, no internal link (02 API contract). The
+    // manage token is the one exception, and it is not internal: it is the candidate's
+    // own handle on their own booking, so they can fix a mistyped choice before closing
+    // the tab (02 §10.43). The durable copy is in the invite.
     return {
       vacancyTitle: vacancy.title,
       durationMinutes: vacancy.durationMinutes,
@@ -248,6 +261,7 @@ export class BookingService {
       lastName,
       email,
       cvFileName: cv!.originalname,
+      manageToken,
     };
   }
 
@@ -259,9 +273,10 @@ export class BookingService {
    * person's applications by position. **Future only**, because someone who interviewed
    * three months ago is a re-interview, not a duplicate.
    *
-   * A cancelled application does not block either. Nothing sets `isCancelled` in this
-   * release, so today the clause changes no outcome — it is here so the deferred
-   * reschedule flow cannot silently lock a candidate out of rebooking.
+   * A cancelled application does not block either, and since 07 that clause carries
+   * real weight: a candidate who cancels remains a live applicant and may book the same
+   * vacancy again, which produces a **second application** rather than restoring the
+   * first (07 §01.2, §02.9).
    */
   private async assertNotAlreadyBooked(
     organizationId: string,
@@ -297,6 +312,8 @@ export class BookingService {
     candidateId: string;
     organizationId: string;
     vacancyId: string;
+    interviewerAccountId: string;
+    manageToken: string;
     firstName: string;
     lastName: string;
     email: string;
@@ -339,6 +356,10 @@ export class BookingService {
           organizationId: input.organizationId,
           candidateId: candidate.id,
           vacancyId: input.vacancyId,
+          // The interviewer this booking was made with, not a pointer at whoever the
+          // vacancy names later (07 §13.63).
+          interviewerAccountId: input.interviewerAccountId,
+          manageToken: input.manageToken,
           status: 'scheduled',
           position,
           submittedName: input.submittedName,
@@ -351,6 +372,19 @@ export class BookingService {
           cvContentType: input.cvContentType,
           cvSizeBytes: input.cvSizeBytes,
           note: input.note || null,
+        },
+      });
+
+      // The log opens here, so it is the whole story rather than only its later
+      // deviations (07 §11.50). In the same transaction as the row it describes: an
+      // application with no `booked` entry would be a history that began mid-sentence.
+      await tx.applicationScheduleEvent.create({
+        data: {
+          applicationId: input.applicationId,
+          type: 'booked',
+          actor: 'candidate',
+          toStart: input.start,
+          timeZone: input.timeZone,
         },
       });
     });
@@ -392,12 +426,23 @@ export class BookingService {
    * to the candidate's card is the only internal thing in it: it is authenticated and
    * the ids are UUIDs, so it reveals that an admin tool exists and nothing else, which
    * 02 §08.33 accepts deliberately.
+   *
+   * The manage link is the candidate's, and the interviewer receives it too, because one
+   * event has one body. That is a **recorded departure** from 00 §04.19 rather than an
+   * oversight: with no mail transport this is the only channel that reaches the
+   * candidate at all, so it is forced rather than chosen (07 §03.15). It grants the
+   * interviewer no capability they lack — they cancel and reschedule from the card — and
+   * the only real cost is attribution, since an action taken through it is logged as the
+   * candidate's. When a transport lands, the email becomes the carrier and this line
+   * goes, without a migration.
    */
   private eventBody(input: {
     vacancy: { title: string; durationMinutes: number };
     organizationId: string;
     candidateId: string;
     applicationId: string;
+    slug: string;
+    manageToken: string;
     submittedName: string;
     email: string;
     note: string;
@@ -406,6 +451,7 @@ export class BookingService {
   }): string {
     const base = process.env.WEB_ORIGIN || 'http://localhost:3000';
     const link = `${base}/org/${input.organizationId}/hiring/candidates/${input.candidateId}?application=${input.applicationId}`;
+    const manage = `${base}${managePath(input.slug, input.manageToken)}`;
 
     return [
       `${input.vacancy.title} — ${input.vacancy.durationMinutes} minutes`,
@@ -414,6 +460,8 @@ export class BookingService {
       `${formatBookedWhen(input.start, input.timeZone)} (${input.timeZone})`,
       `${input.submittedName} · ${input.email}`,
       input.note ? `Note: ${input.note}` : null,
+      '',
+      `Reschedule or cancel: ${manage}`,
       '',
       link,
     ]
