@@ -320,9 +320,8 @@ test.describe('Spec 04 — signature providers', () => {
 
     await expect(page.getByTestId('envelope-provider')).toHaveText('Signed via SignWell');
     await expect(page.getByTestId('envelope-test-badge')).toBeVisible();
-    // Spelled `envelope-download-btn` because that is the id spec 02 defines and a
-    // shipped test asserts; spec 04's list says `envelope-download-button` for the same
-    // one control, and renaming it would edit an existing test.
+    // `envelope-download-btn` is spec 02's id for a control that already exists, and
+    // spec 04 defers to it rather than naming it again.
     await expect(page.getByTestId('envelope-download-btn')).toBeVisible();
     // Requirement 28 — no Certificate of Completion of ours is issued or offered.
     await expect(page.getByTestId('envelope-certificate-link')).toHaveCount(0);

@@ -1,10 +1,14 @@
 -- Documents spec 04 — Signature Providers & SignWell.
 --
 -- Every statement here is additive: new columns with defaults, one new table, two new
--- enum values. No renames, no drops, no new NOT NULL on an existing table. That is what
--- makes `make deploy-<env>` sound, since it rolls the services out BEFORE running
--- `prisma migrate deploy` — the already-running code must tolerate this schema, and the
--- new code must tolerate the old one.
+-- enum values. No renames, no drops, no new NOT NULL on an existing table. That makes the
+-- ROLLBACK safe — the previous release ignores everything added here — but it does NOT
+-- make `make deploy-<env>`'s default order safe for this release. That target rolls the
+-- services out BEFORE running `prisma migrate deploy`, and the generated Prisma client
+-- names columns in its SELECT rather than using SELECT *, so until this lands the new code
+-- asks Envelope, EnvelopeSigner and Organization for columns that do not exist and every
+-- read fails with 42703. Backward compatibility 3 of the spec delegates the consequence to
+-- the runbook: this release migrates first, then deploys. See docs/deployment.md.
 
 -- AlterEnum
 -- This migration adds more than one value to an enum.

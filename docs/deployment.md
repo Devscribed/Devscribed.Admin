@@ -81,10 +81,38 @@ digest out of the state, so a web deploy cannot silently roll the API forward or
 are applied with `wait_for_steady_state`, so `make deploy-dev` failing means the deploy failed —
 not that it was merely submitted.
 
-**Migrations run after the rollout**, from the same image the API runs. That is safe because
-migrations here are additive by rule (see [CLAUDE.md](../CLAUDE.md)): the deploy and the migration are
-independent and either order must work. They have to run inside the VPC because the database has no
-route out of it, which is also why they cannot be run from a laptop or a CI runner directly.
+**Migrations run after the rollout by default**, from the same image the API runs, and they have to
+run inside the VPC because the database has no route out of it — which is also why they cannot be run
+from a laptop or a CI runner directly.
+
+Migrations here are additive by rule (see [CLAUDE.md](../CLAUDE.md)), and it is worth being exact
+about what that buys. **Additive makes the rollback safe, not the roll-out window.** Nothing is
+renamed, dropped or narrowed, so the previous release's code keeps running against the new schema and
+a code rollback never needs a schema rollback. It says nothing about the gap between the new tasks
+going healthy and `prisma migrate deploy` finishing.
+
+**A release that adds columns to a table the running code reads must migrate first.** Prisma's
+generated client enumerates columns in its `SELECT` rather than using `SELECT *`, so from the moment
+the new tasks are serving until the migration lands, every read of that table asks for a column that
+does not exist yet and fails with Postgres `42703`. A column default protects a row that is written;
+it does not protect a query naming a column that is absent. For that class of release the order is:
+
+```bash
+make migrate-dev          # additive, so the release currently running ignores what it adds
+make deploy-dev           # then roll the services out onto the schema they expect
+```
+
+`make deploy-<env>` still runs `prisma migrate deploy` at the end; having migrated first only makes
+that step a no-op. And because push to `main` deploys `dev` by itself through `infra/deploy.sh` —
+rollout first, migration second — a release in this class has its migration applied **before** the
+merge, not after it.
+
+The first release that needs this order is **spec 04, signature providers**: it adds
+`Organization.signatureProviderKey`, four `Envelope.provider*` columns and
+`EnvelopeSigner.providerRef` to tables the documents list and detail read on every request, so
+deploying first answers 500 from both screens for the length of the rollout. Releases that only add a
+table nothing yet reads, or a column only the new code touches, are unaffected and keep the default
+order.
 
 ## Pausing an environment
 
@@ -275,9 +303,15 @@ produced a web app that proxied to a namespace that had never been created, and 
 every API call. `infra/deploy.sh` derives that origin deterministically rather than reading it back
 for exactly this reason.
 
-**Migrations run after the rollout.** A green rollout followed by a red migration means the new code
-is already serving; the environment is not broken, the schema is behind. Fix forward with
-`make migrate-dev` rather than rolling the services back.
+**Migrations run after the rollout, unless the release ordered them first.** A green rollout followed
+by a red migration means the new code is already serving against the old schema — so whether the
+environment is broken depends on what the migration adds. If the new code reads columns the migration
+was going to create, every such read is failing with `42703` right now and the screens over them are
+answering 500; that is an outage, and the fix is to get `make migrate-dev` green immediately.
+If the new code only writes what the migration adds, or reads nothing it creates, the environment is
+serving normally and the schema is merely behind. Either way, fix forward with `make migrate-dev`
+rather than rolling the services back — the migration is additive, so rolling back does not undo it
+and re-running it is safe. See *Every day* above for which releases must migrate before the rollout.
 
 **A stuck Terraform lock.** State is in S3 with native locking. An apply killed mid-run (a laptop
 closing, a CI job cancelled) can leave the lock file behind; `terraform force-unlock <id>` in

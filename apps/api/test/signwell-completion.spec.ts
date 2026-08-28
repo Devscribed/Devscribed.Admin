@@ -34,8 +34,10 @@ import {
 import { documentCanceled } from './signwell-webhook-fixtures';
 
 /**
- * specs/documents/04-signature-providers.md, requirements 27, 28 and 41–42 — completion
- * from the provider's PDF, and voiding as delete-then-converge.
+ * specs/documents/04-signature-providers.md, requirements 27, 28 and 40–42 — completion
+ * from the provider's PDF, and voiding as delete-then-settle: `DELETE`, then the local
+ * void, with no re-read, because the document is gone and a read could only produce the
+ * `404` requirements 41 and 42 already account for.
  *
  * Invariant 10 is the spine of this file: an envelope is not `completed` until *their*
  * bytes are in *our* storage. Everything else here is a consequence — a failed download is

@@ -1306,8 +1306,11 @@ export class EnvelopesService {
     }
 
     /* ------------------------------------------------------------------ *
-     * Requirement 40 — **voiding is delete-then-converge**, and the race is resolved in
-     * favour of the truth.
+     * Requirement 40 — **voiding is delete-then-settle**. The order is: call `DELETE`,
+     * then mark the envelope voided. There is no re-read: `204` is the confirmation, and
+     * requirements 41 and 42 are why asking again would be wrong — the document is gone,
+     * so a read can only produce the `404` we already expect, and the reconciler is
+     * required to stop calling rather than to read that `404` as a provider fault.
      *
      * SignWell exposes no cancel or void route at all, so `cancel` is a hard `DELETE`.
      * It runs here, outside the transaction (invariant 11), and *before* the local void:
