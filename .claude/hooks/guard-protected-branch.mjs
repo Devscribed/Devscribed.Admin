@@ -17,11 +17,18 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { writeSync } from 'node:fs';
 
 const PROTECTED = ['main', 'master'];
 
+/**
+ * Written with writeSync, not process.stdout.write. stdout to a pipe is asynchronous, and
+ * exiting immediately after a buffered write drops it — which here means a refusal that
+ * silently becomes an approval. This is the one place in the pipeline where losing output
+ * costs a deployment.
+ */
 const deny = (reason) => {
-  process.stdout.write(JSON.stringify({
+  writeSync(1, JSON.stringify({
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
       permissionDecision: 'deny',
@@ -72,7 +79,11 @@ async function main() {
       );
     }
 
-    if (/prisma\s+generate/.test(part) && !/apps[/\\]api/.test(part) && !/--schema/.test(part)) {
+    /* Anchored to the start of the segment. An unanchored match denied any command that
+       merely *mentioned* prisma generate — including a test fixture quoting it — which is
+       a refusal nobody can act on and the fastest way to get a guard switched off. */
+    if (/^(?:npx\s+|pnpm\s+|yarn\s+|npm\s+exec\s+)?prisma\s+generate\b/.test(part)
+        && !/apps[/\\]api/.test(part) && !/--schema/.test(part)) {
       const cwd = e.cwd ?? '';
       if (!/apps[/\\]api/.test(cwd)) {
         deny(

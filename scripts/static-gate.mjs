@@ -77,8 +77,11 @@ const SUPPRESSIONS = [
   [/eslint-disable/, 'a disabled lint rule', false],
 ];
 
-for (const chunk of git('diff', '-U0', base, '--', 'apps', 'packages', 'e2e').split('\ndiff --git ')) {
-  const file = chunk.match(/^(?:a\/)?(\S+)/)?.[1]?.replace(/^a\//, '');
+/* Split on the header rather than on "\ndiff --git ": the first chunk has no leading
+   newline, so a naive split leaves its header attached and the first file of every diff
+   gets parsed as "diff". That bug hid rule 2 entirely the first time this ran. */
+for (const chunk of git('diff', '-U0', base, '--', 'apps', 'packages', 'e2e').split(/^diff --git /m)) {
+  const file = chunk.match(/^a\/(\S+)/)?.[1];
   if (!file || !isSource(file)) continue;
 
   for (const line of chunk.split('\n')) {
@@ -100,8 +103,34 @@ for (const chunk of git('diff', '-U0', base, '--', 'apps', 'packages', 'e2e').sp
   }
 
   if (!isTest(file)) continue;
-  const removed = (chunk.match(/^-.*\b(expect|assert)\s*\(/gm) ?? []).length;
-  const added = (chunk.match(/^\+.*\b(expect|assert)\s*\(/gm) ?? []).length;
+
+  /* An assertion that was commented out is still gone. Counting the "+ // await expect(…)"
+     line as an added assertion made removed == added and hid the simplest weakening there
+     is — so a commented assertion is its own finding and never counts towards the total. */
+  const isAssertion = (l) => /\b(expect|assert)\s*\(/.test(l);
+  const isCommented = (l) => /^[+-]\s*(\/\/|\/\*|\*(?!\/))/.test(l);
+  const lines = chunk.split('\n');
+
+  for (const l of lines) {
+    if (!l.startsWith('+') || l.startsWith('+++') || !isAssertion(l) || !isCommented(l)) continue;
+    add({
+      rule: 'pipeline/no-detector-weakening',
+      file,
+      claim: 'an assertion was commented out',
+      witness: {
+        kind: 'rule',
+        detail: `The diff comments out an assertion:\n    ${l.slice(1).trim()}\nThe test still runs and still passes, and it no longer checks anything.`,
+        source: 'CLAUDE.md',
+      },
+      suggestedFix: 'restore the assertion, or contest with the reason it is now wrong',
+    });
+  }
+
+  const count = (sign) => lines.filter(
+    (l) => l.startsWith(sign) && !l.startsWith(`${sign}${sign}${sign}`) && isAssertion(l) && !isCommented(l),
+  ).length;
+  const removed = count('-');
+  const added = count('+');
   if (removed > added) {
     add({
       rule: 'pipeline/no-detector-weakening',

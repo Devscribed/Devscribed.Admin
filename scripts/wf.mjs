@@ -126,6 +126,20 @@ function loadRun(runId = currentRunId()) {
 }
 
 /**
+ * A halt is a halt. Without this, a driver that ignores the exit code keeps feeding verdicts
+ * into a run that already stopped for a human, and the counters carry on climbing behind a
+ * decision nobody made.
+ */
+function refuseIfHalted(run) {
+  if (!run.halt) return;
+  fail(
+    `run is halted (${run.halt.reason}): ${run.halt.detail}\n`
+    + '    A halt asks for a person, not another attempt. Resolve it and start a new run, '
+    + 'or `wf abort` and begin again.',
+  );
+}
+
+/**
  * Single-writer discipline. Every mutation goes through here so run.json can never be
  * clobbered by a read-modify-write race between two stages.
  */
@@ -408,6 +422,7 @@ function cmdStage(args) {
   const stage = args._[1];
   if (!STAGES.includes(stage)) fail(`unknown stage "${stage}"`);
   const run = loadRun();
+  refuseIfHalted(run);
   if (args.start) {
     run.stages[stage].status = 'running';
     run.stages[stage].attempts += 1;
@@ -429,6 +444,7 @@ function cmdVerdict(args) {
   const verdict = read(resolve(ROOT, args.file));
 
   const run = loadRun();
+  refuseIfHalted(run);
   const classified = classify(stage, verdict.findings);
 
   /* A gate that hands out addresses it does not own is itself broken. Say so instead of

@@ -31,10 +31,18 @@ const BLOB_THRESHOLD = 2048;
 const PENDING = new Map(); // survives only within a process; the on-disk map below spans them
 
 const SECRET_PATHS = [/(^|\/)\.env(\.|$)/i, /(^|\/)Info\.txt$/i, /\.pem$/i, /\.tfstate/i];
+/**
+ * Deliberately narrow. A generic "long base64-ish run" rule was tried first and redacted
+ * every large legitimate output — a minified bundle, a data URI, a 5000-character file —
+ * which quietly emptied the journal of exactly the content it exists to keep. Secret paths
+ * are already covered by SECRET_PATHS; these catch a credential pasted into a command or
+ * printed by one.
+ */
 const SECRET_SHAPES = [
-  /\b(?:sk|pk|ghp|gho|xox[baprs])-[A-Za-z0-9_-]{16,}\b/,
-  /\b[A-Za-z0-9+/]{40,}={0,2}\b/,
-  /(password|secret|token|api[_-]?key)\s*[:=]\s*["']?[^\s"']{8,}/i,
+  /\b(?:sk|pk|ghp|gho|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{16,}\b/,
+  /(password|passwd|secret|token|api[_-]?key|authorization)\s*[:=]\s*["']?[^\s"',}]{8,}/i,
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
+  /\baws_secret_access_key\b/i,
 ];
 
 const out = (s) => process.stdout.write(s);
