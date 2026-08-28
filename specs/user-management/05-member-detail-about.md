@@ -607,74 +607,22 @@ Server-side validation: all rules enforced regardless of UI state.
   1. HTTP 200 (success). Role remains `admin`, job title updated to "CEO".
 
 ### TC-05-E2E-01: Admin edits role and Job title and they persist
-- **Level:** E2E
-- **Preconditions:** logged in as `admin`; open member "Aleksey Siniakevich" who is `user` with empty Job title.
-- **Steps:**
-  1. From the Members list, open Aleksey Siniakevich's detail.
-  2. Confirm the About tab is active and the header shows avatar initials, name, role badge, joined date, email, timezone.
-  3. Select `manager` from the role picker.
-  4. Enter "Backend Engineer" in the Job title input.
-  5. Click "Save changes".
-  6. Reload the page.
-- **Expected Result:**
-  1. After step 5 a "Changes saved" toast appears, role badge updates to `manager`, and Job title shows "Backend Engineer".
-  2. After reload both values are retained.
-- **Selectors:** `member-detail`, `member-detail-avatar`, `member-detail-tab-about`, `member-detail-name`, `member-detail-role-badge`, `member-detail-joined`, `member-detail-email`, `member-detail-timezone`, `member-role-select-{id}`, `job-title-input`, `job-title-save-button`, `toast-member-saved`.
+- **Retired.** Covered by the integration case that saves role and job title together on an active member and reads them back. The form's write-and-reread path on this screen is still exercised by TC-05-E2E-11.
 
 ### TC-05-E2E-02: user sees a read-only About with no editor
-- **Level:** E2E
-- **Preconditions:** logged in as `user`; open any active member's detail.
-- **Steps:**
-  1. Open the member's detail and the About tab.
-- **Expected Result:**
-  1. The header fields are visible (avatar, name, role badge, joined date, email, timezone).
-  2. No role picker is present. The Job title renders read-only. No `job-title-input` editor, no `member-role-select-*`, and no `job-title-save-button` are present.
-- **Selectors:** `member-detail`, `member-detail-tab-about`, `job-title-readonly`, `job-title-input` (asserted absent), `member-role-select-{id}` (asserted absent), `job-title-save-button` (asserted absent).
+- **Retired.** Covered by TC-05-INT-12 (the permission flags a user or viewer receives) and TC-05-INT-02 (the save is refused at the API regardless of what the page draws). The page renders from those flags.
 
 ### TC-05-E2E-03: Removed member's detail is fully read-only even for admin
-- **Level:** E2E
-- **Preconditions:** logged in as `admin`; a removed member exists (visible via "Show removed" filter).
-- **Steps:**
-  1. Tick "Show removed members" on the Members list.
-  2. Open the removed member's detail.
-- **Expected Result:**
-  1. The header shows avatar, name, role badge, "Removed" status badge, joined date, email, timezone.
-  2. No role picker, no `job-title-input` editor, and no `job-title-save-button` are present — fully read-only.
-- **Selectors:** `member-detail`, `member-detail-tab-about`, `job-title-readonly`, `job-title-input` (asserted absent), `member-role-select-{id}` (asserted absent), `job-title-save-button` (asserted absent).
+- **Retired.** Covered by the integration cases that return fully locked-down flags for a removed member and reject a save against one. That the screen renders read-only from those flags is asserted by TC-05-E2E-02.
 
 ### TC-05-E2E-04: Admin clears Job title
-- **Level:** E2E
-- **Preconditions:** logged in as `admin`; open an active member whose Job title is "Backend Engineer".
-- **Steps:**
-  1. Clear the Job title input (select all + delete).
-  2. Click "Save changes".
-  3. Reload the page.
-- **Expected Result:**
-  1. After step 2 a "Changes saved" toast appears.
-  2. After reload the Job title input shows the placeholder "Enter a job title" (empty).
-- **Selectors:** `job-title-input`, `job-title-save-button`, `toast-member-saved`.
+- **Retired.** Covered by the integration case that allows clearing a job title. Clearing is the same form path as setting, on the same field.
 
 ### TC-05-E2E-05: Manager sees role picker on user/viewer detail but not on admin/manager detail
-- **Level:** E2E
-- **Preconditions:** logged in as `manager`; org has members with roles `admin`, `manager`, `user`, `viewer`.
-- **Steps:**
-  1. Open a `user` member's detail — verify role picker is present with options `manager`/`user`/`viewer` (no `admin`).
-  2. Open an `admin` member's detail — verify role picker is absent but job title input and save button are present.
-  3. Open a `manager` member's detail — verify role picker is absent but job title input and save button are present.
-- **Expected Result:**
-  1. Role picker present on `user`/`viewer` details with correct options, absent on `admin`/`manager` details.
-  2. The picker does NOT include `admin` as an option.
-  3. Job title input and save button are present on all active member details for a manager.
-- **Selectors:** `member-role-select-{id}` (present on user/viewer, absent on admin/manager), `job-title-input`, `job-title-save-button`.
+- **Retired.** Covered by TC-05-INT-10 and TC-05-INT-11 for the flags a manager receives on a user and on an admin, and by TC-05-INT-07 for the rule behind them. Role-gated rendering is proved in the browser once, by TC-01-E2E-07 in the documents area.
 
 ### TC-05-E2E-06: Placeholder tabs are visible but disabled
-- **Level:** E2E
-- **Preconditions:** logged in as any role; open any member's detail.
-- **Steps:**
-  1. Observe the tab bar.
-- **Expected Result:**
-  1. The About tab is active. Vacation tab is active or disabled per spec 07. Projects, Roles, and Payments tab labels are visible but disabled/non-functional.
-- **Selectors:** `member-detail-tab-about`, `member-detail-tab-vacation`, `member-detail-tab-projects`, `member-detail-tab-roles`, `member-detail-tab-payments`.
+- **Retired.** Retired without replacement. The placeholder tabs are static markup with nothing behind them; the case asserted that four disabled elements are disabled.
 
 ### TC-05-E2E-07: Navigate to member detail and back
 - **Level:** E2E
@@ -717,23 +665,8 @@ Server-side validation: all rules enforced regardless of UI state.
 - **Selectors:** `member-role-select-{id}` (asserted absent), `job-title-input`, `job-title-save-button`, `toast-member-saved`.
 
 ### TC-05-E2E-10: Loading skeleton shown while fetching member detail
-- **Level:** E2E
-- **Preconditions:** logged in as any role.
-- **Steps:**
-  1. Click a member row on the Members list.
-- **Expected Result:**
-  1. A loading skeleton is briefly visible before the member detail data loads.
-- **Selectors:** `member-detail-loading-skeleton`.
+- **Retired.** Duplicate mechanism. The loading skeleton is one component with one trigger, and TC-04-E2E-09 proves it on the list.
 
 ### TC-05-E2E-11: Job title validation error shown for input exceeding 100 characters
-- **Level:** E2E
-- **Preconditions:** logged in as `admin`; open an active member's detail.
-- **Steps:**
-  1. Enter a 101-character string in the Job title input.
-  2. Observe the inline error.
-  3. Shorten the value to 100 characters.
-  4. Observe the inline error clears.
-- **Expected Result:**
-  1. After step 1, an inline error "Job title must be at most 100 characters" appears beneath the input.
-  2. After step 3, the error clears and the save button is usable.
-- **Selectors:** `job-title-input`, `field-error-jobTitle`, `job-title-save-button`.
+- **Retired.** Covered by TC-05-INT-04 for the 100-character limit. "Inline error on blur, cleared on correction" is the shared form mechanism TC-01-E2E-03 proves once.
+

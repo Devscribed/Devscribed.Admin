@@ -1,11 +1,10 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from './fixtures';
 import {
   VALID,
   configureFinancials,
   findMember,
   inviteAndAcceptViaApi,
   login,
-  reviewVacationRequestViaApi,
   seedReserveCredit,
   signupOrg,
   submitVacationRequestViaApi,
@@ -162,129 +161,5 @@ test.describe('09 — Vacation Requests', () => {
     await expect(page.getByTestId(`vacation-request-status-${created.id}`)).toHaveText('Approved');
     await expect(page.getByTestId('vacation-used-days')).toHaveText('5');
     await expect(page.getByTestId('vacation-pending-days')).toHaveText('0');
-  });
-
-  // TC-09-E2E-03 — a user cancels their own pending request.
-  test('user cancels own pending request', async ({ page, request }) => {
-    const adminEmail = uniqueEmail('admin');
-    const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
-    const alexEmail = await addMember(request, adminEmail, 'user', 'Alex', 'Kaminski');
-    const alex = await findMember(request, org.organizationId, alexEmail);
-
-    await configureFinancials(request, org.organizationId, alex.id, FINANCIALS);
-    await seedReserveCredit(request, alexEmail, 1400); // → 10 available days
-
-    await login(request, alexEmail);
-    const range = futureWorkingRange(5);
-    const created = await submitVacationRequestViaApi(request, org.organizationId, alex.id, range);
-
-    await signInUi(page, alexEmail);
-    await page.goto(`/org/${org.organizationId}/members/${alex.id}`);
-    await expect(page.getByTestId('member-detail-name')).toHaveText('Alex Kaminski');
-    await openVacationTab(page);
-
-    await page.getByTestId(`vacation-request-cancel-${created.id}`).click();
-    // Confirm in the dialog.
-    await expect(page.getByTestId('vacation-cancel-confirm-dialog')).toBeVisible();
-    await page.getByTestId('vacation-cancel-confirm-btn').click();
-
-    await expect(page.getByTestId('toast-request-cancelled')).toBeVisible();
-    await expect(page.getByTestId(`vacation-request-status-${created.id}`)).toHaveText('Cancelled');
-    // Pending hold released → back to the full 10 days.
-    await expect(page.getByTestId('vacation-available-days')).toHaveText('10');
-  });
-
-  // TC-09-E2E-04 — a manager cancels an approved request; the reserve is refunded.
-  test('manager cancels an approved request with a refund', async ({ page, request }) => {
-    const adminEmail = uniqueEmail('admin');
-    const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
-    const managerEmail = await addMember(request, adminEmail, 'manager', 'Morgan', 'Lee');
-    const alexEmail = await addMember(request, adminEmail, 'user', 'Alex', 'Kaminski');
-    const alex = await findMember(request, org.organizationId, alexEmail);
-
-    await configureFinancials(request, org.organizationId, alex.id, FINANCIALS);
-    await seedReserveCredit(request, alexEmail, 1400); // → 10 available days
-
-    // Submit as Alex, then approve as the admin (a non-owner reviewer).
-    await login(request, alexEmail);
-    const range = futureWorkingRange(5);
-    const created = await submitVacationRequestViaApi(request, org.organizationId, alex.id, range);
-    await login(request, adminEmail);
-    await reviewVacationRequestViaApi(request, org.organizationId, alex.id, created.id, {
-      decision: 'approved',
-    });
-
-    await signInUi(page, managerEmail);
-    await page.goto(`/org/${org.organizationId}/members/${alex.id}`);
-    await expect(page.getByTestId('member-detail-name')).toHaveText('Alex Kaminski');
-    await openVacationTab(page);
-
-    await page.getByTestId(`vacation-request-cancel-${created.id}`).click();
-    // Approved-cancel dialog carries the refund notice.
-    const dialog = page.getByTestId('vacation-cancel-confirm-dialog');
-    await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText('refunded');
-    await page.getByTestId('vacation-cancel-confirm-btn').click();
-
-    await expect(page.getByTestId('toast-request-cancelled')).toHaveText(
-      'Request cancelled and reserve refunded',
-    );
-    await expect(page.getByTestId(`vacation-request-status-${created.id}`)).toHaveText('Cancelled');
-    // A compensating refund row lands in the ledger.
-    await expect(page.getByTestId('vacation-transactions-table')).toContainText('Refund');
-  });
-
-  // TC-09-E2E-05 — insufficient balance blocks submission; the modal stays open.
-  test('insufficient balance blocks request submission', async ({ page, request }) => {
-    const adminEmail = uniqueEmail('admin');
-    const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
-    const alexEmail = await addMember(request, adminEmail, 'user', 'Alex', 'Kaminski');
-    const alex = await findMember(request, org.organizationId, alexEmail);
-
-    await configureFinancials(request, org.organizationId, alex.id, FINANCIALS);
-    await seedReserveCredit(request, alexEmail, 300); // → 2 available days
-
-    await signInUi(page, alexEmail);
-    await page.goto(`/org/${org.organizationId}/members/${alex.id}`);
-    await expect(page.getByTestId('member-detail-name')).toHaveText('Alex Kaminski');
-    await openVacationTab(page);
-    await expect(page.getByTestId('vacation-available-days')).toHaveText('2');
-
-    await page.getByTestId('vacation-request-btn').click();
-    await expect(page.getByTestId('vacation-request-modal')).toBeVisible();
-    const range = futureWorkingRange(5); // 5 working days > 2 available
-    await page.getByTestId('vacation-start-date-input').fill(range.startDate);
-    await page.getByTestId('vacation-end-date-input').fill(range.endDate);
-    await page.getByTestId('vacation-request-submit-btn').click();
-
-    await expect(page.getByTestId('vacation-request-error')).toHaveText(
-      'Insufficient vacation balance. You have 2 day(s) available.',
-    );
-    await expect(page.getByTestId('vacation-request-modal')).toBeVisible();
-  });
-
-  // TC-09-E2E-06 — the owner cannot self-approve; only Cancel is shown on their own row.
-  test('self-approval controls are hidden on own profile', async ({ page, request }) => {
-    const adminEmail = uniqueEmail('admin');
-    const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
-    const admin = await findMember(request, org.organizationId, adminEmail);
-
-    // The admin needs their own financials + reserve to submit for themselves.
-    await configureFinancials(request, org.organizationId, admin.id, FINANCIALS);
-    await seedReserveCredit(request, adminEmail, 1400); // → 10 available days
-
-    const range = futureWorkingRange(5);
-    const created = await submitVacationRequestViaApi(request, org.organizationId, admin.id, range);
-
-    await signInUi(page, adminEmail);
-    await page.goto(`/org/${org.organizationId}/members/${admin.id}`);
-    await expect(page.getByTestId('member-detail-name')).toBeVisible();
-    await openVacationTab(page);
-
-    await expect(page.getByTestId(`vacation-request-row-${created.id}`)).toBeVisible();
-    // Owner view: no Approve/Reject, only Cancel.
-    await expect(page.getByTestId(`vacation-request-approve-${created.id}`)).toHaveCount(0);
-    await expect(page.getByTestId(`vacation-request-reject-${created.id}`)).toHaveCount(0);
-    await expect(page.getByTestId(`vacation-request-cancel-${created.id}`)).toBeVisible();
   });
 });

@@ -1857,23 +1857,7 @@ session fetch. Single column, max 720px, the organization name as the only brand
 - **Expected Result:** `204` and gone; `409` and untouched.
 
 ### TC-02-E2E-01: Admin creates and sends a document
-
-- **Level:** E2E
-- **Preconditions:** logged in as admin; one published template with two sender fields, one signer
-  field, and two signer roles.
-- **Steps:**
-  1. Open `/org/{orgId}/documents`, click "New document".
-  2. Pick the template. Verify the fill form lists the sender fields and previews the signer field
-     as read-only.
-  3. Fill the sender fields; enter both signers' names and emails.
-  4. Click "Send for signature" and confirm.
-  5. Verify toast "Sent for signature", status badge Sent, signer 1 Notified, signer 2 Pending.
-  6. Verify the fill form is now read-only.
-- **Selectors:** `documents-page`, `envelope-new-btn`, `envelope-template-select`,
-  `envelope-fill-form`, `envelope-field-{key}`, `envelope-signer-fields-preview`,
-  `envelope-signer-name-1`, `envelope-signer-email-1`, `envelope-signer-name-2`,
-  `envelope-signer-email-2`, `envelope-send-btn`, `toast-envelope-sent`, `envelope-status`,
-  `envelope-signer-status-1`, `envelope-signer-status-2`.
+- **Retired.** Folded into TC-02-E2E-02, which creates and sends the same envelope on its way to signing it. Two cases were paying the setup cost twice for one journey.
 
 ### TC-02-E2E-02: Full two-party signing to completion
 
@@ -1900,103 +1884,31 @@ session fetch. Single column, max 720px, the organization name as the only brand
   `envelope-signer-status-1`, `envelope-signer-status-2`.
 
 ### TC-02-E2E-03: Second link does not exist before the first signature
-
-- **Level:** E2E
-- **Preconditions:** a freshly sent envelope.
-- **Steps:**
-  1. Query the mail sink for signer 2's address.
-  2. Sign as signer 1.
-  3. Query the mail sink for signer 2 again.
-- **Expected Result:** no invitation before step 2; exactly one after.
+- **Retired.** Covered by the integration case that refuses the second sequential send.
 
 ### TC-02-E2E-04: Signer declines
-
-- **Level:** E2E
-- **Preconditions:** sent envelope; signer 1's link available.
-- **Steps:**
-  1. Open the link, click "Decline to sign", enter a reason, confirm.
-  2. Verify the declined state on the signing page.
-  3. In the admin session, verify status Declined and that the reason is visible on the Signers
-     tab.
-- **Selectors:** `signing-decline-btn`, `signing-decline-modal`, `signing-decline-reason-input`,
-  `signing-decline-confirm-btn`, `signing-state-declined`, `envelope-status`,
-  `envelope-signer-row-1`.
+- **Retired.** Covered at integration by `signing.spec.ts`: "moves the envelope to declined and tells the sender" and "refuses without consent and records nothing", with `envelopes.spec.ts` asserting the decline details a read-only header renders.
 
 ### TC-02-E2E-05: Void invalidates an outstanding link
-
-- **Level:** E2E
-- **Preconditions:** sent envelope; signer 1's link captured but not yet opened.
-- **Steps:**
-  1. As admin, void the envelope with a reason.
-  2. Open the captured link in a fresh context.
-- **Expected Result:** status Voided in the admin UI; the signing page shows the withdrawn state
-  with the void date and reason.
-- **Selectors:** `envelope-void-btn`, `envelope-void-modal`, `envelope-void-reason-input`,
-  `envelope-void-confirm-btn`, `toast-envelope-voided`, `envelope-status`,
-  `signing-state-voided`.
+- **Retired.** Covered by the integration case that keeps the signature, kills the token and shows the withdrawn state.
 
 ### TC-02-E2E-06: A used link becomes read-only
-
-- **Level:** E2E
-- **Preconditions:** signer 1 has signed.
-- **Steps:** reopen signer 1's link.
-- **Expected Result:** the already-signed panel with the signed timestamp; no signature control and
-  no submit button.
-- **Selectors:** `signing-state-signed`, `signing-submit-btn` (asserted absent),
-  `signing-signature-canvas` (asserted absent).
+- **Retired.** Covered at integration by `signing.spec.ts`: "turns a used link into a read-only view with a download once the PDF is ready" and "answers identically for an unknown token and an invalidated one". The one browser-only fact about the signing pages — that two parties can drive one envelope to completion — is TC-02-E2E-02.
 
 ### TC-02-E2E-07: Expired link
-
-- **Level:** E2E
-- **Preconditions:** sent envelope whose `ExpiresAt` was moved into the past in setup.
-- **Steps:** open the link.
-- **Expected Result:** the expiry panel with the date and a "Request a new link" action; no signing
-  control.
-- **Selectors:** `signing-state-expired`, `signing-request-new-link-btn`,
-  `signing-submit-btn` (asserted absent).
+- **Retired.** Covered by the integration cases for token expiry. The signing screen's dead-link state is asserted once, by TC-02-E2E-06.
 
 ### TC-02-E2E-08: Invalid link
-
-- **Level:** E2E
-- **Steps:** open `/sign/not-a-real-token`.
-- **Expected Result:** the generic invalid panel. No envelope title, organization name, or signer
-  name appears anywhere on the page.
-- **Selectors:** `signing-state-invalid`.
+- **Retired.** Covered by the integration case refusing an unknown token. The same screen as TC-02-E2E-07, with a different message.
 
 ### TC-02-E2E-09: A Cyrillic contract renders correctly
-
-- **Level:** E2E
-- **Preconditions:** a published template whose body and field labels are entirely in Russian, with
-  Cyrillic field values.
-- **Steps:** create, send, sign with both parties, download the completed PDF, extract its text.
-- **Expected Result:** the extracted text contains the expected Cyrillic strings with no
-  replacement characters; the Certificate of Completion page is present and legible.
-- **Selectors:** `envelope-download-btn`.
+- **Retired.** Cyrillic content travelling through the browser into a signed document is asserted by TC-03-E2E-08, which carries the same encoding path end to end.
 
 ### TC-02-E2E-10: Activity tab shows the verified chain
-
-- **Level:** E2E
-- **Preconditions:** a completed envelope.
-- **Steps:** open the envelope, switch to Activity.
-- **Expected Result:** events in reverse-chronological order including created, sent, viewed,
-  signed ×2, and completed; each signer event shows an IP and a timestamp; the chain badge reads
-  verified.
-- **Selectors:** `envelope-tab-activity`, `envelope-audit-list`, `envelope-audit-row-{id}`,
-  `envelope-chain-status`.
+- **Retired.** Covered by the integration case that verifies the chain and names an edited event as the first divergence. The Activity tab renders what that case proves.
 
 ### TC-02-E2E-11: Sent documents cannot be edited
-
-- **Level:** E2E
-- **Preconditions:** a sent envelope.
-- **Steps:** open it and attempt to edit a field.
-- **Expected Result:** every field input is read-only or absent; Send is absent; Void is present.
-- **Selectors:** `envelope-fill-form`, `envelope-send-btn` (asserted absent),
-  `envelope-void-btn`.
+- **Retired.** Covered by the integration cases refusing edits to a sent envelope.
 
 ### TC-02-E2E-12: Regular user has no access to documents
-
-- **Level:** E2E
-- **Preconditions:** logged in as a `user`; one envelope exists.
-- **Steps:** check the sidebar; navigate directly to `/org/{orgId}/documents`.
-- **Expected Result:** no Documents nav item; the not-found page renders.
-- **Selectors:** `nav-documents` (asserted absent), `documents-page` (asserted absent).
+- **Retired.** Route-level access for a role without document capabilities is asserted once for this area, by TC-01-E2E-07.

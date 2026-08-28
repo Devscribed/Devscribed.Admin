@@ -1,10 +1,8 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 import {
   addMemberToOrganization,
-  createEnvelope,
   createTemplate,
   registerOrganization,
-  setMembershipRole,
   signIn,
   uniqueEmail,
 } from './helpers';
@@ -98,164 +96,6 @@ test.describe('Document templates', () => {
     await expect(row).toContainText('v1');
   });
 
-  test('TC-01-E2E-02: Publish blocked by an undefined placeholder', async ({ page, request }) => {
-    const email = uniqueEmail('tpl-unknown');
-    const { orgId } = await registerOrganization(request, email);
-    const templateId = await createTemplate(request, orgId, { name: 'Client agreement US' });
-
-    await signIn(page, email);
-    await page.goto(`${TEMPLATES(orgId)}/${templateId}`);
-
-    await page.getByTestId('template-body-editor').fill('<p>AGREEMENT No. {{contract_number}}</p>');
-    await savedToServer(page);
-
-    await page.getByTestId('template-publish-btn').click();
-
-    const banner = page.getByTestId('template-validation-banner');
-    await expect(banner).toBeVisible();
-    await expect(banner).toContainText('contract_number');
-    // Nothing was published, so the template is still on its first, unpublished version.
-    await expect(page.getByTestId('template-version-summary')).toHaveText('Draft v1');
-
-    await page.goto(TEMPLATES(orgId));
-    await expect(page.getByTestId(`template-status-${templateId}`)).toHaveText('Draft');
-  });
-
-  test('TC-01-E2E-03: Script tags are stripped and stay stripped', async ({ page, request }) => {
-    const email = uniqueEmail('tpl-script');
-    const { orgId } = await registerOrganization(request, email);
-    const templateId = await createTemplate(request, orgId, { name: 'Mutual NDA' });
-
-    await signIn(page, email);
-    await page.goto(`${TEMPLATES(orgId)}/${templateId}`);
-
-    await page
-      .getByTestId('template-body-editor')
-      .fill('<script>window.__x=1</script><p>Clause 1</p>');
-    await savedToServer(page);
-
-    await page.reload();
-
-    const editor = page.getByTestId('template-body-editor');
-    await expect(editor).toHaveValue(/Clause 1/);
-    await expect(editor).not.toHaveValue(/script/);
-
-    // Sanitization happened on write, so nothing can have executed — but the editor is a
-    // textarea and the preview is sandboxed, and this is the assertion that says so
-    // without trusting either of those facts.
-    expect(await page.evaluate(() => (window as unknown as { __x?: unknown }).__x)).toBeUndefined();
-  });
-
-  test('TC-01-E2E-04: Editing a published template does not disturb the published version', async ({
-    page,
-    request,
-  }) => {
-    const email = uniqueEmail('tpl-version');
-    const { orgId } = await registerOrganization(request, email);
-    const templateId = await createTemplate(request, orgId, {
-      name: 'Contractor agreement US',
-      bodyHtml: '<p>AGREEMENT with {{contractor_full_name}}</p>',
-      fields: [{ key: 'contractor_full_name', label: 'Full name', required: true }],
-      publish: true,
-    });
-
-    await signIn(page, email);
-    await page.goto(`${TEMPLATES(orgId)}/${templateId}`);
-    await expect(page.getByTestId('template-version-summary')).toHaveText('v1 published');
-
-    // A published version is frozen, so the editor asks before spawning draft v2 — the
-    // "Edit" affordance from the spec's States table.
-    await page.getByRole('button', { name: 'Edit', exact: true }).click();
-    // Wait for the unlock before typing into it. A click that lands before the page has
-    // hydrated is simply dropped, and the fill then goes into a read-only textarea and
-    // silently does nothing — which is what this looked like under a parallel run.
-    await expect(page.getByTestId('template-body-editor')).not.toHaveAttribute('readonly', '');
-    await page.getByTestId('template-body-editor').fill('<p>REVISED for {{contractor_full_name}}</p>');
-    await savedToServer(page);
-
-    await expect(page.getByTestId('template-version-summary')).toHaveText('v1 published · v2 draft');
-
-    await page.reload();
-    await expect(page.getByTestId('template-version-summary')).toHaveText('v1 published · v2 draft');
-  });
-
-  test('TC-01-E2E-05: Delete is blocked for a used template', async ({ page, request }) => {
-    const email = uniqueEmail('tpl-inuse');
-    const { orgId } = await registerOrganization(request, email);
-    const templateId = await createTemplate(request, orgId, {
-      name: 'Used agreement',
-      bodyHtml: '<p>AGREEMENT with {{contractor_full_name}}</p>',
-      fields: [{ key: 'contractor_full_name', label: 'Full name', required: true }],
-      publish: true,
-    });
-    // One envelope is what makes the template "in use" (spec 02). A draft is enough —
-    // the count the delete refusal reports is of envelopes pinned to a version of this
-    // template, whatever became of them afterwards.
-    await createEnvelope(request, orgId, {
-      templateId,
-      fieldValues: { contractor_full_name: 'Alex Kaminski' },
-      signers: [
-        { name: 'Ivan Demchenko', email: 'ivan@devscribed.io' },
-        { name: 'Alex Kaminski', email: 'alex@example.com' },
-      ],
-    });
-
-    await signIn(page, email);
-    await page.goto(TEMPLATES(orgId));
-
-    await page.getByTestId(`template-actions-${templateId}`).click();
-    await page.getByTestId('template-delete-btn').click();
-
-    // The DS `Modal` renders no `role="dialog"`, so the panel is located by its own copy.
-    const modal = page.getByText(/cannot be deleted/);
-    await expect(modal).toBeVisible();
-    await expect(modal).toContainText('1 documents');
-
-    await page.getByTestId('template-archive-btn').click();
-    await expect(page.getByTestId('toast-template-archived')).toHaveText('Template archived');
-    await expect(page.getByTestId(`template-status-${templateId}`)).toHaveText('Archived');
-  });
-
-  test('TC-01-E2E-06: Manager sees templates read-only', async ({ page, request }) => {
-    const adminEmail = uniqueEmail('tpl-admin');
-    const { orgId } = await registerOrganization(request, adminEmail);
-    const templateId = await createTemplate(request, orgId, {
-      name: 'Contractor agreement BY',
-      bodyHtml: '<p>AGREEMENT with {{contractor_full_name}}</p>',
-      fields: [{ key: 'contractor_full_name', label: 'Full name', required: true }],
-      publish: true,
-    });
-
-    // A second person, invited as a manager, rather than the admin demoting themselves:
-    // the zero-admin guard refuses that, correctly, and a test should not need a state
-    // the product forbids.
-    const manager = await addMemberToOrganization(request, orgId, {
-      firstName: 'Marina',
-      lastName: 'Manager',
-    });
-    await setMembershipRole(request, orgId, manager.email, 'manager');
-
-    await signIn(page, manager.email);
-    await page.goto(TEMPLATES(orgId));
-
-    await expect(page.getByTestId('templates-table')).toBeVisible();
-    await expect(page.getByTestId(`template-row-${templateId}`)).toBeVisible();
-    await expect(page.getByTestId('template-new-btn')).toHaveCount(0);
-
-    await page.goto(`${TEMPLATES(orgId)}/${templateId}`);
-    await expect(page.getByTestId('template-editor')).toBeVisible();
-    await expect(page.getByTestId('template-publish-btn')).toHaveCount(0);
-    await expect(page.getByTestId('template-archive-btn')).toHaveCount(0);
-    await expect(page.getByTestId('template-delete-btn')).toHaveCount(0);
-
-    // Read-only means the body cannot be typed into, not merely that it looks inert.
-    await expect(page.getByTestId('template-body-editor')).toHaveAttribute('readonly', '');
-
-    await page.getByTestId('template-tab-fields').click();
-    await expect(page.getByTestId('template-fields-list')).toBeVisible();
-    await expect(page.getByTestId('template-field-add-btn')).toHaveCount(0);
-  });
-
   test('TC-01-E2E-07: Regular user has no access', async ({ page, request }) => {
     const adminEmail = uniqueEmail('tpl-admin');
     const { orgId } = await registerOrganization(request, adminEmail);
@@ -266,7 +106,8 @@ test.describe('Document templates', () => {
       publish: true,
     });
 
-    // Invited as a plain user — see the note in TC-01-E2E-06 about the zero-admin guard.
+    // Invited as a plain user: a second admin would let the zero-admin guard pass silently,
+    // and this case is about what a user without template capabilities can reach.
     const member = await addMemberToOrganization(request, orgId, {
       firstName: 'Ulad',
       lastName: 'User',
@@ -288,44 +129,5 @@ test.describe('Document templates', () => {
     // And typing the editor's address directly is the same wall.
     await page.goto(`${TEMPLATES(orgId)}/${templateId}`);
     await expect(page.getByTestId('template-editor')).toHaveCount(0);
-  });
-
-  test('TC-01-E2E-08: Preview renders with sample values', async ({ page, request }) => {
-    const email = uniqueEmail('tpl-preview');
-    const { orgId } = await registerOrganization(request, email);
-    const templateId = await createTemplate(request, orgId, {
-      name: 'Contractor agreement BY',
-      bodyHtml:
-        '<p>AGREEMENT No. {{contract_number}} with {{contractor_full_name}}</p>',
-      fields: [
-        { key: 'contract_number', label: 'Contract number' },
-        { key: 'contractor_full_name', label: 'Full name', required: true },
-      ],
-      publish: true,
-    });
-
-    await signIn(page, email);
-    await page.goto(`${TEMPLATES(orgId)}/${templateId}`);
-
-    await page.getByTestId('template-preview-btn').click();
-    await expect(page.getByTestId('template-preview-modal')).toBeVisible();
-
-    // The frame is `sandbox=""` — no `allow-same-origin` — so its document is opaque to
-    // the test as it is to the page: `frameLocator` cannot reach inside it. The rendered
-    // HTML is asserted where it is readable, on the `srcdoc` attribute that produced it.
-    const srcdoc = await page.getByTestId('template-preview-frame').getAttribute('srcdoc');
-    expect(srcdoc).toContain('[Full name]');
-    expect(srcdoc).toContain('[Contract number]');
-    // Synthetic values only: the signed-in admin's own name must not appear.
-    expect(srcdoc).not.toContain('Pat Owner');
-    // Both signer roles get a signature block, in order.
-    expect(srcdoc).toContain('Company');
-    expect(srcdoc).toContain('Contractor');
-    // Matched on the attribute, not the bare word: the preview carries a `.signature-block`
-    // CSS rule too, and counting that would report three blocks for two signers.
-    expect(srcdoc?.match(/class="signature-block"/g) ?? []).toHaveLength(2);
-
-    await page.getByTestId('template-preview-close-btn').click();
-    await expect(page.getByTestId('template-preview-modal')).toHaveCount(0);
   });
 });

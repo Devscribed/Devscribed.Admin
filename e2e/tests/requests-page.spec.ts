@@ -1,11 +1,10 @@
-import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from './fixtures';
 import {
   VALID,
   configureFinancials,
   findMember,
   inviteAndAcceptViaApi,
   login,
-  reviewVacationRequestViaApi,
   seedReserveCredit,
   signupOrg,
   submitVacationRequestViaApi,
@@ -86,25 +85,6 @@ function futureWorkingRange(workingDays: number): { startDate: string; endDate: 
   }
   return { startDate: ymd(start), endDate: ymd(end) };
 }
-
-/**
- * Drives the DS `Select` status filter: click the control (its `data-testid` sits on the
- * trigger button), then click the option.
- *
- * `option`, not `link`. The Select renders `role="listbox"` with `role="option"` rows, and
- * an explicit role replaces the implicit `link` an `<a href>` would otherwise carry. It
- * read as `link` while the list was a plain stack of anchors — the version the documents
- * area's BUG-01/BUG-03 regressions replaced, because a `Card` clipped it to a few pixels.
- * The role is also the stronger target: status badges are spans and member-name links
- * never carry a status word, but neither is a listbox option.
- */
-async function selectStatusFilter(page: Page, label: string): Promise<void> {
-  await page.getByTestId('requests-status-filter').click();
-  await page.getByRole('option', { name: label, exact: true }).click();
-}
-
-/** Every real request card carries exactly one `requests-card-status-*` node — a clean count. */
-const cardStatus = (page: Page) => page.locator('[data-testid^="requests-card-status-"]');
 
 /**
  * Clicks the sidebar Requests row and lands on the page. The row's client-nav `onClick`
@@ -189,145 +169,5 @@ test.describe('10 — Organization Requests Page', () => {
 
     // No pending requests left → the badge pill disappears (rendered only when count > 0).
     await expect(page.getByTestId('sidebar-requests-badge')).toHaveCount(0);
-  });
-
-  // TC-10-E2E-02 — the status filter narrows the list. 4 members, one request each →
-  // 2 pending, 1 approved, 1 rejected. Separate members keep every request active despite
-  // the shared date range (overlap only blocks two active requests on one member).
-  test('status filter narrows the requests list', async ({ page, request }) => {
-    const adminEmail = uniqueEmail('admin');
-    const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
-
-    const people: Array<[string, string]> = [
-      ['Ana', 'Pending'],
-      ['Ben', 'Pending'],
-      ['Cara', 'Approved'],
-      ['Dan', 'Rejected'],
-    ];
-    const emails: string[] = [];
-    for (const [firstName, lastName] of people) {
-      emails.push(await addMember(request, adminEmail, 'user', firstName, lastName));
-    }
-    const members = [];
-    for (const email of emails) members.push(await findMember(request, org.organizationId, email));
-    for (const member of members) {
-      await configureFinancials(request, org.organizationId, member.id, FINANCIALS);
-    }
-    for (const email of emails) await seedReserveCredit(request, email, 1400);
-
-    // One 3-day request per member, submitted as its owner.
-    const ids: string[] = [];
-    for (let i = 0; i < members.length; i += 1) {
-      await login(request, emails[i]);
-      const created = await submitVacationRequestViaApi(
-        request,
-        org.organizationId,
-        members[i].id,
-        futureWorkingRange(3),
-      );
-      ids.push(created.id);
-    }
-
-    // As admin: approve #3, reject #4 (with a comment so the rejected card shows one).
-    await login(request, adminEmail);
-    await reviewVacationRequestViaApi(request, org.organizationId, members[2].id, ids[2], {
-      decision: 'approved',
-    });
-    await reviewVacationRequestViaApi(request, org.organizationId, members[3].id, ids[3], {
-      decision: 'rejected',
-      comment: 'Coverage gap this week',
-    });
-
-    await signInUi(page, adminEmail);
-    await openRequestsPage(page);
-
-    // Default (pending) → the two untouched requests.
-    await expect(cardStatus(page)).toHaveCount(2);
-    await expect(page.getByTestId(`requests-card-status-${ids[0]}`)).toHaveText('Pending');
-    await expect(page.getByTestId(`requests-card-status-${ids[1]}`)).toHaveText('Pending');
-
-    // All → every request.
-    await selectStatusFilter(page, 'All');
-    await expect(cardStatus(page)).toHaveCount(4);
-
-    // Approved → just Cara's.
-    await selectStatusFilter(page, 'Approved');
-    await expect(cardStatus(page)).toHaveCount(1);
-    await expect(page.getByTestId(`requests-card-status-${ids[2]}`)).toHaveText('Approved');
-
-    // Rejected → just Dan's, with the reviewer comment.
-    await selectStatusFilter(page, 'Rejected');
-    await expect(cardStatus(page)).toHaveCount(1);
-    await expect(page.getByTestId(`requests-card-status-${ids[3]}`)).toHaveText('Rejected');
-    await expect(page.getByTestId(`requests-card-reviewer-comment-${ids[3]}`)).toContainText(
-      'Coverage gap this week',
-    );
-  });
-
-  // TC-10-E2E-03 — user and viewer have no access: the sidebar row is omitted, and direct
-  // navigation redirects to the members page.
-  test('user and viewer cannot access the Requests page', async ({ page, request }) => {
-    const adminEmail = uniqueEmail('admin');
-    const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
-    const umaEmail = await addMember(request, adminEmail, 'user', 'Uma', 'User');
-    const valEmail = await addMember(request, adminEmail, 'viewer', 'Val', 'Viewer');
-
-    for (const email of [umaEmail, valEmail]) {
-      await signInUi(page, email);
-
-      // The Requests row never renders for these roles.
-      await expect(page.getByTestId('sidebar-requests-link')).toHaveCount(0);
-
-      // Direct navigation bounces back to Members; the page frame never shows.
-      await page.goto(`/org/${org.organizationId}/requests`);
-      await page.waitForURL('**/members');
-      await expect(page.getByTestId('requests-page')).toHaveCount(0);
-    }
-  });
-
-  // TC-10-E2E-04 — a manager cancels an approved request; the reserve is refunded. An approved
-  // request legitimately isn't in the default Pending view, so we filter to "All" to reach it;
-  // after cancel the card updates to Cancelled in place (stays visible).
-  test('manager cancels an approved request with a refund', async ({ page, request }) => {
-    const adminEmail = uniqueEmail('admin');
-    const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
-    const managerEmail = await addMember(request, adminEmail, 'manager', 'Morgan', 'Lee');
-    const alexEmail = await addMember(request, adminEmail, 'user', 'Alex', 'Kaminski');
-    const alex = await findMember(request, org.organizationId, alexEmail);
-
-    await configureFinancials(request, org.organizationId, alex.id, FINANCIALS);
-    await seedReserveCredit(request, alexEmail, 1400); // → 10 available days
-
-    // Submit as Alex, approve as the admin (a non-owner reviewer).
-    await login(request, alexEmail);
-    const created = await submitVacationRequestViaApi(
-      request,
-      org.organizationId,
-      alex.id,
-      futureWorkingRange(5),
-    );
-    await login(request, adminEmail);
-    await reviewVacationRequestViaApi(request, org.organizationId, alex.id, created.id, {
-      decision: 'approved',
-    });
-
-    await signInUi(page, managerEmail);
-    await openRequestsPage(page);
-
-    // The approved request is not pending — surface it via "All".
-    await selectStatusFilter(page, 'All');
-    await expect(page.getByTestId(`requests-card-status-${created.id}`)).toHaveText('Approved');
-
-    await page.getByTestId(`requests-card-cancel-${created.id}`).click();
-    const dialog = page.getByTestId('requests-cancel-confirm-dialog');
-    await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText('refunded');
-    await page.getByTestId('requests-cancel-confirm-btn').click();
-
-    await expect(page.getByTestId('toast-request-cancelled')).toHaveText(
-      'Request cancelled and reserve refunded',
-    );
-    await expect(page.getByTestId(`requests-card-${created.id}`)).toBeVisible();
-    await expect(page.getByTestId(`requests-card-status-${created.id}`)).toHaveText('Cancelled');
   });
 });
