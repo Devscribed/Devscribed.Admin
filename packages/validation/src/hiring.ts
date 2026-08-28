@@ -200,6 +200,19 @@ export const HIRING_MESSAGES = {
     /** Completed by `currentTimeMessage` — the time they came here to change. */
     currentTime: 'Currently {when}',
     rescheduleFailed: "We couldn't move your interview. Please try again.",
+    /**
+     * The receipt for a completed move, and `justBooked`'s counterpart (07 §05.27). The
+     * card beneath already names the new time, so the notice states only what the card
+     * cannot: that the update is on its way. Same reason as `justBooked` — the release
+     * sends no mail of its own, so Microsoft's invite is the only thing that ever
+     * reaches the candidate.
+     */
+    justMoved: 'Your interview has been moved. An updated calendar invite is on its way.',
+    /**
+     * Completed by `movedMessage`. The polite region has no card under it to lean on, so
+     * unlike the banner it names the time the interview moved to.
+     */
+    moved: 'Your interview has been moved to {when}.',
     newBooking: 'New booking',
     panelLabel: 'Your interview',
     /** The board badge and the card's mark, completed by `cancelledBadgeLabel`. */

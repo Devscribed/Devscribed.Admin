@@ -107,12 +107,15 @@ for a move as well as for a booking. See §12.
     | **Just cancelled** | A confirmation of what was just done, and "New booking" |
     | **Everything else** | "We couldn't find your booking." and "New booking" |
 
-16a. The live state may additionally carry a **just-booked notice**: "A calendar invite is on its
-    way to the address you gave." It is a **modifier on the live state, not a fourth rendering** — it draws only
-    where `booking` is non-null, so no flag can make it appear over the blurred screen and confirm
-    that a dead token was once real (§04.18).
+16a. The live state may additionally carry a **notice**, of which there are two: the **just-booked
+    notice** — "A calendar invite is on its way to the address you gave." — and the **just-moved
+    notice** (§05.27). Both are **modifiers on the live state, not a fourth rendering** — they draw
+    only where `booking` is non-null, so no flag can make one appear over the blurred screen and
+    confirm that a dead token was once real (§04.18). Only one is ever on screen at a time: a move
+    supersedes the arrival that preceded it, and two notices stacked over one card would read as
+    two things having happened.
 
-    It states the one fact the record cannot state for itself. Everything else the old confirmation
+    The just-booked notice states the one fact the record cannot state for itself. Everything else the old confirmation
     said — the title, the length, the time, the zone, the name, the email, the CV — is already on
     the card, and repeating it would read as a bug. It matters because the release sends no mail of
     its own (§12), so Microsoft's invite is the only thing the candidate ever receives, and
@@ -181,7 +184,20 @@ for a move as well as for a booking. See §12.
 26. Picking a slot **is** the confirmation. There is no second dialog: a candidate who chose
     Thursday 14:00 does not need to be asked whether they meant Thursday 14:00, and the action is
     reversible at will (§02.8).
-27. On success the page returns to the live state showing the new time. The old time is not shown.
+27. On success the page returns to the live state showing the new time. The old time is not shown,
+    and a **just-moved notice** is drawn where the just-booked one is drawn (§04.16a): "Your
+    interview has been moved. An updated calendar invite is on its way."
+
+    A move is the only action on this page that leaves no trace of itself. Cancelling replaces the
+    screen; booking arrives on a URL the candidate was not on a moment ago; a move rewrites one
+    line of a card they were already looking at, and a candidate who was not watching that line has
+    nothing to tell them it landed. The notice is the acknowledgement, and it carries the same fact
+    the just-booked one does — an updated invite is coming, which matters because the release sends
+    no mail of its own (§12) and Microsoft's update is the only thing the candidate receives.
+
+    Like both other receipts it is client-side state, gone on reload, for §04.19's reason. The
+    polite region gets a longer form of it that **names the new time**, because unlike the notice it
+    has no card beneath it to lean on.
 
 ### 06. Candidate cancel
 
@@ -377,8 +393,9 @@ for a move as well as for a booking. See §12.
 
 ### Manage page — live booking
 
-Arrived at from the invite, or straight from a completed booking — in which case the notice above
-the panel is present on that first view only (§04.16a).
+Arrived at from the invite, straight from a completed booking, or straight from a move made on
+this page — in the latter two cases the notice above the panel is drawn, in its booked or its moved
+wording, and the next reload clears it (§04.16a, §05.27).
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -492,8 +509,8 @@ the panel is present on that first view only (§04.16a).
 4. Candidate picks a date and a time and presses Move interview.
 5. System re-checks that the slot was offered and is free, updates the calendar event in place, then
    writes the new time and a `rescheduled` event in one transaction.
-6. Page returns to the live state showing the new time. Microsoft sends both parties a
-   meeting-updated notice.
+6. Page returns to the live state showing the new time, under a notice confirming the move.
+   Microsoft sends both parties a meeting-updated notice.
 
 ### Main flow: the candidate cancels
 
@@ -652,6 +669,8 @@ updated application. Errors as the public cancel route.
 | Context | Message |
 |---|---|
 | Just booked | "A calendar invite is on its way to the address you gave." |
+| Just moved | "Your interview has been moved. An updated calendar invite is on its way." |
+| Just moved — announced, not drawn | "Your interview has been moved to {date} at {time}." |
 | Booking not resolvable — any cause | "We couldn't find your booking." |
 | Just cancelled | "Your interview has been cancelled." |
 | Slot taken | "That time was just booked. Please choose another." |
@@ -677,7 +696,7 @@ CV validation messages are [02](02-booking-page.md)'s and must match its table e
   destructive control is never adjacent to a field that autosaves.
 - Required `data-testid` attributes:
   - `manage-page`, `manage-org-wordmark`, `manage-vacancy-title`, `manage-duration`
-  - `manage-booked`
+  - `manage-booked`, `manage-moved`
   - `manage-booking-when`, `manage-booking-zone`, `manage-cv-present`
   - `manage-reschedule-button`, `manage-cancel-button`, `manage-cv-replace-input`
   - `manage-reschedule-submit`, `manage-reschedule-cancel`, `manage-current-time`
@@ -904,8 +923,10 @@ CV validation messages are [02](02-booking-page.md)'s and must match its table e
 - **Steps:**
   1. Open the manage link, press Reschedule, pick another date and time, press Move interview.
 - **Expected Result:**
-  1. The page returns to the live state naming the new time and zone.
-  2. Reloading shows the new time.
+  1. The page returns to the live state naming the new time and zone, under a notice confirming the
+     move.
+  2. Reloading shows the new time, and no notice — it is a receipt for an action, not a state of the
+     record.
   3. The candidate card shows the new time and a history entry reading old → new, attributed to the candidate.
 
 ### TC-H07-E2E-02: A candidate cancels, then books again

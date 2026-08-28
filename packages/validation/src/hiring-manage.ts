@@ -194,6 +194,10 @@ export function excludeOwnBooking(
 export const currentTimeMessage = (start: Date, timeZone: string): string =>
   HIRING_MESSAGES.manage.currentTime.replace('{when}', formatBookedWhen(start, timeZone));
 
+/** What the polite region says once a move has landed (07 §05.27). */
+export const movedMessage = (start: Date, timeZone: string): string =>
+  HIRING_MESSAGES.manage.moved.replace('{when}', formatBookedWhen(start, timeZone));
+
 /* ------------------------------------------------------------------ *
  * Cancellation, as the team reads it — 05 design, 07 design
  * ------------------------------------------------------------------ */

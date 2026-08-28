@@ -9,6 +9,7 @@ import {
   formatLongDate,
   formatSlotTime,
   isoDateInZone,
+  movedMessage,
   retainSelection,
   zoneLabel,
 } from '@devscribed/validation';
@@ -50,6 +51,10 @@ type Page =
  * rendering**: it is drawn only where there is a live record to draw it over, so the
  * blur is untouched by it (07 §04.16a).
  *
+ * A completed move leaves the same kind of notice behind (07 §05.27): the card states
+ * the new time, and the notice states the only part of it the card cannot — that the
+ * update is on its way.
+ *
  * Rescheduling replaces the booking Card in place rather than navigating: the URL does
  * not change, and **Keep current time** puts the record back with nothing altered.
  * Choosing a slot *is* the confirmation — there is no second dialog, because a candidate
@@ -77,6 +82,8 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
   const [hour12, setHour12] = useState(false);
   /** Arrived here straight from booking, rather than from an invite opened later. */
   const [justBooked, setJustBooked] = useState(false);
+  /** Set only by a move this visit made — the same species of receipt (07 §05.27). */
+  const [justMoved, setJustMoved] = useState(false);
   // Named so the dialog opens on it. Focus returns to whatever invoked the dialog on
   // its own, which `Modal` handles for every caller.
   const dismiss = useRef<HTMLButtonElement>(null);
@@ -159,6 +166,8 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
   function startRescheduling(): void {
     setBanner(null);
     setSelectedSlot(null);
+    // A receipt for the last move is not a receipt for this one.
+    setJustMoved(false);
     setRescheduling(true);
   }
 
@@ -185,9 +194,14 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
         setPage({ state: 'ready', view: body });
         setRescheduling(false);
         setSelectedSlot(null);
-        setAnnouncement(
-          `Your interview has been moved to ${formatWhen(body.booking.startUtc, body.booking.timeZone)}.`,
-        );
+        /*
+         * The move supersedes the arrival: "an invite is on its way" was answered by an
+         * invite that has since been superseded itself, and two notices stacked over one
+         * card would read as two things having happened.
+         */
+        setJustBooked(false);
+        setJustMoved(true);
+        setAnnouncement(movedMessage(new Date(body.booking.startUtc), body.booking.timeZone));
         return;
       }
       /*
@@ -412,18 +426,25 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
         ) : (
           <>
             {/*
-              A modifier on the live state, never a rendering of its own: it is inside
-              this branch, so there is no path on which it draws over the blurred screen
-              and confirms that a dead token was once real (07 §04.16a).
+              Both notices are modifiers on the live state, never renderings of their
+              own: they are inside this branch, so there is no path on which either
+              draws over the blurred screen and confirms that a dead token was once real
+              (07 §04.16a).
 
-              The one fact the record beneath cannot state. Everything else the old
+              Each states the one fact the record beneath cannot. Everything else the old
               confirmation said — the title, the length, the time, the zone, the name,
               the email, the CV — is already on the card, and repeating it would read as
-              a bug.
+              a bug. Neither survives a reload, which is the posture this page takes for
+              the cancellation receipt too (07 §04.19).
             */}
             {justBooked && (
               <InfoBanner tone="info" data-testid="manage-booked">
                 {HIRING_MESSAGES.manage.justBooked}
+              </InfoBanner>
+            )}
+            {justMoved && (
+              <InfoBanner tone="info" data-testid="manage-moved">
+                {HIRING_MESSAGES.manage.justMoved}
               </InfoBanner>
             )}
 

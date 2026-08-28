@@ -146,6 +146,8 @@ test.describe('Manage booking', () => {
 
     await page.goto(manage.path);
     const before = (await page.getByTestId('manage-booking-when').textContent())!;
+    // Nothing has been done on this page yet, so there is no receipt for anything.
+    await expect(page.getByTestId('manage-moved')).toHaveCount(0);
 
     await page.getByTestId('manage-reschedule-button').click();
 
@@ -188,6 +190,12 @@ test.describe('Manage booking', () => {
     await expect(page.getByTestId('manage-booking-zone')).toContainText('UTC');
     await expect(page.getByTestId('manage-current-time')).toHaveCount(0);
 
+    // A move rewrites one line of a card the candidate was already looking at, so it is
+    // the one action here that would otherwise leave no trace of itself (07 §05.27).
+    await expect(page.getByTestId('manage-moved')).toHaveText(
+      'Your interview has been moved. An updated calendar invite is on its way.',
+    );
+
     const after = (await when.textContent())!;
     expect(after).toContain(
       new Date(startUtc).toLocaleTimeString('en-GB', {
@@ -197,9 +205,12 @@ test.describe('Manage booking', () => {
       }),
     );
 
-    // A reload reads it back off the record, not out of this visit's state.
+    // A reload reads it back off the record, not out of this visit's state — and the
+    // notice does not survive it, being a receipt for an action rather than a state of
+    // the record (07 §04.19).
     await page.reload();
     await expect(page.getByTestId('manage-booking-when')).toHaveText(after);
+    await expect(page.getByTestId('manage-moved')).toHaveCount(0);
 
     // And the card carries the move, attributed to the candidate, in a history that was
     // one line until now.

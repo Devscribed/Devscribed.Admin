@@ -143,6 +143,7 @@ Both states are the same composition, differing only in banner tone and wording.
 | Confirm cancel | `Button` | `variant="danger"`, `loading` | `manage-cancel-confirm` |
 | Dismiss | `Button` | `variant="ghost"` | `manage-cancel-dismiss` |
 | Just-booked notice | `InfoBanner` | `tone="info"` | `manage-booked` |
+| Just-moved notice | `InfoBanner` | `tone="info"` | `manage-moved` |
 | Cancelled notice | `InfoBanner` | `tone="info"` | `manage-cancelled` |
 | Not-found notice | `InfoBanner` | `tone="warning"` | `manage-not-found` |
 | New booking | `Button` | `variant="primary"`, `size="lg"`, `as="a"` | `manage-new-booking-button` |
@@ -189,6 +190,7 @@ Validation and error messages are **not** here — they belong to
 | Slot | Text |
 |---|---|
 | Just-booked notice | A calendar invite is on its way to the address you gave. |
+| Just-moved notice | Your interview has been moved. An updated calendar invite is on its way. |
 | Panel label | YOUR INTERVIEW |
 | Reschedule action | Reschedule |
 | Cancel action · candidate | Cancel interview |
@@ -261,6 +263,7 @@ Every value is a token; nothing here is a literal.
 | **Dialog · open** | `Modal` — `--shadow-modal`, ink-tinted scrim, focus trapped |
 | **Dialog · destructive** | Confirm is `danger`; **focus opens on the dismiss control**, never on Confirm |
 | **Just-booked notice** | `InfoBanner tone="info"`, above the Card, first view only. Not `success`: the page's posture is calm, and the record beneath is the celebration |
+| **Just-moved notice** | Identical treatment, in the same slot, until the next reload or the next press of Reschedule. Never drawn beside the just-booked one — a move replaces it |
 | **Cancelled notice** | `InfoBanner tone="info"` |
 | **Not-found notice** | `InfoBanner tone="warning"` |
 | **Server error** | `InfoBanner tone="error"`, above the Card, values retained |
@@ -285,7 +288,9 @@ Transitions run at `--duration-base` on `--easing-standard`. Nothing bounces.
 - **Selecting a slot** — enables Move interview. No dialog follows: choosing the time *is* the
   confirmation ([07 §05.26](07-manage-booking.md)).
 - **Move interview** — on success the pickers are replaced by the booking Card showing the new time,
-  and the polite region announces it. On `slot_taken` the slot leaves the list, the selection
+  under the just-moved notice, and the polite region announces the move naming that time. Pressing
+  Reschedule again clears the notice: it is a receipt for the move that has been made, not for the
+  one being made. On `slot_taken` the slot leaves the list, the selection
   clears, and the banner explains; the booking on file is untouched.
 - **Cancel** — opens the `Modal`. `Escape` and the dismiss control both close it with nothing
   written. Confirm replaces the whole page with the cancelled notice.
@@ -351,6 +356,6 @@ than leaving as an absence:
 ## Reference mockup
 
 To be produced as `07-manage-booking.mock.html` — static, token-driven, all four public states —
-live, rescheduling, just cancelled, not found — plus the live state's just-booked notice and both
-team dialogs on one page, following `02-booking-page.mock.html`. It is the visual acceptance
+live, rescheduling, just cancelled, not found — plus both of the live state's notices, just booked
+and just moved, and both team dialogs on one page, following `02-booking-page.mock.html`. It is the visual acceptance
 target for this screen.

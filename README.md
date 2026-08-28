@@ -670,6 +670,15 @@ notice: a receipt for an action, not a state of the record, which is the same ru
 receipt already followed. The notice draws only over a live booking, so no flag can make it appear
 on the blurred screen and confirm that a dead token was once real.
 
+**A completed move leaves a notice of the same kind.** Rescheduling is the one action on this page
+that would otherwise leave no trace of itself: cancelling replaces the screen, booking arrives on a
+URL the candidate was not on a moment ago, and a move rewrites a single line of a card they were
+already looking at. A successful move therefore draws "Your interview has been moved. An updated
+calendar invite is on its way." in the slot the just-booked notice uses, and clears it on the next
+reload or the next press of Reschedule. It states no time — the card two lines below carries that,
+and repeating it would read as two things having happened — while the polite region gets a longer
+form that does name the new time, having no card beneath it to lean on.
+
 **The manage page names nobody.** Not the interviewer, and — since this release — not the candidate
 either: no name, no email address, no CV filename, withheld from the response rather than merely
 unrendered. The reasoning is the one already used to blur a dead link. That link travels in a

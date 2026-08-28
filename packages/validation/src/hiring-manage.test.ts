@@ -12,6 +12,7 @@ import {
   isLiveBooking,
   justBookedPath,
   managePath,
+  movedMessage,
   planReschedule,
   scheduleEntryAriaLabel,
   scheduleEntryLabel,
@@ -390,3 +391,23 @@ describe('the just-booked landing', () => {
   });
 });
 
+/* ------------------------------------------------------------------ *
+ * The receipt for a move — 07 §05.27
+ * ------------------------------------------------------------------ */
+
+describe('the just-moved notice', () => {
+  it('states the update without restating the card beneath it', () => {
+    expect(HIRING_MESSAGES.manage.justMoved).toBe(
+      'Your interview has been moved. An updated calendar invite is on its way.',
+    );
+    // The new time is on the card two lines below; a notice repeating it would read as
+    // two things having happened.
+    expect(HIRING_MESSAGES.manage.justMoved).not.toMatch(/\d/);
+  });
+
+  it('names the new time for the polite region, which has no card to lean on', () => {
+    expect(movedMessage(at('2026-08-25T11:00:00.000Z'), 'Europe/Minsk')).toBe(
+      'Your interview has been moved to Tuesday, 25 August 2026 at 14:00.',
+    );
+  });
+});
