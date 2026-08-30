@@ -49,6 +49,10 @@ verdict for `transaction`, `FOR UPDATE` and `infra/`: the words appear, but abou
 | 17 | 15 replicated | ? | opus | medium | *running* | | | | | |
 | 18 | 15, sweeps 5+9 as shards | 8 | opus | medium | 3/3 | 16 | 33 | 75/75 | 897s | $34.39 |
 | 19 | 17, **sweeps as a floor** | 5 | sonnet | medium | **0/3** | 2 | 10 | 75/75 | 726s | $10.97 |
+| 20 | **open**, 20f | 4 | sonnet | xhigh | 1/3 | 4 | 8 | 75/75 | 836s | $14.65 |
+| 21 | **open**, 30f | 3 | opus | medium | 1/3 | 6 | 19 | 75/75 | 828s | $21.31 |
+| 22 | **open**, 15f | 5 | sonnet | xhigh | 0/3 | 5 | 11 | 75/75 | 1007s | $18.67 |
+| 23 | **open**, 20f | 4 | opus | medium | 2/3 | 11 | 24 | 75/75 | 809s | $22.94 |
 
 Runs 1–2 and 3–4 are independent repetitions of the same configuration, differing only in
 which coverage mechanism supplied the file list. Both pairs replicated, so the 0/3 → 3/3 gap
@@ -382,6 +386,84 @@ four, and it looks better while doing it.
 
 **The floor change is not in the pipeline.** Both profiles ship as measured: `open` with no
 checklist at all, `sweeps` with the sweeps as written.
+
+## The open profile, gridded
+
+The `open` profile hands each shard its own judgement and no checklist — the reviewer as it was
+before any of this. Five runs fill the grid, every one hand-checked against the three defects
+because the keyword scorer proposes false matches on B1 and B3 by catching a neighbouring
+finding in the same file.
+
+| shards | 15 files | 20 files | 30 files |
+|---|---|---|---|
+| sonnet `xhigh` | **0/3** (E19) | **1/3** (E17) | — |
+| opus `medium` | — | **2/3** (E20) | **1/3** (E18) |
+| opus `xhigh` | **3/3, 3/3** (A3, B3) | — | — |
+
+It is monotone in all three directions and there is no free lunch: more model, more effort and
+a smaller shard each buy recall, and nothing substitutes for anything else. Sonnet at `xhigh`
+does not reach opus at `medium` on the same 20 files (1/3 against 2/3), and opus at `medium`
+does not reach opus at `xhigh` however the shard is sized.
+
+**And the sweeps profile beats the open profile at the same model, effort and cost:**
+
+| | 3 known | blockers | corroborated | alone | wall | cost |
+|---|---|---|---|---|---|---|
+| E20 · open, opus/medium, 20f | 2/3 | 11 | 9 | 2 | 809s | $22.94 |
+| **E13 · sweeps, opus/medium, 15f** | **3/3** | 9 | 8 | 1 | **789s** | **$21.00** |
+| E9 · sweeps, sonnet/medium, 15f | 2/3 | 4 | 4 | **0** | 776s | $12.55 |
+| A3 · open, opus/xhigh, ~15f | 3/3 | 13 | 9 | 4 | 1164s | $36.07 |
+
+E13 dominates E20 on every axis at once, and reaches the opus/`xhigh` baseline's recall for
+$15 less and 375 seconds less, with four fewer blockers and three fewer of them
+uncorroborated.
+
+**Recall by configuration, over all nineteen runs:**
+
+| | runs | of three |
+|---|---|---|
+| open + sonnet, any effort, 10–20 files | 4 | 0, 1, 1, 2 |
+| open + opus `medium` | 2 | 1, 2 |
+| open + opus `xhigh` | 2 | **3, 3** |
+| sweeps + sonnet `medium`, 15 files | 3 | **2, 2, 2** |
+| sweeps + opus `medium`, 15 files | 2 | **3, 3** |
+
+The two columns that replicate are the ones with the sweeps or with `xhigh`. The open profile
+on sonnet sits near one of three at every effort and every size tried.
+
+## False positives follow the model, not the method
+
+The worry the sweeps invite is that a checklist manufactures findings. Counting blockers no
+other independent arm raises:
+
+| | uncorroborated blockers, per run |
+|---|---|
+| sonnet + sweeps | 0, 0, 0, 0 |
+| sonnet + open | 2, 0, 0, 0 |
+| opus + sweeps | 6, 1, 6 |
+| opus + open | 4, 2, 2 |
+
+Opus is verbose with the sweeps and without them; sonnet is spare either way. **The sweeps
+neither add nor remove false positives** — the model decides that.
+
+There is a reason in the design, and it matters for how freely a sweep can be added.
+**Attention and blocking are gated separately.** A sweep only decides what gets looked at. To
+block, a finding needs a rule from the closed list and a witness another party can check, and
+without the witness it is demoted to a note automatically. A sweep that is too broad therefore
+costs shard time, not a false blocker.
+
+## What no measurement here can settle
+
+Every run above reviews the same commit. "The sweeps work" and "the sweeps encode this change's
+answers" are indistinguishable from this data, and sweeps 10 and 11 were derived from what one
+model found on this diff. The distinction that might survive is between a defect signature and
+a procedure — "check that write-once guards include a status predicate" fires only on its own
+shape, while "write down the rule and the question the code asks, and block when they differ"
+does not name a domain. Whether that holds is unmeasured.
+
+The cheapest thing that would settle it is not another arm. It is recording, on every real run
+against a new spec, **what the review missed** — found later by QA, by a deploy, by a bug. A
+held-out sample nobody could have fitted, accumulating for free.
 
 ## What was measured and dropped
 
