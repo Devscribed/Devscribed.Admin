@@ -86,6 +86,15 @@ function runState() {
   return existsSync(p) ? { id, dir: join(ROOT, '.workflow/runs', id), ...JSON.parse(readFileSync(p, 'utf8')) } : null;
 }
 
+/** HEAD when an attempt starts, so a report can tell what each attempt actually changed. */
+function headSha() {
+  try {
+    return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim();
+  } catch {
+    return null;
+  }
+}
+
 /* ── stage prompts ───────────────────────────────────────────────────────── */
 
 /**
@@ -185,7 +194,8 @@ function runAgentStage(stage, run) {
   const abs = join(ROOT, verdictPath);
   if (existsSync(abs)) rmSync(abs);
 
-  const args = ['-p', promptFor(stage, run, verdictPath), '--agent', agent,
+  const prompt = promptFor(stage, run, verdictPath);
+  const args = ['-p', prompt, '--agent', agent,
     '--permission-mode', permissionMode, '--output-format', 'json'];
   if (model) args.push('--model', model);
 
@@ -207,6 +217,43 @@ function runAgentStage(stage, run) {
   if (dryRun) return { status: 'pass', findings: [], dryRun: true };
 
   const started = Date.now();
+  const attempt = (run.stages[stage].attempts ?? 0) + 1;
+  mkdirSync(join(run.dir, 'stages'), { recursive: true });
+  const stem = join(run.dir, 'stages', `${stage}.attempt-${attempt}`);
+
+  /**
+   * What this attempt was given, written *before* the agent starts.
+   *
+   * Two reasons it goes first rather than alongside the log. A run that is still going, or
+   * one that was killed, has no log at all — and those are exactly the runs somebody wants to
+   * look at. Written up front, these two files mean every attempt is legible from the moment
+   * it begins: what was asked, of whom, on which model, continuing which session.
+   *
+   * The prompt in particular existed nowhere. Reading a finished run afterwards, "what did
+   * the reviewer actually see?" could only be re-derived by running `promptFor` again against
+   * a run that had since moved on — which answers a different question. It is the one half of
+   * every stage that was never recorded, and it is the half that explains the other.
+   */
+  writeFileSync(`${stem}.prompt.md`, prompt);
+  writeFileSync(
+    `${stem}.start.json`,
+    `${JSON.stringify(
+      {
+        stage,
+        attempt,
+        agent,
+        model: model ?? null,
+        resumedSession: resume ?? null,
+        fuseMin: timeoutMin,
+        startedAt: new Date(started).toISOString(),
+        baseRef: run.baseRef,
+        head: headSha(),
+      },
+      null,
+      2,
+    )}\n`,
+  );
+
   const r = spawnSync('claude', args, {
     cwd: ROOT,
     encoding: 'utf8',
@@ -216,9 +263,7 @@ function runAgentStage(stage, run) {
   });
   const secs = ((Date.now() - started) / 1000).toFixed(0);
 
-  mkdirSync(join(run.dir, 'stages'), { recursive: true });
-  const attempt = (run.stages[stage].attempts ?? 0) + 1;
-  writeFileSync(join(run.dir, 'stages', `${stage}.attempt-${attempt}.log`), `${r.stdout ?? ''}\n${r.stderr ?? ''}`);
+  writeFileSync(`${stem}.log`, `${r.stdout ?? ''}\n${r.stderr ?? ''}`);
 
   if (r.error?.code === 'ETIMEDOUT') {
     note(`fuse blew after ${timeoutMin}m`);

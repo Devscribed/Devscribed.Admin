@@ -96,6 +96,28 @@ function agentEventsOnly(events) {
   return events.filter((e) => agentSessions.has(e.sessionId));
 }
 
+/**
+ * A tool call's paths, in the spelling `git` uses.
+ *
+ * `Read` is handed an absolute path and on Windows that path has backslashes, while the diff
+ * names files as repo-relative POSIX. A substring test between the two never matches, so the
+ * ledger scored zero for the one tool it exists to count: in the run that produced this fix,
+ * all 123 `Read` calls were invisible and every file it credited had come from a bash command
+ * line instead. It then told reviewers to go back to files they had read in full — the
+ * opposite of the error it was written to err towards.
+ */
+const ROOT_POSIX = ROOT.split('\\').join('/');
+/* Three spellings of this repository appear in one journal: the Windows path `Read` is given,
+   the drive-letter path a `cd` uses, and the MSYS `/d/...` form Git Bash prefers. Strip all of
+   them, anywhere in the string — a command line carries the prefix mid-text, not just at the
+   front. Everything left is repo-relative and comparable to `git diff --numstat`. */
+const PREFIXES = [ROOT_POSIX + '/', '/' + ROOT_POSIX[0].toLowerCase() + ROOT_POSIX.slice(2) + '/'];
+const toRepoPath = (s) => {
+  let t = String(s).split('\\').join('/');
+  for (const p of PREFIXES) t = t.split(p).join('');
+  return t;
+};
+
 const openedIn = new Map(); // path -> Set(attempt)
 let attempt = 0;
 let last = null;
@@ -104,7 +126,7 @@ for (const e of agentEventsOnly(journal.filter((e) => e.stage === 'review' && e.
   last = e.ts;
 
   const i = e.input ?? {};
-  const text = [i.file_path, i.command, i.path, i.pattern, i.glob].filter(Boolean).join(' ');
+  const text = toRepoPath([i.file_path, i.command, i.path, i.pattern, i.glob].filter(Boolean).join(' '));
   if (!text) continue;
   for (const path of sizes.keys()) {
     if (text.includes(path)) {

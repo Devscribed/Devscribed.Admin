@@ -6,9 +6,9 @@
   "branch": "spec/signwell-provider",
   "baseRef": "57d55acd03b825aeed9c85836e85138f12b01be1",
   "headAtInit": "38cabfa82dbcae5112c1b7a1b12ede71307f63f9",
-  "status": "implement",
+  "status": "ready",
   "createdAt": "2026-08-28T17:26:56.047Z",
-  "updatedAt": "2026-08-28T19:42:36.160Z",
+  "updatedAt": "2026-08-28T20:12:43.886Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -22,32 +22,32 @@
       "lastVerdict": "pass"
     },
     "implement": {
-      "status": "running",
+      "status": "passed",
       "attempts": 5,
       "startedAt": "2026-08-28T19:42:36.160Z",
-      "endedAt": "2026-08-28T19:12:27.650Z",
+      "endedAt": "2026-08-28T19:59:07.083Z",
       "lastVerdict": "pass"
     },
     "static_gate": {
       "status": "passed",
-      "attempts": 3,
-      "startedAt": "2026-08-28T19:12:27.739Z",
-      "endedAt": "2026-08-28T19:12:27.885Z",
+      "attempts": 4,
+      "startedAt": "2026-08-28T19:59:07.171Z",
+      "endedAt": "2026-08-28T19:59:07.315Z",
       "lastVerdict": "pass"
     },
     "review": {
       "status": "passed",
-      "attempts": 3,
-      "startedAt": "2026-08-28T19:12:27.970Z",
-      "endedAt": "2026-08-28T19:25:46.730Z",
+      "attempts": 4,
+      "startedAt": "2026-08-28T19:59:07.407Z",
+      "endedAt": "2026-08-28T20:10:47.875Z",
       "lastVerdict": "pass"
     },
     "qa": {
-      "status": "blocked",
-      "attempts": 2,
-      "startedAt": "2026-08-28T19:28:34.288Z",
-      "endedAt": "2026-08-28T19:42:36.061Z",
-      "lastVerdict": "fail"
+      "status": "passed",
+      "attempts": 3,
+      "startedAt": "2026-08-28T20:10:47.972Z",
+      "endedAt": "2026-08-28T20:12:43.837Z",
+      "lastVerdict": "pass"
     }
   },
   "budget": {
@@ -379,6 +379,40 @@
         "source": ".workflow/runs/2026-08-28T17-26-56_documents-04-signature-providers/handoff.json"
       },
       "suggestedFix": "None for the implementer. If the retry-budget change is not meant to ship with this branch, land it separately."
+    },
+    {
+      "stage": "review",
+      "id": "N1",
+      "target": "code",
+      "severity": "note",
+      "rule": "not a written rule - judgement",
+      "file": "apps/api/src/signature/signwell/stub-signwell-http-client.ts",
+      "symbol": "ping and hooks",
+      "line": 181,
+      "claim": "After 5cbc193 the E2E stub answers ping with an unconditional true and hooks with no health check, so no browser case can produce an unreachable or unregistered live check on the settings screen. Together with the integration suite that leaves reachable and webhookRegistered, two fields of the GET contract at spec lines 970-978 and the mechanism the Blast Radius row on a stale webhook registration relies on, asserted by no test at any level. A note rather than a blocker: the spec test matrix has no case for them and requirement 32 makes them display only, never a gate.",
+      "witness": {
+        "kind": "test",
+        "detail": "Grepping reachable and webhookRegistered across apps/api/test, e2e/tests and packages/validation returns only prose and the service own declarations, and no assertion in any spec file. The per-organization health change is right for TC-04-E2E-03, which goes through getDocument, but it removed the only lever a browser case had over the account wide calls the settings screen makes.",
+        "source": "specs/documents/04-signature-providers.md:1165"
+      },
+      "suggestedFix": "One integration case over GET /api/organizations/{orgId}/settings/signing with the SignWell client stubbed to fail /me and to return a hook whose callback_url is somebody else's, asserting reachable false, webhookRegistered false, and that configured and selectability are unaffected."
+    },
+    {
+      "stage": "review",
+      "id": "N2",
+      "target": "code",
+      "severity": "note",
+      "rule": "not a written rule - judgement",
+      "file": "apps/api/src/signature/signwell/signwell-http-client.ts",
+      "symbol": "HttpSignWellClient.attempt",
+      "line": 430,
+      "claim": "The last failure of an exhausted retry sequence is counted twice by the breaker: recordFailure runs inside the loop for the 5xx and transport error branches and again at :430 after the loop, so one exhausted call contributes six consecutive failures rather than five. Not wrong against the spec, since five consecutive failures is about failures rather than calls and opening one attempt early is the safe direction, but the counter no longer means what its name says and the 429 path, which never records inside the loop, is counted differently from the others.",
+      "witness": {
+        "kind": "rule",
+        "detail": "recordFailure appears at :413 for a 5xx, :425 for a transport error and :430 after the loop, with no guard against the last iteration having already recorded. TC-04-INT-21 asserts the breaker opens after five consecutive failures and closes after its window, and both hold either way, so nothing observable moves.",
+        "source": "apps/api/src/signature/signwell/signwell-http-client.ts:430"
+      },
+      "suggestedFix": "Record the failure once per attempt: drop the call at :430, or make it conditional on the loop having exited without recording, which is the 429 only path."
     }
   ],
   "halt": null,
