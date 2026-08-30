@@ -82,6 +82,12 @@ So the reviewer has two profiles, set in `.claude/ai-workflow.config.json` under
 `shardSize` is set beside them. `scripts/review-slice.mjs` prints both, and the root takes
 them from there rather than choosing.
 
+**The default is `open` at fifteen files.** That exact cell is not measured. What is measured
+is the open profile on opus at `medium` either side of it — two of three known defects at
+twenty files, one of three at thirty — and the same model and effort with the sweeps at
+fifteen, which found all three twice. Fifteen is where the size trend and the sweeps evidence
+both point, and it is an extrapolation until a run lands on it.
+
 Neither profile is retired. What is measured: the sweeps make a pass **reproducible** — two
 runs of the sweeps profile agree on half their blockers, two runs without agree on none — and
 they cost a third of the open profile. What is not measured: whether they narrow what a

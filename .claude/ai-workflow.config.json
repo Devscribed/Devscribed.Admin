@@ -25,7 +25,7 @@
       "agent": "code-reviewer",
       "model": "opus",
       "profile": "open",
-      "shardSize": 25,
+      "shardSize": 15,
       "profiles": {
         "open": {
           "shardAgent": "review-shard-open",
