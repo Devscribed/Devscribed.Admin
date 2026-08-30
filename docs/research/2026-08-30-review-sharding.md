@@ -47,7 +47,8 @@ verdict for `transaction`, `FOR UPDATE` and `infra/`: the words appear, but abou
 | 15 | 11, **opus** shards | 6 | **opus** | medium | **3/3** | 11 | 22 | 75/75 | 900s | — |
 | 16 | 11, **opus** shards | 9 | opus | low | 2/3 | 11 | 21 | 75/75 | 751s | $24.02 |
 | 17 | 15 replicated | ? | opus | medium | *running* | | | | | |
-| 18 | 15, sweeps 5+9 as shards | ? | opus | medium | *running* | | | | | |
+| 18 | 15, sweeps 5+9 as shards | 8 | opus | medium | 3/3 | 16 | 33 | 75/75 | 897s | $34.39 |
+| 19 | 17, **sweeps as a floor** | 5 | sonnet | medium | **0/3** | 2 | 10 | 75/75 | 726s | $10.97 |
 
 Runs 1–2 and 3–4 are independent repetitions of the same configuration, differing only in
 which coverage mechanism supplied the file list. Both pairs replicated, so the 0/3 → 3/3 gap
@@ -340,6 +341,47 @@ status predicate. Every sonnet shard that enumerated it cleared it as unreachabl
 reachability argument survives a hand check: the sweep that reaches that path selects
 `status: { in: [sent, partially_signed] }`, so a terminal envelope is filtered before the write
 is reached. Unadjudicated, and recorded here rather than counted as a sonnet miss.
+
+## Making the sweeps a floor made the review worse
+
+The objection the sweeps invite is that they are fitted: they were derived from what one model
+found on one change, and a reviewer walking a list has a stopping condition that open-ended
+judgement does not. Run 19 tried to keep the method and remove the stopping condition. Three
+changes, all in the same direction:
+
+- the shard states, **before it opens the skill**, what the change is for and the two or three
+  things most likely wrong in a change of that shape — first, so the list cannot anchor it;
+- the skill says the sweeps are a floor, necessary for a verdict and never sufficient for a
+  `pass`;
+- a finding belonging to no sweep gets `"sweep": null` and is first-class.
+
+| | 17 · sweeps as written | 19 · sweeps as a floor |
+|---|---|---|
+| blockers | 4 | **2** |
+| notes | 9 | 10 |
+| known defects | 2/3 | **0/3** |
+| findings using `"sweep": null` | — | **0** |
+| wall | 776s | 726s |
+| cost | $12.55 | $10.97 |
+
+**It did not produce the thing it was designed to produce and it cost the thing that worked.**
+Not one finding used the open slot, so the extra freedom bought nothing; meanwhile the three
+known defects that the same profile had been raising as blockers came back as notes about
+neighbouring code or not at all. The retry defect appears as a note on double-counted failures
+in the same file — adjacent, and not the defect.
+
+The mechanism is worth naming, because it is the opposite of what was intended. Telling a
+reviewer to look everywhere *before* it looks at anything in particular spends attention on
+breadth, and the enumerate-then-judge discipline is a depth instrument: it works by forcing one
+question against every item, and a reviewer that has already formed a view of what is probably
+wrong answers that question more cheaply.
+
+Both blockers run 19 did raise are corroborated, so it is not noisy — it is quiet. A gate that
+returns two well-founded findings and misses three known defects is worse than one that returns
+four, and it looks better while doing it.
+
+**The floor change is not in the pipeline.** Both profiles ship as measured: `open` with no
+checklist at all, `sweeps` with the sweeps as written.
 
 ## What was measured and dropped
 
