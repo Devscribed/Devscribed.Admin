@@ -63,6 +63,30 @@ one: on sonnet shards it found the unimplemented section once in two runs. On op
 `medium` it replicated. The durable fix is to compute the spec's sections and hand them over
 the way `review-slice.mjs` hands over files — a worklist, not a reminder.
 
+## The method is a profile, not the only way to review
+
+Deriving sweeps 10 and 11 from what one model found on one change is fitting to the sample. It
+cannot be told apart from a real generalisation without a held-out spec, and there is none:
+every measurement here is the same commit. A checklist also gives a reviewer a stopping
+condition — eleven sweeps done, therefore `pass` — which open-ended judgement does not have,
+and a defect of a shape nobody wrote down in advance is exactly what the list cannot see.
+
+So the reviewer has two profiles, set in `.claude/ai-workflow.config.json` under
+`stages.review`:
+
+| profile | shard agent | model | what it reads |
+|---|---|---|---|
+| `open` | `review-shard-open` | opus, `medium` | its own judgement, no checklist |
+| `sweeps` | `review-shard` | sonnet, `medium` | the sweeps in this skill |
+
+`shardSize` is set beside them. `scripts/review-slice.mjs` prints both, and the root takes
+them from there rather than choosing.
+
+Neither profile is retired. What is measured: the sweeps make a pass **reproducible** — two
+runs of the sweeps profile agree on half their blockers, two runs without agree on none — and
+they cost a third of the open profile. What is not measured: whether they narrow what a
+reviewer can see on a change unlike this one.
+
 ## Consequences
 
 - `scripts/review-ledger.mjs` and `scripts/review-coverage.mjs` are deleted; ADR 0003 retired

@@ -18,8 +18,9 @@ with a `test` witness, not something you go and execute.
 
 - `git diff <baseRef>...HEAD` — the change itself, and nothing outside it.
 - The spec named in `run.json` and `.workflow/runs/<runId>/handoff.json`.
-- `.claude/skills/code-review/SKILL.md` — the method. Nine sweeps; each enumerates something
-  and answers one question about every item it enumerated.
+- `.claude/skills/code-review/SKILL.md` — the sweeps, when the active profile uses them. Each
+  enumerates something and answers one question about every item it enumerated. Sweeps 5 and 9
+  are yours in either profile.
 - `.claude/skills/spec/references/checklist.md` — the rubric for the spec itself.
 - The "Conventions that matter" and "Watch out for" sections of `CLAUDE.md`.
 
@@ -58,9 +59,10 @@ back.
 **Dispatch before you read anything yourself.** The shards are the long pole; every minute you
 spend reading before they start is a minute added to the end.
 
-1. Divide the slice into groups of at most fifteen files, balanced by changed lines.
-2. Dispatch every group **in a single message containing one `Task` call per group**, with
-   `subagent_type: "review-shard"`. All of them in that one message — calls sent in separate
+1. Divide the slice into groups of the size the slice's **How to shard** section gives, balanced
+   by changed lines. That number and the shard agent are configuration; neither is yours to pick.
+2. Dispatch every group **in a single message containing one `Task` call per group**, with the
+   `subagent_type` the slice named. All of them in that one message — calls sent in separate
    messages run one after another, and the whole point is that they do not. Give each its file
    list, the base sha, the spec path and its shard number. They return their verdicts to you as
    text; no files are involved.

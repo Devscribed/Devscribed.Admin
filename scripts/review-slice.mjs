@@ -172,6 +172,21 @@ if (asJson) {
   process.exit(0);
 }
 
+/* The reviewer's shape is configuration, not a decision it makes each run: which shard agent
+   reads the files, and how many files one of them is handed. It is printed here because the
+   root runs this first, so one command hands it both the work and the shape. */
+const review = (() => {
+  try {
+    return JSON.parse(readFileSync(join(ROOT, '.claude', 'ai-workflow.config.json'), 'utf8')).stages?.review ?? {};
+  } catch {
+    return {};
+  }
+})();
+const profileName = review.profile ?? 'sweeps';
+const profile = review.profiles?.[profileName] ?? {};
+const shardSize = review.shardSize ?? 15;
+result.profile = { name: profileName, shardSize, ...profile };
+
 console.log(`# Review slice — pass ${result.pass}`);
 console.log(`# ${from.slice(0, 7)}..${HEAD.slice(0, 7)} — ${anchor}`);
 console.log(`# the whole change is ${wholeDiff} files; this slice is ${worklist.length}\n`);
@@ -191,6 +206,11 @@ if (verdicts.length) {
   }
 }
 
+console.log(`
+## How to shard`);
+console.log(`Profile ${profileName} — dispatch subagent_type "${profile.shardAgent ?? 'review-shard'}".`);
+console.log(`At most ${shardSize} files per shard, balanced by changed lines — ${Math.max(1, Math.ceil(worklist.length / shardSize))} shard(s) here.`);
+console.log('Both live in .claude/ai-workflow.config.json under stages.review. Do not choose your own.');
 console.log(`\n## Accounting`);
 console.log(`Your verdict must set \`reviewedUpTo\` to ${HEAD.slice(0, 7)} and account for all ${worklist.length}:`);
 console.log('`read` + `unreached` = the slice. A `pass` with a non-empty `unreached` is not a pass.');

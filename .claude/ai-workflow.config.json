@@ -20,9 +20,24 @@
       "script": "scripts/static-gate.mjs"
     },
     "review": {
+      "$comment": "profile picks how the shards read. `open` gives each shard open-ended judgement and no checklist; `sweeps` gives it the enumerate-then-judge method in .claude/skills/code-review/SKILL.md. shardSize is the largest number of files one shard is handed.",
       "enabled": true,
       "agent": "code-reviewer",
-      "model": "opus"
+      "model": "opus",
+      "profile": "open",
+      "shardSize": 25,
+      "profiles": {
+        "open": {
+          "shardAgent": "review-shard-open",
+          "shardModel": "opus",
+          "shardEffort": "medium"
+        },
+        "sweeps": {
+          "shardAgent": "review-shard",
+          "shardModel": "sonnet",
+          "shardEffort": "medium"
+        }
+      }
     },
     "qa": {
       "enabled": true,
