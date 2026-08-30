@@ -113,6 +113,9 @@ the accounting, and it must add up to the whole diff:
   "findings": [ … ] }
 ```
 
+`line` is a single number — the first line of the span. A range like `12-18` is not a JSON
+number and makes the whole verdict unreadable.
+
 - `read` — opened this pass, by you or by a shard.
 - `reviewedUpTo` — `git rev-parse HEAD`. The next pass starts where you stopped.
 - `unreached` — you ran out of fuse. Naming a file here is not a failure; leaving it out of

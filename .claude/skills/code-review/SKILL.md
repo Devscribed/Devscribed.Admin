@@ -11,7 +11,8 @@ list was not run.
 
 Record one line per item, at most a dozen words. No prose, no summary.
 
-Sweeps 1–8 apply to the files you were given. Sweep 9 applies to the change as a whole.
+Sweeps 5 and 9 are about the change as a whole. Every other sweep applies to the files you
+were given.
 
 ## 1. Transaction sweep
 
@@ -96,11 +97,46 @@ in the previous version that would stop working.
 
 **Enumerate** every test id the spec names and every test the files add or change.
 
-**For each**, where it lives and whether the assertion still proves the rule.
+**For each**, where it lives, and **what would have to break for it to fail**.
+
+**A test nothing can break is a finding**: an assertion about a value nothing produces, a
+selector nothing renders, a query that resolves to the wrong element, a mechanism that throws
+before the assertion runs, or state made global in a suite that runs in parallel.
 
 **Blocks when** an id the spec names exists nowhere, a check was weakened — `.skip`, `.only`,
 `@ts-ignore`, `as any`, `eslint-disable`, a relaxed assertion, a deleted case — or a test
 asserts the opposite of the spec.
+
+## 10. Predicate sweep
+
+**Enumerate** every guard that holds an invariant up: the `where` of a conditional write, an
+early return, the condition on a state transition, a boolean that gates an action.
+
+**For each**, write two things — the rule it is there to enforce, and the exact question the
+code asks.
+
+**Blocks when those are not the same question.** It usually reads as almost right:
+
+- the invariant spans two facts and the write constrains one of them;
+- equality is required and a subset check is written — every expected item found, nothing
+  said about the ones that were not expected;
+- "does any row exist" stands in for "does *ours* exist";
+- the guard is read from a copy loaded before the transaction that is supposed to protect it,
+  so the value it tests is already stale when it is tested;
+- two steps run in one pass and the first changes the state the second selects on.
+
+## 11. Call-site sweep
+
+**Enumerate** every mechanism that is meant to hold everywhere rather than somewhere: a
+partition or queue key, a scope filter, an audit write, a lazy refresh, a rate limit, a
+redaction, an idempotency key.
+
+**For each**, list every call site and say whether the mechanism is present at all of them.
+
+**Blocks when a mechanism required at a class of call sites is applied to some and not the
+rest.** Look for what hides it: an optional parameter only one caller passes, a fallback
+default that stands in when the real value is absent, a wrapper applied at one entry point of
+three. A mechanism with a graceful default fails silently at every site that forgot it.
 
 ## 9. Boundary sweep
 

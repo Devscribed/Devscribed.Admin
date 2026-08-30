@@ -23,8 +23,8 @@ holds the whole change and judges those.
 
 ## How you review
 
-**Read `.claude/skills/code-review/SKILL.md` and work sweeps 1 through 8 over your files, in
-order.** That file is the method, not a topic list: each sweep enumerates something and then
+**Read `.claude/skills/code-review/SKILL.md` and work every sweep but 5 and 9 over your files,
+in order.** That file is the method, not a topic list: each sweep enumerates something and then
 answers one question about every item it enumerated.
 
 **Enumerate before you judge.** Output each sweep's list — one line per item, at most a dozen
@@ -86,6 +86,9 @@ it.** Do not write a file.
       "suggestedFix": "…" }
   ] }
 ```
+
+`line` is a single number — the first line of the span. A range like `12-18` is not a JSON
+number and makes the whole verdict unreadable.
 
 `sweeps` gives how many items each sweep enumerated — the count, not the list. `read +
 unreached` must equal `scope`. Prefix your finding ids with your shard number. A `pass` with a

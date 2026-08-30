@@ -288,6 +288,59 @@ makes the verbosity worth reading does not.
 return four or five blockers; opus shards return eleven, and so did the opus/xhigh baselines.
 The method changed what is *in* the findings; it did not change how many there are.
 
+## Testing a prompt rule for a dollar
+
+A full pass dispatches a fleet and costs a quarter of an hour. A prompt rule can be tested for
+the price of one subagent: `scripts/lab-probe.mjs` gives a single shard the files a defect
+lives in, the spec, and nothing else, and prints what it returns. Three probes cost $2.68 and
+eighteen minutes between them.
+
+The defect classes the opus arms found and the sonnet arms did not, generalised away from the
+instances, come to two shapes. Both are now sweeps.
+
+**A predicate that is nearly the required predicate.** The invariant spans two facts and the
+write constrains one; equality is required and a subset check is written; "does any row exist"
+stands in for "does ours exist"; the guard is read from a copy loaded before the transaction
+meant to protect it; two steps in one pass are ordered so the first changes what the second
+selects on.
+
+**A mechanism applied to some call sites and not the rest.** A partition key one caller passes
+and six omit; a lazy refresh wired into two entry points of three. What hides it is the
+graceful default — an optional parameter, a fallback constant — which turns every site that
+forgot the mechanism into a silent success.
+
+The test sweep also now asks, of each test, **what would have to break for it to fail**. A test
+nothing can break is the finding.
+
+### What the probes showed
+
+| shard | sweep 10 items | blockers | wall | cost |
+|---|---|---|---|---|
+| 1 file, before the new sweeps | — | 1 | 356s | $1.08 |
+| 1 file, after | 7 | 1 | 260s | $0.57 |
+| 3 files, sonnet `medium` | 8 | 1 | 317s | $0.80 |
+| 3 files, sonnet `high` | 13 | 2 | 506s | $1.30 |
+
+**The probe corrected the experiment before it corrected the prompt.** Given one file, the
+shard enumerated the guard in question and dismissed it for lack of a reachable scenario —
+correctly, under its own witness rule, because the code that decides reachability is in two
+other files. A one-file probe cannot test a rule about a defect that is not visible from one
+file. With the three files that carry the reachability, the same sweep at the same effort
+raised the convergence race that four independent arms rate a blocker.
+
+**With a method, effort buys something after all.** Sonnet at `high` enumerated thirteen
+predicates against `medium`'s eight and returned one more blocker, for 60% more time and cost.
+The earlier finding that `high` was worse was measured *without* the sweeps: raising effort
+with no method to spend it on produces more thinking about nothing in particular.
+
+### One blocker the probes put in doubt
+
+Three opus arms block on the completion write guarding only `signedPdfKey: null` with no
+status predicate. Every sonnet shard that enumerated it cleared it as unreachable, and the
+reachability argument survives a hand check: the sweep that reaches that path selects
+`status: { in: [sent, partially_signed] }`, so a terminal envelope is filtered before the write
+is reached. Unadjudicated, and recorded here rather than counted as a sonnet miss.
+
 ## What was measured and dropped
 
 **"Raising the shard effort is how you buy quality back."** Wrong, at least below opus. Run 7
