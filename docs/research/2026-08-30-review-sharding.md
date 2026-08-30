@@ -44,9 +44,9 @@ verdict for `transaction`, `FOR UPDATE` and `infra/`: the words appear, but abou
 | 12 | 11, **sonnet root** | 6 | sonnet | medium | 2/3 | 4 | 7 | 75/75 | 1074s | $11.04 |
 | 13 | 11 replicated | 5 | sonnet | medium | **2/3** | 4 | 9 | 75/75 | 776s | $12.55 |
 | 14 | 11, shards of 10 | 10 | sonnet | medium | 2/3 | 10 | 8 | 75/75 | 744s | $14.74 |
-| 15 | 11, **opus** shards | 6 | **opus** | medium | **3/3** | 11 | 22 | 75/75 | 900s | — |
+| 15 | 11, **opus** shards | 6 | **opus** | medium | **3/3** | 18 | 29 | 75/75 | 1208s | $29.80 |
 | 16 | 11, **opus** shards | 9 | opus | low | 2/3 | 11 | 21 | 75/75 | 751s | $24.02 |
-| 17 | 15 replicated | ? | opus | medium | *running* | | | | | |
+| 17 | 15 replicated | 5 | opus | medium | **3/3** | 9 | 24 | 75/75 | 789s | $21.00 |
 | 18 | 15, sweeps 5+9 as shards | 8 | opus | medium | 3/3 | 16 | 33 | 75/75 | 897s | $34.39 |
 | 19 | 17, **sweeps as a floor** | 5 | sonnet | medium | **0/3** | 2 | 10 | 75/75 | 726s | $10.97 |
 | 20 | **open**, 20f | 4 | sonnet | xhigh | 1/3 | 4 | 8 | 75/75 | 836s | $14.65 |
@@ -54,9 +54,22 @@ verdict for `transaction`, `FOR UPDATE` and `infra/`: the words appear, but abou
 | 22 | **open**, 15f | 5 | sonnet | xhigh | 0/3 | 5 | 11 | 75/75 | 1007s | $18.67 |
 | 23 | **open**, 20f | 4 | opus | medium | 2/3 | 11 | 24 | 75/75 | 809s | $22.94 |
 
+One run is missing from the table and belongs in it: an `open` arm at 25 files on sonnet/`xhigh`
+died when the session allowance ran out. Its shards completed and its root got one turn before
+`You've hit your session limit`, so it produced no verdict at all. `exit.json` recorded
+`status: 1, turns: 1`, which is how an exhausted allowance is told apart from a bad
+configuration.
+
 Runs 1–2 and 3–4 are independent repetitions of the same configuration, differing only in
 which coverage mechanism supplied the file list. Both pairs replicated, so the 0/3 → 3/3 gap
 is not sampling noise.
+
+**Every 3-known column is hand-checked.** The scorer matches keywords against rule, file,
+symbol, claim and witness; it proposes and it is wrong often enough to matter, usually by
+catching a different real finding in the same file — the serialization defect standing in for
+the retry defect in `signwell-http-client.ts`, an incidental mention of `infra/` standing in
+for the unimplemented Infrastructure section. Eight such false matches were caught by hand
+across these runs. Read the scorer as a shortlist, never as a result.
 
 ## What holds
 
@@ -276,13 +289,14 @@ root at `high` — and move only the shard model and its effort.
 |---|---|---|---|---|---|---|---|
 | sonnet · medium (13) | 2/3 | 4 | 4 | **0** | 9 | 776s | $12.55 |
 | opus · low (16) | 2/3 | 11 | 8 | 3 | 21 | 751s | $24.02 |
-| **opus · medium (15)** | **3/3** | 11 | **11** | **0** | 22 | 900s | — |
+| **opus · medium (15)** | **3/3** | 18 | 12 | 6 | 29 | 1208s | $29.80 |
 
-**Run 15 is the best verdict this series has produced.** Eleven blockers, every one of them
-raised independently by at least one other arm, none alone — and all three known defects,
-including the absence B1 that only one other sharded arm has ever found. Both opus/xhigh
-baselines were less precise: thirteen and twelve blockers with five and three that nobody
-corroborates.
+**Run 15 finds all three known defects, including the absence B1 that only one other sharded
+arm had ever found.** Its verdict was read twice: an intermediate state showed eleven blockers,
+all corroborated, and the root then kept writing to eighteen, of which six are corroborated by
+nobody. The final number is the one in the table. Reading a verdict file before its process
+exits is how a run gets credited with a precision it did not finish with, and it is the second
+time that trap has cost a wrong number here.
 
 **`low` is not a cheaper `medium`; it is a different failure.** Run 16 cost nearly twice run
 15's sonnet twin and produced the same recall as sonnet at a third of sonnet's precision. The
@@ -514,24 +528,35 @@ measured, since the mechanism is not in doubt.
 
 ## Open
 
-- **Can a better prompt buy what effort buys?** Runs 7 and 8 both shard at 15 files and both
-  run sonnet. Run 7 raises the shard effort to `high` and changes nothing else. Run 8 leaves
-  effort at `medium` and replaces the method: a `code-review` skill of nine sweeps, each of
-  which enumerates something and answers one question about every item, with the enumeration
-  required in the output before any finding. Until now the reviewer's only rubric was
-  `checklist.md`, which is written for judging a spec rather than code.
-- **Is the quality loss caused by effort or by model?** Runs 15 and 16 put opus shards on the
-  best available prompt at 15 files, at `medium` and at `low`, against run 13's sonnet at
-  `medium`.
-- **Can the section walk be made mechanical?** B1 is found by prompt instruction one time in
-  two. Computing the spec's sections and handing them over as a worklist is the same move that
-  fixed coverage.
-- **How many of the sharded blockers are false?** Runs 3 and 4 produced 12 and 14 blockers
-  where the pipeline's whole history produced 4. Until each is adjudicated against the code,
-  the blocker count measures verbosity, not quality — only the 3-of-3 column is trustworthy.
+- **Does any of this generalise?** Unmeasured, and unmeasurable from here: every run reviews
+  the same commit, so a working method and a method fitted to this change's defects look
+  identical. The cheapest test is not another arm but a record of what a real review **missed**
+  — caught later by QA, a deploy or a bug — on specs nobody could have fitted.
+- **Can the section walk be made mechanical?** The requirement sweep finds an unimplemented
+  section by instruction, which means it sometimes does not. Computing the spec's sections and
+  handing them over is the move that already fixed coverage, and it belongs one stage earlier:
+  the plan named no `infra/` task, nothing checked the plan against the spec, and a code
+  reviewer reading a diff was the first to notice that a whole section produced no diff.
+- **How many of the sharded blockers are false?** Corroboration is the working proxy — a
+  finding no other independent arm raises is unconfirmed. It ranks; it does not adjudicate.
+  Only the 3-known column is ground truth.
 - **What crashed two runs.** Two agent processes died mid-work with empty stderr, no log and a
   surviving sibling task. Memory pressure is the standing suspicion, unproven. `exit.json` now
-  records status, signal and spawn error for the next occurrence.
+  records status, signal and spawn error, which is what identified the session-limit death
+  above.
+
+## What was decided, and where it is written
+
+| decision | where |
+|---|---|
+| The implementer adds a commit per attempt and never amends | [ADR 0001](../adr/0001-stacked-commits-not-amend.md) |
+| A review's scope is a commit range, not a journal-derived ledger | [ADR 0003](../adr/0003-commit-slice-not-journal-ledger.md) |
+| A review is a set of sweeps; clearing an item costs what raising one costs | [ADR 0004](../adr/0004-review-is-a-set-of-sweeps.md) |
+| The reviewer's shape is configuration: two profiles and a shard size | [ADR 0004](../adr/0004-review-is-a-set-of-sweeps.md) |
+
+Shipped as measured: `open` gives each shard opus at `medium` and no checklist; `sweeps` gives
+it sonnet at `medium` and the nine sweeps. Both live in `.claude/ai-workflow.config.json` under
+`stages.review`, with `shardSize` beside them.
 
 ## How to reproduce
 
@@ -543,8 +568,14 @@ node scripts/lab-run.mjs --agent code-reviewer --run <id> \
   --prompt lab-prompt-review.md --model opus --effort high --fuse 50
 ```
 
-Shard size lives in one line of `.claude/agents/code-reviewer.md`; shard model and effort in
-the frontmatter of `.claude/agents/review-shard.md`.
+Shard size and the shard agent come from `.claude/ai-workflow.config.json` under
+`stages.review`; shard model and effort from that same block and from the agent's frontmatter,
+which wins for that agent.
 
 Reading the results: `scripts/lab-watch.mjs` for run state, `scripts/lab-peek.mjs` for what
-each subagent is doing or said, `.workflow/shard-cost.mjs` for per-shard span and tokens.
+each subagent is doing or said, `.workflow/shard-cost.mjs` for per-shard span and tokens,
+`.workflow/critical-path.mjs` for where the wall clock went, `.workflow/score-arms.mjs` for the
+shortlist against ground truth and `.workflow/corroborate.mjs` for what more than one arm saw.
+
+A single prompt rule does not need a run: `scripts/lab-probe.mjs` gives one shard the files a
+defect lives in and prints what it returns, for about a dollar.

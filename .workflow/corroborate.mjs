@@ -19,6 +19,12 @@ const ARMS = [
   ['E12', 'D:/git_repos/ds-lab-e12/.workflow/runs/lab-E12/review.verdict.json'],
   ['E13', 'D:/git_repos/ds-lab-e13/.workflow/runs/lab-E13/review.verdict.json'],
   ['E14', 'D:/git_repos/ds-lab-e14/.workflow/runs/lab-E14/review.verdict.json'],
+  ['E15', 'D:/git_repos/ds-lab-e15/.workflow/runs/lab-E15/review.verdict.json'],
+  ['E16', 'D:/git_repos/ds-lab-e16/.workflow/runs/lab-E16/review.verdict.json'],
+  ['E17', 'D:/git_repos/ds-lab-e17/.workflow/runs/lab-E17/review.verdict.json'],
+  ['E18', 'D:/git_repos/ds-lab-e18/.workflow/runs/lab-E18/review.verdict.json'],
+  ['E19', 'D:/git_repos/ds-lab-e19/.workflow/runs/lab-E19/review.verdict.json'],
+  ['E20', 'D:/git_repos/ds-lab-e20/.workflow/runs/lab-E20/review.verdict.json'],
   ['A3', 'D:/git_repos/ds-lab-review/.workflow/runs/lab-A3/review.verdict.json'],
   ['B3', 'D:/git_repos/ds-lab-slice/.workflow/runs/lab-B3/review.verdict.json'],
 ];

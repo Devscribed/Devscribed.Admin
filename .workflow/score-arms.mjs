@@ -32,6 +32,12 @@ const ARMS = [
   { name: 'E12 opus/low shards', dir: 'D:/git_repos/ds-lab-e12', run: 'lab-E12' },
   { name: 'E13 = E11 replicated', dir: 'D:/git_repos/ds-lab-e13', run: 'lab-E13' },
   { name: 'E14 sweeps5+9 as shards', dir: 'D:/git_repos/ds-lab-e14', run: 'lab-E14' },
+  { name: 'E15 sweeps as a floor', dir: 'D:/git_repos/ds-lab-e15', run: 'lab-E15' },
+  { name: 'E16 open son/xhigh 25f', dir: 'D:/git_repos/ds-lab-e16', run: 'lab-E16' },
+  { name: 'E17 open son/xhigh 20f', dir: 'D:/git_repos/ds-lab-e17', run: 'lab-E17' },
+  { name: 'E18 open opus/med 30f', dir: 'D:/git_repos/ds-lab-e18', run: 'lab-E18' },
+  { name: 'E19 open son/xhigh 15f', dir: 'D:/git_repos/ds-lab-e19', run: 'lab-E19' },
+  { name: 'E20 open opus/med 20f', dir: 'D:/git_repos/ds-lab-e20', run: 'lab-E20' },
 ];
 
 const TRUTH = [
