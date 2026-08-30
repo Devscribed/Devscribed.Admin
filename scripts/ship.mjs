@@ -126,8 +126,12 @@ function promptFor(stage, run, verdictPath) {
         + `\`.workflow/runs/${run.id}/stages/implement.attempt-${(run.stages.implement.attempts ?? 0) + 1}.md\`.${back}`;
     case 'review': {
       const done = run.stages.review.attempts ?? 0;
+      const ledger = `\n\n## Your worklist\n\nRun \`node scripts/review-ledger.mjs\` first. It splits the diff into what must be read this `
+        + `pass and what an earlier pass settled, and it decides the second by comparing each file against the commit that pass `
+        + `actually saw. You may not write a verdict while the worklist is non-empty; if the fuse runs out first, report the `
+        + `remainder in \`covered.unreached\` and do not call it a pass.\n`;
       if (!done) {
-        return `${head}\nReview \`git diff ${run.baseRef}...HEAD -- . ':(exclude).workflow'\` against the spec and the handoff.${back}`;
+        return `${head}\nReview \`git diff ${run.baseRef}...HEAD -- . ':(exclude).workflow'\` against the spec and the handoff.${ledger}${back}`;
       }
       const priors = Array.from({ length: done }, (_, i) =>
         `  - \`.workflow/runs/${run.id}/stages/review.attempt-${i + 1}.json\``).join('\n');
@@ -144,13 +148,13 @@ They are claims to check, not conclusions to trust. If you disagree with an earl
 
 ## What has and has not been looked at
 
-Run \`node scripts/review-coverage.mjs\` and read the ledger. It is derived from what earlier reviews actually opened, not from what they claimed, and it is the plan for this pass:
+Run \`node scripts/review-ledger.mjs\`. It is derived from what earlier reviews actually opened — not from what they claimed — and from the commit each of those passes saw, so "unchanged since" is checked rather than remembered. It is the plan for this pass:
 
 1. **Confirm each earlier blocker is closed** by checking its witness against the code. Say so per finding.
-2. **Then go to the files no review has ever opened**, largest first. A previous pass is not proof of absence — on the first run of this spec, review 1 opened 22 of 65 files, and both blockers review 2 raised were in a file review 1 never read.
-3. **Do not re-derive a file an earlier pass already judged** unless the diff since that pass touches it.
+2. **Then work the worklist**, largest first. A previous pass is not proof of absence — on the first run of this spec, four passes named 55, 46, 50 and 44 files of a diff that grew to 84, and nine files were never opened by any of them.
+3. **Do not re-derive a settled file.** The ledger has already confirmed with \`git diff\` that it has not moved.
 
-A review that only re-checks the fix and reports clean has not reviewed this diff.${back}`;
+You may not write a verdict while the worklist is non-empty. A review that only re-checks the fix and reports clean has not reviewed this diff.${back}`;
     }
     case 'qa':
       return `${head}\nRun unit in full, then the integration and E2E suites the diff touches — never either one whole; `

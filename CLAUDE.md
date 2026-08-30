@@ -120,3 +120,35 @@ contests halts the run for a person instead of spending another attempt. The run
 
 The pipeline stops at a green branch. It never merges and never pushes — see the note about
 `main` above.
+
+**Agent prompts are rules only.** A definition under `.claude/agents/` states the desired
+behaviour and the prohibitions, in as few words as state them. Never put in a prompt:
+
+- measurements, counts, timings or costs from this project;
+- what happened on an earlier run, or what some agent did last time;
+- why a rule exists, what it replaced, or a link to the reasoning.
+
+Write the conclusion, not the evidence for it. "Never run the whole E2E suite" is the rule; the
+numbers that made it true belong in `docs/`, written for people. Every sentence of
+justification is paid for on every invocation and changes no behaviour.
+
+## Record what you learn
+
+Two directories, two readers, and neither is an agent at runtime.
+
+**[docs/adr/](docs/adr/) — decisions.** One file per decision that was not obvious, cost
+something to learn, or will be re-litigated. Write it when a rule changes: a new convention, a
+reversed one, a constraint nobody would guess from the code. Say what the rule is, what it
+replaced, what it costs. Never delete a superseded record — mark it superseded and leave the
+evidence, because the next person to propose the old idea needs to find it.
+
+**[docs/research/](docs/research/) — measurements.** Write one when a change is driven by a
+number: a benchmark, an experiment, a comparison of two approaches. State the ground truth
+first and how it was established, then every configuration you ran and what came back.
+
+**Record the hypotheses that died.** A measurement that killed an idea is the most valuable
+thing in either directory, and the easiest to lose, because nobody writes down what they
+stopped believing. Give it a heading of its own and name what disproved it.
+
+Numbers come from artefacts on disk — a log, a transcript, a verdict — never from an agent's
+summary of itself. A claim you cannot point at is not a measurement.
