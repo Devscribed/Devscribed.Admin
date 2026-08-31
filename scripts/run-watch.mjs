@@ -1,0 +1,133 @@
+#!/usr/bin/env node
+/**
+ * run-watch — the report, following a run that is still going.
+ *
+ * `run-report.mjs` writes one self-contained page: everything the reader needs is baked in,
+ * which is what makes it worth attaching to an issue and opening months later. The cost of
+ * that is a snapshot. A run you actually want to watch is a run in flight, and re-running the
+ * generator and hitting reload loses the scroll position and every open step.
+ *
+ * So this serves the same page over http and pushes it a new payload whenever the run
+ * directory changes. Nothing about the file changes: opened as a file it is the snapshot it
+ * always was, because a `file://` page has the null origin and may not fetch its own
+ * directory — which is the whole reason a server exists here rather than a poll.
+ *
+ * The payload is the generator's own `--json`, so there is one definition of what a run is.
+ * A second reader that reconstructed it would drift from the page it is meant to feed.
+ *
+ *   node scripts/run-watch.mjs [runId] [--port 4300] [--open]
+ */
+
+import { createServer } from 'node:http';
+import { execFileSync, spawn } from 'node:child_process';
+import { existsSync, readFileSync, watch } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { tmpdir } from 'node:os';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const RUNS = join(ROOT, '.workflow', 'runs');
+
+const argv = process.argv.slice(2);
+const opt = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
+const die = (m) => { process.stderr.write(`run-watch: ${m}\n`); process.exit(1); };
+
+/* A flag that takes a value swallows the token after it, or `--port 4300` reads as a request
+   to watch a run called "4300". */
+const VALUE_FLAGS = new Set(['--port']);
+const positional = [];
+for (let i = 0; i < argv.length; i += 1) {
+  if (argv[i].startsWith('--')) { if (VALUE_FLAGS.has(argv[i])) i += 1; continue; }
+  positional.push(argv[i]);
+}
+
+const runId = positional[0] ?? (() => {
+  const cur = join(ROOT, '.workflow/current');
+  return existsSync(cur) ? readFileSync(cur, 'utf8').trim() : null;
+})();
+
+if (!runId) die('no run to watch — pass a runId or start a run');
+const runDir = join(RUNS, runId);
+if (!existsSync(runDir)) die(`no such run: ${runId}`);
+
+const PORT = Number(opt('port', 4300));
+const report = (...a) => execFileSync(process.execPath, [join(ROOT, 'scripts/run-report.mjs'), runId, ...a], {
+  cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
+});
+
+/* The page is generated once. Everything that changes afterwards arrives as a payload, so a
+   reload is never needed and never loses what the reader had open. */
+const pagePath = join(tmpdir(), `run-watch-${process.pid}.html`);
+report('--out', pagePath);
+const page = readFileSync(pagePath, 'utf8');
+
+const clients = new Set();
+let last = '';
+
+function payload() {
+  try {
+    /* Re-encoded compactly rather than shipped as the generator prints it. Two reasons, and
+       the second is the one that matters: an SSE frame is newline-delimited, and parsing here
+       proves the payload is whole. A run mid-write is the normal case, not an error —
+       `ship.mjs` truncates a verdict before it fills it — and a half-written read must be
+       skipped rather than pushed. The last good payload stands until the next change. */
+    return JSON.stringify(JSON.parse(report('--json')));
+  } catch (e) {
+    process.stderr.write(`run-watch: payload skipped — ${e.message.split('\n')[0]}\n`);
+    return null;
+  }
+}
+
+function push(only) {
+  if (!clients.size) return;
+  const next = payload();
+  if (!next || (next === last && !only)) return;
+  last = next;
+  const frame = `data: ${next}\n\n`;
+  for (const res of only ? [only] : clients) res.write(frame);
+  process.stdout.write(`  push ${(next.length / 1024).toFixed(0)}kB → ${only ? 1 : clients.size} client(s)\n`);
+}
+
+/* One change is many events — a verdict lands as a create, a write and a close, and an agent
+   log grows a line at a time. Debounce to the far side of the burst, and regenerate once. */
+let timer = null;
+const bump = () => { clearTimeout(timer); timer = setTimeout(push, 400); };
+
+watch(runDir, { recursive: true }, bump);
+
+createServer((req, res) => {
+  const path = new URL(req.url, 'http://localhost').pathname;
+
+  if (path === '/feed') {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    });
+    res.write(': hello\n\n');
+    clients.add(res);
+    req.on('close', () => clients.delete(res));
+    /* The page was generated when the server started. Anything that happened between then and
+       this connection is already missing from it, so a new reader is brought up to date at
+       once rather than at the next change — which on a finished run never comes. */
+    push(res);
+    return;
+  }
+
+  if (path === '/' || path === '/index.html') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(page);
+    return;
+  }
+
+  res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+  res.end('not found\n');
+}).listen(PORT, '127.0.0.1', () => {
+  const url = `http://localhost:${PORT}`;
+  process.stdout.write(`run-watch: ${runId}\n  ${url}\n  watching ${runDir}\n`);
+  if (argv.includes('--open')) {
+    const [cmd, args] = process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url]]
+      : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]];
+    spawn(cmd, args, { detached: true, stdio: 'ignore' }).unref();
+  }
+});

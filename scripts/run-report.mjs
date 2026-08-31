@@ -627,6 +627,9 @@ pre.txt{background:var(--surface-3);border-radius:12px;padding:14px 16px;overflo
 .kv dt{color:var(--on-surface-var);white-space:nowrap}
 .kv dd{margin:0;font-family:var(--mono);font-size:12.5px;word-break:break-all}
 .note-callout{background:var(--warn-container);color:var(--on-warn-container);border-radius:12px;padding:12px 15px;font-size:13px;line-height:1.6;margin-bottom:14px}
+.livebadge{position:fixed;left:22px;bottom:22px;z-index:40;padding:8px 14px;border-radius:14px;
+  background:var(--secondary-container);color:var(--on-secondary-container);font-size:12px;font-variant-numeric:tabular-nums}
+.livebadge.lost{background:#F9DEDC;color:#410E0B}
 .fab{position:fixed;right:22px;bottom:22px;z-index:40;display:flex;flex-direction:column;gap:10px}
 .fab button{width:auto;padding:13px 18px;border:0;border-radius:16px;background:var(--primary);color:#fff;
             box-shadow:var(--e2);cursor:pointer;font-size:13px;font-weight:500}
@@ -658,9 +661,22 @@ pre.txt{background:var(--surface-3);border-radius:12px;padding:14px 16px;overflo
 
 <script id="run-data" type="application/json">${DATA}</script>
 <script>
-const D = JSON.parse(document.getElementById('run-data').textContent);
+let D = JSON.parse(document.getElementById('run-data').textContent);
 
-const COLOR = { pre_implement:'#7E57C2', implement:'#3B6FD4', review:'#D4761B', qa:'#0F8F82', static_gate:'#79747E', preflight:'#79747E' };
+/* Everything below re-runs on every update, so what the reader has done to the page lives
+   out here instead of in the DOM: which steps are open, which tab each one shows, which
+   filter is on. Re-reading that from the markup would lose it, because the markup is what
+   gets replaced. */
+let stepEls = [];
+let bound = false;
+let first = true;
+let allOpen = false;
+let cursor = 0;
+let activeFilter = 0;
+const openIds = new Set();
+const activeTab = new Map();
+
+const COLOR ={ pre_implement:'#7E57C2', implement:'#3B6FD4', review:'#D4761B', qa:'#0F8F82', static_gate:'#79747E', preflight:'#79747E' };
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const mmss = s => Math.floor(s/60) + ':' + String(Math.round(s)%60).padStart(2,'0');
 const hhmm = ms => new Date(ms).toTimeString().slice(0,8);
@@ -672,6 +688,8 @@ const verdictChip = s => {
   const m = { pass:'c-pass', blocked:'c-block', fail:'c-block', error:'c-info', running:'c-run', aborted:'c-block' };
   return s ? '<span class="chip ' + (m[s]||'c-info') + '">' + esc(s) + '</span>' : '';
 };
+
+function render() {
 
 /* ── header ─────────────────────────────────────────────────────────── */
 document.getElementById('hdTitle').textContent = D.spec || D.runId;
@@ -880,20 +898,38 @@ document.getElementById('steps').innerHTML = D.steps.map((s,i) => {
 }).join('');
 
 /* ── interaction ────────────────────────────────────────────────────── */
-const stepEls = [...document.querySelectorAll('.step')];
+stepEls = [...document.querySelectorAll('.step')];
 function openStep(i, scroll) {
   const el = stepEls[i]; if (!el) return;
-  el.classList.add('open');
+  el.classList.add('open'); openIds.add(el.id);
   document.querySelectorAll('.stepitem').forEach(b => b.classList.toggle('on', +b.dataset.idx === i));
   if (scroll) el.scrollIntoView({ block:'start' });
 }
+
+/* Put back what the reader had before this render replaced the markup. A step is remembered
+   by its id rather than by its index: an attempt that starts while the page is open shifts
+   every index after it, and restoring by position would reopen the wrong steps. */
+stepEls.forEach(el => {
+  if (allOpen || openIds.has(el.id)) el.classList.add('open');
+  const t = activeTab.get(el.id);
+  if (t != null) {
+    el.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+    el.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.dataset.t === t));
+  }
+});
+
+if (!bound) {
 document.addEventListener('click', e => {
   const head = e.target.closest('.step-head');
   if (head) { const el = head.closest('.step'); el.classList.toggle('open');
-    if (el.classList.contains('open')) openStep(+el.dataset.idx, false); return; }
+    if (el.classList.contains('open')) { openIds.add(el.id); openStep(+el.dataset.idx, false); }
+    else openIds.delete(el.id);
+    return; }
   const tab = e.target.closest('.tab');
   if (tab) {
     const { s, t } = tab.dataset;
+    const step = tab.closest('.step');
+    if (step) activeTab.set(step.id, t);
     document.querySelectorAll('.tab[data-s="' + s + '"]').forEach(b => b.classList.toggle('on', b.dataset.t === t));
     document.querySelectorAll('.pane[data-s="' + s + '"]').forEach(p => p.classList.toggle('on', p.dataset.t === t));
     return;
@@ -903,6 +939,7 @@ document.addEventListener('click', e => {
   const bar = e.target.closest('[data-go]');
   if (bar) { const el = document.getElementById(bar.dataset.go); if (el) { el.classList.add('open'); openStep(+el.dataset.idx, true); } }
 });
+}
 
 const FILTERS = [
   ['все', () => true],
@@ -910,23 +947,26 @@ const FILTERS = [
   ['незавершённые', el => el.dataset.odd === '1'],
 ];
 document.getElementById('filters').innerHTML = FILTERS.map(([n],i) =>
-  '<button class="fbtn' + (i===0?' on':'') + '" data-f="' + i + '">' + n + '</button>').join('') +
+  '<button class="fbtn' + (i===activeFilter?' on':'') + '" data-f="' + i + '">' + n + '</button>').join('') +
   '<span class="dim" style="margin-left:auto;font-size:12px">клик по полосе на диаграмме открывает шаг · j / k — следующий и предыдущий</span>';
+const keepNow = FILTERS[activeFilter][1];
+stepEls.forEach(el => { el.style.display = keepNow(el) ? '' : 'none'; });
+
+if (!bound) {
 document.getElementById('filters').addEventListener('click', e => {
   const b = e.target.closest('.fbtn'); if (!b) return;
+  activeFilter = +b.dataset.f;
   document.querySelectorAll('.fbtn').forEach(x => x.classList.toggle('on', x === b));
-  const keep = FILTERS[+b.dataset.f][1];
+  const keep = FILTERS[activeFilter][1];
   stepEls.forEach(el => { el.style.display = keep(el) ? '' : 'none'; });
 });
 
-let allOpen = false;
 document.getElementById('toggleAll').addEventListener('click', e => {
   allOpen = !allOpen;
-  stepEls.forEach(el => el.classList.toggle('open', allOpen));
+  stepEls.forEach(el => { el.classList.toggle('open', allOpen); if (allOpen) openIds.add(el.id); else openIds.delete(el.id); });
   e.target.textContent = allOpen ? 'Свернуть всё' : 'Развернуть всё';
 });
 
-let cursor = 0;
 document.addEventListener('keydown', e => {
   if (e.target.matches('input,textarea')) return;
   if (e.key === 'j' || e.key === 'k') {
@@ -934,6 +974,7 @@ document.addEventListener('keydown', e => {
     stepEls[cursor].classList.add('open'); openStep(cursor, true);
   }
 });
+}
 
 /* ── routing log ────────────────────────────────────────────────────── */
 document.getElementById('routing').innerHTML =
@@ -977,7 +1018,30 @@ document.getElementById('cov').innerHTML =
   'Пути нормализуются: <span class="mono">Read</span> на Windows отдаёт абсолютный путь с обратными слэшами, и без нормализации ' +
   'реестр не засчитывает ни одного чтения.</p>';
 
-if (D.steps.length) openStep(0, false);
+bound = true;
+if (first) { first = false; if (D.steps.length) openStep(0, false); }
+}
+
+render();
+
+/* ── live ───────────────────────────────────────────────────────────────
+   Served over http by run-watch.mjs, the page follows the run: the watcher pushes a fresh
+   payload whenever the run directory changes, and the whole view is drawn again from it.
+   Opened as a file it stays exactly what it was — a snapshot — because a file:// page has the
+   null origin and may not fetch its own directory. */
+if (location.protocol === 'http:' || location.protocol === 'https:') {
+  const live = document.createElement('div');
+  live.className = 'livebadge';
+  live.textContent = '● следит';
+  document.body.appendChild(live);
+  const es = new EventSource('feed');
+  es.onmessage = (ev) => {
+    D = JSON.parse(ev.data);
+    render();
+    live.textContent = '● обновлено ' + new Date().toTimeString().slice(0, 8);
+  };
+  es.onerror = () => { live.textContent = '○ связь потеряна'; live.classList.add('lost'); };
+}
 </script>
 </body></html>`;
 
