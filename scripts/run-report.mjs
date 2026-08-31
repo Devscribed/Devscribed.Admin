@@ -627,6 +627,10 @@ pre.txt{background:var(--surface-3);border-radius:12px;padding:14px 16px;overflo
 .kv dt{color:var(--on-surface-var);white-space:nowrap}
 .kv dd{margin:0;font-family:var(--mono);font-size:12.5px;word-break:break-all}
 .note-callout{background:var(--warn-container);color:var(--on-warn-container);border-radius:12px;padding:12px 15px;font-size:13px;line-height:1.6;margin-bottom:14px}
+.runpick{display:flex;align-items:center;gap:10px;margin:14px 0 4px}
+.runpick label{font-size:12px;opacity:.75}
+.runpick select{max-width:min(560px,100%);padding:7px 12px;border-radius:12px;font:inherit;font-size:13px;
+  border:1px solid var(--outline,#79747E);background:var(--surface,#fff);color:inherit}
 .livebadge{position:fixed;left:22px;bottom:22px;z-index:40;padding:8px 14px;border-radius:14px;
   background:var(--secondary-container);color:var(--on-secondary-container);font-size:12px;font-variant-numeric:tabular-nums}
 .livebadge.lost{background:#F9DEDC;color:#410E0B}
@@ -638,6 +642,7 @@ pre.txt{background:var(--surface-3);border-radius:12px;padding:14px 16px;overflo
 <body>
 <div class="appbar"><div class="appbar-in">
   <h1><span id="hdTitle"></span> <span id="hdStatus"></span></h1>
+  <div class="runpick" id="runPickWrap" hidden><label for="runPick">Прогон</label><select id="runPick"></select></div>
   <div class="meta" id="hdMeta"></div>
   <div class="metrics" id="hdMetrics"></div>
 </div></div>
@@ -692,6 +697,7 @@ const verdictChip = s => {
 function render() {
 
 /* ── header ─────────────────────────────────────────────────────────── */
+document.title = 'Прогон · ' + D.runId;
 document.getElementById('hdTitle').textContent = D.spec || D.runId;
 document.getElementById('hdStatus').innerHTML =
   verdictChip(D.status) + (D.totals.running ? ' <span class="chip c-run">прогон идёт</span>' : '') +
@@ -1034,13 +1040,55 @@ if (location.protocol === 'http:' || location.protocol === 'https:') {
   live.className = 'livebadge';
   live.textContent = '● следит';
   document.body.appendChild(live);
-  const es = new EventSource('feed');
-  es.onmessage = (ev) => {
-    D = JSON.parse(ev.data);
-    render();
-    live.textContent = '● обновлено ' + new Date().toTimeString().slice(0, 8);
-  };
-  es.onerror = () => { live.textContent = '○ связь потеряна'; live.classList.add('lost'); };
+
+  const wrap = document.getElementById('runPickWrap');
+  const pick = document.getElementById('runPick');
+  let es = null;
+  let shown = D.runId;
+
+  /* Switching runs keeps nothing: the ids belong to the run that is leaving, so an open step
+     or a chosen tab would either miss or, worse, land on an unrelated step that happens to be
+     called review-2 as well. */
+  function reset() {
+    openIds.clear(); activeTab.clear();
+    activeFilter = 0; allOpen = false; cursor = 0; first = true;
+  }
+
+  function connect(runId) {
+    if (es) es.close();
+    live.classList.remove('lost');
+    live.textContent = '● следит';
+    es = new EventSource('feed' + (runId ? '?run=' + encodeURIComponent(runId) : ''));
+
+    es.addEventListener('runs', (ev) => {
+      const list = JSON.parse(ev.data);
+      pick.innerHTML = list.map((r) =>
+        '<option value="' + esc(r.id) + '">' + esc(r.id) +
+        (r.status ? ' · ' + esc(r.status) : '') +
+        (r.spec ? ' · ' + esc(r.spec.split('/').pop()) : '') + '</option>').join('');
+      pick.value = shown;
+      wrap.hidden = list.length < 2;
+    });
+
+    es.addEventListener('payload', (ev) => {
+      const next = JSON.parse(ev.data);
+      if (next.runId !== shown) { reset(); shown = next.runId; pick.value = shown; }
+      D = next;
+      render();
+      live.textContent = '● обновлено ' + new Date().toTimeString().slice(0, 8);
+    });
+
+    es.onerror = () => { live.textContent = '○ связь потеряна'; live.classList.add('lost'); };
+  }
+
+  pick.addEventListener('change', () => {
+    location.hash = pick.value;
+    connect(pick.value);
+  });
+
+  /* The hash is what makes a reload land back on the run being read, and what makes the link
+     worth sending to someone. */
+  connect(decodeURIComponent(location.hash.slice(1)) || null);
 }
 </script>
 </body></html>`;
