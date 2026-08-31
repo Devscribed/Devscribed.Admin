@@ -25,7 +25,16 @@ npm run dev            # API on :4000, web on :3000
 npm run test:unit      # Vitest, packages/validation
 npm run test:int       # Jest + Supertest against devscribed_test (wiped each run)
 npm run test:e2e       # Playwright; starts both dev servers itself
+
+npm run spec -- <what to spec>     # opens Claude Code on /spec
+npm run bug  -- <what is broken>   # /bug
+npm run ship -- <spec path>        # /ship — the skill, which checks the branch and reads the outcome
+npm run ship:run -- <spec path>    # scripts/ship.mjs alone, no model either side
+npm run watch                      # the live run report on http://localhost:4300
 ```
+
+Under yarn the `--` is unnecessary: `yarn spec projects and their members`. Install with npm
+regardless — the lockfile is `package-lock.json`.
 
 Full first-time setup is in [README.md](README.md). `apps/api/.env` is untracked — every fresh
 clone needs `cp apps/api/.env.example apps/api/.env`.

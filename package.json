@@ -15,11 +15,16 @@
     "build": "npm run build --workspaces --if-present",
     "release": "release-it",
     "release:dry": "release-it --dry-run",
+    "spec": "node scripts/claude-cmd.mjs spec",
+    "bug": "node scripts/claude-cmd.mjs bug",
+    "ship": "node scripts/claude-cmd.mjs ship",
+    "ship:run": "node scripts/ship.mjs",
+    "watch": "node scripts/run-watch.mjs",
     "wf": "node scripts/wf.mjs",
     "wf:status": "node scripts/wf.mjs status",
     "wf:log": "node scripts/wf.mjs log",
     "gate": "node scripts/static-gate.mjs",
-    "ship": "node scripts/ship.mjs"
+    "coverage": "node scripts/handoff-coverage.mjs"
   },
   "devDependencies": {
     "release-it": "21.0.2"
