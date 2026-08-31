@@ -133,9 +133,28 @@ deploys; it does not test:
 | Trigger | Runs the suite | Then deploys |
 |---|---|---|
 | pull request | yes ([`test.yml`](../.github/workflows/test.yml)) | nothing |
-| push to `main` | no | `dev` |
-| tag `v*` pointing at a commit on `main` | no | `prod` |
-| manual dispatch | no | whichever environment you pick |
+| push to `main` | no | `dev`, **if the push moved a file that ships** |
+| tag `v*` pointing at a commit on `main` | no | `prod`, always |
+| manual dispatch | no | whichever environment you pick, always |
+
+### What counts as shipping
+
+A push that changed only an agent prompt, a spec, a doc, a developer script or an e2e test is
+copied into no image and changes nothing the stand serves, so the `target` job reads the diff and
+the deploy job does not run. The run still appears in Actions, and its summary lists the files it
+saw and the sentence explaining what it decided — a `paths` filter on the trigger would produce no
+run at all, and "why did that not deploy" would have nowhere to be answered.
+
+Not shipping: `.claude/`, `docs/`, `specs/`, `scripts/`, `.workflow/`, `e2e/` (except its
+`package.json`, which both Dockerfiles copy so the workspace install resolves), any `*.md`,
+`.gitignore`, `.editorconfig`, `LICENSE`.
+
+Everything else ships. **The list is what does not ship, never what does** — a directory nobody has
+classified yet deploys, which is the failure worth having: a needless rollout costs a minute, a
+missed one leaves the stand serving last week's code.
+
+A tag and a manual dispatch never ask the question. Both are deliberate acts, and a release that
+silently does not run would be far worse than a `dev` rollout that needlessly does.
 
 **The suite runs on the pull request.** [`test.yml`](../.github/workflows/test.yml) is triggered by
 `pull_request` and by nothing else, so a change is proved green before it is merged and the merge

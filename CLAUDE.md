@@ -25,7 +25,17 @@ npm run dev            # API on :4000, web on :3000
 npm run test:unit      # Vitest, packages/validation
 npm run test:int       # Jest + Supertest against devscribed_test (wiped each run)
 npm run test:e2e       # Playwright; starts both dev servers itself
+
+npm run spec -- <what to spec>     # opens Claude Code on /spec
+npm run bug  -- <what is broken>   # /bug
+npm run ship -- <spec path>        # /ship — the skill, which checks the branch and reads the outcome
+npm run ship:run -- <spec path>    # scripts/ship.mjs alone, no model either side
+npm run board                      # the run report, opened in a browser — pick the run in the page
+npm run watch                      # the same, without opening anything
 ```
+
+Under yarn the `--` is unnecessary: `yarn spec projects and their members`. Install with npm
+regardless — the lockfile is `package-lock.json`.
 
 Full first-time setup is in [README.md](README.md). `apps/api/.env` is untracked — every fresh
 clone needs `cp apps/api/.env.example apps/api/.env`.
@@ -89,7 +99,10 @@ is the real one. To look at a screen, start a pair on those ports rather than bo
 ## Watch out for
 
 - **`main` deploys itself, and does not test first.** `deploy.yml` is the pipeline: push to
-  `main` deploys `dev`, a `v*` tag on `main` deploys `prod`, and neither runs a test. The suite
+  `main` deploys `dev` *when the push moved a file that ships* — a change to `.claude/`,
+  `docs/`, `specs/`, `scripts/`, `e2e/` or any `*.md` is copied into no image and deploys
+  nothing, and the run says so. A `v*` tag on `main` deploys `prod` unconditionally, and
+  neither runs a test. The suite
   lives in `test.yml`, which triggers on `pull_request` only — so the pull request is the only
   gate, and a change that reaches `main` any other way is deployed untested. The deploy half is
   gated on the repository variable `DEPLOY_ENABLED`. The runbook —

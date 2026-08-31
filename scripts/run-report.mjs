@@ -85,6 +85,11 @@ const AGENT_OF = { pre_implement: 'pre-implementer', implement: 'implementer', r
 
 /* ── the journal ──────────────────────────────────────────────────────────── */
 
+/** Written by `wf.mjs` as the run advances, so they are the run moving whoever was at the
+ *  keyboard. `agent-stop` is deliberately not here: it fires for any session that ends,
+ *  including the operator's, and a stage ending already writes `stage-end`. */
+const ORCHESTRATOR_EVENTS = new Set(['init', 'stage-start', 'stage-end', 'route', 'ready', 'infra-error']);
+
 const journal = (readIf(join(dir, 'events.jsonl')) ?? '')
   .split(/\r?\n/)
   .filter(Boolean)
@@ -236,23 +241,53 @@ function attachTools() {
     bySession.get(s.sessionId).push(s);
   }
 
+  const byStage = new Map();
+  for (const s of steps) {
+    if (!byStage.has(s.stage)) byStage.set(s.stage, []);
+    byStage.get(s.stage).push(s);
+  }
+
   for (const e of journal) {
-    if (e.event !== 'tool' || !e.sessionId) continue;
-    const candidates = bySession.get(e.sessionId);
+    if (e.event !== 'tool') continue;
+    let candidates = e.sessionId ? bySession.get(e.sessionId) : null;
+    /* A sub-agent runs in a session of its own, which no step records — only the agent the
+       orchestrator started is in `bySession`. Matching those by stage instead is what makes a
+       shard's work visible at all; without it the whole of a sharded review is silence.
+       `agentType` is what keeps this safe: the operator's own shell is journaled under this
+       stage too, and it is the one caller that carries no agent. */
+    let byStageGuess = false;
+    if (!candidates && e.agentType) { candidates = byStage.get(e.stage); byStageGuess = true; }
     if (!candidates) continue;
     const t = Date.parse(e.ts);
     /* A resumed session spans several attempts, so a call belongs to the latest attempt that
        had already started when it was made. The 30s slack covers the gap between the
-       orchestrator recording a start and the agent's first call landing. */
+       orchestrator recording a start and the agent's first call landing.
+       A session the step recorded is trusted without an upper bound, because that is what a
+       resume looks like. The stage guess gets one: an agent working in this copy long after
+       the run ended is stamped with the run's stage too, and is otherwise indistinguishable
+       from a shard of it. A sub-agent runs inside its parent's window; a stranger does not. */
     let target = null;
-    for (const c of candidates) if (t >= c.startedAt - 30_000 && (!target || c.startedAt > target.startedAt)) target = c;
+    for (const c of candidates) {
+      if (t < c.startedAt - 30_000) continue;
+      if (byStageGuess && t > (c.endedAt ?? Date.now()) + 30_000) continue;
+      if (!target || c.startedAt > target.startedAt) target = c;
+    }
     if (!target) continue;
     const sec = (e.durationMs ?? 0) / 1000;
     target.toolSec += sec;
     target.byTool[e.tool] = (target.byTool[e.tool] ?? 0) + 1;
     target.tools.push({
       at: Math.max(0, Math.round((t - target.startedAt) / 1000)),
+      /* Absolute, not only the offset: "how long ago" has to survive being read on a page
+         that has been open longer than the payload is old. */
+      ts: t,
       tool: e.tool,
+      /* A short id is a name and survives whole; only a long one is a hash worth cutting. */
+      actor: e.agentType
+        ? (e.agentId && e.agentId !== 'main'
+          ? `${e.agentType}·${String(e.agentId).length <= 12 ? e.agentId : String(e.agentId).slice(0, 8)}`
+          : e.agentType)
+        : null,
       sec: +sec.toFixed(1),
       ok: e.ok !== false,
       what: String(e.input?.command ?? e.input?.file_path ?? e.input?.pattern ?? e.input?.path ?? '')
@@ -439,6 +474,21 @@ const payload = {
   priority: PRIORITY,
   t0,
   t1,
+  /* When the run last moved, and when this payload was built. The difference between them is
+     the silence, and silence is the only thing that tells a thinking agent from a dead one.
+     Which makes *whose* activity counts the whole question: the journal stamps every call made
+     while the run holds the lock, including the operator's own shell in the same working copy.
+     Counting those would reset the silence to zero every time somebody typed, and the board
+     would report a dead run as alive — the one error it exists to prevent. An event counts
+     when it carries an agent, or when the orchestrator wrote it. */
+  lastEventAt: Math.max(
+    0,
+    /* Read from what the report already attributed to a step, so the badge and the per-step
+       lines cannot tell different stories about when this run last moved. */
+    ...steps.flatMap((s) => (s.tools.length ? [s.tools[s.tools.length - 1].ts] : [])),
+    ...journal.filter((e) => ORCHESTRATOR_EVENTS.has(e?.event)).map((e) => Date.parse(e.ts) || 0),
+  ) || null,
+  generatedAt: Date.now(),
   totals,
   byStage: Object.values(byStage),
   steps,
@@ -627,6 +677,42 @@ pre.txt{background:var(--surface-3);border-radius:12px;padding:14px 16px;overflo
 .kv dt{color:var(--on-surface-var);white-space:nowrap}
 .kv dd{margin:0;font-family:var(--mono);font-size:12.5px;word-break:break-all}
 .note-callout{background:var(--warn-container);color:var(--on-warn-container);border-radius:12px;padding:12px 15px;font-size:13px;line-height:1.6;margin-bottom:14px}
+/* The last thing the agent did, on every step. On a running one it is the difference between
+   working and stopped, so it is the one line here that moves on its own. */
+/* A flex row, not a clipped line: the command is the part that may be cut and the time is the
+   part that must survive, so the command shrinks and the time is pinned to the right. Clipping
+   the whole line loses the time first, which is the one thing being read. */
+.act{display:flex;gap:6px;align-items:baseline;margin-top:4px;font-size:11.5px;
+  color:var(--on-surface-var);white-space:nowrap;min-width:0}
+.act .ico{flex:0 0 auto;width:10px;opacity:.55}
+.act .who{flex:0 0 auto}
+/* A grid item defaults to min-width:auto and refuses to shrink below its content, so without
+   this the whole head grows to fit the command and pushes the time out past the card. */
+.step-head .hd{min-width:0}
+.act .what{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;opacity:.6;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.act .ago{flex:0 0 auto;margin-left:auto;padding-left:10px;opacity:.55}
+/* Re-rendered on every push, so the fade runs exactly when something new arrived — and never
+   on a tick, when nothing did. */
+.act.live{color:var(--primary);animation:actin .7s ease-out}
+.act.live .ico{animation:blink 1.2s steps(1) infinite}
+@keyframes blink{50%{opacity:.12}}
+@keyframes actin{from{background:rgba(103,80,164,.16)}to{background:transparent}}
+.stepitem .nm small.live{color:var(--primary);opacity:.9}
+.dot.beat{animation:pulse 1.6s ease-in-out infinite}
+.runpick{display:flex;align-items:center;gap:10px;margin:14px 0 4px}
+.runpick label{font-size:12px;opacity:.75}
+.runpick select{max-width:min(560px,100%);padding:7px 12px;border-radius:12px;font:inherit;font-size:13px;
+  border:1px solid var(--outline,#79747E);background:var(--surface,#fff);color:inherit}
+.livebadge{position:fixed;left:22px;bottom:22px;z-index:40;padding:8px 14px;border-radius:14px;
+  background:var(--secondary-container);color:var(--on-secondary-container);font-size:12px;font-variant-numeric:tabular-nums}
+.livebadge.lost{background:#F9DEDC;color:#410E0B}
+/* Quiet is not yet wrong — an agent thinking is quiet. Stalled has crossed the point where a
+   person should look, so it says so instead of pulsing reassuringly. */
+.livebadge.quiet{background:#FFF3D6;color:#4A3B00}
+.livebadge.stalled{background:#F9DEDC;color:#410E0B;animation:pulse 1.6s ease-in-out infinite}
+.gbar{transition:width .5s ease,left .5s ease}
+.gbar.running{transition:none}
 .fab{position:fixed;right:22px;bottom:22px;z-index:40;display:flex;flex-direction:column;gap:10px}
 .fab button{width:auto;padding:13px 18px;border:0;border-radius:16px;background:var(--primary);color:#fff;
             box-shadow:var(--e2);cursor:pointer;font-size:13px;font-weight:500}
@@ -635,6 +721,7 @@ pre.txt{background:var(--surface-3);border-radius:12px;padding:14px 16px;overflo
 <body>
 <div class="appbar"><div class="appbar-in">
   <h1><span id="hdTitle"></span> <span id="hdStatus"></span></h1>
+  <div class="runpick" id="runPickWrap" hidden><label for="runPick">Прогон</label><select id="runPick"></select></div>
   <div class="meta" id="hdMeta"></div>
   <div class="metrics" id="hdMetrics"></div>
 </div></div>
@@ -658,11 +745,29 @@ pre.txt{background:var(--surface-3);border-radius:12px;padding:14px 16px;overflo
 
 <script id="run-data" type="application/json">${DATA}</script>
 <script>
-const D = JSON.parse(document.getElementById('run-data').textContent);
+let D = JSON.parse(document.getElementById('run-data').textContent);
 
-const COLOR = { pre_implement:'#7E57C2', implement:'#3B6FD4', review:'#D4761B', qa:'#0F8F82', static_gate:'#79747E', preflight:'#79747E' };
+/* Everything below re-runs on every update, so what the reader has done to the page lives
+   out here instead of in the DOM: which steps are open, which tab each one shows, which
+   filter is on. Re-reading that from the markup would lose it, because the markup is what
+   gets replaced. */
+let stepEls = [];
+let bound = false;
+let first = true;
+let allOpen = false;
+let cursor = 0;
+let activeFilter = 0;
+let viewT0 = 0;
+let viewSpan = 1;
+const openIds = new Set();
+const activeTab = new Map();
+
+const COLOR ={ pre_implement:'#7E57C2', implement:'#3B6FD4', review:'#D4761B', qa:'#0F8F82', static_gate:'#79747E', preflight:'#79747E' };
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const mmss = s => Math.floor(s/60) + ':' + String(Math.round(s)%60).padStart(2,'0');
+/* Round once, then split. Flooring the minutes off an unrounded value while rounding the
+   seconds prints 0:60 for anything just under a minute — which only shows up once a caller
+   passes a live, fractional number. */
+const mmss = s => { const t = Math.round(s); return Math.floor(t/60) + ':' + String(t%60).padStart(2,'0'); };
 const hhmm = ms => new Date(ms).toTimeString().slice(0,8);
 const pctOf = (a,b) => b ? Math.round(a/b*100) : 0;
 const nfmt = n => (n ?? 0).toLocaleString('ru-RU');
@@ -673,7 +778,10 @@ const verdictChip = s => {
   return s ? '<span class="chip ' + (m[s]||'c-info') + '">' + esc(s) + '</span>' : '';
 };
 
+function render() {
+
 /* ── header ─────────────────────────────────────────────────────────── */
+document.title = 'Прогон · ' + D.runId;
 document.getElementById('hdTitle').textContent = D.spec || D.runId;
 document.getElementById('hdStatus').innerHTML =
   verdictChip(D.status) + (D.totals.running ? ' <span class="chip c-run">прогон идёт</span>' : '') +
@@ -696,6 +804,7 @@ document.getElementById('hdMetrics').innerHTML = [
 /* ── gantt ──────────────────────────────────────────────────────────── */
 (function(){
   const span = Math.max(1, D.t1 - D.t0);
+  viewT0 = D.t0; viewSpan = span;
   const lanes = [...new Set(D.steps.map(s => s.stage))];
   const rows = lanes.map(lane => {
     const bars = D.steps.filter(s => s.stage === lane).map(s => {
@@ -705,7 +814,8 @@ document.getElementById('hdMetrics').innerHTML = [
       const cls = s.state === 'aborted' ? ' abort' : s.state === 'running' ? ' running' : '';
       const bg = cls ? '' : ';background:' + (COLOR[s.stage] || '#79747E');
       const label = s.state === 'aborted' ? s.attempt + '✗' : s.attempt + ' · ' + mmss(s.wallSec) + (s.costUsd ? ' · $' + s.costUsd : '');
-      return '<div class="gbar' + cls + '" data-go="' + s.stage + '-' + s.attempt + '" style="left:' + l.toFixed(2) + '%;width:' + w.toFixed(2) + '%' + bg + '" title="' + esc(s.stage + ' ' + s.attempt + ' · ' + (s.status||s.state)) + '">' + esc(label) + '</div>';
+      const grows = s.state === 'running' ? ' data-start="' + s.startedAt + '" data-attempt="' + s.attempt + '"' : '';
+      return '<div class="gbar' + cls + '" data-go="' + s.stage + '-' + s.attempt + '"' + grows + ' style="left:' + l.toFixed(2) + '%;width:' + w.toFixed(2) + '%' + bg + '" title="' + esc(s.stage + ' ' + s.attempt + ' · ' + (s.status||s.state)) + '">' + esc(label) + '</div>';
     }).join('');
     return '<div class="grow"><div class="glab">' + esc(lane) + '</div><div class="gtrack">' + bars + '</div></div>';
   }).join('');
@@ -717,10 +827,16 @@ document.getElementById('hdMetrics').innerHTML = [
 document.getElementById('rail').innerHTML = D.steps.map((s,i) => {
   const bad = s.findings.some(isBlocker) || s.state === 'aborted';
   const dot = s.script ? '#79747E' : (COLOR[s.stage] || '#79747E');
+  const last = s.tools && s.tools.length ? s.tools[s.tools.length - 1] : null;
+  /* On a step that is going, what it is doing beats what model it is: the model does not
+     change and the tool is the only thing on this line that ever moves. */
+  const under = s.state === 'running' && last
+    ? '<small class="live">' + esc(last.actor && last.actor !== s.agent ? last.actor + ' · ' + last.tool : last.tool) + '</small>'
+    : '<small>' + esc(s.model || (s.script ? 'скрипт' : '')) + '</small>';
   return (i ? '<div class="connector"></div>' : '') +
     '<button class="stepitem" data-idx="' + i + '">' +
-      '<span class="dot" style="background:' + dot + '">' + (s.script ? '·' : s.attempt) + '</span>' +
-      '<span class="nm">' + esc(s.stage) + '<small>' + esc(s.model || (s.script ? 'скрипт' : '')) + '</small></span>' +
+      '<span class="dot' + (s.state === 'running' ? ' beat' : '') + '" style="background:' + dot + '">' + (s.script ? '·' : s.attempt) + '</span>' +
+      '<span class="nm">' + esc(s.stage) + under + '</span>' +
       '<span class="tm">' + (s.script ? '—' : mmss(s.wallSec)) + (bad ? ' ●' : '') + '</span>' +
     '</button>';
 }).join('');
@@ -745,6 +861,23 @@ function findingHtml(f) {
     '<div class="claim">' + esc(f.claim) + '</div>' +
     (deep ? '<details><summary>Свидетельство и починка</summary><div class="deep">' + deep + '</div></details>' : '') +
   '</div>';
+}
+
+/* The last thing the agent actually did. On a running step it is the answer to "is it alive",
+   so it carries a live clock; on a finished one the wall time it happened at is more use than
+   a distance from now. The actor is named only when it is not the agent the orchestrator
+   started — that is a sub-agent, and whose work it is matters more than the tool. */
+function actHtml(s) {
+  const t = s.tools && s.tools.length ? s.tools[s.tools.length - 1] : null;
+  if (!t) return '';
+  const live = s.state === 'running';
+  const who = t.actor && t.actor !== s.agent ? '<b>' + esc(t.actor) + '</b> · ' : '';
+  const when = live ? '' : hhmm(t.ts || (s.startedAt + t.at * 1000));
+  return '<span class="act' + (live ? ' live' : '') + '"' + (t.ts ? ' data-ts="' + t.ts + '"' : '') + '>' +
+    '<span class="ico">' + (live ? '▸' : '↳') + '</span>' +
+    '<span class="who">' + who + esc(t.tool) + '</span>' +
+    (t.what ? '<span class="what">' + esc(t.what.slice(0, 160)) + '</span>' : '') +
+    '<span class="ago">' + when + '</span></span>';
 }
 
 function routeHtml(s) {
@@ -871,29 +1004,47 @@ document.getElementById('steps').innerHTML = D.steps.map((s,i) => {
   return '<div class="card step" id="' + s.stage + '-' + s.attempt + '" data-idx="' + i + '"' +
     (bl ? ' data-bad="1"' : '') + (s.state !== 'done' ? ' data-odd="1"' : '') + '>' +
     '<button class="step-head"><span class="idx" style="background:' + color + '">' + (s.script ? '·' : s.attempt) + '</span>' +
-      '<span><span class="ttl">' + esc(s.stage) + ' ' + s.attempt + ' ' + verdictChip(s.status) + ' ' + stateChip(s.state) +
+      '<span class="hd"><span class="ttl">' + esc(s.stage) + ' ' + s.attempt + ' ' + verdictChip(s.status) + ' ' + stateChip(s.state) +
         (bl ? '<span class="chip c-block">' + bl + ' блок.</span>' : '') +
         (nt ? '<span class="chip c-note">' + nt + ' зам.</span>' : '') +
-      '</span><span class="sub">' + esc(sub) + '</span></span>' +
+      '</span><span class="sub">' + esc(sub) + '</span>' + actHtml(s) + '</span>' +
       '<span class="caret">▾</span></button>' +
     '<div class="panel"><div class="tabs">' + tabs + '</div>' + panes + '</div></div>';
 }).join('');
 
 /* ── interaction ────────────────────────────────────────────────────── */
-const stepEls = [...document.querySelectorAll('.step')];
+stepEls = [...document.querySelectorAll('.step')];
 function openStep(i, scroll) {
   const el = stepEls[i]; if (!el) return;
-  el.classList.add('open');
+  el.classList.add('open'); openIds.add(el.id);
   document.querySelectorAll('.stepitem').forEach(b => b.classList.toggle('on', +b.dataset.idx === i));
   if (scroll) el.scrollIntoView({ block:'start' });
 }
+
+/* Put back what the reader had before this render replaced the markup. A step is remembered
+   by its id rather than by its index: an attempt that starts while the page is open shifts
+   every index after it, and restoring by position would reopen the wrong steps. */
+stepEls.forEach(el => {
+  if (allOpen || openIds.has(el.id)) el.classList.add('open');
+  const t = activeTab.get(el.id);
+  if (t != null) {
+    el.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+    el.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.dataset.t === t));
+  }
+});
+
+if (!bound) {
 document.addEventListener('click', e => {
   const head = e.target.closest('.step-head');
   if (head) { const el = head.closest('.step'); el.classList.toggle('open');
-    if (el.classList.contains('open')) openStep(+el.dataset.idx, false); return; }
+    if (el.classList.contains('open')) { openIds.add(el.id); openStep(+el.dataset.idx, false); }
+    else openIds.delete(el.id);
+    return; }
   const tab = e.target.closest('.tab');
   if (tab) {
     const { s, t } = tab.dataset;
+    const step = tab.closest('.step');
+    if (step) activeTab.set(step.id, t);
     document.querySelectorAll('.tab[data-s="' + s + '"]').forEach(b => b.classList.toggle('on', b.dataset.t === t));
     document.querySelectorAll('.pane[data-s="' + s + '"]').forEach(p => p.classList.toggle('on', p.dataset.t === t));
     return;
@@ -903,6 +1054,7 @@ document.addEventListener('click', e => {
   const bar = e.target.closest('[data-go]');
   if (bar) { const el = document.getElementById(bar.dataset.go); if (el) { el.classList.add('open'); openStep(+el.dataset.idx, true); } }
 });
+}
 
 const FILTERS = [
   ['все', () => true],
@@ -910,23 +1062,26 @@ const FILTERS = [
   ['незавершённые', el => el.dataset.odd === '1'],
 ];
 document.getElementById('filters').innerHTML = FILTERS.map(([n],i) =>
-  '<button class="fbtn' + (i===0?' on':'') + '" data-f="' + i + '">' + n + '</button>').join('') +
+  '<button class="fbtn' + (i===activeFilter?' on':'') + '" data-f="' + i + '">' + n + '</button>').join('') +
   '<span class="dim" style="margin-left:auto;font-size:12px">клик по полосе на диаграмме открывает шаг · j / k — следующий и предыдущий</span>';
+const keepNow = FILTERS[activeFilter][1];
+stepEls.forEach(el => { el.style.display = keepNow(el) ? '' : 'none'; });
+
+if (!bound) {
 document.getElementById('filters').addEventListener('click', e => {
   const b = e.target.closest('.fbtn'); if (!b) return;
+  activeFilter = +b.dataset.f;
   document.querySelectorAll('.fbtn').forEach(x => x.classList.toggle('on', x === b));
-  const keep = FILTERS[+b.dataset.f][1];
+  const keep = FILTERS[activeFilter][1];
   stepEls.forEach(el => { el.style.display = keep(el) ? '' : 'none'; });
 });
 
-let allOpen = false;
 document.getElementById('toggleAll').addEventListener('click', e => {
   allOpen = !allOpen;
-  stepEls.forEach(el => el.classList.toggle('open', allOpen));
+  stepEls.forEach(el => { el.classList.toggle('open', allOpen); if (allOpen) openIds.add(el.id); else openIds.delete(el.id); });
   e.target.textContent = allOpen ? 'Свернуть всё' : 'Развернуть всё';
 });
 
-let cursor = 0;
 document.addEventListener('keydown', e => {
   if (e.target.matches('input,textarea')) return;
   if (e.key === 'j' || e.key === 'k') {
@@ -934,6 +1089,7 @@ document.addEventListener('keydown', e => {
     stepEls[cursor].classList.add('open'); openStep(cursor, true);
   }
 });
+}
 
 /* ── routing log ────────────────────────────────────────────────────── */
 document.getElementById('routing').innerHTML =
@@ -977,7 +1133,125 @@ document.getElementById('cov').innerHTML =
   'Пути нормализуются: <span class="mono">Read</span> на Windows отдаёт абсолютный путь с обратными слэшами, и без нормализации ' +
   'реестр не засчитывает ни одного чтения.</p>';
 
-if (D.steps.length) openStep(0, false);
+bound = true;
+if (first) { first = false; if (D.steps.length) openStep(0, false); }
+/* Fill the live clocks now rather than leaving them blank until the first tick, a second
+   later — the gap is small and it is the first thing the eye lands on. */
+tick();
+}
+
+/* ── the second hand ────────────────────────────────────────────────────
+   Between two pushes nothing arrives, and an agent can think for minutes without touching a
+   tool. Redrawing the page on a timer would be a lie about new data; not moving at all is a
+   lie about being stuck. So the clock — and only the clock — advances locally: the running
+   bar grows, its own elapsed time counts, and the silence is named. Everything that is a
+   fact about the run still arrives from the run. */
+function tick() {
+  const now = Date.now();
+  const span = Math.max(viewSpan, now - viewT0);
+
+  document.querySelectorAll('.gbar.running[data-start]').forEach(el => {
+    const startedAt = +el.dataset.start;
+    const sec = (now - startedAt) / 1000;
+    el.style.width = Math.min(100 - (startedAt - viewT0) / span * 100, Math.max((now - startedAt) / span * 100, 0.4)).toFixed(2) + '%';
+    el.textContent = el.dataset.attempt + ' · ' + mmss(sec);
+  });
+
+  document.querySelectorAll('.act.live[data-ts]').forEach(el => {
+    const ms = now - +el.dataset.ts;
+    const ago = el.querySelector('.ago');
+    if (ago) ago.textContent = ms < 2000 ? 'только что' : ms < 60000 ? Math.round(ms / 1000) + ' с назад' : mmss(ms / 1000) + ' назад';
+  });
+
+  const wall = document.querySelector('#hdMetrics .metric .v');
+  if (wall && D.totals.running) wall.textContent = mmss(D.totals.wallSec + (now - D.generatedAt) / 1000);
+
+  return now;
+}
+
+render();
+
+/* ── live ───────────────────────────────────────────────────────────────
+   Served over http by run-watch.mjs, the page follows the run: the watcher pushes a fresh
+   payload whenever the run directory changes, and the whole view is drawn again from it.
+   Opened as a file it stays exactly what it was — a snapshot — because a file:// page has the
+   null origin and may not fetch its own directory. */
+if (location.protocol === 'http:' || location.protocol === 'https:') {
+  const live = document.createElement('div');
+  live.className = 'livebadge';
+  live.textContent = '● следит';
+  document.body.appendChild(live);
+
+  const wrap = document.getElementById('runPickWrap');
+  const pick = document.getElementById('runPick');
+  let es = null;
+  let shown = D.runId;
+
+  /* Switching runs keeps nothing: the ids belong to the run that is leaving, so an open step
+     or a chosen tab would either miss or, worse, land on an unrelated step that happens to be
+     called review-2 as well. */
+  function reset() {
+    openIds.clear(); activeTab.clear();
+    activeFilter = 0; allOpen = false; cursor = 0; first = true;
+  }
+
+  function connect(runId) {
+    if (es) es.close();
+    live.classList.remove('lost');
+    live.textContent = '● следит';
+    es = new EventSource('feed' + (runId ? '?run=' + encodeURIComponent(runId) : ''));
+
+    es.addEventListener('runs', (ev) => {
+      const list = JSON.parse(ev.data);
+      pick.innerHTML = list.map((r) =>
+        '<option value="' + esc(r.id) + '">' + esc(r.id) +
+        (r.status ? ' · ' + esc(r.status) : '') +
+        (r.spec ? ' · ' + esc(r.spec.split('/').pop()) : '') + '</option>').join('');
+      pick.value = shown;
+      wrap.hidden = list.length < 2;
+    });
+
+    es.addEventListener('payload', (ev) => {
+      const next = JSON.parse(ev.data);
+      if (next.runId !== shown) { reset(); shown = next.runId; pick.value = shown; }
+      D = next;
+      render();
+      beat();
+    });
+
+    es.onerror = () => { live.textContent = '○ связь потеряна'; live.className = 'livebadge lost'; };
+  }
+
+  /* What the badge says is the difference between "thinking" and "stopped", which is the one
+     question a page like this has to answer and the one an animation cannot. A run in flight
+     shows how long the journal has been quiet; a finished one shows when it last changed. */
+  function beat() {
+    const now = tick();
+    if (!D.totals.running) {
+      live.className = 'livebadge';
+      /* On a run that has stopped, when it last did anything is the useful number. When the
+         page was generated is not — that is a fact about the page. */
+      live.textContent = D.lastEventAt
+        ? '● последняя активность ' + hhmm(D.lastEventAt)
+        : '● обновлено ' + hhmm(D.generatedAt);
+      return;
+    }
+    const quiet = D.lastEventAt ? (now - D.lastEventAt) / 1000 : null;
+    live.className = 'livebadge' + (quiet != null && quiet > 180 ? ' stalled' : quiet != null && quiet > 60 ? ' quiet' : '');
+    live.textContent = quiet == null ? '● идёт' : '● идёт · тихо ' + mmss(quiet);
+  }
+
+  setInterval(beat, 1000);
+
+  pick.addEventListener('change', () => {
+    location.hash = pick.value;
+    connect(pick.value);
+  });
+
+  /* The hash is what makes a reload land back on the run being read, and what makes the link
+     worth sending to someone. */
+  connect(decodeURIComponent(location.hash.slice(1)) || null);
+}
 </script>
 </body></html>`;
 

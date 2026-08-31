@@ -22,14 +22,23 @@ Run this before showing a spec to anyone. A "no" is a defect, not a style prefer
 - [ ] A failure in a derived artifact cannot lose the irreplaceable one.
 - [ ] Every state transition writes its audit record in the same transaction.
 - [ ] Values written exactly once are identified as such.
-- [ ] Concurrent access to the same row states its locking strategy.
+- [ ] Every writer of a row is enumerated, with its lock and with what it re-reads inside the
+      transaction. Guards are evaluated on the in-transaction read, never on a copy loaded before
+      it.
+- [ ] Every unconditional invariant was checked against the call sites it already governs;
+      violators are fixed, carved out, or named out of scope.
+- [ ] Every "on any read" / "for every X" rule enumerates the call sites it covers.
+- [ ] A scope key is a required argument with no default.
+- [ ] Every outbound call states whether it is idempotent, and a non-idempotent one states what
+      runs between retry attempts.
 - [ ] Partial failure rolls back — nothing is half-applied and no status claims something that did
       not happen.
 
 ## Security
 
 - [ ] Every new endpoint states its authentication and capability.
-- [ ] Public surfaces state their rate limit.
+- [ ] Public surfaces state their rate limit, the identity it is keyed on, and why that identity
+      cannot be forged by the caller behind a proxy.
 - [ ] Unknown and unauthorized responses are identical, with no timing signal.
 - [ ] Author-controlled markup is sanitized on write and rendered sandboxed.
 - [ ] Every substituted value is escaped.
@@ -49,12 +58,34 @@ Run this before showing a spec to anyone. A "no" is a defect, not a style prefer
 
 - [ ] Frontmatter is complete: `id`, `title`, `routes`, `api`, `entities`, `tags`, `depends-on`.
 - [ ] Every `data-testid` in the selectors section appears in an E2E case, and vice versa.
-- [ ] Every error message in the spec appears in the Error Messages table.
+- [ ] Every error message in the spec appears in the Error Messages table, and every row of that
+      table names its `packages/validation` export and the route that emits it.
+- [ ] Every "asserted absent" has a presence twin — the same selector or field asserted present
+      where the rule says it should be.
+- [ ] Every `##` section has at least one test case, or an explicit note saying it has none and
+      why.
+- [ ] E2E cases that mutate process-wide state are marked serial.
+- [ ] Every premise about the pipeline or infrastructure is cited by file path, not restated from
+      CLAUDE.md.
 - [ ] No message text is duplicated between the business spec and a `.design.md`.
 - [ ] Rules shared with other specs live in the area README, not copied.
 - [ ] The area README index, dependency graph, and cross-spec side effects are updated.
 - [ ] Cross-references to other specs use their number and are accurate.
 - [ ] File paths cited from the codebase actually exist.
+
+## External systems, when present
+
+- [ ] Every claim about the external system says how it was established and what it ran against.
+- [ ] Every observation names the state the probe was in.
+- [ ] No requirement rests on a row marked `Assumed`.
+- [ ] Every boundary value names its unit and vocabulary on both sides, and what detects a
+      mismatch.
+- [ ] Unrecognized values from outside stall and are logged; nothing defaults at the boundary.
+- [ ] Permanent refusals are separated from outages, and compensation is scoped to what could
+      actually have been written.
+- [ ] The behaviours the double must reproduce are listed, including the ones that make tests fail.
+- [ ] Every allow-list entry carries the reason it is there, and a test fails on any refused
+      resource.
 
 ## Infrastructure, when present
 

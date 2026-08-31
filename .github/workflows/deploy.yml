@@ -19,6 +19,13 @@ name: Deploy
 # a pull request — a push straight to `main` deploys code no suite has run. Turn on branch
 # protection for `main` requiring the test checks and that cannot happen.
 #
+# **A push to `main` deploys only what ships.** A commit that moves an agent prompt, a spec,
+# a doc, a developer script or an e2e test is copied into no image and changes nothing the
+# stand serves, so the `target` job reads the diff and the deploy job does not run. The run
+# still appears, and its summary says which files it saw and why it stopped — a filtered-out
+# trigger would leave "why did that not deploy" with nowhere to be answered. Tags and manual
+# dispatches skip the question entirely: both are deliberate acts.
+#
 # Two switches remain, and both are deliberate:
 #
 #   1. The repository variable `DEPLOY_ENABLED` must be `true`
@@ -71,7 +78,14 @@ jobs:
     outputs:
       environment: ${{ steps.pick.outputs.environment }}
       services: ${{ steps.pick.outputs.services }}
+      deploy: ${{ steps.scope.outputs.deploy }}
     steps:
+      # The scope check below diffs this push against its predecessor, which the default
+      # shallow clone cannot reach.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - id: pick
         env:
           DISPATCH_ENVIRONMENT: ${{ inputs.environment }}
@@ -93,13 +107,79 @@ jobs:
           echo "services=${services}" >> "$GITHUB_OUTPUT"
           echo "### Target: \`${environment}\` (${services})" >> "$GITHUB_STEP_SUMMARY"
 
+      # A push to `main` that changed no shipping file has nothing to roll out. Editing an
+      # agent prompt, a spec or the README moved no code into any image, and a rollout for it
+      # costs a queue slot, a smoke test and a minute of somebody wondering what changed.
+      #
+      # Decided here rather than by a `paths` filter on the trigger, for two reasons. A path
+      # filter on a `push` that also carries `tags: ['v*']` would put the release path at the
+      # mercy of how GitHub evaluates paths for a tag push, and a prod release that silently
+      # does not run is far worse than a dev rollout that needlessly does. And a filtered-out
+      # trigger produces no run at all, so "why did my change not deploy" has nowhere to be
+      # answered; this way the run exists and says so.
+      #
+      # The list is what does *not* ship, never what does. A directory nobody has classified
+      # yet deploys, which is the failure worth having: the cost of a needless rollout is a
+      # minute, and the cost of a missed one is a stand serving last week's code.
+      - id: scope
+        name: Does anything that ships change?
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          decide() {
+            echo "deploy=$1" >> "$GITHUB_OUTPUT"
+            if [ "$1" = true ]; then echo "Deploying — $2" >> "$GITHUB_STEP_SUMMARY";
+            else echo "**Nothing to deploy** — $2" >> "$GITHUB_STEP_SUMMARY"; fi
+            exit 0
+          }
+
+          # A tag is a release and a dispatch is somebody pressing the button. Both are
+          # deliberate, and neither is second-guessed by reading a diff.
+          if [ "${GITHUB_EVENT_NAME}" != push ]; then decide true "run started by hand"; fi
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then decide true "tag ${GITHUB_REF_NAME} is a release"; fi
+
+          # A new branch, a force push, or a predecessor this clone does not carry: there is
+          # no diff to read, so deploy rather than guess.
+          if [ -z "${BEFORE}" ] || [ "${BEFORE}" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            decide true "no previous commit to compare against"
+          fi
+
+          changed="$(git diff --name-only "${BEFORE}" "${GITHUB_SHA}")"
+          [ -n "${changed}" ] || decide false "the push changed no files"
+
+          # Everything here is either read by a person or run on a developer's machine. None
+          # of it is copied by apps/api/Dockerfile or apps/web/Dockerfile, and none of it is
+          # touched by infra/deploy.sh.
+          ignored='^\.claude/|^docs/|^specs/|^scripts/|^\.workflow/|^e2e/|(^|/)[^/]*\.md$|^\.(gitignore|editorconfig)$|^LICENSE$'
+          # ...except this one: both Dockerfiles copy `e2e/package.json`, because the install
+          # resolves every workspace in the tree.
+          ships_anyway='^e2e/package(-lock)?\.json$'
+
+          rest="$(printf '%s\n' "${changed}" | { grep -vE "${ignored}" || true; })"
+          back="$(printf '%s\n' "${changed}" | { grep -E "${ships_anyway}" || true; })"
+          shipping="$(printf '%s\n%s\n' "${rest}" "${back}" | { grep -v '^$' || true; })"
+
+          {
+            echo "<details><summary>Files in this push (${GITHUB_EVENT_NAME})</summary>"
+            echo; echo '```'; printf '%s\n' "${changed}"; echo '```'; echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -z "${shipping}" ]; then
+            decide false "nothing in this push is copied into an image"
+          fi
+          decide true "$(printf '%s\n' "${shipping}" | wc -l | tr -d ' ') shipping file(s) changed"
+
   deploy:
     name: Deploy ${{ needs.target.outputs.environment }}
     needs: [target]
 
     # `DEPLOY_ENABLED` is the master switch: a repository with it unset cannot deploy by
-    # accident.
-    if: vars.DEPLOY_ENABLED == 'true'
+    # accident. `target.outputs.deploy` is the second: a push that moved no shipping file
+    # has nothing to roll out, and says so in the run summary rather than vanishing.
+    if: vars.DEPLOY_ENABLED == 'true' && needs.target.outputs.deploy == 'true'
 
     runs-on: ubuntu-latest
 
