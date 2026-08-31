@@ -4,29 +4,41 @@ import { APPLICATION_STATUS_LABELS, type ApplicationStatus } from '@devscribed/v
 import { Badge } from '@/ds';
 
 /**
- * An application's status, in the five tones Meridian already has.
+ * An application's status, in the four status hues blue's palette has.
  *
- * There is no sixth tone and no new colour: `Offer` is the **outlined** variant of the
- * success tone rather than a new hue — it is the same good news as `Passed`, one step
- * further along, and Meridian reserves its remaining accent (amber) for the tracker and
- * for warnings (03 design §Status tones).
+ * Blue's `Badge` is `ActivityBadge` — a two-state pill on a *user*, and a hiring funnel is not
+ * two states. Mapping five onto its four paints would force `Scheduled`, which is neither good
+ * news nor bad, to be drawn as one or the other; that is not a lost reinforcement but colour
+ * saying something false, so `Badge` took blue's two remaining status hues instead
+ * (ledger §32, and blue's readme: *"Status colors (green/yellow/red/cyan) are used sparingly and
+ * only for real state"*).
+ *
+ * The rule is **hue is direction, fill is finality** (03 design §Status badges). Only the two
+ * terminal states are solid, which is what keeps "sparingly" true — a list of in-flight
+ * candidates is mostly outlined pills, and a filled one means the process ended.
+ *
+ * It also corrects an inversion Meridian had: `Offer` was the *outlined* variant of `Passed`, so
+ * the strongest status in the funnel was drawn with the least emphasis.
  */
-const TONES: Record<ApplicationStatus, { tone: 'active' | 'inactive' | 'warning' | 'info'; outline?: boolean }> = {
-  scheduled: { tone: 'info' },
-  didnt_pass: { tone: 'inactive' },
-  maybe: { tone: 'warning' },
-  passed: { tone: 'active' },
-  offer: { tone: 'active', outline: true },
+const TONES: Record<
+  ApplicationStatus,
+  { status: 'active' | 'inactive' | 'info' | 'warning'; outlined?: boolean }
+> = {
+  scheduled: { status: 'info' },
+  maybe: { status: 'warning' },
+  passed: { status: 'active', outlined: true },
+  offer: { status: 'active' },
+  didnt_pass: { status: 'inactive' },
 };
 
 export function StatusBadge({
   status,
   ...rest
 }: { status: ApplicationStatus } & React.HTMLAttributes<HTMLSpanElement>) {
-  const { tone, outline } = TONES[status];
-  // The label is the meaning; the tone only repeats it in colour.
+  const paint = TONES[status];
+  // The label is the meaning; the hue only repeats it in colour.
   return (
-    <Badge tone={tone} outline={outline} {...rest}>
+    <Badge status={paint.status} outlined={paint.outlined} {...rest}>
       {APPLICATION_STATUS_LABELS[status]}
     </Badge>
   );

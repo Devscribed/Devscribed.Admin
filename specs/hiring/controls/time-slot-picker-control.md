@@ -21,6 +21,18 @@ Carried over from `hiring-process/02-booking-page/controls/time-slot-picker-cont
 change: **times are 24-hour by default with a 12-hour toggle**, where the source spec stated the
 12-hour format is not used. See [02 §04](../02-booking-page.md).
 
+## Where it lives
+
+The list is composed from the Teammerly Original DS at `1_DS for dev/` rather than being a
+component of it: `Button variant="secondary"` per slot, `Select` for the zone, `ToggleButton` for
+the format, `Preloader` while a date is in flight. Only the format toggle needed opening
+([§31](../../design-system/ledger.md)) — blue's `ToggleButton` is the segmented pill this control
+already wanted, but it forwarded nothing and announced its two segments as unrelated buttons.
+
+It ships alongside the [Calendar Control](calendar-control.md) in one `SlotPicker`, which both
+hosts mount whole. A second picker with its own rules is precisely how a page ends up offering a
+start time the server would reject.
+
 ## Functional Requirements
 
 ### 01. Structure
@@ -48,8 +60,14 @@ change: **times are 24-hour by default with a 12-hour toggle**, where the source
 9. On the current day, start times already past in the active zone are not offered.
 10. **Display format:** 24-hour with zero-padded hours and minutes by default — `09:00`, `14:30`,
     `23:45`. A **12-hour toggle** re-renders the same slots as `9:00 AM`, `2:30 PM`. The choice is
-    remembered per browser and applies to the public booking page only; it never changes the
-    calendar event body or any internal screen.
+    remembered per browser under one key, so it follows a person across **every screen that draws
+    this picker** — the public booking page, the manage page, and the team's reschedule dialog. It
+    changes nothing else: not the calendar event body, and no time drawn outside this control.
+    A browser that refuses storage still gets the 24-hour default and keeps its choice for the
+    visit.
+    The control is a `ToggleButton` — a two-value segmented pill, not a switch. Both values are
+    always legible, which is what a format control needs: a switch labelled only by its current
+    state cannot say what pressing it would do.
 11. A single flat chronological list, earliest first. Slots are not grouped by part of day.
 
 ### 03. Slot States
@@ -94,7 +112,9 @@ change: **times are 24-hour by default with a 12-hour toggle**, where the source
 
 ### 07. Empty, Loading & Error
 
-28. **Loading** — a non-interactive treatment, rather than implying there are or are not times.
+28. **Loading** — a `Preloader` in place of the list, rather than a treatment implying there are or
+    are not times. Unlike the calendar, the list *is* replaced: it has no stable shape to dim, and
+    a date change replaces every entry in it anyway.
 29. **Empty (this date)** — a message that no times are available on this date and to pick another.
     Rare in normal operation, because the Calendar Control only lets an available date be selected.
 30. **Empty (no date)** — the corresponding message when the whole window has no availability.
@@ -127,6 +147,15 @@ Required `data-testid` attributes:
 - `slot-option-{startUtc}` — keyed by the absolute instant, so the identifier is stable across
   zone and format changes
 - `slot-list-loading`, `slot-list-empty`, `slot-list-error`, `slot-list-retry`
+
+The zone and format controls are named by the host, because two of them can be on screen at once —
+the booking page passes `booking-timezone-select` / `booking-timeformat-toggle`, and the reschedule
+dialog passes `application-timezone-select-{applicationId}` /
+`application-timeformat-toggle-{applicationId}`.
+
+A selected slot is a `Button` carrying `aria-pressed`, and the format toggle is a
+`role="radiogroup"` of two `role="radio"` segments ([§31](../../design-system/ledger.md)) — two
+buttons that swap a boolean between them are one control, and prod's markup says so nowhere.
 
 ## Test Cases
 

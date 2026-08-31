@@ -44,6 +44,14 @@ export function Select({
   /* react-select 5.5.6 default placeholder is the literal 'Select...' (Select-*.esm.js:962);
      the app never overrides it on the holiday-members field, so it must be three periods. */
   label, placeholder = 'Select...', value, options = [], onChange, isSearchable, isDisabled, isMulti,
+  /* §36 — react-select's own prop and its own default (`closeMenuOnSelect: true`, for multi
+     as much as for single). Blue closed the menu only when `!isMulti`, which is a divergence
+     from the library it recreates rather than something measured off it: prod passes no such
+     prop anywhere. Left open, a multi-select covers whatever sits under it with a list that
+     `hideSelectedOptions` has often just emptied — the filter bar picks a position and the
+     category row below it disappears behind `No options`. Restoring the default is §21's move
+     again: toward react-select, not away from it. */
+  closeMenuOnSelect = true,
   error, errorMessage, errorId, hint, hintId, withDescription, formatOptionLabel, variant = 'dropdown',
   /* §21 — blue draws the chip, the create row and the listbox itself and gives no way to tag
      any of them; per-option `testId` covers the rows. Same shape as §4 and §16. */
@@ -104,7 +112,7 @@ export function Select({
     }
     setQuery('');
     setActive(-1);
-    if (!isMulti) setOpen(false);
+    if (closeMenuOnSelect) setOpen(false);
   }
 
   function move(delta) {

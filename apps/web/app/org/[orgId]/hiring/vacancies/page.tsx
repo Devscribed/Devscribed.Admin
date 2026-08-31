@@ -16,6 +16,7 @@ import {
   type SelectOption,
 } from '@/ds';
 import { PageHeader } from '@/layout/PageHeader';
+import { valueOf } from '@/hiring/select';
 import type { Vacancy } from '@/hiring/types';
 import { VacancyDialog } from './VacancyDialog';
 
@@ -29,10 +30,6 @@ const STATUS_OPTIONS: SelectOption[] = [
   { value: 'open', label: 'Open', testId: 'vacancies-status-option-open' },
   { value: 'closed', label: 'Closed', testId: 'vacancies-status-option-closed' },
 ];
-
-/** Blue's `Select` hands back the option, not its value — the control owns both halves. */
-const valueOf = (option: SelectOption | string | (SelectOption | string)[]): string =>
-  typeof option === 'string' ? option : Array.isArray(option) ? '' : option.value;
 
 /**
  * The vacancies list: search, the status filter, and the route into a vacancy.

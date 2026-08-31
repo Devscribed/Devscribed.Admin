@@ -21,6 +21,12 @@ carry numbers in the [ledger](../design-system/ledger.md).
 **Theme:** light only. Both screens render inside the `AppShell`
 (`specs/user-management/00-app-shell.design.md`) and draw no chrome of their own.
 
+> **Amended by Phase 4.** The category picker in the dialog now **closes its menu** when a
+> category is chosen. Blue kept a multi-select's list open, which react-select — the library blue
+> recreates — does only when `closeMenuOnSelect` is explicitly `false`; restoring the default is
+> [§36](../design-system/ledger.md). Nothing else on these screens changed, and
+> `hiring-vacancies.spec.ts` is unaffected.
+
 These are the first screens to **lose components rather than repaint them**, so the calls made
 here are the ones Phases 4–7 follow: [where a persistent banner sits](#the-banner-slot), [which
 heading a caption becomes](#headings), and [what replaces a tooltip](#the-blocked-action).

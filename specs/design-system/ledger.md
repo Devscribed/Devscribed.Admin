@@ -4,10 +4,10 @@ Everything the vendored copy of the design system at `1_DS for dev/` has that up
 One numbered entry per component or prop added, under
 [§D3](README.md) — *edit the vendored copy in place, but never silently*.
 
-Phase 0 created this file; Phase 1 wrote §1–§11, Phase 2 wrote §12–§18 and Phase 3 wrote
-§19–§29. `npm run ds:drift` currently reports seven local-only components — `AuthLayout`,
-`Card`, `Chip`, `CrossIcon`, `IconButton`, `Eye`, `EyeOff` — and each of them is numbered
-below, which is the bar this file exists to hold.
+Phase 0 created this file; Phase 1 wrote §1–§11, Phase 2 wrote §12–§18, Phase 3 wrote
+§19–§29 and Phase 4 wrote §30–§36. `npm run ds:drift` currently reports eight local-only
+components — `AuthLayout`, `Calendar`, `Card`, `Chip`, `CrossIcon`, `IconButton`, `Eye`,
+`EyeOff` — and each of them is numbered below, which is the bar this file exists to hold.
 
 ## Numbering convention
 
@@ -69,6 +69,14 @@ Each entry is one of three, because the distinction decides what the upstream pu
 | 28 | `EmptyState` | `...rest` and `style`. The one node on the screen saying why a list is empty is the one a test most needs to name, and blue forwarded neither `data-testid` nor `role`. | `omission` | [§D2](README.md) | 3 | [01](../hiring/01-vacancies.design.md) |
 | 29 | `Select` | `allowCreate` / `onCreate` / `createTestId` — the `Create "…"` row offered when the query matches no option. This is the one part of §21 that is not a repair: prod uses react-select, never react-select/creatable, so there is no production behaviour behind it. It is react-select's own documented pattern drawn as one more option row, which is why it needs no treatment of its own — but it **must be pushed upstream as designed, not measured**. | `designed` | [§D1](README.md) | 3 | [01](../hiring/01-vacancies.design.md) |
 
+| 30 | `Calendar` | New component: an availability-aware month grid. Prod books nothing, so there is no date *picker* to measure — but there is a month grid, and every value here is taken from it. `DateRangePicker` is blue's faithful recreation of the react-datepicker 4.x defaults the product ships, and this reproduces its metrics rather than inventing any: the 1.7rem cell with a .166rem margin and a 3px radius, `__month` at .4rem, the header at 8px 0 over a `--color-gray` rule, `__current-month` at .944rem/500, the day names in `--text-primary`/450, the 32×32 navigation with its 9px border-drawn chevron, and the three day states — selected `--color-blue`/white/13px/600, disabled `--color-gray-light` at opacity .5 and `not-allowed`, everything else untinted. Blue's `DateField`, a 140px text field holding `"Mar 18, 2026"`, is not a substitute. Three things depart from that grid and each is a decision about what the grid *contains* rather than how it is drawn: **the week runs Monday to Sunday**, **leading and trailing cells are blank**, and **it is a keyboard grid** — arrows by day and by week, `Home`/`End`, `PageUp`/`PageDown`, `Enter`/`Space`, a roving tab stop, and a focus ring, where react-datepicker leaves `__day--keyboard-selected` transparent. See the note below. **Must be pushed upstream as designed, not measured.** | `designed` | [§D1](README.md), [§D6](README.md) | 4 | [03](../hiring/03-candidate-database.design.md), [calendar](../hiring/controls/calendar-control.md) |
+| 31 | `ToggleButton` | `...rest`, `style`, per-segment `data-testid`, an `aria-label` for the group, and the semantics that make it one control: `role="radiogroup"` over two `role="radio"` segments, a single tab stop, and arrow keys that move and select. Prod's markup is two bare `<button>`s, so a reader met with "24h, button" then "12h, button" is told there are two actions rather than one choice with two answers — and the paint was the only thing saying which was chosen. The focus ring is the other half: the source declares no `:focus` state at all, which is survivable while nothing is expected to arrive by keyboard, and a radio group is. Every painted value is unchanged; the root's `margin-bottom: 20px` and `max-width: 160px` are still prod's, now overridable by the caller that shares a row with a zone picker. | `omission` | [§D2](README.md) | 4 | [slots](../hiring/controls/time-slot-picker-control.md) |
+| 32 | `Badge` | `info` and `warning` statuses, solid and outlined. Blue's `Badge` is `ActivityBadge` — a two-state pill on a *user*, green for active and red for inactive — and a hiring funnel is five states. Four paints cannot carry five without one of them lying: `Scheduled` is neither good news nor bad, and painting it green or red is not a lost reinforcement (which is what [reversal 9](README.md) accepted on the login banner) but colour saying something false. The hues are not invented — blue's readme names four and scopes them, *"Status colors (green/yellow/red/cyan) are used sparingly and only for real state (active/inactive badges, form errors, info banners)"* — and these are the palette's other half in `ActivityBadge`'s own treatment. `--status-warning` had no consumer in blue at all before this. One variant does not take the solid treatment literally: blue paints a solid badge white-on-hue, which holds on `#27C79A` and `#D80027`, and on `#FFD02B` white is not a legibility trade-off but an absence of text — so the yellow stays on the fill and the ink becomes `--text-primary`, the same reading its outlined form takes. **Designed: prod has never drawn a badge in either hue.** | `designed` | [§D1](README.md) | 4 | [03](../hiring/03-candidate-database.design.md) |
+| 33 | `TextArea` | `trailing` — a node at the end of the **label row**. §25 said this was Phase 5's and had no consumer until then; it was wrong by one phase, because the cancel dialog's character count is exactly it. It goes in the label row rather than inside the field, which is `TextInput`'s answer (§5), because a multi-line field has no unambiguous right edge to pin anything to: the text reaches it on some lines and not others, and the scrollbar takes it when there is one. The label row is the one place above the field whose height does not depend on the value — which is what lets a count, or Phase 5's autosave indicator, appear, change and leave without moving the field beneath it. The label's `margin-bottom: 7px` is zeroed inside the row, where it would otherwise have the layout effect prod's inline `<label>` never gives it, so the field sits at the same y with a trailing node and without one. | `omission` | [§D2](README.md) | 4 | [03](../hiring/03-candidate-database.design.md) |
+| 34 | `Table` | `busy`, `hideHeader` and `footer` — the three §18 named and deferred for want of a consumer. `busy` dims the rows and sets `aria-busy` **together**, so a filterable list gets one treatment instead of each screen dimming its own body and forgetting the announcement; the rows stay and stay clickable, and the header is left alone because it did not change. `hideHeader` drops the header for a short grouped list already named by the surface it sits in — prod's tables all carry one, because prod's tables are all one list of one thing. `footer` is the infinite-scroll load-more indicator, which prod renders *inside* the table (`.loadNextTableIndicator`, centred) in the row position the next page will occupy, rather than as a control beneath it — which is what makes the page's arrival replace it rather than push it. | `omission` | [§D2](README.md) | 4 | [03](../hiring/03-candidate-database.design.md) |
+| 35 | `TextInput` | `wrapperStyle` — style for the field's own box, which `...rest` and `style` cannot reach because they address the `<input>`. `Select` (§21) and `SearchInput` (§26) both grew this already and in the same words: *a caller placing this field in a row is sizing that box, not the input inside it*. The three are siblings and disagreed only because they were measured separately, which is §25's observation about `TextInput` and `TextArea` arriving at the same field. The criteria filter's value control is the call site — a `Select` for a scale and a `TextInput` for a number, in one flex row, and only one of the two could say how wide it was. | `omission` | [§D2](README.md) | 4 | [03](../hiring/03-candidate-database.design.md) |
+| 36 | `Select` | `closeMenuOnSelect`, react-select's own prop name and its own default (`true`, for multi as much as for single). Blue closed the menu only when `!isMulti`, which is not something measured off prod — prod passes no such prop anywhere — but a divergence from the library blue recreates. It is §21's move a third time: **toward** react-select rather than away from it. Left open, a multi-select covers whatever sits under it with a list that `hideSelectedOptions` has often just emptied; on the candidates filter bar, picking the one position hid the category row behind an open `No options`. Passing `false` restores blue's behaviour for a caller that wants it. Note this changes one Phase 3 screen: `VacancyDialog`'s category picker now closes when a category is chosen. | `omission` | [§D2](README.md) | 4 | [03](../hiring/03-candidate-database.design.md), [01](../hiring/01-vacancies.design.md) |
+
 ### A note on §22 and reversal 2
 
 `Tooltip` → native `title` is [reversal 2](README.md), and the record said the phase that hit it
@@ -97,6 +105,46 @@ the node that is already holding the navigation, rather than to a second copy of
 here would put two of every nav row in the document, and with them two of every `data-testid` and
 two of every `aria-current`. `MenuDrawer` itself is untouched and stays blue's component for the
 drawers that are not the nav rail.
+
+### A note on §30 and the week start
+
+react-datepicker runs its week **Sunday to Saturday**, and blue reproduces that: `DateRangePicker`
+draws `Su Mo Tu We Th Fr Sa`. `Calendar` runs Monday to Sunday. That is a departure from blue's
+measurement, so it is written here rather than left to be found.
+
+It is the **content/language** split ([§D6](README.md)) rather than a layout disagreement, and
+blue's own note is the evidence: the day names sit in the paragraph listing *"everything below that
+CustomDateRangePicker.module.scss does NOT set"* — the react-datepicker default, *"reproduced
+rather than redesigned"*. Prod never made this choice; it inherited a library's locale default, the
+same way it inherited English month names. Nobody would read adopting blue as adopting English as a
+design decision, and week start is that class of thing.
+
+Hiring did make the choice, wrote it down — *"The week **always runs Monday to Sunday**. This never
+varies by locale"* ([calendar-control §03.12](../hiring/controls/calendar-control.md)) — and tests
+it: `monthMatrix` and `WEEKDAY_INITIALS` in `@devscribed/validation`, under TC-HCAL-UNIT-01. The
+component is handed its `weeks` rather than deriving them, so the week start is the **consumer's**
+either way; adopting Sunday would mean rewriting a tested validation helper and a functional
+requirement under cover of a reskin, which is not what [§D1](README.md)'s *"including layout"*
+clause is for. D1 moved a sidebar from 252px to 290px; it does not re-decide what a date grid means.
+
+The same reasoning covers blank leading and trailing cells (§04.15), where react-datepicker greys
+the adjacent months' numbers: a day number in the grid looks selectable, and every one of these is
+outside the booking window.
+
+### A note on §32 and the fifth status
+
+Phase 3 declined `Badge` for the vacancy's category chips and built `Chip` instead, on the grounds
+that *"blue's `Badge` is `ActivityBadge`, two status hues and nothing else"* (§20). §32 is the same
+observation reaching the opposite conclusion, and the difference is worth stating: a category is
+**not a status**, so it wanted a different component and blue already drew one. An application's
+status **is** a status — the thing `Badge` is for — and there are simply more of them than prod has
+users' states. So the component is right and its palette was short.
+
+The mapping is in [03 design](../hiring/03-candidate-database.design.md) and its rule is *hue is
+direction, fill is finality*: only the two terminal states are solid, which is what keeps blue's
+"sparingly" true when the badge is repeated down a table. It also corrects an inversion Meridian
+had — `Offer` was the outlined variant of `Passed`, so the strongest status in the funnel was drawn
+with the least emphasis.
 
 ## Closed
 

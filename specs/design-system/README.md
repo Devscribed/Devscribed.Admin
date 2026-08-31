@@ -77,9 +77,9 @@ value-identical; typography is the only place the scales genuinely collide.
 | `--fs-14` | 14 | `--font-size-s` | 14 | 35 | identical |
 | `--fs-16` | 16 | `--font-size-base` | 16 | 1 | identical |
 | `--fs-24` | 24 | `--headline-4-size` | 24 | 2 | identical |
-| `--fs-11` | 11 | `--font-size-xs` | 12 | 3 | +1px — 1 closed in Phase 3, into `FieldLabel` |
-| `--fs-13` | 13 | `--font-size-s` | 14 | 14 | +1px — 1 closed in Phase 3, into `InfoBanner` (which is 12px, so **−1px**) |
-| `--fs-15` | 15 | `--font-size-base` | 16 | 11 | +1px — 1 closed in Phase 3, snapped |
+| `--fs-11` | 11 | `--font-size-xs` | 12 | 3 | +1px — 1 closed in Phase 3, into `FieldLabel`. 2 left, Phases 5 and 8 |
+| `--fs-13` | 13 | `--font-size-s` | 14 | 14 | +1px — 1 closed in Phase 3, into `InfoBanner` (which is 12px, so **−1px**); Phase 4 closed 3 more, none of them a remap. 5 left |
+| `--fs-15` | 15 | `--font-size-base` | 16 | 11 | +1px — 1 closed in Phase 3, snapped; Phase 4 closed 1 more into `Calendar`'s own header type. 9 left |
 | `--fs-22` | 22 | `--headline-5-size` | 20 | 1 | −2px |
 | `--fs-27` | 27 | `--headline-4-size` | 24 | 1 | ✅ **settled in Phase 2** — the page header is blue's `PageTitle`, whose type steps 16 → 20 → 24px with the viewport rather than holding one size. The single use is gone. |
 | `--fs-34` | 34 | *none* | — | 2 | ⚠ no counterpart — decide per site |
@@ -95,7 +95,7 @@ value-identical; typography is the only place the scales genuinely collide.
 | `--text` | `--text-primary` `#1B1B1B` | 17 | |
 | `--text-sub` | `--text-tertiary` `#54595E` | 20 | |
 | `--text-muted` | `--text-secondary` `#64748B` | 48 | |
-| `--text-faint` | `--text-secondary` | 4 | ⚠ blue has 3 text levels, yellow has 4 — collapses. **The pattern settled in Phase 3**: a shown-but-unavailable thing (an ineligible option, a blocked menu row) is `--text-secondary`. The 4 uses are all in Phases 4–8's files; they inherit the answer, not the argument |
+| `--text-faint` | `--text-secondary` | 4 | ⚠ blue has 3 text levels, yellow has 4 — collapses. **The pattern settled in Phase 3**: a shown-but-unavailable thing (an ineligible option, a blocked menu row) is `--text-secondary`. Phase 4 closed 2 by inheriting it — a past interview's date and a character count are *receded*, which is the same reading. 2 left, Phases 5 and 6 |
 | `--accent` | `--action-primary` `#007AFF` | 14 | |
 | `--accent-soft` | `--color-blue-light` `#EFF6FF` | 2 | |
 | `--accent-border` | `--color-blue-lighter` `#E8F2FE` | 1 | |
@@ -105,7 +105,7 @@ value-identical; typography is the only place the scales genuinely collide.
 | `--tracker` | `--color-tracker-blue` `#2AA7FF` | 1 | both systems reserve a tracker hue |
 | `--bg` | `--surface-page` | 3 | the well is `#f8fafc`, set in `AppShell` |
 | `--bg-panel` | `--surface-card` | 1 | |
-| `--bg-panel-2` | `--surface-sunken` `#EEF2F5` | 4 | ⚠ check each — may want the `AppShell` well instead. **Two settled in Phase 2:** the sidebar and the top bar are `--surface-card`, because blue's shell is white panels around a `#f8fafc` well, not the reverse. The 2 left are the candidates filter bar, Phase 4 |
+| `--bg-panel-2` | `--surface-sunken` `#EEF2F5` | 4 | ⚠ check each — may want the `AppShell` well instead. **Two settled in Phase 2:** the sidebar and the top bar are `--surface-card`, because blue's shell is white panels around a `#f8fafc` well, not the reverse. **A third settled in Phase 4** the other way: the candidates filter bar *is* `--surface-sunken`, the tone blue already puts behind a `Table`'s own header row, because a control surface is neither a white panel nor the well. 1 left — the candidate card's application section, Phase 5 |
 | `--border` | `--border-default` `#E7E7E7` | 5 | |
 | `--divider` | `--border-subtle` | 3 | |
 | `--radius-sm` | `--radius-l` | 1 | 8px both |
@@ -118,12 +118,16 @@ value-identical; typography is the only place the scales genuinely collide.
 
 ### The seven rows that need a human call
 
-`--fs-34` (2 uses, no counterpart) · `--fs-13` / `--fs-15` / `--fs-11` (17 uses left, ±1px) ·
-~~`--sp-7`~~ (**settled in Phase 1** → `--space-7`, 20px) · ~~`--text-faint`~~ (**pattern settled
-in Phase 3**; 4 uses left, Phases 4–8) ·
-~~`--bg-panel-2`~~ (**half settled in Phase 2** → `--surface-card` on the shell; 2 uses left, Phase 4) ·
+`--fs-34` (2 uses, no counterpart — both Phase 8) · `--fs-13` / `--fs-15` / `--fs-11` (16 uses
+left, ±1px) · ~~`--sp-7`~~ (**settled in Phase 1** → `--space-7`, 20px) · ~~`--text-faint`~~
+(**pattern settled in Phase 3**, applied in Phase 4; 2 uses left, Phases 5 and 6) ·
+~~`--bg-panel-2`~~ (**settled across Phases 2 and 4** — `--surface-card` for a shell panel,
+`--surface-sunken` for a control surface; 1 use left, Phase 5) ·
 `--amber-500` (2 uses left, both Phase 8) · ~~`--hover-bg-tint`~~ (**half settled in Phase 2**;
 1 use left, Phase 6).
+
+**No Phase 4 file carries a yellow token.** The eight that still do are Phases 5–8's, plus the
+later phases' rules in `globals.css`.
 
 Two rows left the map entirely in Phase 2 rather than being remapped: `--fs-27` and `--fs-21`,
 both because the element that carried them is now a design-system component with its own type.
@@ -189,6 +193,12 @@ upstream push:
   renders), `FileInput` (no CV upload in a time-tracker), `BoardCard` + `BoardColumn` (no kanban in
   prod). These must be marked **designed, not measured** when pushed upstream.
 
+  `Calendar` landed in Phase 4 as [§30](ledger.md), and the instruction above turned out to be
+  better than it looked: blue **already contains** the react-datepicker measurement, in
+  `DateRangePicker`, so the grid was reproduced from blue's own file rather than from the library's
+  documentation. Only three things are genuinely designed — the Monday week start, the blank
+  adjacent-month cells, and the keyboard grid — and all three are argued in the ledger's note.
+
 ### Delete — 6, replaced by blue's pattern (D4)
 
 | Yellow | Uses | Blue's pattern | Cost |
@@ -197,8 +207,8 @@ upstream push:
 | `Skeleton` | 9 | `Preloader` — 3-dot loader, `overlay` mode | Content pops in rather than resolving in place. |
 | `Toast` | 5 | `InfoBanner` | Transient becomes persistent; needs a slot on 5 screens. |
 | `Tooltip` | 3 | native `title` | Not the free swap it looks like — see *Reversals* below. |
-| `Pagination` | 1 | infinite scroll | New scroll handler plus the documented `Preloader size=8 margin=5` load-more row. |
-| `Toggle` | 1 | `ToggleButton` | Switch becomes a labelled two-value segmented pill. |
+| ~~`Pagination`~~ | 1 | infinite scroll | ✅ **gone in Phase 4.** `Table footer` ([§34](ledger.md)) holding prod's own `.loadNextTableIndicator` at `Preloader size=8 margin=5`, fetched by an `IntersectionObserver`. The match count never moved — see *Reversals* 1. |
+| ~~`Toggle`~~ | 1 | `ToggleButton` | ✅ **gone in Phase 4.** Yellow's was already a segmented pill, so the swap was the prop shape (`value1`/`value2`/`selectedValue`) plus [§31](ledger.md), which made two buttons one `radiogroup`. |
 
 ### Rename — 8
 
@@ -262,8 +272,15 @@ and so a reviewer can tell a considered reversal from an accident.
 1. **`Pagination` → infinite scroll deletes an answer, not just a control.** `README.md` records
    that the candidate database is paginated *precisely because* infinite scroll cannot answer
    "how many match?", and that bounds are disabled rather than hidden so Next never slides under
-   the cursor. D4 still applies — blue's pattern wins — but **Phase 4 must re-home the match
-   count** (the filter bar is the obvious place). Dropping the control silently drops the count.
+   the cursor. D4 still applies — blue's pattern wins — but the match count had to survive it.
+
+   **Settled in Phase 4, and the count did not have to move.** It was never part of the pagination
+   control: it is its own `aria-live` node above the table, it already read `12 of 128 candidates`,
+   and it still does. What pagination actually carried was *position*, and the in-table load-more
+   row carries that instead — rows below the fold mean more to come, and no row means the list is
+   complete. Blue's own list screens work this way (`ProjectsTable`, `ToDosTable`, `ClientsTable`),
+   and the indicator is prod's `.loadNextTableIndicator` at the `Preloader size=8 margin=5` the
+   readme measures. Full detail in [`03-candidate-database.design.md`](../hiring/03-candidate-database.design.md).
 
 2. **`Tooltip` → native `title` is free only for a pointer.** The PRD calls this a free swap; it is
    not. Yellow's `Menu` + `Tooltip` are a deliberate pair: a blocked action is *disabled rather
@@ -300,8 +317,15 @@ and so a reviewer can tell a considered reversal from an accident.
 
 5. **`SectionLabel` → headings orphans `Table hideHeader`'s rationale.** `hideHeader` exists because
    My interviews' two groups are "already named by the `SectionLabel` above them". Remove
-   `SectionLabel` and Phase 4 must supply the replacement heading, or `hideHeader` loses the reason
-   it was added.
+   `SectionLabel` and the replacement heading has to name the table, or `hideHeader` loses the
+   reason it was added.
+
+   **Settled in Phase 4: the group's name is the `Card`'s own title**, at `titleAs="h2"`
+   ([§27](ledger.md)), wrapping the `Table hideHeader` ([§34](ledger.md)). That is stronger than
+   the caption it replaces — a card title names the table *inside its own surface* rather than by
+   proximity — and it puts the group in the `<h2>` outline under `PageTitle`'s `<h1>`, which is
+   the answer Phase 3 already gave for captions. The `<section aria-label>` around each group went
+   with it: a real heading and a same-named region announce the group twice.
 
 6. **`Card` must be built with `clip` from the start.** Yellow's `Card` gained `clip` (default
    `true`) because cards clip to their radius — which is what rounds an edge-to-edge `Table`'s
@@ -314,11 +338,25 @@ and so a reviewer can tell a considered reversal from an accident.
 
    **Phase 3 did not exercise it.** Its two popovers open from a `Modal` (the category and
    interviewer pickers) and from `PageHeader` (the actions menu), neither of which is a `Card`.
-   `clip` is built and defaulted correctly, but the four surfaces this reversal names are all in
-   Phases 4 and 6 — so it is still unproven, and those phases carry the whole of it.
+
+   **Phase 4 proved it.** The candidates filter bar is the first of the four surfaces, it passes
+   `clip={false}`, and `hiring-candidates.spec.ts` has the regression test this reversal was
+   written for — it hit-tests the last criterion's own coordinates with `elementFromPoint`, because
+   a clipped popover keeps its layout geometry and scrolls into view inside the card that hides it,
+   so a click-based test passes either way. It is green. The three remaining surfaces are the
+   candidate card's application section (Phase 5) and the two library cards (Phase 6).
+
+   Phase 4 also found the other half of this problem, which `clip` does not solve: blue's `Select`
+   kept a multi-select's menu **open** after a choice, so picking the one position left an emptied
+   `No options` list covering the category row beneath it. That is [§36](ledger.md) — a divergence
+   from react-select's own default rather than anything measured.
 
 7. **`--text-faint` collapsing flattens a hierarchy.** Yellow has four text levels, blue has three.
    Wherever faint and muted sat adjacent to signal a difference, that difference disappears.
+
+   Phase 3 settled the pattern and **Phase 4 applied it twice** without needing to reopen it: a
+   past interview's date and a character count are *receded*, which is the same reading as a
+   shown-but-unavailable option, so both take `--text-secondary`. Two uses left, in Phases 5 and 6.
 
 8. **`--shadow-card` is removed, not remapped.** Blue separates static surfaces with a border and
    reserves shadow for hover. Anywhere yellow used elevation to stack surfaces needs a border.

@@ -21,6 +21,7 @@ import {
   type SelectOption,
 } from '@/ds';
 import { focusByTestId } from '@/field-error';
+import { asOption, asOptions } from '@/hiring/select';
 import type { Category, InterviewerOption, Vacancy } from '@/hiring/types';
 
 type Values = { title: string; interviewerAccountId: string; durationMinutes: string; description: string };
@@ -52,12 +53,6 @@ const valuesOf = (vacancy: Vacancy): Values => ({
   durationMinutes: String(vacancy.durationMinutes),
   description: vacancy.description ?? '',
 });
-
-/** Blue's `Select` deals in options, not in the values behind them. */
-const asOption = (option: SelectOption | string | (SelectOption | string)[]): SelectOption =>
-  option as SelectOption;
-const asOptions = (option: SelectOption | string | (SelectOption | string)[]): SelectOption[] =>
-  option as SelectOption[];
 
 /**
  * Create and edit a vacancy.

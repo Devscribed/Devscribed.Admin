@@ -18,7 +18,7 @@
  */
 .booking-panels {
   display: grid;
-  gap: var(--sp-8);
+  gap: var(--space-6);
   grid-template-columns: 1fr 1fr;
 }
 
@@ -32,7 +32,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--sp-6);
+  gap: var(--space-5);
 }
 
 .booking-zone {
@@ -43,7 +43,7 @@
 .booking-slots {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-4);
+  gap: var(--space-3);
 }
 
 .booking-format {
@@ -312,27 +312,29 @@
 .candidates-filter-row {
   display: flex;
   align-items: flex-start;
-  gap: var(--sp-4);
-  padding: var(--sp-3) 0;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
 }
 
+/* Sizing only. The label inside is blue's `FieldLabel`, which brings its own type and its
+   own measured `padding: 10px 0 0 10px`; this box is what the three labels align in, and
+   what the breakpoint below collapses. */
 .candidates-filter-label {
   flex: 0 0 96px;
-  padding-top: 14px;
 }
 
 .candidates-criteria-rows {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: var(--sp-3);
+  gap: var(--space-2);
   min-width: 0;
 }
 
 .candidates-criteria-row {
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--space-1);
   flex-wrap: wrap;
 }
 
@@ -340,12 +342,11 @@
   /* The label moves above its controls, and the email folds under the name. */
   .candidates-filter-row {
     flex-direction: column;
-    gap: var(--sp-2);
+    gap: var(--space-1);
   }
 
   .candidates-filter-label {
     flex: none;
-    padding-top: 0;
   }
 
   .candidates-criteria-rows {
@@ -410,10 +411,10 @@
  */
 .my-interview-actions {
   display: flex;
-  gap: var(--sp-3);
+  gap: var(--space-2);
   justify-content: flex-end;
   opacity: 0;
-  transition: opacity var(--duration-base, 200ms) var(--easing-standard, ease);
+  transition: opacity var(--duration-fast) var(--ease-standard);
 }
 
 [data-testid^='my-interview-row-']:hover .my-interview-actions,

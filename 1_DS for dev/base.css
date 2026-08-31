@@ -126,3 +126,21 @@ input, textarea, select { font: inherit; }
 }
 
 .ds-app-shell-scrim { position: fixed; inset: 0; z-index: 2001; }
+
+/* §30 — `Calendar`'s day cell. react-datepicker sizes a day 1.7rem tall with a .166rem margin
+   above and below, giving a 2.032rem vertical pitch; that is reproduced here so the two grids
+   share a rhythm. It lives in a class for the reason `.page-title` and `.ds-navbar` do: the
+   touch-target rule below is a media query, and a media query cannot be an inline style.
+   Horizontally the column is `1fr` rather than react-datepicker's fixed 1.7rem — prod draws this
+   in a fixed-width popover and this one is inline in a card that flexes. */
+.ds-calendar-day {
+  display: block;
+  height: 1.7rem;
+  line-height: 1.7rem;
+  margin: 0.166rem 0;
+}
+
+/* calendar-control §09.39 — a 27px cell is a comfortable mouse target and a poor thumb one. */
+@media (pointer: coarse) {
+  .ds-calendar-day { height: 2.75rem; line-height: 2.75rem; }
+}

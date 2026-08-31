@@ -25,6 +25,34 @@ availability comes from the **assigned interviewer** of the vacancy rather than 
 hiring manager, and the interview duration comes from the **vacancy** rather than from which of
 three links was opened.
 
+## Where it lives
+
+The control is `Calendar`, a component of the Teammerly Original DS at `1_DS for dev/`
+([§30](../../design-system/ledger.md)). It has **no production precedent** — Teamplay books
+nothing — so it is *designed, not measured*, and its paint is taken from the one place blue does
+render a month grid: `DateRangePicker`, which is a faithful recreation of the react-datepicker 4.x
+defaults the product actually ships. Cell metrics, header, navigation chevrons, and the available /
+selected / disabled treatments all come from there.
+
+Two things in this document do **not** follow that grid, and both are deliberate. They are named
+here rather than left to be rediscovered:
+
+- **The week runs Monday to Sunday** (§03.12), where react-datepicker's default — and therefore
+  blue's measurement — runs Sunday to Saturday. Week start is a locale convention, not design
+  language: it is the same class of thing as the month names being English, and blue's own note
+  records `week starts Sunday (Su…Sa)` as *the library default, reproduced rather than
+  redesigned*. Prod never made this choice; it inherited it. This product did make it, wrote it
+  down, and tests it — `monthMatrix` in `@devscribed/validation`, TC-HCAL-UNIT-01.
+- **Leading and trailing cells are blank** (§04.15), where react-datepicker renders the adjacent
+  months' day numbers greyed. The reason is in the requirement: a day number in the grid looks
+  selectable, and every one of these is outside the window.
+
+Both are decisions about what the grid *contains*. Everything about how it is *drawn* is blue's.
+
+Availability, the booking window and the time zone are business rules and stay with whatever
+fetched them — the component is handed the weeks to draw, which dates may be chosen, and the bounds
+it may navigate between.
+
 ## Functional Requirements
 
 ### 01. Structure
@@ -56,8 +84,10 @@ three links was opened.
 ### 03. Weekday Row
 
 11. Seven columns, one per weekday, each a single letter.
-12. The week **always runs Monday to Sunday** — `M T W T F S S`. This never varies by locale.
-13. Labels are static and align with the columns below.
+12. The week **always runs Monday to Sunday** — `M T W T F S S`. This never varies by locale, and
+    it does not follow react-datepicker's Sunday-first default — see [Where it lives](#where-it-lives).
+13. Labels are static and align with the columns below. They take blue's day-name treatment:
+    `--text-primary` at `--font-weight-headline` (450), on the header's own surface above the grid.
 
 ### 04. Date Grid
 
@@ -73,6 +103,16 @@ three links was opened.
 Mutually exclusive, except that **Today** may combine with Available or Unavailable, and with
 Selected.
 
+Blue draws three of these already, and they are adopted as measured: an ordinary cell is
+untinted with `--text-primary`; a **selected** cell is `--color-blue` filled, white, 13px/600; a
+**disabled** cell is `--color-gray-light` filled at `opacity: .5` with `not-allowed`. All three
+take the 3px radius react-datepicker uses for a day, which is smaller than blue's 8px workhorse
+radius because a 1.7rem cell is smaller than a button.
+
+Unavailable, Past and Beyond-the-window therefore share one paint — blue has one treatment for
+"you cannot pick this", and the three differ in *why* rather than in what the candidate may do.
+Their accessible names still distinguish them (§10.42).
+
 17. **Available** — at least one bookable slot exists on this date. Interactive: clickable,
     focusable, selectable.
 18. **Unavailable** — inside the window but with zero bookable slots (fully booked, a non-working
@@ -81,9 +121,14 @@ Selected.
     month, since earlier months are unreachable.
 20. **Beyond the window** — later than the maximum bookable date. Non-selectable, and in practice
     barely reachable because Next disables first.
-21. **Today** — marked so it is distinguishable even when unselected.
+21. **Today** — marked so it is distinguishable even when unselected. It takes a `--color-blue`
+    outline rather than a fill, so it never reads as the selection.
 22. **Selected** — exactly one date at a time across the whole control.
-23. **Hover** and **Focus** are distinct from each other and from Selected.
+23. **Hover** and **Focus** are distinct from each other and from Selected. Hover takes
+    `--color-row-hover`, blue's neutral row tint; focus takes `--shadow-focus-input`, the ring
+    every other blue control uses. react-datepicker leaves its keyboard-selected day transparent,
+    which is survivable only while nothing can focus it — this grid is a keyboard grid (§10.41),
+    so the ring is not optional.
 
 ### 06. Selection
 
@@ -113,9 +158,12 @@ Selected.
 33. The control fetches availability for the visible month plus enough context to render the grid
     correctly, and refetches when navigating to an uncached month.
 34. **Loading** — the grid is non-interactive while a month is in flight, rather than implying that
-    every date is available or that none is.
-35. **Error** — a friendly message with a retry. No date may be selected until availability is
-    known; booking cannot proceed on unknown availability.
+    every date is available or that none is. It dims in place and a `Preloader` sits over it; the
+    grid is not replaced, because a month that collapsed and re-expanded on every navigation would
+    move the slot list under the candidate.
+35. **Error** — a friendly message with a retry, drawn as an `InfoBanner variant="warning"` above a
+    `Button`. No date may be selected until availability is known; booking cannot proceed on
+    unknown availability.
 36. **Empty month** — every cell Unavailable. The candidate may still navigate, within the window
     bounds.
 
@@ -150,8 +198,22 @@ Required `data-testid` attributes:
 - `calendar-grid`, `calendar-day-{isoDate}`
 - `calendar-loading`, `calendar-error`, `calendar-retry`
 
-State is exposed on `calendar-day-{isoDate}` via `aria-disabled`, `aria-selected`, and
-`aria-current="date"` for today.
+Each day cell is a real `<button>`, and an unpickable one carries the **`disabled` attribute**,
+not `aria-disabled` alone. This is the opposite of the call made for a blocked menu row
+([§22](../../design-system/ledger.md)), and for the opposite reason: there, the point was that a
+blocked action stays readable, so it kept its place in the keyboard walk. Here §10.41 requires the
+walk to *skip* unavailable days, and 30 cells of which four are pickable is a grid nobody should
+have to arrow through. Tests select on it directly — `[data-testid^="calendar-day-"]:not([disabled])`.
+
+State is also exposed on `calendar-day-{isoDate}` via `aria-selected` and `aria-current="date"`
+for today.
+
+The month controls are `IconButton label="Previous month"` / `"Next month"`, which carries blue's
+own disabled treatment and hit area. The chevron is drawn as react-datepicker draws it: a 9px box
+with two 3px borders, rotated.
+
+Two screens host this control — the public booking page (02) and the team's reschedule dialog
+(07) — through the shared `SlotPicker`. There is no second date control with different rules.
 
 ## Test Cases
 

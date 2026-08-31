@@ -28,7 +28,22 @@ function geometry(col, i, count) {
  * A linked row is a real anchor, so middle-click and copy-address work.
  */
 export function Table({
-  columns = [], rows = [], rowKey, rowTestId, rowHref, onRowClick, disabledRowIds = [], style, ...rest
+  columns = [], rows = [], rowKey, rowTestId, rowHref, onRowClick, disabledRowIds = [],
+  /* §34 — three forms prod has and blue never exposed.
+
+     `busy` dims the rows and sets `aria-busy` **together**, so a filterable list gets one
+     treatment instead of each screen dimming its own body and forgetting the announcement. The
+     rows stay: a table that collapsed and re-expanded on every keystroke would reflow the page
+     under the reader for no information at all. The header does not dim — it did not change.
+
+     `hideHeader` is for a short grouped list whose columns are self-evident and whose name is
+     already above it. Prod's own tables all carry headers, because prod's own tables are all one
+     list of one thing.
+
+     `footer` is the infinite-scroll load-more row, which prod renders *inside* the table
+     (`.loadNextTableIndicator`, centred) rather than as a control beneath it. */
+  busy, hideHeader, footer,
+  style, ...rest
 }) {
   const cols = columns.map((col) => (typeof col === 'string' ? { label: col } : col));
   /* A string `rowHref` or `rowTestId` applies to every row; a function reads the row. `rowKey`
@@ -41,14 +56,16 @@ export function Table({
     return ri;
   };
   return (
-    <div {...rest} style={{ width: '100%', color: 'var(--text-primary)', fontFamily: 'var(--font-family-base)', ...style }}>
-      <div style={{ display: 'flex', width: '100%', height: 70, padding: '0 16px', backgroundColor: 'var(--surface-sunken)', borderBottom: '1px solid var(--color-gray-lighter)', position: 'sticky', top: 0, zIndex: 1 }}>
-        {cols.map((col, i) => (
-          <div key={i} style={{ ...geometry(col, i, cols.length), fontWeight: 'var(--font-weight-semibold)', fontSize: 16, lineHeight: '24px' }}>
-            {col.label}
-          </div>
-        ))}
-      </div>
+    <div {...rest} aria-busy={busy || undefined} style={{ width: '100%', color: 'var(--text-primary)', fontFamily: 'var(--font-family-base)', ...style }}>
+      {!hideHeader && (
+        <div style={{ display: 'flex', width: '100%', height: 70, padding: '0 16px', backgroundColor: 'var(--surface-sunken)', borderBottom: '1px solid var(--color-gray-lighter)', position: 'sticky', top: 0, zIndex: 1 }}>
+          {cols.map((col, i) => (
+            <div key={i} style={{ ...geometry(col, i, cols.length), fontWeight: 'var(--font-weight-semibold)', fontSize: 16, lineHeight: '24px' }}>
+              {col.label}
+            </div>
+          ))}
+        </div>
+      )}
       {rows.map((row, ri) => {
         const disabled = disabledRowIds.includes(ri);
         const href = disabled ? undefined : value(rowHref, row);
@@ -64,7 +81,11 @@ export function Table({
             style={{
               display: 'flex', width: '100%', height: 70, padding: '0 16px', alignItems: 'center',
               borderBottom: '1px solid var(--color-gray-lighter)', backgroundColor: disabled ? 'var(--surface-disabled)' : '#fff',
-              filter: disabled ? 'grayscale(1)' : 'none', opacity: disabled ? 0.6 : 1,
+              filter: disabled ? 'grayscale(1)' : 'none',
+              /* §34 — a busy row is still a row: dimmed, still readable, still clickable. Only
+                 `disabled` takes the heavier grayscale, because that one is not coming back. */
+              opacity: disabled ? 0.6 : busy ? 0.55 : 1,
+              transition: 'opacity var(--duration-fast) var(--ease-standard)',
               cursor: disabled ? 'default' : clickable ? 'pointer' : 'default',
               color: 'var(--text-primary)', textDecoration: 'none',
               /* .disabledRow also blocks interaction, hover included */
@@ -81,6 +102,14 @@ export function Table({
           </Row>
         );
       })}
+      {footer && (
+        /* Inside the table, not beneath it: prod's infinite-scroll tables put the next-page
+           indicator in the row position the next page will occupy, which is what makes its
+           arrival replace it rather than push it. */
+        <div style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-6)' }}>
+          {footer}
+        </div>
+      )}
     </div>
   );
 }

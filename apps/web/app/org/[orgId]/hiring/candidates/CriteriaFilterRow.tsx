@@ -8,7 +8,8 @@ import {
   type FilterOperator,
   type FilterOperatorOption,
 } from '@devscribed/validation';
-import { Combobox, IconButton, Input, Select } from '@/ds';
+import { CloseIcon, IconButton, Select, TextInput, type SelectOption } from '@/ds';
+import { valueOf } from '@/hiring/select';
 import type { Criterion } from '@/hiring/types';
 
 /**
@@ -77,8 +78,30 @@ export function CriteriaFilterRow({
   onRemove: () => void;
 }) {
   const criterion = criteria.find((entry) => entry.id === row.criterionId) ?? null;
-  const operators = criterion ? operatorsFor(criterion.type) : [];
   const control = criterion ? valueControlFor(criterion.type) : 'none';
+
+  const criterionOptions: SelectOption[] = criteria.map((entry) => ({
+    value: entry.id,
+    /**
+     * The archived marker is part of the label rather than a trailing node: the control
+     * filters on its options' text, so a node here would make an archived criterion
+     * unfindable by typing its name. Archived criteria stay filterable — that is the whole
+     * difference from deleting one (03 §04.19) — and the list already sorts them below the
+     * active ones.
+     */
+    label: entry.isArchived
+      ? `${entry.name} · ${CRITERION_MESSAGES.archivedBadge}`
+      : entry.name,
+    testId: `criteria-filter-criterion-${index}-option-${entry.id}`,
+  }));
+
+  const operatorOptions: SelectOption[] = (criterion ? operatorsFor(criterion.type) : []).map(
+    (option) => ({
+      value: operatorKey(option),
+      label: option.label,
+      testId: `criteria-filter-op-${index}-option-${operatorKey(option)}`,
+    }),
+  );
 
   return (
     <div
@@ -87,42 +110,27 @@ export function CriteriaFilterRow({
       aria-label={`Criteria filter ${index + 1}`}
       data-testid={`criteria-filter-row-${index}`}
     >
-      <Combobox
-        multiple={false}
-        value={row.criterionId ? [row.criterionId] : []}
-        options={criteria.map((entry) => ({
-          value: entry.id,
-          /**
-           * The archived marker is part of the label rather than a trailing `Badge`:
-           * the combobox filters on its options' text, so a node here would make an
-           * archived criterion unfindable by typing its name. Archived criteria stay
-           * filterable — that is the whole difference from deleting one (03 §04.19) —
-           * and the list already sorts them below the active ones.
-           */
-          label: entry.isArchived
-            ? `${entry.name} · ${CRITERION_MESSAGES.archivedBadge}`
-            : entry.name,
-        }))}
+      {/* `Select isSearchable` — blue's own control with the capability prod never switches
+          on (ledger §21), not a second combobox beside it. */}
+      <Select
+        isSearchable
+        value={criterionOptions.find((option) => option.value === row.criterionId)}
+        options={criterionOptions}
         // Changing the criterion resets the operator and the value rather than carrying
         // a meaningless leftover across types (03 §UI Notes).
-        onChange={(value) => onChange({ ...EMPTY_ROW, criterionId: value[0] ?? null })}
+        onChange={(option) => onChange({ ...EMPTY_ROW, criterionId: valueOf(option) || null })}
         placeholder="Criterion…"
         aria-label="Criterion"
         data-testid={`criteria-filter-criterion-${index}`}
-        optionTestId={(value) => `criteria-filter-criterion-${index}-option-${value}`}
         wrapperStyle={{ flex: '2 1 200px', minWidth: 0 }}
       />
 
       <Select
-        value={row.operatorKey}
-        options={operators.map((option) => ({
-          value: operatorKey(option),
-          label: option.label,
-          testId: `criteria-filter-op-${index}-option-${operatorKey(option)}`,
-        }))}
-        onChange={(operator) => onChange({ ...row, operatorKey: operator, value: '' })}
+        value={operatorOptions.find((option) => option.value === row.operatorKey)}
+        options={operatorOptions}
+        onChange={(option) => onChange({ ...row, operatorKey: valueOf(option), value: '' })}
         placeholder="Operator"
-        disabled={!criterion}
+        isDisabled={!criterion}
         aria-label="Operator"
         data-testid={`criteria-filter-op-${index}`}
         wrapperStyle={{ flex: '1 1 130px', minWidth: 0 }}
@@ -145,14 +153,9 @@ export function CriteriaFilterRow({
         onClick={onRemove}
         data-testid={`criteria-filter-remove-${index}`}
       >
-        <svg viewBox="0 0 10 10" width={10} height={10} aria-hidden>
-          <path
-            d="M1 1 L9 9 M9 1 L1 9"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-          />
-        </svg>
+        {/* Blue's own close glyph, the one `Modal` and `InfoBanner` dismiss with, rather
+            than a path drawn here. */}
+        <CloseIcon width="10" height="10" />
       </IconButton>
     </div>
   );
@@ -176,21 +179,23 @@ function ValueControl({
   const style = { flex: '1 1 140px', minWidth: 0 };
 
   if (control === 'scale') {
+    // Worst to best, the order the scale itself is stored in — and the order every
+    // `at least` reads against.
+    const options: SelectOption[] = [...(criterion?.values ?? [])]
+      .sort((left, right) => left.position - right.position)
+      .map((entry) => ({
+        value: entry.id,
+        label: entry.label,
+        testId: `${testId}-option-${entry.id}`,
+      }));
+
     return (
       <Select
-        value={value}
-        // Worst to best, the order the scale itself is stored in — and the order every
-        // `at least` reads against.
-        options={[...(criterion?.values ?? [])]
-          .sort((left, right) => left.position - right.position)
-          .map((entry) => ({
-            value: entry.id,
-            label: entry.label,
-            testId: `${testId}-option-${entry.id}`,
-          }))}
-        onChange={onChange}
+        value={options.find((option) => option.value === value)}
+        options={options}
+        onChange={(option) => onChange(valueOf(option))}
         placeholder="Value"
-        disabled={!criterion}
+        isDisabled={!criterion}
         aria-label="Value"
         data-testid={testId}
         wrapperStyle={style}
@@ -245,7 +250,7 @@ function TypedValue({
   };
 
   return (
-    <Input
+    <TextInput
       type={control === 'number' ? 'number' : 'text'}
       value={draft}
       onChange={(event) => setDraft(event.target.value)}

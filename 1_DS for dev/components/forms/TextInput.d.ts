@@ -1,4 +1,4 @@
-import { InputHTMLAttributes, ReactNode, Ref } from 'react';
+import { CSSProperties, InputHTMLAttributes, ReactNode, Ref } from 'react';
 
 export interface TextInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'type'> {
   label?: string;
@@ -14,6 +14,9 @@ export interface TextInputProps extends Omit<InputHTMLAttributes<HTMLInputElemen
   hintId?: string;
   /** §5 — control drawn inside the field's right edge, e.g. a password reveal toggle. */
   trailing?: ReactNode;
+  /** §35 — style for the field's box; `...rest` and `style` address the `<input>`. The same
+   *  slot `Select` (§21) and `SearchInput` (§26) carry, for the same reason. */
+  wrapperStyle?: CSSProperties;
   type?: string;
   /** §3 — every other attribute reaches the `<input>`; `style` merges over the painted one, and
    *  `id` also wires the label's `htmlFor`. Falls back to a generated id. */

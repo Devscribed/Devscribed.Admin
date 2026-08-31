@@ -27,7 +27,13 @@ export const TextInput = React.forwardRef(function TextInput({
   /* §3 — blue forwards nothing, so `data-testid`, `readOnly`, `autoFocus`, `onBlur`, `name`,
      `required` and every `aria-*` vanished before reaching the DOM. `id` is new here too: blue's
      <label> has no `htmlFor`, which is an accessibility gap rather than a measured choice. */
-  id, style, onFocus, onBlur, ...rest
+  id, style, onFocus, onBlur,
+  /* §35 — style for the field's own box, which `...rest` and `style` cannot reach because they
+     address the `<input>`. `Select` (§21) and `SearchInput` (§26) both grew this for the same
+     reason and in the same words: a caller placing this field in a row is sizing that box, not
+     the input inside it. The three are siblings and disagreed only because they were measured
+     separately. */
+  wrapperStyle, ...rest
 }, ref) {
   const [focused, setFocused] = React.useState(false);
   const generatedId = React.useId();
@@ -61,7 +67,7 @@ export const TextInput = React.forwardRef(function TextInput({
       ? <div style={{ ...messageSlot, color: 'var(--text-secondary)' }}><span id={hintId}>{hint}</span></div>
       : null;
   return (
-    <div>
+    <div style={wrapperStyle}>
       {label && (
         <label htmlFor={inputId} style={{ display: 'inline-block', fontWeight: 'var(--font-weight-regular)', fontSize: 'var(--font-size-xs)', lineHeight: '21px', color: 'var(--text-secondary)', marginBottom: 4, padding: '10px 0 0 10px' }}>
           {label}

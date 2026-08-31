@@ -28,6 +28,10 @@ export interface SelectProps extends Omit<HTMLAttributes<HTMLElement>, 'onChange
   isDisabled?: boolean;
   /** Renders the selection as removable `Chip`s (white, 7px blue left border, 8px radius). */
   isMulti?: boolean;
+  /** §36 — react-select's own prop and default: the menu closes when an option is chosen, for
+   *  `isMulti` as much as for single. Blue kept a multi-select's menu open, which react-select
+   *  does only when this is explicitly `false`. Pass `false` for that behaviour. */
+  closeMenuOnSelect?: boolean;
   /** Red border + red glow (`.errorInput` treatment). */
   error?: boolean;
   /** Message under the control: 10px / -20px in `dropdown`, 8px / -16px in `formik`. */

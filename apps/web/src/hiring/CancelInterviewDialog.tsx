@@ -7,7 +7,7 @@ import {
   teamCancelConfirmMessage,
   validateCancelReason,
 } from '@devscribed/validation';
-import { Button, InfoBanner, Modal, Textarea } from '@/ds';
+import { Button, FormActions, InfoBanner, Modal, TextArea } from '@/ds';
 import type { CardApplication } from '@/hiring/types';
 
 /**
@@ -103,32 +103,12 @@ export function CancelInterviewDialog({
       onClose={onClose}
       initialFocusRef={dismiss}
       data-testid={`application-cancel-dialog-${applicationId}`}
-      actions={
-        <>
-          <Button
-            ref={dismiss}
-            variant="ghost"
-            onClick={onClose}
-            data-testid={`application-cancel-dismiss-${applicationId}`}
-          >
-            {HIRING_MESSAGES.manage.cancelDialogDismiss}
-          </Button>
-          <Button
-            variant="danger"
-            loading={cancelling}
-            disabled={Boolean(reasonError)}
-            onClick={() => void confirm()}
-            data-testid={`application-cancel-confirm-${applicationId}`}
-          >
-            {HIRING_MESSAGES.manage.cancelAction}
-          </Button>
-        </>
-      }
+      style={{ width: 520 }}
     >
-      <div style={{ display: 'grid', gap: 'var(--sp-8)' }}>
+      <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
         {banner && (
           <InfoBanner
-            tone="error"
+            variant="error"
             role="alert"
             data-testid={`application-cancel-error-${applicationId}`}
           >
@@ -136,26 +116,49 @@ export function CancelInterviewDialog({
           </InfoBanner>
         )}
 
-        <p style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}>
+        <p style={{ margin: 0, fontSize: 'var(--font-size-s)', color: 'var(--text-tertiary)' }}>
           {teamCancelConfirmMessage(candidateName, new Date(startUtc), timeZone)}
         </p>
 
-        <Textarea
+        <TextArea
           label={HIRING_MESSAGES.manage.reasonLabel}
           rows={3}
           value={reason}
           onChange={(event) => setReason(event.target.value)}
           error={reasonError}
+          errorId={`application-cancel-reason-error-${applicationId}`}
+          aria-invalid={reasonError ? true : undefined}
           placeholder={HIRING_MESSAGES.manage.reasonPlaceholder}
           data-testid={`application-cancel-reason-${applicationId}`}
           // The count is the answer to "how much is left", which a member writing to a
-          // limit needs before they hit it rather than after.
-          trailing={
-            <span style={{ fontSize: 'var(--fs-12)', color: 'var(--text-faint)' }}>
-              {reason.trim().length}/{MANAGE_LIMITS.reasonMax}
-            </span>
-          }
+          // limit needs before they hit it rather than after. It sits in the label row
+          // (ledger §33) rather than under the field: the field's own message slot is
+          // where the error goes, and a count that shared it would flicker away every
+          // time the reason went over.
+          // Readable rather than `aria-hidden`: it is not in a live region, so it is never
+          // announced on a keystroke, and hiding it would leave the one person who cannot
+          // see the field filling up with no way to find out how much room is left.
+          trailing={`${reason.trim().length}/${MANAGE_LIMITS.reasonMax}`}
         />
+
+        <FormActions align="full">
+          <Button
+            ref={dismiss}
+            onClick={onClose}
+            data-testid={`application-cancel-dismiss-${applicationId}`}
+          >
+            {HIRING_MESSAGES.manage.cancelDialogDismiss}
+          </Button>
+          <Button
+            variant="delete"
+            preloader={cancelling}
+            disabled={Boolean(reasonError)}
+            onClick={() => void confirm()}
+            data-testid={`application-cancel-confirm-${applicationId}`}
+          >
+            {HIRING_MESSAGES.manage.cancelAction}
+          </Button>
+        </FormActions>
       </div>
     </Modal>
   );

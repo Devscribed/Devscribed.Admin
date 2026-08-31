@@ -9,7 +9,7 @@ import {
   isoDateInZone,
   retainSelection,
 } from '@devscribed/validation';
-import { Button, InfoBanner, Modal } from '@/ds';
+import { Button, FormActions, InfoBanner, Modal } from '@/ds';
 import { SlotPicker, readTimeFormat, writeTimeFormat } from '@/hiring/SlotPicker';
 import { useAvailability } from '@/hiring/useAvailability';
 import type { CardApplication } from '@/hiring/types';
@@ -136,42 +136,17 @@ export function RescheduleDialog({
       open={open}
       title={`Reschedule ${candidateName}'s interview`}
       onClose={onClose}
-      width={720}
       data-testid={`application-reschedule-dialog-${applicationId}`}
-      actions={
-        <>
-          <Button
-            variant="ghost"
-            onClick={onClose}
-            data-testid={`application-reschedule-dismiss-${applicationId}`}
-          >
-            {HIRING_MESSAGES.manage.rescheduleDismiss}
-          </Button>
-          {/* Disabled until a slot is chosen: choosing the time *is* the confirmation,
-              and there is no second dialog behind it (07 §05.26). */}
-          <Button
-            variant="primary"
-            loading={moving}
-            disabled={!selectedSlot}
-            aria-busy={moving || undefined}
-            onClick={() => void move()}
-            data-testid={`application-reschedule-submit-${applicationId}`}
-          >
-            {moving
-              ? HIRING_MESSAGES.manage.rescheduleSubmitting
-              : HIRING_MESSAGES.manage.rescheduleSubmit}
-          </Button>
-        </>
-      }
+      style={{ width: 720 }}
     >
-      <div style={{ display: 'grid', gap: 'var(--sp-8)' }}>
+      <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
         <div aria-live="polite" style={SR_ONLY}>
           {announcement}
         </div>
 
         {banner && (
           <InfoBanner
-            tone="error"
+            variant="error"
             role="alert"
             data-testid={`application-reschedule-error-${applicationId}`}
           >
@@ -182,7 +157,7 @@ export function RescheduleDialog({
         {/* Stated, never rendered as a selected date or slot. */}
         <p
           data-testid={`application-current-time-${applicationId}`}
-          style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}
+          style={{ margin: 0, fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}
         >
           {currentTimeMessage(new Date(currentStartUtc), timeZone)}
         </p>
@@ -212,6 +187,35 @@ export function RescheduleDialog({
             timeFormatToggle: `application-timeformat-toggle-${applicationId}`,
           }}
         />
+
+        {/*
+          `FormActions`, not `Modal`'s own actions slot — blue's Modal has none, and this is
+          the row prod closes a form with. Not `ConfirmDialog` either: it fires `onClose` in
+          the same breath as `onAccept`, so a confirmation whose action is a request with a
+          busy state cannot use it (03 design §The two dialogs).
+        */}
+        <FormActions align="full">
+          <Button
+            onClick={onClose}
+            data-testid={`application-reschedule-dismiss-${applicationId}`}
+          >
+            {HIRING_MESSAGES.manage.rescheduleDismiss}
+          </Button>
+          {/* Disabled until a slot is chosen: choosing the time *is* the confirmation,
+              and there is no second dialog behind it (07 §05.26). */}
+          <Button
+            variant="primary"
+            preloader={moving}
+            disabled={!selectedSlot}
+            aria-busy={moving || undefined}
+            onClick={() => void move()}
+            data-testid={`application-reschedule-submit-${applicationId}`}
+          >
+            {moving
+              ? HIRING_MESSAGES.manage.rescheduleSubmitting
+              : HIRING_MESSAGES.manage.rescheduleSubmit}
+          </Button>
+        </FormActions>
       </div>
     </Modal>
   );

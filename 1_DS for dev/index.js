@@ -19,6 +19,7 @@ export { IconButton } from './components/core/IconButton.jsx';
 export { PageTitle } from './components/core/PageTitle.jsx';
 export { ToggleButton } from './components/core/ToggleButton.jsx';
 
+export { Calendar } from './components/data/Calendar.jsx';
 export { CircleList } from './components/data/CircleList.jsx';
 export { CircleSelect } from './components/data/CircleSelect.jsx';
 export { MembersCell } from './components/data/MembersCell.jsx';

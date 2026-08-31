@@ -20,17 +20,41 @@ export const TextArea = React.forwardRef(function TextArea({
   /* §25 — blue forwards nothing, so `data-testid`, `name`, `required`, `readOnly` and every
      `aria-*` vanished before the DOM, and the `<label>` was associated with nothing. Both are
      `TextInput`'s §3 and §4, which this field is the twin of; it gets the same shape. */
-  id, style, onFocus, onBlur, ...rest
+  id, style, onFocus, onBlur,
+  /* §33 — a node at the trailing end of the **label row**: a character count, an autosave
+     indicator. It goes there rather than inside the field, which is `TextInput`'s answer (§5),
+     because a multi-line field has no unambiguous right edge to pin anything to — the text
+     reaches it on some lines and not others, and the scrollbar takes it when there is one.
+     The label row is the one place above the field whose height does not depend on the value,
+     which is what lets an indicator appear, change and leave without moving the field below it. */
+  trailing,
+  ...rest
 }, ref) {
   const [focused, setFocused] = React.useState(false);
   const generatedId = React.useId();
   const fieldId = id || generatedId;
+  /* prod renders a plain <label> (display: inline), so its margin-bottom: 7px has no layout
+     effect — the block-level textarea simply starts on the next line. In the row below it would
+     have one, so it is zeroed there: the field sits at the same y with a trailing node and
+     without one, which is the whole reason the slot is in this row. */
+  const labelNode = label ? (
+    <label
+      htmlFor={fieldId}
+      style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', marginBottom: trailing ? 0 : 7, padding: '10px 0 0 10px' }}
+    >
+      {label}
+    </label>
+  ) : null;
+
   return (
     <div style={{ position: 'relative' }}>
-      {/* prod renders a plain <label> (display: inline), so its margin-bottom: 7px has no
-          layout effect — the block-level textarea simply starts on the next line. */}
-      {label && (
-        <label htmlFor={fieldId} style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', marginBottom: 7, padding: '10px 0 0 10px' }}>{label}</label>
+      {trailing ? (
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--space-5)' }}>
+          {labelNode || <span />}
+          <span style={{ flexShrink: 0, fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>{trailing}</span>
+        </div>
+      ) : (
+        labelNode
       )}
       <textarea
         {...rest}

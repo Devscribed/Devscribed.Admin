@@ -8,8 +8,9 @@ import {
   monthMatrix,
   parseYearMonth,
 } from '@devscribed/validation';
-import { Button, Calendar, Card, InfoBanner, Select, Spinner, Toggle } from '@/ds';
+import { Button, Calendar, Card, InfoBanner, Preloader, Select, ToggleButton } from '@/ds';
 import { timeZoneOptions } from '@/hiring/format';
+import { valueOf } from '@/hiring/select';
 import type { UseAvailability } from '@/hiring/useAvailability';
 
 /**
@@ -18,7 +19,7 @@ import type { UseAvailability } from '@/hiring/useAvailability';
  *
  * It is lifted out rather than reimplemented because 07's design spec says so in as many
  * words — *the same `Calendar`, the same slot `Button`s, the same zone `Select` and
- * format `Toggle`* — and because a second picker with its own rules is precisely how a
+ * format `ToggleButton`* — and because a second picker with its own rules is precisely how a
  * page ends up offering a start time the server would reject.
  *
  * Everything about *why* a slot is being chosen stays with the caller: the submit
@@ -100,9 +101,9 @@ export function SlotPicker({
             // grid to dim yet — only a wait.
             <div
               data-testid="calendar-loading"
-              style={{ display: 'flex', justifyContent: 'center', color: 'var(--accent)' }}
+              style={{ display: 'flex', justifyContent: 'center' }}
             >
-              <Spinner size={24} />
+              <Preloader aria-hidden />
             </div>
           ) : (
             <Calendar
@@ -140,18 +141,33 @@ export function SlotPicker({
       <div className="booking-controls">
         <div className="booking-zone">
           <Select
+            isSearchable
             options={timeZoneOptions(timeZone)}
             value={timeZone}
-            onChange={onTimeZoneChange}
+            onChange={(option) => onTimeZoneChange(valueOf(option))}
+            aria-label="Time zone"
             data-testid={testIds.timeZoneSelect}
           />
         </div>
         <div className="booking-format">
-          <Toggle
-            options={['24h', '12h']}
-            value={hour12 ? '12h' : '24h'}
-            onChange={(choice) => onFormatChange(choice === '12h')}
+          {/*
+            One control with two answers, not two buttons: `ToggleButton` is a `radiogroup`
+            of two `radio` segments (ledger §31). Both values stay legible, which is what a
+            format control needs — a switch labelled only by its current state cannot say what
+            pressing it would do.
+
+            The root's `margin-bottom: 20px` is prod's, and it belongs to a stacked form rather
+            than to a control sharing a row with a zone picker.
+          */}
+          <ToggleButton
+            value1="24h"
+            value2="12h"
+            selectedValue={hour12 ? '12h' : '24h'}
+            onValue1Click={() => onFormatChange(false)}
+            onValue2Click={() => onFormatChange(true)}
+            aria-label="Time format"
             data-testid={testIds.timeFormatToggle}
+            style={{ marginBottom: 0 }}
           />
         </div>
       </div>
@@ -213,16 +229,16 @@ export function SlotList({
 
   return (
     <div data-testid="slot-list">
-      <div data-testid="slot-list-header" style={{ marginBottom: 'var(--sp-6)' }}>
+      <div data-testid="slot-list-header" style={{ marginBottom: 'var(--space-5)' }}>
         <div
           data-testid="slot-list-date"
-          style={{ fontSize: 'var(--fs-14)', color: 'var(--text)' }}
+          style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-primary)' }}
         >
           {date ? formatLongDate(date) : ' '}
         </div>
         <div
           data-testid="slot-list-timezone"
-          style={{ fontSize: 'var(--fs-12)', color: 'var(--text-muted)' }}
+          style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}
         >
           All times in {timeZone}
         </div>
@@ -231,14 +247,16 @@ export function SlotList({
       {status === 'loading' ? (
         <div
           data-testid="slot-list-loading"
-          style={{ display: 'flex', justifyContent: 'center', color: 'var(--accent)' }}
+          style={{ display: 'flex', justifyContent: 'center' }}
         >
-          <Spinner size={24} />
+          {/* The list is replaced rather than dimmed: it has no stable shape to hold, and a
+              date change replaces every entry in it anyway (time-slot-picker §07.28). */}
+          <Preloader aria-hidden />
         </div>
       ) : slots.length === 0 ? (
         <p
           data-testid="slot-list-empty"
-          style={{ margin: 0, color: 'var(--text-muted)', fontSize: 'var(--fs-14)' }}
+          style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 'var(--font-size-s)' }}
         >
           {date
             ? 'No times available on this date — please pick another.'
@@ -258,8 +276,6 @@ export function SlotList({
             return (
               <Button
                 key={slot}
-                variant="secondary"
-                size="sm"
                 data-slot={slot}
                 data-testid={`slot-option-${slot}`}
                 aria-pressed={chosen}
@@ -267,16 +283,12 @@ export function SlotList({
                 // is expressed in — a bare "14:00" means nothing on its own.
                 aria-label={`${label}, ${timeZone}`}
                 onClick={() => onSelect(slot)}
-                style={
-                  chosen
-                    ? {
-                        background: 'var(--accent-soft)',
-                        color: 'var(--accent)',
-                        borderColor: 'var(--accent-border)',
-                        fontVariantNumeric: 'tabular-nums',
-                      }
-                    : { fontVariantNumeric: 'tabular-nums' }
-                }
+                // Chosen is blue's own primary fill, the same solid `--color-blue` the
+                // Calendar paints its selected day with — one answer to "this is the one you
+                // picked" across both halves of the picker, rather than a style object here
+                // and a component treatment there.
+                variant={chosen ? 'primary' : undefined}
+                style={{ fontVariantNumeric: 'tabular-nums' }}
               >
                 {label}
               </Button>
@@ -300,14 +312,8 @@ export function Failure({
 }) {
   return (
     <div data-testid={testId}>
-      <InfoBanner tone="warning">{HIRING_MESSAGES.booking.availabilityFailed}</InfoBanner>
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={onRetry}
-        data-testid={retryTestId}
-        style={{ marginTop: 'var(--sp-6)' }}
-      >
+      <InfoBanner variant="warning">{HIRING_MESSAGES.booking.availabilityFailed}</InfoBanner>
+      <Button onClick={onRetry} data-testid={retryTestId} style={{ marginTop: 'var(--space-5)' }}>
         Try again
       </Button>
     </div>

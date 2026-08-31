@@ -10,7 +10,7 @@ import {
   interviewMovedToast,
   isLiveBooking,
 } from '@devscribed/validation';
-import { Button, Card, InfoBanner, SectionLabel, Skeleton, Table, Toast } from '@/ds';
+import { Button, Card, InfoBanner, Preloader, Table } from '@/ds';
 import { PageHeader } from '@/layout/PageHeader';
 import { CancelInterviewDialog } from '@/hiring/CancelInterviewDialog';
 import { RescheduleDialog } from '@/hiring/RescheduleDialog';
@@ -42,7 +42,7 @@ type Acting = { row: MyInterviewRow; action: 'reschedule' | 'cancel' } | null;
  * It also carries **Reschedule and Cancel as row affordances** (07 §08.40), because for
  * a `user` who interviews this screen is the whole of hiring and it is the one they
  * actually live on. Both act in place: the server answers with the updated application,
- * the row is replaced, and a toast reports it — no reload, and no navigation away from a
+ * the row is replaced, and a banner reports it — no reload, and no navigation away from a
  * list somebody is working down.
  */
 export default function MyInterviewsPage({ params }: { params: Promise<{ orgId: string }> }) {
@@ -51,7 +51,7 @@ export default function MyInterviewsPage({ params }: { params: Promise<{ orgId: 
   const [state, setState] = useState<State>({ status: 'loading' });
   const [acting, setActing] = useState<Acting>(null);
   /** The outcome, and the id 07's design names for it. */
-  const [toast, setToast] = useState<{ message: string; testId: string } | null>(null);
+  const [notice, setNotice] = useState<{ message: string; testId: string } | null>(null);
 
   const load = useCallback(async (): Promise<void> => {
     setState({ status: 'loading' });
@@ -121,14 +121,9 @@ export default function MyInterviewsPage({ params }: { params: Promise<{ orgId: 
     return (
       <>
         <PageHeader title={INTERVIEW_MESSAGES.title} />
-        <InfoBanner tone="error" data-testid="my-interviews-error">
+        <InfoBanner variant="error" data-testid="my-interviews-error">
           {MESSAGES.generic}{' '}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => void load()}
-            data-testid="my-interviews-retry"
-          >
+          <Button onClick={() => void load()} data-testid="my-interviews-retry">
             Try again
           </Button>
         </InfoBanner>
@@ -141,7 +136,13 @@ export default function MyInterviewsPage({ params }: { params: Promise<{ orgId: 
       <>
         <PageHeader title={INTERVIEW_MESSAGES.title} />
         <Card>
-          <Skeleton rows={4} height={22} data-testid="my-interviews-loading-skeleton" />
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-7)' }}>
+            {/* The dots carry no text, so the announcement is made beside them. */}
+            <Preloader data-testid="my-interviews-loading" aria-hidden />
+            <span aria-live="polite" style={SR_ONLY}>
+              Loading interviews
+            </span>
+          </div>
         </Card>
       </>
     );
@@ -164,25 +165,38 @@ export default function MyInterviewsPage({ params }: { params: Promise<{ orgId: 
     rows: MyInterviewRow[],
     { dim, testId, empty }: { dim: boolean; testId: string; empty?: string },
   ) => (
-    <section style={{ marginBottom: 'var(--sp-8)' }} aria-label={label}>
-      <SectionLabel style={{ marginBottom: 'var(--sp-4)' }}>{label}</SectionLabel>
+    /*
+      The group's name is the `Card`'s own title, not a caption floating above it.
+
+      This is what keeps `hideHeader`'s argument intact once `SectionLabel` is gone
+      (reversal 5): the prop exists because the group is "already named by the label above
+      it", and a card title names the table *inside its own surface* rather than by
+      proximity. `titleAs="h2"` (ledger §27) puts it in the outline under `PageTitle`'s
+      `<h1>`, which is also why there is no `aria-label` on a region here any more — a real
+      heading and a same-named region announce the group twice.
+    */
+    <Card
+      title={label}
+      titleAs="h2"
+      padded={rows.length === 0}
+      style={{ marginBottom: 'var(--space-6)' }}
+    >
       {rows.length === 0 ? (
-        <Card>
-          <p
-            data-testid="my-interviews-empty"
-            style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}
-          >
-            {empty}
-          </p>
-        </Card>
+        <p
+          data-testid="my-interviews-empty"
+          style={{ margin: 0, fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}
+        >
+          {empty}
+        </p>
       ) : (
         <div data-testid={testId}>
           <Table<MyInterviewRow>
             rows={rows}
+            style={{ marginTop: 'var(--space-5)' }}
             /*
-              The grouping label above already names the list, and three rows under an
-              uppercase rule read as a report rather than as what this is — a glance at
-              today (03 design §My interviews).
+              The columns are self-evident and the card title already names the list; a
+              header row over three rows reads as a report rather than as what this is —
+              a glance at today (03 design §My interviews).
             */
             hideHeader
             rowHref={open}
@@ -202,7 +216,7 @@ export default function MyInterviewsPage({ params }: { params: Promise<{ orgId: 
                 label: 'Vacancy',
                 flex: 2,
                 render: (row) => (
-                  <span style={{ color: 'var(--text-sub)' }}>{row.vacancyTitle}</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>{row.vacancyTitle}</span>
                 ),
               },
               {
@@ -211,7 +225,9 @@ export default function MyInterviewsPage({ params }: { params: Promise<{ orgId: 
                 render: (row) => (
                   // Past dates recede: the group heading says which they are, and the
                   // colour lets the eye skip them on the way to what is next.
-                  <span style={{ color: dim ? 'var(--text-faint)' : 'var(--text)' }}>
+                  // Past dates recede to `--text-secondary`: blue has three text levels where
+                  // Meridian had four, and a shown-but-receded thing is this one (reversal 7).
+                  <span style={{ color: dim ? 'var(--text-secondary)' : 'var(--text-primary)' }}>
                     {formatShortWhen(new Date(row.startUtc), viewerTimeZone)}
                   </span>
                 ),
@@ -226,6 +242,9 @@ export default function MyInterviewsPage({ params }: { params: Promise<{ orgId: 
                 label: 'Actions',
                 flex: 2,
                 align: 'flex-end',
+                // Blue caps the last column at 80px, which is the width of prod's
+                // icon-only actions cell (§18). Two labelled buttons are not that.
+                maxWidth: 240,
                 render: (row) => (
                   <RowActions row={row} onAct={(action) => setActing({ row, action })} />
                 ),
@@ -234,7 +253,7 @@ export default function MyInterviewsPage({ params }: { params: Promise<{ orgId: 
           />
         </div>
       )}
-    </section>
+    </Card>
   );
 
   return (
@@ -245,6 +264,26 @@ export default function MyInterviewsPage({ params }: { params: Promise<{ orgId: 
           <span data-testid="my-interviews-timezone">Times in {viewerTimeZone}</span>
         }
       />
+
+      {/*
+        Blue has no toast, so the outcome is a persistent banner in the slot Phase 3 fixed:
+        directly under `PageHeader`, above the body, where it pushes content down rather than
+        covering it (reversal 4). It leaves by being dismissed or replaced — never by timing
+        out, because a banner that removes itself after a few seconds is a toast wearing a
+        different component. The test ids are kept: they name the announcement, not the
+        component that draws it.
+      */}
+      {notice && (
+        <InfoBanner
+          variant="success"
+          role="status"
+          onDismiss={() => setNotice(null)}
+          data-testid={notice.testId}
+          style={{ marginBottom: 'var(--space-6)' }}
+        >
+          {notice.message}
+        </InfoBanner>
+      )}
 
       {/*
         The upcoming group renders even when it is empty, so a quiet day does not look
@@ -280,7 +319,7 @@ export default function MyInterviewsPage({ params }: { params: Promise<{ orgId: 
           onMoved={(updated) => {
             setActing(null);
             replaceRow(updated);
-            setToast({
+            setNotice({
               message: interviewMovedToast(new Date(updated.startUtc), viewerTimeZone),
               testId: 'toast-interview-rescheduled',
             });
@@ -301,7 +340,7 @@ export default function MyInterviewsPage({ params }: { params: Promise<{ orgId: 
           onCancelled={(updated) => {
             setActing(null);
             replaceRow(updated);
-            setToast({
+            setNotice({
               message: HIRING_MESSAGES.toast.interviewCancelled,
               testId: 'toast-interview-cancelled',
             });
@@ -309,11 +348,6 @@ export default function MyInterviewsPage({ params }: { params: Promise<{ orgId: 
         />
       )}
 
-      {toast && (
-        <Toast tone="success" onDismiss={() => setToast(null)} data-testid={toast.testId}>
-          {toast.message}
-        </Toast>
-      )}
     </div>
   );
 }
@@ -322,8 +356,10 @@ export default function MyInterviewsPage({ params }: { params: Promise<{ orgId: 
  * The row's trailing cell: Reschedule and Cancel, revealed on hover and on keyboard
  * focus, and always present for the row's own focus order.
  *
- * Both are `ghost` on both counts — a `danger` fill repeated down a table of interviews
- * turns a calm list into an alarm (07 design). They are **absent** once `start` has
+ * Both take blue's **default** button — the neutral outlined one — rather than its `delete`
+ * variant, for the reason 07's design gave when they were both `ghost`: a destructive fill
+ * repeated down a table of interviews turns a calm list into an alarm. Blue has no ghost, and
+ * the neutral outline is the quietest thing it does have. They are **absent** once `start` has
  * passed or the interview has been called off, not disabled: a disabled control with no
  * explanation is worse than one that is simply not there, and the API refuses a past
  * interview anyway.
@@ -352,8 +388,6 @@ function RowActions({
   return (
     <div className="my-interview-actions">
       <Button
-        variant="ghost"
-        size="sm"
         onClick={act('reschedule')}
         aria-label={`Reschedule ${row.candidateName}'s interview`}
         data-testid={`my-interview-reschedule-${row.applicationId}`}
@@ -361,8 +395,6 @@ function RowActions({
         {HIRING_MESSAGES.manage.rescheduleAction}
       </Button>
       <Button
-        variant="ghost"
-        size="sm"
         onClick={act('cancel')}
         aria-label={`Cancel ${row.candidateName}'s interview`}
         data-testid={`my-interview-cancel-${row.applicationId}`}
@@ -372,3 +404,13 @@ function RowActions({
     </div>
   );
 }
+
+/** The loader's dots say nothing; this is what says it beside them. */
+const SR_ONLY = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  whiteSpace: 'nowrap',
+} as const;

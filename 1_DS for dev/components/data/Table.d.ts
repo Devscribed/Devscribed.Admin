@@ -27,6 +27,14 @@ export interface TableProps<Row = any> extends Omit<HTMLAttributes<HTMLDivElemen
   onRowClick?: (row: Row, event: MouseEvent) => void;
   /** Row indices to render grayscale/disabled (matches the source's inactive-member styling). */
   disabledRowIds?: number[];
+  /** §34 — dims the rows and sets `aria-busy` together, for a list being refiltered in place.
+   *  The rows stay and stay clickable; only the header is left alone, because it did not change. */
+  busy?: boolean;
+  /** §34 — drops the header row, for a short grouped list already named by the surface it sits in. */
+  hideHeader?: boolean;
+  /** §34 — a node in the row position after the last row, centred. The infinite-scroll load-more
+   *  indicator, which prod renders inside the table rather than as a control beneath it. */
+  footer?: ReactNode;
 }
 
 export function Table<Row = any>(props: TableProps<Row>): JSX.Element;
