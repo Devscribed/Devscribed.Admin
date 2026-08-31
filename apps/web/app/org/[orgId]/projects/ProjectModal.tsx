@@ -110,15 +110,21 @@ export function ProjectModal({
     }
     setNameError(null);
 
-    // Key is optional at creation — validate only when non-empty (spec 13 FR-1/FR-2).
+    // Key is optional at creation (spec 13 FR-1/FR-2). The user's intent is signaled
+    // by `keyTouched`: an untouched key is just an auto-suggestion the user never
+    // confirmed, so a rejection there must not block submit — silently omit it and
+    // let the project be created keyless (which the user can fix later on the detail
+    // page). Only when `keyTouched` do we treat the value as a submission and surface
+    // errors inline.
     let keyValue: string | null = null;
     if (!isEdit && projectKey.trim().length > 0) {
       const keyResult = validateProjectKey(projectKey);
-      if (!keyResult.valid) {
+      if (keyResult.valid) {
+        keyValue = keyResult.value;
+      } else if (keyTouched) {
         setKeyError(keyResult.error);
         return;
       }
-      keyValue = keyResult.value;
     }
     setKeyError(null);
     setSubmitting(true);
