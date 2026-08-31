@@ -42,9 +42,7 @@ E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/<file>.spec.t
 E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/<file>.spec.ts -g "TC-09-E2E-01"
 ```
 
-3000 and 4000 belong to whoever is working. A busy port is never a reason to report a case
-unrun, and reusing a running dev server is not the alternative: it is configured for
-development and its signing provider is the real one.
+A busy port is never a reason to report a case unrun.
 
 Filter Jest with a positional path. Never `--testPathPatterns` — this version ignores it in
 silence and runs everything while your log says you filtered.

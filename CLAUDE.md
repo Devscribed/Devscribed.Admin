@@ -80,15 +80,9 @@ path: `--testPathPatterns` is the Jest 30 spelling and this version ignores it s
 running everything while the log says otherwise.
 
 **An agent's e2e run holds its own ports**, as above — 3000 and 4000 belong to whoever is
-working. A busy port is never a reason to report a case unrun, and reusing a running dev
-server is not the alternative: it is configured for development and its signing provider is
-the real one. The database follows the ports and is never `devscribed_dev`.
-
-**To look at a screen yourself**, start a pair on those ports and drive a browser at it —
-`PORT=4100 … npm run dev --workspace @devscribed/api` with `SIGNWELL_DRIVER=stub`,
-`MAIL_TRANSPORT=memory`, `JOB_QUEUE=inline` and the e2e `DATABASE_URL`, then
-`PORT=3100 API_ORIGIN=http://localhost:4100 npm run dev --workspace @devscribed/web`. Stop
-them when you are done.
+working, and the database follows the ports and is never `devscribed_dev`. Reusing a running
+dev server is not the alternative: it is configured for development and its signing provider
+is the real one. To look at a screen, start a pair on those ports rather than borrowing one.
 
 **Navigation.** No dead links. A nav item that the current role cannot use is not rendered.
 
