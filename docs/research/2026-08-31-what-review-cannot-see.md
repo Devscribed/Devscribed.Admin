@@ -1,8 +1,8 @@
-# What review cannot see, and twenty passes proving it
+# What review cannot see, and twenty-three passes proving it
 
-**2026-08-31.** Twenty-three automated review passes over one change found six defects. Forty
-minutes of clicking through the same change against the real provider found two more, and one
-of them means the feature has never worked.
+**2026-08-31.** Twenty-three automated review passes over one change found six defects. An
+afternoon of using the same change against the real provider found **five more**, every one of
+them a blocker but one, and each of four on its own made the feature inoperable.
 
 ## Ground truth
 
@@ -14,7 +14,7 @@ The change is `specs/documents/04-signature-providers`, 75 files and 11,448 line
   [2026-08-30-review-sharding.md](2026-08-30-review-sharding.md).
 
 Everything below comes from those artefacts, from the API log of a manual session, and from
-`specs/bugs/BUG-001` and `BUG-002`, which record the two manual findings in full.
+`specs/bugs/BUG-001` through `BUG-004`, which record the four manual findings in full.
 
 ## Why the six defects happened
 
@@ -119,13 +119,68 @@ built from a spec cannot falsify that spec — it can only confirm it.
 `EMAIL_PATTERN`; nothing about it looks wrong until something downstream rejects what it
 admits.
 
+## All five, and the shape they share
+
+This record was written after the first two. Three more followed the same way — a person using
+the product — and none by anything automated. All five together, because the shape only became
+clear once they could be read side by side.
+
+| | what it was | what found it |
+|---|---|---|
+| [BUG-001](../../specs/bugs/BUG-001-signwell-text-tags-materialize-no-fields.md) | Text tags materialize no fields; every document stuck in `Draft` | A send that never completed |
+| [BUG-002](../../specs/bugs/BUG-002-email-validation-looser-than-the-provider.md) | An address we accept the provider refuses, reported as an outage | A signer with a Cyrillic address |
+| [BUG-003](../../specs/bugs/BUG-003-embedded-signing-url-refuses-framing.md) | The signing URL refuses framing until asked with an undocumented parameter | An empty grey rectangle |
+| [BUG-004](../../specs/bugs/BUG-004-field-geometry-sent-in-points-not-provider-pixels.md) | Coordinates sent in points, placed in pixels; every signature a row too high | Looking at a signed page |
+| [BUG-005](../../specs/bugs/BUG-005-recipient-completed-not-signed.md) | A signed recipient reads `completed`, not `signed`; the turn never closed and no second signer could ever be let in | Opening the second signer's link |
+
+**All five are agreements with a third party, and the diff does not contain the third party.**
+That was the lesson from the first two and it has held for three more without amendment.
+
+BUG-004 sharpens it. The provider accepted our coordinates, stored them, echoed them back
+unchanged, materialized the fields and sent the document. `GET /documents/{id}` returns
+`"y": 136.7` — our own number, faithfully. There is no status, no warning and no validation
+that could have said the number meant nothing. Every gate we have was green, and the signature
+was drawn on the page's heading.
+
+**The double cannot help, by construction.** A test double is written from what we believe.
+Ours echoed the field list back, so it agreed with our units, our framing assumption and our
+tag vocabulary in turn. Each time, seven integration suites and a full E2E run confirmed a
+belief rather than testing it. A double built from a spec cannot falsify that spec, and a
+double built from a *correct* spec still cannot falsify our arithmetic.
+
+**BUG-005 is the one a spec review could have caught, and the reason it is worth naming.**
+Requirement 39 wrote *"Observed values: `created`, `sent`, `waiting`"* and then, in the very
+next sentence, mapped `viewed`, `signed` and `declined` "at face value" — three values that had
+never been observed, in a list introduced by the word *observed*. Nobody had signed anything
+when it was written, so `signed` could not have been seen; the requirement extended a verified
+list with an unverified member and the seam is visible in its own prose. That is a defect a
+careful reader can find **without** the provider, unlike the other four, and twenty-three
+passes did not find it — because a reviewer checks code against the spec, and the code
+implemented this requirement exactly.
+
+**What did find BUG-004 was measurement, not inspection.** The page is drawn 794 px wide;
+A4 at 96 dpi is 794 px; the signature's centre sat at 154 px and the field we sent had its
+centre at 154.7. Two numbers from a screenshot and one from the API, and the cause is not a
+matter of opinion. That is available to a reviewer only if the reviewer is running the thing.
+
 ## What follows
 
-**QA has to exercise the thing, against a real environment, with a database under it.** Not
-run the test suites — those are the implementer's, and they were green. The two defects above
-were reachable only by using the product against the provider it integrates with, and they are
-the two most serious findings of the entire exercise: one makes the feature inoperable and the
-other misreports a user error as an outage.
+**QA has to exercise the thing, against a real environment, with a database under it, and
+against the real third party where one exists.** Five defects, five caused by a belief about
+somebody else's system, zero found by twenty-three review passes over the code that held the
+belief. Not run the test suites — those are the implementer's, and they were green. These were
+reachable only by using the product against the provider it integrates with, and four of the
+five make the feature inoperable on their own.
+
+**And QA has to reach the *end*.** BUG-005 sat behind a first signature: every earlier step
+worked, the mail went out, the log read as a clean handover, and the failure was on the second
+signer's screen. A pass that stops at "the widget loaded" would have missed it. The rule this
+argues for is that a QA case walks a journey to its last actor, not to its first success.
+
+**Mark an observation where it stops.** Requirements 13 and 39 both recorded something that was seen
+and then continued past it in the same breath. The cheap discipline is a column: this value
+came back from the API, that one we expect. BUG-005's corrected table has it, and the next
+person to extend the list has to say which half they are adding to.
 
 **A doubled dependency needs a witness that is not the spec.** The stub should be checked
 against a recorded live response, or the observation it encodes re-verified, or both. As it
