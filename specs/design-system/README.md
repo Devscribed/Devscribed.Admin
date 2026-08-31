@@ -64,7 +64,7 @@ value-identical; typography is the only place the scales genuinely collide.
 | `--sp-4` | 8 | `--space-3` | 8 | 36 | identical |
 | `--sp-5` | 10 | `--space-4` | 10 | 3 | identical |
 | `--sp-6` | 12 | `--space-5` | 12 | 26 | identical |
-| `--sp-7` | 14 | `--space-5` or `--space-6` | 12 / 16 | 3 | ⚠ no 14px step in blue |
+| `--sp-7` | 14 | `--space-7` | 20 | 3 | ✅ **settled in Phase 1** — neither 12 nor 16. `TextInput` pins its message *below* the field rather than pushing it, so a field needs 16px of clearance underneath; 20px is the first step that gives it, and it is blue's own form rhythm. All 3 uses were on the signed-out screens and are gone. |
 | `--sp-8` | 16 | `--space-6` | 16 | 26 | identical |
 | `--sp-10` | 20 | `--space-7` | 20 | 20 | identical |
 | `--sp-12` | 24 | `--space-8` | 24 | 4 | identical |
@@ -101,7 +101,7 @@ value-identical; typography is the only place the scales genuinely collide.
 | `--accent-border` | `--color-blue-lighter` `#E8F2FE` | 1 | |
 | `--hover-bg-tint` | `--color-row-hover` | 2 | ⚠ yellow tints hover violet; blue's row hover is neutral grey |
 | `--error-500` | `--status-error` `#D80027` | 5 | |
-| `--amber-500` | `--status-warning` `#FFD02B` | 2 | ⚠ blue has no amber palette — confirm each site is a warning |
+| `--amber-500` | `--status-warning` `#FFD02B` | 2 | ⚠ confirm each site is a warning. Both remaining uses are Phase 8's public surfaces. The third caller — `/login`'s deactivation banner, which reached amber through `InfoBanner tone="warning"` — was settled in Phase 1: see reversal 9. |
 | `--tracker` | `--color-tracker-blue` `#2AA7FF` | 1 | both systems reserve a tracker hue |
 | `--bg` | `--surface-page` | 3 | the well is `#f8fafc`, set in `AppShell` |
 | `--bg-panel` | `--surface-card` | 1 | |
@@ -119,9 +119,9 @@ value-identical; typography is the only place the scales genuinely collide.
 ### The seven rows that need a human call
 
 `--fs-34` (2 uses, no counterpart) · `--fs-13` / `--fs-15` / `--fs-11` (28 uses, ±1px) ·
-`--sp-7` (3 uses, no 14px step) · `--text-faint` (4 uses, collapses) · `--bg-panel-2` (4 uses,
-sunken vs. the well) · `--amber-500` (2 uses, confirm each is a warning) · `--hover-bg-tint`
-(2 uses, violet → neutral).
+~~`--sp-7`~~ (**settled in Phase 1** → `--space-7`, 20px) · `--text-faint` (4 uses, collapses) ·
+`--bg-panel-2` (4 uses, sunken vs. the well) · `--amber-500` (2 uses left, both Phase 8) ·
+`--hover-bg-tint` (2 uses, violet → neutral).
 
 Every other row is scriptable. Do the script first, then walk these by hand.
 
@@ -266,6 +266,16 @@ and so a reviewer can tell a considered reversal from an accident.
 
 8. **`--shadow-card` is removed, not remapped.** Blue separates static surfaces with a border and
    reserves shadow for hover. Anywhere yellow used elevation to stack surfaces needs a border.
+
+9. **`/login`'s two error tones collapse into one.** `LoginForm` painted a deactivated account
+   amber and a wrong password red, because amber says "retrying will not help" where red invites
+   another guess. Blue's `InfoBanner` has two measured variants, `info` and a red one, because
+   that is all prod has; amber exists in the palette but has never been a banner, so keeping the
+   distinction meant inventing a treatment and calling it measured. **Settled in Phase 1: the tone
+   is gone.** The argument for dropping it was in the note that introduced it — *the wording
+   carries the full meaning on its own; the tone is reinforcement, never the sole signal*. The
+   only test for it (TC-02-E2E-04) is skipped pending spec 04, so nothing was silently loosened.
+   Full reasoning in [`02-authentication-login.design.md`](../user-management/02-authentication-login.design.md).
 
 ## Phase map
 
