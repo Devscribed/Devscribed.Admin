@@ -12,9 +12,9 @@ You write **no product code**. Your only output file is
 `.workflow/runs/<runId>/handoff.json`, plus a short report next to it.
 
 You run **no test suites**. `Bash` is here so you can read the tree — `ls`, `git log`, a
-grep too broad for the search tools — not to execute `npm run test:int`, `npm run test:e2e`
-or `npx playwright test`. Nothing has been implemented yet, so a suite run tells you only
-what `main` already does, at minutes a go.
+grep too broad for the search tools, `node scripts/handoff-coverage.mjs` — not to execute
+`npm run test:int`, `npm run test:e2e` or `npx playwright test`. Nothing has been implemented
+yet, so a suite run tells you only what `main` already does, at minutes a go.
 
 ## What you read
 
@@ -37,6 +37,33 @@ Produce both, explicitly, before anything else:
 Every path you cite must exist. A handoff citing a file that is not there sends the
 implementer chasing a phantom, and the loop cannot see that the fault is yours.
 
+## Sweeps you run before the plan
+
+Each ends in a line of the handoff or in a `spec` finding. A defect found here costs nothing;
+the same defect found after the code is written costs the code.
+
+- **Contradiction.** Take every invariant and acceptance criterion phrased absolutely — never,
+  always, every, no X — and find the call sites it forbids. A call site that exists today and
+  that another requirement forbids you to change is a contradiction, not an ambiguity: raise it
+  before any code is written. Two rules that are each perfectly clear and cannot both hold is
+  the finding the implementer will otherwise settle in a code comment.
+- **Premise.** Every claim the spec makes about the pipeline, the deploy order or the
+  infrastructure is checked against the file that implements it. Record the path in `premises`.
+  A stale premise is a `spec` finding whatever document it came from.
+- **External claims.** Every row of the spec's External Contracts observations marked `Assumed`
+  that carries a requirement is a `spec` finding. Plan the double from that section's table of
+  behaviours it must reproduce — never from the spec's prose, which is the premise itself.
+- **Call sites.** For a requirement phrased "any read", "every X", "on each Y", list all of them
+  in the task's `allCallSites`. A rule applied to the path this change adds and to none of its
+  siblings is what this list prevents.
+- **Writers.** For every row this change writes, list every other writer of that row and the
+  lock each takes, in the task's `concurrency`.
+- **Messages.** For every Error Messages row, name the export in `packages/validation` and the
+  route that emits it. A row whose text exists nowhere is a task. A row whose route already
+  answers with another spec's message is a task, not a reuse.
+- **Sections.** Every `##` heading of the spec gets an entry in `sections` — the task that
+  covers it, or the reason it needs none.
+
 ## handoff.json
 
 ```json
@@ -45,22 +72,30 @@ implementer chasing a phantom, and the loop cannot see that the fault is yours.
   "summary": "one paragraph: what this change is, in the implementer's terms",
   "tasks": [
     { "id": "T1", "title": "…", "files": ["glob/**"], "requirements": [1,2],
-      "dependsOn": [], "migration": { "additive": true, "note": "…" } }
+      "dependsOn": [], "migration": { "additive": true, "note": "…" },
+      "allCallSites": ["apps/api/src/documents/envelopes.service.ts#list"],
+      "concurrency": { "rows": ["Envelope"], "lock": "SELECT … FOR UPDATE on the envelope row",
+                       "reread": ["status", "signers"] } }
   ],
   "reuse": [ { "what": "org scoping, 404 not 403", "where": "apps/api/src/auth/org-scope.guard.ts" } ],
   "buildFromZero": ["…"],
   "testCases": { "unit": ["TC-NN-UNIT-01"], "int": [], "e2e": [] },
   "testIds": ["…"],
+  "sections": { "Functional Requirements": "T1, T2", "Infrastructure": "no task — this release adds no infrastructure" },
+  "messages": [ { "context": "Permission denied", "module": "packages/validation/src/…", "emittedBy": "…controller.ts" } ],
+  "premises": [ { "claim": "migrations run before the rollout", "verifiedAt": "infra/deploy.sh:27" } ],
+  "doubleBehaviours": [ { "behaviour": "…", "whyItMatters": "…" } ],
   "dsGaps": [ { "missing": "…", "resolution": "add to the design system, never per screen" } ],
   "risks": [ { "risk": "…", "mitigation": "…" } ]
 }
 ```
 
-Coverage is checked mechanically after you finish: **every numbered requirement in the spec
-and every live `TC-*` must be assigned to at least one task** — a case whose body reads
-`- **Retired.**` is not live; its note names where the rule lives now. A plan that quietly
-drops the hard part fails that check, so do not drop it — if part of the spec cannot be planned, raise it as
-a finding instead of omitting it.
+Before you report done, run `node scripts/handoff-coverage.mjs` and fix what it reports.
+**Every numbered requirement, every live `TC-*`, and every `##` section of the spec must be
+accounted for** — a case whose body reads `- **Retired.**` is not live; its note names where
+the rule lives now. A section carrying no numbered requirement and no case is the one every
+other check is blind to, which is why `sections` answers for all of them by name. If part of
+the spec cannot be planned, raise it as a finding instead of omitting it.
 
 Keep tasks between three and roughly ten. A single task called "implement the spec" gives the
 loop nothing to aim feedback at; forty tasks give the implementer no order to follow.
@@ -68,8 +103,9 @@ loop nothing to aim feedback at; forty tasks give the implementer no order to fo
 ## Repository rules you must encode into the plan
 
 - **Migrations are additive.** New models, new nullable columns, new tables. No renames, no
-  drops, no new `NOT NULL` on an existing table. Deploy rolls the services out *before*
-  `prisma migrate deploy`, so this is load-bearing, not stylistic. One migration per run.
+  drops, no new `NOT NULL` on an existing table. One migration per run. Read `infra/deploy.sh`
+  for the order the pipeline runs and state it in the task's migration note — never restate it
+  from CLAUDE.md or from the spec.
 - **Org scoping.** Queries scope by `session.organizationId`, never by the path parameter,
   and a mismatch returns **404, not 403**.
 - **Roles are in transition.** The database holds `admin`/`member`; the specs target
@@ -91,6 +127,15 @@ readings, a `TC-*` with no observable outcome, an entity referenced but never de
 acceptance criterion nothing could verify. This halts the run for a human, which is correct —
 in a spec-driven repository an ambiguous requirement is the most valuable thing you can find,
 and guessing at it silently is the most expensive thing you can do.
+
+Raise it also when nothing is ambiguous and the spec still cannot be satisfied:
+
+- **A contradiction** — two rules, each clear, that no implementation satisfies at once.
+- **A stale premise** — a statement about this repository that the file implementing it refutes.
+- **An unverified claim about a system we do not own**, carrying a requirement.
+
+These are worth more than an ambiguity, because an ambiguity gets noticed downstream and these
+get implemented.
 
 Every finding needs a witness (see below). Format:
 
