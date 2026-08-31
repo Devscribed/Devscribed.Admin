@@ -236,9 +236,21 @@ function attachTools() {
     bySession.get(s.sessionId).push(s);
   }
 
+  const byStage = new Map();
+  for (const s of steps) {
+    if (!byStage.has(s.stage)) byStage.set(s.stage, []);
+    byStage.get(s.stage).push(s);
+  }
+
   for (const e of journal) {
-    if (e.event !== 'tool' || !e.sessionId) continue;
-    const candidates = bySession.get(e.sessionId);
+    if (e.event !== 'tool') continue;
+    let candidates = e.sessionId ? bySession.get(e.sessionId) : null;
+    /* A sub-agent runs in a session of its own, which no step records — only the agent the
+       orchestrator started is in `bySession`. Matching those by stage instead is what makes a
+       shard's work visible at all; without it the whole of a sharded review is silence.
+       `agentType` is what keeps this safe: the operator's own shell is journaled under this
+       stage too, and it is the one caller that carries no agent. */
+    if (!candidates && e.agentType) candidates = byStage.get(e.stage);
     if (!candidates) continue;
     const t = Date.parse(e.ts);
     /* A resumed session spans several attempts, so a call belongs to the latest attempt that
@@ -252,7 +264,16 @@ function attachTools() {
     target.byTool[e.tool] = (target.byTool[e.tool] ?? 0) + 1;
     target.tools.push({
       at: Math.max(0, Math.round((t - target.startedAt) / 1000)),
+      /* Absolute, not only the offset: "how long ago" has to survive being read on a page
+         that has been open longer than the payload is old. */
+      ts: t,
       tool: e.tool,
+      /* A short id is a name and survives whole; only a long one is a hash worth cutting. */
+      actor: e.agentType
+        ? (e.agentId && e.agentId !== 'main'
+          ? `${e.agentType}·${String(e.agentId).length <= 12 ? e.agentId : String(e.agentId).slice(0, 8)}`
+          : e.agentType)
+        : null,
       sec: +sec.toFixed(1),
       ok: e.ok !== false,
       what: String(e.input?.command ?? e.input?.file_path ?? e.input?.pattern ?? e.input?.path ?? '')
@@ -632,6 +653,29 @@ pre.txt{background:var(--surface-3);border-radius:12px;padding:14px 16px;overflo
 .kv dt{color:var(--on-surface-var);white-space:nowrap}
 .kv dd{margin:0;font-family:var(--mono);font-size:12.5px;word-break:break-all}
 .note-callout{background:var(--warn-container);color:var(--on-warn-container);border-radius:12px;padding:12px 15px;font-size:13px;line-height:1.6;margin-bottom:14px}
+/* The last thing the agent did, on every step. On a running one it is the difference between
+   working and stopped, so it is the one line here that moves on its own. */
+/* A flex row, not a clipped line: the command is the part that may be cut and the time is the
+   part that must survive, so the command shrinks and the time is pinned to the right. Clipping
+   the whole line loses the time first, which is the one thing being read. */
+.act{display:flex;gap:6px;align-items:baseline;margin-top:4px;font-size:11.5px;
+  color:var(--on-surface-var);white-space:nowrap;min-width:0}
+.act .ico{flex:0 0 auto;width:10px;opacity:.55}
+.act .who{flex:0 0 auto}
+/* A grid item defaults to min-width:auto and refuses to shrink below its content, so without
+   this the whole head grows to fit the command and pushes the time out past the card. */
+.step-head .hd{min-width:0}
+.act .what{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;opacity:.6;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.act .ago{flex:0 0 auto;margin-left:auto;padding-left:10px;opacity:.55}
+/* Re-rendered on every push, so the fade runs exactly when something new arrived — and never
+   on a tick, when nothing did. */
+.act.live{color:var(--primary);animation:actin .7s ease-out}
+.act.live .ico{animation:blink 1.2s steps(1) infinite}
+@keyframes blink{50%{opacity:.12}}
+@keyframes actin{from{background:rgba(103,80,164,.16)}to{background:transparent}}
+.stepitem .nm small.live{color:var(--primary);opacity:.9}
+.dot.beat{animation:pulse 1.6s ease-in-out infinite}
 .runpick{display:flex;align-items:center;gap:10px;margin:14px 0 4px}
 .runpick label{font-size:12px;opacity:.75}
 .runpick select{max-width:min(560px,100%);padding:7px 12px;border-radius:12px;font:inherit;font-size:13px;
@@ -759,10 +803,16 @@ document.getElementById('hdMetrics').innerHTML = [
 document.getElementById('rail').innerHTML = D.steps.map((s,i) => {
   const bad = s.findings.some(isBlocker) || s.state === 'aborted';
   const dot = s.script ? '#79747E' : (COLOR[s.stage] || '#79747E');
+  const last = s.tools && s.tools.length ? s.tools[s.tools.length - 1] : null;
+  /* On a step that is going, what it is doing beats what model it is: the model does not
+     change and the tool is the only thing on this line that ever moves. */
+  const under = s.state === 'running' && last
+    ? '<small class="live">' + esc(last.actor && last.actor !== s.agent ? last.actor + ' · ' + last.tool : last.tool) + '</small>'
+    : '<small>' + esc(s.model || (s.script ? 'скрипт' : '')) + '</small>';
   return (i ? '<div class="connector"></div>' : '') +
     '<button class="stepitem" data-idx="' + i + '">' +
-      '<span class="dot" style="background:' + dot + '">' + (s.script ? '·' : s.attempt) + '</span>' +
-      '<span class="nm">' + esc(s.stage) + '<small>' + esc(s.model || (s.script ? 'скрипт' : '')) + '</small></span>' +
+      '<span class="dot' + (s.state === 'running' ? ' beat' : '') + '" style="background:' + dot + '">' + (s.script ? '·' : s.attempt) + '</span>' +
+      '<span class="nm">' + esc(s.stage) + under + '</span>' +
       '<span class="tm">' + (s.script ? '—' : mmss(s.wallSec)) + (bad ? ' ●' : '') + '</span>' +
     '</button>';
 }).join('');
@@ -787,6 +837,23 @@ function findingHtml(f) {
     '<div class="claim">' + esc(f.claim) + '</div>' +
     (deep ? '<details><summary>Свидетельство и починка</summary><div class="deep">' + deep + '</div></details>' : '') +
   '</div>';
+}
+
+/* The last thing the agent actually did. On a running step it is the answer to "is it alive",
+   so it carries a live clock; on a finished one the wall time it happened at is more use than
+   a distance from now. The actor is named only when it is not the agent the orchestrator
+   started — that is a sub-agent, and whose work it is matters more than the tool. */
+function actHtml(s) {
+  const t = s.tools && s.tools.length ? s.tools[s.tools.length - 1] : null;
+  if (!t) return '';
+  const live = s.state === 'running';
+  const who = t.actor && t.actor !== s.agent ? '<b>' + esc(t.actor) + '</b> · ' : '';
+  const when = live ? '' : hhmm(t.ts || (s.startedAt + t.at * 1000));
+  return '<span class="act' + (live ? ' live' : '') + '"' + (t.ts ? ' data-ts="' + t.ts + '"' : '') + '>' +
+    '<span class="ico">' + (live ? '▸' : '↳') + '</span>' +
+    '<span class="who">' + who + esc(t.tool) + '</span>' +
+    (t.what ? '<span class="what">' + esc(t.what.slice(0, 160)) + '</span>' : '') +
+    '<span class="ago">' + when + '</span></span>';
 }
 
 function routeHtml(s) {
@@ -913,10 +980,10 @@ document.getElementById('steps').innerHTML = D.steps.map((s,i) => {
   return '<div class="card step" id="' + s.stage + '-' + s.attempt + '" data-idx="' + i + '"' +
     (bl ? ' data-bad="1"' : '') + (s.state !== 'done' ? ' data-odd="1"' : '') + '>' +
     '<button class="step-head"><span class="idx" style="background:' + color + '">' + (s.script ? '·' : s.attempt) + '</span>' +
-      '<span><span class="ttl">' + esc(s.stage) + ' ' + s.attempt + ' ' + verdictChip(s.status) + ' ' + stateChip(s.state) +
+      '<span class="hd"><span class="ttl">' + esc(s.stage) + ' ' + s.attempt + ' ' + verdictChip(s.status) + ' ' + stateChip(s.state) +
         (bl ? '<span class="chip c-block">' + bl + ' блок.</span>' : '') +
         (nt ? '<span class="chip c-note">' + nt + ' зам.</span>' : '') +
-      '</span><span class="sub">' + esc(sub) + '</span></span>' +
+      '</span><span class="sub">' + esc(sub) + '</span>' + actHtml(s) + '</span>' +
       '<span class="caret">▾</span></button>' +
     '<div class="panel"><div class="tabs">' + tabs + '</div>' + panes + '</div></div>';
 }).join('');
@@ -1044,6 +1111,9 @@ document.getElementById('cov').innerHTML =
 
 bound = true;
 if (first) { first = false; if (D.steps.length) openStep(0, false); }
+/* Fill the live clocks now rather than leaving them blank until the first tick, a second
+   later — the gap is small and it is the first thing the eye lands on. */
+tick();
 }
 
 /* ── the second hand ────────────────────────────────────────────────────
@@ -1061,6 +1131,12 @@ function tick() {
     const sec = (now - startedAt) / 1000;
     el.style.width = Math.min(100 - (startedAt - viewT0) / span * 100, Math.max((now - startedAt) / span * 100, 0.4)).toFixed(2) + '%';
     el.textContent = el.dataset.attempt + ' · ' + mmss(sec);
+  });
+
+  document.querySelectorAll('.act.live[data-ts]').forEach(el => {
+    const ms = now - +el.dataset.ts;
+    const ago = el.querySelector('.ago');
+    if (ago) ago.textContent = ms < 2000 ? 'только что' : ms < 60000 ? Math.round(ms / 1000) + ' с назад' : mmss(ms / 1000) + ' назад';
   });
 
   const wall = document.querySelector('#hdMetrics .metric .v');
