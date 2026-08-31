@@ -89,7 +89,10 @@ is the real one. To look at a screen, start a pair on those ports rather than bo
 ## Watch out for
 
 - **`main` deploys itself, and does not test first.** `deploy.yml` is the pipeline: push to
-  `main` deploys `dev`, a `v*` tag on `main` deploys `prod`, and neither runs a test. The suite
+  `main` deploys `dev` *when the push moved a file that ships* — a change to `.claude/`,
+  `docs/`, `specs/`, `scripts/`, `e2e/` or any `*.md` is copied into no image and deploys
+  nothing, and the run says so. A `v*` tag on `main` deploys `prod` unconditionally, and
+  neither runs a test. The suite
   lives in `test.yml`, which triggers on `pull_request` only — so the pull request is the only
   gate, and a change that reaches `main` any other way is deployed untested. The deploy half is
   gated on the repository variable `DEPLOY_ENABLED`. The runbook —
