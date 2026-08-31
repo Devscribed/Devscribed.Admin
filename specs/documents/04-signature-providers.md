@@ -89,7 +89,7 @@ Reconnaissance first, because most of the cost here is not the adapter.
 | The `SigningProvider` port | A different shape from today's: session-scoped, asynchronous, with a capability record so the envelope service branches on *what a provider does*, not on *which provider it is*. |
 | `InternalSigningProvider`, rewritten | The in-house engine keeps every behaviour spec 02 requires but is re-expressed against the new port. This is the risky half of the work: it touches a working, shipped signature engine. |
 | `SignWellSigningProvider` | HTTP client, rate-limit handling, error mapping, test-mode flag, recipient mapping. |
-| Text-tag emission | Our templates carry `{{placeholder}}`. SignWell's text tags are **also** `{{...}}`. See requirement 14 — this collision is the single most dangerous detail in the integration. |
+| The field list and the execution page | The document we send is a copy, and every signature and signer-entered value on it has to be placed by coordinate on a page we lay out ourselves. Our templates also carry `{{placeholder}}`, and none may survive into the copy. See requirement 14 — this is the single most dangerous detail in the integration. |
 | Webhook receiver | Endpoint, hash verification, replay store, and a converge-to-state reconciler that re-reads from the API rather than trusting the body. |
 | Reconciliation sweep | So a dropped webhook costs timeliness and never correctness. |
 | Organization signing settings | There is **no organization-settings surface in the product today** — the routes are `documents`, `members`, `outbox`, `requests`, and `account/settings`. This spec introduces the first one. |
@@ -253,7 +253,8 @@ unchanged.
     | `files` | one item, `{ name, file_base64 }` | The frozen document rendered to PDF by our own `PdfRenderer`. `file_url` is rejected — it would require exposing a public URL to an unsigned contract. |
     | `recipients` | one per `EnvelopeSigner`, in `order` | `signing_order` mirrors ours. |
     | `apply_signing_order` | `true` | Spec 02's sequential rule, enforced on their side too. |
-    | `text_tags` | `true` | Field placement — requirement 14. |
+    | `text_tags` | `false` | We place fields ourselves. Nothing in the PDF is meant to be parsed — requirement 14. |
+    | `fields` | one entry per signature and per signer-owned field | The whole field list, with page and coordinates. Requirement 14 builds it. |
     | `embedded_signing` | `true` | Requirement 12. |
     | `embedded_signing_notifications` | `false` | We send the mail. |
     | `reminders` | `false` | Our sweep sends reminders, so there is one reminder policy, not two. |
@@ -265,34 +266,115 @@ unchanged.
 
     *Observed:* the call answers `201` with `status: "Created"`, `files[0].pages_number: 0` and
     `fields: []` — the PDF has not been read yet. Creation is **two-phase and asynchronous**:
-    SignWell parses the file, materializes the text tags into fields, and moves the document to
-    `Sent` on its own, with no second call from us. Requirement 38 is the consequence.
+    SignWell parses the file and then, with no second call from us, materializes **only the
+    fields the request supplied** and moves the document to `Sent`. A document with no fields
+    settles in `Draft` and is never sent. Requirement 38 is the consequence.
 
-14. **The placeholder collision.** SignWell's text tags are delimited by `{{` and `}}` — byte for
-    byte, our own placeholder syntax (spec 01, Shared Rules). At send the frozen HTML deliberately
-    still carries `{{signer_owned_key}}` literally, because those values do not exist yet. Under
-    SignWell:
+    **It materializes nothing from the file itself.** An earlier draft of this requirement said
+    SignWell turned our text tags into fields; it does not, and no send has ever succeeded on
+    that premise. BUG-001 records nine probe documents against the live API: six tag syntaxes
+    (ours, HelloSign's, DocuSign's, and three shorter spellings) and a probe with no tag at all
+    all behaved identically — `files[0].pages_number` went from `0` to `1`, so the file *was*
+    read, and the document then sat in `Draft` with `fields: []` forever. The one probe that
+    sent `text_tags: false` with an explicit `fields` entry reported one field at `201`, reached
+    `Sent` within twenty seconds, and carried an `embedded_signing_url`. That is the only
+    creation path this product uses.
 
-    a. Signer-owned placeholders are **translated** into SignWell tag syntax before rendering —
-       `{{contractor_signature}}` becomes a signature tag bound to that signer's index, and a
-       signer-owned text field becomes a text tag.
-    b. Signature blocks, which carry `data-signer-role` in our renderer, emit a signature tag
-       sized to the block.
-    c. After translation the renderer **asserts that no `{{…}}` remains** that is not a tag it
-       emitted. Any residual — a sender value that itself contained braces, an unbound
-       placeholder, a template that slipped through spec 01's validation — aborts the send with
-       `document_tags_unresolved` before a document is created and before a webhook can exist.
-       Sending anyway would let a contract be signed with a stray field on it.
-    d. Tags are rendered in the page background colour so they do not appear in the signed PDF.
-       SignWell does not strip them. This is why (c) has to be an abort and not a warning: an
-       unresolved placeholder would be *invisible* in the output and still consume a field.
+14. **The placeholder collision, and where the fields go.** Two separate facts shape this
+    requirement, and an earlier draft ran them together.
+
+    The first is that **the frozen HTML still carries `{{signer_owned_key}}` literally at send**,
+    because a signer-owned value does not exist yet, and `renderedHtml` is written once (spec 02,
+    invariant 5). A placeholder that reaches the PDF prints on the contract.
+
+    The second is that **we build the field list ourselves** (requirement 13). Nothing in the
+    document is meant to be parsed, so no tag of any kind is emitted and nothing is painted the
+    background colour to hide it.
+
+    The send therefore builds a **copy** of the frozen HTML, and an explicit field list beside
+    it. The copy is where every rule below applies; `Envelope.renderedHtml` and `documentHash`
+    keep describing exactly the bytes spec 02 froze (requirement 29).
+
+    a. **Every `{{…}}` in the copy is resolved.** A placeholder naming a signer-owned field
+       whose role has a signer becomes a visible blank carrying that field's number on the
+       execution page — `______ [1]` — because the value will be typed there rather than in the
+       prose. See (e).
+    b. **Each signature block emits one signature field**, bound to that signer's recipient
+       number. The blocks are the ones our renderer wrote, found by `data-signer-role`; the
+       prose is never searched for a signature anchor.
+    c. **After the copy is built, no `{{…}}` may remain.** Any residual — a sender value that
+       itself contained braces, a placeholder naming a role nobody fills, a template that
+       slipped through spec 01's validation — aborts the send with `document_tags_unresolved`
+       before a document is created and before a webhook can exist.
+
+       This is still an abort and not a warning, and the reason has changed rather than gone
+       away. It is no longer that a stray tag would be *invisible*: it is that it would be
+       **visible** — a literal `{{rate}}` printed on a contract somebody is about to sign, in a
+       document our own hash says is final. Nothing downstream can fix that, so nothing
+       downstream is allowed to see it.
+    d. **The field list is `fields`, in the create body.** One `signature` entry per signature
+       block, `recipient_id` equal to that signer's `signing_order`, `required: true`; one entry
+       per signer-owned template field, `type: "text"`, bound to the signer whose role owns it,
+       with the template's own `required` flag. Every entry carries `page`, `x`, `y`, `width`
+       and `height` — which is what (e) exists to answer.
+    e. **Geometry: the execution page.** Coordinates cannot be *measured* here. `PdfRenderer` is
+       an abstraction over a Lambda in production (spec 02 requirement 31); nothing in this
+       repository sees where a block landed on a page, and the height of a block depends on its
+       content, so no arithmetic over the HTML can recover it either.
+
+       So we do not place fields against the prose at all. **The copy hoists the signature
+       section onto a page of its own, at the front, and lays it out on a fixed grid.** Every
+       field sits on that page, whose number is therefore always `1`, and whose rows are the
+       same size whatever the contract says. The grid is arithmetic, not measurement:
+
+       | Constant | Value | Where it comes from |
+       |---|---|---|
+       | Page | A4, 595.28 × 841.89 pt | The renderer's `format: 'A4'` |
+       | Print margin | 20 mm top and bottom, 18 mm left and right | The renderer's `margin` |
+       | Document margin | 2.5 rem — 30 pt | The frozen document's own `body { margin }` |
+       | Content origin | x 81 pt, y 86.7 pt | The two margins above, added |
+       | Heading | 48 pt | This spec |
+       | Provider units | CSS pixels at 96 dpi — points × 96/72 | SignWell's viewer draws A4 at 794 px. The grid stays in points, because the renderer does; the adapter converts as it builds the field list (BUG-004) |
+       | Row | 72 pt, one per field | This spec |
+       | Field box | 240 × 36 pt, 2 pt below the row's top | This spec |
+       | Rows per page | 9 | What fits above the bottom margin |
+
+       The copy carries those numbers as `data-field-*` attributes on the rows it lays out, and
+       the adapter reads them back rather than recomputing them, so the drawn row and the field
+       box cannot drift apart. A field with no row — more than nine of them, or a signer whose
+       block is missing — **aborts the send before the create**, with the same
+       `document_fields_not_materialized` refusal requirement 38 uses. It never guesses a
+       coordinate.
+
+       The frozen HTML gains only those attributes and two comment markers. The internal
+       provider ignores both, so an `internal` envelope renders exactly as it did (requirement
+       10). The execution page exists only in the copy.
+
+       **What this costs is named rather than hidden.** The counterparty signs a document whose
+       signature section is a first page rather than a last one, and a signer-owned value is
+       typed on that page instead of in the sentence its placeholder sat in. Both are visible
+       to everyone who opens the PDF, which is the property that was chosen over accuracy we
+       cannot have: a misplacement here is a page somebody reads, not a field nobody notices.
+       The remaining assumptions — the page size and margins of the production renderer, which
+       lives outside this repository — are in Known Gaps.
 
 15. `signerAccess` calls `GET /documents/{id}` and returns the current
-    `recipients[n].embedded_signing_url` for the signer whose turn it is. It is never persisted.
+    `recipients[n].embedded_signing_url` for the signer whose turn it is, **made embeddable
+    first**. It is never persisted.
+
+    The URL as given is the ordinary signing page — the same address a signer would be emailed
+    — and SignWell serves it with `X-Frame-Options: SAMEORIGIN`. It drops that header only for
+    `signwell_embedded_iframe=1`, a parameter that appears in no API response and in no field
+    name (BUG-003). The adapter sets it with `searchParams`, so a URL already carrying a query
+    string keeps it, and nothing above the port has to know that a particular provider needs
+    anything done to its URL — `embeddedSigningUrl` is the port's word, and the internal
+    provider answers `null`.
 
     The URL is hosted in **our own `<iframe>`, with our own `message` listener that checks
     `event.origin` against the embed host** before reading anything (edge case 19). SignWell's
-    `SignWellEmbed` SDK is deliberately **not** loaded. The difference is not ergonomic: `/sign`
+    `SignWellEmbed` SDK is deliberately **not** loaded, and costs nothing: its 25 KB exist to
+    append that one parameter, create an iframe and relay `postMessage`, and we do all three.
+    The difference is not ergonomic: `/sign`
     is the one session-less page in the product, and it renders author-controlled HTML. The area
     README lists a restrictive CSP there as one of four required mitigations for exactly that,
     and pulling a vendor script onto it would spend a security control to save a `postMessage`
@@ -502,23 +584,31 @@ unchanged.
 
 ### Verified provider behaviour
 
-38. **The send is not finished when `createSession` returns.** Because creation is asynchronous
-    (requirement 13), the field list does not exist yet at `201`. The send path therefore polls
-    `GET /documents/{id}` until `status` leaves `Created` — at most ten attempts over thirty
-    seconds — and then **verifies that the parsed fields are the ones our translation emitted**:
-    one signature field per signer, each bound to the right recipient, plus one field per
-    signer-owned template field with the expected `required` flag.
+38. **The send is not finished when `createSession` returns.** Reaching `Sent` is still
+    asynchronous (requirement 13): the `201` comes back with `status: "Created"`, `pages_number:
+    0` and `fields: []` even when the request supplied a complete field list. The send path
+    therefore still polls `GET /documents/{id}` until `status` leaves `Created` — at most ten
+    attempts over thirty seconds.
 
-    A mismatch is not a warning. A text tag that failed to parse produces a contract with a
-    missing signature line that nobody notices until a counterparty cannot sign it, or worse,
-    signs a document whose other party never can. On mismatch the send deletes the document
-    (requirement 18), leaves the envelope in `draft`, and reports
-    `document_fields_not_materialized` naming what was expected and what came back.
+    **What the poll verifies has changed.** It is no longer "did SignWell find our tags", a
+    question that could only ever be answered no. It is now **"did SignWell keep the fields we
+    sent"**: one `signature` per signer bound to that signer's recipient number, one field per
+    signer-owned template field with the `required` flag we asked for, and nothing else. The
+    check is against `request.expectedFields`, which is what requirement 14 built, and it is
+    still a match on type, recipient and required flag with each received field claimed at most
+    once.
 
-    *Observed:* the three tags in the verification document produced exactly three fields —
-    `signature` for recipient 1, `signature` and a non-required `text` for recipient 2 — with
-    coordinates derived from each tag's position and size, and `:n` correctly yielding
-    `required: false`.
+    That is a narrower question than before and it is still worth asking. A document that
+    settles in `Draft` with no fields is exactly what a request whose field list was rejected or
+    dropped looks like, and it is indistinguishable from a healthy `201` until this poll runs. A
+    contract with a missing signature line is not something a counterparty should be able to
+    reach, so a mismatch is not a warning: the send deletes the document (requirement 18),
+    leaves the envelope in `draft`, and reports `document_fields_not_materialized` naming what
+    was expected and what came back.
+
+    The poll deliberately does **not** assert the `page` or the coordinates it gets back. Those
+    are our own arithmetic (requirement 14e), echoed; asserting them would prove only that the
+    provider stored what we sent, which is the one thing an echo cannot fail to do.
 39. **Turn is read from `recipients[].status`, not inferred.** *Observed values:* `created`
     before send, then `sent` for the recipient whose turn is open and `waiting` for the rest.
     Convergence maps `waiting` → our `pending`, `sent` → `notified`, and takes `viewed`,
@@ -556,8 +646,8 @@ unchanged.
 | # | Situation | Behaviour |
 |---|---|---|
 | 1 | A sender value contains `{{` | Send aborts with `document_tags_unresolved` naming the offending key. Nothing is created on the provider. |
-| 2 | A signer-owned placeholder matches no signer role | Same abort. Spec 01 validation should have caught it; this is the second gate, and it is the one that matters, because the field would be invisible in the PDF. |
-| 3 | Two signature blocks carry the same `data-signer-role` | Both emit tags bound to the same recipient. Permitted — one signer may sign in two places. |
+| 2 | A signer-owned placeholder matches no signer role | Same abort. Spec 01 validation should have caught it; this is the second gate, and it is the one that matters, because the placeholder would otherwise print on the contract. |
+| 3 | Two signature blocks carry the same `data-signer-role` | The execution page holds **one row per signer** (requirement 14e), so the second block gets no field. Our renderer writes one block per signer and cannot produce this; a document that somehow did would abort before the create rather than send a signature nobody can reach. Asking one signer to sign twice is out of scope under SignWell. |
 | 4 | `createSession` succeeds but the transaction recording `providerRef` fails | An orphan document exists on their side. The next send adopts it by `metadata.envelope_id` (requirement 26); the envelope stays `draft` meanwhile. |
 | 5 | A webhook arrives before the send transaction commits | `providerRef` is not in our database yet, so it records `outcome = unknown_ref`. The lazy sync on first read converges it. Nothing is lost, because state is re-fetched rather than applied. |
 | 6 | A webhook names a document of another SignWell account | No `providerRef` of ours matches. `unknown_ref`, `200`, counter incremented. |
@@ -578,7 +668,8 @@ unchanged.
 | 21 | The provider rate-limits us mid-signing | `signerAccess` fails, the signer sees the retry card, and the token is not consumed. |
 | 22 | The circuit breaker is open when a send is attempted | The send fails fast with `provider_unavailable` and the envelope stays `draft` — the same observable outcome as a timeout, without spending a call. |
 | 23 | `POST /documents` returns `201` but the document never leaves `Created` | The send's verification poll (requirement 38) times out after thirty seconds, deletes the document, and leaves the envelope in `draft` with `document_fields_not_materialized`. |
-| 24 | Text tags parse into the wrong count or the wrong recipient | Same outcome as the row above. The document is deleted rather than left open, because a contract with a missing signature line is not a document anyone should be able to reach. |
+| 24 | The document comes back holding fields we did not send, or missing ones we did | Same outcome as the row above. The document is deleted rather than left open, because a contract with a missing signature line is not a document anyone should be able to reach. |
+| 24a | A field in our list has no row on the execution page — more than nine fields, or a signer with no signature block | The send aborts **before** the create with `document_fields_not_materialized` naming the field. Nothing is spent, and no coordinate is guessed. |
 | 25 | Void races the last signature | The `DELETE` wins and the completed document is destroyed on their side. Accepted (requirement 40); the captured signatures survive in our own trail. |
 | 26 | `DELETE` returns `404` during a void | The document is already gone. The envelope voids locally with `providerError` set — our void is not blocked by their state. |
 | 27 | `GET /documents/{id}` returns `404` on a voided envelope | The settled post-delete state. The reconciler stops calling rather than treating it as an error. |
@@ -586,6 +677,11 @@ unchanged.
 | 29 | `completed_pdf` returns `404` | Carries no information: an incomplete document and an unknown id answer identically. Status is established from `GET /documents/{id}` first, and a `404` here is retried, never treated as terminal (requirement 17). |
 | 30 | A list filter is silently ignored during orphan recovery | Matching is client-side on `metadata.envelope_id`; an unmatched page is skipped, never adopted (requirement 26). |
 | 31 | `event.time` is far from now | A skewed time produces a different hash and fails verification. A *correct* hash over a skewed time is indistinguishable from a delayed delivery, and convergence makes both harmless. |
+| 32 | A signer address the configured provider will not accept | Refused at entry, with a field error on the address, before the envelope is created. The rule is spec 01's shared one and is not provider-specific: the local part is the ASCII set RFC 5322 permits unquoted, so an address only deliverable over SMTPUTF8 never reaches a send. Validating against the provider before sending was rejected — it is a network call in the entry path, it fails differently when the provider is down, and it would make address validation depend on which provider an organization happens to have chosen. |
+| 33 | The provider answers `4xx` other than `429` for a request we built | **Not `provider_unavailable`.** A permanent refusal of something we sent: it is not retried, it does **not** run the orphan scan of requirement 26 — nothing was created, so there is nothing to adopt — and it does not count toward the circuit breaker, which exists for outages. When the error body addresses a field, the field **path** is carried on the error and logged; the body is not (requirement 36 — a path is an address, the body is document content). When no field can be named it degrades to a permanent refusal with no field. `429` stays an outage: the limiter refuses before processing and the budget refills. |
+| 34 | The provider's signing URL refuses to be framed | The adapter makes it embeddable before returning it; the raw `embedded_signing_url` is never framed. The double refuses framing the same way the provider does, or it hides this whole class: a stub that frames happily cannot fail the test it exists for. |
+| 35 | The frame never loads | The signer gets the error card and its retry, bounded by a timeout. A frame the browser refuses fires **no** `error` event — the refusal is handled before the element hears about it — so `onLoad` alone cannot tell "still arriving" from "will never arrive", and without a clock the signer waits forever on a page with no session and no support channel. |
+| 36 | A coordinate leaves in the wrong unit | Nothing detects it. The provider accepts any number, stores it, echoes it back unchanged, materializes the field and sends the document; the signature simply lands somewhere else on the page. The double echoes what it is given and so agrees with whatever we believe. `TC-04-INT-27` asserts the conversion, and it is the only automated thing that can fail when this breaks. |
 
 ## Data Model
 
@@ -876,11 +972,12 @@ Provider unreachable:
 
 1. Sender fills and sends as spec 02 describes; nothing on the fill form changes.
 2. The service freezes `renderedHtml` and computes `documentHash` — unchanged from spec 02.
-3. The renderer translates signer-owned placeholders and signature blocks into SignWell text tags
-   and asserts no other `{{…}}` survives (requirement 14).
-4. `PdfRenderer` produces the PDF from the translated HTML.
+3. A **copy** of the frozen HTML is built: its signature section is hoisted onto an execution
+   page at the front, every signer-owned placeholder becomes a numbered blank with a row on that
+   page, and no `{{…}}` may survive (requirement 14).
+4. `PdfRenderer` produces the PDF from that copy.
 5. `createSession` posts the document with `test_mode`, `embedded_signing`, `apply_signing_order`,
-   and `metadata.envelope_id`.
+   `metadata.envelope_id`, and the `fields` list read off the execution page.
 6. On success, `providerKey`, `providerRef`, each signer's `providerRef`, and `providerTestMode`
    are written in the same transaction that flips the envelope to `sent` and records the `sent`
    event.
@@ -893,8 +990,10 @@ Provider unreachable:
 2. `signerAccess` fetches a fresh `embedded_signing_url` for this recipient.
 3. The page renders our shell with the URL in an iframe.
 4. The signer completes the fields and signs inside the widget.
-5. The `SignWellEmbed` `completed` event fires in the parent page; we show our own confirmation
-   and **do not** treat the message as state — a `postMessage` is a hint from a frame, not a fact.
+5. The widget posts `{action: "completed"}` to the parent, our listener checks `event.origin`
+   against the embed host before reading it, and we show our own confirmation. We **do not**
+   treat the message as state — a `postMessage` is a hint from a frame, not a fact. There is no
+   `SignWellEmbed` object: requirement 15 does not load the SDK.
 6. SignWell POSTs `document_signed` to our webhook.
 7. The reconciler verifies the hash, records the notification, calls `fetchState`, sees signer 1
    signed and signer 2 pending, converges, writes the `signed` event, and moves the envelope to
@@ -913,7 +1012,7 @@ Provider unreachable:
    and the `completed` event.
 6. Completion mail goes out through our SES, as under the internal provider.
 
-### Alt Flow: Text tags unresolved (branches from send, step 3)
+### Alt Flow: Placeholders unresolved (branches from send, step 3)
 
 The assertion fails. No SignWell document is created, the envelope stays `draft`, and the sender
 sees "This document still contains unresolved placeholders and cannot be sent." with the offending
@@ -1153,6 +1252,8 @@ spend a whole E2E case re-reading a string the API already decided.
 |---|---|---|
 | **The in-house engine** | Rewriting `InternalSignatureProvider` onto a new port touches a shipped, working signature path. A regression here breaks executed contracts, not a screen. | Requirement 10: spec 02's suite must pass **unedited**. Any test that needs changing is a defect of this work. |
 | **`envelopes.service.ts`** | The send path gains provider branching, and it is already the largest service in the area. | Branch on `capabilities`, never on `providerKey`; the switch exists in one place. |
+| **`envelope-renderer.ts`** | It is shared with the internal provider, which needs no geometry at all, and spec 02's suite asserts fragments of the frozen HTML byte for byte. | The frozen document gains `data-field-*` attributes on the signature blocks and two comment markers, and nothing else: no reordering, no new visible element, no change to `.signature-line` or `.signature-mark`. The execution page is assembled in the SignWell copy. |
+| **The SignWell doubles** | The E2E stub materialized one signature field per recipient out of nothing, which is why seven integration suites and a full E2E run passed against behaviour the provider has never had. A double that is wrong in the provider's favour is worse than no double. | Both doubles now echo the request: fields exist only when the request supplied them, and a document created with none stays in `Draft` and is never sent — the live behaviour BUG-001 measured. |
 | **`envelope-completion.ts`** | Two sources of PDF bytes instead of one. | The content-addressed key and the `updateMany` guard are unchanged; only the byte source is chosen earlier. |
 | **`/sign/{token}`** | The route now has two bodies. Its guards, token validation and `viewed` recording stay common. | `surface` is decided server-side and the client renders one of two bodies; the access rules are not duplicated. |
 | **The event chain** | A second writer (the reconciler) joins the controllers. | It writes through `EnvelopeEventsService` like everything else, so invariant 4 holds by construction. |
@@ -1228,7 +1329,10 @@ spend a whole E2E case re-reading a string the API already decided.
 |---|---|---|
 | **The webhook hash authenticates almost nothing.** Verified to work as documented, and verified to be the only signal there is: `type@time` keyed by the webhook id, carried in the body, with no signature header. | We never write state from a body: every notification triggers a re-fetch (requirement 21), so a forged or replayed body can at worst cause an unnecessary API call. | SignWell signing the request body with a real shared secret. Until then, treat the endpoint as public. |
 | **No event id, so dedupe is a composite key.** Two genuinely distinct events of the same type, for the same signer, in the same second would collapse into one. | Convergence is idempotent and state-based, so collapsing two notifications loses nothing — the second would have re-read the same state. | An event id from the provider. |
-| **Text tags remain in the document.** SignWell does not strip them; we hide them by painting them the background colour. | Our templates are our own HTML with a known white page background. | Server-side tag stripping by the provider, or field placement by coordinates once we can compute them. |
+| **The execution page's coordinates are computed, never measured.** Requirement 14e lists every constant they rest on. Two of them are not ours: the page size and the print margins of `devscribed-pdf-render-{env}`, the production renderer, which lives outside this repository. If that function is configured for Letter, or for margins other than 20 mm / 18 mm, every field box shifts and nothing in the send notices. | The boxes sit on a page that is deliberately sparse — a 240 × 36 pt box on a 72 pt row — so a small error is still a box on its own blank line, and any error at all is visible on the first page of the first document anyone opens. | Pinning the Lambda's `page.pdf` options to the same A4 and margins the local driver uses, and asserting it. Until then the first live send is looked at by a person. |
+| **A signer-entered value prints on the execution page, not in the sentence its placeholder sat in.** The prose keeps a numbered blank pointing at the row. | Placing a field inline would need the position of a run of text on a rendered page, which requirement 14e explains we cannot get. The reference is visible in both directions, so the document still reads. | Measured geometry — a renderer that returns element boxes along with the bytes. |
+| **A document rendered without a browser gets no execution page.** `LocalChromiumPdfRenderer` degrades to a single-page Latin-1 writer when no Chromium can be resolved, and that writer honours no CSS at all, so the field boxes land over whatever text is at the top of its one page. | It is loud: the driver logs that its output is not the production rendering, and the integration suite runs there deliberately (CI installs no browser for it) against a doubled provider that never sees a PDF. No deployed environment renders that way — the API image carries a browser and production uses the Lambda. | Refusing the fallback writer on the SignWell send path, once the integration suite no longer depends on it. |
+| **Whether text-tag parsing is off for this account or absent from the API is not established.** BUG-001 tested one workspace, one plan, one key; a plan-gated feature and a withdrawn one look identical from there. | It does not change what the product does — the explicit field list is deterministic and verified working on the account this product uses. | A statement from SignWell. It would change nothing here unless tags turn out to be both available and cheaper than the execution page. |
 | **Two evidence formats coexist in one organization.** An envelope signed before the switch has our Certificate of Completion; one after has SignWell's audit page. | Both are complete records; neither is diminished by the other existing. The envelope detail names which one it is. | Nothing, by design — history is not rewritten. |
 | **A rolled-back release stalls SignWell envelopes.** The old code has no reconciler, so an in-flight SignWell envelope stops advancing until the roll-forward. | No data is lost or corrupted; the sweep converges everything on the next deploy. | Keeping the reconciler in the previous release before enabling the provider. |
 | **Test-mode documents may be purged on SignWell's side.** | We download and store the completed PDF ourselves (requirement 27), so our copy is durable. | Nothing — this is the correct arrangement regardless. |
@@ -1264,32 +1368,36 @@ Observable statements, checkable without reading the implementation.
     after the first.
 11. A verified webhook naming a document we do not hold is answered identically to one we do.
 12. No provider call is made while a database transaction is open.
+13. No request this codebase sends sets `text_tags: true`, and every SignWell document it creates
+    carries a `fields` list it built itself.
+14. A double that materializes fields only when the request supplied them, and leaves a
+    field-less document in `Draft`, passes the same suites the live API would.
 
 ## Test Cases
 
 Test levels follow the repository rule: a server rule is proved at integration even when a screen
 shows it, and E2E is spent only where the assertion is out of reach of an API test.
 
-### TC-04-UNIT-01: Text-tag translation replaces signer placeholders and nothing else
+### TC-04-UNIT-01: The copy resolves signer placeholders, and the field list matches the page
 
 - **Level:** Unit
 - **Preconditions:** frozen HTML with a sender-substituted value, a signer-owned `{{signer_note}}`, and a signature block carrying `data-signer-role="contractor"`.
-- **Steps:** 1. Translate for SignWell with two signers.
-- **Expected Result:** 1. `{{signer_note}}` becomes a text tag bound to the contractor's index. 2. The signature block emits a signature tag. 3. The sender-substituted text is byte-identical to the input. 4. No other `{{` remains.
+- **Steps:** 1. Build the SignWell copy for two signers.
+- **Expected Result:** 1. `{{signer_note}}` becomes a numbered blank and a `text` field bound to the contractor's recipient number with the template's `required` flag. 2. The signature block yields one `signature` field for that signer. 3. The sender-substituted text is byte-identical to the input. 4. No `{{` remains anywhere. 5. Every field in the list has a row on the execution page, and every row's box is the one requirement 14e's grid computes for its index.
 
-### TC-04-UNIT-02: A stray placeholder aborts translation
+### TC-04-UNIT-02: A stray placeholder aborts the copy
 
 - **Level:** Unit
 - **Preconditions:** frozen HTML containing `{{unbound_key}}` that belongs to no signer and no signature block.
-- **Steps:** 1. Translate.
+- **Steps:** 1. Build the copy.
 - **Expected Result:** 1. Throws `document_tags_unresolved`. 2. The error names `unbound_key`.
 
-### TC-04-UNIT-03: A sender value containing braces aborts translation
+### TC-04-UNIT-03: A sender value containing braces aborts the copy
 
 - **Level:** Unit
 - **Preconditions:** a sender field whose value is the literal text `rate is {{tbd}}`.
-- **Steps:** 1. Freeze and translate.
-- **Expected Result:** 1. Throws `document_tags_unresolved` naming `tbd`. This is the case that would otherwise put an invisible extra field on a signed contract.
+- **Steps:** 1. Freeze and build the copy.
+- **Expected Result:** 1. Throws `document_tags_unresolved` naming `tbd`. This is the case that would otherwise print `{{tbd}}` on a contract somebody signs.
 
 ### TC-04-UNIT-04: Webhook hash verification, against a hash SignWell produced
 
@@ -1333,14 +1441,14 @@ shows it, and E2E is spent only where the assertion is out of reach of an API te
 - **Steps:** 1. Send.
 - **Expected Result:** 1. No second document is created. 2. The existing reference is adopted. 3. The envelope reaches `sent` exactly once.
 
-### TC-04-INT-03a: The send verifies that text tags materialized
+### TC-04-INT-03a: The send verifies that the fields it sent came back
 
 - **Level:** Integration
 - **Preconditions:** the stub answers `201` with `status: "Created"`, `fields: []`, then on the second read returns `Sent` with a signature field per signer.
 - **Steps:** 1. Send.
 - **Expected Result:** 1. The service polled rather than trusting the `201`. 2. The envelope reaches `sent`. 3. No signer is left without a signature field.
 
-### TC-04-INT-03b: A tag that failed to parse aborts and deletes
+### TC-04-INT-03b: A field the provider dropped aborts and deletes
 
 - **Level:** Integration
 - **Preconditions:** the stub returns `Sent` with only one signature field for a two-signer document.
@@ -1511,6 +1619,73 @@ shows it, and E2E is spent only where the assertion is out of reach of an API te
 - **Preconditions:** the stub blocks for two seconds on `createSession`.
 - **Steps:** 1. Send while a second request reads the same envelope.
 - **Expected Result:** 1. The reader is not blocked. 2. No transaction was open for the duration of the call — invariant 11.
+
+### TC-04-INT-23: A signer address the provider will not accept is refused at entry
+- **Level:** Integration
+- **Preconditions:** an organization on SignWell, with a published template and a draft envelope.
+- **Steps:**
+  1. PUT the envelope with a second signer whose email is `фывфывфыв@gmail.com`.
+  2. PUT the envelope with `ivan.demchenko.dev@gmail.com` and `alex+contracts@example.co.uk`.
+- **Expected Result:**
+  1. `400`, `errors["signers[1].email"]` is "Enter a valid email address", no SignWell call is
+     made at all, the envelope stays `draft` with no provider reference, and **neither** address
+     is stored — the save is refused whole, including the valid first one.
+  2. `200`, both stored: the tightening refuses a script, not plus-addressing or dots.
+- **Implemented in:** `apps/api/test/signwell-send.spec.ts`.
+
+### TC-04-INT-24: A 4xx is a permanent refusal, not an outage, and scans for no orphan
+- **Level:** Integration
+- **Preconditions:** an organization on SignWell with a sendable envelope; and, for the client
+  half, the real `HttpSignWellClient` over a stub transport.
+- **Steps:**
+  1. The create fails with a permanent refusal; send the envelope.
+  2. The create fails with an outage; send the envelope.
+  3. The transport answers `422` with
+     `{"errors":{"files":{"file_1":{"file_data":["is invalid","The document could not be read"]}}}}`.
+  4. The transport answers `403` with a body naming no field.
+  5. The transport answers `503`.
+- **Expected Result:**
+  1. The envelope stays `draft`, nothing is applied, no `sent` event — and `listDocuments` is
+     called **zero** times: the orphan scan does not run.
+  2. `listDocuments` **is** called, which is the case requirement 26 exists for.
+  3. Rejects with `ProviderRejectedRequestError`, not `ProviderUnavailableError`; `status` 422
+     and `fieldPath` `files.file_1.file_data`; one request, no backoff, and the adopt-existing
+     lookup is never invoked. The provider's prose ("could not be read") appears nowhere in
+     what is extracted.
+  4. Rejects with `ProviderRejectedRequestError`, `fieldPath` `null`.
+  5. Still an outage: `ProviderUnavailableError` after five attempts.
+- **Implemented in:** `apps/api/test/signwell-send.spec.ts` (steps 1–2) and
+  `apps/api/test/signwell-client.spec.ts` (steps 3–5).
+
+### TC-04-INT-25: The send supplies the fields, against a double that materializes nothing else
+
+BUG-001's regression test. It is numbered 25 rather than the 21 that report names, because
+TC-04-INT-21 was already the rate-limiter case when the report was written.
+
+- **Level:** Integration
+- **Preconditions:** an organization on SignWell, a template with two signature blocks bound to two signers and one signer-owned field; a double whose `POST /documents` answers `fields: []` and afterwards materializes **only** the fields the request supplied, leaving a field-less document in `Draft`.
+- **Steps:** 1. Send the envelope.
+- **Expected Result:** 1. The create body has `text_tags: false` and a `fields` list: one `signature` per signer with `recipient_id` equal to that signer's `signing_order`, plus one `text` for the signer-owned field on the signer whose role owns it, each carrying `page: 1` and a box on the execution page's grid. 2. The document reaches `Sent` and the envelope stores its `providerRef`. 3. A send whose field list the double drops leaves the document in `Draft`, deletes it, and refuses with `document_fields_not_materialized` — which is what the old code did on every send.
+
+### TC-04-INT-26: The signing URL is made embeddable before it leaves the adapter
+
+BUG-003's regression test.
+
+- **Level:** Integration
+- **Preconditions:** a `Sent` SignWell envelope whose double answers `https://example.test/docs/abc/` as `embedded_signing_url`.
+- **Steps:** 1. `GET /api/sign/{token}`.
+- **Expected Result:** 1. `embeddedSigningUrl` is `https://example.test/docs/abc/?signwell_embedded_iframe=1`. 2. A URL that already carries `?foo=1` keeps it and gains the parameter alongside. 3. A missing URL stays `null`, so no caller frames the string `"null"`.
+- **Implemented in:** `apps/api/test/signwell-embeddable.spec.ts`.
+
+### TC-04-INT-27: Box geometry is converted to the provider's units
+
+BUG-004's regression test.
+
+- **Level:** Integration in number, unit in shape — it is the only automated thing that can fail when the units drift, so it belongs with the cases a person reads when the send path changes.
+- **Preconditions:** none.
+- **Steps:** 1. Convert the execution page's first row.
+- **Expected Result:** 1. `72 pt` is `96 px` and A4's `595.28 pt` is `793.71 px`. 2. The grid's first row `y` of `136.7` leaves as `182.27`. 3. Width and height scale with the origin: `240 × 36` becomes `320 × 48`.
+- **Implemented in:** `apps/api/test/signwell-embeddable.spec.ts`.
 
 ### TC-04-E2E-01: An admin switches the organization to SignWell
 

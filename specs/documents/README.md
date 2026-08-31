@@ -267,6 +267,13 @@ Both are follow-ups the spec owes before spec 04's SignWell path can work, per
   Requirement 13's recorded observation does not reproduce: SignWell materializes no fields
   from text tags, so requirements 14 and 38 rest on a premise that does not hold and need
   rewriting before any code changes.
+- **[BUG-003](../bugs/BUG-003-embedded-signing-url-refuses-framing.md)** — `SPEC-GAP`. The
+  provider's signing URL refuses framing until asked with `signwell_embedded_iframe=1`; this
+  also settles the SDK contradiction between requirement 15 and the Flows section, in
+  requirement 15's favour.
+- **[BUG-004](../bugs/BUG-004-field-geometry-sent-in-points-not-provider-pixels.md)** —
+  `SPEC-GAP`. Requirement 14e's grid is in points and says nothing about the unit the field
+  list leaves in; the provider places in CSS pixels, so every signature landed a row high.
 - **[BUG-002](../bugs/BUG-002-email-validation-looser-than-the-provider.md)** — `SPEC-GAP`.
   Two edge cases missing: a signer address the provider will not accept, and a provider `4xx`
   reported to the sender as an outage.

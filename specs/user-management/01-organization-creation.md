@@ -62,7 +62,9 @@ Any new person can sign up for Devscribed.Admin and, as part of signing up, crea
 10. The organization's `createdAt` and the membership's "joined" date are recorded at creation time.
 11. The user's timezone is auto-detected from the browser at signup (via `Intl.DateTimeFormat().resolvedOptions().timeZone`) and stored on the account.
 12. Email verification of the creator's own address is not required to complete signup in this release.
-13. **Email format validation:** email must conform to a standard `local@domain.tld` pattern (at least one character before `@`, a domain with at least one dot, and a TLD). Email must not exceed 254 characters. Validation is enforced both client-side (on blur and on submit) and server-side on the API.
+13. **Email format validation:** email must conform to a standard `local@domain.tld` pattern (a local part, a domain with at least one dot, and a TLD). Email must not exceed 254 characters. Validation is enforced both client-side (on blur and on submit) and server-side on the API.
+
+    **The local part is ASCII**, restricted to the unquoted set RFC 5322 permits — letters, digits, and ``!#$%&'*+/=?^_`{|}~-`` — as dot-separated atoms, so a dot may not lead, trail, or repeat. Two consequences are deliberate: **plus-addressing is accepted** (`user+contracts@gmail.com`), and **quoted local parts are refused** (`"john doe"@example.com` is legal RFC 5322 and accepted almost nowhere). The domain rule already required Latin letters in the TLD; before BUG-002 the local part required nothing, so `фывфывфыв@gmail.com` was accepted here and refused later by the signature provider at the send. **This rule governs every address the product stores** — signup, invitation, account settings, and envelope signers — and lives in one place, `packages/validation`.
 14. **Field-specific error messages:** each validation rule produces a specific, deterministic error message. The complete set:
 
     | Field | Rule | Error message |
@@ -263,6 +265,10 @@ Each field is a labeled text input with:
   6. Validate `"user@example.com"` (valid).
   7. Validate a 254-character email (boundary — valid).
   8. Validate a 255-character email (over limit).
+  9. Validate `"фывфывфыв@gmail.com"` (non-ASCII local part — BUG-002).
+  10. Validate `"\"john doe\"@example.com"` (quoted local part).
+  11. Validate `".user@example.com"`, `"user.@example.com"` and `"us..er@example.com"` (misplaced dots).
+  12. Validate `"user+contracts@gmail.com"` and ``"a!#$%&'*+/=?^_`{|}~-b@example.com"`` (plus-addressing and the rest of the permitted set).
 - **Expected Result:**
   1. Empty → invalid ("Email is required").
   2. No `@` → invalid ("Enter a valid email address").
@@ -272,6 +278,10 @@ Each field is a labeled text input with:
   6. `"user@example.com"` → valid.
   7. 254 chars → valid (boundary).
   8. 255 chars → invalid ("Email must be at most 254 characters").
+  9. Non-ASCII local part → invalid ("Enter a valid email address").
+  10. Quoted local part → invalid ("Enter a valid email address").
+  11. All three misplaced-dot forms → invalid ("Enter a valid email address").
+  12. Both → valid.
 
 ### TC-01-UNIT-07: Password error messages are rule-specific
 - **Level:** Unit

@@ -6,7 +6,7 @@ surface: api
 verdict: SPEC-GAP
 owning-spec: documents/04
 violates: null
-regression-test: TC-04-INT-22
+regression-test: TC-04-INT-23
 introduced-in: predates this spec; the shared pattern is spec 01's
 affects: all
 tags: [validation, signwell, email, error-mapping]
@@ -121,7 +121,7 @@ having; nothing breaks without one.
 
 ## Regression Test
 
-`TC-04-INT-22` — a signer address with a non-Latin local part is refused at entry.
+`TC-04-INT-23` — a signer address with a non-Latin local part is refused at entry.
 
 **Precondition:** an organization on SignWell.
 
@@ -133,7 +133,7 @@ envelope is created and no provider call is made.
 **Against the current code it fails**: the address is accepted, the envelope is created, and
 the failure appears later as `provider_unavailable`.
 
-A second case, `TC-04-INT-23`, covers the mapping: a provider `422` produces a permanent
+A second case, `TC-04-INT-24`, covers the mapping: a provider `422` produces a permanent
 refusal, not `provider_unavailable`, and no orphan scan runs.
 
 ## Known Gaps

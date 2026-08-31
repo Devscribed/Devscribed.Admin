@@ -6,7 +6,7 @@ surface: api
 verdict: SPEC-DEFECT
 owning-spec: documents/04
 violates: null
-regression-test: TC-04-INT-21
+regression-test: TC-04-INT-25
 introduced-in: never worked against the live API; the stub hid it
 affects: all
 tags: [signwell, text-tags, send, spec-observation]
@@ -147,7 +147,7 @@ stored data whose shape changes.
 
 ## Regression Test
 
-`TC-04-INT-21` — a send against a SignWell double that behaves like the live API.
+`TC-04-INT-25` — a send against a SignWell double that behaves like the live API.
 
 **Precondition:** an organization on SignWell, a template with two signature blocks bound to
 two signers, and a double whose `POST /documents` returns `fields: []` and materializes only
@@ -171,7 +171,7 @@ provider does not have.
 
 - A SignWell envelope sent from the UI reaches `Sent` at the provider and stores its ref.
 - The signer's `/sign/{token}` page loads the widget through a real `embedded_signing_url`.
-- `TC-04-INT-21` passes; the reproduction above no longer reproduces.
+- `TC-04-INT-25` passes; the reproduction above no longer reproduces.
 - No request from this codebase sets `text_tags: true`.
 - Requirements 13, 14 and 38 are rewritten before the code changes, per CLAUDE.md.
 
