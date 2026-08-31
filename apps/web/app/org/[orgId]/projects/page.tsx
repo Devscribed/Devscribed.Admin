@@ -56,29 +56,40 @@ export default function ProjectsPage({ params }: { params: Promise<{ orgId: stri
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ProjectListItem | null>(null);
 
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    try {
-      const response = await fetch(
-        `/api/organizations/${orgId}/projects?status=${parseProjectStatusFilter(filter)}`,
-        { credentials: 'same-origin' },
-      );
-      if (response.ok) {
-        const data = (await response.json()) as ProjectsResponse;
-        setProjects(data.projects);
-      } else {
+  const load = useCallback(
+    async (signal?: AbortSignal): Promise<void> => {
+      setLoading(true);
+      try {
+        const response = await fetch(
+          `/api/organizations/${orgId}/projects?status=${parseProjectStatusFilter(filter)}`,
+          { credentials: 'same-origin', signal },
+        );
+        if (signal?.aborted) return;
+        if (response.ok) {
+          const data = (await response.json()) as ProjectsResponse;
+          if (signal?.aborted) return;
+          setProjects(data.projects);
+        } else {
+          setProjects([]);
+          showToast('toast-projects-error', PROJECT_MESSAGES.genericError, 'error');
+        }
+      } catch (err) {
+        if ((err as Error)?.name === 'AbortError') return;
         setProjects([]);
         showToast('toast-projects-error', PROJECT_MESSAGES.genericError, 'error');
       }
-    } catch {
-      setProjects([]);
-      showToast('toast-projects-error', PROJECT_MESSAGES.genericError, 'error');
-    }
-    setLoading(false);
-  }, [orgId, filter, showToast]);
+      if (signal?.aborted) return;
+      setLoading(false);
+    },
+    [orgId, filter, showToast],
+  );
 
   useEffect(() => {
-    void load();
+    // Cancel the previous in-flight fetch when the filter changes so its late reply
+    // can't clobber the newer one (a race that shows up under slower CI compile times).
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
   }, [load]);
 
   async function handleRestore(project: ProjectListItem): Promise<void> {
