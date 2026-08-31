@@ -21,7 +21,11 @@ function base(variant, disabled) {
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '100%',
+    /* §1 — prod's Button is always inside a width-constrained wrapper, so `width: '100%'`
+       measured as harmless there and is not a design decision. Removed, because a button that
+       cannot be narrower than its parent has no way to sit next to anything. Blue's own
+       compositions that leaned on it now say so themselves: ConfirmDialog passes the width,
+       FormActions stretches its slot with a grid. */
     padding: '0 8px',
     height: 44,
     border: '1.5px solid transparent',
@@ -49,21 +53,32 @@ function base(variant, disabled) {
  * Variants: default (outlined neutral), primary (solid blue), delete (solid red).
  * Hover: default fades to 60% opacity; primary/delete brighten via filter — never darken with a new color.
  */
-export function Button({ variant, icon, preloader, disabled, children, onClick, type = 'button' }) {
+export const Button = React.forwardRef(function Button(
+  /* §2 — blue destructures seven props and forwards nothing, so `data-testid`, `ref`, `aria-*`,
+     `className` and `style` were dropped on the floor. That is a measurement gap, not an API:
+     prod never needed them because prod has no test ids. */
+  { variant, icon, preloader, disabled, children, onClick, type = 'button', style, onMouseEnter, onMouseLeave, ...rest },
+  ref,
+) {
   const [hover, setHover] = React.useState(false);
-  const style = base(variant, disabled);
+  const painted = base(variant, disabled);
   if (hover && !disabled) {
-    if (variant === 'primary' || variant === 'delete') style.filter = 'brightness(90%)';
-    else style.opacity = 0.6;
+    if (variant === 'primary' || variant === 'delete') painted.filter = 'brightness(90%)';
+    else painted.opacity = 0.6;
   }
   return (
     <button
+      {...rest}
+      ref={ref}
       type={type}
       disabled={disabled}
+      /* §2 — a button that has swapped its label for "Signing in" and started a request is busy,
+         and a screen reader has no other way to know. Prod never announced it. */
+      aria-busy={preloader ? true : undefined}
       onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={style}
+      onMouseEnter={(e) => { setHover(true); if (onMouseEnter) onMouseEnter(e); }}
+      onMouseLeave={(e) => { setHover(false); if (onMouseLeave) onMouseLeave(e); }}
+      style={{ ...painted, ...style }}
     >
       {(icon || preloader) && <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, flexShrink: 0 }}>{icon}</span>}
       <span className="ds-btn-title" style={{ margin: '0 10px' }}>{children}</span>
@@ -81,4 +96,4 @@ export function Button({ variant, icon, preloader, disabled, children, onClick, 
       )}
     </button>
   );
-}
+});

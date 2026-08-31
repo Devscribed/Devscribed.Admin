@@ -31,8 +31,10 @@ export function ConfirmDialog({ title, description, open, onClose, onAccept, acc
         <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
           <div style={{ width: '100%', color: 'var(--text-primary)', marginBottom: 20, fontFamily: 'var(--font-family-base)', fontSize: 'var(--font-size-base)' }}>{description}</div>
           <div style={{ display: 'flex', alignSelf: 'flex-end', gap: 10 }}>
-            <div style={{ minWidth: 100 }}><Button onClick={onClose}>{declineBtnText}</Button></div>
-            <div style={{ minWidth: 100 }}><Button variant="primary" onClick={handleAccept}>{acceptBtnText}</Button></div>
+            {/* the width used to come from Button's own `width: '100%'`; it is passed here
+                now that §1 has removed it, so these two still fill their 100px slots. */}
+            <div style={{ minWidth: 100 }}><Button style={{ width: '100%' }} onClick={onClose}>{declineBtnText}</Button></div>
+            <div style={{ minWidth: 100 }}><Button style={{ width: '100%' }} variant="primary" onClick={handleAccept}>{acceptBtnText}</Button></div>
           </div>
         </div>
       </div>

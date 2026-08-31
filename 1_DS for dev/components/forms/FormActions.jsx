@@ -10,8 +10,10 @@ export function FormActions({ children, leading, maxWidth = 240, align = 'right'
   return (
     <div style={{ display: 'flex', width: '100%', maxWidth: full ? '100%' : maxWidth, marginLeft: align === 'left' ? 0 : 'auto', gap }}>
       {leading && <div style={{ marginRight: 'auto' }}>{leading}</div>}
+      {/* `display: grid` stretches the child to fill the slot, which is what Button's own
+          `width: '100%'` did for it before §1 removed that. */}
       {React.Children.map(children, (child) => (
-        <div style={{ flex: full ? '0 0 auto' : 1, minWidth: full ? 100 : 0 }}>{child}</div>
+        <div style={{ display: 'grid', flex: full ? '0 0 auto' : 1, minWidth: full ? 100 : 0 }}>{child}</div>
       ))}
     </div>
   );

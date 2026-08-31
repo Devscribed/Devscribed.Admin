@@ -10,12 +10,14 @@
 declare module '@ds' {
   export * from '@ds/components/appLayout/AccountMenu';
   export * from '@ds/components/appLayout/AppShell';
+  export * from '@ds/components/appLayout/AuthLayout';
   export * from '@ds/components/appLayout/MiniTracker';
   export * from '@ds/components/appLayout/Navbar';
   export * from '@ds/components/appLayout/Tracker';
 
   export * from '@ds/components/core/Badge';
   export * from '@ds/components/core/Button';
+  export * from '@ds/components/core/IconButton';
   export * from '@ds/components/core/PageTitle';
   export * from '@ds/components/core/ToggleButton';
 

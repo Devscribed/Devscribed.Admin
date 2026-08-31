@@ -5,6 +5,7 @@
 // two disagree, and every disagreement must carry a number in specs/design-system/ledger.md.
 
 export { AccountMenu } from './components/appLayout/AccountMenu.jsx';
+export { AuthLayout } from './components/appLayout/AuthLayout.jsx';
 export { AppShell } from './components/appLayout/AppShell.jsx';
 export { MiniTracker } from './components/appLayout/MiniTracker.jsx';
 export { Navbar } from './components/appLayout/Navbar.jsx';
@@ -12,6 +13,7 @@ export { Tracker } from './components/appLayout/Tracker.jsx';
 
 export { Badge } from './components/core/Badge.jsx';
 export { Button } from './components/core/Button.jsx';
+export { IconButton } from './components/core/IconButton.jsx';
 export { PageTitle } from './components/core/PageTitle.jsx';
 export { ToggleButton } from './components/core/ToggleButton.jsx';
 
@@ -59,6 +61,8 @@ export {
   ReportsIcon,
   TimeOffIcon,
   OrgIcon,
+  Eye,
+  EyeOff,
   Icon,
 } from './components/icons/Icon.jsx';
 

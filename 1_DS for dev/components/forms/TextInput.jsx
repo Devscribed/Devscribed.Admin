@@ -9,12 +9,29 @@ if (typeof document !== 'undefined' && !document.getElementById('ds-text-input-s
   document.head.appendChild(el);
 }
 
+/* Blue's error message: absolute, 8px, `*`-prefixed, 16px below the field. `hint` (§4) takes the
+   same slot and the same geometry deliberately — a hint that sat in flow would push the field
+   below it every time an error replaced it, and a hint drawn larger than the error it swaps with
+   would make the swap jump. One slot, one geometry, error wins when both are given. */
+const messageSlot = {
+  position: 'absolute', fontSize: 8, bottom: -16, left: 0, whiteSpace: 'nowrap',
+};
+
 /**
  * TextInput — labeled text field recreated from components/shared/forms/ValidationTextInput
  * and the global `.form-control` / `.input-label` / `.errorInput` rules in index.scss.
  */
-export function TextInput({ label, description, error, placeholder, value, onChange, type = 'text' }) {
+export const TextInput = React.forwardRef(function TextInput({
+  label, description, error, errorId, hint, hintId, trailing,
+  placeholder, value, onChange, type = 'text',
+  /* §3 — blue forwards nothing, so `data-testid`, `readOnly`, `autoFocus`, `onBlur`, `name`,
+     `required` and every `aria-*` vanished before reaching the DOM. `id` is new here too: blue's
+     <label> has no `htmlFor`, which is an accessibility gap rather than a measured choice. */
+  id, style, onFocus, onBlur, ...rest
+}, ref) {
   const [focused, setFocused] = React.useState(false);
+  const generatedId = React.useId();
+  const inputId = id || generatedId;
   const inputStyle = {
     display: 'block',
     width: '100%',
@@ -30,27 +47,38 @@ export function TextInput({ label, description, error, placeholder, value, onCha
     borderTopRightRadius: description ? 0 : 'var(--radius-l)',
     borderBottomRightRadius: description ? 0 : 'var(--radius-l)',
     padding: 10,
+    /* §5 — room for the trailing control, so a long value never runs under it. */
+    paddingRight: trailing ? 44 : 10,
     outline: 'none',
     boxShadow: error ? 'var(--shadow-error-glow)' : focused ? 'var(--shadow-focus-input)' : 'none',
     transition: 'var(--transition-border-focus)',
     boxSizing: 'border-box',
+    ...style,
   };
+  const message = error
+    ? <div style={{ ...messageSlot, color: 'var(--status-error)' }}>*<span id={errorId} data-testid={errorId}>{error}</span></div>
+    : hint
+      ? <div style={{ ...messageSlot, color: 'var(--text-secondary)' }}><span id={hintId}>{hint}</span></div>
+      : null;
   return (
     <div>
       {label && (
-        <label style={{ display: 'inline-block', fontWeight: 'var(--font-weight-regular)', fontSize: 'var(--font-size-xs)', lineHeight: '21px', color: 'var(--text-secondary)', marginBottom: 4, padding: '10px 0 0 10px' }}>
+        <label htmlFor={inputId} style={{ display: 'inline-block', fontWeight: 'var(--font-weight-regular)', fontSize: 'var(--font-size-xs)', lineHeight: '21px', color: 'var(--text-secondary)', marginBottom: 4, padding: '10px 0 0 10px' }}>
           {label}
         </label>
       )}
       <div style={{ position: 'relative', display: description ? 'grid' : 'block', gridTemplateColumns: description ? '40% 60%' : undefined, alignItems: 'center' }}>
         <input
+          {...rest}
+          ref={ref}
+          id={inputId}
           className="ds-text-input"
           type={type}
           placeholder={placeholder}
           value={value}
           onChange={onChange}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          onFocus={(e) => { setFocused(true); if (onFocus) onFocus(e); }}
+          onBlur={(e) => { setFocused(false); if (onBlur) onBlur(e); }}
           style={inputStyle}
         />
         {description && (
@@ -58,10 +86,16 @@ export function TextInput({ label, description, error, placeholder, value, onCha
             {description}
           </div>
         )}
-        {error && (
-          <div style={{ position: 'absolute', fontSize: 8, bottom: -16, left: 0, color: 'var(--status-error)', whiteSpace: 'nowrap' }}>*{error}</div>
+        {/* §5 — the trailing slot sits over the field's own right padding. It is positioned
+            against the input, so it is not combined with `description`, which splits the row
+            into a grid. Nothing in the app uses both. */}
+        {trailing && (
+          <span style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center' }}>
+            {trailing}
+          </span>
         )}
+        {message}
       </div>
     </div>
   );
-}
+});

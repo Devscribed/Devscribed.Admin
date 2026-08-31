@@ -2,14 +2,14 @@
 
 import Link from 'next/link';
 import { useRef, useState, type FormEvent } from 'react';
-import { AuthLayout, Button, InfoBanner, Input } from '@/ds';
-import { errorNode, focusByTestId } from '@/field-error';
+import { AuthLayout, Button, InfoBanner, TextInput } from '@/ds';
+import { focusByTestId } from '@/field-error';
 import { AUTH_MESSAGES, MESSAGES, validateEmail } from '@devscribed/validation';
 
 const EMAIL_TEST_ID = 'forgot-email-input';
 
 const backToLogin = (
-  <Link href="/login" data-testid="forgot-back-link" style={{ textDecoration: 'none' }}>
+  <Link href="/login" data-testid="forgot-back-link">
     Back to login
   </Link>
 );
@@ -83,7 +83,7 @@ export function ForgotPasswordScreen() {
     return (
       <AuthLayout title="Forgot your password?" footer={backToLogin}>
         <InfoBanner
-          tone="info"
+          variant="info"
           role="alert"
           aria-live="polite"
           data-testid="forgot-confirmation-message"
@@ -92,10 +92,10 @@ export function ForgotPasswordScreen() {
         </InfoBanner>
         <p
           style={{
-            margin: 'var(--sp-4) 0 0',
-            fontSize: 'var(--fs-13)',
-            lineHeight: 'var(--lh-normal)',
-            color: 'var(--text-muted)',
+            margin: 'var(--space-3) 0 0',
+            fontSize: 'var(--font-size-s)',
+            lineHeight: 'var(--line-height-base)',
+            color: 'var(--text-secondary)',
           }}
         >
           Check your inbox — the link expires in 60 minutes.
@@ -106,13 +106,13 @@ export function ForgotPasswordScreen() {
           data-testid="forgot-retry-link"
           style={{
             display: 'inline-block',
-            marginTop: 'var(--sp-8)',
+            marginTop: 'var(--space-6)',
             padding: 0,
             border: 'none',
             background: 'none',
             font: 'inherit',
-            fontSize: 'var(--fs-13)',
-            color: 'var(--accent)',
+            fontSize: 'var(--font-size-s)',
+            color: 'var(--text-link)',
             cursor: 'pointer',
           }}
         >
@@ -130,15 +130,17 @@ export function ForgotPasswordScreen() {
     >
       <form onSubmit={submit} noValidate data-testid="forgot-form">
         {banner && (
-          <div style={{ marginBottom: 'var(--sp-8)' }}>
-            <InfoBanner tone="error" role="alert" aria-live="polite">
+          <div style={{ marginBottom: 'var(--space-6)' }}>
+            <InfoBanner variant="error" role="alert" aria-live="polite">
               {banner}
             </InfoBanner>
           </div>
         )}
 
-        <Input
+        <TextInput
           label="Email"
+          id={EMAIL_TEST_ID}
+          name="email"
           type="email"
           placeholder="you@company.com"
           value={email}
@@ -149,18 +151,17 @@ export function ForgotPasswordScreen() {
           data-testid={EMAIL_TEST_ID}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? 'field-error-email' : undefined}
-          error={error ? errorNode('email', error) : undefined}
+          error={error ?? undefined}
+          errorId="field-error-email"
           style={submitting ? { opacity: 0.55 } : undefined}
-          wrapperStyle={{ gap: 0 }}
         />
 
         <Button
           type="submit"
           variant="primary"
-          size="lg"
-          loading={submitting}
+          preloader={submitting}
           data-testid="forgot-submit-button"
-          style={{ width: '100%', marginTop: 'var(--sp-10)' }}
+          style={{ width: '100%', marginTop: 'var(--space-7)' }}
         >
           {submitting ? 'Sending' : 'Send reset link'}
         </Button>

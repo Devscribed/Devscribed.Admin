@@ -1,20 +1,14 @@
-/* Page-level reset only. Every visual value comes from the Meridian tokens. */
-* {
-  box-sizing: border-box;
-}
-
-html,
-body {
-  margin: 0;
-  padding: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-text);
-}
-
-a {
-  color: var(--accent);
-}
+/*
+ * Layout rules that inline styles cannot express — media queries, `:hover` on a descendant,
+ * `:focus-within`. Every visual value is a design-system token.
+ *
+ * There is no page-level reset here any more. `@ds/styles.css` loads `base.css`, which is
+ * the design system's own reset: `box-sizing` on everything, `margin: 0` and the Poppins
+ * stack on `body`, and the brand blue on an unclassed `<a>`. This file used to repeat all
+ * four against yellow's token names, and because it is imported *after* the design system it
+ * won — so on blue those declarations resolved to nothing and took the body font and the
+ * link colour down with them. Deleting them is the fix; base.css was always the better copy.
+ */
 
 /*
  * The public booking page is the one screen with real breakpoints — a calendar beside

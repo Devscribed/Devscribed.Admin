@@ -16,7 +16,7 @@ export default function LoginPage() {
       footer={
         <>
           New to Teammerly?{' '}
-          <Link href="/signup" data-testid="login-signup-link" style={{ textDecoration: 'none' }}>
+          <Link href="/signup" data-testid="login-signup-link">
             Create an account
           </Link>
         </>

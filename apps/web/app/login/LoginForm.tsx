@@ -3,10 +3,9 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
-import { Button, Eye, EyeOff, IconButton, InfoBanner, Input } from '@/ds';
-import { errorNode, focusByTestId } from '@/field-error';
+import { Button, Eye, EyeOff, IconButton, InfoBanner, TextInput } from '@/ds';
+import { focusByTestId } from '@/field-error';
 import {
-  AUTH_MESSAGES,
   LOGIN_FIELD_ORDER,
   MESSAGES,
   validateEmail,
@@ -28,14 +27,6 @@ const TEST_IDS: Record<LoginField, string> = {
 const LABELS: Record<LoginField, string> = { email: 'Email', password: 'Password' };
 
 const VALIDATORS = { email: validateEmail, password: validatePasswordPresent };
-
-/**
- * Deactivation is a state, not a typo — amber says "retrying will not help", where red
- * would invite the visitor to keep guessing. The wording carries the meaning on its
- * own; the tone only reinforces it.
- */
-const toneFor = (message: string) =>
-  message === AUTH_MESSAGES.deactivated ? ('warning' as const) : ('error' as const);
 
 /**
  * Where to land after signing in.
@@ -131,6 +122,8 @@ export function LoginForm() {
     const message = errors[field];
     return {
       label: LABELS[field],
+      id: TEST_IDS[field],
+      name: field,
       value: values[field],
       onChange: change(field),
       onBlur: blur(field),
@@ -138,18 +131,24 @@ export function LoginForm() {
       'data-testid': TEST_IDS[field],
       'aria-invalid': message ? true : undefined,
       'aria-describedby': message ? `field-error-${field}` : undefined,
-      error: message ? errorNode(field, message) : undefined,
+      error: message,
+      errorId: `field-error-${field}`,
       style: submitting ? { opacity: 0.55 } : undefined,
-      wrapperStyle: { gap: 0 },
     };
   };
 
   return (
     <form onSubmit={submit} noValidate data-testid="login-form">
       {banner && (
-        <div style={{ marginBottom: 'var(--sp-8)' }}>
+        <div style={{ marginBottom: 'var(--space-6)' }}>
+          {/*
+            A deactivated account used to get its own amber tone, on the reasoning that amber
+            says "retrying will not help" where red invites another guess. Blue paints one
+            banner for anything that went wrong, and the tone was only ever reinforcement —
+            the wording carries the meaning on its own, as the note that introduced it said.
+          */}
           <InfoBanner
-            tone={toneFor(banner)}
+            variant="error"
             role="alert"
             aria-live="polite"
             data-testid="login-error-message"
@@ -159,11 +158,16 @@ export function LoginForm() {
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-7)' }}>
+      {/*
+        20px is blue's own form rhythm, and it is what the error slot needs: TextInput pins the
+        message 16px under the field rather than pushing the field below it, so anything under a
+        field has to leave that much room. 14px, which is what this gap used to be, does not.
+      */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
         {LOGIN_FIELD_ORDER.map((field) =>
           field === 'password' ? (
             <div key={field}>
-              <Input
+              <TextInput
                 {...fieldProps(field)}
                 type={revealPassword ? 'text' : 'password'}
                 trailing={
@@ -171,6 +175,7 @@ export function LoginForm() {
                     label={revealPassword ? 'Hide password' : 'Show password'}
                     aria-pressed={revealPassword}
                     active={revealPassword}
+                    size={28}
                     data-testid="login-password-toggle"
                     // Keeps focus in the field: the toggle never steals the caret.
                     onMouseDown={(event) => event.preventDefault()}
@@ -180,18 +185,15 @@ export function LoginForm() {
                   </IconButton>
                 }
               />
-              <div style={{ marginTop: 'var(--sp-2)', fontSize: 'var(--fs-13)' }}>
-                <Link
-                  href="/forgot-password"
-                  data-testid="login-forgot-link"
-                  style={{ textDecoration: 'none' }}
-                >
+              {/* clears the error slot exactly — see the gap note above. */}
+              <div style={{ marginTop: 'var(--space-6)', fontSize: 'var(--font-size-s)' }}>
+                <Link href="/forgot-password" data-testid="login-forgot-link">
                   Forgot password?
                 </Link>
               </div>
             </div>
           ) : (
-            <Input key={field} {...fieldProps(field)} type="email" placeholder="you@company.com" />
+            <TextInput key={field} {...fieldProps(field)} type="email" placeholder="you@company.com" />
           ),
         )}
       </div>
@@ -199,10 +201,9 @@ export function LoginForm() {
       <Button
         type="submit"
         variant="primary"
-        size="lg"
-        loading={submitting}
+        preloader={submitting}
         data-testid="login-submit-button"
-        style={{ width: '100%', marginTop: 'var(--sp-10)' }}
+        style={{ width: '100%', marginTop: 'var(--space-7)' }}
       >
         {submitting ? 'Signing in' : 'Sign in'}
       </Button>

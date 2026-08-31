@@ -12,7 +12,7 @@ export default function SignupPage() {
       footer={
         <>
           Already have an account?{' '}
-          <Link href="/login" data-testid="signup-login-link" style={{ textDecoration: 'none' }}>
+          <Link href="/login" data-testid="signup-login-link">
             Sign in
           </Link>
         </>
