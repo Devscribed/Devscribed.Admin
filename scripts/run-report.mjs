@@ -85,6 +85,11 @@ const AGENT_OF = { pre_implement: 'pre-implementer', implement: 'implementer', r
 
 /* ── the journal ──────────────────────────────────────────────────────────── */
 
+/** Written by `wf.mjs` as the run advances, so they are the run moving whoever was at the
+ *  keyboard. `agent-stop` is deliberately not here: it fires for any session that ends,
+ *  including the operator's, and a stage ending already writes `stage-end`. */
+const ORCHESTRATOR_EVENTS = new Set(['init', 'stage-start', 'stage-end', 'route', 'ready', 'infra-error']);
+
 const journal = (readIf(join(dir, 'events.jsonl')) ?? '')
   .split(/\r?\n/)
   .filter(Boolean)
@@ -250,14 +255,23 @@ function attachTools() {
        shard's work visible at all; without it the whole of a sharded review is silence.
        `agentType` is what keeps this safe: the operator's own shell is journaled under this
        stage too, and it is the one caller that carries no agent. */
-    if (!candidates && e.agentType) candidates = byStage.get(e.stage);
+    let byStageGuess = false;
+    if (!candidates && e.agentType) { candidates = byStage.get(e.stage); byStageGuess = true; }
     if (!candidates) continue;
     const t = Date.parse(e.ts);
     /* A resumed session spans several attempts, so a call belongs to the latest attempt that
        had already started when it was made. The 30s slack covers the gap between the
-       orchestrator recording a start and the agent's first call landing. */
+       orchestrator recording a start and the agent's first call landing.
+       A session the step recorded is trusted without an upper bound, because that is what a
+       resume looks like. The stage guess gets one: an agent working in this copy long after
+       the run ended is stamped with the run's stage too, and is otherwise indistinguishable
+       from a shard of it. A sub-agent runs inside its parent's window; a stranger does not. */
     let target = null;
-    for (const c of candidates) if (t >= c.startedAt - 30_000 && (!target || c.startedAt > target.startedAt)) target = c;
+    for (const c of candidates) {
+      if (t < c.startedAt - 30_000) continue;
+      if (byStageGuess && t > (c.endedAt ?? Date.now()) + 30_000) continue;
+      if (!target || c.startedAt > target.startedAt) target = c;
+    }
     if (!target) continue;
     const sec = (e.durationMs ?? 0) / 1000;
     target.toolSec += sec;
@@ -460,10 +474,20 @@ const payload = {
   priority: PRIORITY,
   t0,
   t1,
-  /* When the journal last moved, and when this payload was built. A page following a run
-     needs both: the difference between them is the silence, and silence is the only thing
-     that tells a thinking agent from a dead one. */
-  lastEventAt: journal.reduce((m, e) => Math.max(m, Date.parse(e?.ts) || 0), 0) || null,
+  /* When the run last moved, and when this payload was built. The difference between them is
+     the silence, and silence is the only thing that tells a thinking agent from a dead one.
+     Which makes *whose* activity counts the whole question: the journal stamps every call made
+     while the run holds the lock, including the operator's own shell in the same working copy.
+     Counting those would reset the silence to zero every time somebody typed, and the board
+     would report a dead run as alive — the one error it exists to prevent. An event counts
+     when it carries an agent, or when the orchestrator wrote it. */
+  lastEventAt: Math.max(
+    0,
+    /* Read from what the report already attributed to a step, so the badge and the per-step
+       lines cannot tell different stories about when this run last moved. */
+    ...steps.flatMap((s) => (s.tools.length ? [s.tools[s.tools.length - 1].ts] : [])),
+    ...journal.filter((e) => ORCHESTRATOR_EVENTS.has(e?.event)).map((e) => Date.parse(e.ts) || 0),
+  ) || null,
   generatedAt: Date.now(),
   totals,
   byStage: Object.values(byStage),
@@ -1205,7 +1229,11 @@ if (location.protocol === 'http:' || location.protocol === 'https:') {
     const now = tick();
     if (!D.totals.running) {
       live.className = 'livebadge';
-      live.textContent = '● обновлено ' + new Date(D.generatedAt).toTimeString().slice(0, 8);
+      /* On a run that has stopped, when it last did anything is the useful number. When the
+         page was generated is not — that is a fact about the page. */
+      live.textContent = D.lastEventAt
+        ? '● последняя активность ' + hhmm(D.lastEventAt)
+        : '● обновлено ' + hhmm(D.generatedAt);
       return;
     }
     const quiet = D.lastEventAt ? (now - D.lastEventAt) / 1000 : null;
