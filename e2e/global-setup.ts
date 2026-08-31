@@ -17,6 +17,10 @@ import { E2E_DATABASE_URL, REMOTE } from './environment';
  */
 export default function globalSetup(): void {
   // A run against a deployment owns neither the schema nor the database.
+  //
+  // The busy-port guard is **not** here: Playwright checks `webServer.port` before it calls
+  // globalSetup, so a conflict aborts the run before this file is reached. It lives at
+  // config load instead — see `environment.ts`.
   if (REMOTE) return;
 
   execSync('npx prisma migrate deploy', {

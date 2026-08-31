@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -79,3 +80,72 @@ function databaseFromDotEnv(): string | null {
     return null;
   }
 }
+
+/**
+ * Turns "port is already in use" into the instruction that answers it.
+ *
+ * Playwright checks `webServer.port` before it calls `globalSetup`, and says only that the
+ * port is taken. Read literally that means "stop working or skip the suite", and skipping
+ * is what happens. It is not what the message means: the run can move.
+ *
+ * So the check lives at config load, which is the first code of ours to run. Only under
+ * `CI` — without it `reuseExistingServer` is on and a busy port is somebody reusing their
+ * own servers on purpose.
+ *
+ * A child process because there is no synchronous way to ask, and this module is imported
+ * synchronously by a config that cannot await.
+ */
+const NEWLINE = String.fromCharCode(10);
+
+function refuseBusyPorts(): void {
+  if (REMOTE || !process.env.CI) return;
+  // Workers load the config too, and by then the servers this run started are listening —
+  // so the check would fire against its own success, in every worker, and fail the run it
+  // exists to make possible. Only the runner asks.
+  if (process.env.TEST_WORKER_INDEX !== undefined) return;
+
+  const probe = spawnSync(
+    process.execPath,
+    [
+      '-e',
+      [
+        "const net=require('net');",
+        'const ports=process.argv.slice(1).map(Number);',
+        // **Connect, do not bind.** A bind test lies on Windows: a server listening on
+        // 0.0.0.0 does not stop a second bind to 127.0.0.1, so every port looks free and
+        // the guard never fires. Reaching the thing is the only honest question.
+        'Promise.all(ports.map(p=>new Promise(r=>{',
+        "const s=net.connect({port:p,host:'127.0.0.1'});",
+        's.setTimeout(1000);',
+        "s.once('connect',()=>{s.destroy();r(p);});",
+        "s.once('error',()=>r(0));",
+        "s.once('timeout',()=>{s.destroy();r(0);});",
+        '})))',
+        ".then(x=>process.stdout.write(x.filter(Boolean).join(',')));",
+      ].join(''),
+      String(WEB_PORT),
+      String(API_PORT),
+    ],
+    { encoding: 'utf8', timeout: 5_000 },
+  );
+
+  const busy = (probe.stdout ?? '').trim().split(',').filter(Boolean);
+  if (busy.length === 0) return;
+
+  throw new Error(
+    [
+      `Port ${busy.join(' and ')} ${busy.length > 1 ? 'are' : 'is'} already in use, so this`,
+      'run cannot start its own servers.',
+      '',
+      'Move the run rather than skipping it. The ports, the database and the signing links',
+      'in the mail sink all follow:',
+      '',
+      '  E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/<file>.spec.ts',
+      '',
+      'Reusing whatever is already listening is not the answer: a dev server is configured',
+      'for development, and its signing provider is the real one.',
+    ].join(NEWLINE),
+  );
+}
+
+refuseBusyPorts();

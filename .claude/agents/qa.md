@@ -37,10 +37,14 @@ deploy gate does that. Run exactly:
 npm test -- test/vacation-requests.spec.ts
 npm test -- test/vacation-requests.spec.ts -t "TC-09-INT-10"
 
-# e2e — the touched spec files plus regressions (from e2e)
-CI=1 npx playwright test tests/<file>.spec.ts tests/regressions.spec.ts
-CI=1 npx playwright test tests/<file>.spec.ts -g "TC-09-E2E-01"
+# e2e — the touched spec files plus regressions (from e2e), on your own ports
+E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/<file>.spec.ts tests/regressions.spec.ts
+E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/<file>.spec.ts -g "TC-09-E2E-01"
 ```
+
+3000 and 4000 belong to whoever is working. A busy port is never a reason to report a case
+unrun, and reusing a running dev server is not the alternative: it is configured for
+development and its signing provider is the real one.
 
 Filter Jest with a positional path. Never `--testPathPatterns` — this version ignores it in
 silence and runs everything while your log says you filtered.
@@ -56,6 +60,20 @@ Always in front of a targeted `npx playwright test`. Never in front of `npm run 
 
 Open the screens the change touched, and the ones its blast radius names. Click through the
 flow. Not optional.
+
+Start your own pair to look at — never a dev server somebody is using:
+
+```bash
+PORT=4100 DATABASE_URL=<the e2e database> DIRECT_URL=<the same> MAIL_TRANSPORT=memory \
+  STORAGE_DRIVER=local PDF_RENDERER=local-chromium JOB_QUEUE=inline \
+  APP_PUBLIC_URL=http://localhost:3100 SIGNWELL_DRIVER=stub SIGNWELL_API_KEY=qa \
+  SIGNWELL_API_APPLICATION_ID=qa SIGNWELL_WEBHOOK_SECRET=qa SIGNWELL_TEST_MODE=true \
+  npm run dev --workspace @devscribed/api
+PORT=3100 API_ORIGIN=http://localhost:4100 npm run dev --workspace @devscribed/web
+```
+
+Seed through the API, drive a browser at `http://localhost:3100`, read the console and the
+network as well as the pixels, and stop both servers when you are done.
 
 Look hardest for **an error from somewhere else showing up on the screen** — a failed request
 from another module, a stack trace, a toast that should not be there.

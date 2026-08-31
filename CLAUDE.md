@@ -74,9 +74,21 @@ in its spec as `- **Retired.**` naming what covers the rule now.
 **Agents run tests targeted, never whole.** `npm run test:unit` runs in full — it is under a
 second. `npm run test:int` and `npm run test:e2e` are for a person and for the deploy gate; an
 agent runs the files its diff touches (`npm test -- test/<file>.spec.ts` from `apps/api`,
-`CI=1 npx playwright test tests/<file>.spec.ts tests/regressions.spec.ts` from `e2e`). Jest here
-is 29, where the file filter is a positional path: `--testPathPatterns` is the Jest 30 spelling
-and this version ignores it silently, running everything while the log says otherwise.
+`E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/<file>.spec.ts
+tests/regressions.spec.ts` from `e2e`). Jest here is 29, where the file filter is a positional
+path: `--testPathPatterns` is the Jest 30 spelling and this version ignores it silently,
+running everything while the log says otherwise.
+
+**An agent's e2e run holds its own ports**, as above — 3000 and 4000 belong to whoever is
+working. A busy port is never a reason to report a case unrun, and reusing a running dev
+server is not the alternative: it is configured for development and its signing provider is
+the real one. The database follows the ports and is never `devscribed_dev`.
+
+**To look at a screen yourself**, start a pair on those ports and drive a browser at it —
+`PORT=4100 … npm run dev --workspace @devscribed/api` with `SIGNWELL_DRIVER=stub`,
+`MAIL_TRANSPORT=memory`, `JOB_QUEUE=inline` and the e2e `DATABASE_URL`, then
+`PORT=3100 API_ORIGIN=http://localhost:4100 npm run dev --workspace @devscribed/web`. Stop
+them when you are done.
 
 **Navigation.** No dead links. A nav item that the current role cannot use is not rendered.
 
@@ -94,6 +106,11 @@ and this version ignores it silently, running everything while the log says othe
 - **`prisma generate` runs from `apps/api`**, which is where `postinstall` runs it. Running it
   from the repository root produces a client that cannot find `apps/api/.env`, and the app then
   starts and fails its first query with "client password must be a string".
+- **Never write file content through a shell heredoc.** A backslash escape does not survive the
+  trip: `'\n'` arrives as a real newline and the file no longer parses. Use the editor tool for
+  file content; when a script must build a newline, `String.fromCharCode(10)`.
+- **Probe a busy port by connecting, not by binding.** On Windows a server on `0.0.0.0` does not
+  prevent a second bind to `127.0.0.1`, so a bind test reports every port free.
 - Migrations should be **additive**. `make deploy-<env>` rolls the services out and *then* runs
   `prisma migrate deploy`, so the new code is serving before the schema changes — which is only
   safe because migrations are additive. This is a rule, not an observation about the current
