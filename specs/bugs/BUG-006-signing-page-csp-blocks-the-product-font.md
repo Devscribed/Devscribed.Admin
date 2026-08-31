@@ -196,12 +196,10 @@ this fix — it is the arrangement the design system already has on every other 
 this page it is a request made by a counterparty who never chose us, and it is the strongest
 argument for self-hosting later.
 
-**The Playwright case itself has not been run.** The suite starts its own API and web
-servers with the stub driver, and the ports were held by the dev servers this defect was
-found on. What was run is the same assertion by hand, in a real Chromium, against the real
-page, in both directions — narrowed policy, one violation and no fonts; widened policy, no
-violations and both families loaded. The case lists and type-checks; that it passes under
-`npm run test:e2e` is unproven and belongs in the next full run.
+**Closed:** the Playwright case has since been run. It could not be at first — the suite
+could only hold the ports a dev environment holds — which is what ADR 0005 fixes; on
+relocated ports it passes, along with the rest of `signature-providers.spec.ts` and
+`regressions.spec.ts`.
 
 **The policy's other directives were not re-derived.** This report widened the two the font
 chain needs and left the rest as they are. Whether anything else on that page is being

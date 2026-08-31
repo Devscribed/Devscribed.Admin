@@ -10,6 +10,7 @@ import {
   signupOrg,
   uniqueEmail,
 } from './helpers';
+import { WEB_ORIGIN } from '../environment';
 
 /**
  * specs/documents/04-signature-providers.md — the E2E row of its matrix.
@@ -61,11 +62,15 @@ const FIELD_VALUES = {
 };
 
 /**
- * Our own origin, derived exactly as `helpers.ts` derives `API` and as playwright.config.ts
- * derives its `baseURL`. TC-04-E2E-02 needs it as a value rather than as a default, because
- * the thing it asserts is that the address bar is still ours after the widget loads.
+ * Our own origin — the one `playwright.config.ts` starts and points `baseURL` at.
+ * TC-04-E2E-02 needs it as a value rather than as a default, because the thing it asserts
+ * is that the address bar is still ours after the widget loads.
+ *
+ * It is imported rather than rebuilt. Spelt out here as `localhost:3000` it was a second
+ * copy of a number the config owns, and the first run on a moved port failed on it — the
+ * page was correct and the constant was stale.
  */
-const WEB = process.env.E2E_BASE_URL ?? 'http://localhost:3000';
+const WEB = WEB_ORIGIN;
 
 const SIGNING_SETTINGS = (orgId: string) => `/org/${orgId}/settings/signing`;
 
