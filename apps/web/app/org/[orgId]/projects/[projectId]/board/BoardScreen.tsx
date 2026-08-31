@@ -40,6 +40,7 @@ import type { MemberListResponse } from '../../../members/types';
 import { BoardSettingsModal } from '../kanban/BoardSettingsModal';
 import { CreateTaskModal, type OrgMember } from '../kanban/CreateTaskModal';
 import { KanbanHeader } from '../kanban/KanbanHeader';
+import { LabelChipStrip } from '../kanban/LabelChip';
 import { MultiSelectFilter } from '../kanban/MultiSelectFilter';
 import type {
   BoardResponse,
@@ -829,6 +830,9 @@ function TaskCard({
       >
         {task.title}
       </div>
+      {task.labels && task.labels.length > 0 && (
+        <LabelChipStrip labels={task.labels} testIdPrefix="task-card-label" />
+      )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 22 }}>
         {task.priority && <PriorityGlyph priority={task.priority} size={14} />}
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>

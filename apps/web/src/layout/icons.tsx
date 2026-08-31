@@ -276,3 +276,21 @@ export function CheckIcon({ size = 14 }: { size?: number }) {
     </svg>
   );
 }
+
+/** Close glyph — the small ✕ used on removable chips (spec 14 label chip remove). */
+export function CloseIcon({ size = 10 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="currentColor" aria-hidden>
+      <path d="M4.28 3.22a.75.75 0 0 0-1.06 1.06L6.94 8l-3.72 3.72a.75.75 0 1 0 1.06 1.06L8 9.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L9.06 8l3.72-3.72a.75.75 0 0 0-1.06-1.06L8 6.94 4.28 3.22Z" />
+    </svg>
+  );
+}
+
+/** Eye glyph — the "Watch / Watching" toggle icon (spec 14 §Watchers Section). */
+export function EyeIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 20 20" width={size} height={size} fill="currentColor" aria-hidden>
+      <path d="M10 4C5.5 4 1.73 6.61.46 10 1.73 13.39 5.5 16 10 16s8.27-2.61 9.54-6C18.27 6.61 14.5 4 10 4Zm0 10.5c-3.31 0-6.19-1.85-7.32-4.5C3.81 7.35 6.69 5.5 10 5.5s6.19 1.85 7.32 4.5c-1.13 2.65-4.01 4.5-7.32 4.5Zm0-7.5A3 3 0 1 0 10 13a3 3 0 0 0 0-6Z" />
+    </svg>
+  );
+}

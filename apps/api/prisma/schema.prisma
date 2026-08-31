@@ -185,6 +185,9 @@ model Membership {
   runningTimer        RunningTimer?
   tasksAssigned       Task[]                       @relation("TaskAssignee")
   tasksReported       Task[]                       @relation("TaskReporter")
+  commentsAuthored    TaskComment[]                @relation("TaskCommentAuthor")
+  watchedTasks        TaskWatcher[]                @relation("TaskWatcherMembership")
+  taskActivity        TaskActivity[]               @relation("TaskActivityActor")
 
   @@index([organizationId])
 }
@@ -663,6 +666,7 @@ model Project {
   runningTimers RunningTimer[]
   columns       BoardColumn[]
   tasks         Task[]
+  labels        TaskLabel[]
 
   @@index([organizationId])
 }
@@ -725,6 +729,10 @@ model Task {
   reporter Membership  @relation("TaskReporter", fields: [reporterId], references: [id], onDelete: Cascade)
   parent   Task?       @relation("TaskHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
   children Task[]      @relation("TaskHierarchy")
+  labels   TaskLabelAssignment[]
+  comments TaskComment[]
+  watchers TaskWatcher[]
+  activity TaskActivity[]
 
   @@unique([projectId, taskNumber])
   @@index([projectId, columnId])
@@ -811,4 +819,100 @@ model RunningTimer {
   project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Spec 14 — Task Collaboration (labels, comments, watchers, activity log).
+// Additive: only back-relations on Project/Task/Membership above. Label-name
+// uniqueness is case-insensitive per project — enforced by a functional unique
+// index on LOWER("name") added by hand in the migration SQL.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Spec 14 — project-scoped label used to categorize tasks. Name is 1–30 codepoints,
+/// unique per project case-insensitively; color is a 7-char hex string. Definition is
+/// managed by admin/manager (`manage-labels`); assignment to a task reuses `manage-tasks`.
+model TaskLabel {
+  id        String   @id @default(uuid())
+  projectId String
+  name      String
+  color     String
+  createdAt DateTime @default(now())
+
+  project     Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignments TaskLabelAssignment[]
+
+  @@index([projectId])
+}
+
+/// Many-to-many join between Task and TaskLabel. Composite PK (`taskId`,`labelId`) is
+/// what makes label assignment naturally idempotent at the DB level (upsert on the PK).
+model TaskLabelAssignment {
+  taskId  String
+  labelId String
+
+  task  Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label TaskLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, labelId])
+  @@index([labelId])
+}
+
+/// Spec 14 — a discussion comment on a task. Content is markdown, 1–10,000 codepoints
+/// (validation layer). Author is a Membership; hard-deletion of a comment does not
+/// delete its `comment_added` activity entry — audit trail preserved (FR-13).
+model TaskComment {
+  id        String   @id @default(uuid())
+  taskId    String
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task   Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author Membership @relation("TaskCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+}
+
+/// Spec 14 — a member's subscription to a task's activity. Composite PK guarantees
+/// no duplicate rows; watch/unwatch endpoints are naturally idempotent at the DB level.
+/// Notification delivery is out of scope in this spec — the row is data-model only.
+model TaskWatcher {
+  taskId       String
+  membershipId String
+  createdAt    DateTime @default(now())
+
+  task       Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  membership Membership @relation("TaskWatcherMembership", fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, membershipId])
+  @@index([membershipId])
+}
+
+/// Spec 14 — append-only activity feed. Written as side effects of task/comment/label/
+/// watcher operations, never via a direct API. `field`/`oldValue`/`newValue` are only
+/// set for `action === 'field_changed'`; label_added/removed carry the label id in
+/// `newValue`/`oldValue`; watcher_added/removed carry the membership id there.
+model TaskActivity {
+  id        String   @id @default(uuid())
+  taskId    String
+  actorId   String
+  action    String
+  field     String?
+  oldValue  String?
+  newValue  String?
+  /// Human-readable snapshot of the old value at write time (spec 14). Populated for
+  /// field_changed rows whose oldValue is an FK id (columnId/assigneeId/parentId), and
+  /// for label_removed / watcher_removed rows where oldValue is a label / membership id.
+  /// Frees the UI from resolving deleted rows through a stale lookup — the name from
+  /// the moment of change is preserved even if the target is later deleted or renamed.
+  oldLabel  String?
+  /// Same as oldLabel, for the incoming value.
+  newLabel  String?
+  createdAt DateTime @default(now())
+
+  task  Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor Membership @relation("TaskActivityActor", fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
 }

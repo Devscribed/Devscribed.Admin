@@ -1,5 +1,6 @@
 import type {
   ColumnCategory,
+  TaskActivityAction,
   TaskPriority,
   TaskType,
 } from '@devscribed/validation';
@@ -47,6 +48,72 @@ export interface KanbanTaskSummary {
   parentId: string | null;
   parentKey: string | null;
   childCount: number;
+  createdAt: string;
+  /** Spec 14 — label chips shown on cards (board/list). Backend may return
+   * an empty array when the task carries no labels. */
+  labels?: TaskLabelChip[];
+}
+
+/** Spec 14 — project-scoped label definition (list/board settings). */
+export interface KanbanLabel {
+  id: string;
+  name: string;
+  color: string;
+  createdAt?: string;
+  /** Optional — surface labels endpoint may include the count of tasks currently
+   * carrying this label so the Board Settings delete confirmation can display it. */
+  assignmentCount?: number;
+}
+
+/** Spec 14 — a label chip embedded on a task (card row / detail chip). */
+export interface TaskLabelChip {
+  id: string;
+  name: string;
+  color: string;
+}
+
+/** Spec 14 — comment as returned by the API. */
+export interface TaskCommentAuthor {
+  membershipId: string;
+  firstName: string;
+  lastName: string;
+}
+export interface TaskComment {
+  id: string;
+  author: TaskCommentAuthor;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Spec 14 — watcher row + list response. */
+export interface TaskWatcher {
+  membershipId: string;
+  firstName: string;
+  lastName: string;
+}
+export interface WatchersResponse {
+  watchers: TaskWatcher[];
+  isWatching: boolean;
+}
+
+/** Spec 14 — activity feed row (§API Contracts). */
+export interface TaskActivityActor {
+  membershipId: string;
+  firstName: string;
+  lastName: string;
+}
+export interface TaskActivityRow {
+  id: string;
+  action: TaskActivityAction;
+  actor: TaskActivityActor | null;
+  field: string | null;
+  oldValue: string | null;
+  newValue: string | null;
+  /** Human-readable snapshot of oldValue at write time (name of column/label/member/parent). */
+  oldLabel: string | null;
+  /** Human-readable snapshot of newValue at write time. */
+  newLabel: string | null;
   createdAt: string;
 }
 
@@ -96,4 +163,6 @@ export interface KanbanTaskDetail {
   children: KanbanTaskChild[];
   createdAt: string;
   updatedAt: string;
+  /** Spec 14 — labels currently attached to the task (see §Task Detail — Labels). */
+  labels?: TaskLabelChip[];
 }

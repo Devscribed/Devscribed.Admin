@@ -22,6 +22,7 @@ import {
 import type { SessionPayload } from '../auth/session.service';
 import { PrismaService } from '../prisma.service';
 import type { AssigneeSummary } from './board.service';
+import { CollaborationService } from './collaboration.service';
 import { KanbanAccessService, type CallerMembership, type ProjectContext } from './kanban.shared';
 
 export interface CreateTaskInput {
@@ -52,6 +53,12 @@ export interface ListTasksQuery {
   search?: string;
 }
 
+export interface TaskLabelSummary {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface TaskSummary {
   id: string;
   key: string;
@@ -67,6 +74,7 @@ export interface TaskSummary {
   parentId: string | null;
   parentKey: string | null;
   childCount: number;
+  labels: TaskLabelSummary[];
   createdAt: string;
 }
 
@@ -107,6 +115,7 @@ export class TasksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: KanbanAccessService,
+    private readonly collab: CollaborationService,
   ) {}
 
   async createTask(
@@ -181,6 +190,27 @@ export class TasksService {
         data: { nextTaskNumber: taskNumber + 1 },
       });
 
+      // Spec 14 — activity + auto-watch on task creation. The `created` row is written
+      // by the reporter (caller), and the reporter is auto-watched (FR-17). If an
+      // assignee was set at create time, they are auto-watched too.
+      await this.collab.writeActivity(tx, {
+        taskId: created.id,
+        actorId: caller.id,
+        action: 'created',
+      });
+      await this.collab.autoWatch(tx, {
+        taskId: created.id,
+        membershipId: caller.id,
+        actorId: caller.id,
+      });
+      if (parsed.assigneeId) {
+        await this.collab.autoWatch(tx, {
+          taskId: created.id,
+          membershipId: parsed.assigneeId,
+          actorId: caller.id,
+        });
+      }
+
       return this.toDetail(tx, created.id, project.key!);
     });
   }
@@ -241,6 +271,7 @@ export class TasksService {
         column: { select: { name: true } },
         assignee: { include: { account: { select: { firstName: true, lastName: true } } } },
         parent: { select: { taskNumber: true } },
+        labels: { include: { label: true } },
         _count: { select: { children: true } },
       },
     });
@@ -364,6 +395,154 @@ export class TasksService {
         },
       });
 
+      // Spec 14 — one `field_changed` row per actually-changed field, all sharing the
+      // same createdAt so the client can present them as a single logical update
+      // (FR-24). Description writes null oldValue/newValue per FR-27.
+      const now = new Date();
+      const newDueDate =
+        parsed.dueDateProvided
+          ? (parsed.dueDate ? parsed.dueDate : null)
+          : (existing.dueDate ? existing.dueDate.toISOString().slice(0, 10) : null);
+      const oldDueDate = existing.dueDate ? existing.dueDate.toISOString().slice(0, 10) : null;
+
+      const diffs: Array<{ field: string; oldValue: string | null; newValue: string | null }> = [];
+      if (parsed.typeProvided && effectiveType !== existing.type) {
+        diffs.push({ field: 'type', oldValue: existing.type, newValue: effectiveType ?? null });
+      }
+      if (parsed.titleProvided && parsed.title! !== existing.title) {
+        diffs.push({ field: 'title', oldValue: existing.title, newValue: parsed.title! });
+      }
+      if (parsed.descriptionProvided) {
+        const newDesc = parsed.description ?? null;
+        if (newDesc !== existing.description) {
+          diffs.push({ field: 'description', oldValue: null, newValue: null });
+        }
+      }
+      if (parsed.priorityProvided) {
+        const newPri = parsed.priority ?? null;
+        if (newPri !== existing.priority) {
+          diffs.push({ field: 'priority', oldValue: existing.priority, newValue: newPri });
+        }
+      }
+      if (parsed.columnIdProvided && effectiveColumnId !== existing.columnId) {
+        diffs.push({
+          field: 'columnId',
+          oldValue: existing.columnId,
+          newValue: effectiveColumnId,
+        });
+      }
+      if (parsed.storyPointsProvided) {
+        const newSp = parsed.storyPoints ?? null;
+        if (newSp !== existing.storyPoints) {
+          diffs.push({
+            field: 'storyPoints',
+            oldValue: existing.storyPoints == null ? null : String(existing.storyPoints),
+            newValue: newSp == null ? null : String(newSp),
+          });
+        }
+      }
+      if (parsed.assigneeIdProvided) {
+        const newAssignee = parsed.assigneeId ?? null;
+        if (newAssignee !== existing.assigneeId) {
+          diffs.push({
+            field: 'assigneeId',
+            oldValue: existing.assigneeId,
+            newValue: newAssignee,
+          });
+        }
+      }
+      if (parsed.parentIdProvided && effectiveParentId !== existing.parentId) {
+        diffs.push({
+          field: 'parentId',
+          oldValue: existing.parentId,
+          newValue: effectiveParentId,
+        });
+      }
+      if (parsed.dueDateProvided && newDueDate !== oldDueDate) {
+        diffs.push({ field: 'dueDate', oldValue: oldDueDate, newValue: newDueDate });
+      }
+
+      // Spec 14 follow-up — snapshot the display value for FK-shaped fields at write
+      // time, so a later delete/rename of a referenced column, member, or parent task
+      // does not turn the feed into raw UUIDs. Bulk-resolve the ids up-front.
+      const columnIdSet = new Set<string>();
+      const memberIdSet = new Set<string>();
+      const parentIdSet = new Set<string>();
+      for (const d of diffs) {
+        if (d.field === 'columnId') {
+          if (d.oldValue) columnIdSet.add(d.oldValue);
+          if (d.newValue) columnIdSet.add(d.newValue);
+        } else if (d.field === 'assigneeId') {
+          if (d.oldValue) memberIdSet.add(d.oldValue);
+          if (d.newValue) memberIdSet.add(d.newValue);
+        } else if (d.field === 'parentId') {
+          if (d.oldValue) parentIdSet.add(d.oldValue);
+          if (d.newValue) parentIdSet.add(d.newValue);
+        }
+      }
+      const columnNames = new Map<string, string>();
+      if (columnIdSet.size > 0) {
+        const rows = await tx.boardColumn.findMany({
+          where: { id: { in: [...columnIdSet] } },
+          select: { id: true, name: true },
+        });
+        for (const r of rows) columnNames.set(r.id, r.name);
+      }
+      const memberNames = new Map<string, string>();
+      if (memberIdSet.size > 0) {
+        const rows = await tx.membership.findMany({
+          where: { id: { in: [...memberIdSet] } },
+          include: { account: { select: { firstName: true, lastName: true } } },
+        });
+        for (const r of rows) {
+          memberNames.set(r.id, `${r.account.firstName} ${r.account.lastName}`.trim());
+        }
+      }
+      const parentKeys = new Map<string, string>();
+      if (parentIdSet.size > 0) {
+        const rows = await tx.task.findMany({
+          where: { id: { in: [...parentIdSet] } },
+          select: { id: true, taskNumber: true },
+        });
+        for (const r of rows) parentKeys.set(r.id, `${project.key}-${r.taskNumber}`);
+      }
+      const snapshot = (field: string, value: string | null): string | null => {
+        if (value == null) return null;
+        if (field === 'columnId') return columnNames.get(value) ?? null;
+        if (field === 'assigneeId') return memberNames.get(value) ?? null;
+        if (field === 'parentId') return parentKeys.get(value) ?? null;
+        return null;
+      };
+
+      for (const d of diffs) {
+        await this.collab.writeActivity(tx, {
+          taskId: existing.id,
+          actorId: caller.id,
+          action: 'field_changed',
+          field: d.field,
+          oldValue: d.oldValue,
+          newValue: d.newValue,
+          oldLabel: snapshot(d.field, d.oldValue),
+          newLabel: snapshot(d.field, d.newValue),
+          createdAt: now,
+        });
+      }
+
+      // Auto-watch on assignee change to a non-null value (FR-17). Emits watcher_added
+      // only if the assignee was not already watching.
+      if (
+        parsed.assigneeIdProvided &&
+        parsed.assigneeId &&
+        parsed.assigneeId !== existing.assigneeId
+      ) {
+        await this.collab.autoWatch(tx, {
+          taskId: existing.id,
+          membershipId: parsed.assigneeId,
+          actorId: caller.id,
+          newLabel: memberNames.get(parsed.assigneeId) ?? null,
+        });
+      }
+
       return this.toDetail(tx, existing.id, project.key!);
     });
   }
@@ -401,6 +580,7 @@ export class TasksService {
         });
       }
 
+      const previousColumnId = task.columnId;
       let columnId = task.columnId;
       if (columnIdProvided) {
         const col = await tx.boardColumn.findFirst({
@@ -420,7 +600,28 @@ export class TasksService {
         where: { id: task.id },
         data: { columnId, position },
       });
+
+      // Spec 14 FR-25 — column changes log a field_changed row; position-only moves
+      // (same column, drag reorder) do NOT emit activity, to keep the feed free of
+      // reorder noise.
       const columnRow = await tx.boardColumn.findUnique({ where: { id: columnId } });
+      if (columnId !== previousColumnId) {
+        const prev = await tx.boardColumn.findUnique({
+          where: { id: previousColumnId },
+          select: { name: true },
+        });
+        await this.collab.writeActivity(tx, {
+          taskId: task.id,
+          actorId: caller.id,
+          action: 'field_changed',
+          field: 'columnId',
+          oldValue: previousColumnId,
+          newValue: columnId,
+          oldLabel: prev?.name ?? null,
+          newLabel: columnRow?.name ?? null,
+        });
+      }
+
       return {
         id: task.id,
         columnId,
@@ -689,6 +890,7 @@ export class TasksService {
         | ({ id: string; account: { firstName: string; lastName: string } } | null)
         | null;
       parent: { taskNumber: number } | null;
+      labels?: Array<{ label: { id: string; name: string; color: string } }>;
       _count: { children: number };
     },
     projectKey: string,
@@ -714,6 +916,11 @@ export class TasksService {
       parentId: t.parentId,
       parentKey: t.parent ? formatTaskKey(projectKey, t.parent.taskNumber) : null,
       childCount: t._count.children,
+      labels: (t.labels ?? []).map((a) => ({
+        id: a.label.id,
+        name: a.label.name,
+        color: a.label.color,
+      })),
       createdAt: t.createdAt.toISOString(),
     };
   }
@@ -739,6 +946,7 @@ export class TasksService {
           },
           orderBy: { taskNumber: 'asc' },
         },
+        labels: { include: { label: true } },
         _count: { select: { children: true } },
       },
     });
@@ -788,6 +996,11 @@ export class TasksService {
           : null,
       })),
       childCount: t._count.children,
+      labels: t.labels.map((a) => ({
+        id: a.label.id,
+        name: a.label.name,
+        color: a.label.color,
+      })),
       createdAt: t.createdAt.toISOString(),
       updatedAt: t.updatedAt.toISOString(),
     };

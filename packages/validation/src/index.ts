@@ -521,7 +521,15 @@ export type MemberCapability =
    */
   | 'view-board'
   | 'manage-tasks'
-  | 'manage-board-columns';
+  | 'manage-board-columns'
+  /**
+   * Spec 14 addition — the Task Collaboration capabilities. Only ONE capability
+   * is new to this spec: `manage-labels` gates label DEFINITION (create/edit/delete
+   * label records in Board Settings). Label ASSIGNMENT reuses `manage-tasks`;
+   * comments, watchers, and activity read reuse `view-board`/`manage-tasks` from
+   * spec 13 with the same `user`-role project-membership scoping applied service-side.
+   */
+  | 'manage-labels';
 
 /**
  * Pure lookup against spec 04's Roles & Permission Matrix (TC-04-UNIT-05), widened by
@@ -554,6 +562,7 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'view-board': true,
     'manage-tasks': true,
     'manage-board-columns': true,
+    'manage-labels': true,
   },
   manager: {
     'view-list': true,
@@ -578,6 +587,7 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'view-board': true,
     'manage-tasks': true,
     'manage-board-columns': true,
+    'manage-labels': true,
   },
   user: {
     'view-list': true,
@@ -602,6 +612,7 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'view-board': true,
     'manage-tasks': true,
     'manage-board-columns': false,
+    'manage-labels': false,
   },
   viewer: {
     'view-list': true,
@@ -626,6 +637,7 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'view-board': false,
     'manage-tasks': false,
     'manage-board-columns': false,
+    'manage-labels': false,
   },
 };
 
@@ -2796,6 +2808,264 @@ export function suggestProjectKey(name: string): string {
     .toUpperCase()
     .replace(/[^A-Z]/g, '')
     .slice(0, KANBAN_LIMITS.projectKeyMax);
+}
+
+// ===========================================================================
+// spec 14 — Task Collaboration (labels, comments, watchers, activity log)
+// ---------------------------------------------------------------------------
+// Pure helpers for labels/comments/watchers and the append-only activity feed.
+// Capabilities: `manage-labels` (new, admin/manager only) is in CAPABILITY_MATRIX
+// above; label assignment reuses `manage-tasks`, comments/watchers/activity
+// reuse `view-board` from spec 13, all with the same project-membership scope
+// for the `user` role.
+// ===========================================================================
+
+/** Verbatim from spec 14 §Error Messages. */
+export const COLLAB_MESSAGES = {
+  labelNameRequired: 'Label name is required',
+  labelNameTooLong: 'Label name must be at most 30 characters',
+  labelNameDuplicate: 'A label with this name already exists',
+  labelColorInvalid: 'Color must be a valid hex code (e.g., #FF0000)',
+  labelNotFound: 'Label not found',
+  labelWrongProject: 'Label must belong to the same project as the task',
+  commentContentRequired: 'Comment cannot be empty',
+  commentContentTooLong: 'Comment must be at most 10,000 characters',
+  commentNotFound: 'Comment not found',
+  commentEditForbidden: 'You can only edit your own comments',
+  commentDeleteForbidden: 'You do not have permission to delete this comment',
+  labelsPermissionDenied: 'You do not have permission to manage labels',
+  taskAccessPermissionDenied: 'You do not have permission to view this task',
+  toastLabelCreated: 'Label created',
+  toastLabelUpdated: 'Label updated',
+  toastLabelDeleted: 'Label deleted',
+  toastCommentPosted: 'Comment posted',
+  toastCommentUpdated: 'Comment updated',
+  toastCommentDeleted: 'Comment deleted',
+  toastNowWatching: 'You are now watching this task',
+  toastUnwatched: 'You stopped watching this task',
+  emptyComments: 'No comments yet. Be the first to comment.',
+  emptyWatchers: 'No one is watching this task yet.',
+  emptyActivity: 'No activity yet.',
+  genericError: 'Something went wrong. Please try again.',
+} as const;
+
+/** Bounds shared by API + web (spec 14 §Validation). */
+export const COLLAB_LIMITS = {
+  labelNameMax: 30,
+  commentContentMax: 10000,
+} as const;
+
+/**
+ * Delete-label confirmation string (spec 14 §Error Messages).
+ * `count` is the number of tasks currently carrying the label — the API returns
+ * this to the client as `unassignedFromTaskCount` after delete, but the client
+ * shows the confirmation BEFORE the delete, so it must compute the count itself.
+ */
+export function labelDeleteConfirmMessage(name: string, count: number): string {
+  const tasks = count === 1 ? 'task' : 'tasks';
+  return `Delete label "${name}"? It will be removed from ${count} ${tasks}. This cannot be undone.`;
+}
+
+/** Delete-comment confirmation string (spec 14 §Error Messages). */
+export const COMMENT_DELETE_CONFIRM = 'Delete this comment? This action cannot be undone.';
+
+/** Hex-color pattern (spec 14 FR-2 / Validation Rule 2). */
+const LABEL_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
+
+/** Label name (spec 14 FR-1 / TC-14-UNIT-01..03). Trim, 1-30 codepoints. */
+export function validateLabelName(input: string): FieldResult {
+  const value = (input ?? '').trim();
+  if (value.length === 0) return fail(COLLAB_MESSAGES.labelNameRequired);
+  if ([...value].length > COLLAB_LIMITS.labelNameMax) {
+    return fail(COLLAB_MESSAGES.labelNameTooLong);
+  }
+  return ok(value);
+}
+
+/** Label color (spec 14 FR-2 / TC-14-UNIT-04..05). Uppercased on return. */
+export function validateLabelColor(input: string): FieldResult {
+  const value = (input ?? '').trim();
+  if (!LABEL_COLOR_PATTERN.test(value)) return fail(COLLAB_MESSAGES.labelColorInvalid);
+  return ok(value.toUpperCase());
+}
+
+/** Comment content (spec 14 FR-9 / TC-14-UNIT-06..09). Trim, 1-10,000 codepoints. */
+export function validateCommentContent(input: string): FieldResult {
+  const value = (input ?? '').trim();
+  if (value.length === 0) return fail(COLLAB_MESSAGES.commentContentRequired);
+  if ([...value].length > COLLAB_LIMITS.commentContentMax) {
+    return fail(COLLAB_MESSAGES.commentContentTooLong);
+  }
+  return ok(value);
+}
+
+/** Task activity action enum (spec 14 FR-22). Append-only log actions. */
+export const TASK_ACTIVITY_ACTIONS = [
+  'created',
+  'field_changed',
+  'comment_added',
+  'comment_deleted',
+  'label_added',
+  'label_removed',
+  'watcher_added',
+  'watcher_removed',
+] as const;
+export type TaskActivityAction = (typeof TASK_ACTIVITY_ACTIONS)[number];
+export function isValidTaskActivityAction(input: unknown): input is TaskActivityAction {
+  return (
+    typeof input === 'string' &&
+    (TASK_ACTIVITY_ACTIONS as readonly string[]).includes(input)
+  );
+}
+
+/**
+ * Human-readable field labels for the `field_changed` activity rows (spec 14 §Screens).
+ * Any field name the API might record — not just spec-13 mutable fields — is mapped here;
+ * an unknown field name falls back to the raw field name (title-cased) so a future field
+ * lands with a sensible-if-terse label instead of blanking out.
+ */
+const ACTIVITY_FIELD_LABELS: Record<string, string> = {
+  title: 'Title',
+  description: 'Description',
+  priority: 'Priority',
+  storyPoints: 'Story Points',
+  assigneeId: 'Assignee',
+  columnId: 'Status',
+  parentId: 'Parent',
+  dueDate: 'Due Date',
+  type: 'Type',
+};
+
+/** Title-case a raw camelCase/snake_case field name for the unknown-field fallback. */
+function humanizeFieldName(field: string): string {
+  const spaced = field.replace(/[_-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+/** Priority display labels used by the activity feed. */
+const PRIORITY_DISPLAY: Record<string, string> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  critical: 'Critical',
+};
+
+/** Task type display labels used by the activity feed. */
+const TYPE_DISPLAY: Record<string, string> = {
+  epic: 'Epic',
+  task: 'Task',
+  bug: 'Bug',
+  story: 'Story',
+  subtask: 'Subtask',
+};
+
+export interface ActivityDisplayHelpers {
+  /** Resolve a membership id to "First Last". `null` id yields "Unassigned". */
+  resolveMember?: (id: string | null) => string;
+  /** Resolve a column id to its display name. */
+  resolveColumn?: (id: string | null) => string;
+  /** Resolve a parent-task id to its key (e.g. "MOB-1"). `null` yields "None". */
+  resolveTask?: (id: string | null) => string;
+  /** Resolve a label id to its name (used by label_added/removed rows). */
+  resolveLabel?: (id: string | null) => string;
+}
+
+/**
+ * A single activity row as returned by the API (spec 14 §API Contracts).
+ * `field`/`oldValue`/`newValue` are only set for `action === 'field_changed'`.
+ * `newValue` on label_added / watcher_added carries the label / member id; symmetric
+ * for the *_removed rows. `oldValue`/`newValue` on comment_added/deleted are null.
+ */
+export interface TaskActivityRowLike {
+  action: TaskActivityAction;
+  field?: string | null;
+  oldValue?: string | null;
+  newValue?: string | null;
+  /**
+   * Human-readable snapshot of the value at write time (API captures the column name,
+   * label name, or member "First Last" for FK-shaped fields). When present, it wins
+   * over the id-based `resolveX` lookup — the snapshot survives later deletes/renames
+   * that would otherwise leave the feed showing a raw UUID.
+   */
+  oldLabel?: string | null;
+  newLabel?: string | null;
+}
+
+/**
+ * Format one activity row as a human-readable description (spec 14 TC-14-UNIT-11/12).
+ * Pure — resolver callbacks convert ids to display strings; a missing resolver
+ * (or a resolver returning `null`) collapses to the raw value, so the API layer can
+ * pre-resolve names or leave the resolution to the UI. `created`, `comment_added`,
+ * etc. are fixed phrases; `field_changed` reads the field label and formats the
+ * before/after arrow.
+ */
+export function formatActivityDescription(
+  row: TaskActivityRowLike,
+  helpers: ActivityDisplayHelpers = {},
+): string {
+  const {
+    resolveMember = (id: string | null) => id ?? 'Unassigned',
+    resolveColumn = (id: string | null) => id ?? '',
+    resolveTask = (id: string | null) => id ?? 'None',
+    resolveLabel = (id: string | null) => id ?? '',
+  } = helpers;
+
+  switch (row.action) {
+    case 'created':
+      return 'created this task';
+    case 'comment_added':
+      return 'commented';
+    case 'comment_deleted':
+      return 'deleted a comment';
+    case 'label_added':
+      return `added label "${row.newLabel ?? resolveLabel(row.newValue ?? null)}"`;
+    case 'label_removed':
+      return `removed label "${row.oldLabel ?? resolveLabel(row.oldValue ?? null)}"`;
+    case 'watcher_added':
+      return `started watching`;
+    case 'watcher_removed':
+      return `stopped watching`;
+    case 'field_changed': {
+      const field = row.field ?? '';
+      const label = ACTIVITY_FIELD_LABELS[field] ?? humanizeFieldName(field);
+      // description changes carry no meaningful before/after per FR-27.
+      if (field === 'description') {
+        return `changed ${label}`;
+      }
+      const from = row.oldLabel
+        ?? formatFieldValue(field, row.oldValue ?? null, {
+          resolveMember,
+          resolveColumn,
+          resolveTask,
+          resolveLabel,
+        });
+      const to = row.newLabel
+        ?? formatFieldValue(field, row.newValue ?? null, {
+          resolveMember,
+          resolveColumn,
+          resolveTask,
+          resolveLabel,
+        });
+      return `changed ${label}: ${from} → ${to}`;
+    }
+    default:
+      return '';
+  }
+}
+
+/** Convert a raw stored field value into its display form. */
+function formatFieldValue(
+  field: string,
+  value: string | null,
+  helpers: Required<ActivityDisplayHelpers>,
+): string {
+  if (field === 'assigneeId') return helpers.resolveMember(value);
+  if (field === 'columnId') return helpers.resolveColumn(value);
+  if (field === 'parentId') return helpers.resolveTask(value);
+  if (field === 'priority') return value == null ? 'None' : PRIORITY_DISPLAY[value] ?? value;
+  if (field === 'type') return value == null ? '' : TYPE_DISPLAY[value] ?? value;
+  if (value == null || value === '') return field === 'dueDate' ? 'None' : '—';
+  return value;
 }
 
 /* ------------------------------------------------------------------ *

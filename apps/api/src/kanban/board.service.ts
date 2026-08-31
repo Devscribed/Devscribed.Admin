@@ -29,6 +29,13 @@ export interface ColumnPayload {
   taskCount?: number;
 }
 
+/** Label chip payload on a board task card (spec 14). */
+export interface BoardTaskLabel {
+  id: string;
+  name: string;
+  color: string;
+}
+
 /** Task card payload returned by `GET /board`. */
 export interface BoardTaskPayload {
   id: string;
@@ -45,6 +52,7 @@ export interface BoardTaskPayload {
   parentId: string | null;
   parentKey: string | null;
   childCount: number;
+  labels: BoardTaskLabel[];
   createdAt: string;
 }
 
@@ -164,6 +172,7 @@ export class BoardService {
       include: {
         assignee: { include: { account: { select: { firstName: true, lastName: true } } } },
         parent: { select: { taskNumber: true } },
+        labels: { include: { label: true } },
         _count: { select: { children: true } },
       },
     });
@@ -188,6 +197,11 @@ export class BoardService {
       parentId: t.parentId,
       parentKey: t.parent ? formatTaskKey(projectKey, t.parent.taskNumber) : null,
       childCount: t._count.children,
+      labels: t.labels.map((a) => ({
+        id: a.label.id,
+        name: a.label.name,
+        color: a.label.color,
+      })),
       createdAt: t.createdAt.toISOString(),
     }));
   }

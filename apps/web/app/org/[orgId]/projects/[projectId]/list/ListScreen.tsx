@@ -19,6 +19,7 @@ import { AvatarInitials } from '../../../members/[memberId]/AvatarInitials';
 import type { MemberListResponse } from '../../../members/types';
 import { CreateTaskModal, type OrgMember } from '../kanban/CreateTaskModal';
 import { KanbanHeader } from '../kanban/KanbanHeader';
+import { LabelChipStrip } from '../kanban/LabelChip';
 import { MultiSelectFilter } from '../kanban/MultiSelectFilter';
 import type {
   BoardResponse,
@@ -426,18 +427,27 @@ function TasksTable({
                   <TaskTypeGlyph type={task.type} size={18} />
                 </Td>
                 <Td>
-                  <span
-                    style={{
-                      fontSize: 'var(--fs-14)',
-                      color: 'var(--text)',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      display: 'block',
-                    }}
-                  >
-                    {task.title}
-                  </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <span
+                      style={{
+                        fontSize: 'var(--fs-14)',
+                        color: 'var(--text)',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        display: 'block',
+                      }}
+                    >
+                      {task.title}
+                    </span>
+                    {task.labels && task.labels.length > 0 && (
+                      <LabelChipStrip
+                        labels={task.labels}
+                        max={4}
+                        testIdPrefix="task-card-label"
+                      />
+                    )}
+                  </div>
                 </Td>
                 <Td width={140}>
                   {column && (

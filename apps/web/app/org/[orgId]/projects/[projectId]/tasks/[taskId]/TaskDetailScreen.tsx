@@ -6,15 +6,26 @@ import { notFound, useRouter } from 'next/navigation';
 import { marked } from 'marked';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button, InfoBanner, Input, Modal, Select, Spinner } from '@/ds';
-import { BackArrowIcon, CheckIcon, PencilIcon, PlusIcon } from '@/layout/icons';
+import {
+  BackArrowIcon,
+  CheckIcon,
+  EyeIcon,
+  PencilIcon,
+  PlusIcon,
+  TrashIcon,
+} from '@/layout/icons';
 import { useSession } from '@/layout/session-context';
 import { useToast } from '@/toast';
 import {
+  COLLAB_MESSAGES,
+  COMMENT_DELETE_CONFIRM,
   KANBAN_MESSAGES,
   TASK_PRIORITIES,
   TASK_TYPES,
   can,
+  formatActivityDescription,
   formatTaskKey,
+  validateCommentContent,
   validateDueDate,
   validateStoryPoints,
   validateTaskDescription,
@@ -26,12 +37,19 @@ import {
 import { AvatarInitials } from '../../../../members/[memberId]/AvatarInitials';
 import type { MemberListResponse } from '../../../../members/types';
 import { CreateTaskModal, type OrgMember } from '../../kanban/CreateTaskModal';
+import { LabelChip } from '../../kanban/LabelChip';
 import type {
   BoardResponse,
   KanbanColumn,
+  KanbanLabel,
   KanbanProject,
   KanbanTaskChild,
   KanbanTaskDetail,
+  TaskActivityRow,
+  TaskComment,
+  TaskLabelChip,
+  TaskWatcher,
+  WatchersResponse,
 } from '../../kanban/types';
 import {
   PRIORITY_LABEL,
@@ -93,16 +111,53 @@ export function TaskDetailScreen({
   const [deleting, setDeleting] = useState(false);
   const [addSubtaskOpen, setAddSubtaskOpen] = useState(false);
 
+  // Spec 14 collaboration state.
+  const [comments, setComments] = useState<TaskComment[]>([]);
+  const [watchers, setWatchers] = useState<TaskWatcher[]>([]);
+  const [isWatching, setIsWatching] = useState(false);
+  const [activity, setActivity] = useState<TaskActivityRow[]>([]);
+  const [projectLabels, setProjectLabels] = useState<KanbanLabel[]>([]);
+  const [myMembershipId, setMyMembershipId] = useState<string | null>(null);
+
+  // Comment composer + edit state.
+  const [commentDraft, setCommentDraft] = useState('');
+  const [commentError, setCommentError] = useState<string | null>(null);
+  const [postingComment, setPostingComment] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editCommentDraft, setEditCommentDraft] = useState('');
+  const [editCommentError, setEditCommentError] = useState<string | null>(null);
+  const [savingCommentEdit, setSavingCommentEdit] = useState(false);
+  const [deleteCommentTarget, setDeleteCommentTarget] = useState<TaskComment | null>(null);
+  const [deletingComment, setDeletingComment] = useState(false);
+  const [labelPickerOpen, setLabelPickerOpen] = useState(false);
+  const labelPickerRootRef = useRef<HTMLDivElement>(null);
+
   const load = useCallback(async () => {
     try {
-      const [taskRes, boardRes] = await Promise.all([
-        fetch(`/api/organizations/${orgId}/projects/${projectId}/tasks/${taskId}`, {
-          credentials: 'same-origin',
-        }),
-        fetch(`/api/organizations/${orgId}/projects/${projectId}/board`, {
-          credentials: 'same-origin',
-        }),
-      ]);
+      const [taskRes, boardRes, commentsRes, watchersRes, activityRes, labelsRes] =
+        await Promise.all([
+          fetch(`/api/organizations/${orgId}/projects/${projectId}/tasks/${taskId}`, {
+            credentials: 'same-origin',
+          }),
+          fetch(`/api/organizations/${orgId}/projects/${projectId}/board`, {
+            credentials: 'same-origin',
+          }),
+          fetch(
+            `/api/organizations/${orgId}/projects/${projectId}/tasks/${taskId}/comments`,
+            { credentials: 'same-origin' },
+          ),
+          fetch(
+            `/api/organizations/${orgId}/projects/${projectId}/tasks/${taskId}/watchers`,
+            { credentials: 'same-origin' },
+          ),
+          fetch(
+            `/api/organizations/${orgId}/projects/${projectId}/tasks/${taskId}/activity`,
+            { credentials: 'same-origin' },
+          ),
+          fetch(`/api/organizations/${orgId}/projects/${projectId}/labels`, {
+            credentials: 'same-origin',
+          }),
+        ]);
       if (taskRes.status === 404) {
         setNotFoundState(true);
         return;
@@ -122,6 +177,23 @@ export function TaskDetailScreen({
         const boardData = (await boardRes.json()) as BoardResponse;
         setProject(boardData.project);
         setColumns(boardData.columns);
+      }
+      if (commentsRes.ok) {
+        const data = (await commentsRes.json()) as { comments: TaskComment[] };
+        setComments(data.comments ?? []);
+      }
+      if (watchersRes.ok) {
+        const data = (await watchersRes.json()) as WatchersResponse;
+        setWatchers(data.watchers ?? []);
+        setIsWatching(!!data.isWatching);
+      }
+      if (activityRes.ok) {
+        const data = (await activityRes.json()) as { activity: TaskActivityRow[] };
+        setActivity(data.activity ?? []);
+      }
+      if (labelsRes.ok) {
+        const data = (await labelsRes.json()) as { labels: KanbanLabel[] };
+        setProjectLabels(data.labels ?? []);
       }
     } catch {
       setError(KANBAN_MESSAGES.genericError);
@@ -151,6 +223,8 @@ export function TaskDetailScreen({
             return { membershipId: m.id, firstName: first, lastName: last };
           });
         setMembers(mapped);
+        const self = data.members.find((m) => m.isSelf);
+        if (self) setMyMembershipId(self.id);
       } catch {
         // non-blocking
       }
@@ -164,6 +238,37 @@ export function TaskDetailScreen({
 
   const archived = project?.status === 'archived';
   const readOnly = archived || !canManageTasks;
+
+  /**
+   * Spec 14 — re-fetch watchers + activity in parallel after any mutation that could
+   * add rows to either. Silently swallows errors: the primary mutation already showed a
+   * toast, and a failed collab refetch just keeps the previous list on screen.
+   */
+  async function refreshCollab() {
+    try {
+      const [watchersRes, activityRes] = await Promise.all([
+        fetch(
+          `/api/organizations/${orgId}/projects/${projectId}/tasks/${taskId}/watchers`,
+          { credentials: 'same-origin' },
+        ),
+        fetch(
+          `/api/organizations/${orgId}/projects/${projectId}/tasks/${taskId}/activity`,
+          { credentials: 'same-origin' },
+        ),
+      ]);
+      if (watchersRes.ok) {
+        const data = (await watchersRes.json()) as WatchersResponse;
+        setWatchers(data.watchers ?? []);
+        setIsWatching(data.isWatching ?? false);
+      }
+      if (activityRes.ok) {
+        const data = (await activityRes.json()) as { activity: TaskActivityRow[] };
+        setActivity(data.activity ?? []);
+      }
+    } catch {
+      // Ignore — a stale collab feed is a UX blip, not a failure to surface.
+    }
+  }
 
   async function patchTask(body: Record<string, unknown>, toastKey = 'toast-task-updated') {
     try {
@@ -181,6 +286,10 @@ export function TaskDetailScreen({
         setTask(detail);
         setStoryPointsDraft(detail.storyPoints != null ? String(detail.storyPoints) : '');
         setDueDateDraft(detail.dueDate ?? '');
+        // Spec 14: every task mutation may add an activity row and (via auto-watch on
+        // assigneeId) a watcher row. The task response itself carries neither list, so
+        // the sidebar/activity feed would otherwise render stale until a full reload.
+        void refreshCollab();
         showToast(toastKey, KANBAN_MESSAGES.toastTaskUpdated);
         return true;
       }
@@ -284,6 +393,243 @@ export function TaskDetailScreen({
     const raw = marked.parse(src, { async: false }) as string;
     return DOMPurify.sanitize(raw);
   }, [task?.description]);
+
+  /* ---------------- Spec 14 — collaboration handlers ---------------- */
+
+  const memberMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const m of members) map.set(m.membershipId, `${m.firstName} ${m.lastName}`);
+    return map;
+  }, [members]);
+
+  const columnMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of columns) map.set(c.id, c.name);
+    return map;
+  }, [columns]);
+
+  const labelNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const l of projectLabels) map.set(l.id, l.name);
+    if (task?.labels) for (const l of task.labels) map.set(l.id, l.name);
+    return map;
+  }, [projectLabels, task?.labels]);
+
+  const availableLabels = useMemo(() => {
+    const assigned = new Set((task?.labels ?? []).map((l) => l.id));
+    return projectLabels.filter((l) => !assigned.has(l.id));
+  }, [projectLabels, task?.labels]);
+
+  useEffect(() => {
+    if (!labelPickerOpen) return;
+    function onDown(e: MouseEvent) {
+      if (
+        labelPickerRootRef.current &&
+        !labelPickerRootRef.current.contains(e.target as Node)
+      ) {
+        setLabelPickerOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setLabelPickerOpen(false);
+    }
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [labelPickerOpen]);
+
+  async function assignLabel(label: KanbanLabel) {
+    if (!task) return;
+    setLabelPickerOpen(false);
+    // Optimistic add.
+    const chip: TaskLabelChip = { id: label.id, name: label.name, color: label.color };
+    setTask({ ...task, labels: [...(task.labels ?? []), chip] });
+    try {
+      const response = await fetch(
+        `/api/organizations/${orgId}/projects/${projectId}/tasks/${task.id}/labels`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ labelId: label.id }),
+        },
+      );
+      if (!response.ok) {
+        void load();
+        const body = await response.json().catch(() => null);
+        showToast(
+          'toast-label-assign',
+          body?.message ?? COLLAB_MESSAGES.genericError,
+          'error',
+        );
+        return;
+      }
+      void load();
+    } catch {
+      void load();
+      showToast('toast-label-assign', COLLAB_MESSAGES.genericError, 'error');
+    }
+  }
+
+  async function removeLabel(labelId: string) {
+    if (!task) return;
+    const original = task.labels ?? [];
+    setTask({ ...task, labels: original.filter((l) => l.id !== labelId) });
+    try {
+      const response = await fetch(
+        `/api/organizations/${orgId}/projects/${projectId}/tasks/${task.id}/labels/${labelId}`,
+        { method: 'DELETE', credentials: 'same-origin' },
+      );
+      if (!response.ok) {
+        void load();
+        const body = await response.json().catch(() => null);
+        showToast(
+          'toast-label-remove',
+          body?.message ?? COLLAB_MESSAGES.genericError,
+          'error',
+        );
+        return;
+      }
+      void load();
+    } catch {
+      void load();
+      showToast('toast-label-remove', COLLAB_MESSAGES.genericError, 'error');
+    }
+  }
+
+  async function submitComment() {
+    if (postingComment) return;
+    const result = validateCommentContent(commentDraft);
+    if (!result.valid) {
+      setCommentError(result.error);
+      const el = document.querySelector<HTMLTextAreaElement>(
+        '[data-testid="task-comment-composer"]',
+      );
+      el?.focus();
+      return;
+    }
+    setCommentError(null);
+    setPostingComment(true);
+    try {
+      const response = await fetch(
+        `/api/organizations/${orgId}/projects/${projectId}/tasks/${taskId}/comments`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ content: result.value }),
+        },
+      );
+      if (response.ok) {
+        setCommentDraft('');
+        showToast('toast-comment-posted', COLLAB_MESSAGES.toastCommentPosted);
+        void load();
+      } else {
+        const body = await response.json().catch(() => null);
+        setCommentError(body?.message ?? COLLAB_MESSAGES.genericError);
+      }
+    } catch {
+      setCommentError(COLLAB_MESSAGES.genericError);
+    }
+    setPostingComment(false);
+  }
+
+  async function saveCommentEdit(comment: TaskComment) {
+    if (savingCommentEdit) return;
+    const result = validateCommentContent(editCommentDraft);
+    if (!result.valid) {
+      setEditCommentError(result.error);
+      return;
+    }
+    setEditCommentError(null);
+    setSavingCommentEdit(true);
+    try {
+      const response = await fetch(
+        `/api/organizations/${orgId}/projects/${projectId}/tasks/${taskId}/comments/${comment.id}`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ content: result.value }),
+        },
+      );
+      if (response.ok) {
+        setEditingCommentId(null);
+        setEditCommentDraft('');
+        showToast('toast-comment-updated', COLLAB_MESSAGES.toastCommentUpdated);
+        void load();
+      } else {
+        const body = await response.json().catch(() => null);
+        setEditCommentError(body?.message ?? COLLAB_MESSAGES.genericError);
+      }
+    } catch {
+      setEditCommentError(COLLAB_MESSAGES.genericError);
+    }
+    setSavingCommentEdit(false);
+  }
+
+  async function confirmDeleteComment(comment: TaskComment) {
+    if (deletingComment) return;
+    setDeletingComment(true);
+    try {
+      const response = await fetch(
+        `/api/organizations/${orgId}/projects/${projectId}/tasks/${taskId}/comments/${comment.id}`,
+        { method: 'DELETE', credentials: 'same-origin' },
+      );
+      if (response.ok) {
+        setDeleteCommentTarget(null);
+        showToast('toast-comment-deleted', COLLAB_MESSAGES.toastCommentDeleted);
+        void load();
+      } else {
+        const body = await response.json().catch(() => null);
+        showToast(
+          'toast-comment-deleted',
+          body?.message ?? COLLAB_MESSAGES.genericError,
+          'error',
+        );
+      }
+    } catch {
+      showToast('toast-comment-deleted', COLLAB_MESSAGES.genericError, 'error');
+    }
+    setDeletingComment(false);
+  }
+
+  async function toggleWatch() {
+    const nextWatching = !isWatching;
+    setIsWatching(nextWatching);
+    try {
+      const response = await fetch(
+        `/api/organizations/${orgId}/projects/${projectId}/tasks/${taskId}/watchers`,
+        {
+          method: nextWatching ? 'POST' : 'DELETE',
+          credentials: 'same-origin',
+        },
+      );
+      if (!response.ok) {
+        setIsWatching(!nextWatching);
+        const body = await response.json().catch(() => null);
+        showToast(
+          'toast-watch-toggle',
+          body?.message ?? COLLAB_MESSAGES.genericError,
+          'error',
+        );
+        return;
+      }
+      showToast(
+        'toast-watch-toggle',
+        nextWatching
+          ? COLLAB_MESSAGES.toastNowWatching
+          : COLLAB_MESSAGES.toastUnwatched,
+      );
+      void load();
+    } catch {
+      setIsWatching(!nextWatching);
+      showToast('toast-watch-toggle', COLLAB_MESSAGES.genericError, 'error');
+    }
+  }
 
   if (error && !task) {
     return (
@@ -573,18 +919,53 @@ export function TaskDetailScreen({
             )}
           </div>
 
-          {/* Reserved slots for spec 14 / 15. */}
-          <div
-            style={{
-              padding: 'var(--sp-4)',
-              border: '1px dashed var(--border)',
-              borderRadius: 'var(--radius-lg)',
-              color: 'var(--text-faint)',
-              fontSize: 'var(--fs-12)',
+          {/* Comments section (spec 14) */}
+          <CommentsSection
+            comments={comments}
+            myMembershipId={myMembershipId}
+            role={role}
+            readOnly={archived}
+            commentDraft={commentDraft}
+            commentError={commentError}
+            postingComment={postingComment}
+            onDraftChange={(v) => {
+              setCommentDraft(v);
+              if (commentError) setCommentError(null);
             }}
-          >
-            Comments and activity — spec 14
-          </div>
+            onSubmit={submitComment}
+            editingCommentId={editingCommentId}
+            editCommentDraft={editCommentDraft}
+            editCommentError={editCommentError}
+            savingCommentEdit={savingCommentEdit}
+            onStartEdit={(c) => {
+              setEditingCommentId(c.id);
+              setEditCommentDraft(c.content);
+              setEditCommentError(null);
+            }}
+            onEditDraftChange={(v) => {
+              setEditCommentDraft(v);
+              if (editCommentError) setEditCommentError(null);
+            }}
+            onEditSave={(c) => void saveCommentEdit(c)}
+            onEditCancel={() => {
+              setEditingCommentId(null);
+              setEditCommentDraft('');
+              setEditCommentError(null);
+            }}
+            onRequestDelete={(c) => setDeleteCommentTarget(c)}
+          />
+
+          {/* Activity section (spec 14) */}
+          <ActivitySection
+            activity={activity}
+            resolveMember={(id) =>
+              id ? memberMap.get(id) ?? 'Unknown' : 'Unassigned'
+            }
+            resolveColumn={(id) => (id ? columnMap.get(id) ?? '(deleted column)' : '')}
+            resolveLabel={(id) => (id ? labelNameMap.get(id) ?? '(deleted label)' : '')}
+            resolveTask={(id) => (id ? id : 'None')}
+          />
+
           <div
             style={{
               padding: 'var(--sp-4)',
@@ -748,6 +1129,143 @@ export function TaskDetailScreen({
             </span>
           </SidePanelField>
 
+          {/* Labels section (spec 14 — side panel). */}
+          <div
+            data-testid="task-labels-section"
+            ref={labelPickerRootRef}
+            style={{ display: 'flex', flexDirection: 'column', gap: 6, position: 'relative' }}
+          >
+            <span
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 'var(--fs-11)',
+                letterSpacing: 1,
+                textTransform: 'uppercase',
+                color: 'var(--text-muted)',
+              }}
+            >
+              Labels
+            </span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+              {(task.labels ?? []).map((label) => (
+                <LabelChip
+                  key={label.id}
+                  label={label}
+                  size="md"
+                  testId={`task-label-chip-${label.id}`}
+                  removeTestId={`task-label-remove-${label.id}`}
+                  onRemove={!readOnly ? () => void removeLabel(label.id) : undefined}
+                />
+              ))}
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => setLabelPickerOpen((v) => !v)}
+                  data-testid="task-label-add-btn"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    background: 'transparent',
+                    border: '1px dashed var(--border)',
+                    borderRadius: 999,
+                    padding: '3px 10px',
+                    color: 'var(--text-muted)',
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 'var(--fs-12)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <PlusIcon size={10} />
+                  Add label
+                </button>
+              )}
+              {(task.labels ?? []).length === 0 && readOnly && (
+                <span style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-13)' }}>—</span>
+              )}
+            </div>
+            {labelPickerOpen && !readOnly && (
+              <div
+                data-testid="task-label-picker"
+                style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 6px)',
+                  left: 0,
+                  right: 0,
+                  zIndex: 40,
+                  background: 'var(--bg-panel)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-md)',
+                  boxShadow: 'var(--shadow-pop)',
+                  padding: 'var(--sp-2)',
+                  maxHeight: 240,
+                  overflowY: 'auto',
+                }}
+              >
+                {availableLabels.length === 0 ? (
+                  <div
+                    style={{
+                      padding: 'var(--sp-3)',
+                      color: 'var(--text-muted)',
+                      fontSize: 'var(--fs-12)',
+                    }}
+                  >
+                    No labels available.
+                  </div>
+                ) : (
+                  availableLabels.map((label) => (
+                    <button
+                      key={label.id}
+                      type="button"
+                      onClick={() => void assignLabel(label)}
+                      data-testid={`task-label-picker-option-${label.id}`}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        width: '100%',
+                        padding: '6px 8px',
+                        border: 'none',
+                        background: 'transparent',
+                        cursor: 'pointer',
+                        borderRadius: 'var(--radius-sm)',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <span
+                        aria-hidden
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: '50%',
+                          background: label.color,
+                          flexShrink: 0,
+                        }}
+                      />
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-display)',
+                          fontSize: 'var(--fs-13)',
+                          color: 'var(--text)',
+                        }}
+                      >
+                        {label.name}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Watchers section (spec 14 — side panel). */}
+          <WatchersSection
+            watchers={watchers}
+            isWatching={isWatching}
+            onToggle={toggleWatch}
+            disabled={false}
+          />
+
           {!readOnly && (
             <>
               <div style={{ borderTop: '1px solid var(--divider)', margin: '0' }} />
@@ -813,6 +1331,42 @@ export function TaskDetailScreen({
           onCreated={() => void load()}
         />
       )}
+
+      <Modal
+        open={deleteCommentTarget !== null}
+        onClose={() => !deletingComment && setDeleteCommentTarget(null)}
+        title="Delete comment"
+        actions={
+          <>
+            <Button
+              variant="secondary"
+              size="lg"
+              disabled={deletingComment}
+              onClick={() => setDeleteCommentTarget(null)}
+              data-testid="task-comment-delete-cancel"
+              style={{ flex: 1 }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="lg"
+              loading={deletingComment}
+              onClick={() =>
+                deleteCommentTarget && void confirmDeleteComment(deleteCommentTarget)
+              }
+              data-testid="task-comment-delete-confirm"
+              style={{ flex: 1 }}
+            >
+              Delete comment
+            </Button>
+          </>
+        }
+      >
+        <p style={{ fontFamily: 'var(--font-text)', fontSize: 'var(--fs-15)', color: 'var(--text-sub)' }}>
+          {COMMENT_DELETE_CONFIRM}
+        </p>
+      </Modal>
     </div>
   );
 }
@@ -918,4 +1472,516 @@ function ChildRow({
       )}
     </button>
   );
+}
+
+/* ---------------- Spec 14 — Comments / Watchers / Activity ---------------- */
+
+const EDITED_THRESHOLD_MS = 5000;
+
+function CommentsSection({
+  comments,
+  myMembershipId,
+  role,
+  readOnly,
+  commentDraft,
+  commentError,
+  postingComment,
+  onDraftChange,
+  onSubmit,
+  editingCommentId,
+  editCommentDraft,
+  editCommentError,
+  savingCommentEdit,
+  onStartEdit,
+  onEditDraftChange,
+  onEditSave,
+  onEditCancel,
+  onRequestDelete,
+}: {
+  comments: TaskComment[];
+  myMembershipId: string | null;
+  role: Role;
+  readOnly: boolean;
+  commentDraft: string;
+  commentError: string | null;
+  postingComment: boolean;
+  onDraftChange: (v: string) => void;
+  onSubmit: () => void;
+  editingCommentId: string | null;
+  editCommentDraft: string;
+  editCommentError: string | null;
+  savingCommentEdit: boolean;
+  onStartEdit: (c: TaskComment) => void;
+  onEditDraftChange: (v: string) => void;
+  onEditSave: (c: TaskComment) => void;
+  onEditCancel: () => void;
+  onRequestDelete: (c: TaskComment) => void;
+}) {
+  const canDeleteAny = role === 'admin' || role === 'manager';
+  return (
+    <div data-testid="task-comments-section" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-4)' }}>
+      <div
+        style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: 'var(--fs-11)',
+          letterSpacing: 1,
+          textTransform: 'uppercase',
+          color: 'var(--text-muted)',
+        }}
+      >
+        Comments ({comments.length})
+      </div>
+      {!readOnly && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' }}>
+          <textarea
+            data-testid="task-comment-composer"
+            value={commentDraft}
+            onChange={(e) => onDraftChange(e.target.value)}
+            placeholder="Write a comment... (markdown)"
+            rows={3}
+            style={{
+              fontFamily: 'var(--font-text)',
+              fontSize: 'var(--fs-14)',
+              color: 'var(--text)',
+              background: 'var(--bg-input)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-md)',
+              padding: '10px 12px',
+              resize: 'vertical',
+              minHeight: 72,
+            }}
+          />
+          {commentError && (
+            <span
+              style={{ color: 'var(--error-500)', fontSize: 'var(--fs-12)' }}
+              data-testid="task-comment-composer-error"
+            >
+              {commentError}
+            </span>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              loading={postingComment}
+              onClick={onSubmit}
+              data-testid="task-comment-submit-btn"
+            >
+              Comment
+            </Button>
+          </div>
+        </div>
+      )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
+        {comments.length === 0 ? (
+          <div
+            style={{
+              padding: 'var(--sp-4)',
+              color: 'var(--text-faint)',
+              fontSize: 'var(--fs-13)',
+              fontStyle: 'italic',
+              background: 'var(--bg-panel-2)',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px solid var(--divider)',
+            }}
+          >
+            {COLLAB_MESSAGES.emptyComments}
+          </div>
+        ) : (
+          comments.map((c) => (
+            <CommentRow
+              key={c.id}
+              comment={c}
+              isMine={c.author.membershipId === myMembershipId}
+              canDeleteAny={canDeleteAny}
+              editing={editingCommentId === c.id}
+              editDraft={editCommentDraft}
+              editError={editingCommentId === c.id ? editCommentError : null}
+              saving={editingCommentId === c.id && savingCommentEdit}
+              onStartEdit={() => onStartEdit(c)}
+              onEditDraftChange={onEditDraftChange}
+              onEditSave={() => onEditSave(c)}
+              onEditCancel={onEditCancel}
+              onRequestDelete={() => onRequestDelete(c)}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CommentRow({
+  comment,
+  isMine,
+  canDeleteAny,
+  editing,
+  editDraft,
+  editError,
+  saving,
+  onStartEdit,
+  onEditDraftChange,
+  onEditSave,
+  onEditCancel,
+  onRequestDelete,
+}: {
+  comment: TaskComment;
+  isMine: boolean;
+  canDeleteAny: boolean;
+  editing: boolean;
+  editDraft: string;
+  editError: string | null;
+  saving: boolean;
+  onStartEdit: () => void;
+  onEditDraftChange: (v: string) => void;
+  onEditSave: () => void;
+  onEditCancel: () => void;
+  onRequestDelete: () => void;
+}) {
+  const canEdit = isMine;
+  const canDelete = isMine || canDeleteAny;
+  const wasEdited =
+    new Date(comment.updatedAt).getTime() - new Date(comment.createdAt).getTime() >
+    EDITED_THRESHOLD_MS;
+  const html = useMemo(() => {
+    const raw = marked.parse(comment.content, { async: false }) as string;
+    return DOMPurify.sanitize(raw);
+  }, [comment.content]);
+  const fullName = `${comment.author.firstName} ${comment.author.lastName}`;
+  const initials = `${comment.author.firstName[0] ?? ''}${comment.author.lastName[0] ?? ''}`.toUpperCase();
+  return (
+    <div
+      data-testid={`task-comment-${comment.id}`}
+      style={{
+        display: 'flex',
+        gap: 'var(--sp-3)',
+        padding: 'var(--sp-4)',
+        background: 'var(--bg-panel-2)',
+        border: '1px solid var(--divider)',
+        borderRadius: 'var(--radius-lg)',
+      }}
+    >
+      <AvatarInitials fullName={fullName} initials={initials} size={28} data-testid={`task-comment-avatar-${comment.id}`} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span
+            data-testid={`task-comment-author-${comment.id}`}
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontWeight: 600,
+              fontSize: 'var(--fs-13)',
+              color: 'var(--text)',
+            }}
+          >
+            {fullName}
+          </span>
+          <span style={{ fontSize: 'var(--fs-12)', color: 'var(--text-muted)' }}>
+            {formatCommentTimestamp(comment.createdAt)}
+          </span>
+          {wasEdited && (
+            <span
+              data-testid={`task-comment-edited-badge-${comment.id}`}
+              style={{ fontSize: 'var(--fs-12)', color: 'var(--text-faint)' }}
+            >
+              (edited)
+            </span>
+          )}
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+            {!editing && canEdit && (
+              <button
+                type="button"
+                onClick={onStartEdit}
+                data-testid={`task-comment-edit-btn-${comment.id}`}
+                aria-label="Edit comment"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text-muted)',
+                  padding: 4,
+                }}
+              >
+                <PencilIcon />
+              </button>
+            )}
+            {!editing && canDelete && (
+              <button
+                type="button"
+                onClick={onRequestDelete}
+                data-testid={`task-comment-delete-btn-${comment.id}`}
+                aria-label="Delete comment"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text-muted)',
+                  padding: 4,
+                }}
+              >
+                <TrashIcon />
+              </button>
+            )}
+          </div>
+        </div>
+        {editing ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)', marginTop: 'var(--sp-2)' }}>
+            <textarea
+              data-testid={`task-comment-edit-composer-${comment.id}`}
+              value={editDraft}
+              onChange={(e) => onEditDraftChange(e.target.value)}
+              rows={3}
+              style={{
+                fontFamily: 'var(--font-text)',
+                fontSize: 'var(--fs-14)',
+                color: 'var(--text)',
+                background: 'var(--bg-input)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-md)',
+                padding: '10px 12px',
+                resize: 'vertical',
+              }}
+            />
+            {editError && (
+              <span style={{ color: 'var(--error-500)', fontSize: 'var(--fs-12)' }}>
+                {editError}
+              </span>
+            )}
+            <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                loading={saving}
+                onClick={onEditSave}
+                data-testid={`task-comment-edit-save-${comment.id}`}
+              >
+                Save
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onEditCancel}
+                data-testid={`task-comment-edit-cancel-${comment.id}`}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div
+            data-testid={`task-comment-content-${comment.id}`}
+            style={{
+              fontSize: 'var(--fs-14)',
+              color: 'var(--text)',
+              marginTop: 6,
+              lineHeight: 1.55,
+              wordBreak: 'break-word',
+            }}
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function WatchersSection({
+  watchers,
+  isWatching,
+  onToggle,
+  disabled,
+}: {
+  watchers: TaskWatcher[];
+  isWatching: boolean;
+  onToggle: () => void;
+  disabled: boolean;
+}) {
+  const visible = watchers.slice(0, 5);
+  const overflow = watchers.length - visible.length;
+  return (
+    <div
+      data-testid="task-watchers-section"
+      style={{ display: 'flex', flexDirection: 'column', gap: 6 }}
+    >
+      <span
+        style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: 'var(--fs-11)',
+          letterSpacing: 1,
+          textTransform: 'uppercase',
+          color: 'var(--text-muted)',
+        }}
+      >
+        Watchers (
+        <span data-testid="task-watchers-count">{watchers.length}</span>)
+      </span>
+      <button
+        type="button"
+        onClick={onToggle}
+        disabled={disabled}
+        data-testid="task-watch-toggle-btn"
+        aria-pressed={isWatching}
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          alignSelf: 'flex-start',
+          padding: '6px 12px',
+          borderRadius: 999,
+          fontFamily: 'var(--font-display)',
+          fontSize: 'var(--fs-12)',
+          fontWeight: 500,
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          background: isWatching ? 'var(--accent-soft)' : 'var(--bg-input)',
+          color: isWatching ? 'var(--accent)' : 'var(--text)',
+          border: `1px solid ${isWatching ? 'var(--accent)' : 'var(--border)'}`,
+          opacity: disabled ? 0.6 : 1,
+        }}
+      >
+        <EyeIcon size={14} />
+        {isWatching ? 'Watching' : 'Watch'}
+      </button>
+      {watchers.length === 0 ? (
+        <span style={{ color: 'var(--text-faint)', fontSize: 'var(--fs-12)' }}>
+          {COLLAB_MESSAGES.emptyWatchers}
+        </span>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', marginTop: 4 }}>
+          {visible.map((w, i) => (
+            <span
+              key={w.membershipId}
+              title={`${w.firstName} ${w.lastName}`}
+              style={{ marginLeft: i === 0 ? 0 : -6 }}
+            >
+              <AvatarInitials
+                fullName={`${w.firstName} ${w.lastName}`}
+                initials={`${w.firstName[0] ?? ''}${w.lastName[0] ?? ''}`.toUpperCase()}
+                size={24}
+                data-testid={`task-watcher-avatar-${w.membershipId}`}
+              />
+            </span>
+          ))}
+          {overflow > 0 && (
+            <span
+              style={{
+                marginLeft: 6,
+                fontFamily: 'var(--font-display)',
+                fontSize: 'var(--fs-11)',
+                color: 'var(--text-muted)',
+              }}
+            >
+              +{overflow} more
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ActivitySection({
+  activity,
+  resolveMember,
+  resolveColumn,
+  resolveLabel,
+  resolveTask,
+}: {
+  activity: TaskActivityRow[];
+  resolveMember: (id: string | null) => string;
+  resolveColumn: (id: string | null) => string;
+  resolveLabel: (id: string | null) => string;
+  resolveTask: (id: string | null) => string;
+}) {
+  return (
+    <div data-testid="task-activity-section" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
+      <div
+        style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: 'var(--fs-11)',
+          letterSpacing: 1,
+          textTransform: 'uppercase',
+          color: 'var(--text-muted)',
+        }}
+      >
+        Activity
+      </div>
+      {activity.length === 0 ? (
+        <div
+          style={{
+            padding: 'var(--sp-4)',
+            color: 'var(--text-faint)',
+            fontSize: 'var(--fs-13)',
+            fontStyle: 'italic',
+            background: 'var(--bg-panel-2)',
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--divider)',
+          }}
+        >
+          {COLLAB_MESSAGES.emptyActivity}
+        </div>
+      ) : (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--sp-3)',
+            padding: 'var(--sp-4)',
+            background: 'var(--bg-panel-2)',
+            border: '1px solid var(--divider)',
+            borderRadius: 'var(--radius-lg)',
+            maxHeight: 400,
+            overflowY: 'auto',
+          }}
+        >
+          {activity.map((row) => {
+            const actorName = row.actor
+              ? `${row.actor.firstName} ${row.actor.lastName}`
+              : 'Unknown';
+            const initials = row.actor
+              ? `${row.actor.firstName[0] ?? ''}${row.actor.lastName[0] ?? ''}`.toUpperCase()
+              : '?';
+            const description = formatActivityDescription(row, {
+              resolveMember,
+              resolveColumn,
+              resolveLabel,
+              resolveTask,
+            });
+            return (
+              <div
+                key={row.id}
+                data-testid={`task-activity-entry-${row.id}`}
+                style={{ display: 'flex', gap: 'var(--sp-3)', alignItems: 'flex-start' }}
+              >
+                <AvatarInitials fullName={actorName} initials={initials} size={22} data-testid={`task-activity-actor-${row.id}`} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 'var(--fs-13)', color: 'var(--text)' }}>
+                    <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600 }}>
+                      {actorName}
+                    </span>{' '}
+                    {description}
+                  </div>
+                  <div style={{ fontSize: 'var(--fs-11)', color: 'var(--text-muted)', marginTop: 2 }}>
+                    {formatCommentTimestamp(row.createdAt)}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatCommentTimestamp(iso: string): string {
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return iso;
+  return d.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
