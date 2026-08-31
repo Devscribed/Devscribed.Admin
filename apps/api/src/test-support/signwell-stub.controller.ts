@@ -13,19 +13,7 @@
  * changing either. It also answers 404 whenever the stub driver is not the one in use, so
  * the route simply does not exist in an environment that talks to the real SignWell.
  */
-import {
-  BadRequestException,
-  Body,
-  Controller,
-  Get,
-  Header,
-  Headers,
-  HttpCode,
-  NotFoundException,
-  Post,
-  Query,
-  Req,
-} from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Header, Headers, HttpCode, NotFoundException, Post, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { SessionService } from '../auth/session.service';
 import { PrismaService } from '../prisma.service';
@@ -65,12 +53,26 @@ export class TestSignWellStubController {
    * It emits the same `postMessage` shape the real widget does when a signer finishes, so
    * the parent page's origin check and its "a message is a hint, never a fact" handling
    * are exercised rather than assumed.
+   *
+   * **It refuses without `signwell_embedded_iframe=1`, exactly as the provider does.** The
+   * live signing URL is the ordinary emailed one and carries `X-Frame-Options: SAMEORIGIN`
+   * until that parameter asks it not to (BUG-003). A stub that framed happily either way
+   * is a stub that cannot fail the test it exists for, and this one did not fail it.
    */
   @Get('widget')
   @Header('Content-Type', 'text/html; charset=utf-8')
-  widget(@Query('document') document?: string, @Headers('authorization') authorization?: string) {
+  widget(
+    @Query('document') document?: string,
+    @Query('signwell_embedded_iframe') embedded?: string,
+    @Headers('authorization') authorization?: string,
+  ) {
     assertFixturesOpen(authorization);
     this.stub();
+    if (embedded !== '1') {
+      throw new ForbiddenException(
+        'This document may only be framed with signwell_embedded_iframe=1.',
+      );
+    }
     const label = (document ?? '').replace(/[^a-zA-Z0-9-]/g, '');
     return (
       '<!doctype html><html><head><meta charset="utf-8"><title>Signing</title></head>' +

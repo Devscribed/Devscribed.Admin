@@ -465,8 +465,10 @@ function SigningScreen({ token }: { token: string }) {
    */
   if (payload?.surface === 'embedded') {
     return (
-      <SigningLayout organizationName={envelope?.senderOrganizationName}>
-        <div data-testid="signing-page" style={{ display: 'grid', gap: 'var(--sp-10)' }}>
+      <SigningLayout organizationName={envelope?.senderOrganizationName} wide>
+        {/* Tighter than our own surface: the widget repeats the document's name in its own
+            header, so the band between our title and its is spent twice. */}
+        <div data-testid="signing-page" style={{ display: 'grid', gap: 'var(--sp-5)' }}>
           <div
             style={{
               display: 'flex',
