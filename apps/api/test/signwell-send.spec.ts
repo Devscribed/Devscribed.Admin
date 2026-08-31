@@ -1,6 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { SIGNING_PROVIDER_MESSAGES } from '@devscribed/validation';
+import { ENVELOPE_MESSAGES, SIGNING_PROVIDER_MESSAGES } from '@devscribed/validation';
 import cookieParser from 'cookie-parser';
 import { json } from 'express';
 import request from 'supertest';
@@ -17,11 +17,16 @@ import {
   CREATE_POLL_ATTEMPTS,
   SignWellSigningProvider,
 } from '../src/signature/signwell/signwell-signing-provider';
-import { SignWellHttpClient } from '../src/signature/signwell/signwell-http-client';
+import {
+  ProviderRejectedRequestError,
+  SignWellHttpClient,
+} from '../src/signature/signwell/signwell-http-client';
 import type { SignWellDocument } from '../src/signature/signwell/signwell-types';
 import {
   Signed,
+  createEnvelope,
   envelopesApi,
+  fillEnvelope,
   publishTemplate,
   sendableEnvelope,
   signup,
@@ -602,6 +607,108 @@ describe('SignWell send', () => {
       expect(
         (await prisma.envelope.findUniqueOrThrow({ where: { id: envelope.id } })).status,
       ).toBe('sent');
+    });
+  });
+
+  /**
+   * BUG-002, the regression test. The address was accepted by every screen, stored, and
+   * then refused by SignWell at the send — where the sender was told the provider was
+   * unavailable. The rule is spec 01's shared one, tightened in `packages/validation`, so
+   * the refusal now happens on the field the sender typed it into.
+   */
+  describe('TC-04-INT-23: A signer address the provider will not accept is refused at entry', () => {
+    it('answers 400 on the address field, stores nothing, and never calls the provider', async () => {
+      const admin = await signup(app, 'admin@acme.com', 'Acme Inc');
+      await useSignWell(app, admin.organizationId);
+      const template = await publishTemplate(app, admin);
+      const envelope = await createEnvelope(app, admin, template.id);
+
+      const refused = await fillEnvelope(app, admin, envelope, {
+        emails: ['company@acme.com', 'фывфывфыв@gmail.com'],
+      }).expect(400);
+      expect(refused.body.errors['signers[1].email']).toBe(
+        ENVELOPE_MESSAGES.signer.emailInvalid,
+      );
+
+      // The whole point of moving the refusal: nothing was sent anywhere.
+      expect(signwell.calls).toEqual([]);
+
+      const stored = await prisma.envelope.findUniqueOrThrow({
+        where: { id: envelope.id },
+        include: { signers: { orderBy: { order: 'asc' } } },
+      });
+      expect(stored.status).toBe('draft');
+      expect(stored.providerRef).toBe('');
+      // Not even the valid first address: the save is refused whole.
+      expect(stored.signers.map((signer) => signer.email)).toEqual(['', '']);
+    });
+
+    it('still accepts the addresses people actually have', async () => {
+      const admin = await signup(app, 'admin@acme.com', 'Acme Inc');
+      await useSignWell(app, admin.organizationId);
+      const template = await publishTemplate(app, admin);
+      const envelope = await createEnvelope(app, admin, template.id);
+
+      await fillEnvelope(app, admin, envelope, {
+        emails: ['ivan.demchenko.dev@gmail.com', 'alex+contracts@example.co.uk'],
+      }).expect(200);
+
+      const stored = await prisma.envelope.findUniqueOrThrow({
+        where: { id: envelope.id },
+        include: { signers: { orderBy: { order: 'asc' } } },
+      });
+      expect(stored.signers.map((signer) => signer.email)).toEqual([
+        'ivan.demchenko.dev@gmail.com',
+        'alex+contracts@example.co.uk',
+      ]);
+    });
+  });
+
+  /**
+   * BUG-002, the second half, at the send path — the half that produced the misleading
+   * log line. A `4xx` means the create was refused and nothing was created, so there is
+   * no orphan and the scan that looks for one is twenty reads spent on nothing.
+   *
+   * The mapping itself — which status becomes which error, and the field path extracted
+   * from the body — is asserted against the real client in `signwell-client.spec.ts`
+   * under the same case number; this half needs the real adapter, which that one does not
+   * have.
+   */
+  describe('TC-04-INT-24: A permanent refusal is not an outage, and scans for no orphan', () => {
+    it('leaves the envelope in draft without listing a single document', async () => {
+      const { admin, envelope } = await onSignWell();
+
+      signwell.onCreate = async () => {
+        throw new ProviderRejectedRequestError(422, 'files.file_1.file_data', 'status_422');
+      };
+
+      const refused = await send(admin, envelope.id);
+      // The status and the sentence a refused send shows are spec 04's open row — the
+      // Error Messages table has no entry for a permanent refusal yet. What this case
+      // fixes is what happens underneath: the refusal is not treated as an outage.
+      expect(refused.status).toBeGreaterThanOrEqual(400);
+
+      // Requirement 26 exists for a create that may have landed. This one did not.
+      expect(signwell.countOf('listDocuments')).toBe(0);
+      expect(signwell.countOf('createDocument')).toBe(1);
+
+      const stored = await prisma.envelope.findUniqueOrThrow({ where: { id: envelope.id } });
+      expect(stored.status).toBe('draft');
+      expect(stored.renderedHtml).toBeNull();
+      expect(stored.providerRef).toBe('');
+      expect(await eventsOf(envelope.id, 'sent')).toBe(0);
+    });
+
+    /** The contrast, unchanged: a real outage still scans, because it may have landed. */
+    it('still scans after an outage, which is the case the scan is for', async () => {
+      const { admin, envelope } = await onSignWell();
+
+      signwell.onCreate = async () => {
+        throw new ProviderUnavailableError('provider_unavailable', 'timeout');
+      };
+
+      await send(admin, envelope.id).expect(503);
+      expect(signwell.countOf('listDocuments')).toBeGreaterThan(0);
     });
   });
 });

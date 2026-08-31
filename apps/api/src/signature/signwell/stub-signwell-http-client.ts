@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ProviderUnavailableError } from '../signing-provider';
 import { SignWellHttpClient } from './signwell-http-client';
+import { flattenFields } from './signwell-types';
 import type {
   SignWellCreateDocumentBody,
   SignWellDocument,
@@ -21,11 +22,13 @@ import type {
  * integration suites do **not** use it — they override `SignWellHttpClient` per case with
  * a stub that answers exactly what that case is about.
  *
- * What it deliberately does not try to be: a simulator. It materializes **one required
- * signature field per recipient** and nothing else, because it cannot read the tags out of
- * a rendered PDF. A template driven through this stub therefore carries no signer-owned
- * fields — which is stated here rather than discovered later from a send that fails the
- * materialization check.
+ * What it deliberately does not try to be: a simulator. But on the one behaviour that
+ * decides whether a send can work at all it is exact, because a double that is wrong in the
+ * provider's favour is worse than no double: **fields exist only when the request supplied
+ * them, and a document created with none settles in `Draft` and is never sent** — which is
+ * what BUG-001 measured against the live API. An earlier version of this stub materialized
+ * a signature field per recipient out of nothing, and seven integration suites and a full
+ * E2E run passed green against a behaviour SignWell has never had.
  */
 @Injectable()
 export class StubSignWellHttpClient extends SignWellHttpClient {
@@ -112,16 +115,17 @@ export class StubSignWellHttpClient extends SignWellHttpClient {
           id,
         )}&recipient=${encodeURIComponent(recipient.id)}`,
       })),
-      // Page-grouped, exactly as the real payloads are — a redactor or a check written
-      // against a flat array must fail here too.
+      // The request's own field list, echoed — nothing is invented from the PDF, because
+      // SignWell invents nothing from it either. Page-grouped, exactly as the real payloads
+      // are: a redactor or a check written against a flat array must fail here too.
       fields: [
-        body.recipients.map((recipient, index) => ({
-          api_id: `Signature_${index + 1}`,
-          type: 'signature',
-          required: true,
-          recipient_id: recipient.id,
-          page: 1,
-          value: null,
+        flattenFields(body.fields).map((field) => ({
+          api_id: field.api_id,
+          type: field.type,
+          required: field.required,
+          recipient_id: field.recipient_id,
+          page: field.page,
+          value: field.type === 'text' ? '' : null,
         })),
       ],
       files: [{ name: body.files[0]?.name ?? 'document.pdf', pages_number: 0 }],
@@ -136,9 +140,16 @@ export class StubSignWellHttpClient extends SignWellHttpClient {
     this.assertHealthy(this.organizationOf(id));
     const document = this.documents.get(id);
     if (!document) return null;
-    // The parse has landed by the first read, which is what the adapter polls for.
+    // The parse has landed by the first read, which is what the adapter polls for. What it
+    // produced is the whole point: the fields the request supplied, and nothing else. A
+    // document that supplied none settles in `Draft` and is never sent, which is what the
+    // live API does and what no tag syntax could change.
     if (document.status === 'Created') {
-      const settled: SignWellDocument = { ...document, status: 'Sent' };
+      const settled: SignWellDocument = {
+        ...document,
+        status: flattenFields(document.fields).length > 0 ? 'Sent' : 'Draft',
+        files: [{ name: document.files?.[0]?.name ?? 'document.pdf', pages_number: 1 }],
+      };
       this.documents.set(id, settled);
       return settled;
     }

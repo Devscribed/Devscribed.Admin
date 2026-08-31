@@ -123,6 +123,26 @@ export function flattenFields(
   return flat;
 }
 
+/**
+ * One field the create request asks for, requirement 14d.
+ *
+ * `page` and the box are ours: the copy places every field on an execution page it lays out
+ * itself (requirement 14e), because nothing here can measure where a block landed on a
+ * rendered page.
+ */
+export interface SignWellCreateField {
+  api_id: string;
+  type: 'signature' | 'text';
+  /** Their recipient id, which our adapter sets to the signing order. */
+  recipient_id: string;
+  page: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  required: boolean;
+}
+
 /** The document body `POST /documents` is sent, field for field from requirement 13. */
 export interface SignWellCreateDocumentBody {
   test_mode: boolean;
@@ -137,7 +157,14 @@ export interface SignWellCreateDocumentBody {
     send_email: false;
   }[];
   apply_signing_order: true;
-  text_tags: true;
+  /**
+   * Never `true`. SignWell materializes only the fields the request supplies and parses
+   * nothing out of the file — BUG-001 measured it against six tag syntaxes and a probe with
+   * no tag at all, and every one of them left the document in `Draft` with no fields.
+   */
+  text_tags: false;
+  /** Grouped per file, and we send one file. Each entry names its own page.  */
+  fields: readonly (readonly SignWellCreateField[])[];
   embedded_signing: true;
   embedded_signing_notifications: false;
   /** Our sweep sends reminders, so there is one reminder policy and not two. */

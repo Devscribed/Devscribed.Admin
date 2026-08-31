@@ -129,8 +129,13 @@ describe('Embedded signing surface', () => {
       const second = await surfaceFor(token).expect(200);
 
       expect(first.body.surface).toBe('embedded');
-      expect(first.body.embeddedSigningUrl).toBe('https://www.signwell.com/docs/credential-1/');
-      expect(second.body.embeddedSigningUrl).toBe('https://www.signwell.com/docs/credential-2/');
+      // Each call's own URL, made framable on the way out (BUG-003, TC-04-INT-26).
+      expect(first.body.embeddedSigningUrl).toBe(
+        'https://www.signwell.com/docs/credential-1/?signwell_embedded_iframe=1',
+      );
+      expect(second.body.embeddedSigningUrl).toBe(
+        'https://www.signwell.com/docs/credential-2/?signwell_embedded_iframe=1',
+      );
       expect(first.body.testMode).toBe(true);
 
       // No column holds it — not on the envelope, not on the signer, not on the token.

@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
-import type { ProviderCapabilities } from '@devscribed/validation';
-import { PdfRenderer } from '../../pdf/pdf-renderer';
-import { parseSignWellNotification } from '../../webhooks/signwell-notification';
+import { Injectable, Logger } from "@nestjs/common";
+import type { ProviderCapabilities } from "@devscribed/validation";
+import { PdfRenderer } from "../../pdf/pdf-renderer";
+import { parseSignWellNotification } from "../../webhooks/signwell-notification";
 import {
   CancelRequest,
   CompletedDocument,
@@ -9,6 +9,7 @@ import {
   CompletedDocumentRequest,
   CreateSessionRequest,
   CreatedSession,
+  ExpectedProviderField,
   ParsedNotification,
   ProviderDocumentGoneError,
   ProviderFieldsNotMaterializedError,
@@ -22,14 +23,26 @@ import {
   SignerAccess,
   SignerAccessRequest,
   SigningProvider,
-} from '../signing-provider';
-import { SignWellHttpClient } from './signwell-http-client';
-import { describeDocument } from './signwell-projection';
-import { flattenFields } from './signwell-types';
-import type { SignWellCreateDocumentBody, SignWellDocument } from './signwell-types';
+} from "../signing-provider";
+import { readSignWellFieldBoxes } from "../../documents/signwell-text-tags";
+import type { SignWellFieldBox } from "../../documents/signwell-text-tags";
+import { SignWellHttpClient } from "./signwell-http-client";
+import { describeDocument } from "./signwell-projection";
+import { flattenFields } from "./signwell-types";
+import type {
+  SignWellCreateDocumentBody,
+  SignWellCreateField,
+  SignWellDocument,
+} from "./signwell-types";
 
 /** The document is `Created` until their asynchronous parse has read the file. */
-const STATUS_CREATED = 'Created';
+const STATUS_CREATED = "Created";
+
+/**
+ * Requirement 14e — every field sits on the execution page, which the copy hoists to the
+ * front, so the page number is a constant rather than something measured off a render.
+ */
+const EXECUTION_PAGE_NUMBER = 1;
 
 /** Requirement 38 — at most ten attempts over thirty seconds. */
 export const CREATE_POLL_ATTEMPTS = 10;
@@ -45,23 +58,60 @@ export const ORPHAN_SCAN_PAGE_CAP = 20;
  * the application branches on `capabilities`, never on the key, and TC-04-UNIT-05 makes
  * that a test rather than an intention.
  */
+/**
+ * `embedded_signing_url` is the ordinary signing page — the same address a signer would be
+ * emailed — and the provider serves it with `X-Frame-Options: SAMEORIGIN`. It drops that
+ * header only when asked to, by a parameter that appears in no API response and in no field
+ * name: `signwell_embedded_iframe=1`. Their embed script exists to add it (BUG-003).
+ *
+ * `searchParams` rather than concatenation, because a URL that already carries a query
+ * string is not ours to assume away. A URL we cannot parse is returned untouched: framing
+ * will fail, and a frame that fails is visible, where a mangled URL is not.
+ */
+export function embeddable(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.set("signwell_embedded_iframe", "1");
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * The grid is in PDF points, because that is what the renderer lays the page out in.
+ * SignWell places fields in **CSS pixels at 96dpi** — its own viewer draws an A4 page 794
+ * pixels wide, which is 210mm at 96dpi and not the 595 points the PDF is measured in.
+ *
+ * Sending points is not an error the provider can see: it accepts them, stores them, and
+ * draws the field a third of the way up the page from where it belongs. A signature landed
+ * on the execution page's heading instead of the first signer's line (BUG-003), which is
+ * the only way this is ever noticed — the API echoes back exactly what it was given.
+ */
+const POINTS_TO_PROVIDER_PIXELS = 96 / 72;
+
+export function toProviderUnits(points: number): number {
+  return Math.round(points * POINTS_TO_PROVIDER_PIXELS * 100) / 100;
+}
+
 @Injectable()
 export class SignWellSigningProvider
   extends SigningProvider
   implements RemotelyTracked, ConnectionChecked
 {
-  readonly key = 'signwell';
+  readonly key = "signwell";
 
   /** Requirement 11, exactly. */
   readonly capabilities: ProviderCapabilities = {
     // Requirement 12: the invitation is ours, from our SES identity, linking to our own
     // `/sign/{token}` — the counterparty never receives mail from a vendor they have no
     // relationship with, and the link cannot outlive our access control.
-    invitationMail: 'ours',
-    signingSurface: 'embedded',
-    completedDocument: 'provider',
-    notifications: 'webhook',
-    signingOrder: 'provider',
+    invitationMail: "ours",
+    signingSurface: "embedded",
+    completedDocument: "provider",
+    notifications: "webhook",
+    signingOrder: "provider",
   };
 
   private readonly log = new Logger(SignWellSigningProvider.name);
@@ -91,11 +141,15 @@ export class SignWellSigningProvider
    * -------------------------------------------------------------- */
 
   async createSession(request: CreateSessionRequest): Promise<CreatedSession> {
+    // Before the render, because a field list we cannot build is a send that must spend
+    // nothing: no PDF, no create, no document to delete afterwards.
+    const fields = this.fieldsFor(request);
+
     const pdf = await this.renderer.render(request.documentHtml);
 
-    // The recipient id is the signing order, deliberately: the text tags our translation
-    // emitted bind by recipient number, so the two have to agree and the cheapest way to
-    // guarantee that is to make them the same value.
+    // The recipient id is the signing order, deliberately: our field list binds by
+    // recipient number, so the two have to agree and the cheapest way to guarantee that is
+    // to make them the same value.
     const recipients = [...request.signers]
       .sort((a, b) => a.order - b.order)
       .map((signer) => ({
@@ -111,16 +165,28 @@ export class SignWellSigningProvider
     const body: SignWellCreateDocumentBody = {
       test_mode: testModeFromEnvironment(),
       draft: false,
-      files: [{ name: `${sanitizeFileName(request.title)}.pdf`, file_base64: pdf.toString('base64') }],
+      files: [
+        {
+          name: `${sanitizeFileName(request.title)}.pdf`,
+          file_base64: pdf.toString("base64"),
+        },
+      ],
       recipients,
       apply_signing_order: true,
-      text_tags: true,
+      // Requirement 13: SignWell parses the file and materializes nothing from it. Asking
+      // it to look was the whole of BUG-001.
+      text_tags: false,
+      // Grouped per file, and there is one file.
+      fields: [fields],
       embedded_signing: true,
       embedded_signing_notifications: false,
       reminders: false,
       expires_in: Math.max(1, Math.ceil(request.expiresInDays)),
       name: request.title,
-      metadata: { envelope_id: request.envelopeId, organization_id: request.organizationId },
+      metadata: {
+        envelope_id: request.envelopeId,
+        organization_id: request.organizationId,
+      },
       allow_decline: true,
       allow_reassign: false,
       ...(process.env.SIGNWELL_API_APPLICATION_ID
@@ -128,15 +194,22 @@ export class SignWellSigningProvider
         : {}),
     };
 
-    const created = await this.createOrAdopt(body, request.envelopeId, request.adoptExisting === true);
-    const providerRef = created.id ?? '';
+    const created = await this.createOrAdopt(
+      body,
+      request.envelopeId,
+      request.adoptExisting === true,
+    );
+    const providerRef = created.id ?? "";
     if (!providerRef) {
-      throw new ProviderUnavailableError('provider_unavailable', 'created_without_an_id');
+      throw new ProviderUnavailableError(
+        "provider_unavailable",
+        "created_without_an_id",
+      );
     }
 
-    // REQUIREMENT 38 — the send is not finished when the create returns. Creation is
-    // two-phase and asynchronous: the 201 comes back with `status: "Created"`,
-    // `pages_number: 0` and `fields: []`, because the file has not been read yet.
+    // REQUIREMENT 38 — the send is not finished when the create returns. Reaching `Sent`
+    // is asynchronous: the 201 comes back with `status: "Created"`, `pages_number: 0` and
+    // `fields: []` even when the request supplied a complete field list.
     const settled = await this.pollUntilParsed(providerRef);
     await this.verifyMaterialized(providerRef, settled, request);
 
@@ -148,6 +221,83 @@ export class SignWellSigningProvider
         request.signers.map((signer) => [signer.id, String(signer.order)]),
       ),
     };
+  }
+
+  /**
+   * Requirement 14d — the field list, and the last place it can be refused for free.
+   *
+   * Every field is matched to a box the copy carries, written by the same renderer that
+   * drew the row it sits on. Nothing here recomputes the grid, and nothing here invents a
+   * coordinate: a field with no box — a tenth field on a nine-row page, a signer whose
+   * signature block is missing — refuses the send **before** the PDF is rendered and before
+   * a document exists. That is the whole difference between a refusal and an orphan.
+   */
+  private fieldsFor(request: CreateSessionRequest): SignWellCreateField[] {
+    const roleOf = new Map(request.signers.map((s) => [s.id, s.roleKey]));
+    const recipientOf = new Map(request.signers.map((s) => [s.id, String(s.order)]));
+    const nameOf = new Map(
+      request.signers.map((s) => [s.id, `${s.name} (signer ${s.order})`]),
+    );
+
+    const boxes = readSignWellFieldBoxes(request.documentHtml).map((box) => ({
+      box,
+      claimed: false,
+    }));
+
+    const fields: SignWellCreateField[] = [];
+    const unplaced: string[] = [];
+    let texts = 0;
+
+    for (const expected of request.expectedFields) {
+      const ref =
+        expected.type === "signature"
+          ? (roleOf.get(expected.signerId) ?? "")
+          : (expected.fieldKey ?? "");
+      const match = boxes.find(
+        (candidate) =>
+          !candidate.claimed &&
+          candidate.box.kind === expected.type &&
+          candidate.box.ref === ref,
+      );
+
+      if (!match) {
+        unplaced.push(describeExpectedField(expected, nameOf));
+        continue;
+      }
+      match.claimed = true;
+
+      const recipientId = recipientOf.get(expected.signerId) ?? "";
+      fields.push({
+        // Unique within the document, and readable in a redacted payload — the projection
+        // and the redactor both keep `api_id` and drop everything else.
+        api_id:
+          expected.type === "signature"
+            ? `Signature_${recipientId}`
+            : `Text_${++texts}`,
+        type: expected.type,
+        recipient_id: recipientId,
+        // Requirement 14e — the execution page is the first page of the copy, always.
+        page: EXECUTION_PAGE_NUMBER,
+        x: toProviderUnits(match.box.x),
+        y: toProviderUnits(match.box.y),
+        width: toProviderUnits(match.box.width),
+        height: toProviderUnits(match.box.height),
+        required: expected.required,
+      });
+    }
+
+    if (unplaced.length > 0) {
+      throw new ProviderFieldsNotMaterializedError(
+        "document_fields_not_placed",
+        unplaced,
+        boxes.map((candidate) => describeBox(candidate.box)),
+      );
+    }
+
+    // In reading order down the execution page, which is the order somebody checking the
+    // request against the document would look for them in.
+    fields.sort((a, b) => a.y - b.y || a.x - b.x);
+    return fields;
   }
 
   /**
@@ -201,7 +351,9 @@ export class SignWellSigningProvider
        * lookup happens between attempts, which is the only place that prevents the
        * duplicate rather than describing it afterwards.
        */
-      return await this.http.createDocument(body, () => this.findOrphan(envelopeId));
+      return await this.http.createDocument(body, () =>
+        this.findOrphan(envelopeId),
+      );
     } catch (error) {
       if (!(error instanceof ProviderUnavailableError)) throw error;
       /*
@@ -210,7 +362,7 @@ export class SignWellSigningProvider
        * fifth attempt was never followed by a sixth.
        */
       this.log.warn(
-        `Creating a SignWell document for envelope ${envelopeId} failed; looking for an orphan`,
+        `Creating a SignWell document for envelope ${envelopeId} failed; looking for an orphan. ${JSON.stringify(error)}. Body ${JSON.stringify(body)}`,
       );
       const adopted = await this.findOrphan(envelopeId);
       if (adopted) return adopted;
@@ -218,7 +370,9 @@ export class SignWellSigningProvider
     }
   }
 
-  private async findOrphan(envelopeId: string): Promise<SignWellDocument | null> {
+  private async findOrphan(
+    envelopeId: string,
+  ): Promise<SignWellDocument | null> {
     for (let page = 1; page <= ORPHAN_SCAN_PAGE_CAP; page++) {
       const list = await this.http.listDocuments(page);
       for (const document of list.documents ?? []) {
@@ -231,17 +385,23 @@ export class SignWellSigningProvider
       if (next === null || next === undefined) return null;
     }
     // The cap is reached: refuse rather than adopt something unverified.
-    throw new ProviderUnavailableError('provider_unavailable', 'orphan_scan_cap_reached');
+    throw new ProviderUnavailableError(
+      "provider_unavailable",
+      "orphan_scan_cap_reached",
+    );
   }
 
-  private async pollUntilParsed(providerRef: string): Promise<SignWellDocument> {
+  private async pollUntilParsed(
+    providerRef: string,
+  ): Promise<SignWellDocument> {
     let last: SignWellDocument | null = null;
 
     for (let attempt = 0; attempt < CREATE_POLL_ATTEMPTS; attempt++) {
       const document = await this.http.getDocument(providerRef);
       if (document) {
         last = document;
-        if ((document.status ?? STATUS_CREATED) !== STATUS_CREATED) return document;
+        if ((document.status ?? STATUS_CREATED) !== STATUS_CREATED)
+          return document;
       }
       if (attempt < CREATE_POLL_ATTEMPTS - 1) await sleep(pollIntervalMs());
     }
@@ -250,37 +410,48 @@ export class SignWellSigningProvider
     // deleted rather than left open.
     await this.deleteQuietly(providerRef);
     throw new ProviderFieldsNotMaterializedError(
-      'document_fields_not_materialized',
-      ['a parsed document'],
-      [last?.status ?? 'no response'],
+      "document_fields_not_materialized",
+      ["a parsed document"],
+      [last?.status ?? "no response"],
     );
   }
 
   /**
-   * Requirement 38's second half. A mismatch is **not** a warning: a text tag that failed
-   * to parse produces a contract with a missing signature line that nobody notices until a
-   * counterparty cannot sign it — or worse, signs a document whose other party never can.
+   * Requirement 38's second half, and the question it asks has changed: not "did SignWell
+   * find our tags", which could only ever be answered no, but "did SignWell keep the fields
+   * we sent".
+   *
+   * Still not a warning. A document that settles with fewer fields than the request carried
+   * is a contract with a missing signature line, which nobody notices until a counterparty
+   * cannot sign it — or worse, signs a document whose other party never can.
+   *
+   * The `page` and the coordinates that come back are deliberately not asserted: they are
+   * our own arithmetic echoed, and an echo cannot fail.
    */
   private async verifyMaterialized(
     providerRef: string,
     document: SignWellDocument,
     request: CreateSessionRequest,
   ): Promise<void> {
-    const recipientOf = new Map(request.signers.map((s) => [s.id, String(s.order)]));
-    const nameOf = new Map(request.signers.map((s) => [s.id, `${s.name} (signer ${s.order})`]));
+    const recipientOf = new Map(
+      request.signers.map((s) => [s.id, String(s.order)]),
+    );
+    const nameOf = new Map(
+      request.signers.map((s) => [s.id, `${s.name} (signer ${s.order})`]),
+    );
 
     const received = flattenFields(document.fields).map((field) => ({
-      type: (field.type ?? '').toLowerCase(),
-      recipientId: field.recipient_id ?? '',
+      type: (field.type ?? "").toLowerCase(),
+      recipientId: field.recipient_id ?? "",
       required: field.required === true,
-      apiId: field.api_id ?? '',
+      apiId: field.api_id ?? "",
       claimed: false,
     }));
 
     const missing: string[] = [];
 
     for (const expected of request.expectedFields) {
-      const recipientId = recipientOf.get(expected.signerId) ?? '';
+      const recipientId = recipientOf.get(expected.signerId) ?? "";
       const match = received.find(
         (field) =>
           !field.claimed &&
@@ -292,11 +463,7 @@ export class SignWellSigningProvider
         match.claimed = true;
         continue;
       }
-      missing.push(
-        expected.type === 'signature'
-          ? `signature for ${nameOf.get(expected.signerId) ?? expected.signerId}`
-          : `field ${expected.fieldKey ?? '?'} for ${nameOf.get(expected.signerId) ?? expected.signerId}`,
-      );
+      missing.push(describeExpectedField(expected, nameOf));
     }
 
     if (missing.length === 0) return;
@@ -312,9 +479,11 @@ export class SignWellSigningProvider
     // signature line is not a document anyone should be able to reach.
     await this.deleteQuietly(providerRef);
     throw new ProviderFieldsNotMaterializedError(
-      'document_fields_not_materialized',
+      "document_fields_not_materialized",
       missing,
-      received.map((field) => `${field.type}:${field.recipientId}:${field.apiId}`),
+      received.map(
+        (field) => `${field.type}:${field.recipientId}:${field.apiId}`,
+      ),
     );
   }
 
@@ -345,17 +514,21 @@ export class SignWellSigningProvider
   async signerAccess(request: SignerAccessRequest): Promise<SignerAccess> {
     const document = await this.http.getDocument(request.providerRef);
     if (!document) {
-      throw new ProviderUnavailableError('provider_unavailable', 'document_not_found');
+      throw new ProviderUnavailableError(
+        "provider_unavailable",
+        "document_not_found",
+      );
     }
 
     const recipient = (document.recipients ?? []).find(
       (candidate) =>
-        (candidate.id ?? '') === request.signerProviderRef ||
-        (candidate.email ?? '').toLowerCase() === request.signerEmail.toLowerCase(),
+        (candidate.id ?? "") === request.signerProviderRef ||
+        (candidate.email ?? "").toLowerCase() ===
+          request.signerEmail.toLowerCase(),
     );
 
     return {
-      embeddedSigningUrl: recipient?.embedded_signing_url ?? null,
+      embeddedSigningUrl: embeddable(recipient?.embedded_signing_url),
       providerStatus: document.status ?? null,
     };
   }
@@ -373,18 +546,29 @@ export class SignWellSigningProvider
    * produces**. A `404` there therefore carries no information at all and must never be
    * read as "the document is gone"; it is a transient to retry (edge case 29).
    */
-  async completedDocument(request: CompletedDocumentRequest): Promise<CompletedDocument> {
+  async completedDocument(
+    request: CompletedDocumentRequest,
+  ): Promise<CompletedDocument> {
     const document = await this.http.getDocument(request.providerRef);
     if (!document) {
-      throw new ProviderUnavailableError('provider_unavailable', 'document_not_found');
+      throw new ProviderUnavailableError(
+        "provider_unavailable",
+        "document_not_found",
+      );
     }
-    if (normalizeStatus(document.status) !== 'completed') {
-      throw new ProviderUnavailableError('provider_unavailable', 'document_not_completed');
+    if (normalizeStatus(document.status) !== "completed") {
+      throw new ProviderUnavailableError(
+        "provider_unavailable",
+        "document_not_completed",
+      );
     }
 
     const bytes = await this.http.completedPdf(request.providerRef);
     if (!bytes) {
-      throw new ProviderUnavailableError('provider_unavailable', 'completed_pdf_not_ready');
+      throw new ProviderUnavailableError(
+        "provider_unavailable",
+        "completed_pdf_not_ready",
+      );
     }
 
     return { bytes, providerRef: request.providerRef };
@@ -407,7 +591,7 @@ export class SignWellSigningProvider
    */
   async cancel(request: CancelRequest): Promise<void> {
     const outcome = await this.http.deleteDocument(request.providerRef);
-    if (outcome === 'not_found') {
+    if (outcome === "not_found") {
       // Edge case 26 — already gone. Our void must not be blocked by their state, so this
       // is reported rather than thrown away, and the caller voids locally anyway.
       throw new ProviderDocumentGoneError(request.providerRef);
@@ -418,8 +602,14 @@ export class SignWellSigningProvider
    * RemotelyTracked
    * -------------------------------------------------------------- */
 
-  async parseNotification(raw: RawNotification): Promise<ParsedNotification | null> {
-    return parseSignWellNotification(raw.body, process.env.SIGNWELL_WEBHOOK_SECRET, this.key);
+  async parseNotification(
+    raw: RawNotification,
+  ): Promise<ParsedNotification | null> {
+    return parseSignWellNotification(
+      raw.body,
+      process.env.SIGNWELL_WEBHOOK_SECRET,
+      this.key,
+    );
   }
 
   /**
@@ -462,30 +652,35 @@ export class SignWellSigningProvider
       // reports what it saw and decides nothing.
       return {
         exists: false,
-        status: 'canceled',
-        providerStatus: 'not_found',
+        status: "canceled",
+        providerStatus: "not_found",
         signers: [],
         declineReason: null,
         completedAt: null,
       };
     }
 
-    const signers: ProviderSignerState[] = (document.recipients ?? []).map((recipient) => ({
-      providerRef: recipient.id ?? '',
-      email: (recipient.email ?? '').trim().toLowerCase(),
-      status: normalizeSignerStatus(recipient.status),
-      signedAt: parseDate(recipient.signed_at),
-      declinedAt: parseDate(recipient.declined_at),
-      declineReason: recipient.decline_reason ?? null,
-    }));
+    const signers: ProviderSignerState[] = (document.recipients ?? []).map(
+      (recipient) => ({
+        providerRef: recipient.id ?? "",
+        email: (recipient.email ?? "").trim().toLowerCase(),
+        status: normalizeSignerStatus(recipient.status),
+        signedAt: parseDate(recipient.signed_at),
+        declinedAt: parseDate(recipient.declined_at),
+        declineReason: recipient.decline_reason ?? null,
+      }),
+    );
 
     return {
       exists: true,
       status: envelopeStatusFrom(document, signers),
       // Kept verbatim for support, never used for logic.
-      providerStatus: document.status ?? '',
+      providerStatus: document.status ?? "",
       signers,
-      declineReason: document.decline_message ?? signers.find((s) => s.declineReason)?.declineReason ?? null,
+      declineReason:
+        document.decline_message ??
+        signers.find((s) => s.declineReason)?.declineReason ??
+        null,
       completedAt: parseDate(document.completed_at),
     };
   }
@@ -509,55 +704,80 @@ export class SignWellSigningProvider
  * to warn that a signature has no legal weight.
  */
 function testModeForDisplay(): boolean {
-  const value = (process.env.SIGNWELL_TEST_MODE ?? '').trim().toLowerCase();
-  return value !== 'false' && value !== '0';
+  const value = (process.env.SIGNWELL_TEST_MODE ?? "").trim().toLowerCase();
+  return value !== "false" && value !== "0";
 }
-export function testModeFromEnvironment(raw = process.env.SIGNWELL_TEST_MODE): boolean {
-  const value = (raw ?? '').trim().toLowerCase();
-  if (value === '' || value === 'true' || value === '1') return true;
-  if (value === 'false' || value === '0') return false;
+export function testModeFromEnvironment(
+  raw = process.env.SIGNWELL_TEST_MODE,
+): boolean {
+  const value = (raw ?? "").trim().toLowerCase();
+  if (value === "" || value === "true" || value === "1") return true;
+  if (value === "false" || value === "0") return false;
   throw new Error(
     `SIGNWELL_TEST_MODE must be a boolean, not ${JSON.stringify(raw)} — refusing to guess, ` +
       'because guessing "false" spends real money and sends real contracts.',
   );
 }
 
+/**
+ * One expected field in a sentence a sender can act on. Both refusals — the field with no
+ * box and the field the provider did not keep — name what is missing the same way, because
+ * to the person reading the error they are the same complaint.
+ */
+function describeExpectedField(
+  expected: ExpectedProviderField,
+  nameOf: ReadonlyMap<string, string>,
+): string {
+  const who = nameOf.get(expected.signerId) ?? expected.signerId;
+  return expected.type === "signature"
+    ? `signature for ${who}`
+    : `field ${expected.fieldKey ?? "?"} for ${who}`;
+}
+
+/** A box, for the "what we did have" half of a refusal. Never a field value. */
+function describeBox(box: SignWellFieldBox): string {
+  return `${box.kind}:${box.ref}`;
+}
+
 /** Requirement 39 — turn is read from `recipients[].status`, never inferred. */
-export function normalizeSignerStatus(status: string | null | undefined): ProviderSignerStatus {
-  switch ((status ?? '').toLowerCase()) {
-    case 'waiting':
-      return 'pending';
-    case 'sent':
-      return 'notified';
-    case 'viewed':
-      return 'viewed';
-    case 'signed':
-      return 'signed';
-    case 'declined':
-      return 'declined';
+export function normalizeSignerStatus(
+  status: string | null | undefined,
+): ProviderSignerStatus {
+  switch ((status ?? "").toLowerCase()) {
+    case "waiting":
+      return "pending";
+    case "sent":
+      return "notified";
+    case "viewed":
+      return "viewed";
+    case "signed":
+      return "signed";
+    case "declined":
+      return "declined";
     // `created` before send, and `null` in a stale webhook body — both are "nothing has
     // happened to this recipient yet".
     default:
-      return 'pending';
+      return "pending";
   }
 }
 
 export function normalizeStatus(status: string | null | undefined): string {
-  return (status ?? '').trim().toLowerCase();
+  return (status ?? "").trim().toLowerCase();
 }
 
 function envelopeStatusFrom(
   document: SignWellDocument,
   signers: readonly ProviderSignerState[],
-): ProviderState['status'] {
+): ProviderState["status"] {
   const status = normalizeStatus(document.status);
 
-  if (status === 'completed') return 'completed';
-  if (status === 'declined' || signers.some((s) => s.status === 'declined')) return 'declined';
-  if (status === 'canceled' || document.archived === true) return 'canceled';
-  if (signers.some((s) => s.status === 'signed')) return 'partially_signed';
-  if (status === 'created') return 'created';
-  return 'sent';
+  if (status === "completed") return "completed";
+  if (status === "declined" || signers.some((s) => s.status === "declined"))
+    return "declined";
+  if (status === "canceled" || document.archived === true) return "canceled";
+  if (signers.some((s) => s.status === "signed")) return "partially_signed";
+  if (status === "created") return "created";
+  return "sent";
 }
 
 function parseDate(value: string | null | undefined): Date | null {
@@ -573,7 +793,9 @@ function parseDate(value: string | null | undefined): Date | null {
  */
 function pollIntervalMs(): number {
   const configured = Number(process.env.SIGNWELL_POLL_INTERVAL_MS);
-  return Number.isFinite(configured) && configured >= 0 ? configured : DEFAULT_POLL_INTERVAL_MS;
+  return Number.isFinite(configured) && configured >= 0
+    ? configured
+    : DEFAULT_POLL_INTERVAL_MS;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -581,6 +803,6 @@ function sleep(ms: number): Promise<void> {
 }
 
 function sanitizeFileName(title: string): string {
-  const cleaned = title.replace(/[^\p{L}\p{N} ._-]/gu, '').trim();
-  return cleaned.length > 0 ? cleaned.slice(0, 120) : 'document';
+  const cleaned = title.replace(/[^\p{L}\p{N} ._-]/gu, "").trim();
+  return cleaned.length > 0 ? cleaned.slice(0, 120) : "document";
 }
