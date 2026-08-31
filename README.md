@@ -205,9 +205,12 @@ recreate both databases. It also clears pgAdmin's own volume, so
 ## The app shell
 
 Every signed-in route lives under `/org/{orgId}/` and renders inside one shell —
-sidebar, top bar, page header — built in `apps/web/src/layout/`. It is documented in
-[00-app-shell.design.md](specs/user-management/00-app-shell.design.md), which also
-records why the shell sits in the app rather than in the design system.
+a 290px sidebar, an 80px navbar and a page header, all of them the design system's own
+`AppShell`, `Sidebar`, `Navbar` and `PageTitle`. Below 1200px the sidebar becomes a drawer.
+`apps/web/src/layout/` holds four thin adapters over those components, supplying the session,
+hiring's nav items and the router — the frame's binding to Next.js is the one part of it the
+design system has no business knowing. It is documented in
+[00-app-shell.design.md](specs/user-management/00-app-shell.design.md).
 
 The organization id in the URL is never a selector. `OrgScopeGuard`
 (`apps/api/src/auth/org-scope.guard.ts`) compares it against the session cookie and
@@ -857,8 +860,9 @@ record the exposure that leaves open rather than implying the endpoints are prot
 > [`specs/design-system/README.md`](specs/design-system/README.md) is the decision record — the
 > token map, the component inventory, and the eight numbered decisions everything else cites — and
 > [`specs/design-system/ledger.md`](specs/design-system/ledger.md) records what the vendored copy
-> adds beyond upstream. Until the first migration phase vendors blue, `1_DS for dev/` still holds
-> yellow and `npm run ds:drift` reports the gap.
+> adds beyond upstream. `1_DS for dev/` holds blue as of Phase 1; the signed-out screens and the
+> signed-in frame are on it, and the hiring screens are not yet. `npm run ds:drift` reports the
+> gap and is expected to, until every disagreement it names carries a ledger number.
 
 - Components come from `1_DS for dev/index.js` via the `@ds` alias
   (`experimental.externalDir`), re-exported through `apps/web/src/ds.ts` — a single

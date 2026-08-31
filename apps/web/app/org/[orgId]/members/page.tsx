@@ -1,7 +1,7 @@
 'use client';
 
 import { use, useEffect, useState } from 'react';
-import { Badge, Card } from '@/ds';
+import { Badge, Card, EmptyState, Table } from '@/ds';
 import { PageHeader } from '@/layout/PageHeader';
 
 interface Member {
@@ -45,48 +45,47 @@ export default function MembersPage({ params }: { params: Promise<{ orgId: strin
     <>
       <PageHeader title="Members" />
 
-      <Card title="Members" padded={false}>
-        <div data-testid="members-list">
-          {members?.map((member) => (
-            <div
-              key={member.id}
-              data-testid={`member-row-${member.id}`}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--sp-8)',
-                padding: '14px 20px',
-                borderTop: '1px solid var(--divider)',
-              }}
-            >
-              <span style={{ flex: 2, fontSize: 'var(--fs-15)' }} data-testid="member-name">
-                {member.name}
-              </span>
-              <span style={{ flex: 2, fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}>
-                {member.email}
-              </span>
-              <span
-                style={{
-                  flex: 1,
-                  fontFamily: 'var(--font-display)',
-                  fontSize: 'var(--fs-13)',
-                  textTransform: 'capitalize',
-                }}
-                data-testid="member-role"
-              >
-                {member.role}
-              </span>
-              <Badge tone={member.status === 'active' ? 'active' : 'inactive'}>
-                {member.status}
-              </Badge>
-            </div>
-          ))}
-          {members?.length === 0 && (
-            <div style={{ padding: '20px', color: 'var(--text-muted)', fontSize: 'var(--fs-14)' }}>
-              No members found
-            </div>
-          )}
-        </div>
+      {/*
+        The table is edge to edge and draws no frame of its own, so the card is what gives it a
+        border and what rounds its first and last rows — which is `clip`, left at its default.
+        Rows go nowhere yet: the member detail screen is spec 04, so the table is told of no
+        destination and its rows keep the default cursor rather than promising one.
+      */}
+      <Card padded={false}>
+        <Table<Member>
+          data-testid="members-list"
+          rowKey="id"
+          rowTestId={(member) => `member-row-${member.id}`}
+          columns={[
+            {
+              label: 'Name',
+              flex: 2,
+              render: (member) => <span data-testid="member-name">{member.name}</span>,
+            },
+            { label: 'Email', flex: 2, align: 'flex-start', key: 'email' },
+            {
+              label: 'Role',
+              align: 'flex-start',
+              render: (member) => (
+                <span data-testid="member-role" style={{ textTransform: 'capitalize' }}>
+                  {member.role}
+                </span>
+              ),
+            },
+            {
+              label: 'Status',
+              align: 'flex-end',
+              maxWidth: 120,
+              render: (member) => (
+                <Badge status={member.status === 'active' ? 'active' : 'inactive'}>
+                  {member.status}
+                </Badge>
+              ),
+            },
+          ]}
+          rows={members ?? []}
+        />
+        {members?.length === 0 && <EmptyState>No members found</EmptyState>}
       </Card>
     </>
   );

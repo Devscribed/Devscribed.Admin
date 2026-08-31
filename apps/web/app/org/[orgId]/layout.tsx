@@ -2,7 +2,7 @@
 
 import { notFound, useRouter } from 'next/navigation';
 import { use, useEffect, useState, type ReactNode } from 'react';
-import { Spinner } from '@/ds';
+import { Preloader } from '@/ds';
 import { AppShell } from '@/layout/AppShell';
 import type { Session } from '@/layout/session-context';
 
@@ -73,10 +73,10 @@ export default function OrgLayout({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: 'var(--accent)',
         }}
       >
-        <Spinner size={28} />
+        {/* Blue's loader paints its own colour; the well it sits on is the one AppShell paints. */}
+        <Preloader />
       </div>
     );
   }

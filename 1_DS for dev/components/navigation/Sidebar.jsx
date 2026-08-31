@@ -30,16 +30,35 @@ const NAV = [
   { type: 'submenu', title: 'Organization', Icon: OrgIcon, subs: ['My organization', 'Subscription'] },
 ];
 
+/* §13 — every row in prod is a `<NavLink to=…>`, so the anchor below carries a real `href`
+   when one is given and falls back to blue's own `href="#"` when it is not. `onNavigate` is
+   what lets a router intercept the click while the row stays a link a reader can middle-click,
+   copy the address of, or open in a new tab. */
+function rowClick(href, onNavigate, onClick, title, sub) {
+  return (e) => {
+    if (onNavigate) {
+      onNavigate(e, href);
+      if (e.defaultPrevented) return;
+    }
+    if (!href) e.preventDefault();
+    if (onClick) onClick(title, sub);
+  };
+}
+
 /* SidebarLink.module.scss: .navLink{font-weight:500; color:$appGray; transition:color .3s;
    svg{margin-right:12px; fill:$appGray}} :hover{color:$appBlue; svg{fill:$appBlue;
    transition:fill .3s}} .activeClassName{color+fill:$appBlue}. Hover and active resolve to the
    same blue, so hovering the active item changes nothing. .navItem{margin-bottom:36px} */
-function TopLink({ Icon, title, active, onClick }) {
+function TopLink({ Icon, title, href, testId, active, onClick, onNavigate }) {
   const [hover, setHover] = React.useState(false);
   const color = active || hover ? 'var(--color-blue)' : 'var(--text-secondary)';
   return (
     <li style={{ marginBottom: 36 }}>
-      <a href="#" onClick={(e) => { e.preventDefault(); onClick && onClick(title); }}
+      <a href={href || '#'} onClick={rowClick(href, onNavigate, onClick, title)}
+        data-testid={testId}
+        /* §13 — prod marks the current row with a class only; `aria-current` is the same fact
+           said where a screen reader can hear it. */
+        aria-current={active ? 'page' : undefined}
         onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
         style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'flex-start', fontFamily: 'var(--font-family-base)', fontWeight: 500, fontSize: 'var(--font-size-base)', color, transition: 'color 0.3s' }}>
         <span style={{ display: 'flex', marginRight: 12, color, transition: 'color 0.3s' }}><Icon /></span>
@@ -49,14 +68,16 @@ function TopLink({ Icon, title, active, onClick }) {
   );
 }
 
-function SubItem({ label, active, last, onClick }) {
+function SubItem({ label, href, testId, active, last, onClick, onNavigate, parent }) {
   const [hover, setHover] = React.useState(false);
   return (
     <li style={{ marginBottom: last ? 0 : 16 }}>
       {/* .subItemLink{padding:4px 12px; 14px/500; color:$appGray} :hover{color:$appBlue}
          .activeClassName{background:#F4F7FF; color:$appBlue} — the active row is already blue,
          so hover leaves it untouched. */}
-      <a href="#" onClick={(e) => { e.preventDefault(); onClick && onClick(); }}
+      <a href={href || '#'} onClick={rowClick(href, onNavigate, onClick, parent, label)}
+        data-testid={testId}
+        aria-current={active ? 'page' : undefined}
         onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
         style={{ padding: '4px 12px', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', fontSize: 'var(--font-size-s)', fontWeight: 500, backgroundColor: active ? 'var(--color-blue-tint)' : 'transparent', color: active || hover ? 'var(--color-blue)' : 'var(--text-secondary)' }}>
         {label}
@@ -65,10 +86,15 @@ function SubItem({ label, active, last, onClick }) {
   );
 }
 
-function SubMenu({ Icon, title, subs, active, defaultOpen, defaultSub, onSelectSub }) {
+function SubMenu({ Icon, title, subs, active, defaultOpen, defaultSub, onSelectSub, onNavigate }) {
   const [open, setOpen] = React.useState(!!defaultOpen);
   const [hover, setHover] = React.useState(false);
-  const [activeSub, setActiveSub] = React.useState(defaultOpen ? (defaultSub || subs[0]) : null);
+  const [clickedSub, setClickedSub] = React.useState(defaultOpen ? (defaultSub || subs[0].label) : null);
+  /* §13 — prod mounts a fresh Sidebar per route, so "open" only ever had to be right once.
+     Under a client router the same instance survives the navigation, and a section that has
+     just become current has to open itself or its rows are unreachable without a second click.
+     A section the reader closed by hand stays closed until it becomes current again. */
+  React.useEffect(() => { if (active) setOpen(true); }, [active]);
   /* .subMenuTitle:hover{color:#0168fa; svg{fill:$appBlue}} beats .activeTitle{color:$appBlue}
      on specificity, so an active submenu title does shift to #0168fa on hover — the one place
      in the sidebar where the active item reacts. The icon and the arrow (also an svg inside the
@@ -77,17 +103,23 @@ function SubMenu({ Icon, title, subs, active, defaultOpen, defaultSub, onSelectS
   const titleIconColor = hover || active ? 'var(--color-blue)' : 'var(--text-secondary)';
   return (
     <React.Fragment>
-      <li onClick={() => setOpen((o) => !o)} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-        style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'flex-start', fontWeight: 500, marginBottom: 36, cursor: 'pointer', color: titleColor, fontFamily: 'var(--font-family-base)', fontSize: 'var(--font-size-base)', transition: 'color 0.3s' }}>
-        <span style={{ display: 'flex', marginRight: 12, color: titleIconColor, transition: 'color 0.3s' }}><Icon /></span>
-        <span>{title}</span>
-        <span style={{ marginLeft: 'auto', display: 'flex', transform: open ? 'rotate(0deg)' : 'rotate(180deg)', color: titleIconColor }}><ArrowIcon /></span>
+      {/* §13 — prod's submenu title is a bare `<li onClick>`: not focusable, not announced, and
+         unopenable without a pointer. The paint is unchanged; the control inside it is real. */}
+      <li onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} style={{ marginBottom: 36 }}>
+        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
+          style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'flex-start', fontWeight: 500, cursor: 'pointer', color: titleColor, fontFamily: 'var(--font-family-base)', fontSize: 'var(--font-size-base)', transition: 'color 0.3s' }}>
+          <span style={{ display: 'flex', marginRight: 12, color: titleIconColor, transition: 'color 0.3s' }}><Icon /></span>
+          <span>{title}</span>
+          <span aria-hidden style={{ marginLeft: 'auto', display: 'flex', transform: open ? 'rotate(0deg)' : 'rotate(180deg)', color: titleIconColor }}><ArrowIcon /></span>
+        </button>
       </li>
       {open && (
         <ul style={{ marginTop: -20, marginLeft: 8, marginBottom: 28, paddingLeft: 12, borderLeft: '1px solid var(--text-secondary)', listStyle: 'none' }}>
           {subs.map((s, i) => (
-            <SubItem key={s} label={s} active={s === activeSub} last={i === subs.length - 1}
-              onClick={() => { setActiveSub(s); onSelectSub && onSelectSub(title, s); }} />
+            <SubItem key={s.label} label={s.label} href={s.href} testId={s.testId} parent={title}
+              active={s.active != null ? s.active : s.label === clickedSub} last={i === subs.length - 1}
+              onNavigate={onNavigate}
+              onClick={() => { setClickedSub(s.label); if (onSelectSub) onSelectSub(title, s.label); }} />
           ))}
         </ul>
       )}
@@ -100,24 +132,49 @@ function SubMenu({ Icon, title, subs, active, defaultOpen, defaultSub, onSelectS
  * Fixed 290px width, 80px logo header, expandable submenus with a blue-tinted
  * active sub-item. `active` sets the active top-level section; `activeSub` optionally
  * sets which sub-item of that section reads as current.
+ *
+ * §13 — `items` is the omission this fills. Blue hardcodes Teamplay's seven groups, because a
+ * measurement of one product has only one nav to measure; a consuming product supplies its own
+ * (`§D6`). The default is still Teamplay's, so blue's own kit and template are unchanged.
+ * Each entry may carry `href`, `testId` and its own `active`, which is what lets a router own
+ * the current-row question instead of the component guessing it from a click.
  */
-export function Sidebar({ active = 'Timesheets', activeSub, onSelect, onLogoClick }) {
+export function Sidebar({
+  items = NAV, active = 'Timesheets', activeSub, onSelect, onNavigate, onLogoClick, logoHref,
+  onClose, label = 'Main', className, style, ...rest
+}) {
   return (
-    <aside style={{ width: 290, height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#fff' }}>
+    <aside {...rest} className={['ds-sidebar', className].filter(Boolean).join(' ')}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#fff', ...style }}>
       <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 80, padding: '0 24px', backgroundColor: '#fff', borderBottom: '1px solid var(--border-subtle)' }}>
         {/* prod: <Link to="/" aria-label="Main page link"> — the logo is the route to the start page. */}
-        <a href="#" aria-label="Main page link" onClick={(e) => { e.preventDefault(); onLogoClick && onLogoClick(); }} style={{ display: 'flex', alignItems: 'center' }}><Wordmark /></a>
-        <button aria-label="Close sidebar" style={{ display: 'none' }}><MenuIcon /></button>
+        <a href={logoHref || '#'} aria-label="Main page link"
+          onClick={rowClick(logoHref, onNavigate, onLogoClick ? () => onLogoClick() : undefined)}
+          style={{ display: 'flex', alignItems: 'center' }}><Wordmark /></a>
+        {/* §14 — prod draws this button and then hides it with `display: none`. It is the
+           drawer's close control, and the rule that reveals it is the breakpoint blue never
+           wired; `.ds-sidebar-close` in base.css is now that rule. */}
+        <button type="button" className="ds-sidebar-close" aria-label="Close sidebar" onClick={onClose} style={{ color: 'var(--text-secondary)' }}><MenuIcon /></button>
       </div>
-      <div style={{ flexGrow: 1, padding: '36px 24px', backgroundColor: '#fff', overflowY: 'auto' }}>
+      <nav aria-label={label} style={{ flexGrow: 1, padding: '36px 24px', backgroundColor: '#fff', overflowY: 'auto' }}>
         <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
-          {NAV.map((item) => item.type === 'link' ? (
-            <TopLink key={item.title} Icon={item.Icon} title={item.title} active={item.title === active} onClick={onSelect} />
-          ) : (
-            <SubMenu key={item.title} Icon={item.Icon} title={item.title} subs={item.subs} active={item.title === active} defaultOpen={item.title === active} defaultSub={item.title === active ? activeSub : undefined} onSelectSub={onSelect} />
-          ))}
+          {items.map((item) => {
+            const isActive = item.active != null ? item.active : item.title === active;
+            if (item.type === 'link') {
+              return (
+                <TopLink key={item.title} Icon={item.Icon} title={item.title} href={item.href}
+                  testId={item.testId} active={isActive} onClick={onSelect} onNavigate={onNavigate} />
+              );
+            }
+            const subs = item.subs.map((s) => (typeof s === 'string' ? { label: s } : s));
+            return (
+              <SubMenu key={item.title} Icon={item.Icon} title={item.title} subs={subs} active={isActive}
+                defaultOpen={isActive} defaultSub={isActive ? activeSub : undefined}
+                onSelectSub={onSelect} onNavigate={onNavigate} />
+            );
+          })}
         </ul>
-      </div>
+      </nav>
     </aside>
   );
 }

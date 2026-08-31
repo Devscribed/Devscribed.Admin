@@ -76,3 +76,53 @@ input, textarea, select { font: inherit; }
   outline: 0;
   box-shadow: var(--shadow-error-glow);
 }
+
+/* §14 — the app frame's one breakpoint. Prod is a fixed 290px rail beside an 80px navbar down
+   to 1200px and a 60px navbar with a drawer below it; every value is already a token, and only
+   the switch between them was never written down, because a recreation of one viewport has one
+   viewport to recreate. It lives here for the same reason `.page-title` does: a media query
+   cannot be an inline style, and width alone must decide, so the server and the hydrated
+   client agree at every size without a stored preference or a `matchMedia` read.
+
+   Below the breakpoint the rail *becomes* the drawer, carrying MenuDrawer's own geometry —
+   340px, `--shadow-drawer`, translateX(105%), 0.3s — rather than a second copy of the
+   navigation sliding in beside it. */
+.ds-navbar { height: var(--layout-navbar-height-desktop); }
+
+.ds-sidebar { width: var(--layout-sidebar-width); }
+
+.ds-app-shell-nav {
+  flex-shrink: 0;
+  border-right: 1px solid var(--border-subtle);
+  background-color: var(--surface-card);
+}
+
+/* Prod draws both of these and then hides them; the breakpoint is what they were waiting for. */
+.ds-navbar-menu, .ds-sidebar-close { display: none; }
+
+@media (max-width: 1199px) {
+  .ds-navbar { height: var(--layout-navbar-height-mobile); }
+
+  .ds-app-shell-nav {
+    position: fixed;
+    top: var(--layout-navbar-height-mobile);
+    right: 0;
+    bottom: 0;
+    z-index: 2002;
+    width: 340px;
+    max-width: 100%;
+    border-right: 0;
+    box-shadow: var(--shadow-drawer);
+    transform: translateX(105%);
+    transition: transform var(--duration-hover);
+  }
+
+  .ds-app-shell-nav[data-open] { transform: translateX(0); }
+
+  /* The rail's own 290px would leave the drawer's last 50px empty. */
+  .ds-app-shell-nav .ds-sidebar { width: 100%; }
+
+  .ds-navbar-menu, .ds-sidebar-close { display: flex; }
+}
+
+.ds-app-shell-scrim { position: fixed; inset: 0; z-index: 2001; }

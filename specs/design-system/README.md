@@ -81,9 +81,9 @@ value-identical; typography is the only place the scales genuinely collide.
 | `--fs-13` | 13 | `--font-size-s` | 14 | 14 | +1px |
 | `--fs-15` | 15 | `--font-size-base` | 16 | 11 | +1px |
 | `--fs-22` | 22 | `--headline-5-size` | 20 | 1 | −2px |
-| `--fs-27` | 27 | `--headline-4-size` | 24 | 1 | −3px |
+| `--fs-27` | 27 | `--headline-4-size` | 24 | 1 | ✅ **settled in Phase 2** — the page header is blue's `PageTitle`, whose type steps 16 → 20 → 24px with the viewport rather than holding one size. The single use is gone. |
 | `--fs-34` | 34 | *none* | — | 2 | ⚠ no counterpart — decide per site |
-| `--fs-21` | — | `--headline-5-size` | 20 | 1 | ⚠ never defined in yellow either — live bug, see below |
+| `--fs-21` | — | *none* | — | 1 | ✅ **settled in Phase 2** — never defined in yellow either. Deleted rather than remapped, see below |
 | `--font-display` | — | `--font-family-base` | — | 17 | Poppins; blue has one family |
 | `--font-text` | — | `--font-family-base` | — | 3 | collapses with the above |
 | `--lh-normal` | 1.4 | `--line-height-base` | 1.5 | 5 | looser |
@@ -99,19 +99,19 @@ value-identical; typography is the only place the scales genuinely collide.
 | `--accent` | `--action-primary` `#007AFF` | 14 | |
 | `--accent-soft` | `--color-blue-light` `#EFF6FF` | 2 | |
 | `--accent-border` | `--color-blue-lighter` `#E8F2FE` | 1 | |
-| `--hover-bg-tint` | `--color-row-hover` | 2 | ⚠ yellow tints hover violet; blue's row hover is neutral grey |
+| `--hover-bg-tint` | `--color-row-hover` | 2 | ⚠ yellow tints hover violet; blue's row hover is neutral grey. One of the two was the top bar's logout row and is gone (Phase 2, onto blue's own popover hover); the other is `.library-row:hover`, Phase 6 |
 | `--error-500` | `--status-error` `#D80027` | 5 | |
 | `--amber-500` | `--status-warning` `#FFD02B` | 2 | ⚠ confirm each site is a warning. Both remaining uses are Phase 8's public surfaces. The third caller — `/login`'s deactivation banner, which reached amber through `InfoBanner tone="warning"` — was settled in Phase 1: see reversal 9. |
 | `--tracker` | `--color-tracker-blue` `#2AA7FF` | 1 | both systems reserve a tracker hue |
 | `--bg` | `--surface-page` | 3 | the well is `#f8fafc`, set in `AppShell` |
 | `--bg-panel` | `--surface-card` | 1 | |
-| `--bg-panel-2` | `--surface-sunken` `#EEF2F5` | 4 | ⚠ check each — may want the `AppShell` well instead |
+| `--bg-panel-2` | `--surface-sunken` `#EEF2F5` | 4 | ⚠ check each — may want the `AppShell` well instead. **Two settled in Phase 2:** the sidebar and the top bar are `--surface-card`, because blue's shell is white panels around a `#f8fafc` well, not the reverse. The 2 left are the candidates filter bar, Phase 4 |
 | `--border` | `--border-default` `#E7E7E7` | 5 | |
 | `--divider` | `--border-subtle` | 3 | |
 | `--radius-sm` | `--radius-l` | 1 | 8px both |
 | `--radius-md` / `--radius-lg` | `--radius-l` | 2 | 10 → 8; blue's workhorse radius |
 | `--radius-pill` | `--radius-pill` | 1 | 20px both |
-| `--shadow-card` | *remove* | 1 | ⚠ blue: static cards use a border, shadow only on hover |
+| `--shadow-card` | *remove* | 1 | ✅ **settled in Phase 2** — `Card` was built with a border and no shadow at all (ledger §12). Blue's hover shadow belongs to `NavigationCard`, which is a control; a static container must not claim a click |
 | `--shadow-pop` | `--shadow-popover` | 1 | |
 | `--duration-base` | `--duration-fast` | 1 | 150ms both |
 | `--fw-semibold` | `--font-weight-semibold` | — | blue also has 450 / 500 / 550 |
@@ -120,17 +120,27 @@ value-identical; typography is the only place the scales genuinely collide.
 
 `--fs-34` (2 uses, no counterpart) · `--fs-13` / `--fs-15` / `--fs-11` (28 uses, ±1px) ·
 ~~`--sp-7`~~ (**settled in Phase 1** → `--space-7`, 20px) · `--text-faint` (4 uses, collapses) ·
-`--bg-panel-2` (4 uses, sunken vs. the well) · `--amber-500` (2 uses left, both Phase 8) ·
-`--hover-bg-tint` (2 uses, violet → neutral).
+~~`--bg-panel-2`~~ (**half settled in Phase 2** → `--surface-card` on the shell; 2 uses left, Phase 4) ·
+`--amber-500` (2 uses left, both Phase 8) · ~~`--hover-bg-tint`~~ (**half settled in Phase 2**;
+1 use left, Phase 6).
+
+Two rows left the map entirely in Phase 2 rather than being remapped: `--fs-27` and `--fs-21`,
+both because the element that carried them is now a design-system component with its own type.
 
 Every other row is scriptable. Do the script first, then walk these by hand.
 
-### A live bug this map exposes
+### A live bug this map exposed
 
-`apps/web/src/layout/Sidebar.tsx:158` sets `fontSize: 'var(--fs-21)'`. Yellow's
-`tokens/typography.css` defines 11/12/13/14/15/16/18/20/22/24/27/34/40 and **never defines
-`--fs-21`**, so the sidebar wordmark silently inherits its size today. Maps to
-`--headline-5-size` (20px). Fixed in passing in Phase 2, which owns the shell.
+`apps/web/src/layout/Sidebar.tsx:158` set `fontSize: 'var(--fs-21)'`. Yellow's
+`tokens/typography.css` defines 11/12/13/14/15/16/18/20/22/24/27/34/40 and **never defined
+`--fs-21`**, so the sidebar wordmark silently inherited its size.
+
+**Fixed in Phase 2 by deletion, not by remapping.** The wordmark was typography — `Team` in ink,
+`merly` in accent, an amber pin — because yellow had no logo file and said so ("There is no logo
+file; never draw one"). Blue has one: the mark the shipping app draws, already inlined in
+`Sidebar.jsx` and in `AuthLayout` since Phase 1. Adopting it takes the type declaration with it,
+so there is no size left to get wrong. The 20px this row would have mapped to is what the
+*headline* scale uses, and the wordmark was never a heading.
 
 ## Component inventory
 
@@ -214,6 +224,12 @@ whatever D2 opening they need.
 - **Ledger this:** `#f8fafc` is hardcoded in blue's `AppShell.jsx` and absent from
   `tokens/colors.css`, while blue's `CLAUDE.md` records prod's off-token hardcode as `#f8f8f8`. Two
   different values, neither tokenised.
+- **Landed in Phase 2**, as ledger §12–§18. Two things the table above does not say, and the phase
+  had to decide: blue's `Sidebar` offers a collapsible-submenu form as well as a flat link, and
+  hiring uses the flat one — every hiring destination is one level deep, and the link form is the
+  one that keeps its own glyph. And the drawer is the rail itself, repositioned, rather than a
+  second copy of the navigation inside a real `MenuDrawer`; the reasoning is under the ledger's
+  Open table.
 
 ## Decisions this migration reverses
 
