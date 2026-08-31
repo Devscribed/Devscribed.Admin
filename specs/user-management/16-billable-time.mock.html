@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>16 — Billable Time · Meridian mockup</title>
+<link rel="stylesheet" href="../../1_DS%20for%20dev/styles.css">
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-text)}
+  .page{padding:var(--sp-16) var(--sp-8);display:flex;flex-direction:column;gap:var(--sp-24);align-items:center}
+  .legend{width:100%;max-width:1200px;font-size:var(--fs-14);line-height:var(--lh-loose);color:var(--text-sub)}
+  .legend h1{font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-27);letter-spacing:var(--ls-tighter);color:var(--text);margin:0 0 var(--sp-2)}
+  .legend code{font-family:var(--font-mono);font-size:var(--fs-13);color:var(--accent)}
+  .state{width:100%;max-width:1200px;display:flex;flex-direction:column;gap:var(--sp-6)}
+  .state-label{font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-11);letter-spacing:var(--ls-uppercase);text-transform:uppercase;color:var(--text-faint)}
+  .stage{background:var(--bg);border:1px solid var(--divider);border-radius:var(--radius-2xl);overflow:hidden;padding:20px}
+
+  /* --- Entry modal --- */
+  .modal{width:520px;background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radius-2xl);box-shadow:var(--shadow-modal);padding:24px;margin:0 auto}
+  .modal-title{font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-20);margin:0 0 16px}
+  .field{display:flex;flex-direction:column;margin-bottom:14px}
+  .field label{font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-11);letter-spacing:var(--ls-wider);text-transform:uppercase;color:var(--text-muted);margin-bottom:6px}
+  .field input,.field select,.field textarea{border:1.5px solid var(--border-strong);border-radius:var(--radius-lg);padding:8px 12px;font-family:var(--font-text);font-size:var(--fs-15);color:var(--text);background:var(--bg-field);outline:none;appearance:none}
+  .field select{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='7' viewBox='0 0 12 7'><path d='M1 1l5 5 5-5' stroke='%23806955' stroke-width='1.6' fill='none'/></svg>");background-repeat:no-repeat;background-position:right 14px center;height:var(--field-h)}
+  .field input{height:var(--field-h)}
+  .field textarea{min-height:70px;resize:vertical}
+  .field-row{display:flex;gap:12px}
+  .field-row .field{flex:1}
+  .toggle-field{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border:1.5px solid var(--border-strong);border-radius:var(--radius-lg);background:var(--bg-field);margin-bottom:14px}
+  .toggle-field .label{display:flex;flex-direction:column}
+  .toggle-field .title{font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-14);color:var(--text)}
+  .toggle-field .desc{font-size:var(--fs-12);color:var(--text-muted);margin-top:2px}
+  .toggle{width:44px;height:24px;background:var(--accent);border-radius:12px;position:relative;cursor:pointer;flex-shrink:0}
+  .toggle::after{content:'';position:absolute;width:18px;height:18px;background:white;border-radius:50%;top:3px;right:3px;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+  .toggle.off{background:var(--border-strong)}
+  .toggle.off::after{right:auto;left:3px}
+  .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 20px;border-radius:var(--radius-lg);border:1.5px solid var(--accent);background:var(--accent);color:var(--on-accent);font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-15);box-shadow:var(--lip-accent);cursor:pointer}
+  .btn-ghost{background:transparent;color:var(--text-sub);border-color:var(--border-strong);box-shadow:none}
+  .btn-sm{height:36px;padding:0 14px;font-size:var(--fs-13)}
+
+  /* --- Weekly TimeGrid --- */
+  .grid-wrap{background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radius-2xl);overflow:hidden}
+  .grid-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--divider)}
+  .grid-title{font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-18)}
+  .grid-nav{display:flex;gap:8px;align-items:center}
+  .grid-nav .arrow{width:32px;height:32px;border-radius:var(--radius-sm);border:1.5px solid var(--border-strong);background:var(--bg-panel);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-sub)}
+  .grid{display:grid;grid-template-columns:120px repeat(7,1fr)}
+  .col-h{padding:12px 8px;text-align:center;font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-11);letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--divider);background:var(--bg-header)}
+  .col-h.today{color:var(--accent)}
+  .col-h .dnum{display:block;font-size:var(--fs-18);color:var(--text);letter-spacing:0;text-transform:none;margin-top:2px;font-weight:var(--fw-semibold)}
+  .col-h.today .dnum{color:var(--accent)}
+  .proj-h{padding:12px;font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-12);color:var(--text-sub);border-bottom:1px solid var(--divider);background:var(--bg-header)}
+  .cell{min-height:80px;padding:6px;border-bottom:1px solid var(--divider);border-left:1px solid var(--divider);display:flex;flex-direction:column;gap:4px;position:relative}
+  .cell.holiday{background:oklch(0.98 0.03 60)}
+  .cell.holiday::before{content:'★ Holiday';position:absolute;top:4px;right:6px;font-size:9px;color:oklch(0.5 0.15 60);font-weight:600;letter-spacing:.4px;text-transform:uppercase}
+  .proj-cell{padding:12px;font-family:var(--font-display);font-weight:var(--fw-medium);font-size:var(--fs-13);border-bottom:1px solid var(--divider);color:var(--text);display:flex;align-items:center;gap:6px}
+  .client-tag{font-size:var(--fs-11);color:var(--text-muted);font-weight:var(--fw-regular);display:block;margin-top:2px}
+  .entry{padding:6px 8px;border-radius:var(--radius-sm);background:var(--accent-soft);color:var(--accent);font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-12);cursor:pointer;display:flex;flex-direction:column;gap:2px;position:relative}
+  .entry .h{font-size:var(--fs-13)}
+  .entry .n{font-size:var(--fs-11);font-weight:var(--fw-regular);opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .entry.nonbill{background:var(--bg-sunken);color:var(--text-muted);border:1px dashed var(--border-strong)}
+  .entry.nonbill::after{content:'NB';position:absolute;top:2px;right:4px;font-size:8px;font-weight:700;opacity:.75}
+  .add{display:flex;align-items:center;justify-content:center;height:28px;border:1px dashed var(--border);border-radius:var(--radius-sm);color:var(--text-faint);font-size:var(--fs-16);cursor:pointer;opacity:0;transition:opacity .12s}
+  .cell:hover .add{opacity:1}
+  .totals{display:grid;grid-template-columns:120px repeat(7,1fr);background:var(--bg-panel-2);border-top:1px solid var(--divider)}
+  .totals .lbl{padding:14px 12px;font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-12);color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;text-align:right}
+  .totals .cell-total{padding:14px 8px;font-family:var(--font-mono);font-weight:var(--fw-semibold);font-size:var(--fs-14);color:var(--text);text-align:center;border-left:1px solid var(--divider)}
+  .totals .cell-total.split{display:flex;flex-direction:column;gap:2px;line-height:1.2}
+  .totals .cell-total .b{color:var(--text)}
+  .totals .cell-total .nb{color:var(--text-muted);font-size:var(--fs-11)}
+
+  /* --- Filter chip --- */
+  .toolbar{display:flex;gap:10px;align-items:center;padding:12px 20px;border-bottom:1px solid var(--divider);background:var(--bg-panel-2)}
+  .chip-toggle{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border:1.5px solid var(--border-strong);border-radius:var(--radius-pill);background:var(--bg-panel);color:var(--text-sub);font-family:var(--font-display);font-weight:var(--fw-medium);font-size:var(--fs-12);cursor:pointer}
+  .chip-toggle.on{background:var(--accent-soft);color:var(--accent);border-color:var(--accent-border)}
+  .legend-swatch{display:inline-flex;align-items:center;gap:8px;font-size:var(--fs-12);color:var(--text-sub);margin-left:auto}
+  .sw{width:14px;height:14px;border-radius:3px}
+  .sw-bill{background:var(--accent-soft)}
+  .sw-nonbill{background:var(--bg-sunken);border:1px dashed var(--border-strong)}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="legend">
+    <h1>16 — Billable Time</h1>
+    <p>Static visual target for the new <code>TimeEntry.billable</code> flag: the toggle in the Add Entry modal and how the Weekly TimeGrid shows non-billable entries. Pairs with the future <code>16-billable-time.md</code> spec, which extends <a href="12-time-tracking.md">12-time-tracking.md</a>.</p>
+  </div>
+
+  <!-- ══════════ 1. Add Entry modal with toggle ══════════ -->
+  <section class="state">
+    <div class="state-label">01 · Add time entry modal — new Billable toggle, on by default</div>
+    <div class="stage">
+      <div class="modal">
+        <h3 class="modal-title">Log time</h3>
+        <div class="field-row">
+          <div class="field"><label>Date *</label><input type="date" value="2026-08-31"></div>
+          <div class="field"><label>Duration *</label><input value="2h 30m"></div>
+        </div>
+        <div class="field"><label>Project *</label><select><option>Website Redesign · Acme Corp</option><option>Mobile App v2 · Acme Corp</option><option>Internal Dashboard · Internal (IT)</option></select></div>
+        <div class="field"><label>Task (optional)</label><input placeholder="e.g. Design review"></div>
+        <div class="field"><label>Description (optional)</label><textarea placeholder="What did you work on?"></textarea></div>
+        <div class="toggle-field">
+          <div class="label">
+            <span class="title">Billable</span>
+            <span class="desc">Counts toward the client's Billed Amount on reports. Turn off for internal work, training, or PTO.</span>
+          </div>
+          <div class="toggle"></div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost">Cancel</button>
+          <button class="btn">Log time</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ 2. Toggle OFF — non-billable ══════════ -->
+  <section class="state">
+    <div class="state-label">02 · Same modal — non-billable (toggle off)</div>
+    <div class="stage">
+      <div class="modal">
+        <h3 class="modal-title">Log time</h3>
+        <div class="field-row">
+          <div class="field"><label>Date *</label><input type="date" value="2026-08-31"></div>
+          <div class="field"><label>Duration *</label><input value="1h 00m"></div>
+        </div>
+        <div class="field"><label>Project *</label><select><option>Internal Dashboard · Internal (IT)</option></select></div>
+        <div class="field"><label>Task (optional)</label><input value="Team retrospective"></div>
+        <div class="field"><label>Description (optional)</label><textarea>Weekly retro, no client output.</textarea></div>
+        <div class="toggle-field">
+          <div class="label">
+            <span class="title">Billable</span>
+            <span class="desc">This entry will not appear in the client's Billed Amount total.</span>
+          </div>
+          <div class="toggle off"></div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost">Cancel</button>
+          <button class="btn">Log time</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ 3. Weekly TimeGrid — mixed ══════════ -->
+  <section class="state">
+    <div class="state-label">03 · Weekly view — billable (solid) vs non-billable (dashed) entries · holiday day</div>
+    <div class="stage" style="padding:0">
+      <div class="grid-wrap">
+        <div class="grid-header">
+          <div class="grid-title">Week of Aug 24 – 30, 2026</div>
+          <div class="grid-nav">
+            <div class="arrow">←</div>
+            <button class="btn btn-ghost btn-sm">Today</button>
+            <div class="arrow">→</div>
+          </div>
+        </div>
+        <div class="toolbar">
+          <span class="chip-toggle on">Billable</span>
+          <span class="chip-toggle on">Non-billable</span>
+          <span class="chip-toggle">Only unassigned</span>
+          <div class="legend-swatch"><span class="sw sw-bill"></span>Billable<span class="sw sw-nonbill"></span>Non-billable</div>
+        </div>
+        <div class="grid">
+          <div class="proj-h">Project</div>
+          <div class="col-h">Mon<span class="dnum">24</span></div>
+          <div class="col-h">Tue<span class="dnum">25</span></div>
+          <div class="col-h">Wed<span class="dnum">26</span></div>
+          <div class="col-h">Thu<span class="dnum">27</span></div>
+          <div class="col-h today">Fri<span class="dnum">28</span></div>
+          <div class="col-h">Sat<span class="dnum">29</span></div>
+          <div class="col-h">Sun<span class="dnum">30</span></div>
+
+          <div class="proj-cell">Website Redesign<span class="client-tag">Acme Corp</span></div>
+          <div class="cell"><div class="entry"><span class="h">3h 30m</span><span class="n">Design review</span></div></div>
+          <div class="cell"><div class="entry"><span class="h">4h 00m</span><span class="n">Header refactor</span></div></div>
+          <div class="cell"><div class="entry"><span class="h">2h 15m</span><span class="n">QA fixes</span></div></div>
+          <div class="cell"><div class="entry"><span class="h">6h 00m</span><span class="n">Client demo prep</span></div></div>
+          <div class="cell"><div class="entry"><span class="h">1h 45m</span><span class="n">Demo debrief</span></div></div>
+          <div class="cell holiday"><div class="add">+</div></div>
+          <div class="cell"><div class="add">+</div></div>
+
+          <div class="proj-cell">Internal Dashboard<span class="client-tag">Internal (IT)</span></div>
+          <div class="cell"><div class="entry nonbill"><span class="h">1h 00m</span><span class="n">Standup</span></div></div>
+          <div class="cell"><div class="entry nonbill"><span class="h">0h 45m</span><span class="n">Standup</span></div></div>
+          <div class="cell"><div class="entry nonbill"><span class="h">1h 30m</span><span class="n">Retro</span></div></div>
+          <div class="cell"><div class="entry nonbill"><span class="h">0h 45m</span><span class="n">Standup</span></div></div>
+          <div class="cell"><div class="entry nonbill"><span class="h">2h 00m</span><span class="n">Training</span></div></div>
+          <div class="cell holiday"><div class="add">+</div></div>
+          <div class="cell"><div class="add">+</div></div>
+
+          <div class="proj-cell">Mobile App v2<span class="client-tag">Acme Corp</span></div>
+          <div class="cell"><div class="add">+</div></div>
+          <div class="cell"><div class="entry"><span class="h">2h 00m</span><span class="n">Bug triage</span></div></div>
+          <div class="cell"><div class="entry"><span class="h">3h 00m</span><span class="n">Push notifications</span></div></div>
+          <div class="cell"><div class="add">+</div></div>
+          <div class="cell"><div class="add">+</div></div>
+          <div class="cell holiday"><div class="add">+</div></div>
+          <div class="cell"><div class="add">+</div></div>
+        </div>
+        <div class="totals">
+          <div class="lbl">Total (bill / nb)</div>
+          <div class="cell-total split"><span class="b">3h 30m</span><span class="nb">+ 1h 00m nb</span></div>
+          <div class="cell-total split"><span class="b">6h 00m</span><span class="nb">+ 0h 45m nb</span></div>
+          <div class="cell-total split"><span class="b">5h 15m</span><span class="nb">+ 1h 30m nb</span></div>
+          <div class="cell-total split"><span class="b">6h 00m</span><span class="nb">+ 0h 45m nb</span></div>
+          <div class="cell-total split"><span class="b">1h 45m</span><span class="nb">+ 2h 00m nb</span></div>
+          <div class="cell-total split"><span class="b">—</span><span class="nb">—</span></div>
+          <div class="cell-total split"><span class="b">—</span><span class="nb">—</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ 4. Running timer with toggle ══════════ -->
+  <section class="state">
+    <div class="state-label">04 · Running timer bar — non-billable indicator</div>
+    <div class="stage" style="padding:20px">
+      <div style="display:flex;gap:16px;padding:16px 20px;background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radius-2xl);align-items:center">
+        <div style="width:14px;height:14px;border-radius:50%;background:var(--error-500);box-shadow:0 0 0 4px oklch(0.95 0.08 25);animation:pulse 1.6s infinite"></div>
+        <div style="flex:1">
+          <div style="font-family:var(--font-display);font-weight:var(--fw-semibold);font-size:var(--fs-15)">Internal Dashboard — Team retro</div>
+          <div style="font-size:var(--fs-12);color:var(--text-muted)">Non-billable · started 14:22</div>
+        </div>
+        <div style="font-family:var(--font-mono);font-weight:var(--fw-semibold);font-size:var(--fs-22);color:var(--text)">00:37:14</div>
+        <div class="toggle-field" style="margin:0;padding:8px 12px;border-radius:var(--radius-lg)">
+          <div class="label" style="margin-right:12px"><span class="title" style="font-size:var(--fs-12)">Billable</span></div>
+          <div class="toggle off"></div>
+        </div>
+        <button class="btn">Stop</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

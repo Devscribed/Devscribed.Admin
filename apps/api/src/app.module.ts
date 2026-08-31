@@ -16,6 +16,7 @@ import { CoreModule } from './core.module';
 import { DocumentsModule } from './documents/documents.module';
 import { HealthController } from './health.controller';
 import { InternalModule } from './internal/internal.module';
+import { KanbanModule } from './kanban/kanban.module';
 import { InvitationsController } from './invitations/invitations.controller';
 import { InvitationsService } from './invitations/invitations.service';
 import { OutboxController } from './mail/outbox.controller';
@@ -80,6 +81,9 @@ import { VacationService } from './vacation/vacation.service';
     // CSRF, and its guard — "the body carries a hash we recognize" — must never be
     // reachable from an org-scoped controller.
     WebhooksModule,
+    // Spec 13 — board columns + tasks. Its own module so the shared
+    // `KanbanAccessService` isn't fanned out into every other controller.
+    KanbanModule,
   ],
   controllers: [
     // First, so that a reader looking for "what does the load balancer call" finds it

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Button, Input, Modal, Select } from '@/ds';
 import { errorNode } from '@/field-error';
+import { TaskSelector, type TaskSelectorValue } from '@/task-selector/TaskSelector';
 import { useToast } from '@/toast';
 import {
   TIME_TRACKING_MESSAGES,
@@ -73,6 +74,9 @@ export function TimeEntryModal({
   const [minutes, setMinutes] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  // Spec 15 — active task-link selection. Hydrated on edit from the entry's
+  // `taskId` + `taskKey`; parsed title from the snapshot label (see FR-2).
+  const [taskSelection, setTaskSelection] = useState<TaskSelectorValue | null>(null);
 
   // Seed on open. Editing an archived-project entry keeps that project selectable even
   // when it is absent from the active-projects list (spec FR-7 preservation).
@@ -85,6 +89,17 @@ export function TimeEntryModal({
       setTask(entry.task ?? '');
       setDescription(entry.description ?? '');
       setDate(entry.date);
+      // Spec 15 — hydrate the task chip when the entry was written with a link.
+      if (entry.taskId && entry.taskKey) {
+        setTaskSelection({
+          id: entry.taskId,
+          key: entry.taskKey,
+          title: extractTitleFromLabel(entry.task, entry.taskKey),
+          type: 'task',
+        });
+      } else {
+        setTaskSelection(null);
+      }
       if (entry.startTime) {
         setMode('timerange');
         setStartTime(formatWallClockInTz(entry.startTime, tz));
@@ -108,6 +123,7 @@ export function TimeEntryModal({
       setEndTime('');
       setHours('');
       setMinutes('');
+      setTaskSelection(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, entry?.id]);
@@ -123,6 +139,13 @@ export function TimeEntryModal({
     }
     return base;
   }, [projects, entry?.projectId, entry?.projectName]);
+
+  /** The currently-selected project record, if it lives in the assignable set. Used
+   * by the spec-15 task selector to decide whether to render (needs `key`). */
+  const selectedProject = useMemo(
+    () => (projectId ? projects.find((p) => p.id === projectId) ?? null : null),
+    [projects, projectId],
+  );
 
   const computed = useMemo(() => {
     if (HHMM.test(startTime) && HHMM.test(endTime)) {
@@ -166,7 +189,11 @@ export function TimeEntryModal({
 
     const body: Record<string, unknown> = {
       projectId: projectId || null,
-      task: result.value.task,
+      // Spec 15 — `taskId: null` explicit so clearing a link on edit unsets it.
+      taskId: taskSelection?.id ?? null,
+      // Spec 15 FR-2 — server ignores `task` when taskId is present. Omitting is
+      // the clearest signal; when unlinked, send whatever the user typed.
+      ...(taskSelection ? {} : { task: result.value.task }),
       description: result.value.description,
       date: result.value.date,
     };
@@ -204,6 +231,13 @@ export function TimeEntryModal({
         setErrors(errBody.errors as Record<string, string>);
       } else if (errBody?.error === 'invalid_project') {
         setErrors({ projectId: errBody.message ?? TIME_TRACKING_MESSAGES.projectInvalid });
+      } else if (
+        errBody?.error === 'task_requires_project' ||
+        errBody?.error === 'task_wrong_project' ||
+        errBody?.error === 'task_not_found' ||
+        errBody?.error === 'task_project_not_assigned'
+      ) {
+        setErrors({ taskId: mapTaskLinkError(errBody.error) });
       } else {
         showToast('toast-entry-saved', errBody?.message ?? TIME_TRACKING_MESSAGES.genericError, 'error');
       }
@@ -268,7 +302,11 @@ export function TimeEntryModal({
             placeholder="Select project…"
             onChange={(value: string) => {
               setProjectId(value);
+              // Spec 15 FR-14/FR-16 — project change clears the task selection
+              // (a task belongs to exactly one project). Free-text `task` stays.
+              setTaskSelection(null);
               clearError('projectId');
+              clearError('taskId');
             }}
             error={errors.projectId}
             data-testid="tt-entry-project-select"
@@ -283,20 +321,67 @@ export function TimeEntryModal({
           )}
         </div>
 
-        {/* Task */}
-        <Input
-          label="Task"
-          placeholder="e.g. API development"
-          value={task}
-          onChange={(e: { target: { value: string } }) => {
-            setTask(e.target.value);
-            clearError('task');
-          }}
-          readOnly={submitting}
-          data-testid="tt-entry-task-input"
-          error={errors.task ? errorNode('task', errors.task) : undefined}
-          wrapperStyle={{ gap: 0 }}
-        />
+        {/* Spec 15 — Task selector, hidden when the project has no board key (FR-15). */}
+        {selectedProject && selectedProject.key && (
+          <div>
+            <label
+              style={{
+                display: 'block',
+                fontFamily: 'var(--font-display)',
+                fontSize: 'var(--fs-11)',
+                letterSpacing: 1,
+                textTransform: 'uppercase',
+                color: 'var(--text-muted)',
+                marginBottom: 6,
+              }}
+            >
+              Task
+            </label>
+            <TaskSelector
+              orgId={orgId}
+              projectId={selectedProject.id}
+              projectName={selectedProject.name}
+              projectKey={selectedProject.key}
+              testIdPrefix="tt-entry"
+              value={taskSelection}
+              onChange={(next) => {
+                // Spec 15 FR-6/FR-13 — clearing the link preserves the computed
+                // label as editable free-text in the `task` field.
+                if (next === null && taskSelection) {
+                  setTask(`${taskSelection.key}: ${taskSelection.title}`);
+                }
+                setTaskSelection(next);
+                clearError('taskId');
+              }}
+              disabled={submitting}
+            />
+            {errors.taskId && (
+              <div
+                data-testid="field-error-taskId"
+                style={{ marginTop: 5, fontSize: 'var(--fs-12)', color: 'var(--error-500)' }}
+              >
+                {errors.taskId}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Free-text task label. Hidden while a task is selected (spec 15 §UI). */}
+        {!taskSelection && (
+          <Input
+            label={selectedProject && selectedProject.key ? 'Task label' : 'Task'}
+            placeholder="e.g. API development"
+            value={task}
+            onChange={(e: { target: { value: string } }) => {
+              setTask(e.target.value);
+              clearError('task');
+            }}
+            readOnly={submitting}
+            data-testid="tt-entry-task-input"
+            error={errors.task ? errorNode('task', errors.task) : undefined}
+            wrapperStyle={{ gap: 0 }}
+          />
+        )}
 
         {/* Date */}
         <Input
@@ -434,4 +519,32 @@ export function TimeEntryModal({
       </form>
     </Modal>
   );
+}
+
+/**
+ * Given a snapshot task label ("MOB-5: Fix login bug") and its key ("MOB-5"), pull
+ * out the title portion for the chip. Falls back to the whole label when the prefix
+ * doesn't match (older entries, or a stale key rename).
+ */
+function extractTitleFromLabel(label: string | null, taskKey: string): string {
+  if (!label) return '';
+  const prefix = `${taskKey}: `;
+  if (label.startsWith(prefix)) return label.slice(prefix.length);
+  return label;
+}
+
+/** Server task-link error code → user-facing message (spec 15 §Error Messages). */
+function mapTaskLinkError(code: string): string {
+  switch (code) {
+    case 'task_requires_project':
+      return TIME_TRACKING_MESSAGES.taskRequiresProject;
+    case 'task_wrong_project':
+      return TIME_TRACKING_MESSAGES.taskWrongProject;
+    case 'task_not_found':
+      return TIME_TRACKING_MESSAGES.taskLinkNotFound;
+    case 'task_project_not_assigned':
+      return TIME_TRACKING_MESSAGES.taskProjectNotAssigned;
+    default:
+      return TIME_TRACKING_MESSAGES.genericError;
+  }
 }

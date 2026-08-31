@@ -539,7 +539,25 @@ export type MemberCapability =
   | 'view-time-tracking'
   | 'manage-own-time-entries'
   | 'manage-all-time-entries'
-  | 'use-timer';
+  | 'use-timer'
+  /**
+   * Spec 13 additions — the Kanban Board & Tasks capabilities.
+   * `view-board`: view the board / list / task detail (admin, manager, user).
+   * `manage-tasks`: create/edit/move/delete tasks (admin, manager, user).
+   * `manage-board-columns`: create/rename/reorder/delete columns (admin, manager).
+   * `user` role is further scoped by `ProjectMember` in the service layer.
+   */
+  | 'view-board'
+  | 'manage-tasks'
+  | 'manage-board-columns'
+  /**
+   * Spec 14 addition — the Task Collaboration capabilities. Only ONE capability
+   * is new to this spec: `manage-labels` gates label DEFINITION (create/edit/delete
+   * label records in Board Settings). Label ASSIGNMENT reuses `manage-tasks`;
+   * comments, watchers, and activity read reuse `view-board`/`manage-tasks` from
+   * spec 13 with the same `user`-role project-membership scoping applied service-side.
+   */
+  | 'manage-labels';
 
 /**
  * Pure lookup against spec 04's Roles & Permission Matrix (TC-04-UNIT-05), widened by
@@ -569,6 +587,10 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-own-time-entries': true,
     'manage-all-time-entries': true,
     'use-timer': true,
+    'view-board': true,
+    'manage-tasks': true,
+    'manage-board-columns': true,
+    'manage-labels': true,
   },
   manager: {
     'view-list': true,
@@ -590,6 +612,10 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-own-time-entries': true,
     'manage-all-time-entries': true,
     'use-timer': true,
+    'view-board': true,
+    'manage-tasks': true,
+    'manage-board-columns': true,
+    'manage-labels': true,
   },
   user: {
     'view-list': true,
@@ -611,6 +637,10 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-own-time-entries': true,
     'manage-all-time-entries': false,
     'use-timer': true,
+    'view-board': true,
+    'manage-tasks': true,
+    'manage-board-columns': false,
+    'manage-labels': false,
   },
   viewer: {
     'view-list': true,
@@ -632,6 +662,10 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-own-time-entries': false,
     'manage-all-time-entries': false,
     'use-timer': false,
+    'view-board': false,
+    'manage-tasks': false,
+    'manage-board-columns': false,
+    'manage-labels': false,
   },
 };
 
@@ -2053,6 +2087,21 @@ export const TIME_TRACKING_MESSAGES = {
   // Empty states.
   emptyPeriod: 'No time entries for this period.',
   emptyToday: 'No time logged today. Start a timer or add an entry.',
+  // ── Spec 15 — Time Tracking ↔ Tasks Integration ─────────────────
+  // Task-link validation (spec 15 §Error Messages).
+  taskRequiresProject: 'Select a project before choosing a task',
+  taskWrongProject: 'The selected task does not belong to the chosen project',
+  taskLinkNotFound: 'Task not found',
+  taskProjectNotAssigned: 'You do not have access to tasks in this project',
+  // Search endpoint (spec 15 §Error Messages).
+  searchProjectKeyRequired: 'This project does not have a board',
+  searchQueryTooLong: 'Search query must be at most 100 characters',
+  // Task Detail — Time Logged (spec 15 §Error Messages / §States).
+  emptyTimeLogged: 'No time logged on this task yet.',
+  // Task selector (spec 15 §Error Messages).
+  taskSelectorNoMatches: 'No matching tasks.',
+  /** `Search tasks in {projectName}...` — templated; use `taskSelectorPlaceholder`. */
+  taskSelectorPlaceholderTemplate: 'Search tasks in {projectName}...',
 } as const;
 
 /** "Timer stopped — {duration} logged" (Toast row, templated). */
@@ -2506,6 +2555,664 @@ export function gmtLabel(tz: string, instant: Date): string {
   const hours = Math.floor(abs / 60);
   const mins = abs % 60;
   return `GMT${sign}${hours}${mins > 0 ? `:${pad2(mins)}` : ''}`;
+}
+
+// ===========================================================================
+// spec 13 — Kanban Board & Tasks
+// ---------------------------------------------------------------------------
+// Pure helpers for project key, board columns, tasks: types, priorities,
+// validators, hierarchy rules, sort options, and the one source of truth for
+// every spec-13 error/toast/empty string. Capabilities (`view-board`,
+// `manage-tasks`, `manage-board-columns`) live in CAPABILITY_MATRIX above and
+// are gated via `can(...)`.
+// ===========================================================================
+
+/** Verbatim from spec 13 §Error Messages — API + web share this table. */
+export const KANBAN_MESSAGES = {
+  projectKeyRequired: 'Set a project key before using the board',
+  projectKeyTooShort: 'Project key must be at least 2 characters',
+  projectKeyTooLong: 'Project key must be at most 10 characters',
+  projectKeyInvalidFormat: 'Project key must contain only uppercase letters',
+  projectKeyDuplicate: 'A project with this key already exists in your organization',
+  projectKeyImmutable: 'Project key cannot be changed after creation',
+  columnNameRequired: 'Column name is required',
+  columnNameTooLong: 'Column name must be at most 50 characters',
+  columnNameDuplicate: 'A column with this name already exists',
+  columnNotFound: 'Column not found',
+  columnNotEmpty:
+    'Cannot delete a column that contains tasks. Move or delete the tasks first.',
+  columnDeleteLast: 'A board must have at least one column',
+  columnIdsMismatch: 'All column IDs must be provided',
+  taskTitleRequired: 'Task title is required',
+  taskTitleTooLong: 'Task title must be at most 200 characters',
+  descriptionTooLong: 'Description must be at most 10,000 characters',
+  typeRequired: 'Task type is required',
+  typeInvalid: 'Task type must be one of: epic, task, bug, story, subtask',
+  priorityInvalid: 'Priority must be one of: low, medium, high, critical',
+  storyPointsInvalid: 'Story points must be an integer between 0 and 999',
+  dueDateInvalid: 'Invalid due date',
+  epicCannotHaveParent: 'Epics cannot have a parent task',
+  subtaskRequiresParent: 'Subtasks must have a parent task',
+  subtaskParentInvalid:
+    'Subtask parent must be a task, bug, or story (not an epic or subtask)',
+  taskParentMustBeEpic: 'Parent of a task, bug, or story must be an epic',
+  parentNotFound: 'Parent task not found',
+  parentWrongProject: 'Parent task must be in the same project',
+  circularReference: 'Cannot create a circular parent reference',
+  assigneeInvalid: 'Assignee must be an active member of the organization',
+  taskNotFound: 'Task not found',
+  projectArchived: 'Cannot modify tasks in an archived project',
+  boardPermissionDenied: 'You do not have permission to view this board',
+  tasksPermissionDenied: 'You do not have permission to manage tasks in this project',
+  columnsPermissionDenied: 'You do not have permission to manage board columns',
+  toastTaskCreated: 'Task created',
+  toastTaskUpdated: 'Task updated',
+  toastTaskDeleted: 'Task deleted',
+  toastTaskMoved: 'Task moved',
+  toastColumnCreated: 'Column created',
+  toastColumnUpdated: 'Column updated',
+  toastColumnDeleted: 'Column deleted',
+  emptyBoard: 'No tasks yet. Create your first task to get started.',
+  emptyColumn: 'No tasks in this column.',
+  emptyList: 'No tasks match your filters.',
+  genericError: 'Something went wrong. Please try again.',
+} as const;
+
+/** Bounds shared by API + web (spec 13 §Validation). */
+export const KANBAN_LIMITS = {
+  projectKeyMin: 2,
+  projectKeyMax: 10,
+  columnNameMax: 50,
+  taskTitleMax: 200,
+  taskDescriptionMax: 10000,
+  storyPointsMin: 0,
+  storyPointsMax: 999,
+} as const;
+
+/** Task types (spec 13 FR-9). */
+export const TASK_TYPES = ['epic', 'task', 'bug', 'story', 'subtask'] as const;
+export type TaskType = (typeof TASK_TYPES)[number];
+export function isValidTaskType(input: unknown): input is TaskType {
+  return typeof input === 'string' && (TASK_TYPES as readonly string[]).includes(input);
+}
+
+/** Task priority (spec 13 FR-14). Null / unset is a fifth valid value. */
+export const TASK_PRIORITIES = ['low', 'medium', 'high', 'critical'] as const;
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];
+export function isValidTaskPriority(input: unknown): input is TaskPriority {
+  return (
+    typeof input === 'string' && (TASK_PRIORITIES as readonly string[]).includes(input)
+  );
+}
+
+/** BoardColumn.category values (spec 13 FR-7). */
+export const COLUMN_CATEGORIES = ['todo', 'in_progress', 'done', 'custom'] as const;
+export type ColumnCategory = (typeof COLUMN_CATEGORIES)[number];
+export function isValidColumnCategory(input: unknown): input is ColumnCategory {
+  return (
+    typeof input === 'string' && (COLUMN_CATEGORIES as readonly string[]).includes(input)
+  );
+}
+
+/** Project key pattern: 2-10 uppercase ASCII letters. */
+const PROJECT_KEY_PATTERN = /^[A-Z]+$/;
+
+/**
+ * Project key (spec 13 FR-1 / TC-13-UNIT-01..06). Trim first; empty → required;
+ * length checked in codepoints (safe for ASCII since [A-Z] only, but we keep the
+ * codepoint idiom shared with other validators).
+ */
+export function validateProjectKey(input: string): FieldResult {
+  const value = (input ?? '').trim();
+  if (value.length === 0) return fail(KANBAN_MESSAGES.projectKeyRequired);
+  const len = [...value].length;
+  if (len < KANBAN_LIMITS.projectKeyMin) return fail(KANBAN_MESSAGES.projectKeyTooShort);
+  if (len > KANBAN_LIMITS.projectKeyMax) return fail(KANBAN_MESSAGES.projectKeyTooLong);
+  if (!PROJECT_KEY_PATTERN.test(value)) return fail(KANBAN_MESSAGES.projectKeyInvalidFormat);
+  return ok(value);
+}
+
+/**
+ * Column name (spec 13 FR-4 / TC-13-UNIT-14..15). Trim, 1-50 codepoints.
+ */
+export function validateColumnName(input: string): FieldResult {
+  const value = (input ?? '').trim();
+  if (value.length === 0) return fail(KANBAN_MESSAGES.columnNameRequired);
+  if ([...value].length > KANBAN_LIMITS.columnNameMax) {
+    return fail(KANBAN_MESSAGES.columnNameTooLong);
+  }
+  return ok(value);
+}
+
+/**
+ * Task title (spec 13 FR-18 / TC-13-UNIT-07..10). Trim, 1-200 codepoints.
+ */
+export function validateTaskTitle(input: string): FieldResult {
+  const value = (input ?? '').trim();
+  if (value.length === 0) return fail(KANBAN_MESSAGES.taskTitleRequired);
+  if ([...value].length > KANBAN_LIMITS.taskTitleMax) {
+    return fail(KANBAN_MESSAGES.taskTitleTooLong);
+  }
+  return ok(value);
+}
+
+/**
+ * Task description (spec 13 FR-17). Nullable; empty/whitespace normalized to null.
+ * The result carries a nullable value that the API can persist as-is.
+ */
+export type NullableFieldResult =
+  | { valid: true; value: string | null }
+  | { valid: false; error: string };
+
+export function validateTaskDescription(
+  input: string | null | undefined,
+): NullableFieldResult {
+  if (input == null) return { valid: true, value: null };
+  const value = String(input).trim();
+  if (value.length === 0) return { valid: true, value: null };
+  if ([...value].length > KANBAN_LIMITS.taskDescriptionMax) {
+    return { valid: false, error: KANBAN_MESSAGES.descriptionTooLong };
+  }
+  return { valid: true, value };
+}
+
+/** Story points (spec 13 FR-15). Nullable integer 0-999. */
+export type NumericNullableFieldResult =
+  | { valid: true; value: number | null }
+  | { valid: false; error: string };
+
+export function validateStoryPoints(
+  input: number | string | null | undefined,
+): NumericNullableFieldResult {
+  if (input == null) return { valid: true, value: null };
+  if (typeof input === 'string' && input.trim().length === 0) {
+    return { valid: true, value: null };
+  }
+  const num = typeof input === 'number' ? input : Number(String(input).trim());
+  if (!Number.isFinite(num)) return { valid: false, error: KANBAN_MESSAGES.storyPointsInvalid };
+  if (!Number.isInteger(num)) return { valid: false, error: KANBAN_MESSAGES.storyPointsInvalid };
+  if (num < KANBAN_LIMITS.storyPointsMin || num > KANBAN_LIMITS.storyPointsMax) {
+    return { valid: false, error: KANBAN_MESSAGES.storyPointsInvalid };
+  }
+  return { valid: true, value: num };
+}
+
+/**
+ * Due date (spec 13 FR-16 / Validation Rule 8). Nullable; accepts 'YYYY-MM-DD' or an
+ * ISO datetime string. Returns the canonical 'YYYY-MM-DD' or null.
+ */
+export function validateDueDate(input: string | null | undefined): NullableFieldResult {
+  if (input == null) return { valid: true, value: null };
+  const value = String(input).trim();
+  if (value.length === 0) return { valid: true, value: null };
+  // Accept 'YYYY-MM-DD' or a valid ISO timestamp; canonicalize to 'YYYY-MM-DD'.
+  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!dateMatch) return { valid: false, error: KANBAN_MESSAGES.dueDateInvalid };
+  const [, y, m, d] = dateMatch;
+  const parsed = Date.parse(`${y}-${m}-${d}T00:00:00Z`);
+  if (!Number.isFinite(parsed)) return { valid: false, error: KANBAN_MESSAGES.dueDateInvalid };
+  // Round-trip check to reject impossible days (e.g. 2026-02-31).
+  const dt = new Date(parsed);
+  const yy = dt.getUTCFullYear();
+  const mm = dt.getUTCMonth() + 1;
+  const dd = dt.getUTCDate();
+  if (yy !== Number(y) || mm !== Number(m) || dd !== Number(d)) {
+    return { valid: false, error: KANBAN_MESSAGES.dueDateInvalid };
+  }
+  return { valid: true, value: `${y}-${m}-${d}` };
+}
+
+/** Task type validator wrapper for pure form use. */
+export function validateTaskType(input: unknown): FieldResult {
+  if (input == null || input === '') return fail(KANBAN_MESSAGES.typeRequired);
+  if (!isValidTaskType(input)) return fail(KANBAN_MESSAGES.typeInvalid);
+  return ok(input);
+}
+
+/**
+ * Task priority. Null / undefined / '' → valid null; otherwise must be in enum.
+ */
+export function validateTaskPriority(
+  input: unknown,
+): { valid: true; value: TaskPriority | null } | { valid: false; error: string } {
+  if (input == null || input === '') return { valid: true, value: null };
+  if (!isValidTaskPriority(input)) return { valid: false, error: KANBAN_MESSAGES.priorityInvalid };
+  return { valid: true, value: input };
+}
+
+/**
+ * Format the human-readable task key from project key + task number
+ * (spec 13 FR-8 / TC-13-UNIT-22).
+ */
+export function formatTaskKey(projectKey: string, taskNumber: number): string {
+  return `${projectKey}-${taskNumber}`;
+}
+
+/**
+ * Which type can be a parent to which type (spec 13 FR-10). Returns null on OK, or the
+ * spec-13 error message when the transition is illegal. Pure — the service does the DB
+ * lookups for existence, same-project, and circular checks separately.
+ *
+ *   - epic         → must NOT have a parent
+ *   - task/bug/story → optional parent; if set, parent must be epic
+ *   - subtask      → parent required; parent must be task/bug/story
+ */
+export function checkTaskHierarchy(
+  childType: TaskType,
+  parentType: TaskType | null,
+): string | null {
+  if (childType === 'epic') {
+    if (parentType != null) return KANBAN_MESSAGES.epicCannotHaveParent;
+    return null;
+  }
+  if (childType === 'subtask') {
+    if (parentType == null) return KANBAN_MESSAGES.subtaskRequiresParent;
+    if (parentType === 'epic' || parentType === 'subtask') {
+      return KANBAN_MESSAGES.subtaskParentInvalid;
+    }
+    return null;
+  }
+  // task / bug / story — parent optional; if provided must be epic.
+  if (parentType == null) return null;
+  if (parentType !== 'epic') return KANBAN_MESSAGES.taskParentMustBeEpic;
+  return null;
+}
+
+/** Valid `sort` query values for the list view (spec 13 GET .../tasks). */
+export const TASK_LIST_SORT_VALUES = [
+  'created_desc',
+  'created_asc',
+  'priority_desc',
+  'priority_asc',
+  'due_date_asc',
+  'due_date_desc',
+  'story_points_desc',
+  'title_asc',
+] as const;
+export type TaskListSort = (typeof TASK_LIST_SORT_VALUES)[number];
+export function parseTaskListSort(value: string | undefined | null): TaskListSort {
+  return (TASK_LIST_SORT_VALUES as readonly string[]).includes(value ?? '')
+    ? (value as TaskListSort)
+    : 'created_desc';
+}
+
+/**
+ * Auto-suggest a project key from a name (design spec 13, Create Project modal):
+ * take the first letter of each word, uppercase, filter to A-Z, cap at 10 chars.
+ * "Mobile App" → "MA"; "Awesome Backend Rewrite" → "ABR". Purely presentation —
+ * server validates whatever the user sends.
+ */
+export function suggestProjectKey(name: string): string {
+  return (name ?? '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '')
+    .slice(0, KANBAN_LIMITS.projectKeyMax);
+}
+
+// ===========================================================================
+// spec 14 — Task Collaboration (labels, comments, watchers, activity log)
+// ---------------------------------------------------------------------------
+// Pure helpers for labels/comments/watchers and the append-only activity feed.
+// Capabilities: `manage-labels` (new, admin/manager only) is in CAPABILITY_MATRIX
+// above; label assignment reuses `manage-tasks`, comments/watchers/activity
+// reuse `view-board` from spec 13, all with the same project-membership scope
+// for the `user` role.
+// ===========================================================================
+
+/** Verbatim from spec 14 §Error Messages. */
+export const COLLAB_MESSAGES = {
+  labelNameRequired: 'Label name is required',
+  labelNameTooLong: 'Label name must be at most 30 characters',
+  labelNameDuplicate: 'A label with this name already exists',
+  labelColorInvalid: 'Color must be a valid hex code (e.g., #FF0000)',
+  labelNotFound: 'Label not found',
+  labelWrongProject: 'Label must belong to the same project as the task',
+  commentContentRequired: 'Comment cannot be empty',
+  commentContentTooLong: 'Comment must be at most 10,000 characters',
+  commentNotFound: 'Comment not found',
+  commentEditForbidden: 'You can only edit your own comments',
+  commentDeleteForbidden: 'You do not have permission to delete this comment',
+  labelsPermissionDenied: 'You do not have permission to manage labels',
+  taskAccessPermissionDenied: 'You do not have permission to view this task',
+  toastLabelCreated: 'Label created',
+  toastLabelUpdated: 'Label updated',
+  toastLabelDeleted: 'Label deleted',
+  toastCommentPosted: 'Comment posted',
+  toastCommentUpdated: 'Comment updated',
+  toastCommentDeleted: 'Comment deleted',
+  toastNowWatching: 'You are now watching this task',
+  toastUnwatched: 'You stopped watching this task',
+  emptyComments: 'No comments yet. Be the first to comment.',
+  emptyWatchers: 'No one is watching this task yet.',
+  emptyActivity: 'No activity yet.',
+  genericError: 'Something went wrong. Please try again.',
+} as const;
+
+/** Bounds shared by API + web (spec 14 §Validation). */
+export const COLLAB_LIMITS = {
+  labelNameMax: 30,
+  commentContentMax: 10000,
+} as const;
+
+/**
+ * Delete-label confirmation string (spec 14 §Error Messages).
+ * `count` is the number of tasks currently carrying the label — the API returns
+ * this to the client as `unassignedFromTaskCount` after delete, but the client
+ * shows the confirmation BEFORE the delete, so it must compute the count itself.
+ */
+export function labelDeleteConfirmMessage(name: string, count: number): string {
+  const tasks = count === 1 ? 'task' : 'tasks';
+  return `Delete label "${name}"? It will be removed from ${count} ${tasks}. This cannot be undone.`;
+}
+
+/** Delete-comment confirmation string (spec 14 §Error Messages). */
+export const COMMENT_DELETE_CONFIRM = 'Delete this comment? This action cannot be undone.';
+
+/** Hex-color pattern (spec 14 FR-2 / Validation Rule 2). */
+const LABEL_COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
+
+/** Label name (spec 14 FR-1 / TC-14-UNIT-01..03). Trim, 1-30 codepoints. */
+export function validateLabelName(input: string): FieldResult {
+  const value = (input ?? '').trim();
+  if (value.length === 0) return fail(COLLAB_MESSAGES.labelNameRequired);
+  if ([...value].length > COLLAB_LIMITS.labelNameMax) {
+    return fail(COLLAB_MESSAGES.labelNameTooLong);
+  }
+  return ok(value);
+}
+
+/** Label color (spec 14 FR-2 / TC-14-UNIT-04..05). Uppercased on return. */
+export function validateLabelColor(input: string): FieldResult {
+  const value = (input ?? '').trim();
+  if (!LABEL_COLOR_PATTERN.test(value)) return fail(COLLAB_MESSAGES.labelColorInvalid);
+  return ok(value.toUpperCase());
+}
+
+/** Comment content (spec 14 FR-9 / TC-14-UNIT-06..09). Trim, 1-10,000 codepoints. */
+export function validateCommentContent(input: string): FieldResult {
+  const value = (input ?? '').trim();
+  if (value.length === 0) return fail(COLLAB_MESSAGES.commentContentRequired);
+  if ([...value].length > COLLAB_LIMITS.commentContentMax) {
+    return fail(COLLAB_MESSAGES.commentContentTooLong);
+  }
+  return ok(value);
+}
+
+/** Task activity action enum (spec 14 FR-22). Append-only log actions. */
+export const TASK_ACTIVITY_ACTIONS = [
+  'created',
+  'field_changed',
+  'comment_added',
+  'comment_deleted',
+  'label_added',
+  'label_removed',
+  'watcher_added',
+  'watcher_removed',
+] as const;
+export type TaskActivityAction = (typeof TASK_ACTIVITY_ACTIONS)[number];
+export function isValidTaskActivityAction(input: unknown): input is TaskActivityAction {
+  return (
+    typeof input === 'string' &&
+    (TASK_ACTIVITY_ACTIONS as readonly string[]).includes(input)
+  );
+}
+
+/**
+ * Human-readable field labels for the `field_changed` activity rows (spec 14 §Screens).
+ * Any field name the API might record — not just spec-13 mutable fields — is mapped here;
+ * an unknown field name falls back to the raw field name (title-cased) so a future field
+ * lands with a sensible-if-terse label instead of blanking out.
+ */
+const ACTIVITY_FIELD_LABELS: Record<string, string> = {
+  title: 'Title',
+  description: 'Description',
+  priority: 'Priority',
+  storyPoints: 'Story Points',
+  assigneeId: 'Assignee',
+  columnId: 'Status',
+  parentId: 'Parent',
+  dueDate: 'Due Date',
+  type: 'Type',
+};
+
+/** Title-case a raw camelCase/snake_case field name for the unknown-field fallback. */
+function humanizeFieldName(field: string): string {
+  const spaced = field.replace(/[_-]+/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+/** Priority display labels used by the activity feed. */
+const PRIORITY_DISPLAY: Record<string, string> = {
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  critical: 'Critical',
+};
+
+/** Task type display labels used by the activity feed. */
+const TYPE_DISPLAY: Record<string, string> = {
+  epic: 'Epic',
+  task: 'Task',
+  bug: 'Bug',
+  story: 'Story',
+  subtask: 'Subtask',
+};
+
+export interface ActivityDisplayHelpers {
+  /** Resolve a membership id to "First Last". `null` id yields "Unassigned". */
+  resolveMember?: (id: string | null) => string;
+  /** Resolve a column id to its display name. */
+  resolveColumn?: (id: string | null) => string;
+  /** Resolve a parent-task id to its key (e.g. "MOB-1"). `null` yields "None". */
+  resolveTask?: (id: string | null) => string;
+  /** Resolve a label id to its name (used by label_added/removed rows). */
+  resolveLabel?: (id: string | null) => string;
+}
+
+/**
+ * A single activity row as returned by the API (spec 14 §API Contracts).
+ * `field`/`oldValue`/`newValue` are only set for `action === 'field_changed'`.
+ * `newValue` on label_added / watcher_added carries the label / member id; symmetric
+ * for the *_removed rows. `oldValue`/`newValue` on comment_added/deleted are null.
+ */
+export interface TaskActivityRowLike {
+  action: TaskActivityAction;
+  field?: string | null;
+  oldValue?: string | null;
+  newValue?: string | null;
+  /**
+   * Human-readable snapshot of the value at write time (API captures the column name,
+   * label name, or member "First Last" for FK-shaped fields). When present, it wins
+   * over the id-based `resolveX` lookup — the snapshot survives later deletes/renames
+   * that would otherwise leave the feed showing a raw UUID.
+   */
+  oldLabel?: string | null;
+  newLabel?: string | null;
+}
+
+/**
+ * Format one activity row as a human-readable description (spec 14 TC-14-UNIT-11/12).
+ * Pure — resolver callbacks convert ids to display strings; a missing resolver
+ * (or a resolver returning `null`) collapses to the raw value, so the API layer can
+ * pre-resolve names or leave the resolution to the UI. `created`, `comment_added`,
+ * etc. are fixed phrases; `field_changed` reads the field label and formats the
+ * before/after arrow.
+ */
+export function formatActivityDescription(
+  row: TaskActivityRowLike,
+  helpers: ActivityDisplayHelpers = {},
+): string {
+  const {
+    resolveMember = (id: string | null) => id ?? 'Unassigned',
+    resolveColumn = (id: string | null) => id ?? '',
+    resolveTask = (id: string | null) => id ?? 'None',
+    resolveLabel = (id: string | null) => id ?? '',
+  } = helpers;
+
+  switch (row.action) {
+    case 'created':
+      return 'created this task';
+    case 'comment_added':
+      return 'commented';
+    case 'comment_deleted':
+      return 'deleted a comment';
+    case 'label_added':
+      return `added label "${row.newLabel ?? resolveLabel(row.newValue ?? null)}"`;
+    case 'label_removed':
+      return `removed label "${row.oldLabel ?? resolveLabel(row.oldValue ?? null)}"`;
+    case 'watcher_added':
+      return `started watching`;
+    case 'watcher_removed':
+      return `stopped watching`;
+    case 'field_changed': {
+      const field = row.field ?? '';
+      const label = ACTIVITY_FIELD_LABELS[field] ?? humanizeFieldName(field);
+      // description changes carry no meaningful before/after per FR-27.
+      if (field === 'description') {
+        return `changed ${label}`;
+      }
+      const from = row.oldLabel
+        ?? formatFieldValue(field, row.oldValue ?? null, {
+          resolveMember,
+          resolveColumn,
+          resolveTask,
+          resolveLabel,
+        });
+      const to = row.newLabel
+        ?? formatFieldValue(field, row.newValue ?? null, {
+          resolveMember,
+          resolveColumn,
+          resolveTask,
+          resolveLabel,
+        });
+      return `changed ${label}: ${from} → ${to}`;
+    }
+    default:
+      return '';
+  }
+}
+
+/** Convert a raw stored field value into its display form. */
+function formatFieldValue(
+  field: string,
+  value: string | null,
+  helpers: Required<ActivityDisplayHelpers>,
+): string {
+  if (field === 'assigneeId') return helpers.resolveMember(value);
+  if (field === 'columnId') return helpers.resolveColumn(value);
+  if (field === 'parentId') return helpers.resolveTask(value);
+  if (field === 'priority') return value == null ? 'None' : PRIORITY_DISPLAY[value] ?? value;
+  if (field === 'type') return value == null ? '' : TYPE_DISPLAY[value] ?? value;
+  if (value == null || value === '') return field === 'dueDate' ? 'None' : '—';
+  return value;
+}
+
+/* ------------------------------------------------------------------ *
+ * Spec 15 — Time Tracking ↔ Tasks Integration
+ * Pure helpers shared by the API and web for the task-link on
+ * TimeEntry / RunningTimer and the task-search endpoint.
+ * ------------------------------------------------------------------ */
+
+/** Max codepoints of the free-text `task` snapshot label persisted on TimeEntry /
+ * RunningTimer. Mirrors `TIME_ENTRY_TASK_MAX` — the computed label is truncated to
+ * fit, so a very long task title cannot overflow the existing column limit. */
+export const TIME_ENTRY_TASK_LABEL_MAX = TIME_ENTRY_TASK_MAX;
+
+/** Max codepoints for the `q` query parameter on tasks/search (spec 15 Rule 6). */
+export const TASK_SEARCH_QUERY_MAX = 100;
+
+/** Max results returned by tasks/search (spec 15 FR-11 / API Contracts). */
+export const TASK_SEARCH_LIMIT = 20;
+
+/** Max recent time entries embedded on the task detail response (spec 15 FR-17). */
+export const TASK_TIME_LOGGED_RECENT_LIMIT = 10;
+
+/**
+ * Compose the frozen `task` label snapshot for a TimeEntry / RunningTimer whose
+ * `taskId` points at a real task (spec 15 FR-2 / TC-15-UNIT-01,02).
+ *
+ * Format: `"{PROJECT_KEY}-{taskNumber}: {title}"` (e.g. `"MOB-5: Fix login bug"`).
+ * The task title is used verbatim — spec 15 explicitly does NOT truncate it here;
+ * the resulting string is then clamped to `TIME_ENTRY_TASK_LABEL_MAX` codepoints
+ * so it fits the existing `task` column and matches spec 12's Rule 10.
+ */
+export function computeTaskLabel(input: {
+  projectKey: string;
+  taskNumber: number;
+  title: string;
+}): string {
+  const raw = `${input.projectKey}-${input.taskNumber}: ${input.title}`;
+  const cps = [...raw];
+  if (cps.length <= TIME_ENTRY_TASK_LABEL_MAX) return raw;
+  return cps.slice(0, TIME_ENTRY_TASK_LABEL_MAX).join('');
+}
+
+/**
+ * Result of `validateTaskLink` — client-side + wire-schema helper (spec 15
+ * §Validation Rules 1, 2). Existence and cross-org / project-membership checks
+ * are DB-scoped and handled server-side inside the mutation transaction; this
+ * function only enforces the two rules that are safely checkable from the request
+ * body alone.
+ */
+export type TaskLinkResult = { valid: true } | { valid: false; error: string };
+
+/**
+ * Validate the `taskId` field on a create/update payload against its `projectId`
+ * (spec 15 Rule 1 & 2 / TC-15-UNIT-03..06). This is the *shape* validator; it
+ * doesn't hit the DB, so `taskProjectId` is optional — pass it only if the caller
+ * already has the loaded task's project id in hand.
+ *
+ * - `taskId == null` → always valid (unlinking / no-link cases, FR-6).
+ * - `taskId != null` and `projectId == null` → `taskRequiresProject` (Rule 1).
+ * - `taskId != null` and `taskProjectId` present but ≠ `projectId` → `taskWrongProject` (Rule 2).
+ * - `taskId != null` with matching or unknown `taskProjectId` → valid (server still
+ *   verifies existence + project membership inside the mutation transaction).
+ */
+export function validateTaskLink(input: {
+  taskId: string | null | undefined;
+  projectId: string | null | undefined;
+  taskProjectId?: string | null | undefined;
+}): TaskLinkResult {
+  if (input.taskId == null || input.taskId === '') return { valid: true };
+  if (input.projectId == null || input.projectId === '') {
+    return { valid: false, error: TIME_TRACKING_MESSAGES.taskRequiresProject };
+  }
+  if (
+    input.taskProjectId != null &&
+    input.taskProjectId !== '' &&
+    input.taskProjectId !== input.projectId
+  ) {
+    return { valid: false, error: TIME_TRACKING_MESSAGES.taskWrongProject };
+  }
+  return { valid: true };
+}
+
+/**
+ * Placeholder text for the task selector (spec 15 §Error Messages / §UI
+ * Description). Interpolates the current project name.
+ */
+export function taskSelectorPlaceholder(projectName: string): string {
+  return `Search tasks in ${projectName}...`;
+}
+
+/**
+ * Validate the `q` search query on GET .../tasks/search (spec 15 Rule 6).
+ * Trims, then enforces the codepoint cap; empty or null → valid empty string
+ * ("browse recent tasks" mode).
+ */
+export function validateTaskSearchQuery(
+  input: string | null | undefined,
+): { valid: true; value: string } | { valid: false; error: string } {
+  const raw = (input ?? '').trim();
+  if (raw.length === 0) return { valid: true, value: '' };
+  if ([...raw].length > TASK_SEARCH_QUERY_MAX) {
+    return { valid: false, error: TIME_TRACKING_MESSAGES.searchQueryTooLong };
+  }
+  return { valid: true, value: raw };
 }
 
 /* ------------------------------------------------------------------ *

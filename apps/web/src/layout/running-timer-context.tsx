@@ -12,7 +12,8 @@ import {
 import { can, type Role } from '@devscribed/validation';
 import { useSession } from './session-context';
 
-/** The running-timer record as returned by `GET/POST/PUT .../timer` (spec 12 API). */
+/** The running-timer record as returned by `GET/POST/PUT .../timer` (spec 12 API,
+ * extended by spec 15 with `taskId` + `taskKey`). */
 export interface RunningTimer {
   id: string;
   projectId: string | null;
@@ -21,6 +22,10 @@ export interface RunningTimer {
   description: string | null;
   /** ISO-8601 UTC instant the server stamped at start; the client derives elapsed from it. */
   startedAt: string;
+  /** Spec 15 — linked task id, or null when unlinked. */
+  taskId?: string | null;
+  /** Spec 15 — `{PROJECT_KEY}-{taskNumber}` shorthand for chip rendering. */
+  taskKey?: string | null;
 }
 
 /** The time entry the server creates when a timer is stopped (spec 12 POST /timer/stop). */
@@ -36,6 +41,9 @@ export interface StoppedTimeEntry {
   endTime: string | null;
   durationMinutes: number;
   createdAt: string;
+  /** Spec 15 — carried through from the running timer at stop time (FR-9). */
+  taskId?: string | null;
+  taskKey?: string | null;
 }
 
 interface StartResult {
@@ -43,6 +51,11 @@ interface StartResult {
   /** 409 — a timer was already running; the caller shows the conflict toast. */
   conflict?: boolean;
   message?: string;
+  /** Spec 15 — server error code (`task_requires_project`, `task_wrong_project`,
+   * `task_not_found`, `task_project_not_assigned`) so the caller can translate. */
+  errorCode?: string | null;
+  /** Spec 15 — field-level validation errors keyed by field name (e.g. `taskId`). */
+  errors?: Record<string, string> | null;
 }
 
 interface RunningTimerValue {
@@ -54,9 +67,21 @@ interface RunningTimerValue {
   /** Re-read the timer from the server (`GET .../timer`). */
   refresh: () => Promise<void>;
   /** Start a timer (`POST .../timer/start`). Seeds state on success. */
-  start: (body: { projectId: string | null; task: string | null; description: string | null }) => Promise<StartResult>;
+  start: (body: {
+    projectId: string | null;
+    task: string | null;
+    description: string | null;
+    /** Spec 15 — link to a task in the project. `null` starts unlinked. */
+    taskId?: string | null;
+  }) => Promise<StartResult>;
   /** Update the running timer's metadata (`PUT .../timer`) without restarting. */
-  update: (body: { projectId: string | null; task: string | null; description: string | null }) => Promise<void>;
+  update: (body: {
+    projectId: string | null;
+    task: string | null;
+    description: string | null;
+    /** Spec 15 — explicit `null` clears an existing task link (FR-6). */
+    taskId?: string | null;
+  }) => Promise<void>;
   /** Stop & save (`POST .../timer/stop`). Clears state; returns the created entry. */
   stop: () => Promise<{ ok: boolean; timeEntry?: StoppedTimeEntry }>;
   /** Discard (`DELETE .../timer`) — no entry created. Clears state. */
@@ -141,7 +166,13 @@ export function RunningTimerProvider({ children }: { children: ReactNode }) {
           return { ok: true };
         }
         const err = await response.json().catch(() => null);
-        return { ok: false, conflict: response.status === 409, message: err?.message };
+        return {
+          ok: false,
+          conflict: response.status === 409,
+          message: err?.message,
+          errorCode: err?.error ?? null,
+          errors: (err?.errors ?? null) as Record<string, string> | null,
+        };
       } catch {
         return { ok: false };
       }

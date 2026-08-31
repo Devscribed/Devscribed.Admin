@@ -99,7 +99,10 @@ export default function TimeTrackingPage({ params }: { params: Promise<{ orgId: 
         );
         if (!response.ok) return;
         const data = (await response.json()) as ProjectsResponse;
-        if (!cancelled) setProjects(data.projects.map((p) => ({ id: p.id, name: p.name })));
+        if (!cancelled)
+          setProjects(
+            data.projects.map((p) => ({ id: p.id, name: p.name, key: p.key ?? null })),
+          );
       } catch {
         // A failed project fetch leaves the selectors with just "— No project —".
       }
@@ -228,7 +231,7 @@ export default function TimeTrackingPage({ params }: { params: Promise<{ orgId: 
     <div data-testid="tt-page">
       <PageHeader title="Time Tracking" />
 
-      <TimerBar projects={projects} onAddEntry={openCreate} onChanged={() => void load()} />
+      <TimerBar orgId={orgId} projects={projects} onAddEntry={openCreate} onChanged={() => void load()} />
 
       {/* Toolbar: member filter + view toggle (left), period nav (right). */}
       <div
