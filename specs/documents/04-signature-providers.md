@@ -609,10 +609,27 @@ unchanged.
     The poll deliberately does **not** assert the `page` or the coordinates it gets back. Those
     are our own arithmetic (requirement 14e), echoed; asserting them would prove only that the
     provider stored what we sent, which is the one thing an echo cannot fail to do.
-39. **Turn is read from `recipients[].status`, not inferred.** *Observed values:* `created`
-    before send, then `sent` for the recipient whose turn is open and `waiting` for the rest.
-    Convergence maps `waiting` → our `pending`, `sent` → `notified`, and takes `viewed`,
-    `signed` and `declined` at face value.
+39. **Turn is read from `recipients[].status`, not inferred** — and read in the provider's
+    vocabulary, which is not ours. **A recipient who has signed reads `completed`.** The word
+    `signed` does not appear in a recipient object at all, and `Completed` at document level
+    means something else entirely: the whole envelope is finished. The same word, two scopes.
+
+    | provider value | ours | observed |
+    |---|---|---|
+    | `created` | `pending` | before send |
+    | `waiting` | `pending` | a recipient whose turn has not opened |
+    | `sent` | `notified` | the recipient whose turn is open |
+    | `completed` | `signed` | a recipient who has signed |
+    | `viewed` | `viewed` | **not observed** — mapped because it costs nothing |
+    | `declined` | `declined` | **not observed** |
+
+    The last two columns are the requirement. An earlier draft listed `signed` here as though
+    it had been seen; it had not, because seeing it required a signature, and the mapping was
+    written from a document nobody had signed. Every future addition to this table says which
+    half it is: a value that came back from the API, or a value we expect (BUG-005).
+
+    A partially signed document reads `Pending` at document level — not `Sent` — and completion
+    is still the document's own claim, never a count of finished recipients.
 40. **Voiding is delete-then-settle.** The order is: call `DELETE`, then mark the envelope
     voided. There is **no re-read** — `204` is the confirmation, and requirements 41 and 42 say
     why asking again would be wrong: the document is gone, so a read can only produce the `404`
@@ -682,6 +699,8 @@ unchanged.
 | 34 | The provider's signing URL refuses to be framed | The adapter makes it embeddable before returning it; the raw `embedded_signing_url` is never framed. The double refuses framing the same way the provider does, or it hides this whole class: a stub that frames happily cannot fail the test it exists for. |
 | 35 | The frame never loads | The signer gets the error card and its retry, bounded by a timeout. A frame the browser refuses fires **no** `error` event — the refusal is handled before the element hears about it — so `onLoad` alone cannot tell "still arriving" from "will never arrive", and without a clock the signer waits forever on a page with no session and no support channel. |
 | 36 | A coordinate leaves in the wrong unit | Nothing detects it. The provider accepts any number, stores it, echoes it back unchanged, materializes the field and sends the document; the signature simply lands somewhere else on the page. The double echoes what it is given and so agrees with whatever we believe. `TC-04-INT-27` asserts the conversion, and it is the only automated thing that can fail when this breaks. |
+| 37 | The provider reports a recipient status we do not recognize | The recipient stays `pending`, so the envelope **stalls rather than advancing on a guess**, and the adapter logs an error naming the value and the document. A vocabulary we cannot read is a defect to be seen, never a state to be inferred — the silent `default` is what let a signed recipient converge to "nothing has happened to them yet". |
+| 38 | Every recipient reads signed and the document is not `Completed` | The envelope does not complete, and the adapter logs the document's status. Completion is the document's claim and the final PDF hangs off it, so a count of finished recipients is not a substitute. The log is what makes a second vocabulary drift visible within seconds. |
 
 ## Data Model
 
@@ -1686,6 +1705,19 @@ BUG-004's regression test.
 - **Steps:** 1. Convert the execution page's first row.
 - **Expected Result:** 1. `72 pt` is `96 px` and A4's `595.28 pt` is `793.71 px`. 2. The grid's first row `y` of `136.7` leaves as `182.27`. 3. Width and height scale with the origin: `240 × 36` becomes `320 × 48`.
 - **Implemented in:** `apps/api/test/signwell-embeddable.spec.ts`.
+
+### TC-04-INT-28: The second signer can sign once the first has completed
+
+BUG-005's regression test, and it ends on the signing surface deliberately: the row, the token,
+the mail and the `email_accepted` event were each asserted already, and all four passed while
+the signer met "It is not your turn to sign yet". A handover asserted anywhere short of the
+person it hands over to is not asserted.
+
+- **Level:** Integration
+- **Preconditions:** a sent two-signer SignWell envelope; a double reporting recipient 1 `completed` and recipient 2 `sent`; a stale `providerSyncedAt`.
+- **Steps:** 1. Read the envelope, so convergence runs. 2. `GET /api/sign/{token}` with the token from the invitation the second signer received.
+- **Expected Result:** 1. Signer 1's row is `signed`. 2. The second signer's link answers `200` with `surface: 'embedded'`. 3. Separately, the vocabulary itself: every observed value maps to what was observed, an unrecognized value is `pending` **and** reported, and `signed` — which no recipient object carries — is not accepted.
+- **Implemented in:** `apps/api/test/signwell-reconcile.spec.ts` and `apps/api/test/signwell-signer-status.spec.ts`.
 
 ### TC-04-E2E-01: An admin switches the organization to SignWell
 

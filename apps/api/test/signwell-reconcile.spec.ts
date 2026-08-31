@@ -16,6 +16,7 @@ import {
   publishTemplate,
   sendableEnvelope,
   signup,
+  tokenFromUrl,
 } from './envelope-fixtures';
 import {
   TestSignWellClient,
@@ -141,7 +142,7 @@ describe('SignWell reconciliation', () => {
       const eventsBefore = await prisma.envelopeEvent.count({ where: { envelopeId: envelope.id } });
 
       // Their queue drains a `document_signed` for a document we have already deleted.
-      remoteSays(providerRef, { recipientStatuses: { '1': 'signed' } });
+      remoteSays(providerRef, { recipientStatuses: { '1': 'completed' } });
       await deliver(
         signedDelivery('document_signed', providerRef, {
           relatedSignerEmail: 'company@acme.com',
@@ -163,7 +164,7 @@ describe('SignWell reconciliation', () => {
   describe('TC-04-INT-11: A missed webhook is converged lazily on read', () => {
     it('reads the provider, writes the signed event, and answers the converged status', async () => {
       const { admin, envelope, providerRef } = await sentEnvelope();
-      remoteSays(providerRef, { recipientStatuses: { '1': 'signed' } });
+      remoteSays(providerRef, { recipientStatuses: { '1': 'completed' } });
       await syncedAt(envelope.id, new Date(Date.now() - 2 * 60 * 60 * 1000));
 
       const detail = await read(admin, envelope.id).expect(200);
@@ -185,7 +186,7 @@ describe('SignWell reconciliation', () => {
      */
     it("opens the next signer's turn and records email_accepted once SES took the message", async () => {
       const { admin, envelope, providerRef } = await sentEnvelope();
-      remoteSays(providerRef, { recipientStatuses: { '1': 'signed', '2': 'sent' } });
+      remoteSays(providerRef, { recipientStatuses: { '1': 'completed', '2': 'sent' } });
       await syncedAt(envelope.id, new Date(Date.now() - 2 * 60 * 60 * 1000));
 
       await read(admin, envelope.id).expect(200);
@@ -223,7 +224,7 @@ describe('SignWell reconciliation', () => {
      */
     it('claims no acceptance when the transport rejects the invitation', async () => {
       const { admin, envelope, providerRef } = await sentEnvelope();
-      remoteSays(providerRef, { recipientStatuses: { '1': 'signed', '2': 'sent' } });
+      remoteSays(providerRef, { recipientStatuses: { '1': 'completed', '2': 'sent' } });
       await syncedAt(envelope.id, new Date(Date.now() - 2 * 60 * 60 * 1000));
 
       mail.failNextSend();
@@ -263,7 +264,7 @@ describe('SignWell reconciliation', () => {
   describe('TC-04-INT-12: A fresh envelope is not re-fetched on every read', () => {
     it('spends nothing on three reads inside the staleness window', async () => {
       const { admin, envelope, providerRef } = await sentEnvelope();
-      remoteSays(providerRef, { recipientStatuses: { '1': 'signed' } });
+      remoteSays(providerRef, { recipientStatuses: { '1': 'completed' } });
       await syncedAt(envelope.id, new Date(Date.now() - 5_000));
 
       signwell.calls.length = 0;
@@ -274,6 +275,38 @@ describe('SignWell reconciliation', () => {
 
       // The 20-per-minute test budget is not spent on reads.
       expect(signwell.calls).toEqual([]);
+    });
+  });
+  /**
+   * The whole point of opening a turn: the person whose turn it is can use their link.
+   * Every part of the handover was asserted before this — the row, the token, the mail —
+   * and the signer still met "It is not your turn to sign yet", because whose turn it is
+   * is decided from **our** signer rows and nothing had closed the first signer's
+   * (BUG-005). The case therefore ends where the signer does, on the signing surface.
+   */
+  describe('TC-04-INT-28: the second signer can sign once the first has completed', () => {
+    it('closes the first turn and lets the second link through', async () => {
+      const { admin, envelope, providerRef } = await sentEnvelope();
+      remoteSays(providerRef, { recipientStatuses: { '1': 'completed', '2': 'sent' } });
+      await syncedAt(envelope.id, new Date(Date.now() - 2 * 60 * 60 * 1000));
+
+      await read(admin, envelope.id).expect(200);
+      await queue.whenIdle();
+
+      // The first signer's turn is closed, which is what makes the second one current.
+      const first = await prisma.envelopeSigner.findFirstOrThrow({
+        where: { envelopeId: envelope.id, order: 1 },
+      });
+      expect(first.status).toBe('signed');
+
+      const invitation = mail.lastFor('alex@example.com', 'signing_invitation');
+      expect(invitation).toBeDefined();
+
+      const surface = await request(app.getHttpServer())
+        .get(`/api/sign/${tokenFromUrl(invitation!.signingUrl)}`)
+        .expect(200);
+      expect(surface.body.surface).toBe('embedded');
+      expect(surface.body.embeddedSigningUrl).toContain('signwell_embedded_iframe=1');
     });
   });
 });

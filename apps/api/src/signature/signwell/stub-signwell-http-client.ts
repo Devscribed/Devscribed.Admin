@@ -67,10 +67,14 @@ export class StubSignWellHttpClient extends SignWellHttpClient {
       status: 'Completed',
       completed_at: now,
       updated_at: now,
+      // `completed` is the provider's word for a recipient who has signed — it says
+      // nothing about the document, whose own `Completed` is set above. A stub that said
+      // `signed` here would speak a vocabulary the API does not have, which is how the
+      // real one went unmapped (BUG-005). No `signed_at` either: a completed recipient
+      // carries no timestamp of its own.
       recipients: (document.recipients ?? []).map((recipient) => ({
         ...recipient,
-        status: 'signed',
-        signed_at: now,
+        status: 'completed',
       })),
     });
     return true;

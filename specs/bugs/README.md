@@ -35,6 +35,7 @@ more than the diagnosis.
 | [002](BUG-002-email-validation-looser-than-the-provider.md) | A signer address we accept, the provider refuses | major | api | `SPEC-GAP` | documents/04 | TC-04-INT-23 | fixed, not committed |
 | [003](BUG-003-embedded-signing-url-refuses-framing.md) | The embedded signing URL refuses to be framed | blocker | ui | `SPEC-GAP` | documents/04 | TC-04-INT-26 | fixed, not committed |
 | [004](BUG-004-field-geometry-sent-in-points-not-provider-pixels.md) | Field geometry sent in points, placed in pixels | blocker | api | `SPEC-GAP` | documents/04 | TC-04-INT-27 | fixed, not committed |
+| [005](BUG-005-recipient-completed-not-signed.md) | A signed recipient reads `completed`, so the turn never closes | blocker | api | `SPEC-DEFECT` | documents/04 | TC-04-INT-28 | fixed, not committed |
 
 ## These were found and fixed by hand
 

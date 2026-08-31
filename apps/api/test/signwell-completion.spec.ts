@@ -91,7 +91,7 @@ describe('SignWell completion', () => {
   const remoteCompleted = (providerRef: string) =>
     remoteSays(providerRef, {
       status: 'Completed',
-      recipientStatuses: { '1': 'signed', '2': 'signed' },
+      recipientStatuses: { '1': 'completed', '2': 'completed' },
       completedAt: new Date().toISOString(),
     });
 

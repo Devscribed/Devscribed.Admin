@@ -260,8 +260,9 @@ Recorded deliberately, each with the reason it is acceptable for this release:
 
 ## Open bug investigations
 
-Both are follow-ups the spec owes before spec 04's SignWell path can work, per
-[specs/bugs](../bugs/README.md):
+All are follow-ups the spec owes before spec 04's SignWell path can work, per
+[specs/bugs](../bugs/README.md). Every one of them is a place where the spec states something
+about SignWell that SignWell does not do:
 
 - **[BUG-001](../bugs/BUG-001-signwell-text-tags-materialize-no-fields.md)** — `SPEC-DEFECT`.
   Requirement 13's recorded observation does not reproduce: SignWell materializes no fields
@@ -277,3 +278,8 @@ Both are follow-ups the spec owes before spec 04's SignWell path can work, per
 - **[BUG-002](../bugs/BUG-002-email-validation-looser-than-the-provider.md)** — `SPEC-GAP`.
   Two edge cases missing: a signer address the provider will not accept, and a provider `4xx`
   reported to the sender as an outage.
+- **[BUG-005](../bugs/BUG-005-recipient-completed-not-signed.md)** — `SPEC-DEFECT`.
+  Requirement 39's status table listed `signed`, a word no recipient object carries; a
+  recipient who has signed reads `completed`. The turn never closed, so the second signer was
+  invited and then refused. The requirement now marks which values were observed and which
+  are expected.

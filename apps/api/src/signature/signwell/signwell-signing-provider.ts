@@ -664,16 +664,44 @@ export class SignWellSigningProvider
       (recipient) => ({
         providerRef: recipient.id ?? "",
         email: (recipient.email ?? "").trim().toLowerCase(),
-        status: normalizeSignerStatus(recipient.status),
+        status: normalizeSignerStatus(recipient.status, (unknown) =>
+          this.log.error(
+            `SignWell reported recipient status ${JSON.stringify(unknown)} on document ` +
+              `${providerRef}, which this adapter does not know. The recipient is treated ` +
+              "as pending, so their turn will not advance until the mapping is corrected.",
+          ),
+        ),
+        // Not in the payload: a recipient object carries no `signed_at`, `declined_at` or
+        // `decline_reason`, verified on a document with one completed recipient. These
+        // read `null` in production and the reconciler dates the row from the convergence
+        // instead. The optional reads stay because the fields cost nothing and their
+        // absence is not documented.
         signedAt: parseDate(recipient.signed_at),
         declinedAt: parseDate(recipient.declined_at),
         declineReason: recipient.decline_reason ?? null,
       }),
     );
 
+    const status = envelopeStatusFrom(document, signers);
+    if (
+      status !== "completed" &&
+      signers.length > 0 &&
+      signers.every((signer) => signer.status === "signed")
+    ) {
+      // Every recipient is done and the document still is not `Completed`. Either the
+      // provider needs a moment to finalize, or its document vocabulary has moved the way
+      // its recipient vocabulary did. The next convergence settles it; this line is what
+      // makes the second case visible instead of silent.
+      this.log.warn(
+        `Every recipient of SignWell document ${providerRef} reads signed, but the ` +
+          `document status is ${JSON.stringify(document.status ?? "")} rather than ` +
+          "Completed; the envelope will not complete until it changes.",
+      );
+    }
+
     return {
       exists: true,
-      status: envelopeStatusFrom(document, signers),
+      status,
       // Kept verbatim for support, never used for logic.
       providerStatus: document.status ?? "",
       signers,
@@ -739,24 +767,41 @@ function describeBox(box: SignWellFieldBox): string {
   return `${box.kind}:${box.ref}`;
 }
 
-/** Requirement 39 — turn is read from `recipients[].status`, never inferred. */
+/**
+ * Requirement 39 — turn is read from `recipients[].status`, never inferred.
+ *
+ * **A recipient who has signed reads `completed`, not `signed`.** The word `signed`
+ * appears nowhere in a recipient object; at document level `Completed` means the whole
+ * envelope is finished, and at recipient level `completed` means only that this one
+ * person is done. The same word, two scopes, and reading it at the wrong one leaves a
+ * signature invisible to us — see BUG-005.
+ *
+ * Anything unrecognized is `pending`, which stalls the envelope rather than advancing it
+ * wrongly, and says so in the log: a vocabulary we do not know is a defect to be seen,
+ * not a state to be guessed.
+ */
 export function normalizeSignerStatus(
   status: string | null | undefined,
+  onUnknown?: (status: string) => void,
 ): ProviderSignerStatus {
-  switch ((status ?? "").toLowerCase()) {
+  const value = (status ?? "").trim().toLowerCase();
+  switch (value) {
+    // `created` before send, `waiting` for a recipient whose turn has not opened, and
+    // `null`/absent in a stale webhook body — all "nothing has happened to them yet".
+    case "":
+    case "created":
     case "waiting":
       return "pending";
     case "sent":
       return "notified";
     case "viewed":
       return "viewed";
-    case "signed":
+    case "completed":
       return "signed";
     case "declined":
       return "declined";
-    // `created` before send, and `null` in a stale webhook body — both are "nothing has
-    // happened to this recipient yet".
     default:
+      onUnknown?.(value);
       return "pending";
   }
 }

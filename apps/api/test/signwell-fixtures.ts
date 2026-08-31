@@ -166,9 +166,12 @@ export function signWellDocument(
       name: recipient.name,
       email: recipient.email,
       signing_order: recipient.signing_order,
+      // The provider's vocabulary, not ours: `completed` is a recipient who has signed.
       status: statuses[recipient.id] ?? (index === 0 ? 'sent' : 'waiting'),
       embedded_signing_url: `https://www.signwell.com/docs/${id}-${recipient.id}/`,
-      signed_at: statuses[recipient.id] === 'signed' ? now : null,
+      // A completed recipient carries no timestamp in the real payload, so neither does
+      // this one; the reconciler dates the row from the convergence.
+      signed_at: null,
       declined_at: statuses[recipient.id] === 'declined' ? now : null,
       decline_reason: null,
     })),

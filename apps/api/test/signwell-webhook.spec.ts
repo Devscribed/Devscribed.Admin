@@ -163,7 +163,7 @@ describe('SignWell webhook', () => {
   describe('TC-04-INT-05: Redelivery is idempotent', () => {
     it('writes one row, one event, and leaves the chain verifiable', async () => {
       const { admin, envelope, providerRef } = await sentEnvelope();
-      remoteSays(providerRef, { recipientStatuses: { '1': 'signed' } });
+      remoteSays(providerRef, { recipientStatuses: { '1': 'completed' } });
 
       const delivery = signedDelivery('document_signed', providerRef, {
         relatedSignerEmail: 'company@acme.com',
