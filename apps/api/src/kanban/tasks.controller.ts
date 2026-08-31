@@ -47,6 +47,19 @@ export class TasksController {
     return this.tasks.listTasks(req.session!, projectId, query);
   }
 
+  /**
+   * Spec 15 — `GET .../projects/:projectId/tasks/search?q=…`. Must be declared before
+   * the `:taskId` route below so Nest doesn't shadow it with the taskId pattern.
+   */
+  @Get('projects/:projectId/tasks/search')
+  async search(
+    @Req() req: AuthenticatedRequest,
+    @Param('projectId') projectId: string,
+    @Query('q') q?: string,
+  ) {
+    return this.tasks.searchTasks(req.session!, projectId, q);
+  }
+
   @Get('projects/:projectId/tasks/:taskId')
   async detail(
     @Req() req: AuthenticatedRequest,

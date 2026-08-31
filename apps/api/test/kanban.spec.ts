@@ -1,6 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { KANBAN_MESSAGES } from '@devscribed/validation';
+import { KANBAN_MESSAGES, TIME_TRACKING_MESSAGES } from '@devscribed/validation';
 import * as bcrypt from 'bcryptjs';
 import cookieParser from 'cookie-parser';
 import { randomUUID } from 'crypto';
@@ -223,6 +223,13 @@ describe('Kanban board & tasks (spec 13)', () => {
   beforeEach(async () => {
     // Cascade takes care of most; explicit deletes for the spec-13 tables + everything the
     // account/org cleanup would otherwise dangle.
+    await prisma.runningTimer.deleteMany();
+    await prisma.timeEntry.deleteMany();
+    await prisma.taskActivity.deleteMany();
+    await prisma.taskWatcher.deleteMany();
+    await prisma.taskComment.deleteMany();
+    await prisma.taskLabelAssignment.deleteMany();
+    await prisma.taskLabel.deleteMany();
     await prisma.task.deleteMany();
     await prisma.boardColumn.deleteMany();
     await prisma.projectMember.deleteMany();
@@ -1500,5 +1507,218 @@ describe('Kanban board & tasks (spec 13)', () => {
     const res = await getBoard(admin, project.id);
     expect(res.body.columns[0].taskCount).toBe(3);
     expect(res.body.columns[1].taskCount).toBe(1);
+  });
+
+  // ────────────────────────────────────────────────────────────────────
+  // Spec 15 — Task Detail (timeLogged*) + Task Search endpoint
+  // ────────────────────────────────────────────────────────────────────
+
+  describe('spec 15 — task detail time logged', () => {
+    const seedEntry = async (
+      admin: Signed,
+      opts: {
+        projectId: string;
+        membershipId: string;
+        taskId?: string | null;
+        durationMinutes: number;
+        date?: Date;
+      },
+    ) =>
+      prisma.timeEntry.create({
+        data: {
+          organizationId: admin.organizationId,
+          membershipId: opts.membershipId,
+          projectId: opts.projectId,
+          taskId: opts.taskId ?? null,
+          durationMinutes: opts.durationMinutes,
+          date: opts.date ?? new Date('2026-08-27T00:00:00Z'),
+          createdByAccountId: admin.accountId,
+        },
+      });
+
+    it('TC-15-INT-22: timeLoggedMinutes aggregates across visible entries', async () => {
+      const admin = await signupAdmin();
+      const project = await createProject(admin, { key: 'MOB' });
+      await getBoard(admin, project.id);
+      const t = await createTask(admin, project.id, { type: 'task', title: 'Aggregation' });
+      await seedEntry(admin, { projectId: project.id, membershipId: admin.membershipId, taskId: t.body.id, durationMinutes: 60 });
+      await seedEntry(admin, { projectId: project.id, membershipId: admin.membershipId, taskId: t.body.id, durationMinutes: 90 });
+      await seedEntry(admin, { projectId: project.id, membershipId: admin.membershipId, taskId: t.body.id, durationMinutes: 45 });
+
+      const res = await getTask(admin, project.id, t.body.id);
+      expect(res.status).toBe(200);
+      expect(res.body.timeLoggedMinutes).toBe(195);
+    });
+
+    it('TC-15-INT-23: recentTimeEntries is capped at 10, sorted date desc', async () => {
+      const admin = await signupAdmin();
+      const project = await createProject(admin, { key: 'MOB' });
+      await getBoard(admin, project.id);
+      const t = await createTask(admin, project.id, { type: 'task', title: 'Cap' });
+      for (let i = 1; i <= 15; i++) {
+        await seedEntry(admin, {
+          projectId: project.id,
+          membershipId: admin.membershipId,
+          taskId: t.body.id,
+          durationMinutes: 30,
+          date: new Date(`2026-08-${String(i).padStart(2, '0')}T00:00:00Z`),
+        });
+      }
+      const res = await getTask(admin, project.id, t.body.id);
+      expect(res.body.recentTimeEntries).toHaveLength(10);
+      const dates = res.body.recentTimeEntries.map((e: any) => e.date);
+      const sorted = [...dates].sort().reverse();
+      expect(dates).toEqual(sorted);
+    });
+
+    it('TC-15-INT-24: user role sees only own entries in aggregate', async () => {
+      const admin = await signupAdmin();
+      const project = await createProject(admin, { key: 'MOB' });
+      await getBoard(admin, project.id);
+      const t = await createTask(admin, project.id, { type: 'task', title: 'Own only' });
+      const u1 = await createMember(admin.organizationId, { role: 'user' });
+      const u2 = await createMember(admin.organizationId, { role: 'user' });
+      await assignToProject(project.id, u1.membershipId, admin.accountId);
+      await assignToProject(project.id, u2.membershipId, admin.accountId);
+      await seedEntry(admin, { projectId: project.id, membershipId: u1.membershipId, taskId: t.body.id, durationMinutes: 60 });
+      await seedEntry(admin, { projectId: project.id, membershipId: u2.membershipId, taskId: t.body.id, durationMinutes: 90 });
+
+      const res = await getTask(u1, project.id, t.body.id);
+      expect(res.status).toBe(200);
+      expect(res.body.timeLoggedMinutes).toBe(60);
+      expect(res.body.recentTimeEntries).toHaveLength(1);
+      expect(res.body.recentTimeEntries[0].membershipId).toBe(u1.membershipId);
+    });
+
+    it('TC-15-INT-25: admin sees all members\' entries in aggregate', async () => {
+      const admin = await signupAdmin();
+      const project = await createProject(admin, { key: 'MOB' });
+      await getBoard(admin, project.id);
+      const t = await createTask(admin, project.id, { type: 'task', title: 'Admin view' });
+      const u1 = await createMember(admin.organizationId, { role: 'user', firstName: 'Alex', lastName: 'K' });
+      const u2 = await createMember(admin.organizationId, { role: 'user', firstName: 'Jane', lastName: 'D' });
+      await seedEntry(admin, { projectId: project.id, membershipId: u1.membershipId, taskId: t.body.id, durationMinutes: 60 });
+      await seedEntry(admin, { projectId: project.id, membershipId: u2.membershipId, taskId: t.body.id, durationMinutes: 90 });
+
+      const res = await getTask(admin, project.id, t.body.id);
+      expect(res.status).toBe(200);
+      expect(res.body.timeLoggedMinutes).toBe(150);
+      expect(res.body.recentTimeEntries).toHaveLength(2);
+      const names = new Set(res.body.recentTimeEntries.map((e: any) => e.memberName));
+      expect(names).toEqual(new Set(['Alex K', 'Jane D']));
+    });
+
+    it('TC-15-INT-26: empty state — no entries', async () => {
+      const admin = await signupAdmin();
+      const project = await createProject(admin, { key: 'MOB' });
+      await getBoard(admin, project.id);
+      const t = await createTask(admin, project.id, { type: 'task', title: 'Empty' });
+
+      const res = await getTask(admin, project.id, t.body.id);
+      expect(res.body.timeLoggedMinutes).toBe(0);
+      expect(res.body.recentTimeEntries).toEqual([]);
+    });
+  });
+
+  describe('spec 15 — task search', () => {
+    const searchTasks = (s: Signed, projectId: string, q?: string) =>
+      request(server())
+        .get(
+          `/api/organizations/${s.organizationId}/projects/${projectId}/tasks/search${q === undefined ? '' : `?q=${encodeURIComponent(q)}`}`,
+        )
+        .set('Cookie', s.cookies);
+
+    it('TC-15-INT-27: matches by key prefix (MOB-1 → MOB-1, MOB-15)', async () => {
+      const admin = await signupAdmin();
+      const project = await createProject(admin, { key: 'MOB' });
+      await getBoard(admin, project.id);
+      await createTask(admin, project.id, { type: 'task', title: 'One' });
+      await createTask(admin, project.id, { type: 'task', title: 'Two' });
+      // Bump next task number to 15 for the third task.
+      await prisma.project.update({ where: { id: project.id }, data: { nextTaskNumber: 15 } });
+      await createTask(admin, project.id, { type: 'task', title: 'Fifteen' });
+
+      const res = await searchTasks(admin, project.id, 'MOB-1');
+      expect(res.status).toBe(200);
+      const keys = res.body.tasks.map((t: any) => t.key);
+      expect(keys).toContain('MOB-1');
+      expect(keys).toContain('MOB-15');
+      expect(keys).not.toContain('MOB-2');
+      // Exact match ranks first.
+      expect(keys[0]).toBe('MOB-1');
+    });
+
+    it('TC-15-INT-28: matches by title substring, case-insensitive', async () => {
+      const admin = await signupAdmin();
+      const project = await createProject(admin, { key: 'MOB' });
+      await getBoard(admin, project.id);
+      await createTask(admin, project.id, { type: 'task', title: 'Fix login bug' });
+
+      const res = await searchTasks(admin, project.id, 'LOGIN');
+      expect(res.status).toBe(200);
+      expect(res.body.tasks).toHaveLength(1);
+      expect(res.body.tasks[0].title).toBe('Fix login bug');
+    });
+
+    it('TC-15-INT-29: empty query returns up to 20 most-recent tasks', async () => {
+      const admin = await signupAdmin();
+      const project = await createProject(admin, { key: 'MOB' });
+      await getBoard(admin, project.id);
+      for (let i = 0; i < 5; i++) {
+        await createTask(admin, project.id, { type: 'task', title: `T${i}` });
+      }
+
+      const res = await searchTasks(admin, project.id);
+      expect(res.status).toBe(200);
+      expect(res.body.tasks).toHaveLength(5);
+    });
+
+    it('TC-15-INT-30: caps results at 20', async () => {
+      const admin = await signupAdmin();
+      const project = await createProject(admin, { key: 'MOB' });
+      await getBoard(admin, project.id);
+      for (let i = 0; i < 30; i++) {
+        await createTask(admin, project.id, { type: 'task', title: `Task number ${i}` });
+      }
+      const res = await searchTasks(admin, project.id, 'task');
+      expect(res.status).toBe(200);
+      expect(res.body.tasks).toHaveLength(20);
+    });
+
+    it('TC-15-INT-31: project without key returns 400 project_key_required', async () => {
+      const admin = await signupAdmin();
+      const project = await createProject(admin, { key: null });
+      const res = await searchTasks(admin, project.id, 'x');
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({
+        error: 'project_key_required',
+        message: TIME_TRACKING_MESSAGES.searchProjectKeyRequired,
+      });
+    });
+
+    it('TC-15-INT-32: user role not a project member returns 403', async () => {
+      const admin = await signupAdmin();
+      const project = await createProject(admin, { key: 'MOB' });
+      const u = await createMember(admin.organizationId, { role: 'user' });
+      const res = await searchTasks(u, project.id, 'x');
+      expect(res.status).toBe(403);
+    });
+
+    it('TC-15-INT-33: viewer role returns 403', async () => {
+      const admin = await signupAdmin();
+      const project = await createProject(admin, { key: 'MOB' });
+      const v = await createMember(admin.organizationId, { role: 'viewer' });
+      const res = await searchTasks(v, project.id, 'x');
+      expect(res.status).toBe(403);
+    });
+
+    it('TC-15-INT-34: cross-org project returns 404', async () => {
+      const adminA = await signupAdmin();
+      const adminB = await signupAdmin();
+      const projectB = await createProject(adminB, { key: 'MOB' });
+
+      const res = await searchTasks(adminA, projectB.id, 'x');
+      expect(res.status).toBe(404);
+    });
   });
 });

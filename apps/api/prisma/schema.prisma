@@ -733,6 +733,9 @@ model Task {
   comments TaskComment[]
   watchers TaskWatcher[]
   activity TaskActivity[]
+  /// Spec 15 — back-relations for TimeEntry.taskRef / RunningTimer.taskRef.
+  timeEntries   TimeEntry[]    @relation("TimeEntryTask")
+  runningTimers RunningTimer[] @relation("RunningTimerTask")
 
   @@unique([projectId, taskNumber])
   @@index([projectId, columnId])
@@ -795,9 +798,18 @@ model TimeEntry {
   project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
   createdBy    Account      @relation("TimeEntryCreatedBy", fields: [createdByAccountId], references: [id])
 
+  /// Spec 15 — optional link to the task this entry was logged against. When set, the
+  /// free-text `task` column carries a snapshot of the task's key + title at write time
+  /// (FR-2/FR-3). onDelete: SetNull so hard-deleting the task un-links entries without
+  /// altering the historical `task` label (FR-8). Relation field is named `taskRef`
+  /// because the scalar `task` (free-text label) is already taken on this model.
+  taskId       String?
+  taskRef      Task?        @relation("TimeEntryTask", fields: [taskId], references: [id], onDelete: SetNull)
+
   @@index([membershipId, date])
   @@index([organizationId, date])
   @@index([projectId])
+  @@index([taskId])
 }
 
 /// A member's single in-progress timer (spec 12). At most ONE per member — enforced by the
@@ -818,7 +830,15 @@ model RunningTimer {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
+  /// Spec 15 — optional link to the task this timer is running against. Carried into the
+  /// created TimeEntry on stop (FR-9); onDelete: SetNull so a task deletion mid-run
+  /// leaves the timer running with taskId cleared (FR-8 / TC-15-INT-20). Relation field
+  /// is `taskRef` because the scalar `task` (free-text label) is already taken here too.
+  taskId       String?
+  taskRef      Task?        @relation("RunningTimerTask", fields: [taskId], references: [id], onDelete: SetNull)
+
   @@index([organizationId])
+  @@index([taskId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

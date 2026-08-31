@@ -176,6 +176,13 @@ describe('Time Tracking (spec 12)', () => {
   beforeEach(async () => {
     await prisma.runningTimer.deleteMany();
     await prisma.timeEntry.deleteMany();
+    await prisma.taskActivity.deleteMany();
+    await prisma.taskWatcher.deleteMany();
+    await prisma.taskComment.deleteMany();
+    await prisma.taskLabelAssignment.deleteMany();
+    await prisma.taskLabel.deleteMany();
+    await prisma.task.deleteMany();
+    await prisma.boardColumn.deleteMany();
     await prisma.projectMember.deleteMany();
     await prisma.project.deleteMany();
     await prisma.vacationRequest.deleteMany();
@@ -832,5 +839,409 @@ describe('Time Tracking (spec 12)', () => {
       task: 'UTC morning',
     });
     expect(new Date(utcRes.body.startTime as string).toISOString().slice(11, 16)).toBe('09:00');
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Spec 15 — Time Tracking ↔ Tasks Integration
+  // ────────────────────────────────────────────────────────────────────────
+
+  describe('spec 15 — task linkage', () => {
+    /** Helper — create a project with a key + one default column + one task. */
+    const seedProjectWithTask = async (
+      admin: Signed,
+      opts: { projectName?: string; key?: string; title?: string } = {},
+    ) => {
+      const projectId = await createProject(admin.cookies, admin.organizationId, opts.projectName ?? `P-${Date.now()}-${Math.random()}`);
+      await prisma.project.update({
+        where: { id: projectId },
+        data: { key: opts.key ?? 'MOB' },
+      });
+      const column = await prisma.boardColumn.create({
+        data: { projectId, name: 'To Do', position: 0, category: 'todo' },
+      });
+      const task = await prisma.task.create({
+        data: {
+          projectId,
+          taskNumber: 5,
+          type: 'task',
+          title: opts.title ?? 'Fix login bug',
+          columnId: column.id,
+          position: 1024,
+          reporterId: admin.membershipId,
+        },
+      });
+      return { projectId, columnId: column.id, task };
+    };
+
+    it('TC-15-INT-01: starts a timer with taskId (happy path) and returns taskKey/label', async () => {
+      const admin = await signupAdmin('s15-01@acme.com', 'S15');
+      const user = await createMember(admin.organizationId, { email: 's15-01u@acme.com', role: 'user' });
+      const { projectId, task } = await seedProjectWithTask(admin);
+      await assignMember(admin.cookies, admin.organizationId, projectId, user.membershipId);
+
+      const res = await startTimer(user.cookies, admin.organizationId, {
+        projectId,
+        taskId: task.id,
+      });
+      expect(res.status).toBe(201);
+      expect(res.body).toMatchObject({
+        projectId,
+        taskId: task.id,
+        taskKey: 'MOB-5',
+        task: 'MOB-5: Fix login bug',
+      });
+    });
+
+    it('TC-15-INT-02: rejects taskId without projectId with 400 task_requires_project', async () => {
+      const admin = await signupAdmin('s15-02@acme.com', 'S15');
+      const { task } = await seedProjectWithTask(admin);
+
+      const res = await startTimer(admin.cookies, admin.organizationId, { taskId: task.id });
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({
+        error: 'task_requires_project',
+        message: TIME_TRACKING_MESSAGES.taskRequiresProject,
+      });
+    });
+
+    it('TC-15-INT-03: rejects taskId from a different project with 400 task_wrong_project', async () => {
+      const admin = await signupAdmin('s15-03@acme.com', 'S15');
+      const { task: t1 } = await seedProjectWithTask(admin, { projectName: 'Alpha', key: 'ALP' });
+      const p2Id = await createProject(admin.cookies, admin.organizationId, 'Beta');
+      await prisma.project.update({ where: { id: p2Id }, data: { key: 'BET' } });
+
+      const res = await startTimer(admin.cookies, admin.organizationId, {
+        projectId: p2Id,
+        taskId: t1.id,
+      });
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({
+        error: 'task_wrong_project',
+        message: TIME_TRACKING_MESSAGES.taskWrongProject,
+      });
+    });
+
+    it('TC-15-INT-04: unknown taskId returns 400 task_not_found', async () => {
+      const admin = await signupAdmin('s15-04@acme.com', 'S15');
+      const { projectId } = await seedProjectWithTask(admin);
+
+      const res = await startTimer(admin.cookies, admin.organizationId, {
+        projectId,
+        taskId: '00000000-0000-0000-0000-000000000000',
+      });
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({
+        error: 'task_not_found',
+        message: TIME_TRACKING_MESSAGES.taskLinkNotFound,
+      });
+    });
+
+    it('TC-15-INT-05: cross-org taskId returns 400 task_not_found (no existence leak)', async () => {
+      const adminA = await signupAdmin('s15-05a@acme.com', 'Acme A');
+      const adminB = await signupAdmin('s15-05b@beta.com', 'Beta B');
+      const { task: taskB } = await seedProjectWithTask(adminB);
+      const aProjectId = await createProject(adminA.cookies, adminA.organizationId, 'A-P');
+      await prisma.project.update({ where: { id: aProjectId }, data: { key: 'AAA' } });
+
+      const res = await startTimer(adminA.cookies, adminA.organizationId, {
+        projectId: aProjectId,
+        taskId: taskB.id,
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('task_not_found');
+    });
+
+    it('TC-15-INT-06: user role linking a task in unassigned project → 403 task_project_not_assigned', async () => {
+      const admin = await signupAdmin('s15-06@acme.com', 'S15');
+      const user = await createMember(admin.organizationId, { email: 's15-06u@acme.com', role: 'user' });
+      const { projectId, task } = await seedProjectWithTask(admin);
+      // Do NOT assign the user to the project.
+
+      const res = await startTimer(user.cookies, admin.organizationId, {
+        projectId,
+        taskId: task.id,
+      });
+      expect(res.status).toBe(403);
+      expect(res.body).toEqual({
+        error: 'task_project_not_assigned',
+        message: TIME_TRACKING_MESSAGES.taskProjectNotAssigned,
+      });
+    });
+
+    it('TC-15-INT-07: admin without ProjectMember can still link a task (bypass)', async () => {
+      const admin = await signupAdmin('s15-07@acme.com', 'S15');
+      const { projectId, task } = await seedProjectWithTask(admin);
+      // Admin has no explicit ProjectMember row — should still succeed.
+
+      const res = await startTimer(admin.cookies, admin.organizationId, {
+        projectId,
+        taskId: task.id,
+      });
+      expect(res.status).toBe(201);
+      expect(res.body.taskId).toBe(task.id);
+    });
+
+    it('TC-15-INT-08: client-supplied task text is ignored when taskId is set (FR-2 overwrite)', async () => {
+      const admin = await signupAdmin('s15-08@acme.com', 'S15');
+      const { projectId, task } = await seedProjectWithTask(admin);
+
+      const res = await startTimer(admin.cookies, admin.organizationId, {
+        projectId,
+        taskId: task.id,
+        task: 'client-spoofed text',
+      });
+      expect(res.status).toBe(201);
+      expect(res.body.task).toBe('MOB-5: Fix login bug');
+    });
+
+    it('TC-15-INT-09: stop timer carries taskId + label into the created TimeEntry', async () => {
+      const admin = await signupAdmin('s15-09@acme.com', 'S15');
+      const { projectId, task } = await seedProjectWithTask(admin);
+
+      await startTimer(admin.cookies, admin.organizationId, { projectId, taskId: task.id });
+      await prisma.runningTimer.update({
+        where: { membershipId: admin.membershipId },
+        data: { startedAt: new Date(Date.now() - 5 * 60000) },
+      });
+      const stop = await stopTimer(admin.cookies, admin.organizationId);
+      expect(stop.status).toBe(200);
+      expect(stop.body.timeEntry).toMatchObject({
+        taskId: task.id,
+        taskKey: 'MOB-5',
+        task: 'MOB-5: Fix login bug',
+      });
+    });
+
+    it('TC-15-INT-10: stop timer recomputes task label if the task title changed while running', async () => {
+      const admin = await signupAdmin('s15-10@acme.com', 'S15');
+      const { projectId, task } = await seedProjectWithTask(admin);
+
+      await startTimer(admin.cookies, admin.organizationId, { projectId, taskId: task.id });
+      await prisma.runningTimer.update({
+        where: { membershipId: admin.membershipId },
+        data: { startedAt: new Date(Date.now() - 5 * 60000) },
+      });
+      // Mutate the task's title AFTER the timer was started.
+      await prisma.task.update({ where: { id: task.id }, data: { title: 'Fix login bug (v2)' } });
+
+      const stop = await stopTimer(admin.cookies, admin.organizationId);
+      expect(stop.status).toBe(200);
+      expect(stop.body.timeEntry.task).toBe('MOB-5: Fix login bug (v2)');
+    });
+
+    it('TC-15-INT-11: PUT /timer sets taskId while running; startedAt unchanged', async () => {
+      const admin = await signupAdmin('s15-11@acme.com', 'S15');
+      const { projectId, task } = await seedProjectWithTask(admin);
+
+      const start = await startTimer(admin.cookies, admin.organizationId, { projectId });
+      const startedAt = start.body.startedAt;
+
+      const put = await putTimer(admin.cookies, admin.organizationId, {
+        projectId,
+        taskId: task.id,
+      });
+      expect(put.status).toBe(200);
+      expect(put.body).toMatchObject({
+        taskId: task.id,
+        task: 'MOB-5: Fix login bug',
+        startedAt,
+      });
+    });
+
+    it('TC-15-INT-12: PUT /timer with taskId: null clears link but preserves task text', async () => {
+      const admin = await signupAdmin('s15-12@acme.com', 'S15');
+      const { projectId, task } = await seedProjectWithTask(admin);
+
+      await startTimer(admin.cookies, admin.organizationId, { projectId, taskId: task.id });
+      const put = await putTimer(admin.cookies, admin.organizationId, { projectId, taskId: null });
+      expect(put.status).toBe(200);
+      expect(put.body.taskId).toBeNull();
+      expect(put.body.task).toBe('MOB-5: Fix login bug'); // preserved snapshot
+    });
+
+    it('TC-15-INT-13: create time entry with taskId (happy path)', async () => {
+      const admin = await signupAdmin('s15-13@acme.com', 'S15');
+      const { projectId, task } = await seedProjectWithTask(admin);
+
+      const res = await createEntry(admin.cookies, admin.organizationId, {
+        projectId,
+        taskId: task.id,
+        date: today(),
+        durationMinutes: 60,
+      });
+      expect(res.status).toBe(201);
+      expect(res.body).toMatchObject({
+        taskId: task.id,
+        taskKey: 'MOB-5',
+        task: 'MOB-5: Fix login bug',
+      });
+    });
+
+    it('TC-15-INT-14: create time entry with taskId but no projectId → 400 task_requires_project', async () => {
+      const admin = await signupAdmin('s15-14@acme.com', 'S15');
+      const { task } = await seedProjectWithTask(admin);
+      const res = await createEntry(admin.cookies, admin.organizationId, {
+        taskId: task.id,
+        date: today(),
+        durationMinutes: 60,
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('task_requires_project');
+    });
+
+    it('TC-15-INT-15: create time entry with wrong-project taskId → 400 task_wrong_project', async () => {
+      const admin = await signupAdmin('s15-15@acme.com', 'S15');
+      const { task: t1 } = await seedProjectWithTask(admin, { key: 'ALP' });
+      const p2Id = await createProject(admin.cookies, admin.organizationId, 'Beta');
+      await prisma.project.update({ where: { id: p2Id }, data: { key: 'BET' } });
+
+      const res = await createEntry(admin.cookies, admin.organizationId, {
+        projectId: p2Id,
+        taskId: t1.id,
+        date: today(),
+        durationMinutes: 60,
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('task_wrong_project');
+    });
+
+    it('TC-15-INT-16: PUT time entry sets taskId on existing free-text entry (client text discarded)', async () => {
+      const admin = await signupAdmin('s15-16@acme.com', 'S15');
+      const { projectId, task } = await seedProjectWithTask(admin);
+
+      const created = await createEntry(admin.cookies, admin.organizationId, {
+        date: today(),
+        durationMinutes: 60,
+        task: 'manual note',
+      });
+      const put = await updateEntry(admin.cookies, admin.organizationId, created.body.id, {
+        projectId,
+        taskId: task.id,
+        task: 'client spoof',
+        date: today(),
+        durationMinutes: 60,
+      });
+      expect(put.status).toBe(200);
+      expect(put.body).toMatchObject({
+        taskId: task.id,
+        task: 'MOB-5: Fix login bug',
+      });
+    });
+
+    it('TC-15-INT-17: PUT time entry with taskId: null clears link but preserves task text', async () => {
+      const admin = await signupAdmin('s15-17@acme.com', 'S15');
+      const { projectId, task } = await seedProjectWithTask(admin);
+
+      const created = await createEntry(admin.cookies, admin.organizationId, {
+        projectId,
+        taskId: task.id,
+        date: today(),
+        durationMinutes: 60,
+      });
+      const put = await updateEntry(admin.cookies, admin.organizationId, created.body.id, {
+        projectId,
+        taskId: null,
+        date: today(),
+        durationMinutes: 60,
+      });
+      expect(put.status).toBe(200);
+      expect(put.body.taskId).toBeNull();
+      expect(put.body.task).toBe('MOB-5: Fix login bug');
+    });
+
+    it('TC-15-INT-18: user without ManageAllTimeEntries cannot set taskId on another member\'s entry (403)', async () => {
+      const admin = await signupAdmin('s15-18@acme.com', 'S15');
+      const u1 = await createMember(admin.organizationId, { email: 's15-18a@acme.com', role: 'user' });
+      const u2 = await createMember(admin.organizationId, { email: 's15-18b@acme.com', role: 'user' });
+      const { projectId, task } = await seedProjectWithTask(admin);
+      await assignMember(admin.cookies, admin.organizationId, projectId, u1.membershipId);
+
+      const created = await createEntry(u2.cookies, admin.organizationId, {
+        date: today(),
+        durationMinutes: 60,
+      });
+      const put = await updateEntry(u1.cookies, admin.organizationId, created.body.id, {
+        projectId,
+        taskId: task.id,
+        date: today(),
+        durationMinutes: 60,
+      });
+      expect(put.status).toBe(403);
+    });
+
+    it('TC-15-INT-19: task deletion → TimeEntry.taskId set null, task text preserved', async () => {
+      const admin = await signupAdmin('s15-19@acme.com', 'S15');
+      const { projectId, task } = await seedProjectWithTask(admin);
+      const created = await createEntry(admin.cookies, admin.organizationId, {
+        projectId,
+        taskId: task.id,
+        date: today(),
+        durationMinutes: 60,
+      });
+      await prisma.task.delete({ where: { id: task.id } });
+
+      const row = await prisma.timeEntry.findUniqueOrThrow({ where: { id: created.body.id } });
+      expect(row.taskId).toBeNull();
+      expect(row.task).toBe('MOB-5: Fix login bug');
+    });
+
+    it('TC-15-INT-20: task deletion → RunningTimer.taskId set null, task text preserved', async () => {
+      const admin = await signupAdmin('s15-20@acme.com', 'S15');
+      const { projectId, task } = await seedProjectWithTask(admin);
+      await startTimer(admin.cookies, admin.organizationId, { projectId, taskId: task.id });
+
+      await prisma.task.delete({ where: { id: task.id } });
+
+      const get = await getTimer(admin.cookies, admin.organizationId);
+      expect(get.status).toBe(200);
+      expect(get.body.timer.taskId).toBeNull();
+      expect(get.body.timer.task).toBe('MOB-5: Fix login bug');
+    });
+
+    it('TC-15-INT-21: deleted-task time entries do not attribute to any other task', async () => {
+      const admin = await signupAdmin('s15-21@acme.com', 'S15');
+      const { projectId, columnId, task } = await seedProjectWithTask(admin);
+      // Add a second task in the same project.
+      const task2 = await prisma.task.create({
+        data: {
+          projectId,
+          taskNumber: 6,
+          type: 'task',
+          title: 'Second task',
+          columnId,
+          position: 2048,
+          reporterId: admin.membershipId,
+        },
+      });
+      // 2 entries against task, none against task2.
+      await createEntry(admin.cookies, admin.organizationId, {
+        projectId, taskId: task.id, date: today(), durationMinutes: 60,
+      });
+      await createEntry(admin.cookies, admin.organizationId, {
+        projectId, taskId: task.id, date: today(), durationMinutes: 90,
+      });
+      await prisma.task.delete({ where: { id: task.id } });
+
+      const res = await request(server())
+        .get(`/api/organizations/${admin.organizationId}/projects/${projectId}/tasks/${task2.id}`)
+        .set('Cookie', admin.cookies);
+      expect(res.status).toBe(200);
+      expect(res.body.timeLoggedMinutes).toBe(0);
+      expect(res.body.recentTimeEntries).toEqual([]);
+    });
+
+    it('TC-15-INT-35: create time entry response includes taskKey for client display', async () => {
+      const admin = await signupAdmin('s15-35@acme.com', 'S15');
+      const { projectId, task } = await seedProjectWithTask(admin);
+      const res = await createEntry(admin.cookies, admin.organizationId, {
+        projectId,
+        taskId: task.id,
+        date: today(),
+        durationMinutes: 60,
+      });
+      expect(res.status).toBe(201);
+      expect(res.body.taskId).toBe(task.id);
+      expect(res.body.taskKey).toBe('MOB-5');
+    });
   });
 });

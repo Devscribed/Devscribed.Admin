@@ -22,8 +22,10 @@ import {
   KANBAN_MESSAGES,
   TASK_PRIORITIES,
   TASK_TYPES,
+  TIME_TRACKING_MESSAGES,
   can,
   formatActivityDescription,
+  formatDurationHuman,
   formatTaskKey,
   validateCommentContent,
   validateDueDate,
@@ -34,6 +36,7 @@ import {
   type TaskPriority,
   type TaskType,
 } from '@devscribed/validation';
+import { useRunningTimer } from '@/layout/running-timer-context';
 import { AvatarInitials } from '../../../../members/[memberId]/AvatarInitials';
 import type { MemberListResponse } from '../../../../members/types';
 import { CreateTaskModal, type OrgMember } from '../../kanban/CreateTaskModal';
@@ -83,6 +86,13 @@ export function TaskDetailScreen({
   const role = session.role as Role;
 
   const canManageTasks = can(role, 'manage-tasks');
+  const canUseTimer = can(role, 'use-timer');
+
+  // Spec 15 — the shell-level running-timer state, so the task detail page can
+  // start a timer pre-filled with this task and swap the button for a "running"
+  // link when a timer is already active.
+  const { timer: runningTimer, start: startTimer } = useRunningTimer();
+  const [startingTimer, setStartingTimer] = useState(false);
 
   const [task, setTask] = useState<KanbanTaskDetail | null>(null);
   const [project, setProject] = useState<KanbanProject | null>(null);
@@ -597,6 +607,39 @@ export function TaskDetailScreen({
     setDeletingComment(false);
   }
 
+  /**
+   * Spec 15 — start a timer pre-filled with this task's project + id. The server
+   * computes the `task` label from the referenced task (FR-2), so no `task` field
+   * is sent. On conflict (spec 12 FR-11 one-timer-per-member) the button already
+   * swaps to the running-link state, so we only surface the toast on real errors.
+   */
+  async function handleStartTimer() {
+    if (startingTimer || !task) return;
+    setStartingTimer(true);
+    const result = await startTimer({
+      projectId,
+      taskId: task.id,
+      task: null,
+      description: null,
+    });
+    setStartingTimer(false);
+    if (result.ok) {
+      showToast('toast-timer-started', TIME_TRACKING_MESSAGES.toastTimerStarted);
+    } else if (result.conflict) {
+      showToast(
+        'toast-timer-started',
+        result.message ?? TIME_TRACKING_MESSAGES.timerAlreadyRunning,
+        'error',
+      );
+    } else {
+      showToast(
+        'toast-timer-started',
+        result.message ?? TIME_TRACKING_MESSAGES.genericError,
+        'error',
+      );
+    }
+  }
+
   async function toggleWatch() {
     const nextWatching = !isWatching;
     setIsWatching(nextWatching);
@@ -966,17 +1009,12 @@ export function TaskDetailScreen({
             resolveTask={(id) => (id ? id : 'None')}
           />
 
-          <div
-            style={{
-              padding: 'var(--sp-4)',
-              border: '1px dashed var(--border)',
-              borderRadius: 'var(--radius-lg)',
-              color: 'var(--text-faint)',
-              fontSize: 'var(--fs-12)',
-            }}
-          >
-            Time logged — spec 15
-          </div>
+          {/* Spec 15 — Time Logged section (aggregate + recent entries). */}
+          <TimeLoggedSection
+            orgId={orgId}
+            totalMinutes={task.timeLoggedMinutes ?? 0}
+            entries={task.recentTimeEntries ?? []}
+          />
         </div>
 
         {/* Right column — side panel */}
@@ -990,6 +1028,45 @@ export function TaskDetailScreen({
             alignSelf: 'flex-start',
           }}
         >
+          {/* Spec 15 — Start Timer button / Running-link, gated on `use-timer`. */}
+          {canUseTimer &&
+            (runningTimer ? (
+              <Link
+                href={`/org/${orgId}/time-tracking`}
+                data-testid="task-timer-running-link"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 'var(--sp-2)',
+                  alignSelf: 'flex-start',
+                  padding: '8px 14px',
+                  borderRadius: 'var(--radius-lg)',
+                  background: 'var(--tracker-bg)',
+                  border: '1px solid var(--tracker-border)',
+                  color: 'var(--amber-700)',
+                  fontFamily: 'var(--font-display)',
+                  fontWeight: 600,
+                  fontSize: 'var(--fs-13)',
+                  textDecoration: 'none',
+                }}
+              >
+                <span aria-hidden>⏱</span> Timer running →
+              </Link>
+            ) : (
+              <Button
+                variant="primary"
+                loading={startingTimer}
+                onClick={() => void handleStartTimer()}
+                data-testid="task-start-timer-btn"
+              >
+                <span
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  <span aria-hidden>▶</span> Start Timer
+                </span>
+              </Button>
+            ))}
+
           <SidePanelField label="Status">
             <Select
               value={task.columnId}
@@ -1973,6 +2050,154 @@ function ActivitySection({
       )}
     </div>
   );
+}
+
+/**
+ * Spec 15 §UI Description — the Time Logged section on task detail. Sits between the
+ * children/comments blocks in the left column. The row list is server-capped at
+ * `TASK_TIME_LOGGED_RECENT_LIMIT` (10) and each row deep-links into the daily view
+ * for that entry's date. Visibility per role is enforced server-side (FR-18): the
+ * caller sees whatever the API decided they may see.
+ */
+function TimeLoggedSection({
+  orgId,
+  totalMinutes,
+  entries,
+}: {
+  orgId: string;
+  totalMinutes: number;
+  entries: import('../../kanban/types').TaskTimeEntryRow[];
+}) {
+  const isEmpty = totalMinutes === 0 && entries.length === 0;
+  return (
+    <div
+      data-testid="task-time-logged-section"
+      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          gap: 'var(--sp-3)',
+        }}
+      >
+        <span
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 'var(--fs-11)',
+            letterSpacing: 1,
+            textTransform: 'uppercase',
+            color: 'var(--text-muted)',
+          }}
+        >
+          Time Logged
+        </span>
+        <span
+          data-testid="task-time-logged-total"
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 'var(--fs-15)',
+            color: 'var(--text)',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {formatDurationHuman(totalMinutes)}
+        </span>
+      </div>
+      {isEmpty ? (
+        <div
+          data-testid="task-time-logged-empty"
+          style={{
+            padding: 'var(--sp-4)',
+            color: 'var(--text-faint)',
+            fontSize: 'var(--fs-13)',
+            fontStyle: 'italic',
+            background: 'var(--bg-panel-2)',
+            border: '1px solid var(--divider)',
+            borderRadius: 'var(--radius-lg)',
+          }}
+        >
+          {TIME_TRACKING_MESSAGES.emptyTimeLogged}
+        </div>
+      ) : (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            border: '1px solid var(--divider)',
+            borderRadius: 'var(--radius-lg)',
+            overflow: 'hidden',
+          }}
+        >
+          {entries.map((entry, i) => (
+            <Link
+              key={entry.id}
+              href={`/org/${orgId}/time-tracking?view=daily&date=${entry.date}`}
+              data-testid={`task-time-logged-entry-${entry.id}`}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--sp-3)',
+                padding: '10px 14px',
+                borderTop: i === 0 ? 'none' : '1px solid var(--divider)',
+                textDecoration: 'none',
+                color: 'var(--text)',
+                background: 'transparent',
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: 'var(--fs-13)',
+                  color: 'var(--text)',
+                  minWidth: 110,
+                }}
+              >
+                {formatEntryDate(entry.date)}
+              </span>
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 'var(--fs-13)',
+                  color: 'var(--text-muted)',
+                  fontVariantNumeric: 'tabular-nums',
+                  minWidth: 70,
+                }}
+              >
+                {formatDurationHuman(entry.durationMinutes)}
+              </span>
+              <span
+                style={{
+                  flex: 1,
+                  fontSize: 'var(--fs-13)',
+                  color: 'var(--text-sub)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {entry.memberName}
+              </span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Format a `YYYY-MM-DD` entry date as "Aug 27, 2026" (UTC-anchored to avoid a
+ * midnight-flip when the viewer's local zone is behind UTC). */
+function formatEntryDate(iso: string): string {
+  const d = new Date(iso + 'T00:00:00Z');
+  if (!Number.isFinite(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
 }
 
 function formatCommentTimestamp(iso: string): string {

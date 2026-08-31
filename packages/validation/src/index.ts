@@ -2059,6 +2059,21 @@ export const TIME_TRACKING_MESSAGES = {
   // Empty states.
   emptyPeriod: 'No time entries for this period.',
   emptyToday: 'No time logged today. Start a timer or add an entry.',
+  // ── Spec 15 — Time Tracking ↔ Tasks Integration ─────────────────
+  // Task-link validation (spec 15 §Error Messages).
+  taskRequiresProject: 'Select a project before choosing a task',
+  taskWrongProject: 'The selected task does not belong to the chosen project',
+  taskLinkNotFound: 'Task not found',
+  taskProjectNotAssigned: 'You do not have access to tasks in this project',
+  // Search endpoint (spec 15 §Error Messages).
+  searchProjectKeyRequired: 'This project does not have a board',
+  searchQueryTooLong: 'Search query must be at most 100 characters',
+  // Task Detail — Time Logged (spec 15 §Error Messages / §States).
+  emptyTimeLogged: 'No time logged on this task yet.',
+  // Task selector (spec 15 §Error Messages).
+  taskSelectorNoMatches: 'No matching tasks.',
+  /** `Search tasks in {projectName}...` — templated; use `taskSelectorPlaceholder`. */
+  taskSelectorPlaceholderTemplate: 'Search tasks in {projectName}...',
 } as const;
 
 /** "Timer stopped — {duration} logged" (Toast row, templated). */
@@ -3066,6 +3081,110 @@ function formatFieldValue(
   if (field === 'type') return value == null ? '' : TYPE_DISPLAY[value] ?? value;
   if (value == null || value === '') return field === 'dueDate' ? 'None' : '—';
   return value;
+}
+
+/* ------------------------------------------------------------------ *
+ * Spec 15 — Time Tracking ↔ Tasks Integration
+ * Pure helpers shared by the API and web for the task-link on
+ * TimeEntry / RunningTimer and the task-search endpoint.
+ * ------------------------------------------------------------------ */
+
+/** Max codepoints of the free-text `task` snapshot label persisted on TimeEntry /
+ * RunningTimer. Mirrors `TIME_ENTRY_TASK_MAX` — the computed label is truncated to
+ * fit, so a very long task title cannot overflow the existing column limit. */
+export const TIME_ENTRY_TASK_LABEL_MAX = TIME_ENTRY_TASK_MAX;
+
+/** Max codepoints for the `q` query parameter on tasks/search (spec 15 Rule 6). */
+export const TASK_SEARCH_QUERY_MAX = 100;
+
+/** Max results returned by tasks/search (spec 15 FR-11 / API Contracts). */
+export const TASK_SEARCH_LIMIT = 20;
+
+/** Max recent time entries embedded on the task detail response (spec 15 FR-17). */
+export const TASK_TIME_LOGGED_RECENT_LIMIT = 10;
+
+/**
+ * Compose the frozen `task` label snapshot for a TimeEntry / RunningTimer whose
+ * `taskId` points at a real task (spec 15 FR-2 / TC-15-UNIT-01,02).
+ *
+ * Format: `"{PROJECT_KEY}-{taskNumber}: {title}"` (e.g. `"MOB-5: Fix login bug"`).
+ * The task title is used verbatim — spec 15 explicitly does NOT truncate it here;
+ * the resulting string is then clamped to `TIME_ENTRY_TASK_LABEL_MAX` codepoints
+ * so it fits the existing `task` column and matches spec 12's Rule 10.
+ */
+export function computeTaskLabel(input: {
+  projectKey: string;
+  taskNumber: number;
+  title: string;
+}): string {
+  const raw = `${input.projectKey}-${input.taskNumber}: ${input.title}`;
+  const cps = [...raw];
+  if (cps.length <= TIME_ENTRY_TASK_LABEL_MAX) return raw;
+  return cps.slice(0, TIME_ENTRY_TASK_LABEL_MAX).join('');
+}
+
+/**
+ * Result of `validateTaskLink` — client-side + wire-schema helper (spec 15
+ * §Validation Rules 1, 2). Existence and cross-org / project-membership checks
+ * are DB-scoped and handled server-side inside the mutation transaction; this
+ * function only enforces the two rules that are safely checkable from the request
+ * body alone.
+ */
+export type TaskLinkResult = { valid: true } | { valid: false; error: string };
+
+/**
+ * Validate the `taskId` field on a create/update payload against its `projectId`
+ * (spec 15 Rule 1 & 2 / TC-15-UNIT-03..06). This is the *shape* validator; it
+ * doesn't hit the DB, so `taskProjectId` is optional — pass it only if the caller
+ * already has the loaded task's project id in hand.
+ *
+ * - `taskId == null` → always valid (unlinking / no-link cases, FR-6).
+ * - `taskId != null` and `projectId == null` → `taskRequiresProject` (Rule 1).
+ * - `taskId != null` and `taskProjectId` present but ≠ `projectId` → `taskWrongProject` (Rule 2).
+ * - `taskId != null` with matching or unknown `taskProjectId` → valid (server still
+ *   verifies existence + project membership inside the mutation transaction).
+ */
+export function validateTaskLink(input: {
+  taskId: string | null | undefined;
+  projectId: string | null | undefined;
+  taskProjectId?: string | null | undefined;
+}): TaskLinkResult {
+  if (input.taskId == null || input.taskId === '') return { valid: true };
+  if (input.projectId == null || input.projectId === '') {
+    return { valid: false, error: TIME_TRACKING_MESSAGES.taskRequiresProject };
+  }
+  if (
+    input.taskProjectId != null &&
+    input.taskProjectId !== '' &&
+    input.taskProjectId !== input.projectId
+  ) {
+    return { valid: false, error: TIME_TRACKING_MESSAGES.taskWrongProject };
+  }
+  return { valid: true };
+}
+
+/**
+ * Placeholder text for the task selector (spec 15 §Error Messages / §UI
+ * Description). Interpolates the current project name.
+ */
+export function taskSelectorPlaceholder(projectName: string): string {
+  return `Search tasks in ${projectName}...`;
+}
+
+/**
+ * Validate the `q` search query on GET .../tasks/search (spec 15 Rule 6).
+ * Trims, then enforces the codepoint cap; empty or null → valid empty string
+ * ("browse recent tasks" mode).
+ */
+export function validateTaskSearchQuery(
+  input: string | null | undefined,
+): { valid: true; value: string } | { valid: false; error: string } {
+  const raw = (input ?? '').trim();
+  if (raw.length === 0) return { valid: true, value: '' };
+  if ([...raw].length > TASK_SEARCH_QUERY_MAX) {
+    return { valid: false, error: TIME_TRACKING_MESSAGES.searchQueryTooLong };
+  }
+  return { valid: true, value: raw };
 }
 
 /* ------------------------------------------------------------------ *

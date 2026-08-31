@@ -165,4 +165,19 @@ export interface KanbanTaskDetail {
   updatedAt: string;
   /** Spec 14 — labels currently attached to the task (see §Task Detail — Labels). */
   labels?: TaskLabelChip[];
+  /** Spec 15 — total minutes logged against this task, scoped per role (user sees
+   * only their own; admin/manager see all members' entries). */
+  timeLoggedMinutes?: number;
+  /** Spec 15 — up to `TASK_TIME_LOGGED_RECENT_LIMIT` most recent time entries with
+   * this taskId, sorted date desc then createdAt desc. Same per-role scoping. */
+  recentTimeEntries?: TaskTimeEntryRow[];
+}
+
+/** Spec 15 — a row in the task detail's "Time Logged" section. */
+export interface TaskTimeEntryRow {
+  id: string;
+  date: string;
+  durationMinutes: number;
+  memberName: string;
+  membershipId: string;
 }

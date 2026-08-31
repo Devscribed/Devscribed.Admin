@@ -22,6 +22,12 @@ export interface TimeEntry {
   endTime: string | null;
   durationMinutes: number;
   createdAt: string;
+  /** Spec 15 — id of the linked task when the entry was created/edited with a
+   * task selection. Null when free-text or the task was later deleted (FR-8). */
+  taskId?: string | null;
+  /** Spec 15 — the `{PROJECT_KEY}-{taskNumber}` shorthand carried on responses so
+   * the client can render the chip without a second lookup. Snapshot at write time. */
+  taskKey?: string | null;
 }
 
 export interface TimeEntriesResponse {
@@ -34,4 +40,7 @@ export interface TimeEntriesResponse {
 export interface AssignableProject {
   id: string;
   name: string;
+  /** Spec 15 — the project's board key (e.g. "MOB"). Null for projects that never
+   * had a key set, in which case the task selector never renders (spec 15 FR-15). */
+  key: string | null;
 }

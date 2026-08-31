@@ -6,6 +6,9 @@ import {
 import {
   KANBAN_MESSAGES,
   TASK_PRIORITIES,
+  TASK_SEARCH_LIMIT,
+  TASK_TIME_LOGGED_RECENT_LIMIT,
+  TIME_TRACKING_MESSAGES,
   checkTaskHierarchy,
   formatTaskKey,
   parseTaskListSort,
@@ -13,6 +16,7 @@ import {
   validateStoryPoints,
   validateTaskDescription,
   validateTaskPriority,
+  validateTaskSearchQuery,
   validateTaskTitle,
   validateTaskType,
   type TaskListSort,
@@ -94,6 +98,23 @@ export interface TaskDetail extends Omit<TaskSummary, 'parentKey'> {
     assignee: AssigneeSummary | null;
   }>;
   updatedAt: string;
+  /** Spec 15 FR-17 — sum of durationMinutes across visible TimeEntry rows with this taskId. */
+  timeLoggedMinutes: number;
+  /** Spec 15 FR-17 — up to `TASK_TIME_LOGGED_RECENT_LIMIT` most recent visible entries. */
+  recentTimeEntries: Array<{
+    id: string;
+    date: string;
+    durationMinutes: number;
+    memberName: string;
+    membershipId: string;
+  }>;
+}
+
+export interface TaskSearchResult {
+  id: string;
+  key: string;
+  title: string;
+  type: string;
 }
 
 /** Priority ordering for sort — critical → high → medium → low → null. */
@@ -211,7 +232,7 @@ export class TasksService {
         });
       }
 
-      return this.toDetail(tx, created.id, project.key!);
+      return this.toDetail(tx, created.id, project.key!, caller);
     });
   }
 
@@ -233,7 +254,7 @@ export class TasksService {
     if (!task) {
       throw new NotFoundException({ error: 'task_not_found', message: KANBAN_MESSAGES.taskNotFound });
     }
-    return this.toDetail(this.prisma, task.id, project.key!);
+    return this.toDetail(this.prisma, task.id, project.key!, caller);
   }
 
   async listTasks(
@@ -543,7 +564,7 @@ export class TasksService {
         });
       }
 
-      return this.toDetail(tx, existing.id, project.key!);
+      return this.toDetail(tx, existing.id, project.key!, caller);
     });
   }
 
@@ -629,6 +650,146 @@ export class TasksService {
         position,
       };
     });
+  }
+
+  /**
+   * Spec 15 — `GET .../projects/{projectId}/tasks/search?q=…`. Search the tasks of one
+   * project. Access rules mirror `getTask`: view-board capability + project membership
+   * (for `user` role). Empty `q` returns the most recently updated tasks (up to 20);
+   * a non-empty `q` matches on `{PROJECT_KEY}-{N}` prefix or on `title` substring
+   * (case-insensitive). Ranks exact-key first, prefix-key second, title third; ties
+   * broken by `updatedAt desc`. Capped at 20 (spec 15 FR-11 / TC-15-INT-30).
+   */
+  async searchTasks(
+    session: SessionPayload,
+    projectId: string,
+    q: unknown,
+  ): Promise<{ tasks: TaskSearchResult[] }> {
+    const caller = await this.access.requireCaller(session);
+    this.access.requireCapability(caller, 'view-board', KANBAN_MESSAGES.boardPermissionDenied);
+    const project = await this.access.requireProject(caller, projectId);
+    await this.access.requireProjectAccess(caller, project, KANBAN_MESSAGES.boardPermissionDenied);
+    // Spec 15 §Error Messages — project without key has no board (TC-15-INT-31); the
+    // message text comes from `searchProjectKeyRequired`, distinct from the board's
+    // own `project_key_required` message.
+    if (!project.key) {
+      throw new BadRequestException({
+        error: 'project_key_required',
+        message: TIME_TRACKING_MESSAGES.searchProjectKeyRequired,
+      });
+    }
+    const qResult = validateTaskSearchQuery(typeof q === 'string' ? q : null);
+    if (!qResult.valid) {
+      throw new BadRequestException({ error: 'query_too_long', message: qResult.error });
+    }
+    const query = qResult.value;
+
+    // Empty query — "browse recent" mode (spec 15 §API Contracts).
+    if (query.length === 0) {
+      const rows = await this.prisma.task.findMany({
+        where: { projectId: project.id },
+        orderBy: { updatedAt: 'desc' },
+        take: TASK_SEARCH_LIMIT,
+        select: { id: true, taskNumber: true, title: true, type: true, updatedAt: true },
+      });
+      return {
+        tasks: rows.map((r) => ({
+          id: r.id,
+          key: `${project.key}-${r.taskNumber}`,
+          title: r.title,
+          type: r.type,
+        })),
+      };
+    }
+
+    // Non-empty query — check for `{KEY}-{N}` (or `{KEY}-` prefix) shape first, else
+    // fall through to title-substring match. Case-insensitive throughout.
+    const keyPrefix = `${project.key}-`.toLowerCase();
+    const qLower = query.toLowerCase();
+    let taskNumberFilter: { equals?: number; startsWithDigits?: string } | null = null;
+    let matchesKeyOnly = false;
+    if (qLower.startsWith(keyPrefix)) {
+      matchesKeyOnly = true;
+      const rest = qLower.slice(keyPrefix.length);
+      if (rest.length > 0 && /^\d+$/.test(rest)) {
+        // Exact-number OR any taskNumber starting with `rest`.
+        taskNumberFilter = { startsWithDigits: rest };
+      } else if (rest.length === 0) {
+        taskNumberFilter = null; // Match all tasks in the project.
+      } else {
+        // Non-numeric after `KEY-` → no matches.
+        return { tasks: [] };
+      }
+    }
+
+    // Load candidates. Prefer a small superset from Postgres and rank in memory —
+    // simpler than a raw SQL with CASE ranking, and the cap is only 20.
+    const where: {
+      projectId: string;
+      OR?: Array<
+        | { title: { contains: string; mode: 'insensitive' } }
+        | { taskNumber: number }
+      >;
+    } = { projectId: project.id };
+    if (matchesKeyOnly) {
+      // Only key-shaped matches — no title-substring match when the query looks like KEY-*
+      if (taskNumberFilter && taskNumberFilter.startsWithDigits) {
+        // Prisma has no `startsWith` for Int columns; fetch a bounded candidate set
+        // by taskNumber via `gte`/`lt` on the numeric prefix. e.g. "1" → 1..1, 10..19,
+        // 100..199 — simpler: fetch all tasks and filter in memory, since cap is small.
+        // Use a bounded findMany with `orderBy updatedAt desc, take 200` to keep it cheap.
+      }
+    } else {
+      where.OR = [{ title: { contains: query, mode: 'insensitive' } }];
+      // Bare digits fallback — allow `q="5"` to also match taskNumber === 5.
+      if (/^\d+$/.test(query)) {
+        where.OR.push({ taskNumber: parseInt(query, 10) });
+      }
+    }
+
+    const candidates = await this.prisma.task.findMany({
+      where,
+      orderBy: { updatedAt: 'desc' },
+      take: 200,
+      select: { id: true, taskNumber: true, title: true, type: true, updatedAt: true },
+    });
+
+    // Post-filter for the KEY-N startsWith case (numeric prefix on taskNumber).
+    let filtered = candidates;
+    if (matchesKeyOnly && taskNumberFilter?.startsWithDigits) {
+      const prefix = taskNumberFilter.startsWithDigits;
+      filtered = candidates.filter((c) => String(c.taskNumber).startsWith(prefix));
+    } else if (matchesKeyOnly && !taskNumberFilter) {
+      // KEY- with no digits — match everything in the project (already fetched).
+      filtered = candidates;
+    }
+
+    // Rank: exact key match, then key prefix, then title substring, then updatedAt desc.
+    const ranked = filtered
+      .map((c) => {
+        const key = `${project.key}-${c.taskNumber}`;
+        const keyLower = key.toLowerCase();
+        let tier = 3;
+        if (keyLower === qLower) tier = 0;
+        else if (matchesKeyOnly) tier = 1;
+        else if (c.title.toLowerCase().includes(qLower)) tier = 2;
+        return { tier, key, task: c };
+      })
+      .filter((r) => r.tier < 3)
+      .sort((a, b) => {
+        if (a.tier !== b.tier) return a.tier - b.tier;
+        return b.task.updatedAt.getTime() - a.task.updatedAt.getTime();
+      })
+      .slice(0, TASK_SEARCH_LIMIT);
+
+    return {
+      tasks: ranked.map((r) => ({
+        id: r.task.id,
+        key: r.key,
+        title: r.task.title,
+        type: r.task.type,
+      })),
+    };
   }
 
   async deleteTask(
@@ -929,6 +1090,7 @@ export class TasksService {
     tx: PrismaService | Parameters<Parameters<PrismaService['$transaction']>[0]>[0],
     taskId: string,
     projectKey: string,
+    caller: CallerMembership,
   ): Promise<TaskDetail> {
     const t = await (tx as PrismaService).task.findUniqueOrThrow({
       where: { id: taskId },
@@ -1003,6 +1165,56 @@ export class TasksService {
       })),
       createdAt: t.createdAt.toISOString(),
       updatedAt: t.updatedAt.toISOString(),
+      ...(await this.computeTimeLogged(tx, taskId, caller)),
+    };
+  }
+
+  /**
+   * Spec 15 FR-17/FR-18 — aggregate `TimeEntry` rows linked to this task, scoped by
+   * the caller's visibility: a `user` sees only their own entries; admin/manager see
+   * every member's. Deleted-task entries (taskId=null after SetNull) are excluded by
+   * the FK, not by us.
+   */
+  private async computeTimeLogged(
+    tx: PrismaService | Parameters<Parameters<PrismaService['$transaction']>[0]>[0],
+    taskId: string,
+    caller: CallerMembership,
+  ): Promise<{
+    timeLoggedMinutes: number;
+    recentTimeEntries: TaskDetail['recentTimeEntries'];
+  }> {
+    const scoped = caller.role === 'user' ? { membershipId: caller.id } : {};
+    const where = { taskId, ...scoped };
+    const [{ _sum }, recent] = await Promise.all([
+      (tx as PrismaService).timeEntry.aggregate({
+        _sum: { durationMinutes: true },
+        where,
+      }),
+      (tx as PrismaService).timeEntry.findMany({
+        where,
+        orderBy: [
+          { date: 'desc' },
+          { startTime: { sort: 'desc', nulls: 'last' } },
+          { createdAt: 'desc' },
+        ],
+        take: TASK_TIME_LOGGED_RECENT_LIMIT,
+        include: {
+          membership: {
+            include: { account: { select: { firstName: true, lastName: true } } },
+          },
+        },
+      }),
+    ]);
+    return {
+      timeLoggedMinutes: _sum.durationMinutes ?? 0,
+      recentTimeEntries: recent.map((e) => ({
+        id: e.id,
+        date: e.date.toISOString().slice(0, 10),
+        durationMinutes: e.durationMinutes,
+        memberName:
+          `${e.membership.account.firstName} ${e.membership.account.lastName}`.trim(),
+        membershipId: e.membershipId,
+      })),
     };
   }
 

@@ -8,6 +8,7 @@ import {
 import {
   TIME_TRACKING_MESSAGES,
   can,
+  computeTaskLabel,
   computeTimerStopMinutes,
   localDateInTz,
   validateTimeEntry,
@@ -33,12 +34,16 @@ import { PrismaService } from '../prisma.service';
  * CREATING caller's tz (the simplest consistent rule).
  */
 
-/** The timer response shape (spec 12 GET/POST/PUT timer contracts). */
+/** The timer response shape (spec 12 GET/POST/PUT timer contracts + spec 15 task fields). */
 export interface TimerShape {
   id: string;
   projectId: string | null;
   projectName: string | null;
   task: string | null;
+  /** Spec 15 — id of the linked Task, if any. */
+  taskId: string | null;
+  /** Spec 15 — display key `{PROJECT_KEY}-{taskNumber}` when a task is linked. */
+  taskKey: string | null;
   description: string | null;
   startedAt: string;
 }
@@ -51,6 +56,10 @@ export interface TimeEntryShape {
   projectId: string | null;
   projectName: string | null;
   task: string | null;
+  /** Spec 15 — id of the linked Task, if any. */
+  taskId: string | null;
+  /** Spec 15 — display key `{PROJECT_KEY}-{taskNumber}` when a task is linked. */
+  taskKey: string | null;
   description: string | null;
   date: string;
   startTime: string | null;
@@ -61,6 +70,8 @@ export interface TimeEntryShape {
 
 export interface TimerMetaBody {
   projectId?: unknown;
+  /** Spec 15 — optional link to a Task belonging to the same project. */
+  taskId?: unknown;
   task?: unknown;
   description?: unknown;
   /** Present on start bodies — always ignored (spec 12 Security 9 / TC-12-INT-24). */
@@ -70,6 +81,8 @@ export interface TimerMetaBody {
 export interface TimeEntryBody {
   membershipId?: unknown;
   projectId?: unknown;
+  /** Spec 15 — optional link to a Task belonging to the same project. */
+  taskId?: unknown;
   task?: unknown;
   description?: unknown;
   date?: unknown;
@@ -88,6 +101,21 @@ interface CallerMembership {
 }
 
 type ProjectClient = Pick<Prisma.TransactionClient, 'project'> | PrismaService;
+
+/** Prisma tx client with access to task + project + membership (spec 15 task resolution). */
+type TaskClient = Prisma.TransactionClient | PrismaService;
+
+/** Result of resolving a `taskId` in a mutation. `task` is the recomputed snapshot label
+ * (spec 15 FR-2) that must OVERWRITE any client-supplied `task` text. When `undefined`,
+ * the caller did not touch `taskId` on this request and the existing `task` column /
+ * label must be preserved. When `null`, the caller explicitly cleared `taskId` (FR-6 —
+ * clear the id, but leave the free-text `task` label unchanged). */
+interface TaskLinkResolution {
+  /** `undefined` → no change; `null` → clear; string → set. */
+  taskId: string | null | undefined;
+  /** `undefined` → do not overwrite existing task text; string → overwrite with this. */
+  taskLabel: string | undefined;
+}
 
 /**
  * Spec 12 — Time Tracking (timer + manual entries). Same conventions as `ProjectsService`:
@@ -113,7 +141,7 @@ export class TimeTrackingService {
     const caller = await this.requireCaller(session);
     const timer = await this.prisma.runningTimer.findUnique({
       where: { membershipId: caller.id },
-      include: { project: true },
+      include: { project: { select: { name: true, key: true } }, taskRef: { select: { taskNumber: true } } },
     });
     return { timer: timer ? this.toTimerShape(timer) : null };
   }
@@ -127,20 +155,33 @@ export class TimeTrackingService {
   async startTimer(session: SessionPayload, body: TimerMetaBody): Promise<TimerShape> {
     const caller = await this.requireTimer(session);
     const meta = this.validateMeta(body);
-    const projectId = await this.resolveProjectId(this.prisma, caller.organizationId, body.projectId);
 
     try {
-      const timer = await this.prisma.runningTimer.create({
-        data: {
-          membershipId: caller.id,
-          organizationId: caller.organizationId,
+      const timer = await this.prisma.$transaction(async (tx) => {
+        const projectId = await this.resolveProjectId(tx, caller.organizationId, body.projectId);
+        // Spec 15 — resolve/validate taskId inside the same tx to avoid TOCTOU.
+        const link = await this.resolveTaskLink(tx, {
+          caller,
           projectId,
-          task: meta.task,
-          description: meta.description,
-          // Server clock only — the client cannot forge the start instant.
-          startedAt: new Date(),
-        },
-        include: { project: true },
+          rawTaskId: body.taskId,
+        });
+        return tx.runningTimer.create({
+          data: {
+            membershipId: caller.id,
+            organizationId: caller.organizationId,
+            projectId,
+            // FR-2: when taskId is linked, the computed label OVERWRITES client `task`.
+            task: link.taskLabel !== undefined ? link.taskLabel : meta.task,
+            taskId: link.taskId === undefined ? null : link.taskId,
+            description: meta.description,
+            // Server clock only — the client cannot forge the start instant.
+            startedAt: new Date(),
+          },
+          include: {
+            project: { select: { name: true, key: true } },
+            taskRef: { select: { taskNumber: true } },
+          },
+        });
       });
       return this.toTimerShape(timer);
     } catch (e) {
@@ -158,17 +199,45 @@ export class TimeTrackingService {
   async updateTimer(session: SessionPayload, body: TimerMetaBody): Promise<TimerShape> {
     const caller = await this.requireCaller(session);
     const meta = this.validateMeta(body);
-    const projectId = await this.resolveProjectId(this.prisma, caller.organizationId, body.projectId);
 
-    const existing = await this.prisma.runningTimer.findUnique({ where: { membershipId: caller.id } });
-    if (!existing) {
-      throw this.noTimer();
-    }
-
-    const timer = await this.prisma.runningTimer.update({
-      where: { membershipId: caller.id },
-      data: { projectId, task: meta.task, description: meta.description },
-      include: { project: true },
+    const timer = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.runningTimer.findUnique({ where: { membershipId: caller.id } });
+      if (!existing) {
+        throw this.noTimer();
+      }
+      const projectId = await this.resolveProjectId(tx, caller.organizationId, body.projectId);
+      const link = await this.resolveTaskLink(tx, {
+        caller,
+        projectId,
+        rawTaskId: body.taskId,
+      });
+      // Spec 15 FR-2: setting taskId overwrites `task` with the computed label (client
+      // `task` is discarded). Spec 15 FR-6: an explicit `taskId: null` clears the link
+      // but MUST leave `task` free-text unchanged — so we do not write task in that case
+      // unless the client also sent a `task` value on the same request.
+      const data: Prisma.RunningTimerUpdateInput = {
+        project: projectId
+          ? { connect: { id: projectId } }
+          : { disconnect: true },
+        description: meta.description,
+      };
+      if (link.taskLabel !== undefined) {
+        data.task = link.taskLabel;
+      } else if (typeof body.task === 'string') {
+        // Caller supplied a task value explicitly (no taskId link) — accept it.
+        data.task = meta.task;
+      }
+      if (link.taskId !== undefined) {
+        data.taskRef = link.taskId === null ? { disconnect: true } : { connect: { id: link.taskId } };
+      }
+      return tx.runningTimer.update({
+        where: { membershipId: caller.id },
+        data,
+        include: {
+          project: { select: { name: true, key: true } },
+          taskRef: { select: { taskNumber: true } },
+        },
+      });
     });
     return this.toTimerShape(timer);
   }
@@ -194,12 +263,36 @@ export class TimeTrackingService {
       // startTime/endTime stay the absolute instants (`startedAt`/`now`).
       const dateStr = localDateInTz(timer.startedAt.toISOString(), this.tzOf(caller));
 
+      // Spec 15 FR-9: RE-COMPUTE the task label snapshot at stop time from the CURRENT
+      // task row, in case the task's title changed while the timer was running
+      // (TC-15-INT-10). If the task was deleted mid-run, taskRef is null (SetNull) and
+      // we fall back to the timer's frozen `task` label.
+      let entryTask = timer.task;
+      let entryTaskId: string | null = timer.taskId;
+      if (entryTaskId) {
+        const task = await tx.task.findUnique({
+          where: { id: entryTaskId },
+          include: { project: { select: { key: true } } },
+        });
+        if (task && task.project.key) {
+          entryTask = computeTaskLabel({
+            projectKey: task.project.key,
+            taskNumber: task.taskNumber,
+            title: task.title,
+          });
+        } else {
+          // Task was deleted between start and stop — treat as unlinked (FR-8).
+          entryTaskId = null;
+        }
+      }
+
       const entry = await tx.timeEntry.create({
         data: {
           membershipId: caller.id,
           organizationId: caller.organizationId,
           projectId: timer.projectId,
-          task: timer.task,
+          taskId: entryTaskId,
+          task: entryTask,
           description: timer.description,
           date: this.dateOnly(dateStr),
           startTime: timer.startedAt,
@@ -207,7 +300,10 @@ export class TimeTrackingService {
           durationMinutes,
           createdByAccountId: caller.accountId,
         },
-        include: { project: true },
+        include: {
+          project: { select: { name: true, key: true } },
+          taskRef: { select: { taskNumber: true } },
+        },
       });
 
       await tx.runningTimer.delete({ where: { membershipId: caller.id } });
@@ -286,7 +382,10 @@ export class TimeTrackingService {
         membershipId: targetMembershipId,
         date: { gte: this.dateOnly(query.from as string), lte: this.dateOnly(query.to as string) },
       },
-      include: { project: true },
+      include: {
+        project: { select: { name: true, key: true } },
+        taskRef: { select: { taskNumber: true } },
+      },
       // date asc, then startTime asc with duration-only (null) entries last within a day.
       orderBy: [{ date: 'asc' }, { startTime: { sort: 'asc', nulls: 'last' } }],
     });
@@ -317,22 +416,34 @@ export class TimeTrackingService {
     }
     const value = result.value;
 
-    const project = await this.resolveActiveProject(this.prisma, caller.organizationId, body.projectId);
-
-    const entry = await this.prisma.timeEntry.create({
-      data: {
-        membershipId: targetMembershipId,
-        organizationId: caller.organizationId,
+    const entry = await this.prisma.$transaction(async (tx) => {
+      const project = await this.resolveActiveProject(tx, caller.organizationId, body.projectId);
+      const link = await this.resolveTaskLink(tx, {
+        caller,
         projectId: project?.id ?? null,
-        task: value.task,
-        description: value.description,
-        date: this.dateOnly(value.date),
-        startTime: value.startTime ? this.composeUtc(value.date, value.startTime, tz) : null,
-        endTime: value.endTime ? this.composeUtc(value.date, value.endTime, tz) : null,
-        durationMinutes: value.durationMinutes,
-        createdByAccountId: caller.accountId,
-      },
-      include: { project: true },
+        rawTaskId: body.taskId,
+      });
+      // Spec 15 FR-2: computed label OVERWRITES client `task` text when taskId is set.
+      const finalTask = link.taskLabel !== undefined ? link.taskLabel : value.task;
+      return tx.timeEntry.create({
+        data: {
+          membershipId: targetMembershipId,
+          organizationId: caller.organizationId,
+          projectId: project?.id ?? null,
+          taskId: link.taskId === undefined ? null : link.taskId,
+          task: finalTask,
+          description: value.description,
+          date: this.dateOnly(value.date),
+          startTime: value.startTime ? this.composeUtc(value.date, value.startTime, tz) : null,
+          endTime: value.endTime ? this.composeUtc(value.date, value.endTime, tz) : null,
+          durationMinutes: value.durationMinutes,
+          createdByAccountId: caller.accountId,
+        },
+        include: {
+          project: { select: { name: true, key: true } },
+          taskRef: { select: { taskNumber: true } },
+        },
+      });
     });
     return this.toEntryShape(entry, null);
   }
@@ -368,20 +479,42 @@ export class TimeTrackingService {
     }
     const value = result.value;
 
-    const projectId = await this.resolveEntryProjectId(caller.organizationId, existing.projectId, body.projectId);
-
-    const entry = await this.prisma.timeEntry.update({
-      where: { id: existing.id },
-      data: {
+    const entry = await this.prisma.$transaction(async (tx) => {
+      const projectId = await this.resolveEntryProjectId(tx, caller.organizationId, existing.projectId, body.projectId);
+      const link = await this.resolveTaskLink(tx, {
+        caller,
         projectId,
-        task: value.task,
+        rawTaskId: body.taskId,
+      });
+      // Spec 15 FR-2: computed label OVERWRITES client `task` text when taskId is set.
+      // FR-6: taskId: null (explicit) leaves `task` free-text alone — so when the caller
+      // did not send a `task` field either, we do not overwrite it.
+      const data: Prisma.TimeEntryUpdateInput = {
+        project: projectId
+          ? { connect: { id: projectId } }
+          : { disconnect: true },
         description: value.description,
         date: this.dateOnly(value.date),
         startTime: value.startTime ? this.composeUtc(value.date, value.startTime, tz) : null,
         endTime: value.endTime ? this.composeUtc(value.date, value.endTime, tz) : null,
         durationMinutes: value.durationMinutes,
-      },
-      include: { project: true },
+      };
+      if (link.taskLabel !== undefined) {
+        data.task = link.taskLabel;
+      } else if (typeof body.task === 'string') {
+        data.task = value.task;
+      }
+      if (link.taskId !== undefined) {
+        data.taskRef = link.taskId === null ? { disconnect: true } : { connect: { id: link.taskId } };
+      }
+      return tx.timeEntry.update({
+        where: { id: existing.id },
+        data,
+        include: {
+          project: { select: { name: true, key: true } },
+          taskRef: { select: { taskNumber: true } },
+        },
+      });
     });
     return this.toEntryShape(entry, null);
   }
@@ -427,6 +560,111 @@ export class TimeTrackingService {
     });
     if (!target) throw new NotFoundException();
     return target.id;
+  }
+
+  /**
+   * Spec 15 — resolve and validate `taskId` on a create/update body. Runs inside the
+   * caller's mutation transaction to close the TOCTOU window for the `user`-role
+   * project-membership check (FR-7 / spec 15 Security §Cross-Project Protection).
+   *
+   * Contract:
+   *   - `taskId === undefined` (omitted from body): returns `{ taskId: undefined,
+   *     taskLabel: undefined }` — the caller leaves the existing DB link + `task`
+   *     column untouched.
+   *   - `taskId === null` (explicit clear): returns `{ taskId: null, taskLabel:
+   *     undefined }` — clear the FK, but do NOT overwrite the free-text `task`
+   *     snapshot (FR-6 / TC-15-INT-12, TC-15-INT-17).
+   *   - `taskId` is a string: returns `{ taskId, taskLabel: "<computed>" }` where the
+   *     label is `computeTaskLabel({...})` — this label OVERWRITES the client's `task`
+   *     text (FR-2 / TC-15-INT-08).
+   *
+   * Errors:
+   *   - 400 `task_requires_project` when taskId is set but projectId is null.
+   *   - 400 `task_not_found` when the task is missing or belongs to another org
+   *     (spec 15 §Security — never leak existence, so cross-org = 400 not 404).
+   *   - 400 `task_wrong_project` when the task belongs to a different project than
+   *     the request's projectId.
+   *   - 403 `task_project_not_assigned` when a `user` caller tries to link a task in
+   *     a project they are not a `ProjectMember` of (admin/manager bypass).
+   */
+  private async resolveTaskLink(
+    tx: TaskClient,
+    args: {
+      caller: CallerMembership;
+      projectId: string | null;
+      rawTaskId: unknown;
+    },
+  ): Promise<TaskLinkResolution> {
+    const raw = args.rawTaskId;
+    if (raw === undefined) {
+      return { taskId: undefined, taskLabel: undefined };
+    }
+    if (raw === null || raw === '') {
+      // Explicit clear — leave `task` text alone (FR-6).
+      return { taskId: null, taskLabel: undefined };
+    }
+    if (typeof raw !== 'string') {
+      throw new BadRequestException({
+        error: 'task_not_found',
+        message: TIME_TRACKING_MESSAGES.taskLinkNotFound,
+      });
+    }
+    if (!args.projectId) {
+      throw new BadRequestException({
+        error: 'task_requires_project',
+        message: TIME_TRACKING_MESSAGES.taskRequiresProject,
+      });
+    }
+
+    // Scope by caller's org via the task's project (spec 15 Security — a task from
+    // another org is 400 `task_not_found`, byte-for-byte identical to "does not exist").
+    const task = await (tx as PrismaService).task.findFirst({
+      where: { id: raw, project: { organizationId: args.caller.organizationId } },
+      include: { project: { select: { id: true, key: true } } },
+    });
+    if (!task) {
+      throw new BadRequestException({
+        error: 'task_not_found',
+        message: TIME_TRACKING_MESSAGES.taskLinkNotFound,
+      });
+    }
+    if (task.projectId !== args.projectId) {
+      throw new BadRequestException({
+        error: 'task_wrong_project',
+        message: TIME_TRACKING_MESSAGES.taskWrongProject,
+      });
+    }
+    // `user` role: must be a ProjectMember of the task's project — admin/manager bypass
+    // (same pattern as spec 12 FR-8 / spec 13 board access, spec 15 FR-7).
+    if (args.caller.role === 'user') {
+      const assignment = await (tx as PrismaService).projectMember.findUnique({
+        where: {
+          projectId_membershipId: { projectId: task.projectId, membershipId: args.caller.id },
+        },
+      });
+      if (!assignment) {
+        throw new ForbiddenException({
+          error: 'task_project_not_assigned',
+          message: TIME_TRACKING_MESSAGES.taskProjectNotAssigned,
+        });
+      }
+    }
+    // project.key can be null for keyless projects — the task selector never shows them
+    // (spec 15 FR-15), but a direct API call could still try. Fall back to computing a
+    // label without the key prefix would break FR-2's `{KEY}-{N}: {title}` shape, so we
+    // require the key.
+    if (!task.project.key) {
+      throw new BadRequestException({
+        error: 'task_not_found',
+        message: TIME_TRACKING_MESSAGES.taskLinkNotFound,
+      });
+    }
+    const label = computeTaskLabel({
+      projectKey: task.project.key,
+      taskNumber: task.taskNumber,
+      title: task.title,
+    });
+    return { taskId: task.id, taskLabel: label };
   }
 
   /** Validate timer metadata (task/description); 400 `{errors}` on failure. */
@@ -480,6 +718,7 @@ export class TimeTrackingService {
    * active org project (else 400). `null`/'' clears the project.
    */
   private async resolveEntryProjectId(
+    client: ProjectClient,
     organizationId: string,
     currentProjectId: string | null,
     rawProjectId: unknown,
@@ -492,7 +731,7 @@ export class TimeTrackingService {
     // Unchanged reference is always allowed (FR-7: archived project preserved when not switched).
     if (rawProjectId === currentProjectId) return currentProjectId;
     // A genuine switch must target an active project.
-    const project = await this.resolveActiveProject(this.prisma, organizationId, rawProjectId);
+    const project = await this.resolveActiveProject(client, organizationId, rawProjectId);
     return project?.id ?? null;
   }
 
@@ -545,15 +784,22 @@ export class TimeTrackingService {
     id: string;
     projectId: string | null;
     task: string | null;
+    taskId: string | null;
     description: string | null;
     startedAt: Date;
-    project?: { name: string } | null;
+    project?: { name: string; key: string | null } | null;
+    taskRef?: { taskNumber: number } | null;
   }): TimerShape {
     return {
       id: timer.id,
       projectId: timer.projectId,
       projectName: timer.project?.name ?? null,
       task: timer.task,
+      taskId: timer.taskId,
+      taskKey:
+        timer.taskId && timer.project?.key && timer.taskRef
+          ? `${timer.project.key}-${timer.taskRef.taskNumber}`
+          : null,
       description: timer.description,
       startedAt: timer.startedAt.toISOString(),
     };
@@ -565,13 +811,15 @@ export class TimeTrackingService {
       membershipId: string;
       projectId: string | null;
       task: string | null;
+      taskId: string | null;
       description: string | null;
       date: Date;
       startTime: Date | null;
       endTime: Date | null;
       durationMinutes: number;
       createdAt: Date;
-      project?: { name: string } | null;
+      project?: { name: string; key: string | null } | null;
+      taskRef?: { taskNumber: number } | null;
     },
     memberName: string | null,
   ): TimeEntryShape {
@@ -581,6 +829,11 @@ export class TimeTrackingService {
       projectId: entry.projectId,
       projectName: entry.project?.name ?? null,
       task: entry.task,
+      taskId: entry.taskId,
+      taskKey:
+        entry.taskId && entry.project?.key && entry.taskRef
+          ? `${entry.project.key}-${entry.taskRef.taskNumber}`
+          : null,
       description: entry.description,
       date: entry.date.toISOString().slice(0, 10),
       startTime: entry.startTime ? entry.startTime.toISOString() : null,
