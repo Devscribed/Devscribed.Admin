@@ -346,7 +346,7 @@ Streams the file with its stored content type and the original filename in
   - `card-criteria-list`, `card-criteria-add`, `card-criteria-autocomplete`,
     `card-criterion-{criterionId}`, `card-criterion-value-{criterionId}`,
     `card-criterion-remove-{criterionId}`, `card-criteria-empty`
-  - `card-save-error`, `card-save-retry`, `card-loading-skeleton`
+  - `card-save-error`, `card-save-retry`, `card-loading`
 
 ## Out of Scope
 

@@ -893,10 +893,21 @@ record the exposure that leaves open rather than implying the endpoints are prot
   inside the field, which a multi-line field has no unambiguous place for. The candidate card's
   saved-at indicator lives in that slot so it can appear and change without moving the field below
   it — the alternative shifts the layout on every autosave. `TextArea` also needs a real
-  `<label for>`; a micro-label sitting above a field never names it.
+  `<label for>`; a micro-label sitting above a field never names it. Both landed:
+  [§25](specs/design-system/ledger.md) in Phase 3 and [§33](specs/design-system/ledger.md) in
+  Phase 4, one phase early, for the cancel dialog's character count — including the part that
+  matters here, the label's `margin-bottom` zeroed inside the row so the field sits at the same y
+  either way.
+- **A `Chip`'s label ellipsises to one line**, which is the same trap as a `Card` clipping a
+  popover, one component down: the criterion chip has to hold a value control that opens a list,
+  and a control in that span is cut off at the chip's edge. `trailing` is the slot outside it
+  ([§37](specs/design-system/ledger.md)), and it is also what makes `Chip` — rather than `Badge`,
+  which in blue is a four-paint status pill — the right component for a chosen thing with a value
+  set on it.
 - **`Button` needs `as="a"`** for an action that is really a navigation. The CV download is one: a
   download through an `onClick` loses middle-click, copy-address and the browser's own download
-  handling.
+  handling. Landed as [§38](specs/design-system/ledger.md) in Phase 5, in the shape `Table`'s
+  `rowHref` already uses — same paint, an anchor when it navigates.
 - **`Select isSearchable` replaces `Combobox`** — the prop exists in blue, and until Phase 3 that
   was all it was: accepted and ignored, because blue measured the painted box of a react-select
   wrapper and left a `<div onClick>` behind it. Implemented as
@@ -918,8 +929,9 @@ record the exposure that leaves open rather than implying the endpoints are prot
   rounds an edge-to-edge `Table`'s square corners — and it also cuts a `Select` list off at the
   card's edge, so the options below the fold are invisible and unclickable. `clip` (default `true`)
   is the opt-out, and it has to exist from the moment `Card` is built, because four surfaces pass
-  `clip={false}`: the candidate database's filter bar, the candidate card's application section,
-  and the two library cards on hiring settings, whose row menus clip the same way below 768px. The
+  `clip={false}`: the candidate database's filter bar (Phase 4) and the candidate card's
+  application section (Phase 5), both of which now prove it, and the two library cards on hiring
+  settings, whose row menus clip the same way below 768px. The
   regression test hit-tests the option's own coordinates rather than clicking it — a clipped
   popover keeps its layout box and still scrolls into view inside the card hiding it, so a click
   passes either way and only what is *painted* there tells the two apart.
@@ -945,7 +957,11 @@ record the exposure that leaves open rather than implying the endpoints are prot
     browser, so this is a free swap for a pointer and a regression for everyone else. **Phase 3
     answered the vacancy site with visible text**: the reason is drawn in the menu row and wired
     as its `aria-describedby`, and the row stays `aria-disabled` and focusable
-    ([§22](specs/design-system/ledger.md)). The last-admin guard is still open.
+    ([§22](specs/design-system/ledger.md)). **Phase 5 deleted the candidate card's without
+    replacing it**: the cancelled badge's `aria-label` was already the whole cancellation and the
+    painted text only a truncation of it, and the scheduling history below draws the same fact as
+    a real row. It also found what makes `title` worse than nothing on a named element — it
+    becomes the *description*, so the sentence is read twice. The last-admin guard is still open.
   - `Toast` → `InfoBanner` turns transient into persistent, which needs both a slot and a
     dismissal story on five screens. **Phase 3 set both**: the slot is directly under
     `PageHeader`, above the page body; dismissal is `InfoBanner onDismiss`

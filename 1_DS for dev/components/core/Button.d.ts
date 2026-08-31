@@ -12,8 +12,17 @@ export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
   disabled?: boolean;
   children: ReactNode;
   type?: 'button' | 'submit';
-  /** §2 — every other attribute reaches the `<button>`; `style` merges over the painted one. */
-  ref?: Ref<HTMLButtonElement>;
+  /** §38 — the element to render. `a` keeps the paint and gives up `type` and `disabled`, which
+   *  an anchor does not have; a `disabled` anchor still paints disabled and gets `aria-disabled`.
+   *  Use it for a control that navigates or downloads, so the browser's own handling survives. */
+  as?: 'button' | 'a';
+  /** §38 — anchor attributes, meaningful only with `as="a"`. */
+  href?: string;
+  download?: string | boolean;
+  target?: string;
+  rel?: string;
+  /** §2 — every other attribute reaches the element; `style` merges over the painted one. */
+  ref?: Ref<HTMLButtonElement | HTMLAnchorElement>;
 }
 
 export function Button(props: ButtonProps): JSX.Element;

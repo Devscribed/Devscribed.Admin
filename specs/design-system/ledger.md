@@ -5,9 +5,11 @@ One numbered entry per component or prop added, under
 [§D3](README.md) — *edit the vendored copy in place, but never silently*.
 
 Phase 0 created this file; Phase 1 wrote §1–§11, Phase 2 wrote §12–§18, Phase 3 wrote
-§19–§29 and Phase 4 wrote §30–§36. `npm run ds:drift` currently reports eight local-only
-components — `AuthLayout`, `Calendar`, `Card`, `Chip`, `CrossIcon`, `IconButton`, `Eye`,
-`EyeOff` — and each of them is numbered below, which is the bar this file exists to hold.
+§19–§29, Phase 4 wrote §30–§36 and Phase 5 wrote §37–§38. `npm run ds:drift` currently reports
+eight local-only components — `AuthLayout`, `Calendar`, `Card`, `Chip`, `CrossIcon`,
+`IconButton`, `Eye`, `EyeOff` — and each of them is numbered below, which is the bar this file
+exists to hold. Phase 5 added no ninth: both of its entries are props on components already
+numbered.
 
 ## Numbering convention
 
@@ -77,6 +79,9 @@ Each entry is one of three, because the distinction decides what the upstream pu
 | 35 | `TextInput` | `wrapperStyle` — style for the field's own box, which `...rest` and `style` cannot reach because they address the `<input>`. `Select` (§21) and `SearchInput` (§26) both grew this already and in the same words: *a caller placing this field in a row is sizing that box, not the input inside it*. The three are siblings and disagreed only because they were measured separately, which is §25's observation about `TextInput` and `TextArea` arriving at the same field. The criteria filter's value control is the call site — a `Select` for a scale and a `TextInput` for a number, in one flex row, and only one of the two could say how wide it was. | `omission` | [§D2](README.md) | 4 | [03](../hiring/03-candidate-database.design.md) |
 | 36 | `Select` | `closeMenuOnSelect`, react-select's own prop name and its own default (`true`, for multi as much as for single). Blue closed the menu only when `!isMulti`, which is not something measured off prod — prod passes no such prop anywhere — but a divergence from the library blue recreates. It is §21's move a third time: **toward** react-select rather than away from it. Left open, a multi-select covers whatever sits under it with a list that `hideSelectedOptions` has often just emptied; on the candidates filter bar, picking the one position hid the category row behind an open `No options`. Passing `false` restores blue's behaviour for a caller that wants it. Note this changes one Phase 3 screen: `VacancyDialog`'s category picker now closes when a category is chosen. | `omission` | [§D2](README.md) | 4 | [03](../hiring/03-candidate-database.design.md), [01](../hiring/01-vacancies.design.md) |
 
+| 37 | `Chip` | `trailing` — a node between the label and the cross — and `removeTestId`. Blue draws `Chip` only inside `Select isMulti`, where the token is a label and a cross and nothing else, so its label span is `overflow: hidden` + `text-overflow: ellipsis` + `white-space: nowrap`, and it is the only slot there is. A screen showing a chosen thing *with a value set on it* cannot use that slot: a control placed there is clipped, and one that opens a list is cut off at the chip's own edge — which is `Card`'s `clip` problem ([reversal 6](README.md)) one level down, answered the same way, by putting the thing that opens outside the box that hides it. The criterion chip is the call site. It is also why §20's conditional pointer cursor needed a third reading: this chip *can* be removed, so `Chip` paints `cursor: pointer` across the whole token, but only the cross and the value control are clickable and the name between them promises nothing — so the caller turns it off, which is §18's rule on `Table`'s rows at chip scale. `removeTestId` is the smaller half: the cross is drawn by the component, exactly as §16's `nameTestId` / `menuTestId` and §21's `chipTestId` are. One painted value changes, and only when `trailing` is given — the chip centres its children instead of stretching them, because everything blue puts in a chip is one line of 14px text and `stretch` and `center` are identical until something taller arrives. | `omission` | [§D2](README.md) | 5 | [04](../hiring/04-candidate-card.design.md) |
+| 38 | `Button` | `as`, which is `'button'` or `'a'`. Blue measured a `<button>` because prod has no control that navigates — every download it offers is a row in a table — so this is §18's `rowHref` gap on a different component, and `Table` already makes the identical swap for a row that does navigate (`const Row = href ? 'a' : 'div'`). The CV's View and Download are navigations wearing a button: routing them through `onClick` gives up middle-click, copy-address, open-in-new-tab and the browser's own `download` handling, and no amount of script gets any of it back — `hiring-candidate-card.spec.ts` asserts three of the four. An anchor drops `type` and `disabled`, which it does not have; a `disabled` anchor still paints disabled and takes `aria-disabled`, so the treatment cannot say one thing while the accessibility tree says another. Everything else — the paint, the hover, the preloader, `aria-busy` — is untouched, plus `text-decoration: none`, which a `<button>` never needed. | `omission` | [§D2](README.md) | 5 | [04](../hiring/04-candidate-card.design.md) |
+
 ### A note on §22 and reversal 2
 
 `Tooltip` → native `title` is [reversal 2](README.md), and the record said the phase that hit it
@@ -95,6 +100,24 @@ So the reason is simply drawn in the row, under the label, at `--font-size-xs` i
 `aria-describedby`, and it needs no component blue does not have. Phases 5 and 6 have the other
 two sites and are not bound to this answer — a menu row has somewhere to put a sentence, and an
 inline icon may not.
+
+**Phase 5 took the third answer — the accepted regression — and it cost almost nothing.** The
+candidate card's one bubble is on the cancelled badge, and what that bubble drew was already the
+badge's accessible **name**: `cancelledTooltip` is the whole fact, who and when and why, while
+`cancelledBadgeLabel`'s `Cancelled by Pat` is only what is painted. The `aria-label` stays, the
+bubble goes, and nothing replaces it.
+
+Native `title` is the case reversal 2 did not anticipate, and it is written down here because
+Phase 6 meets it again. On an element that *already has a name*, `title` is not a second chance
+at the name — it becomes the accessible **description**, so a reader would be given the same
+sentence twice, once as the name and once after it. Together with being unreachable from a
+keyboard in every major browser, that makes it cost a reader something and give nobody anything.
+
+What makes this cheap rather than a real loss is that the screen draws the fact anyway: the
+scheduling history a few rows below lists the cancellation as a real row, with the actor, the
+timestamp and the reason. The vacancies menu had no such place, which is why it had to draw one.
+Reversal 3 remains the third site's warning — on `BoardCard` the tooltip *is* the badge's name,
+so Phase 7 needs `aria-label` there and never `title`.
 
 ### A note on §14 and `MenuDrawer`
 

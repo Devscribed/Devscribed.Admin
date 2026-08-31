@@ -11,7 +11,7 @@ import {
   interviewMovedToast,
   type ApplicationStatus,
 } from '@devscribed/validation';
-import { Button, Card, InfoBanner, Skeleton, Toast } from '@/ds';
+import { Button, Card, InfoBanner, Preloader } from '@/ds';
 import { focusByTestId } from '@/field-error';
 import { PageHeader } from '@/layout/PageHeader';
 import type {
@@ -66,8 +66,11 @@ export default function CandidateCardPage({
    * cancellation are three different outcomes and 04/07 name a surface for each, so the
    * id travels with the message rather than being fixed to the one component that shows
    * them all.
+   *
+   * One at a time: a new outcome replaces the last rather than stacking under it
+   * (reversal 4), and nothing here times out.
    */
-  const [toast, setToast] = useState<{ message: string; testId: string } | null>(null);
+  const [notice, setNotice] = useState<{ message: string; testId: string } | null>(null);
   /**
    * The org-wide criteria library, fetched once for the whole page rather than per
    * application: it is the same list on every section, and a second copy would be a
@@ -189,7 +192,7 @@ export default function CandidateCardPage({
       try {
         await patch(applicationId, { status });
       } catch {
-        setToast({ message: MESSAGES.generic, testId: 'card-status-toast' });
+        setNotice({ message: MESSAGES.generic, testId: 'card-status-toast' });
         return;
       }
 
@@ -211,7 +214,7 @@ export default function CandidateCardPage({
 
       // A member who changes the status here stays on the card — this is the middle of
       // an interview, not the end of one.
-      setToast({
+      setNotice({
         message: `Moved to ${APPLICATION_STATUS_LABELS[status]}`,
         testId: 'card-status-toast',
       });
@@ -219,8 +222,13 @@ export default function CandidateCardPage({
       // The one focus move on this page, and it is a direct answer to what the member
       // just did: an outcome with no reason recorded is the gap this prompts for
       // (04 §06.31). Prompted, never required — the field is focused, not validated.
+      //
+      // After the banner above has been laid out, never before it. The announcement is
+      // now in flow rather than floating over the page (reversal 4), so focusing first
+      // would scroll the field into view and then push it down by the banner's own
+      // height — which is the one thing this screen exists not to do.
       if (CONCLUSION_PROMPTING_STATUSES.includes(status)) {
-        focusByTestId('card-conclusion-input');
+        requestAnimationFrame(() => focusByTestId('card-conclusion-input'));
       }
     },
     [patch],
@@ -232,7 +240,7 @@ export default function CandidateCardPage({
     // this caller may not see. Which of those it is, is exactly what it must not say.
     return (
       <Card data-testid="candidate-not-found">
-        <p style={{ margin: 0, fontSize: 'var(--fs-15)', color: 'var(--text-sub)' }}>
+        <p style={{ margin: 0, fontSize: 'var(--font-size-base)', color: 'var(--text-tertiary)' }}>
           {HIRING_MESSAGES.card.notFound}
         </p>
       </Card>
@@ -242,10 +250,13 @@ export default function CandidateCardPage({
   if (state.status === 'loading') {
     return (
       <Card>
-        <span aria-live="polite" style={VISUALLY_HIDDEN}>
-          Loading candidate
-        </span>
-        <Skeleton rows={5} height={22} data-testid="card-loading-skeleton" />
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-7)' }}>
+          {/* The dots carry no text, so the announcement is made beside them. */}
+          <Preloader data-testid="card-loading" aria-hidden />
+          <span aria-live="polite" style={VISUALLY_HIDDEN}>
+            Loading candidate
+          </span>
+        </div>
       </Card>
     );
   }
@@ -253,10 +264,10 @@ export default function CandidateCardPage({
   if (state.status === 'error') {
     return (
       <Card data-testid="card-load-error">
-        <InfoBanner tone="error">
-          <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+        <InfoBanner variant="error" role="alert">
+          <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
             {MESSAGES.generic}
-            <Button variant="ghost" size="sm" onClick={() => void load()} data-testid="card-load-retry">
+            <Button onClick={() => void load()} data-testid="card-load-retry">
               Retry
             </Button>
           </span>
@@ -296,7 +307,7 @@ export default function CandidateCardPage({
         : current,
     );
 
-    setToast(
+    setNotice(
       outcome === 'cancelled'
         ? {
             message: HIRING_MESSAGES.toast.interviewCancelled,
@@ -321,17 +332,40 @@ export default function CandidateCardPage({
         }
       />
 
+      {/*
+        Reversal 4's slot, the one Phase 3 fixed: directly under `PageHeader`, above the
+        page body. The announcement is about the page and was raised from the header over
+        it, and in flow it pushes the body down rather than covering it — which is why the
+        status change below defers its focus move until after this has been laid out.
+
+        It leaves by being dismissed or by being replaced; nothing times out, because a
+        banner that removes itself after a few seconds is a toast wearing a different
+        component. The test ids are kept: they name the announcement, not the component
+        that draws it.
+      */}
+      {notice && (
+        <InfoBanner
+          variant="success"
+          role="status"
+          onDismiss={() => setNotice(null)}
+          data-testid={notice.testId}
+          style={{ marginBottom: 'var(--space-6)' }}
+        >
+          {notice.message}
+        </InfoBanner>
+      )}
+
       {applications.length === 0 ? (
         <Card>
           <p
             data-testid="candidate-no-applications"
-            style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}
+            style={{ margin: 0, fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}
           >
             No applications yet.
           </p>
         </Card>
       ) : (
-        <div style={{ display: 'grid', gap: 'var(--sp-8)' }}>
+        <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
           {applications.map((application) => (
             <ApplicationSection
               key={application.id}
@@ -389,11 +423,6 @@ export default function CandidateCardPage({
         </div>
       )}
 
-      {toast && (
-        <Toast tone="success" onDismiss={() => setToast(null)} data-testid={toast.testId}>
-          {toast.message}
-        </Toast>
-      )}
     </div>
   );
 }

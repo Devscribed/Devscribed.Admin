@@ -18,11 +18,13 @@ import {
   type ApplicationStatus,
   type TimelineEntry,
 } from '@devscribed/validation';
-import { Badge, Button, Card, SectionLabel, Select, Tooltip } from '@/ds';
+import { Badge, Button, Card, Select } from '@/ds';
 import { CancelInterviewDialog } from '@/hiring/CancelInterviewDialog';
 import { formatDuration } from '@/hiring/format';
 import { RescheduleDialog } from '@/hiring/RescheduleDialog';
+import { valueOf } from '@/hiring/select';
 import type { CardApplication } from '@/hiring/types';
+import { SectionHeading } from './SectionHeading';
 
 /**
  * One application: what the candidate and the calendar already settled, read-only, and
@@ -128,7 +130,7 @@ export function ApplicationSection({
               <>
                 <div
                   data-testid={`application-when-${application.id}`}
-                  style={{ fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}
+                  style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-tertiary)' }}
                 >
                   {formatShortWhen(start, viewerTimeZone)} {viewerTimeZone} ·{' '}
                   <span data-testid={`application-interviewer-${application.id}`}>
@@ -137,7 +139,7 @@ export function ApplicationSection({
                   {/* The zone they booked in, when it is not the one being read in —
                       it is what their invite says and what they agreed to. */}
                   {bookedElsewhere && (
-                    <span style={{ color: 'var(--text-muted)' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>
                       {' · booked '}
                       {formatShortWhen(start, application.bookedTimeZone)}{' '}
                       {application.bookedTimeZone}
@@ -148,7 +150,7 @@ export function ApplicationSection({
                 {application.submittedName !== candidateName && (
                   <p
                     data-testid={`application-submitted-as-${application.id}`}
-                    style={{ margin: '2px 0 0', fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}
+                    style={{ margin: '2px 0 0', fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}
                   >
                     Applied as &ldquo;{application.submittedName}&rdquo;
                   </p>
@@ -162,16 +164,19 @@ export function ApplicationSection({
                 {actionable && (
                   <div className="application-schedule-actions">
                     <Button
-                      variant="secondary"
-                      size="sm"
                       onClick={() => setRescheduling(true)}
                       data-testid={`application-reschedule-${application.id}`}
                     >
                       {HIRING_MESSAGES.manage.rescheduleAction}
                     </Button>
+                    {/*
+                      `delete` here, unlike the same pair on My interviews, which takes the
+                      neutral outline for both: this is one interview under its own heading,
+                      not a fill repeated down a table of them, and calling an interview off
+                      is the one action on this page that cannot be undone.
+                    */}
                     <Button
-                      variant="danger"
-                      size="sm"
+                      variant="delete"
                       onClick={() => setCancelling(true)}
                       data-testid={`application-cancel-${application.id}`}
                     >
@@ -184,38 +189,31 @@ export function ApplicationSection({
           </div>
 
           <div className="card-section-status">
+            {/*
+              Names who cancelled and when (04 §03.11). The mark says the interview did not
+              take place and nothing about the candidate's standing — which is why the
+              section keeps its status control beside it.
+
+              The hover bubble is gone, and this is the second of reversal 2's three sites.
+              The badge's *name* is still the whole fact, which is where the sentence has
+              always lived — `cancelledTooltip` is the accessible name and the truncated
+              form is only what is drawn. Native `title` would add nothing a reader can use
+              and take something away: with text content already naming the badge, `title`
+              becomes its description, so the same sentence would be announced twice. And a
+              pointer user is not left guessing, because this screen draws the fact in full
+              a few rows below, in the scheduling history, with who gave the reason and
+              when — which the vacancies menu (§22) had nowhere to put.
+            */}
             {application.isCancelled && (
-              <Tooltip
-                content={cancelledTooltip(application.cancellation, viewerTimeZone)}
-                placement="left"
-                testId={`application-cancelled-tooltip-${application.id}`}
-                style={{ display: 'inline-block' }}
+              <Badge
+                status="inactive"
+                aria-label={cancelledTooltip(application.cancellation, viewerTimeZone)}
+                data-testid={`application-cancelled-${application.id}`}
               >
-                {/* Names who cancelled and when (04 §03.11). The mark says the interview
-                    did not take place and nothing about the candidate's standing — which
-                    is why the section keeps its status control beside it. */}
-                <Badge
-                  tone="inactive"
-                  aria-label={cancelledTooltip(application.cancellation, viewerTimeZone)}
-                  data-testid={`application-cancelled-${application.id}`}
-                >
-                  {cancelledBadgeLabel(application.cancellation)}
-                </Badge>
-              </Tooltip>
+                {cancelledBadgeLabel(application.cancellation)}
+              </Badge>
             )}
-            {expanded && (
-              <Select
-                value={application.status}
-                options={applicationStatusOptions().map((option) => ({
-                  ...option,
-                  testId: `application-status-option-${application.id}-${option.value}`,
-                }))}
-                onChange={(value) => onStatusChange(value as ApplicationStatus)}
-                aria-label={`Status for ${application.vacancy.title}`}
-                data-testid={`application-status-select-${application.id}`}
-                wrapperStyle={{ width: 170 }}
-              />
-            )}
+            {expanded && <StatusSelect application={application} onChange={onStatusChange} />}
           </div>
         </div>
 
@@ -278,15 +276,15 @@ export function ApplicationSection({
 
             {application.note && (
               <div>
-                <SectionLabel>Candidate&rsquo;s note</SectionLabel>
+                <SectionHeading>Candidate&rsquo;s note</SectionHeading>
                 <p
                   data-testid={`application-note-${application.id}`}
                   style={{
-                    margin: 'var(--sp-4) 0 0',
+                    margin: 'var(--space-3) 0 0',
                     whiteSpace: 'pre-wrap',
-                    fontSize: 'var(--fs-15)',
-                    lineHeight: 'var(--lh-normal)',
-                    color: 'var(--text-sub)',
+                    fontSize: 'var(--font-size-base)',
+                    lineHeight: 'var(--line-height-base)',
+                    color: 'var(--text-tertiary)',
                   }}
                 >
                   {application.note}
@@ -304,7 +302,23 @@ export function ApplicationSection({
   );
 }
 
-/** The vacancy and its length; collapsed, the whole summary row; and the toggle. */
+/**
+ * The vacancy and its length; collapsed, the whole summary row; and the toggle.
+ *
+ * A real `<h2>` — the level between `PageTitle`'s `<h1>` and the panel's own captions, which
+ * is the outline Phase 3 established for a caption that names a surface (reversal 5). The
+ * panel cannot use `Card`'s own `title` slot to get it: `Card` draws a title and one trailing
+ * action in a single row, and this header carries the interview's facts and its two schedule
+ * actions under the title and a badge and a status control beside it.
+ *
+ * When the section is collapsible the button goes *inside* the heading rather than the heading
+ * inside the button, which is the disclosure pattern: the section is still findable by heading,
+ * and the control that opens it is still a control.
+ *
+ * The type is blue's headline-6 — 16px, `--font-weight-medium`, -0.32px — which is exactly
+ * what `Card` paints its own titles with. Meridian's `--font-display` at 600 and -.2px is the
+ * same idea in a family the app no longer has.
+ */
 function Heading({
   application,
   minutes,
@@ -320,13 +334,13 @@ function Heading({
   summary: string | null;
   onToggle: () => void;
 }) {
-  const style = {
-    fontFamily: 'var(--font-display)',
-    fontWeight: 600,
-    fontSize: 'var(--fs-16)',
-    letterSpacing: '-.2px',
-    color: 'var(--text)',
-    marginBottom: 4,
+  const heading = {
+    margin: '0 0 4px',
+    fontWeight: 'var(--headline-6-weight)',
+    fontSize: 'var(--headline-6-size)',
+    lineHeight: 'var(--headline-6-line)',
+    letterSpacing: 'var(--headline-6-tracking)',
+    color: 'var(--text-primary)',
   } as const;
 
   const title = (
@@ -334,7 +348,7 @@ function Heading({
       <span data-testid={`application-vacancy-${application.id}`}>
         {application.vacancy.title}
       </span>
-      <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>
+      <span style={{ color: 'var(--text-secondary)', fontWeight: 'var(--font-weight-regular)' }}>
         {' · '}
         {formatDuration(minutes)}
         {summary ? ` · ${summary}` : ''}
@@ -342,31 +356,65 @@ function Heading({
     </span>
   );
 
-  if (!collapsible) return <div style={style}>{title}</div>;
+  if (!collapsible) return <h2 style={heading}>{title}</h2>;
 
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-expanded={expanded}
-      data-testid={`application-toggle-${application.id}`}
-      style={{
-        ...style,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 'var(--sp-4)',
-        width: '100%',
-        padding: 0,
-        border: 'none',
-        background: 'none',
-        textAlign: 'left',
-        color: 'var(--text)',
-        cursor: 'pointer',
-      }}
-    >
-      {title}
-      <Chevron expanded={expanded} />
-    </button>
+    <h2 style={heading}>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        data-testid={`application-toggle-${application.id}`}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'var(--space-3)',
+          width: '100%',
+          padding: 0,
+          border: 'none',
+          background: 'none',
+          textAlign: 'left',
+          font: 'inherit',
+          letterSpacing: 'inherit',
+          color: 'inherit',
+          cursor: 'pointer',
+        }}
+      >
+        {title}
+        <Chevron expanded={expanded} />
+      </button>
+    </h2>
+  );
+}
+
+/**
+ * The application's status, and the one control on this page that writes without a save.
+ *
+ * Blue's `Select` deals in options rather than the values behind them, so the current status
+ * is looked up in the list rather than handed over as a bare string — passing the string would
+ * draw `didnt_pass` where the label belongs.
+ */
+function StatusSelect({
+  application,
+  onChange,
+}: {
+  application: CardApplication;
+  onChange: (status: ApplicationStatus) => void;
+}) {
+  const options = applicationStatusOptions().map((option) => ({
+    ...option,
+    testId: `application-status-option-${application.id}-${option.value}`,
+  }));
+
+  return (
+    <Select
+      value={options.find((option) => option.value === application.status)}
+      options={options}
+      onChange={(option) => onChange(valueOf(option) as ApplicationStatus)}
+      aria-label={`Status for ${application.vacancy.title}`}
+      data-testid={`application-status-select-${application.id}`}
+      wrapperStyle={{ width: 170 }}
+    />
   );
 }
 
@@ -383,13 +431,13 @@ function Chevron({ expanded }: { expanded: boolean }) {
         marginLeft: 'auto',
         flexShrink: 0,
         transform: `rotate(${expanded ? 180 : 0}deg)`,
-        transition: 'transform 200ms',
+        transition: 'transform var(--duration-hover)',
       }}
     >
       <path
         d="M4 6l4 4 4-4"
         fill="none"
-        stroke="var(--text-muted)"
+        stroke="var(--text-secondary)"
         strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -436,25 +484,29 @@ function SchedulingHistory({
   return (
     <div>
       <Button
-        variant="ghost"
-        size="sm"
         onClick={() => setExpanded((open) => !open)}
         aria-expanded={expanded}
         aria-controls={listId}
         data-testid={`application-history-toggle-${applicationId}`}
-        style={{ paddingLeft: 0, color: 'var(--text-muted)' }}
       >
-        <span aria-hidden style={{ marginRight: 'var(--sp-3)' }}>{expanded ? '▾' : '▸'}</span>
+        <span aria-hidden style={{ marginRight: 'var(--space-2)' }}>{expanded ? '▾' : '▸'}</span>
         {expanded ? HIRING_MESSAGES.manage.historyLabel : scheduleSummary(entries, viewerTimeZone)}
       </Button>
 
+      {/*
+        The last of the token map's four `--bg-panel-2` surfaces, and it takes the answer
+        Phase 4 gave the candidates filter bar rather than the one Phase 2 gave the shell:
+        `--surface-sunken`, the tone blue already puts behind a `Table`'s own header row. A
+        log inset into the panel it belongs to is a recessed surface, not a second white card
+        floating inside a white card.
+      */}
       {expanded && (
         <Card
           id={listId}
           data-testid={listId}
-          style={{ background: 'var(--bg-panel-2)', marginTop: 'var(--sp-4)' }}
+          style={{ background: 'var(--surface-sunken)', marginTop: 'var(--space-3)' }}
         >
-          <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 'var(--sp-4)' }}>
+          <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 'var(--space-3)' }}>
             {entries.map((entry) => (
               <li
                 key={entry.id}
@@ -463,23 +515,29 @@ function SchedulingHistory({
                 style={{
                   display: 'flex',
                   alignItems: 'baseline',
-                  gap: 'var(--sp-6)',
-                  fontSize: 'var(--fs-13)',
-                  color: 'var(--text)',
+                  gap: 'var(--space-5)',
+                  fontSize: 'var(--font-size-s)',
+                  color: 'var(--text-primary)',
                 }}
               >
                 <span style={{ fontVariantNumeric: 'tabular-nums' }}>
                   {scheduleEntryLabel(entry)}
                 </span>
-                <span style={{ color: 'var(--text-sub)' }}>{entry.actorName}</span>
+                <span style={{ color: 'var(--text-tertiary)' }}>{entry.actorName}</span>
                 {/* The reason a member gave, never on a candidate-facing surface. */}
                 {entry.reason && (
-                  <span style={{ color: 'var(--text-sub)' }}>— {entry.reason}</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}>— {entry.reason}</span>
                 )}
+                {/*
+                  Meridian drew this in `--text-faint`, the fourth text level blue does not
+                  have (reversal 7). It takes `--text-secondary`, the answer Phase 3 settled
+                  and Phase 4 applied twice: a timestamp beside the fact it dates is shown
+                  but receded, which is the same reading as a past interview's date.
+                */}
                 <span
                   style={{
                     marginLeft: 'auto',
-                    color: 'var(--text-faint)',
+                    color: 'var(--text-secondary)',
                     fontVariantNumeric: 'tabular-nums',
                   }}
                 >
@@ -498,6 +556,11 @@ function SchedulingHistory({
  * View and download, both pointed at the authenticated endpoint. There is no storage URL
  * on this page to leak (04 §07.33) — the key never leaves the server. Real links rather
  * than buttons, so the browser's own download handling applies.
+ *
+ * `Button as="a"` (ledger §38) is what keeps that true under blue, which measured a
+ * `<button>` because prod has no control that navigates. Scripted navigation would lose
+ * middle-click, copy-address, open-in-new-tab and `download`'s own filename handling, and
+ * the CV test asserts three of the four.
  */
 function CvRow({ orgId, application }: { orgId: string; application: CardApplication }) {
   // Every booking stores a CV, so an application without one is a record that lost it —
@@ -506,7 +569,7 @@ function CvRow({ orgId, application }: { orgId: string; application: CardApplica
     return (
       <p
         data-testid="card-cv-unavailable"
-        style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}
+        style={{ margin: 0, fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}
       >
         {HIRING_MESSAGES.card.cvUnavailable}
       </p>
@@ -525,21 +588,19 @@ function CvRow({ orgId, application }: { orgId: string; application: CardApplica
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
-          fontSize: 'var(--fs-14)',
-          color: 'var(--text)',
+          fontSize: 'var(--font-size-s)',
+          color: 'var(--text-primary)',
         }}
       >
         <span aria-hidden="true">📄 </span>
         {application.cv.fileName}
         {application.cv.sizeBytes !== null && (
-          <span style={{ color: 'var(--text-muted)' }}> {fileSize(application.cv.sizeBytes)}</span>
+          <span style={{ color: 'var(--text-secondary)' }}> {fileSize(application.cv.sizeBytes)}</span>
         )}
       </span>
       <div className="card-cv-actions">
         <Button
           as="a"
-          variant="secondary"
-          size="sm"
           href={`${href}?disposition=inline`}
           target="_blank"
           rel="noreferrer"
@@ -550,8 +611,6 @@ function CvRow({ orgId, application }: { orgId: string; application: CardApplica
         </Button>
         <Button
           as="a"
-          variant="secondary"
-          size="sm"
           href={href}
           download={application.cv.fileName}
           aria-label={`Download ${application.cv.fileName}`}

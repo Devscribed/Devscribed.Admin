@@ -57,28 +57,39 @@ export const Button = React.forwardRef(function Button(
   /* §2 — blue destructures seven props and forwards nothing, so `data-testid`, `ref`, `aria-*`,
      `className` and `style` were dropped on the floor. That is a measurement gap, not an API:
      prod never needed them because prod has no test ids. */
-  { variant, icon, preloader, disabled, children, onClick, type = 'button', style, onMouseEnter, onMouseLeave, ...rest },
+  { variant, icon, preloader, disabled, children, onClick, type = 'button', style, onMouseEnter, onMouseLeave,
+    /* §38 — the element, so a control that *navigates* can be a real `<a>` wearing this paint.
+       Prod has no such control — every download it offers is a row in a table — so blue measured
+       a `<button>` and stopped. A `<button onClick={() => location.assign(...)}>` loses
+       middle-click, copy-address, open-in-new-tab and the browser's own download handling, none
+       of which any amount of script gets back. `Table` already makes this exact swap for a row
+       that navigates (§18: `const Row = href ? 'a' : 'div'`), and this is that, on a button. */
+    as: Tag = 'button',
+    ...rest },
   ref,
 ) {
   const [hover, setHover] = React.useState(false);
+  const link = Tag === 'a';
   const painted = base(variant, disabled);
   if (hover && !disabled) {
     if (variant === 'primary' || variant === 'delete') painted.filter = 'brightness(90%)';
     else painted.opacity = 0.6;
   }
   return (
-    <button
+    <Tag
       {...rest}
       ref={ref}
-      type={type}
-      disabled={disabled}
+      /* An anchor has neither attribute. `disabled` still paints — the caller asked for the
+         disabled treatment — so it says so where a reader can hear it rather than only looking
+         unavailable. */
+      {...(link ? { 'aria-disabled': disabled || undefined } : { type, disabled })}
       /* §2 — a button that has swapped its label for "Signing in" and started a request is busy,
          and a screen reader has no other way to know. Prod never announced it. */
       aria-busy={preloader ? true : undefined}
       onClick={onClick}
       onMouseEnter={(e) => { setHover(true); if (onMouseEnter) onMouseEnter(e); }}
       onMouseLeave={(e) => { setHover(false); if (onMouseLeave) onMouseLeave(e); }}
-      style={{ ...painted, ...style }}
+      style={{ ...painted, ...(link ? { textDecoration: 'none' } : null), ...style }}
     >
       {(icon || preloader) && <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, flexShrink: 0 }}>{icon}</span>}
       <span className="ds-btn-title" style={{ margin: '0 10px' }}>{children}</span>
@@ -94,6 +105,6 @@ export const Button = React.forwardRef(function Button(
           )}
         </span>
       )}
-    </button>
+    </Tag>
   );
 });

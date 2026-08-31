@@ -7,10 +7,12 @@ import {
   MESSAGES,
   type AssessmentInput,
 } from '@devscribed/validation';
-import { Badge, Button, Combobox, IconButton, Input, SectionLabel, Select } from '@/ds';
+import { Button, Chip, Select, TextInput, type SelectOption } from '@/ds';
 import { focusByTestId } from '@/field-error';
 import { CriterionDialog } from '@/hiring/CriterionDialog';
+import { valueOf } from '@/hiring/select';
 import type { CardCriterion, Criterion } from '@/hiring/types';
+import { SectionHeading } from './SectionHeading';
 
 /**
  * The criteria assessed on one application (spec 04 §05).
@@ -161,19 +163,21 @@ export function CriteriaSection({
    * exists would match nothing and the control would offer to **create** it, which the
    * library refuses as a duplicate. So they stay, and choosing one edits what is there.
    */
-  const options = library
+  const options: SelectOption[] = library
     .filter((criterion) => !criterion.isArchived)
-    .map((criterion) => ({ value: criterion.id, label: criterion.name }));
+    .map((criterion) => ({
+      value: criterion.id,
+      label: criterion.name,
+      testId: `card-criteria-option-${criterion.id}`,
+    }));
 
   if (readOnly) return <ReadOnlyCriteria criteria={criteria} />;
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-6)' }}>
-        <SectionLabel>Criteria</SectionLabel>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-5)' }}>
+        <SectionHeading>Criteria</SectionHeading>
         <Button
-          variant="ghost"
-          size="sm"
           onClick={() => setAdding(true)}
           data-testid="card-criteria-add"
           style={{ marginLeft: 'auto' }}
@@ -185,7 +189,7 @@ export function CriteriaSection({
       {chips.length === 0 && !adding ? (
         <p
           data-testid="card-criteria-empty"
-          style={{ margin: 'var(--sp-4) 0 0', fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}
+          style={{ margin: 'var(--space-3) 0 0', fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}
         >
           {HIRING_MESSAGES.card.noCriteria}
         </p>
@@ -195,58 +199,66 @@ export function CriteriaSection({
           style={{
             display: 'flex',
             flexWrap: 'wrap',
-            gap: 'var(--sp-4)',
+            gap: 'var(--space-3)',
             listStyle: 'none',
-            margin: 'var(--sp-4) 0 0',
+            margin: 'var(--space-3) 0 0',
             padding: 0,
           }}
         >
           {chips.map(({ criterion, assessment }) => (
             <li key={criterion.id} className="card-criterion-chip">
-              <Badge
-                tone="neutral"
-                dot={false}
+              {/*
+                `Chip`, not `Badge`. Blue's `Badge` is `ActivityBadge` — four status paints and
+                no neutral — and a criterion is not a status, which is the split §32 made when
+                it took the opposite view of an application's. `Chip` is what blue draws for a
+                chosen thing, and the value control goes in its `trailing` slot (§37) rather
+                than in the label, which ellipsises to one line and would clip the list this
+                control drops.
+
+                The pointer cursor `Chip` paints when it can be removed is turned off: on this
+                chip only the cross and the value control are clickable, and the name between
+                them promises nothing. That is §18's rule on `Table`'s rows, one level down.
+              */}
+              <Chip
                 data-testid={`card-criterion-${criterion.id}`}
-                style={{ paddingRight: 4, gap: 'var(--sp-3)' }}
+                onRemove={() => void remove(criterion.id)}
+                removeLabel={`Remove ${criterion.name}`}
+                removeTestId={`card-criterion-remove-${criterion.id}`}
+                style={{ cursor: 'default', margin: 0, minWidth: 0 }}
+                trailing={
+                  <ValueControl
+                    criterion={criterion}
+                    assessment={assessment}
+                    busy={saving === criterion.id}
+                    onSave={(value) => void save(criterion, value)}
+                  />
+                }
               >
                 {criterion.name}
                 {criterion.isArchived && (
-                  <span style={{ color: 'var(--text-muted)', fontSize: 'var(--fs-11)' }}>
-                    (archived)
-                  </span>
+                  <span style={{ color: 'var(--text-secondary)' }}> (archived)</span>
                 )}
-                <ValueControl
-                  criterion={criterion}
-                  assessment={assessment}
-                  busy={saving === criterion.id}
-                  onSave={(value) => void save(criterion, value)}
-                />
-                <IconButton
-                  label={`Remove ${criterion.name}`}
-                  size={20}
-                  onClick={() => void remove(criterion.id)}
-                  data-testid={`card-criterion-remove-${criterion.id}`}
-                >
-                  <span aria-hidden="true" style={{ fontSize: 'var(--fs-12)', lineHeight: 1 }}>
-                    ×
-                  </span>
-                </IconButton>
-              </Badge>
+              </Chip>
             </li>
           ))}
         </ul>
       )}
 
       {adding && (
-        <div style={{ marginTop: 'var(--sp-6)', maxWidth: 320 }}>
-          <Combobox
+        <div style={{ marginTop: 'var(--space-5)', maxWidth: 320 }}>
+          {/*
+            `Select isSearchable allowCreate` — blue's own control with the capability prod
+            never switches on (§21) and the create row §29 added, not a second combobox. The
+            per-option test ids ride on the options themselves, which is the shape §21 gave
+            a listbox blue draws for itself.
+          */}
+          <Select
             placeholder="Type to find or create…"
             autoFocus
-            value={[]}
+            isSearchable
             options={options}
-            multiple={false}
             allowCreate
-            onChange={(selected) => choose(selected[0])}
+            onChange={(option) => choose(valueOf(option))}
             // Nothing is written until the dialog is confirmed, so cancelling it leaves
             // no half-made criterion in a library the whole team shares.
             onCreate={(name) => {
@@ -254,7 +266,7 @@ export function CriteriaSection({
               setCreating(name);
             }}
             createTestId="card-criteria-create-option"
-            optionTestId={(value) => `card-criteria-option-${value}`}
+            aria-label="Find or create a criterion"
             data-testid="card-criteria-autocomplete"
           />
         </div>
@@ -265,7 +277,7 @@ export function CriteriaSection({
         {note && (
           <span
             data-testid="card-criteria-note"
-            style={{ display: 'block', marginTop: 'var(--sp-4)', fontSize: 'var(--fs-12)', color: 'var(--text-muted)' }}
+            style={{ display: 'block', marginTop: 'var(--space-3)', fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}
           >
             {note}
           </span>
@@ -273,7 +285,7 @@ export function CriteriaSection({
         {error && (
           <span
             data-testid="card-criteria-error"
-            style={{ display: 'block', marginTop: 'var(--sp-4)', fontSize: 'var(--fs-12)', color: 'var(--error-500)' }}
+            style={{ display: 'block', marginTop: 'var(--space-3)', fontSize: 'var(--font-size-xs)', color: 'var(--status-error)' }}
           >
             {error}
           </span>
@@ -304,6 +316,11 @@ export function CriteriaSection({
  * A `Select` writes the moment it is chosen. The two typed fields cannot: saving per
  * keystroke would write `7`, `70`, `700` on the way to `700`, so they commit on blur and
  * on Enter — which is what "on change" means for a field somebody is still typing into.
+ *
+ * All four are blue's controls at blue's own height. Meridian shrank them to 26px to fit
+ * inside a `Badge`; blue's form controls are 44px, the chip grows to hold one, and the
+ * criteria *filter* row on the candidates screen already reads at that size — the two are
+ * the same three-control shape and must not disagree about it (D1).
  */
 function ValueControl({
   criterion,
@@ -322,36 +339,42 @@ function ValueControl({
   const shared = { 'aria-label': criterion.name, 'aria-busy': busy || undefined };
 
   if (criterion.type === 'scale') {
+    const options: SelectOption[] = criterion.values.map((value) => ({
+      value: value.id,
+      label: value.label,
+      testId: `card-criterion-option-${value.id}`,
+    }));
     return (
       <Select
         {...shared}
-        value={assessment?.valueId ?? ''}
+        value={options.find((option) => option.value === assessment?.valueId)}
         placeholder="Value"
-        options={criterion.values.map((value) => ({
-          value: value.id,
-          label: value.label,
-          testId: `card-criterion-option-${value.id}`,
-        }))}
-        onChange={(valueId) => onSave({ valueId })}
+        options={options}
+        onChange={(option) => onSave({ valueId: valueOf(option) })}
         data-testid={testId}
-        wrapperStyle={{ display: 'inline-block', minWidth: 96 }}
+        wrapperStyle={{ width: 116 }}
       />
     );
   }
 
   if (criterion.type === 'boolean') {
+    const options: SelectOption[] = [
+      { value: 'yes', label: 'Yes', testId: `card-criterion-option-${criterion.id}-yes` },
+      { value: 'no', label: 'No', testId: `card-criterion-option-${criterion.id}-no` },
+    ];
+    const chosen =
+      assessment === null || assessment.valueBool === null
+        ? undefined
+        : options[assessment.valueBool ? 0 : 1];
     return (
       <Select
         {...shared}
-        value={assessment?.valueBool === null || assessment === null ? '' : assessment.valueBool ? 'yes' : 'no'}
+        value={chosen}
         placeholder="Value"
-        options={[
-          { value: 'yes', label: 'Yes', testId: `card-criterion-option-${criterion.id}-yes` },
-          { value: 'no', label: 'No', testId: `card-criterion-option-${criterion.id}-no` },
-        ]}
-        onChange={(value) => onSave({ valueBool: value === 'yes' })}
+        options={options}
+        onChange={(option) => onSave({ valueBool: valueOf(option) === 'yes' })}
         data-testid={testId}
-        wrapperStyle={{ display: 'inline-block', minWidth: 88 }}
+        wrapperStyle={{ width: 104 }}
       />
     );
   }
@@ -411,7 +434,7 @@ function TypedValue({
   }
 
   return (
-    <Input
+    <TextInput
       {...rest}
       type={type}
       value={draft}
@@ -425,8 +448,9 @@ function TypedValue({
         commit();
       }}
       data-testid={testId}
-      wrapperStyle={{ display: 'inline-block' }}
-      style={{ height: 26, width: type === 'number' ? 84 : 160, fontSize: 'var(--fs-13)' }}
+      // §35's slot: `style` addresses the `<input>`, and it is the box around it that has
+      // to be told how wide to be inside a chip.
+      wrapperStyle={{ width: type === 'number' ? 104 : 180 }}
     />
   );
 }
@@ -441,11 +465,11 @@ function TypedValue({
 function ReadOnlyCriteria({ criteria }: { criteria: CardCriterion[] }) {
   return (
     <div>
-      <SectionLabel>Criteria</SectionLabel>
+      <SectionHeading>Criteria</SectionHeading>
       {criteria.length === 0 ? (
         <p
           data-testid="card-criteria-empty"
-          style={{ margin: 'var(--sp-4) 0 0', fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}
+          style={{ margin: 'var(--space-3) 0 0', fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}
         >
           {HIRING_MESSAGES.card.noCriteria}
         </p>
@@ -455,23 +479,34 @@ function ReadOnlyCriteria({ criteria }: { criteria: CardCriterion[] }) {
           style={{
             display: 'flex',
             flexWrap: 'wrap',
-            gap: 'var(--sp-4)',
+            gap: 'var(--space-3)',
             listStyle: 'none',
-            margin: 'var(--sp-4) 0 0',
+            margin: 'var(--space-3) 0 0',
             padding: 0,
           }}
         >
           {criteria.map((assessment) => (
             <li key={assessment.criterionId}>
-              <Badge tone="neutral" dot={false} data-testid={`card-criterion-${assessment.criterionId}`}>
+              {/*
+                The same chip without a cross — which is also what drops the pointer cursor
+                (§20). The value keeps the `trailing` slot it has in the editable form, so
+                the two states read as one thing with and without its controls, and the test
+                id lands on the same node either way.
+              */}
+              <Chip
+                data-testid={`card-criterion-${assessment.criterionId}`}
+                style={{ margin: 0, minWidth: 0 }}
+                trailing={
+                  <span
+                    data-testid={`card-criterion-value-${assessment.criterionId}`}
+                    style={{ marginLeft: 'var(--space-2)', marginRight: 3, fontSize: 14 }}
+                  >
+                    {recordedValue(assessment)}
+                  </span>
+                }
+              >
                 {assessment.name}
-                <span
-                  data-testid={`card-criterion-value-${assessment.criterionId}`}
-                  style={{ marginLeft: 'var(--sp-3)', color: 'var(--text)' }}
-                >
-                  {recordedValue(assessment)}
-                </span>
-              </Badge>
+              </Chip>
             </li>
           ))}
         </ul>

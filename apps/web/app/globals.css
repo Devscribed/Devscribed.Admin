@@ -100,40 +100,40 @@
  */
 .card-section {
   /* Clear of the shell's own top padding when `?application=` scrolls one into view. */
-  scroll-margin-top: var(--sp-10);
+  scroll-margin-top: var(--space-7);
 }
 
 .card-section-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--sp-8);
+  gap: var(--space-6);
 }
 
 .card-section-status {
   display: flex;
   align-items: center;
-  gap: var(--sp-4);
+  gap: var(--space-3);
   flex-shrink: 0;
 }
 
 .card-section-body {
   display: grid;
-  gap: var(--sp-10);
-  margin-top: var(--sp-10);
-  padding-top: var(--sp-10);
-  border-top: 1px solid var(--border);
+  gap: var(--space-7);
+  margin-top: var(--space-7);
+  padding-top: var(--space-7);
+  border-top: 1px solid var(--border-default);
 }
 
 .card-cv-row {
   display: flex;
   align-items: center;
-  gap: var(--sp-8);
+  gap: var(--space-6);
 }
 
 .card-cv-actions {
   display: flex;
-  gap: var(--sp-4);
+  gap: var(--space-3);
   flex-shrink: 0;
 }
 
@@ -141,7 +141,7 @@
   /* The status control drops below the title rather than squeezing it. */
   .card-section-head {
     flex-direction: column;
-    gap: var(--sp-6);
+    gap: var(--space-5);
   }
 
   .card-section-status {
@@ -392,8 +392,8 @@
  */
 .application-schedule-actions {
   display: flex;
-  gap: var(--sp-6);
-  margin-top: var(--sp-8);
+  gap: var(--space-5);
+  margin-top: var(--space-6);
 }
 
 @media (max-width: 599px) {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { HIRING_MESSAGES } from '@devscribed/validation';
-import { Button, InfoBanner, Textarea } from '@/ds';
+import { Button, InfoBanner, TextArea } from '@/ds';
 import { timeOf, useAutosave } from '@/hiring/useAutosave';
 
 /** How long "Saved just now" holds before it becomes a clock time (04 §UI Notes). */
@@ -15,6 +15,11 @@ const JUST_NOW_MS = 60_000;
  * while typing into it. So the saved indicator sits in the label row, which reserves
  * its height whether or not it has text; the failure banner appears *below* the field
  * rather than above it; and neither ever replaces what is in the editor.
+ *
+ * The label row is `TextArea`'s `trailing` slot (ledger §33), which Phase 4 built one phase
+ * early for the cancel dialog's character count — including the part that matters here, the
+ * label's `margin-bottom` zeroed inside the row so the field sits at the same y with a
+ * trailing node and without one.
  *
  * The indicator does not tick. It reads "Saved just now" for a minute and then changes
  * once to a clock time — a relative time counting upwards would be motion at the edge
@@ -55,23 +60,31 @@ export function AutosavingField({
 
   return (
     <div>
-      <Textarea
+      <TextArea
         label={label}
         rows={rows}
         placeholder={placeholder}
         value={editor.value}
         onChange={(event) => editor.change(event.target.value)}
         data-testid={`${testId}-input`}
+        /*
+         * Blue pins its textarea at a flat 100px, because prod's one textarea is a comment
+         * box and 100px is what it measures. `height: auto` hands the sizing back to `rows`,
+         * which is the platform's own answer and the one the spec is written in — and it is
+         * the whole reason the notes field is the tallest thing on the page while the
+         * conclusion under it is not.
+         */
+        style={{ height: 'auto' }}
+        /*
+         * The indicator, in the label row (ledger §33). The row's height does not depend on
+         * the value, and the label's `margin-bottom` is zeroed inside it, so this appears,
+         * changes and empties without the field beneath it moving a pixel.
+         *
+         * The 12px `--text-secondary` it used to carry itself is the slot's own type now, so
+         * only the test id and the no-wrap are left here.
+         */
         trailing={
-          <span
-            data-testid={`${testId}-saved-at`}
-            style={{
-              fontFamily: 'var(--font-text)',
-              fontSize: 'var(--fs-12)',
-              color: 'var(--text-muted)',
-              whiteSpace: 'nowrap',
-            }}
-          >
+          <span data-testid={`${testId}-saved-at`} style={{ whiteSpace: 'nowrap' }}>
             {indicator(editor.state, editor.savedAt, recent)}
           </span>
         }
@@ -90,30 +103,25 @@ export function AutosavingField({
         style={{
           display: 'flex',
           justifyContent: 'flex-end',
-          marginTop: 'var(--sp-4)',
+          marginTop: 'var(--space-3)',
         }}
       >
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={editor.save}
-          data-testid={`${testId}-save`}
-        >
+        <Button onClick={editor.save} data-testid={`${testId}-save`}>
           Save
         </Button>
       </div>
 
       {failed && (
-        <div style={{ marginTop: 'var(--sp-4)' }}>
-          <InfoBanner tone="error" data-testid="card-save-error">
-            <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+        <div style={{ marginTop: 'var(--space-3)' }}>
+          {/*
+            `role="alert"` rather than the page's own announcement slot: this belongs to one
+            field, it appears under that field, and the member is looking at it. The page's
+            banner under `PageHeader` reports what happened to the *page*.
+          */}
+          <InfoBanner variant="error" role="alert" data-testid="card-save-error">
+            <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
               {HIRING_MESSAGES.card.saveFailed}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={editor.retry}
-                data-testid="card-save-retry"
-              >
+              <Button onClick={editor.retry} data-testid="card-save-retry">
                 {HIRING_MESSAGES.card.retry}
               </Button>
             </span>
