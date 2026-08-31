@@ -3,7 +3,18 @@
 import { notFound, useRouter } from 'next/navigation';
 import { use, useCallback, useEffect, useState } from 'react';
 import { HIRING_MESSAGES, type VacancyStatusFilter } from '@devscribed/validation';
-import { Badge, Button, Card, SearchField, Select, Skeleton, Table } from '@/ds';
+import {
+  Badge,
+  Button,
+  Card,
+  Chip,
+  EmptyState,
+  Preloader,
+  SearchInput,
+  Select,
+  Table,
+  type SelectOption,
+} from '@/ds';
 import { PageHeader } from '@/layout/PageHeader';
 import type { Vacancy } from '@/hiring/types';
 import { VacancyDialog } from './VacancyDialog';
@@ -13,11 +24,15 @@ type State = { status: 'loading' } | { status: 'ready'; vacancies: Vacancy[] } |
 /** 01 §05.16 — the same 300 ms the member search already uses. */
 const SEARCH_DEBOUNCE_MS = 300;
 
-const STATUS_OPTIONS = [
+const STATUS_OPTIONS: SelectOption[] = [
   { value: 'all', label: 'All', testId: 'vacancies-status-option-all' },
   { value: 'open', label: 'Open', testId: 'vacancies-status-option-open' },
   { value: 'closed', label: 'Closed', testId: 'vacancies-status-option-closed' },
 ];
+
+/** Blue's `Select` hands back the option, not its value — the control owns both halves. */
+const valueOf = (option: SelectOption | string | (SelectOption | string)[]): string =>
+  typeof option === 'string' ? option : Array.isArray(option) ? '' : option.value;
 
 /**
  * The vacancies list: search, the status filter, and the route into a vacancy.
@@ -71,6 +86,7 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
   if (state.status === 'gone') notFound();
 
   const filtered = query.trim().length > 0 || status !== 'all';
+  const vacancies = state.status === 'ready' ? state.vacancies : [];
 
   return (
     <>
@@ -87,138 +103,130 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 'var(--sp-6)',
-          marginBottom: 'var(--sp-10)',
+          gap: 'var(--space-5)',
+          marginBottom: 'var(--space-7)',
           flexWrap: 'wrap',
         }}
       >
-        <SearchField
+        <SearchInput
+          outlined
           placeholder="Search vacancies…"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
+          onClear={() => setSearch('')}
           aria-label="Search vacancies"
           data-testid="vacancies-search-input"
-          style={{ flex: 1, minWidth: 220 }}
+          wrapperStyle={{ flex: 1, minWidth: 220 }}
         />
         <Select
-          value={status}
+          value={STATUS_OPTIONS.find((option) => option.value === status)}
           options={STATUS_OPTIONS}
-          onChange={(value) => setStatus(value as VacancyStatusFilter)}
+          onChange={(option) => setStatus(valueOf(option) as VacancyStatusFilter)}
+          aria-label="Filter by status"
           data-testid="vacancies-status-filter"
           wrapperStyle={{ width: 160 }}
         />
       </div>
 
-      {state.status === 'loading' ? (
-        <Card>
-          <span
-            aria-live="polite"
-            style={{
-              position: 'absolute',
-              width: 1,
-              height: 1,
-              overflow: 'hidden',
-              clip: 'rect(0 0 0 0)',
-            }}
-          >
-            Loading vacancies
-          </span>
-          <Skeleton rows={4} height={22} data-testid="vacancies-loading-skeleton" />
-        </Card>
-      ) : state.vacancies.length === 0 ? (
-        <Card>
-          <p
-            data-testid="vacancies-empty-state"
-            style={{ margin: 0, color: 'var(--text-muted)', fontSize: 'var(--fs-14)' }}
-          >
+      {/*
+        One surface at every state, which is what blue's table screens do and what the members
+        list already does: the card gives the edge-to-edge table its border and rounds its first
+        and last rows, and the loader and the empty message sit inside it rather than replacing
+        it. `clip` is left at its default — nothing here opens a popover inside the card.
+      */}
+      <Card padded={false} data-testid="vacancies-list">
+        <Table<Vacancy>
+          rows={vacancies}
+          rowKey="id"
+          rowHref={(row) => `/org/${orgId}/hiring/vacancies/${row.id}`}
+          rowTestId={(row) => `vacancy-row-${row.id}`}
+          onRowClick={(row, event) => {
+            if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+            event.preventDefault();
+            router.push(`/org/${orgId}/hiring/vacancies/${row.id}`);
+          }}
+          columns={[
+            {
+              label: 'Title',
+              flex: 3,
+              render: (row) => (
+                <div style={{ minWidth: 0 }}>
+                  <span data-testid={`vacancy-title-${row.id}`}>{row.title}</span>
+                  {/* Chips on a second line inside the title cell — read-only here,
+                      editable only in the dialog (01 §UI Notes). */}
+                  {row.categories.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: 'var(--space-1)' }}>
+                      {row.categories.map((category) => (
+                        <Chip
+                          key={category.id}
+                          label={category.name}
+                          data-testid={`vacancy-category-chip-${category.id}`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ),
+            },
+            {
+              label: 'Interviewer',
+              flex: 2,
+              render: (row) => (
+                <span data-testid={`vacancy-interviewer-${row.id}`}>{row.interviewer.fullName}</span>
+              ),
+            },
+            {
+              // Length and Candidates take blue's positional rule rather than saying anything:
+              // a middle column reads centred. They were right-aligned Grotesk numerals under
+              // Meridian, and blue has one family and no mono treatment to align.
+              label: 'Length',
+              flex: 1,
+              render: (row) => (
+                <span data-testid={`vacancy-duration-${row.id}`}>{row.durationMinutes} min</span>
+              ),
+            },
+            {
+              label: 'Candidates',
+              flex: 1,
+              render: (row) => (
+                <span data-testid={`vacancy-count-${row.id}`}>{row.applicationCount}</span>
+              ),
+            },
+            {
+              label: 'Status',
+              flex: 1,
+              maxWidth: 120,
+              render: (row) => (
+                <Badge
+                  status={row.status === 'open' ? 'active' : 'inactive'}
+                  data-testid={`vacancy-status-${row.id}`}
+                >
+                  {row.status === 'open' ? 'Open' : 'Closed'}
+                </Badge>
+              ),
+            },
+          ]}
+        />
+
+        {state.status === 'loading' && (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-7)' }}>
+            {/* The dots carry no text, so the announcement is made beside them. */}
+            <Preloader data-testid="vacancies-loading" aria-hidden />
+            <span
+              aria-live="polite"
+              style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}
+            >
+              Loading vacancies
+            </span>
+          </div>
+        )}
+
+        {state.status === 'ready' && vacancies.length === 0 && (
+          <EmptyState data-testid="vacancies-empty-state">
             {filtered ? HIRING_MESSAGES.vacancy.emptyFiltered : HIRING_MESSAGES.vacancy.empty}
-          </p>
-        </Card>
-      ) : (
-        <div data-testid="vacancies-list">
-          <Table<Vacancy>
-            rows={state.vacancies}
-            rowHref={(row) => `/org/${orgId}/hiring/vacancies/${row.id}`}
-            rowTestId={(row) => `vacancy-row-${row.id}`}
-            onRowClick={(row, event) => {
-              if (event.metaKey || event.ctrlKey || event.shiftKey) return;
-              event.preventDefault();
-              router.push(`/org/${orgId}/hiring/vacancies/${row.id}`);
-            }}
-            columns={[
-              {
-                label: 'Title',
-                flex: 3,
-                render: (row) => (
-                  <div style={{ minWidth: 0 }}>
-                    <span data-testid={`vacancy-title-${row.id}`}>{row.title}</span>
-                    {/* Chips on a second line inside the title cell — read-only here,
-                        editable only in the dialog (01 §UI Notes). */}
-                    {row.categories.length > 0 && (
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          gap: 'var(--sp-2)',
-                          marginTop: 'var(--sp-2)',
-                        }}
-                      >
-                        {row.categories.map((category) => (
-                          <Badge
-                            key={category.id}
-                            tone="neutral"
-                            dot={false}
-                            data-testid={`vacancy-category-chip-${category.id}`}
-                          >
-                            {category.name}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ),
-              },
-              {
-                label: 'Interviewer',
-                flex: 2,
-                render: (row) => (
-                  <span data-testid={`vacancy-interviewer-${row.id}`}>{row.interviewer.fullName}</span>
-                ),
-              },
-              {
-                label: 'Length',
-                flex: 1,
-                mono: true,
-                render: (row) => (
-                  <span data-testid={`vacancy-duration-${row.id}`}>{row.durationMinutes} min</span>
-                ),
-              },
-              {
-                label: 'Candidates',
-                flex: 1,
-                align: 'flex-end',
-                mono: true,
-                render: (row) => (
-                  <span data-testid={`vacancy-count-${row.id}`}>{row.applicationCount}</span>
-                ),
-              },
-              {
-                label: 'Status',
-                flex: 1,
-                align: 'flex-end',
-                render: (row) => (
-                  <Badge
-                    tone={row.status === 'open' ? 'active' : 'inactive'}
-                    data-testid={`vacancy-status-${row.id}`}
-                  >
-                    {row.status === 'open' ? 'Open' : 'Closed'}
-                  </Badge>
-                ),
-              },
-            ]}
-          />
-        </div>
-      )}
+          </EmptyState>
+        )}
+      </Card>
 
       <VacancyDialog
         orgId={orgId}
@@ -226,7 +234,7 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
         onClose={() => setDialogOpen(false)}
         onSaved={(vacancy) => {
           setDialogOpen(false);
-          // The toast belongs to the destination, so it survives the navigation the
+          // The banner belongs to the destination, so it survives the navigation the
           // spec asks for rather than being raised on a screen about to be replaced.
           router.push(`/org/${orgId}/hiring/vacancies/${vacancy.id}?created=1`);
         }}

@@ -255,7 +255,7 @@
 .vacancy-detail-columns {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-  gap: var(--sp-10);
+  gap: var(--space-7);
   align-items: start;
 }
 

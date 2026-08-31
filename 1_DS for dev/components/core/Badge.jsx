@@ -11,10 +11,17 @@ const badgeVariants = {
  * Badge — status pill recreated from components/shared/ActivityBadge.
  * Solid variants for active/inactive states; outlined variants for lower-emphasis contexts.
  */
-export function Badge({ status = 'active', outlined, children }) {
+export function Badge({
+  status = 'active', outlined,
+  /* §19 — blue destructures three props and forwards nothing, so `data-testid` and every
+     `aria-*` were dropped before the DOM. Prod never needed them; a badge whose text a test
+     has to read does. */
+  style, children, ...rest
+}) {
   const key = outlined ? (status === 'active' ? 'outlinedActive' : 'outlinedInactive') : (status === 'active' ? 'active' : 'inactive');
   return (
     <span
+      {...rest}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -26,6 +33,7 @@ export function Badge({ status = 'active', outlined, children }) {
         lineHeight: '16px',
         padding: '4px 8px',
         ...badgeVariants[key],
+        ...style,
       }}
     >
       {children ?? (status === 'active' ? 'Active' : 'Inactive')}

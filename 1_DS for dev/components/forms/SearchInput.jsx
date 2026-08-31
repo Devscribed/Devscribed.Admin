@@ -24,7 +24,14 @@ if (typeof document !== 'undefined' && !document.getElementById('ds-search-input
  * .closeIconContainer{20x20; right:0 (10px when outlined); svg 12x12 fill $appGray} — rendered
  * only while the field has a value.
  */
-export function SearchInput({ placeholder = 'Search…', value, onChange, onClear, outlined = false }) {
+export function SearchInput({
+  placeholder = 'Search…', value, onChange, onClear, outlined = false,
+  /* §26 — blue forwards nothing, so `data-testid`, `aria-label` and `name` never reached the
+     `<input>`. `wrapperStyle` is separate on purpose: the root is the 44px positioning box the
+     icons are pinned to, and a caller placing this field in a row is sizing that box, not the
+     input inside it. */
+  wrapperStyle, style, clearLabel = 'Clear search', ...rest
+}) {
   const [focused, setFocused] = React.useState(false);
   const [hover, setHover] = React.useState(false);
   const inputRef = React.useRef(null);
@@ -34,11 +41,12 @@ export function SearchInput({ placeholder = 'Search…', value, onChange, onClea
     if (inputRef.current) inputRef.current.focus();
   };
   return (
-    <div style={{ position: 'relative', width: '100%', height: 44 }}>
+    <div style={{ position: 'relative', width: '100%', height: 44, ...wrapperStyle }}>
       <span style={{ position: 'absolute', left: outlined ? 10 : 0, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, color: 'var(--text-secondary)' }}>
         <MagnifyIcon width="16" height="16" />
       </span>
       <input
+        {...rest}
         ref={inputRef}
         className="ds-search-input"
         placeholder={placeholder}
@@ -58,12 +66,15 @@ export function SearchInput({ placeholder = 'Search…', value, onChange, onClea
           boxShadow: outlined ? (focused ? 'inset 0 2px 2px rgb(0 0 0 / 5%), 0 0 10px rgb(1 104 250 / 50%)' : hover ? 'inset 0 0 3px 0 rgba(0, 0, 0, 0.1)' : 'none') : 'none',
           padding: outlined ? '10px 30px 10px 40px' : '10px 30px',
           transition: 'var(--transition-border-focus)',
+          ...style,
         }}
       />
       {!!(value && String(value).length) && (
-        <span onClick={handleClear} style={{ position: 'absolute', right: outlined ? 10 : 0, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, color: 'var(--text-secondary)', cursor: 'pointer' }}>
-          <CloseIcon width="12" height="12" />
-        </span>
+        /* §26 — prod's clear cross is a `<span onClick>`: a control that empties the field and
+           cannot be reached without a pointer. */
+        <button type="button" aria-label={clearLabel} onClick={handleClear} style={{ position: 'absolute', right: outlined ? 10 : 0, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+          <CloseIcon width="12" height="12" aria-hidden />
+        </button>
       )}
     </div>
   );

@@ -77,9 +77,9 @@ value-identical; typography is the only place the scales genuinely collide.
 | `--fs-14` | 14 | `--font-size-s` | 14 | 35 | identical |
 | `--fs-16` | 16 | `--font-size-base` | 16 | 1 | identical |
 | `--fs-24` | 24 | `--headline-4-size` | 24 | 2 | identical |
-| `--fs-11` | 11 | `--font-size-xs` | 12 | 3 | +1px |
-| `--fs-13` | 13 | `--font-size-s` | 14 | 14 | +1px |
-| `--fs-15` | 15 | `--font-size-base` | 16 | 11 | +1px |
+| `--fs-11` | 11 | `--font-size-xs` | 12 | 3 | +1px — 1 closed in Phase 3, into `FieldLabel` |
+| `--fs-13` | 13 | `--font-size-s` | 14 | 14 | +1px — 1 closed in Phase 3, into `InfoBanner` (which is 12px, so **−1px**) |
+| `--fs-15` | 15 | `--font-size-base` | 16 | 11 | +1px — 1 closed in Phase 3, snapped |
 | `--fs-22` | 22 | `--headline-5-size` | 20 | 1 | −2px |
 | `--fs-27` | 27 | `--headline-4-size` | 24 | 1 | ✅ **settled in Phase 2** — the page header is blue's `PageTitle`, whose type steps 16 → 20 → 24px with the viewport rather than holding one size. The single use is gone. |
 | `--fs-34` | 34 | *none* | — | 2 | ⚠ no counterpart — decide per site |
@@ -95,7 +95,7 @@ value-identical; typography is the only place the scales genuinely collide.
 | `--text` | `--text-primary` `#1B1B1B` | 17 | |
 | `--text-sub` | `--text-tertiary` `#54595E` | 20 | |
 | `--text-muted` | `--text-secondary` `#64748B` | 48 | |
-| `--text-faint` | `--text-secondary` | 4 | ⚠ blue has 3 text levels, yellow has 4 — collapses |
+| `--text-faint` | `--text-secondary` | 4 | ⚠ blue has 3 text levels, yellow has 4 — collapses. **The pattern settled in Phase 3**: a shown-but-unavailable thing (an ineligible option, a blocked menu row) is `--text-secondary`. The 4 uses are all in Phases 4–8's files; they inherit the answer, not the argument |
 | `--accent` | `--action-primary` `#007AFF` | 14 | |
 | `--accent-soft` | `--color-blue-light` `#EFF6FF` | 2 | |
 | `--accent-border` | `--color-blue-lighter` `#E8F2FE` | 1 | |
@@ -118,14 +118,24 @@ value-identical; typography is the only place the scales genuinely collide.
 
 ### The seven rows that need a human call
 
-`--fs-34` (2 uses, no counterpart) · `--fs-13` / `--fs-15` / `--fs-11` (28 uses, ±1px) ·
-~~`--sp-7`~~ (**settled in Phase 1** → `--space-7`, 20px) · `--text-faint` (4 uses, collapses) ·
+`--fs-34` (2 uses, no counterpart) · `--fs-13` / `--fs-15` / `--fs-11` (17 uses left, ±1px) ·
+~~`--sp-7`~~ (**settled in Phase 1** → `--space-7`, 20px) · ~~`--text-faint`~~ (**pattern settled
+in Phase 3**; 4 uses left, Phases 4–8) ·
 ~~`--bg-panel-2`~~ (**half settled in Phase 2** → `--surface-card` on the shell; 2 uses left, Phase 4) ·
 `--amber-500` (2 uses left, both Phase 8) · ~~`--hover-bg-tint`~~ (**half settled in Phase 2**;
 1 use left, Phase 6).
 
 Two rows left the map entirely in Phase 2 rather than being remapped: `--fs-27` and `--fs-21`,
 both because the element that carried them is now a design-system component with its own type.
+
+**Phase 3 says that is the rule, not the exception.** It closed one use each of `--fs-11`,
+`--fs-13` and `--fs-15`, and only *one of the three was a remap*: `--fs-15` snapped up to
+`--font-size-base` as D5 says. The other two left the map the way `--fs-27` did — the uppercase
+micro-label became `FieldLabel` and the hand-built error line became `InfoBanner`, each arriving
+with its own type. `--fs-13` is the one that shows why this matters: mapped by the table it would
+have gone *up* to 14px, and the component it actually became draws at 12. The ±1px rows shrink
+fastest by being deleted, so **walk them last, after the component swap** — several will not
+survive to need a call.
 
 Every other row is scriptable. Do the script first, then walk these by hand.
 
@@ -141,6 +151,18 @@ file; never draw one"). Blue has one: the mark the shipping app draws, already i
 `Sidebar.jsx` and in `AuthLayout` since Phase 1. Adopting it takes the type declaration with it,
 so there is no size left to get wrong. The 20px this row would have mapped to is what the
 *headline* scale uses, and the wordmark was never a heading.
+
+### A second live bug, found in Phase 3
+
+`1_DS for dev/components/forms/` held **`Textarea.jsx` and `Textarea.d.ts`** — yellow's casing —
+while `index.js` imported `./components/forms/TextArea.jsx` and `apps/web/types/ds.d.ts` mapped
+`@ds/components/forms/TextArea`. Phase 1 renamed the component and not the file, and macOS's
+case-insensitive filesystem hid it: every local build resolved, and the same import would have
+failed on any case-sensitive one. Fixed in Phase 3 by a two-step `git mv`, which is the only way
+to record a case-only rename from a filesystem that cannot tell the two apart.
+
+Worth a check rather than a habit: `index.js`'s import paths should be diffable against
+`git ls-files`, and nothing else in the vendored copy disagrees today.
 
 ## Component inventory
 
@@ -253,6 +275,13 @@ and so a reviewer can tell a considered reversal from an accident.
    wired to `aria-describedby`, or an accepted regression. Whichever is chosen, it is a ledger
    entry, not a silent swap.
 
+   **Phase 3 took visible text**, on the vacancy's blocked delete: the reason is drawn in the
+   menu row under the label and wired as that row's `aria-describedby`, and the row keeps
+   `aria-disabled` and its place in the keyboard walk ([§22](ledger.md), which carries the
+   argument). Native `title` was never available there — the whole point of showing a blocked
+   action is that its reason can be read. Phases 5 and 6 are **not bound** to that answer: a menu
+   row has somewhere to put a sentence, an inline icon may not.
+
 3. **`BoardCard`'s `cancelledTooltip` is an accessible *name*, not a description.** The badge is
    deliberately truncated to a first name because a board card is a glance, so the tooltip carries
    the whole fact and is the badge's accessible name rather than what is drawn. A native `title`
@@ -261,7 +290,13 @@ and so a reviewer can tell a considered reversal from an accident.
 
 4. **`Toast` → `InfoBanner` changes the affordance, not just the component.** Transient becomes
    persistent, so five screens need both a slot and a dismissal story. Phase 3 sets the pattern the
-   other four follow.
+   other four follow — and it is: **directly under `PageHeader`, above the page body**, because
+   the announcement is about the page and was raised from the header above it, and in flow it
+   pushes content down rather than covering it. It goes away by being dismissed
+   (`InfoBanner onDismiss`, [§24](ledger.md)) or by being replaced — a new notice overwrites the
+   old one, so they never stack. **Nothing auto-dismisses**: a banner that removed itself after a
+   few seconds would be a toast wearing a different component, which is the thing blue does not
+   have. Full detail in [`01-vacancies.design.md`](../hiring/01-vacancies.design.md).
 
 5. **`SectionLabel` → headings orphans `Table hideHeader`'s rationale.** `hideHeader` exists because
    My interviews' two groups are "already named by the `SectionLabel` above them". Remove
@@ -276,6 +311,11 @@ and so a reviewer can tell a considered reversal from an accident.
    6 consume popovers inside it.** A `Card` built without `clip` regresses all four in a way that a
    click-based test still passes — the existing regression test hit-tests the option's own
    coordinates for exactly this reason.
+
+   **Phase 3 did not exercise it.** Its two popovers open from a `Modal` (the category and
+   interviewer pickers) and from `PageHeader` (the actions menu), neither of which is a `Card`.
+   `clip` is built and defaulted correctly, but the four surfaces this reversal names are all in
+   Phases 4 and 6 — so it is still unproven, and those phases carry the whole of it.
 
 7. **`--text-faint` collapsing flattens a hierarchy.** Yellow has four text levels, blue has three.
    Wherever faint and muted sat adjacent to signal a difference, that difference disappears.
@@ -302,7 +342,7 @@ Full detail in [`plans/yellow-to-blue-migration.md`](../../plans/yellow-to-blue-
 | 0 | *no app code* | This record, the ledger, the drift check, README + spec-README reconciliation |
 | 1 | `/login`, `/signup`, `/forgot-password`, `/reset-password` | Vendor blue · `types/ds.d.ts` · open blue's components (D2) · `AuthLayout`, `IconButton`, `Eye`/`EyeOff` |
 | 2 | signed-in frame, `/org/{orgId}/members` | The relayout (290/80/60/1200, `MenuDrawer`) · `Card` · `Table` remap · the `--fs-21` fix |
-| 3 | vacancies list + detail, `VacancyDialog` | First deletions: `Toast`, `SectionLabel`, `Skeleton`, `Menu` |
+| 3 | vacancies list + detail, `VacancyDialog` | First deletions: `Toast`, `SectionLabel`, `Skeleton`, `Menu`, `Combobox` · `Select` opened into a real combobox · `Chip` · ledger §19–§29 |
 | 4 | candidates, my interviews, reschedule/cancel | `Calendar` · `Toggle`→`ToggleButton` · `Pagination`→infinite scroll |
 | 5 | candidate card | `Tooltip`→`title` · `TextArea` trailing slot · `Button as="a"` for CV download |
 | 6 | hiring settings, `CriterionDialog` | `ConfirmDialog` · `Select isSearchable` |

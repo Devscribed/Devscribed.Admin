@@ -7,6 +7,13 @@ export interface InfoBannerProps extends HTMLAttributes<HTMLDivElement> {
    * `success` (§7) is green, which prod has no banner for.
    */
   variant?: 'info' | 'warning' | 'error' | 'success';
+  /**
+   * §24 — draws a trailing close button. Prod has none: its banners report a state and go away
+   * when the state does. One reporting an event that already happened cannot.
+   */
+  onDismiss?: () => void;
+  /** Accessible name for that button. Defaults to `Dismiss`. */
+  dismissLabel?: string;
   children: ReactNode;
 }
 

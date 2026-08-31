@@ -204,7 +204,7 @@ whose link has not been shared is already private.
 3. User fills title, picks an interviewer and a length, optionally adds categories and a
    description.
 4. User submits. System sends `POST …/hiring/vacancies`.
-5. On success the dialog closes, a toast reads "Vacancy created", and the browser navigates to the
+5. On success the dialog closes, the banner reads "Vacancy created", and the browser navigates to the
    new vacancy's detail page with the booking link visible.
 
 ### Flow: add a category that does not exist yet
@@ -332,11 +332,11 @@ Errors:
 | Delete blocked | "Close this vacancy instead — it has candidates" |
 | Forbidden | "You do not have permission to manage vacancies" |
 | Member removal blocked (user-management 04) | "Reassign or close this member's open vacancies first" |
-| Toast — created | "Vacancy created" |
-| Toast — updated | "Vacancy updated" |
-| Toast — closed | "Vacancy closed" |
-| Toast — reopened | "Vacancy reopened" |
-| Toast — link copied | "Booking link copied" |
+| Banner — created | "Vacancy created" |
+| Banner — updated | "Vacancy updated" |
+| Banner — closed | "Vacancy closed" |
+| Banner — reopened | "Vacancy reopened" |
+| Banner — link copied | "Booking link copied" |
 | Empty list | "No vacancies yet." |
 | Network error | "Something went wrong. Please try again." |
 

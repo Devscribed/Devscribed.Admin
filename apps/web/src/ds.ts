@@ -20,10 +20,13 @@ export {
   Button,
   Card,
   Checkbox,
+  Chip,
   ConfirmDialog,
   EmptyState,
   Eye,
   EyeOff,
+  FieldLabel,
+  FormActions,
   IconButton,
   InfoBanner,
   Modal,
@@ -40,3 +43,6 @@ export {
   TextInput,
   ToggleButton,
 } from '@ds';
+
+/** Type-only, so a screen can narrow what `Select`'s `onChange` hands back. */
+export type { SelectOption } from '@ds';

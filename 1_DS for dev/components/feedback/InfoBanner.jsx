@@ -1,4 +1,6 @@
 import React from 'react';
+import { IconButton } from '../core/IconButton.jsx';
+import { CloseIcon } from '../icons/Icon.jsx';
 
 /* Blue measured two banners, because prod has two. `info` and `warning` are those, unchanged —
    note that prod's `warning` paints with the *error* palette, which is why `error` below is the
@@ -23,6 +25,12 @@ export function InfoBanner({
   /* §6 — blue forwards neither `style` nor rest props, so `role="alert"`, `aria-live` and
      `data-testid` never reached the DOM. Every banner in this app is an announcement. */
   style,
+  /* §24 — prod's banners report a *state*: they are drawn while the thing is true and removed
+     when it stops being. A banner standing in for a toast reports an *event*, which nothing
+     later makes untrue, so it needs a way to be put away. The control is `IconButton` (§10),
+     which is blue's own Modal-close treatment, at the banner's trailing edge. */
+  onDismiss,
+  dismissLabel = 'Dismiss',
   ...rest
 }) {
   const paint = variants[variant] || variants.info;
@@ -45,7 +53,12 @@ export function InfoBanner({
       <span style={{ display: 'flex', width: 16, height: 16, color: paint.line }}>
         <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="8" cy="8" r="8" opacity="0.15" /><rect x="7.1" y="6.5" width="1.8" height="6" rx="0.9" /><rect x="7.1" y="3.5" width="1.8" height="1.8" rx="0.9" /></svg>
       </span>
-      <span style={{ fontFamily: 'var(--font-family-base)', fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)' }}>{children}</span>
+      <span style={{ flex: 1, minWidth: 0, fontFamily: 'var(--font-family-base)', fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)' }}>{children}</span>
+      {onDismiss && (
+        <IconButton label={dismissLabel} size={20} onClick={onDismiss} style={{ flexShrink: 0, color: paint.line }}>
+          <CloseIcon width="10" height="10" />
+        </IconButton>
+      )}
     </div>
   );
 }

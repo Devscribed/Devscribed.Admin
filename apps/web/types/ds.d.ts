@@ -18,6 +18,7 @@ declare module '@ds' {
   export * from '@ds/components/core/Badge';
   export * from '@ds/components/core/Button';
   export * from '@ds/components/core/Card';
+  export * from '@ds/components/core/Chip';
   export * from '@ds/components/core/IconButton';
   export * from '@ds/components/core/PageTitle';
   export * from '@ds/components/core/ToggleButton';

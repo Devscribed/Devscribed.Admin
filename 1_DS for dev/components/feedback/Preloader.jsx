@@ -24,12 +24,22 @@ if (typeof document !== 'undefined' && !document.getElementById('ds-pulse-loader
   document.head.appendChild(el);
 }
 
-export function Preloader({ size = 12, margin = 7, overlay = false, speedMultiplier = 1 }) {
+export function Preloader({
+  size = 12, margin = 7, overlay = false, speedMultiplier = 1,
+  /* §23 — blue forwards nothing, so `data-testid`, `role="status"` and `aria-label` never
+     reached the DOM. Prod portals this into #portal and nothing has to find it; a loader that
+     stands in for a screen's content has to be both findable and announceable. */
+  style, ...rest
+}) {
   return (
     <span
-      style={overlay
-        ? { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1002 }
-        : { display: 'inherit' }}
+      {...rest}
+      style={{
+        ...(overlay
+          ? { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1002 }
+          : { display: 'inherit' }),
+        ...style,
+      }}
     >
       {[1, 2, 3].map((i) => (
         <span

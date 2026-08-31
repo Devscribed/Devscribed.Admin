@@ -897,8 +897,10 @@ record the exposure that leaves open rather than implying the endpoints are prot
 - **`Button` needs `as="a"`** for an action that is really a navigation. The CV download is one: a
   download through an `onClick` loses middle-click, copy-address and the browser's own download
   handling.
-- **`Select isSearchable` replaces `Combobox`** — the capability exists in blue, production just
-  never enables it. The rules the libraries screen established travel with it. Its filter folds
+- **`Select isSearchable` replaces `Combobox`** — the prop exists in blue, and until Phase 3 that
+  was all it was: accepted and ignored, because blue measured the painted box of a react-select
+  wrapper and left a `<div onClick>` behind it. Implemented as
+  [ledger §21](specs/design-system/ledger.md), with the create row as §29. The rules the libraries screen established travel with it. Its filter folds
   case deliberately: an option that already exists must never hide behind a create row over a
   difference in capitalisation, because creating it is exactly what the API will refuse. The create
   row appears only when the typed text matches **nothing at all**, not merely when it is not an
@@ -940,9 +942,15 @@ record the exposure that leaves open rather than implying the endpoints are prot
     `aria-disabled` instead of the `disabled` attribute, which would take it out of the tab order
     and the reason with it, and because the bubble stays in the accessibility tree at all times so
     `aria-describedby` always resolves. Native `title` is not keyboard-reachable in any major
-    browser, so this is a free swap for a pointer and a regression for everyone else.
+    browser, so this is a free swap for a pointer and a regression for everyone else. **Phase 3
+    answered the vacancy site with visible text**: the reason is drawn in the menu row and wired
+    as its `aria-describedby`, and the row stays `aria-disabled` and focusable
+    ([§22](specs/design-system/ledger.md)). The last-admin guard is still open.
   - `Toast` → `InfoBanner` turns transient into persistent, which needs both a slot and a
-    dismissal story on five screens.
+    dismissal story on five screens. **Phase 3 set both**: the slot is directly under
+    `PageHeader`, above the page body; dismissal is `InfoBanner onDismiss`
+    ([§24](specs/design-system/ledger.md)), and a new notice replaces the old one rather than
+    stacking. Nothing auto-dismisses — that would be a toast wearing a different component.
 - **`BoardColumn` and `BoardCard` are the only drag-and-drop primitive in either system**, and
   production has no kanban at all — so they are designed rather than measured, and the
   pick-up/gap/drop visual language is the system's rather than one screen's. They stay

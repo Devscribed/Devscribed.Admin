@@ -194,6 +194,18 @@ export function EyeOffIcon(props) {
   );
 }
 
+/* §20 — react-select's own clear/remove cross, the glyph the app's `Select` draws on a multi
+   value and on the clear indicator. It was inlined inside `Select.jsx`, which is where it had
+   to be duplicated from the moment `Chip` was promoted out of that file. Moved here unchanged;
+   `size` becomes the `width`/`height` pair every other glyph here takes. */
+export function CrossIcon(props) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" focusable="false" style={{ display: 'inline-block', lineHeight: 1 }} {...props}>
+      <path d="M14.348 14.849c-.469.469-1.229.469-1.697 0L10 11.819l-2.651 3.03c-.469.469-1.229.469-1.697 0-.469-.469-.469-1.229 0-1.697l2.758-3.15-2.759-3.152c-.469-.469-.469-1.228 0-1.697.469-.469 1.228-.469 1.697 0L10 8.183l2.651-3.031c.469-.469 1.228-.469 1.697 0 .469.469.469 1.229 0 1.697l-2.758 3.152 2.758 3.15c.469.469.469 1.229 0 1.698z" />
+    </svg>
+  );
+}
+
 /* The reveal toggle reads better as `<Eye />` than `<EyeIcon />` at the call site, but the
    dispatcher below keys on the icon's own export name like every other glyph. */
 export { EyeIcon as Eye, EyeOffIcon as EyeOff };
@@ -204,7 +216,7 @@ const ICONS = {
   ArrowIcon, CloseIcon, MagnifyIcon, TrashIcon, ThreeDotsIcon, UserIcon, PersonCircleIcon,
   MailOutlineIcon, TimeOutlineIcon, InfoCircleIcon, CloudDownloadOutlineIcon, SettingsIcon,
   CheckIcon, MenuIcon, TimesheetsIcon, ProjectManagementIcon, PeopleIcon, ReportsIcon,
-  TimeOffIcon, OrgIcon, EyeIcon, EyeOffIcon,
+  TimeOffIcon, OrgIcon, EyeIcon, EyeOffIcon, CrossIcon,
 };
 
 export function Icon({ name, ...props }) {

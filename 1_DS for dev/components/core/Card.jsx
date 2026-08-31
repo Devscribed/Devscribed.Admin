@@ -12,7 +12,15 @@ import React from 'react';
  * `NavigationCard`, which is a control; painting them on a static container would promise a
  * click that is not there.
  */
-export function Card({ title, action, padded = true, clip = true, style, children, ...rest }) {
+export function Card({
+  title, action, padded = true, clip = true, style, children,
+  /* §27 — prod's card headings are `<div>`s, because prod's card headings are `<div>`s. A
+     screen that replaced its captions with card titles is relying on them to *be* the outline
+     under `PageTitle`'s `<h1>`, and blue already renders that one as a real heading. Every
+     value below is unchanged; only the element is. */
+  titleAs: TitleTag = 'h2',
+  ...rest
+}) {
   return (
     <div
       {...rest}
@@ -35,7 +43,7 @@ export function Card({ title, action, padded = true, clip = true, style, childre
             gap: 'var(--space-5)', padding: 'var(--space-6) var(--space-6) 0',
           }}
         >
-          <div
+          <TitleTag
             style={{
               fontWeight: 'var(--headline-6-weight)', fontSize: 'var(--headline-6-size)',
               lineHeight: 'var(--headline-6-line)', letterSpacing: 'var(--headline-6-tracking)',
@@ -43,7 +51,7 @@ export function Card({ title, action, padded = true, clip = true, style, childre
             }}
           >
             {title}
-          </div>
+          </TitleTag>
           {action}
         </div>
       )}

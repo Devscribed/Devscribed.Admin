@@ -23,6 +23,9 @@ export function ReportsIcon(props: GlyphProps): JSX.Element;
 export function TimeOffIcon(props: GlyphProps): JSX.Element;
 export function OrgIcon(props: GlyphProps): JSX.Element;
 
+/** §20 — react-select's clear/remove cross, moved out of `Select.jsx` when `Chip` was promoted. */
+export function CrossIcon(props: GlyphProps): JSX.Element;
+
 /** §9 — drawn to blue's icon rules; prod has no password field to measure one from. */
 export function EyeIcon(props: GlyphProps): JSX.Element;
 export function EyeOffIcon(props: GlyphProps): JSX.Element;

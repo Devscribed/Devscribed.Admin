@@ -14,6 +14,7 @@ export { Tracker } from './components/appLayout/Tracker.jsx';
 export { Badge } from './components/core/Badge.jsx';
 export { Button } from './components/core/Button.jsx';
 export { Card } from './components/core/Card.jsx';
+export { Chip } from './components/core/Chip.jsx';
 export { IconButton } from './components/core/IconButton.jsx';
 export { PageTitle } from './components/core/PageTitle.jsx';
 export { ToggleButton } from './components/core/ToggleButton.jsx';
@@ -44,6 +45,7 @@ export { TimeField } from './components/forms/TimeField.jsx';
 export {
   ArrowIcon,
   CloseIcon,
+  CrossIcon,
   MagnifyIcon,
   TrashIcon,
   ThreeDotsIcon,

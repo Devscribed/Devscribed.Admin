@@ -9,8 +9,18 @@ import {
   validateVacancy,
   type VacancyField,
 } from '@devscribed/validation';
-import { Button, Combobox, Input, Modal, Select, Textarea } from '@/ds';
-import { errorNode, focusByTestId } from '@/field-error';
+import {
+  Button,
+  FieldLabel,
+  FormActions,
+  InfoBanner,
+  Modal,
+  Select,
+  TextArea,
+  TextInput,
+  type SelectOption,
+} from '@/ds';
+import { focusByTestId } from '@/field-error';
 import type { Category, InterviewerOption, Vacancy } from '@/hiring/types';
 
 type Values = { title: string; interviewerAccountId: string; durationMinutes: string; description: string };
@@ -42,6 +52,12 @@ const valuesOf = (vacancy: Vacancy): Values => ({
   durationMinutes: String(vacancy.durationMinutes),
   description: vacancy.description ?? '',
 });
+
+/** Blue's `Select` deals in options, not in the values behind them. */
+const asOption = (option: SelectOption | string | (SelectOption | string)[]): SelectOption =>
+  option as SelectOption;
+const asOptions = (option: SelectOption | string | (SelectOption | string)[]): SelectOption[] =>
+  option as SelectOption[];
 
 /**
  * Create and edit a vacancy.
@@ -109,8 +125,8 @@ export function VacancyDialog({
     setBanner(null);
   };
 
-  // Reached from the form's own submit and from the footer button, which the dialog
-  // renders outside the form — hence the structural type rather than a FormEvent.
+  // Reached from the form's own submit and from the footer button, which the reassign
+  // confirmation renders outside the form — hence the structural type rather than a FormEvent.
   async function submit(event: { preventDefault: () => void }): Promise<void> {
     event.preventDefault();
     if (submitting) return;
@@ -148,7 +164,7 @@ export function VacancyDialog({
 
     // Ids for what the library already holds, names for what it does not — the API
     // resolves a name that turns out to exist to the existing entry rather than
-    // erroring, which is the same rule the combobox applies while typing.
+    // erroring, which is the same rule the picker applies while typing.
     const categoryIds = categories.filter((value) => pendingName(value) === null);
     const newCategoryNames = categories
       .map(pendingName)
@@ -200,25 +216,36 @@ export function VacancyDialog({
     }
   }
 
-  const options = interviewers.map((option) => ({
+  const interviewerOptions: SelectOption[] = interviewers.map((option) => ({
     value: option.accountId,
     label: option.fullName,
     disabled: !option.eligible,
-    // The reason is part of the option's accessible name, so it is announced rather
-    // than merely seen.
+    // Drawn inside the option, so the reason is part of its accessible name and is
+    // announced rather than merely seen.
     hint: option.eligible ? undefined : HIRING_MESSAGES.vacancy.interviewer.ineligibleOption,
     testId: `vacancy-interviewer-option-${option.accountId}`,
   }));
 
   // The library, plus whatever the member has typed but not yet saved. Both are options
   // so the control has one list to filter, and both render as the same chip.
-  const categoryOptions = [
-    ...library.map((category) => ({ value: category.id, label: category.name })),
+  const categoryOptions: SelectOption[] = [
+    ...library.map((category) => ({
+      value: category.id,
+      label: category.name,
+      testId: `vacancy-category-option-${category.id}`,
+    })),
     ...categories
       .map((value) => ({ value, name: pendingName(value) }))
       .filter((entry): entry is { value: string; name: string } => entry.name !== null)
-      .map((entry) => ({ value: entry.value, label: entry.name })),
+      .map((entry) => ({
+        value: entry.value,
+        label: entry.name,
+        testId: `vacancy-category-option-${entry.value}`,
+      })),
   ];
+  const selectedCategories = categories
+    .map((value) => categoryOptions.find((option) => option.value === value))
+    .filter((option): option is SelectOption => option !== undefined);
 
   return (
     <>
@@ -226,37 +253,27 @@ export function VacancyDialog({
         open={open && confirming === null}
         title={vacancy ? 'Edit vacancy' : 'New vacancy'}
         onClose={onClose}
-        width={520}
         data-testid="vacancy-dialog"
-        actions={
-          <>
-            <Button variant="secondary" onClick={onClose} data-testid="vacancy-cancel-button">
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={submit}
-              loading={submitting}
-              data-testid="vacancy-submit-button"
-            >
-              {vacancy ? 'Save changes' : 'Create vacancy'}
-            </Button>
-          </>
-        }
+        style={{ width: 520 }}
       >
-        <form onSubmit={submit} noValidate style={{ display: 'grid', gap: 'var(--sp-10)' }}>
+        {/* 20px is blue's form rhythm and the room every field's message slot needs — the
+            error and the hint are pinned 16px under the control rather than pushing it. */}
+        <form onSubmit={submit} noValidate style={{ display: 'grid', gap: 'var(--space-7)' }}>
           {banner && (
-            <div role="alert" style={{ fontSize: 'var(--fs-13)', color: 'var(--error-500)' }}>
+            <InfoBanner variant="error" role="alert" aria-live="polite" data-testid="vacancy-dialog-error">
               {banner}
-            </div>
+            </InfoBanner>
           )}
 
-          <Input
+          <TextInput
             label="Title"
+            id="vacancy-title-input"
+            name="title"
             placeholder="Senior React Engineer"
             value={values.title}
             onChange={(event) => set('title')(event.target.value)}
-            error={errors.title ? errorNode('title', errors.title) : undefined}
+            error={errors.title}
+            errorId="field-error-title"
             aria-invalid={errors.title ? true : undefined}
             aria-describedby={errors.title ? 'field-error-title' : undefined}
             data-testid="vacancy-title-input"
@@ -264,44 +281,42 @@ export function VacancyDialog({
 
           <Select
             label="Interviewer"
+            id="vacancy-interviewer-select"
             placeholder="Choose an interviewer"
-            value={values.interviewerAccountId}
-            options={options}
-            onChange={set('interviewerAccountId')}
-            error={
-              errors.interviewerAccountId
-                ? errorNode('interviewerAccountId', errors.interviewerAccountId)
-                : undefined
+            value={interviewerOptions.find((option) => option.value === values.interviewerAccountId)}
+            options={interviewerOptions}
+            onChange={(option) => set('interviewerAccountId')(asOption(option).value)}
+            error={errors.interviewerAccountId ? true : undefined}
+            errorMessage={errors.interviewerAccountId}
+            errorId="field-error-interviewerAccountId"
+            // The hint shares the error's slot, so only one of the two ever exists to be
+            // described by — which is what keeps this `aria-describedby` single-valued.
+            hint="Availability is read from their Microsoft 365 calendar."
+            hintId="vacancy-interviewer-hint"
+            aria-describedby={
+              errors.interviewerAccountId ? 'field-error-interviewerAccountId' : 'vacancy-interviewer-hint'
             }
             data-testid="vacancy-interviewer-select"
           />
-          <div
-            id="vacancy-interviewer-hint"
-            style={{ marginTop: 'calc(-1 * var(--sp-6))', fontSize: 'var(--fs-12)', color: 'var(--text-muted)' }}
-          >
-            Availability is read from their Microsoft 365 calendar.
-          </div>
 
-          <div>
-            <label
-              style={{
-                display: 'block',
-                fontFamily: 'var(--font-display)',
-                fontSize: 'var(--fs-11)',
-                letterSpacing: 1,
-                textTransform: 'uppercase',
-                color: errors.durationMinutes ? 'var(--error-500)' : 'var(--text-muted)',
-                marginBottom: 6,
-              }}
-            >
-              Interview length
-            </label>
-            <div style={{ display: 'flex', gap: 'var(--sp-8)' }}>
+          {/* The one control the design system has no component for: three mutually exclusive
+              values, drawn on one row. `FieldLabel` is blue's own label, so it matches the
+              fields above it exactly. */}
+          <div role="radiogroup" aria-labelledby="vacancy-duration-label">
+            <FieldLabel>
+              <span
+                id="vacancy-duration-label"
+                style={{ color: errors.durationMinutes ? 'var(--status-error)' : undefined }}
+              >
+                Interview length
+              </span>
+            </FieldLabel>
+            <div style={{ display: 'flex', gap: 'var(--space-6)' }}>
               {VACANCY_DURATIONS.map((minutes) => (
                 <label
                   key={minutes}
                   data-testid={`vacancy-duration-${minutes}`}
-                  style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', cursor: 'pointer' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer' }}
                 >
                   <input
                     type="radio"
@@ -309,9 +324,9 @@ export function VacancyDialog({
                     value={minutes}
                     checked={values.durationMinutes === String(minutes)}
                     onChange={() => set('durationMinutes')(String(minutes))}
-                    style={{ accentColor: 'var(--accent)' }}
+                    style={{ accentColor: 'var(--action-primary)' }}
                   />
-                  <span style={{ fontSize: 'var(--fs-14)' }}>{minutes} min</span>
+                  <span style={{ fontSize: 'var(--font-size-s)' }}>{minutes} min</span>
                 </label>
               ))}
             </div>
@@ -319,40 +334,65 @@ export function VacancyDialog({
               <div
                 id="field-error-durationMinutes"
                 data-testid="field-error-durationMinutes"
-                style={{ marginTop: 5, fontSize: 'var(--fs-12)', color: 'var(--error-500)' }}
+                style={{
+                  marginTop: 5,
+                  fontSize: 'var(--font-size-xs)',
+                  color: 'var(--status-error)',
+                }}
               >
                 {errors.durationMinutes}
               </div>
             )}
           </div>
 
-          <Combobox
+          <Select
             label="Categories"
+            id="vacancy-categories-input"
             placeholder="Type to add…"
-            value={categories}
-            options={categoryOptions}
+            isMulti
+            isSearchable
             allowCreate
+            variant="formik"
+            value={selectedCategories}
+            options={categoryOptions}
             // Nothing is written here: the name joins the selection as a pending entry
             // and the submit creates it, so cancelling the dialog leaves no orphan.
             onCreate={(name) => setCategories((prev) => [...prev, `${PENDING}${name}`])}
-            onChange={setCategories}
+            onChange={(option) => setCategories(asOptions(option).map((entry) => entry.value))}
             createTestId="vacancy-category-create-option"
-            optionTestId={(value) => `vacancy-category-option-${value}`}
             // Not `vacancy-category-chip-{id}` — that one names the read-only chips on
             // the list, and the dialog opens on top of them.
-            chipTestId={(value) => `vacancy-category-selected-${value}`}
+            chipTestId={(option) => `vacancy-category-selected-${asOption(option).value}`}
             data-testid="vacancy-categories-input"
           />
 
-          <Textarea
+          <TextArea
             label="Description"
+            id="vacancy-description-input"
+            name="description"
             placeholder="What the role involves, who it suits."
-            rows={5}
             value={values.description}
             onChange={(event) => set('description')(event.target.value)}
-            error={errors.description ? errorNode('description', errors.description) : undefined}
+            error={errors.description}
+            errorId="field-error-description"
+            aria-invalid={errors.description ? true : undefined}
+            aria-describedby={errors.description ? 'field-error-description' : undefined}
             data-testid="vacancy-description-input"
           />
+
+          <FormActions align="full">
+            <Button onClick={onClose} data-testid="vacancy-cancel-button">
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              preloader={submitting}
+              data-testid="vacancy-submit-button"
+            >
+              {vacancy ? 'Save changes' : 'Create vacancy'}
+            </Button>
+          </FormActions>
         </form>
       </Modal>
 
@@ -361,23 +401,24 @@ export function VacancyDialog({
         title="Change interview details?"
         onClose={() => setConfirming(null)}
         data-testid="vacancy-reassign-confirm"
-        actions={
-          <>
-            <Button variant="secondary" onClick={() => setConfirming(null)}>
-              Cancel
-            </Button>
+        style={{ width: 520 }}
+      >
+        <div style={{ display: 'grid', gap: 'var(--space-7)' }}>
+          <p style={{ margin: 0, fontSize: 'var(--font-size-s)', color: 'var(--text-tertiary)' }}>
+            {confirming}
+          </p>
+          <FormActions align="full">
+            <Button onClick={() => setConfirming(null)}>Cancel</Button>
             <Button
               variant="primary"
               onClick={submit}
-              loading={submitting}
+              preloader={submitting}
               data-testid="vacancy-reassign-confirm-button"
             >
               Save changes
             </Button>
-          </>
-        }
-      >
-        <p style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}>{confirming}</p>
+          </FormActions>
+        </div>
       </Modal>
     </>
   );

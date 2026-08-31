@@ -3,7 +3,17 @@
 import { notFound, useRouter, useSearchParams } from 'next/navigation';
 import { use, useCallback, useEffect, useState } from 'react';
 import { HIRING_MESSAGES, MESSAGES } from '@devscribed/validation';
-import { Badge, Button, Card, Menu, Modal, SectionLabel, Skeleton, Toast } from '@/ds';
+import {
+  Badge,
+  Button,
+  Card,
+  Chip,
+  FormActions,
+  InfoBanner,
+  Modal,
+  Popover,
+  Preloader,
+} from '@/ds';
 import { PageHeader } from '@/layout/PageHeader';
 import { formatDuration } from '@/hiring/format';
 import type { Vacancy } from '@/hiring/types';
@@ -11,7 +21,11 @@ import { VacancyDialog } from '../VacancyDialog';
 
 type State = { status: 'loading' } | { status: 'ready'; vacancy: Vacancy } | { status: 'gone' };
 
-const TOAST_TEST_IDS: Record<string, string> = {
+/**
+ * The ids are the ones the suite already knows these announcements by. They named a `Toast`
+ * when there was one to name; what they identify now is the banner slot under the header.
+ */
+const NOTICE_TEST_IDS: Record<string, string> = {
   [HIRING_MESSAGES.toast.vacancyCreated]: 'toast-vacancy-created',
   [HIRING_MESSAGES.toast.vacancyUpdated]: 'toast-vacancy-updated',
   [HIRING_MESSAGES.toast.vacancyClosed]: 'toast-vacancy-closed',
@@ -28,7 +42,7 @@ type Notice = { message: string; tone: 'success' | 'error' };
  * Closing changes nothing but whether the link accepts bookings (01 §03.9), so the link
  * stays on the page for a closed vacancy — carrying a note rather than disappearing.
  * Delete is disabled rather than hidden once there are candidates: a missing action is
- * indistinguishable from a bug, and the tooltip carries the reason.
+ * indistinguishable from a bug, and the row carries the reason as its description.
  */
 export default function VacancyDetailPage({
   params,
@@ -131,7 +145,15 @@ export default function VacancyDetailPage({
   if (state.status === 'loading') {
     return (
       <Card>
-        <Skeleton rows={4} height={22} />
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-7)' }}>
+          <Preloader aria-hidden />
+          <span
+            aria-live="polite"
+            style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}
+          >
+            Loading vacancy
+          </span>
+        </div>
       </Card>
     );
   }
@@ -168,18 +190,17 @@ export default function VacancyDetailPage({
           vacancy.durationMinutes,
         )} · ${vacancy.interviewer.fullName}`}
         action={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
             <Button
-              variant="secondary"
               onClick={() => router.push(`/org/${orgId}/hiring/vacancies/${vacancyId}/board`)}
               data-testid="vacancy-board-link"
             >
               Board
             </Button>
-            <Button variant="secondary" onClick={() => setEditing(true)} data-testid="vacancy-edit-button">
+            <Button onClick={() => setEditing(true)} data-testid="vacancy-edit-button">
               Edit
             </Button>
-            <Menu
+            <Popover
               label="Vacancy actions"
               data-testid="vacancy-actions-menu"
               items={[
@@ -200,10 +221,12 @@ export default function VacancyDetailPage({
                   key: 'delete',
                   label: 'Delete vacancy',
                   testId: 'vacancy-action-delete',
-                  tone: 'danger',
+                  danger: true,
                   disabled: blocked,
-                  tooltip: HIRING_MESSAGES.vacancy.deleteBlocked,
-                  tooltipTestId: 'vacancy-delete-guard-message',
+                  // Drawn in the row rather than hidden in a `title`, which no browser
+                  // reaches from a keyboard — see the design spec's Reversals note.
+                  description: blocked ? HIRING_MESSAGES.vacancy.deleteBlocked : undefined,
+                  descriptionTestId: 'vacancy-delete-guard-message',
                   onSelect: () => setConfirmingDelete(true),
                 },
               ]}
@@ -212,17 +235,29 @@ export default function VacancyDetailPage({
         }
       />
 
-      <div style={{ display: 'grid', gap: 'var(--sp-10)' }}>
-        <Card>
-          <SectionLabel>Booking link</SectionLabel>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 'var(--sp-8)',
-              marginTop: 'var(--sp-4)',
-            }}
+      {/*
+        Where a toast used to float. An announcement that outlives the moment it was raised has
+        to have a place on the page, and the place is directly under the header the action was
+        taken from — it pushes the page down rather than covering it, and it goes away when it
+        is dismissed or when the next one replaces it.
+      */}
+      {notice && (
+        <div style={{ marginBottom: 'var(--space-7)' }}>
+          <InfoBanner
+            variant={notice.tone === 'success' ? 'success' : 'error'}
+            role="status"
+            aria-live="polite"
+            onDismiss={() => setNotice(null)}
+            data-testid={NOTICE_TEST_IDS[notice.message] ?? 'toast-vacancy-error'}
           >
+            {notice.message}
+          </InfoBanner>
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gap: 'var(--space-7)' }}>
+        <Card title="Booking link">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-6)' }}>
             <span
               data-testid="vacancy-booking-link"
               style={{
@@ -231,26 +266,25 @@ export default function VacancyDetailPage({
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                fontFamily: 'var(--font-display)',
-                fontSize: 'var(--fs-14)',
-                color: 'var(--text)',
+                fontFamily: 'var(--font-family-base)',
+                fontSize: 'var(--font-size-s)',
+                color: 'var(--text-primary)',
               }}
             >
               {bookingUrl}
             </span>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={copyLink}
-              data-testid="vacancy-copy-link-button"
-            >
+            <Button onClick={copyLink} data-testid="vacancy-copy-link-button">
               Copy
             </Button>
           </div>
           {!open && (
             <p
               data-testid="vacancy-closed-link-note"
-              style={{ margin: 'var(--sp-4) 0 0', fontSize: 'var(--fs-12)', color: 'var(--text-muted)' }}
+              style={{
+                margin: 'var(--space-3) 0 0',
+                fontSize: 'var(--font-size-xs)',
+                color: 'var(--text-secondary)',
+              }}
             >
               {HIRING_MESSAGES.vacancy.closedLinkNote}
             </p>
@@ -260,45 +294,35 @@ export default function VacancyDetailPage({
         {/* Categories and Description side by side, the categories column narrower —
             it holds chips, not prose (01 design §Layout — detail). */}
         <div className="vacancy-detail-columns">
-          <Card>
-            <SectionLabel>Categories</SectionLabel>
+          <Card title="Categories">
             <div
               data-testid="vacancy-detail-categories"
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 'var(--sp-2)',
-                marginTop: 'var(--sp-4)',
-              }}
+              style={{ display: 'flex', flexWrap: 'wrap' }}
             >
               {vacancy.categories.length === 0 ? (
-                <span style={{ fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}>
+                <span style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}>
                   No categories.
                 </span>
               ) : (
                 vacancy.categories.map((category) => (
-                  <Badge
+                  <Chip
                     key={category.id}
-                    tone="neutral"
-                    dot={false}
+                    label={category.name}
                     data-testid={`vacancy-category-chip-${category.id}`}
-                  >
-                    {category.name}
-                  </Badge>
+                  />
                 ))
               )}
             </div>
           </Card>
 
-          <Card>
-            <SectionLabel>Description</SectionLabel>
+          <Card title="Description">
             <p
               style={{
-                margin: 'var(--sp-4) 0 0',
+                margin: 0,
                 whiteSpace: 'pre-wrap',
-                fontSize: 'var(--fs-15)',
-                lineHeight: 'var(--lh-normal)',
-                color: vacancy.description ? 'var(--text-sub)' : 'var(--text-muted)',
+                fontSize: 'var(--font-size-base)',
+                lineHeight: 'var(--line-height-base)',
+                color: vacancy.description ? 'var(--text-tertiary)' : 'var(--text-secondary)',
               }}
             >
               {vacancy.description || 'No description.'}
@@ -307,16 +331,13 @@ export default function VacancyDetailPage({
         </div>
 
         <Card>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-8)' }}>
-            <Badge
-              tone={open ? 'active' : 'inactive'}
-              data-testid={`vacancy-status-${vacancy.id}`}
-            >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-6)' }}>
+            <Badge status={open ? 'active' : 'inactive'} data-testid={`vacancy-status-${vacancy.id}`}>
               {open ? 'Open' : 'Closed'}
             </Badge>
             <span
               data-testid="vacancy-detail-counts"
-              style={{ fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}
+              style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-tertiary)' }}
             >
               {vacancy.applicationCount} candidates · {vacancy.scheduledCount} scheduled
             </span>
@@ -336,41 +357,35 @@ export default function VacancyDetailPage({
         }}
       />
 
+      {/*
+        Still `Modal` rather than blue's `ConfirmDialog`: `ConfirmDialog` fires `onClose` in the
+        same breath as `onAccept`, so a confirmation whose action is a request with a busy state
+        cannot use it. Flagged for Phase 6, which owns that component.
+      */}
       <Modal
         open={confirmingDelete}
         title="Delete vacancy?"
         onClose={() => setConfirmingDelete(false)}
         data-testid="vacancy-delete-confirm"
-        actions={
-          <>
-            <Button variant="secondary" onClick={() => setConfirmingDelete(false)}>
-              Cancel
-            </Button>
+        style={{ width: 520 }}
+      >
+        <div style={{ display: 'grid', gap: 'var(--space-7)' }}>
+          <p style={{ margin: 0, fontSize: 'var(--font-size-s)', color: 'var(--text-tertiary)' }}>
+            {vacancy.title} will be removed. This cannot be undone.
+          </p>
+          <FormActions align="full">
+            <Button onClick={() => setConfirmingDelete(false)}>Cancel</Button>
             <Button
-              variant="danger"
+              variant="delete"
               onClick={remove}
-              loading={busy}
+              preloader={busy}
               data-testid="vacancy-delete-confirm-button"
             >
               Delete vacancy
             </Button>
-          </>
-        }
-      >
-        <p style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}>
-          {vacancy.title} will be removed. This cannot be undone.
-        </p>
+          </FormActions>
+        </div>
       </Modal>
-
-      {notice && (
-        <Toast
-          tone={notice.tone}
-          onDismiss={() => setNotice(null)}
-          data-testid={TOAST_TEST_IDS[notice.message] ?? 'toast-vacancy-error'}
-        >
-          {notice.message}
-        </Toast>
-      )}
     </div>
   );
 }
