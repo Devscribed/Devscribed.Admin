@@ -31,6 +31,17 @@ Code and tests that satisfy the handoff, plus a stage report at
 - **One migration per run.** On a retry, replace the migration this run already created —
   migrations are additive and therefore permanent, so a second one leaves the failed attempt
   in the schema forever.
+- **A comment is not where a rule is amended.** If you are writing a comment explaining why a
+  spec rule does not apply here, stop and raise a `spec` finding. A deviation you can argue
+  for is still a deviation, and the argument belongs where the rule can be changed.
+- **A single enumerated exception is exactly one edit.** Where the spec permits one change to
+  a file it otherwise freezes, your diff to that file is that change and nothing else — no
+  rename, no extra assertion, no comment.
+- **A double stands in for the system, not for the spec.** The spec's External Contracts
+  section names the behaviours it must reproduce, including the ones that make your tests
+  fail. A behaviour you would have to invent is a `spec` finding, not a choice you make in the
+  double. A double built from the spec's sentences makes the suite a second copy of the
+  premise, and every test passes while nothing works.
 
 ## Repository conventions
 
@@ -49,15 +60,57 @@ Code and tests that satisfy the handoff, plus a stage report at
 - Selectors are `data-testid` only, named in the spec. Test case ids in code match the spec's.
 - Migrations are additive. Run `prisma generate` from `apps/api`, never the repository root.
 
+## Writes, boundaries and predicates
+
+- **Before a predicate-guarded write, write two sentences:** the rule the predicate is there to
+  enforce, and the question the code actually asks. When those are different questions the
+  predicate is incomplete.
+- **A guard is evaluated on the row the transaction locked.** Re-read inside the transaction,
+  after the lock, and decide against that read. Anything loaded before an `await` that leaves
+  the process is stale by the time it is tested.
+- **A scope key has no fallback.** `?? 'shared'` on an organization or tenant key turns a
+  per-scope rule into a global one, silently and with every test still green. If the signature
+  cannot carry the key, raise it rather than defaulting it.
+- **An unrecognized value from outside stalls and is logged.** Never map it to a default. A
+  state you cannot read is a defect to be seen, not a state to infer.
+- **A rule about one call does not live in a generic helper's happy path.** When a requirement
+  names a single route inside a shared client, the check lives on that route, or the helper
+  takes it as a parameter.
+- **A helper that is safe in one place is not safe as a trust boundary.** A value good enough
+  to record in an audit log is not thereby good enough to key a rate limit or an authorization
+  decision.
+
+## Tests
+
+- **An assertion must be able to fail.** A test that passes against the behaviour before your
+  change is not coverage. An assertion about a value nothing produces, or a selector nothing
+  renders, is a finding you raise — not a test you keep.
+- **An assertion about a user-facing message compares the spec's literal text**, never the
+  constant the code imports. Asserting the constant certifies whatever the code happens to say.
+- **A `data-testid` the spec names must reach the element the test drives.** If a design-system
+  component spreads it onto a wrapper, that is a DS gap — fix it in the design system, never by
+  reaching past the id into a role or an internal input.
+- **Every `data-testid` you add is named in the spec.** If it is not there, you do not add it.
+- **A case that mutates process-wide state runs serially.** The suite is parallel by default.
+
 ## Before you report done
 
-Run what you can run: `npm run test:unit`, a type check, and **the integration suites your
-diff touches** — from `apps/api`, `npm test -- test/<file>.spec.ts`, naming the files. Never
-report a check you did not run.
+**Run the tests you wrote.** `npm run test:unit`, a type check, the integration suites your
+diff touches — from `apps/api`, `npm test -- test/<file>.spec.ts`, naming the files — and the
+E2E files your diff touches, from `e2e`, on your own ports:
 
-**Do not run E2E, and do not run integration in full.** Filter Jest with a positional path;
-never `--testPathPatterns`, which this version ignores in silence and runs everything while
-your log says you filtered.
+```
+E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/<file>.spec.ts tests/regressions.spec.ts
+```
+
+Your stage report names each command and its summary line. A suite you did not run is a suite
+you did not write: a spec file that does not compile, a selector that resolves to the wrong
+element, a click on a control inside a menu nobody opened — each of those passes every reading
+and dies on the first execution.
+
+**Never run integration or E2E in full**, and never take ports 3000 or 4000 — they belong to
+whoever is working. Filter Jest with a positional path; never `--testPathPatterns`, which this
+version ignores in silence and runs everything while your log says you filtered.
 
 **Then commit, on the working branch, in one commit.** Not optional: the reviewer reads
 `git diff <baseRef>...HEAD`, so work left uncommitted makes that diff empty and the review
