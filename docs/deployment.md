@@ -127,66 +127,55 @@ Nothing is destroyed and no data is lost.
 
 ## Automatic deploys from GitHub
 
-[`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) is the pipeline for `main`. It tests
-first and deploys second:
+[`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) is the pipeline for `main`. It
+deploys; it does not test:
 
 | Trigger | Runs the suite | Then deploys |
 |---|---|---|
-| push to `main` | yes | `dev` |
-| tag `v*` pointing at a commit on `main` | yes | `prod` |
-| manual dispatch | yes | whichever environment you pick |
 | pull request | yes ([`test.yml`](../.github/workflows/test.yml)) | nothing |
+| push to `main` | no | `dev` |
+| tag `v*` pointing at a commit on `main` | no | `prod` |
+| manual dispatch | no | whichever environment you pick |
 
-**The suite is a gate, not a neighbour.** `test.yml` is a reusable workflow that `deploy.yml` calls,
-and the deploy job `needs` it, so nothing reaches an environment on a red run. That dependency is
-what makes an automatic deploy safe to have at all: while deploys were manual a human read the test
-result before pressing the button, and now nobody does. It is also why `test.yml` has no `push`
-trigger of its own — on `main` it runs as the first half of this pipeline, and a second trigger
-would run Playwright twice per merge.
+**The suite runs on the pull request.** [`test.yml`](../.github/workflows/test.yml) is triggered by
+`pull_request` and by nothing else, so a change is proved green before it is merged and the merge
+itself re-runs nothing. That keeps the whole suite, Playwright included, to one run per change and
+takes roughly three minutes off every deploy.
 
-The tests half runs whether or not deploys are switched on. Only the deploy half is gated, on
-switches that remain deliberately:
+It also means the pull request is the only gate there is. **Turn on branch protection for `main`
+requiring the three test checks** — with it off, a push straight to `main` deploys code no suite has
+run, to an environment people are using.
 
-1. The repository variable `DEPLOY_ENABLED` must be `true`. A repository with it unset runs the
-   suite and deploys nothing, however the workflow is triggered.
+The deploy half is gated on switches that remain deliberately:
+
+1. The repository variable `DEPLOY_ENABLED` must be `true`. A repository with it unset deploys
+   nothing, however the workflow is triggered.
 2. `AWS_DEPLOY_ROLE_DEV` / `AWS_DEPLOY_ROLE_PROD` must hold the ARNs that
    `terraform output github_deploy_role_arn` prints for each environment. The job checks its own
    **before** asking AWS for anything, so an unset one fails with a sentence naming the variable
    rather than with an opaque OIDC rejection.
-3. `DEPLOY_REQUIRE_TESTS` decides whether the gate is there at all. Unset — or anything other than
-   the exact string `false` — keeps it. See below.
 
-### How long the gate takes, and how to not have one
+### How long the suite takes
 
-The suite sits in front of every deploy, so its duration is added to every deploy. It is sharded
-across runners to keep that short:
+The suite is what a reviewer waits on before merging. The E2E half is sharded across runners to
+keep that short:
 
 | Job | Shards | Each |
 |---|---|---|
 | Unit | 1 | ~40s |
-| Integration | 2 | ~1m50s |
+| Integration | 1 | ~2m30s |
 | E2E | 3 | ~3m |
 
 Roughly three minutes end to end, down from 6m40s when the 120 browser tests ran two at a time on
-one runner. Each shard is a separate runner with **its own Postgres service container**, which is
-what makes sharding safe rather than merely faster: the integration suite truncates tables between
-tests and the E2E suite mints accounts in a shared database, and neither would survive two shards
-pointed at one server. Nothing about the tests changed — only how many machines run them.
+one runner. Each E2E shard is a separate runner with **its own Postgres service container**, which
+is what makes sharding safe rather than merely faster: the suite mints accounts in a shared
+database and would not survive two shards pointed at one server. Nothing about the tests changed —
+only how many machines run them.
 
-If three minutes is still three minutes too many, set `DEPLOY_REQUIRE_TESTS` to `false`. The `tests`
-job is then skipped on this pipeline and the rollout starts immediately. Pull requests still run the
-full suite, because `test.yml` has its own `pull_request` trigger and this variable does not touch
-it.
-
-Be clear about what that trades. It is defensible when **every** change reaches `main` through a
-pull request: the PR run is then the last suite anybody sees, and re-running it on the merge commit
-mostly re-confirms what was already green. It is not defensible while anybody pushes straight to
-`main`, which is how this repository has been worked so far — with the variable off, such a push
-deploys code that no suite has run, to an environment people are using.
-
-A middle position, if you want it: leave `DEPLOY_REQUIRE_TESTS` unset and turn on branch protection
-for `main` requiring the three test checks. The gate then runs once, on the PR, and the merge is
-already known-good.
+The integration suite is one runner and sharded across two until that stopped paying: `jest
+--maxWorkers=4` already parallelises it inside the runner, each worker on its own database by
+`TEMPLATE` copy, so a second machine bought a fraction of a suite that is not the long pole in
+exchange for a whole extra `npm ci` and service container.
 
 `AWS_DEPLOY_ROLE_PROD` is unset today because prod has never been applied — there is no role to
 name yet. A `v*` tag will fail at that check until `make infra-prod` has run once.

@@ -88,10 +88,11 @@ is the real one. To look at a screen, start a pair on those ports rather than bo
 
 ## Watch out for
 
-- **`main` deploys itself.** `deploy.yml` is the pipeline: push to `main` runs the whole suite
-  and then deploys `dev`; a `v*` tag on `main` does the same and deploys `prod`. `test.yml` is a
-  reusable workflow it calls, and the deploy job `needs` it, so a red run deploys nothing. The
-  deploy half is still gated on the repository variable `DEPLOY_ENABLED`. The runbook —
+- **`main` deploys itself, and does not test first.** `deploy.yml` is the pipeline: push to
+  `main` deploys `dev`, a `v*` tag on `main` deploys `prod`, and neither runs a test. The suite
+  lives in `test.yml`, which triggers on `pull_request` only — so the pull request is the only
+  gate, and a change that reaches `main` any other way is deployed untested. The deploy half is
+  gated on the repository variable `DEPLOY_ENABLED`. The runbook —
   releasing, rolling back, and what to do when a deploy fails — is
   [docs/deployment.md](docs/deployment.md). Prod tags come from `npm run release`.
 - **Role values are in transition.** The database holds `admin` / `member`; the specs target

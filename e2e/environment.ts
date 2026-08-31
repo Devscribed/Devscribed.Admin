@@ -53,7 +53,12 @@ export const API_ORIGIN =
  *
  * The port is learned from `apps/api/.env` for the reason `apps/api/test/database-url.ts`
  * learns it there: a developer with a native Postgres on 5433 has to remap the container,
- * `.env` is untracked and machine-local, and CI has no `.env` and is unaffected.
+ * and `.env` is untracked and machine-local.
+ *
+ * **CI has no `.env`, so CI must set `E2E_DATABASE_URL`** — see the e2e job in
+ * `.github/workflows/test.yml`. Without it the fallback below points at a developer's
+ * compose port on a runner where nothing listens there, and the run dies at the API's
+ * `predev` migration with `P1001` before a single test starts.
  *
  * `prisma migrate deploy` creates the database when it is missing, so no compose change and
  * no `docker compose down -v` is needed on a machine that already has its data volume.
