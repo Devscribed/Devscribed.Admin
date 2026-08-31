@@ -278,6 +278,11 @@ about SignWell that SignWell does not do:
 - **[BUG-002](../bugs/BUG-002-email-validation-looser-than-the-provider.md)** — `SPEC-GAP`.
   Two edge cases missing: a signer address the provider will not accept, and a provider `4xx`
   reported to the sender as an outage.
+- **[BUG-006](../bugs/BUG-006-signing-page-csp-blocks-the-product-font.md)** — `SPEC-GAP`.
+  The restrictive CSP this README requires on `/sign/*` refuses the design system's own
+  typefaces, so the only page a counterparty sees is the only page in the wrong font. Two
+  origins are named rather than one; the general rule — the policy is an allow-list against
+  a stylesheet chain nobody reading it can see — is edge case 39.
 - **[BUG-005](../bugs/BUG-005-recipient-completed-not-signed.md)** — `SPEC-DEFECT`.
   Requirement 39's status table listed `signed`, a word no recipient object carries; a
   recipient who has signed reads `completed`. The turn never closed, so the second signer was

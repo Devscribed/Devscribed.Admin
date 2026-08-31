@@ -701,6 +701,7 @@ unchanged.
 | 36 | A coordinate leaves in the wrong unit | Nothing detects it. The provider accepts any number, stores it, echoes it back unchanged, materializes the field and sends the document; the signature simply lands somewhere else on the page. The double echoes what it is given and so agrees with whatever we believe. `TC-04-INT-27` asserts the conversion, and it is the only automated thing that can fail when this breaks. |
 | 37 | The provider reports a recipient status we do not recognize | The recipient stays `pending`, so the envelope **stalls rather than advancing on a guess**, and the adapter logs an error naming the value and the document. A vocabulary we cannot read is a defect to be seen, never a state to be inferred — the silent `default` is what let a signed recipient converge to "nothing has happened to them yet". |
 | 38 | Every recipient reads signed and the document is not `Completed` | The envelope does not complete, and the adapter logs the document's status. Completion is the document's claim and the final PDF hangs off it, so a count of finished recipients is not a substitute. The log is what makes a second vocabulary drift visible within seconds. |
+| 39 | The design system loads an asset from an origin the `/sign/*` policy does not name | The browser refuses it and the page renders degraded, with no error state and nothing failing. The product's own typefaces were refused this way from the day the policy was written — `display=swap` paints the fallback first and the swap never comes, so the only page a counterparty sees was the only page in the wrong typeface. Every origin the policy admits is named in `next.config.mjs` with the reason it is there, and `TC-04-E2E-07` fails when **anything** on that page is refused |
 
 ## Data Model
 
@@ -1276,7 +1277,7 @@ spend a whole E2E case re-reading a string the API already decided.
 | **`envelope-completion.ts`** | Two sources of PDF bytes instead of one. | The content-addressed key and the `updateMany` guard are unchanged; only the byte source is chosen earlier. |
 | **`/sign/{token}`** | The route now has two bodies. Its guards, token validation and `viewed` recording stay common. | `surface` is decided server-side and the client renders one of two bodies; the access rules are not duplicated. |
 | **The event chain** | A second writer (the reconciler) joins the controllers. | It writes through `EnvelopeEventsService` like everything else, so invariant 4 holds by construction. |
-| **The CSP on `/sign/*`** | `frame-src` is `'self'`, so the embedded widget is refused by the browser outright — TC-04-E2E-02 fails and no counterparty can sign anywhere. This is a mitigation the area README lists as required against author-controlled HTML on a session-less page, and the embedded surface cannot exist without loosening it. | `frame-src` gains the embed origin and nothing else, from a **build-time** variable — `headers()` resolves during `next build` exactly as `rewrites()` does, so a runtime value would silently do nothing. `script-src` is deliberately untouched: requirement 15 hosts the widget in our own iframe with our own origin-checked listener rather than loading SignWell's SDK, so no third-party script reaches that page. |
+| **The CSP on `/sign/*`** | `frame-src` is `'self'`, so the embedded widget is refused by the browser outright — TC-04-E2E-02 fails and no counterparty can sign anywhere. This is a mitigation the area README lists as required against author-controlled HTML on a session-less page, and the embedded surface cannot exist without loosening it. | `frame-src` gains the embed origin and nothing else, from a **build-time** variable — `headers()` resolves during `next build` exactly as `rewrites()` does, so a runtime value would silently do nothing. `script-src` is deliberately untouched: requirement 15 hosts the widget in our own iframe with our own origin-checked listener rather than loading SignWell's SDK, so no third-party script reaches that page. Two further origins are named for the same reason and with the same care: `style-src` gains `https://fonts.googleapis.com` and `font-src` gains `https://fonts.gstatic.com`, because the design system's typefaces are loaded from there by every page and this is the only page whose policy could refuse them (BUG-006). Widening one without the other changes nothing visible — the stylesheet and the font files are governed by different directives. |
 | **Public attack surface** | A new unauthenticated POST endpoint. | Hash verification, a replay store, a rate limit, no state written from the body, and a response that is identical for known and unknown references. |
 | **Outbound network from the API** | The API now makes outbound HTTPS calls in the request path. A hung provider could exhaust the request pool. | Hard 10s timeout per call, five attempts with backoff **outside** any transaction (invariant 11), and a circuit breaker that fails fast for 60s after five consecutive failures. |
 | **Secrets** | An API key that can create and destroy real contracts. | SSM `SecureString`, injected by ECS — the store this repository already uses. Terraform creates the parameter and the IAM policy, never the value, so no secret reaches the state file. |
@@ -1718,6 +1719,19 @@ person it hands over to is not asserted.
 - **Steps:** 1. Read the envelope, so convergence runs. 2. `GET /api/sign/{token}` with the token from the invitation the second signer received.
 - **Expected Result:** 1. Signer 1's row is `signed`. 2. The second signer's link answers `200` with `surface: 'embedded'`. 3. Separately, the vocabulary itself: every observed value maps to what was observed, an unrecognized value is `pending` **and** reported, and `signed` — which no recipient object carries — is not accepted.
 - **Implemented in:** `apps/api/test/signwell-reconcile.spec.ts` and `apps/api/test/signwell-signer-status.spec.ts`.
+
+### TC-04-E2E-07: The signing page is refused nothing by its own policy
+
+BUG-006's regression test, and deliberately not a test about fonts. A CSP is a
+hand-maintained allow-list on the one page whose stylesheet chain nobody reading the policy
+can see, and what it refuses it refuses silently.
+
+- **Level:** E2E. Only a browser can report that a resource was refused.
+- **Preconditions:** a sent SignWell envelope and a signer's link.
+- **Steps:** 1. Collect `securitypolicyviolation` events from before the document exists. 2. Open `/sign/{token}` and wait for the widget.
+- **Expected Result:** 1. No violation is reported. 2. A failure names the violated directive and the blocked URI, so the next gap in the policy is one line of output.
+- **Deliberately not asserted:** that the fonts arrived. That would put a third party's reachability from CI in the path of a green suite, and a network failure is not a policy violation.
+- **Implemented in:** `e2e/tests/signature-providers.spec.ts`.
 
 ### TC-04-E2E-01: An admin switches the organization to SignWell
 

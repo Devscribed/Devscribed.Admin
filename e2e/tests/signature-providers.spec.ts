@@ -424,4 +424,65 @@ test.describe('Spec 04 — signature providers', () => {
     // Requirement 28 — no Certificate of Completion of ours is issued or offered.
     await expect(page.getByTestId('envelope-certificate-link')).toHaveCount(0);
   });
+  /**
+   * The one page in the product with a Content-Security-Policy, and the one page shown to
+   * somebody who is not our user. A policy is a hand-maintained allow-list, and what it
+   * refuses is refused silently: the design system's typefaces were blocked from the day
+   * the policy was written, and the only symptom was a page in the browser's fallback
+   * sans-serif with `display=swap` making even that look deliberate (BUG-006).
+   *
+   * So the assertion is not about fonts. It is that this page is refused **nothing** — the
+   * next asset the design system loads from somewhere new fails here, by name, instead of
+   * shipping.
+   *
+   * It deliberately does not assert that the fonts arrived: that would put Google's
+   * reachability from CI in the path of a green suite, and a network failure is not a
+   * policy violation. What we control is that we did not forbid them.
+   */
+  test('TC-04-E2E-07: the signing page is refused nothing by its own policy', async ({
+    request,
+    browser,
+  }) => {
+    test.slow();
+    const { orgId, templateId } = await seedOrganization(request);
+    await useSignWell(request, orgId);
+    const counterparty = uniqueEmail('counterparty');
+    await createEnvelope(request, orgId, {
+      templateId,
+      fieldValues: FIELD_VALUES,
+      signers: [
+        { name: 'Pat Owner', email: counterparty },
+        { name: 'Alex Kaminski', email: uniqueEmail('second') },
+      ],
+      send: true,
+    });
+    const link = await signingLinkFor(request, counterparty);
+
+    const context = await browser.newContext();
+    const signer = await context.newPage();
+    try {
+      // Registered before the document exists, so a stylesheet refused during the first
+      // paint is caught rather than raced.
+      await signer.addInitScript(() => {
+        (window as unknown as { cspViolations: string[] }).cspViolations = [];
+        document.addEventListener('securitypolicyviolation', (event) => {
+          (window as unknown as { cspViolations: string[] }).cspViolations.push(
+            `${event.violatedDirective} refused ${event.blockedURI}`,
+          );
+        });
+      });
+
+      await signer.goto(link);
+      // The frame is what the page is for; once it is up, everything the document asks for
+      // has been asked for.
+      await expect(signer.getByTestId('sign-embedded-frame')).toBeVisible();
+
+      const violations = await signer.evaluate(
+        () => (window as unknown as { cspViolations: string[] }).cspViolations,
+      );
+      expect(violations).toEqual([]);
+    } finally {
+      await context.close();
+    }
+  });
 });
