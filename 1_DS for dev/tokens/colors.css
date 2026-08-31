@@ -1,119 +1,63 @@
-/* Meridian palette — warm editorial neutrals + violet accent + amber tracker.
-   All non-neutral colors are OKLCH so dark-mode variants sit on the same hue arc. */
-:root{
-  /* ---- Base neutrals (paper) ---- */
-  --paper-0:#FFFFFF;
-  --paper-50:#FBF8F2;
-  --paper-100:#F7F3EC;
-  --paper-200:#F0EADF;
-  --paper-500:#E4DBCC;
-  --paper-600:#DBCFB9;
-  --paper-700:#c3b8a3;
+/* Teammerly (Teamplay) — Color tokens
+   Extracted verbatim from src/styles/variables.scss and component .module.scss
+   files in the attached teamplay-react-app codebase. */
 
-  --ink-900:#241F1A;
-  --ink-700:#5F574A;
-  --ink-500:#8A8072;
-  --ink-400:#A89E8D;
+:root {
+  /* Base palette */
+  --color-black: #1B1B1B;
+  --color-blue: #007AFF;        /* primary action color, iOS-blue */
+  --color-blue-light: #EFF6FF;
+  --color-blue-lighter: #E8F2FE; /* logo lockup background */
+  --color-blue-tint: #F4F7FF;    /* active sidebar sub-item background */
+  --color-tracker-blue: #2AA7FF; /* floating tracker widget accent (distinct from primary blue) */
+  --color-gray: #64748B;
+  --color-gray-light: #E7E7E7;
+  --color-gray-lighter: #E8E8E8;
+  --color-gray-dark: #54595E;
+  --color-gray-table-header: #EEF2F5;
+  --color-gray-disabled-bg: #EFF1F5;
+  --color-white: #FFFFFF;
 
-  /* ---- Charcoal (dark theme) ---- */
-  --char-0:#17140F;
-  --char-100:#1C1811;
-  --char-150:#1E1A14;
-  --char-200:#211D16;
-  --char-400:#2C261D;
-  --char-500:#2F2920;
-  --char-700:#4A4235;
-  --char-800:#5A5142;
-  --char-900:#6F6656;
-  --char-ink:#EDE7DB;
-  --char-sub:#A69C8A;
+  /* Status palette */
+  --color-success: #27C79A;
+  --color-warning: #FFD02B;
+  --color-error: #D80027;
+  --color-info: #00B6FF;
 
-  /* ---- Accent: Violet (primary action, focus, "live") ---- */
-  --violet-200:oklch(0.95 0.035 292);
-  --violet-400:oklch(0.85 0.06 292);
-  --violet-500:oklch(0.68 0.17 292);   /* dark accent */
-  --violet-600:oklch(0.62 0.17 292);   /* dark primary */
-  --violet-700:oklch(0.5 0.16 292);    /* PRIMARY */
-  --violet-800:oklch(0.44 0.16 292);   /* hover */
-  --violet-900:oklch(0.4 0.15 292);    /* lip / press */
+  /* Structural / border colors (literal rgba values from source) */
+  --color-border-subtle: rgba(72, 94, 144, 0.16);
+  --color-row-hover: rgba(211, 211, 211, 0.1);
+  --color-overlay-scrim: rgba(0, 0, 0, 0.6);
+  --color-error-outline: rgba(234, 78, 61, 0.45);
+  --color-info-tint: rgba(0, 182, 255, 0.1);
+  --color-error-tint: rgba(216, 0, 39, 0.1);
 
-  /* ---- Amber: tracker + warning ---- */
-  --amber-100:oklch(0.96 0.04 74);
-  --amber-300:oklch(0.82 0.09 74);
-  --amber-500:oklch(0.74 0.14 74);
-  --amber-700:oklch(0.55 0.13 74);
-  --amber-800:oklch(0.5 0.1 74);
+  /* Semantic aliases */
+  --surface-page: var(--color-white);
+  --surface-card: var(--color-white);
+  --surface-sunken: var(--color-gray-table-header);
+  --surface-disabled: var(--color-gray-disabled-bg);
+  --surface-overlay: var(--color-white);
 
-  /* ---- Success: green ---- */
-  --success-100:oklch(0.95 0.04 160);
-  --success-500:oklch(0.58 0.11 160);
-  --success-700:oklch(0.45 0.1 160);
+  --text-primary: var(--color-black);
+  --text-secondary: var(--color-gray);
+  --text-tertiary: var(--color-gray-dark);
+  --text-on-accent: var(--color-white);
+  --text-link: var(--color-blue);
 
-  /* ---- Error: red ---- */
-  --error-100:oklch(0.95 0.04 25);
-  --error-400:oklch(0.7 0.12 25);
-  --error-500:oklch(0.55 0.2 25);
-  --error-600:oklch(0.5 0.18 25);
-  --error-700:oklch(0.46 0.19 25);
+  --border-default: var(--color-gray-light);
+  --border-subtle: var(--color-border-subtle);
 
-  /* ---- Semantic — light ---- */
-  --bg:var(--paper-100);
-  --bg-panel:var(--paper-0);
-  --bg-panel-2:var(--paper-50);
-  --bg-sunken:var(--paper-200);
-  --bg-header:var(--paper-200);
-  --bg-field:var(--paper-0);
+  --action-primary: var(--color-blue);
+  --action-primary-text: var(--color-white);
+  --action-danger: var(--color-error);
+  --action-danger-text: var(--color-white);
+  --action-neutral-text: var(--color-gray);
 
-  --text:var(--ink-900);
-  --text-sub:var(--ink-700);
-  --text-muted:var(--ink-500);
-  --text-faint:var(--ink-400);
+  --status-success: var(--color-success);
+  --status-warning: var(--color-warning);
+  --status-error: var(--color-error);
+  --status-info: var(--color-info);
 
-  --border:var(--paper-500);
-  --border-strong:var(--paper-600);
-  --divider:var(--paper-200);
-
-  --accent:var(--violet-700);
-  --accent-hover:var(--violet-800);
-  --accent-lip:var(--violet-900);
-  --accent-soft:var(--violet-200);
-  --accent-border:var(--violet-400);
-  --on-accent:#fff;
-
-  --tracker:var(--amber-500);
-  --tracker-bg:oklch(0.78 0.14 74 / 0.1);
-  --tracker-border:var(--amber-800);
-
-  --status-active-bg:var(--success-100);
-  --status-active-ink:var(--success-700);
-  --status-active-dot:var(--success-500);
-  --status-inactive-bg:var(--error-100);
-  --status-inactive-ink:var(--error-600);
-  --status-inactive-dot:var(--error-500);
-}
-
-[data-theme="dark"]{
-  --bg:var(--char-0);
-  --bg-panel:var(--char-200);
-  --bg-panel-2:var(--char-100);
-  --bg-sunken:var(--char-150);
-  --bg-header:var(--char-200);
-  --bg-field:var(--char-150);
-
-  --text:var(--char-ink);
-  --text-sub:var(--char-sub);
-  --text-muted:var(--ink-500);
-  --text-faint:var(--char-800);
-
-  --border:var(--char-400);
-  --border-strong:var(--char-500);
-  --divider:var(--char-500);
-
-  --accent:var(--violet-600);
-  --accent-hover:var(--violet-500);
-  --accent-soft:oklch(0.62 0.17 292 / 0.18);
-  --accent-border:oklch(0.62 0.17 292 / 0.35);
-
-  --tracker-bg:oklch(0.78 0.14 74 / 0.1);
-  --tracker-border:var(--amber-800);
+  --focus-ring-color: rgba(1, 104, 250, 0.5);
 }

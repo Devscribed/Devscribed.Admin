@@ -1,27 +1,31 @@
-:root{
-  --sp-0:0px;
-  --sp-1:2px;
-  --sp-2:4px;
-  --sp-3:6px;
-  --sp-4:8px;
-  --sp-5:10px;
-  --sp-6:12px;
-  --sp-7:14px;
-  --sp-8:16px;
-  --sp-9:18px;
-  --sp-10:20px;
-  --sp-11:22px;
-  --sp-12:24px;
-  --sp-14:28px;
-  --sp-16:32px;
-  --sp-20:40px;
-  --sp-24:48px;
-  --sp-28:56px;
+/* Teammerly (Teamplay) — Spacing & radius tokens
+   These are the literal px values observed repeatedly across .module.scss files
+   (paddings, gaps, margins) — not rounded to a 4/8 grid where the source wasn't. */
 
-  /* Layout */
-  --sidebar-w:252px;
-  --topbar-h:68px;
-  --field-h:44px;
-  --field-h-lg:46px;
-  --field-h-sm:38px;
+:root {
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 10px;
+  --space-5: 12px;
+  --space-6: 16px;
+  --space-7: 20px;
+  --space-8: 24px;
+  --space-9: 25px;
+  --space-10: 30px;
+  --space-11: 36px;
+  --space-12: 40px;
+
+  /* Layout constants pulled directly from AppLayout / Sidebar / Navbar */
+  --layout-sidebar-width: 290px;
+  --layout-navbar-height-mobile: 60px;
+  --layout-navbar-height-desktop: 80px;
+  --layout-breakpoint-desktop: 1200px;
+
+  /* Radii ($border-radius literal values, not a synthetic scale) */
+  --radius-s: 4px;    /* ActivityBadge */
+  --radius-m: 6px;    /* popovers, tracker card, menu drawer top corners (implicit) */
+  --radius-l: 8px;    /* buttons, inputs, cards, modal, ChapterNavigationCard */
+  --radius-pill: 20px; /* ToggleButton segmented control */
+  --radius-circle: 50%; /* tracker start/stop button, avatar chips */
 }

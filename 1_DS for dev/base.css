@@ -1,0 +1,78 @@
+/* Teammerly (Teamplay) — base element resets, adapted from src/styles/reset.scss
+   and the global rules in src/index.scss (.input-label / .form-control / .errorInput). */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+/* No `color` here on purpose: neither src/index.scss nor src/styles/reset.scss sets a colour
+   on `body`, so inherited text in prod is the browser default #000 (measured on the
+   "Edit Information" h4 in prod-screens/43-account.png — 2940 pure #000000 pixels).
+   Components that are black in prod say so themselves (.fTable{color:$appBlack}). */
+body {
+  margin: 0;
+  font-family: var(--font-family-base);
+  line-height: var(--line-height-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+ul { list-style: none; padding: 0; margin: 0; }
+/* reset.scss only declares a{text-decoration:none}; prod has no global link colour at all — every
+   link takes its colour from its own class, so an unclassed <a> in prod is browser-default blue.
+   DEVIATION (see STATUS.md): this system paints unclassed links with the brand blue instead, so
+   links added later don't render #0000EE. Nothing in the kit relies on it. */
+a { text-decoration: none; color: var(--text-link); }
+a:hover { color: var(--text-link); }
+p, h1, h2, h3, h4, h5, h6 { margin: 0; }
+
+/* PageTitle.module.scss — headLine6, then headLine5 ≥768px, headLine4 ≥1200px. Media queries
+   can't be inline, so PageTitle.jsx renders <h1 class="page-title"> against these rules. */
+.page-title { font-weight: 500; font-size: 16px; line-height: 24px; letter-spacing: -0.32px; }
+@media (min-width: 768px) { .page-title { font-weight: 450; font-size: 20px; line-height: 30px; letter-spacing: -0.32px; } }
+@media (min-width: 1200px) { .page-title { font-weight: 450; font-size: 24px; line-height: 36px; letter-spacing: -0.7px; } }
+img { max-width: 100%; display: block; }
+button {
+  margin: 0; padding: 0; border: 0; background: transparent;
+  font: inherit; cursor: pointer;
+}
+input, textarea, select { font: inherit; }
+
+/* Measured in prod-screens/02, 03, 21 (2x): every <label> in the app renders ~10px right of
+   its field's left edge and ~10px lower than line-height:21px alone would put it (label ink
+   x=962 vs field border x=940; label block 35px, not 25). src/index.scss shows no padding —
+   the deployed build's rule differs from the repo copy, so the measured inset is reproduced. */
+.input-label {
+  display: inline-block;
+  padding: 10px 0 0 10px;
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-xs);
+  line-height: 21px;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-1);
+  white-space: nowrap;
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  font-size: var(--font-size-s);
+  color: var(--text-primary);
+  caret-color: var(--text-primary);
+  background-color: var(--color-white);
+  border: 1.5px solid var(--border-default);
+  border-radius: var(--radius-l);
+  padding: var(--space-4);
+  transition: var(--transition-border-focus);
+}
+.form-control:focus {
+  border-color: var(--color-blue);
+  outline: 0;
+  box-shadow: var(--shadow-focus-input);
+}
+.form-control::placeholder { color: var(--text-secondary); opacity: 1; }
+
+.errorInput {
+  border-color: var(--color-error) !important;
+  outline: 0;
+  box-shadow: var(--shadow-error-glow);
+}

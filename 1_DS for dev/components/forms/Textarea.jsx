@@ -1,58 +1,40 @@
-import React, { useId, useState } from 'react';
+import React from 'react';
 
-export function Textarea({ label, error, hint, trailing, rows = 4, id, style, wrapperStyle, ...rest }) {
-  const [focus, setFocus] = useState(false);
-  const generatedId = useId();
-  const fieldId = id || generatedId;
-  const borderColor = error ? 'var(--error-500)' : (focus ? 'var(--accent)' : 'var(--border-strong)');
-  const ring = focus
-    ? (error ? 'var(--shadow-glow-error)' : 'var(--shadow-glow-accent)')
-    : 'none';
+/**
+ * TextArea — shared/forms/textAreas/TextArea: a `.form-control` textarea with an inline
+ * 12px label above it and an absolutely-positioned 8px error message below.
+ * TextArea.module.scss: .root{position:relative} .label{color:$appGray;margin-bottom:7px;
+ * font-size:12px} textarea{width:100%;resize:none;height:100px}
+ * .errorMessage{position:absolute;font-size:8px;bottom:-16px;left:0;color:$errorColor;
+ * white-space:nowrap}. The rest comes from the global `.form-control` / `.errorInput`.
+ */
+export function TextArea({ label, placeholder, value, onChange, error, errorMessage }) {
+  const [focused, setFocused] = React.useState(false);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', ...wrapperStyle }}>
-      {(label || trailing) && (
-        // The label row is a row so `trailing` can sit at its far end — a saved-at
-        // indicator, a character count — without displacing the field below it. It
-        // keeps its height whether or not either side has anything in it, so text
-        // appearing there never nudges what someone is typing into.
-        <div style={{
-          display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
-          gap: 12, minHeight: 17, marginBottom: 6,
-        }}>
-          <label htmlFor={fieldId} style={{
-            display: 'block',
-            fontFamily: 'var(--font-display)', fontSize: 'var(--fs-11)', letterSpacing: 1,
-            textTransform: 'uppercase',
-            color: error ? 'var(--error-500)' : 'var(--text-muted)',
-          }}>{label}</label>
-          {trailing}
-        </div>
+    <div style={{ position: 'relative' }}>
+      {/* prod renders a plain <label> (display: inline), so its margin-bottom: 7px has no
+          layout effect — the block-level textarea simply starts on the next line. */}
+      {label && (
+        <label style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', marginBottom: 7, padding: '10px 0 0 10px' }}>{label}</label>
       )}
       <textarea
-        {...rest}
-        id={fieldId}
-        rows={rows}
-        onFocus={(e) => { setFocus(true); rest.onFocus && rest.onFocus(e); }}
-        onBlur={(e) => { setFocus(false); rest.onBlur && rest.onBlur(e); }}
+        placeholder={placeholder}
+        value={value}
+        onChange={onChange}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         style={{
-          width: '100%', resize: 'vertical',
-          border: `1.5px solid ${borderColor}`, borderRadius: 'var(--radius-lg)',
-          padding: '11px 12px',
-          fontFamily: 'var(--font-text)', fontSize: 'var(--fs-15)',
-          lineHeight: 'var(--lh-normal)', color: 'var(--text)',
-          background: 'var(--bg-field)', outline: 'none',
-          boxShadow: ring, transition: 'border-color .15s, box-shadow .15s',
-          cursor: rest.disabled ? 'not-allowed' : 'text',
-          opacity: rest.disabled ? 0.55 : 1,
-          ...style,
+          display: 'block', width: '100%', height: 100, minHeight: 44, resize: 'none',
+          fontFamily: 'var(--font-family-base)', fontSize: 'var(--font-size-s)',
+          color: 'var(--text-primary)', caretColor: 'var(--text-primary)', backgroundColor: '#fff',
+          border: `1.5px solid ${error ? 'var(--status-error)' : focused ? 'var(--color-blue)' : 'var(--border-default)'}`,
+          borderRadius: 'var(--radius-l)', padding: 10, outline: 'none',
+          boxShadow: error ? 'var(--shadow-error-glow)' : focused ? 'var(--shadow-focus-input)' : 'none',
+          transition: 'var(--transition-border-focus)', boxSizing: 'border-box',
         }}
       />
-      {(error || hint) && (
-        <div style={{
-          fontFamily: 'var(--font-text)', fontSize: 'var(--fs-12)',
-          color: error ? 'var(--error-500)' : 'var(--text-muted)',
-          marginTop: 5,
-        }}>{error || hint}</div>
+      {error && errorMessage && (
+        <span style={{ position: 'absolute', fontSize: 8, bottom: -16, left: 0, color: 'var(--status-error)', whiteSpace: 'nowrap' }}>{errorMessage}</span>
       )}
     </div>
   );

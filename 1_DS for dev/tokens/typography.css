@@ -1,36 +1,41 @@
-:root{
-  /* Sizes */
-  --fs-11:11px; --fs-12:12px; --fs-13:13px; --fs-14:14px; --fs-15:15px;
-  --fs-16:16px; --fs-18:18px; --fs-20:20px; --fs-22:22px; --fs-24:24px;
-  --fs-27:27px; --fs-34:34px; --fs-40:40px;
+/* Teammerly (Teamplay) — Typography tokens
+   Font family + sizes come from src/index.scss and src/styles/variables.scss.
+   Headline scale comes from the headLine4/5/6 mixins in src/styles/mixins.scss —
+   note the non-4/8-grid weights (450, 550) and letter-spacing are copied verbatim. */
 
-  /* Line heights */
-  --lh-tight:1.15;   /* @kind other */
-  --lh-normal:1.4;   /* @kind other */
-  --lh-loose:1.6;    /* @kind other */
+:root {
+  --font-family-base: 'Poppins', sans-serif;
 
-  /* Weights */
-  --fw-regular:400; /* @kind other */
-  --fw-medium:500;  /* @kind other */
-  --fw-semibold:600;/* @kind other */
-  --fw-bold:700;    /* @kind other */
+  /* Literal weights used across the app (Poppins loaded 300–700) */
+  --font-weight-light: 300;
+  --font-weight-regular: 400;
+  --font-weight-headline: 450;   /* headLine4 / headLine5 */
+  --font-weight-medium: 500;     /* headLine6, nav links, badges */
+  --font-weight-button: 550;     /* Button label weight */
+  --font-weight-semibold: 600;   /* modal / dialog titles */
+  --font-weight-bold: 700;
 
-  /* Letter spacing */
-  --ls-tight:-1px;
-  --ls-tighter:-.5px;
-  --ls-normal:0;         /* @kind other */
-  --ls-wide:.3px;
-  --ls-wider:1px;         /* uppercase micro labels */
-  --ls-widest:1.5px;      /* section headers */
-  --ls-uppercase:2px;
+  /* Body sizes ($fontSize*) */
+  --font-size-xs: 12px;   /* fontSizeBodyXS */
+  --font-size-s: 14px;    /* fontSizeBodyS */
+  --font-size-base: 16px; /* fontSizeBody */
+  --font-size-l: 18px;    /* fontSizeBodyL */
 
-  /* Roles */
-  --type-display: var(--fw-semibold) var(--fs-40)/1.08 var(--font-display);
-  --type-h1:      var(--fw-semibold) var(--fs-27)/1.15 var(--font-display);
-  --type-h2:      var(--fw-semibold) var(--fs-22)/1.2  var(--font-display);
-  --type-h3:      var(--fw-semibold) var(--fs-16)/1.3  var(--font-display);
-  --type-body:    var(--fw-regular)  var(--fs-14)/1.6  var(--font-text);
-  --type-body-lg: var(--fw-regular)  var(--fs-15)/1.6  var(--font-text);
-  --type-label:   var(--fw-semibold) var(--fs-11)/1.2  var(--font-display);   /* uppercase, --ls-wider */
-  --type-mono-num:var(--fw-semibold) var(--fs-15)/1.2  var(--font-display);   /* numerals live in display */
+  --line-height-base: 1.5;
+
+  /* Headline scale (mixins.scss) */
+  --headline-4-size: 24px;
+  --headline-4-line: 36px;
+  --headline-4-tracking: -0.7px;
+  --headline-4-weight: var(--font-weight-headline);
+
+  --headline-5-size: 20px;
+  --headline-5-line: 30px;
+  --headline-5-tracking: -0.32px;
+  --headline-5-weight: var(--font-weight-headline);
+
+  --headline-6-size: 16px;
+  --headline-6-line: 24px;
+  --headline-6-tracking: -0.32px;
+  --headline-6-weight: var(--font-weight-medium);
 }

@@ -1,29 +1,34 @@
-import * as React from 'react';
-
-export type SelectOption =
-  | string
-  | {
-      value: string;
-      label: React.ReactNode;
-      /** Shown but not selectable — a missing entry reads as a bug, a disabled one explains itself. */
-      disabled?: boolean;
-      /** Trailing note, typically the reason the option is disabled. Part of its accessible name. */
-      hint?: React.ReactNode;
-      /** `data-testid` on the option row — options are otherwise addressable only by text. */
-      testId?: string;
-    };
-
-export interface SelectProps {
-  label?: React.ReactNode;
-  value?: string;
-  options: SelectOption[];
-  onChange?: (value: string) => void;
-  placeholder?: string;
-  error?: string;
-  disabled?: boolean;
-  style?: React.CSSProperties;
-  wrapperStyle?: React.CSSProperties;
+export interface SelectOption {
+  label: string;
+  value: string;
 }
 
-/** Custom select — matches Input geometry, opens a popover styled like a menu. */
-export declare function Select(props: SelectProps): JSX.Element;
+export interface SelectProps {
+  label?: string;
+  /** Defaults to react-select's own `Select...`. */
+  placeholder?: string;
+  /** A single option, or an array when `isMulti`. */
+  value?: SelectOption | string | (SelectOption | string)[];
+  options?: (SelectOption | string)[];
+  onChange?: (option: SelectOption | string | (SelectOption | string)[]) => void;
+  /** Accepted for parity with react-select; every call site in the app passes false. */
+  isSearchable?: boolean;
+  /** Greys the value and indicators (neutral40 / neutral10) and blocks pointer events. */
+  isDisabled?: boolean;
+  /** Renders the selection as removable chips (white, 7px blue left border, 8px radius). */
+  isMulti?: boolean;
+  /** Red border + red glow (`.errorInput` treatment). */
+  error?: boolean;
+  /** Message under the control: 10px / -20px in `dropdown`, 8px / -16px in `formik`. */
+  errorMessage?: string;
+  /** Mirrors DropdownSelect's `withDescription`: suppresses the blue selected-row highlight
+   *  (used by filters whose options render a two-line description + value). */
+  withDescription?: boolean;
+  /** Mirrors react-select's `formatOptionLabel(option, { context })`. */
+  formatOptionLabel?: (option: SelectOption | string, meta: { context: 'menu' | 'value' }) => JSX.Element | string;
+  /** `dropdown` = DropdownSelect (4px control, menu +10px, 150px min width; default).
+   *  `formik` = CustomFormikSelect / AutocompleteSelect (8px control, menu +8px). */
+  variant?: 'dropdown' | 'formik';
+}
+
+export function Select(props: SelectProps): JSX.Element;

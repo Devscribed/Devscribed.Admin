@@ -1,12 +1,8 @@
-import * as React from 'react';
-
 export interface CheckboxProps {
+  label: string;
   checked?: boolean;
-  onChange?: (checked: boolean) => void;
-  label?: React.ReactNode;
-  disabled?: boolean;
-  style?: React.CSSProperties;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  id?: string;
 }
 
-/** Meridian checkbox — 20px violet-filled square with a white stroke check. */
-export declare function Checkbox(props: CheckboxProps): JSX.Element;
+export function Checkbox(props: CheckboxProps): JSX.Element;
