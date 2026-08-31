@@ -1,17 +1,27 @@
 #!/usr/bin/env node
 /**
- * static-gate — two rules, and only two.
+ * static-gate — the checks a reviewer reading a diff cannot be relied on to make.
  *
- * The gate exists for one narrow reason: the reviewer is a model, and there are two changes
- * it might not notice in a large diff that would let a bad run *pass*. Everything else a
- * checklist could enforce is left to the reviewer, because a wrong reviewer costs a note or
+ * The gate exists for one narrow reason: the reviewer is a model, and there are changes it
+ * might not notice in a large diff that would let a bad run *pass*. Everything a checklist
+ * could enforce by reading is left to the reviewer, because a wrong reviewer costs a note or
  * an appeal, while a wrong pass costs a merge.
  *
  *   1. The implementation may not edit the specification it is being checked against.
  *   2. The implementation may not weaken the checks that judge it.
+ *   3. The test tree must typecheck. `tsconfig.build.json` excludes `test`, so nothing else
+ *      compiles the integration suites until they run — and a suite that does not compile
+ *      reports nothing while the log says the cases passed.
+ *   4. Every message in the spec's Error Messages table exists in `packages/validation`.
+ *   5. Every `data-testid` the spec requires is rendered, and every one the diff adds is named
+ *      in the spec.
  *
- * Both read `git diff` directly. There is no file walker, no symbol parser and no bespoke
- * copy of a lint rule — design-system token rules already exist as oxlint config in
+ * Rules 3 to 5 answer questions with one right answer that no amount of reading a diff
+ * reliably produces: a string that exists nowhere, an id nothing renders, a file that does not
+ * compile. Everything a rule here cannot settle mechanically it reports as a note.
+ *
+ * Rules 1 and 2 read `git diff` directly. There is no file walker, no symbol parser and no
+ * bespoke copy of a lint rule — design-system token rules already exist as oxlint config in
  * `1_DS for dev/_adherence.oxlintrc.json`, and reimplementing them here would be a second
  * source of truth that drifts.
  *
@@ -150,6 +160,172 @@ for (const chunk of git('diff', '-U0', base, '--', 'apps', 'packages', 'e2e').sp
       },
       suggestedFix: 'restore the assertions, or contest with the reason each removed one is now wrong',
     });
+  }
+}
+
+/* `git grep` exits 1 when nothing matches, which execFileSync raises. Every search below
+   treats "no match" as an answer rather than as a failure. */
+const gitQuiet = (...a) => { try { return git(...a); } catch { return ''; } };
+const matches = (needle, ...pathspec) =>
+  gitQuiet('grep', '-l', '--fixed-strings', '--', needle, '--', ...pathspec).split('\n').filter(Boolean);
+
+/* ── 3. the test tree must typecheck ─────────────────────────────────────── */
+
+const TSC = join(ROOT, 'node_modules/typescript/bin/tsc');
+const TS_PROJECTS = [
+  ['apps/api/tsconfig.json', 'apps/api'],
+  ['packages/validation/tsconfig.json', 'packages/validation'],
+];
+
+for (const [project, scope] of TS_PROJECTS) {
+  if (!existsSync(TSC) || !existsSync(join(ROOT, project))) continue;
+  if (!git('diff', '--name-only', base, '--', scope).trim()) continue;
+
+  let out = '';
+  try {
+    execFileSync(process.execPath, [TSC, '-p', project, '--noEmit'], { cwd: ROOT, encoding: 'utf8', stdio: 'pipe' });
+    continue;
+  } catch (e) {
+    out = `${e.stdout ?? ''}${e.stderr ?? ''}`;
+  }
+
+  const errors = out.split('\n').filter((l) => /error TS\d+/.test(l));
+  if (!errors.length) continue;
+  add({
+    rule: 'pipeline/test-tree-typecheck',
+    file: errors[0].match(/^([^(]+)\(/)?.[1]?.replace(/\\/g, '/') ?? project,
+    claim: `${project} does not compile: ${errors.length} type error(s)`,
+    witness: {
+      kind: 'command',
+      detail: `node_modules/typescript/bin/tsc -p ${project} --noEmit\n${errors.slice(0, 5).join('\n')}`,
+      source: project,
+    },
+    suggestedFix: 'fix the type errors — a spec file that does not compile runs none of its cases, and the suite reports only the files that did',
+  });
+}
+
+/* ── 4 and 5. the spec's own tables, against the repository ──────────────── */
+
+const specText = (() => {
+  if (!run?.spec) return null;
+  const p = join(ROOT, run.spec);
+  return existsSync(p) ? readFileSync(p, 'utf8') : null;
+})();
+
+/* Split rather than match: a multiline `$` ends at the first newline, so an end-of-section
+   lookahead written that way captures nothing and every rule below silently passes. Splitting
+   on the heading marker cannot make that mistake, and `###` subheadings stay inside the block. */
+const section = (heading) => {
+  const block = `\n${specText ?? ''}`.split('\n## ').find((b) => b.startsWith(heading));
+  return block ? block.slice(block.indexOf('\n') + 1) : '';
+};
+
+/* 4. Every row of the Error Messages table is a promise that the string exists in one place.
+   A row whose text is nowhere in `packages/validation` is implemented nowhere, and a test
+   asserting the constant the route happens to return certifies the divergence instead of
+   catching it — which is why reading the diff does not find this one. */
+
+/* A message long enough to wrap is stored as two concatenated literals, so it never appears
+   contiguously and a plain search reports every long message as missing. Erasing the seam —
+   quotes, the joining `+`, and the line break — lets the whole message be compared whole.
+   Matching a prefix instead would be worse than useless here: the permission messages differ
+   only in their last two words, so any prefix rule passes a message that is not implemented. */
+const seamless = (s) => s.replace(/["'`+]/g, '').replace(/\s+/g, ' ');
+const validationText = seamless(gitQuiet('grep', '-h', '', '--', 'packages/validation'));
+const present = (text) => validationText.includes(seamless(text));
+
+for (const line of section('Error Messages').split('\n')) {
+  if (!line.startsWith('|') || /^\|\s*-+/.test(line)) continue;
+  const cells = line.split('|').map((c) => c.trim());
+  const message = cells[2];
+  if (!message || message === 'Message') continue;
+
+  /* A row carrying a placeholder cannot be matched whole. The longest literal run either side
+     of the substitution is what the code must contain, and a short one says too little to
+     search for. */
+  const probe = message.split(/\{[^}]*\}/).sort((a, b) => b.length - a.length)[0]?.trim() ?? '';
+  if (probe.length < 12) continue;
+
+  if (!present(probe)) {
+    add({
+      rule: 'spec/message-not-implemented',
+      file: run.spec,
+      symbol: cells[1],
+      claim: `the Error Messages row "${cells[1]}" names a string that exists nowhere in packages/validation`,
+      witness: {
+        kind: 'command',
+        detail: `git grep -lF -- ${JSON.stringify(probe)} -- packages/validation\n(no match)`,
+        source: run.spec,
+      },
+      suggestedFix: 'add the message to packages/validation and emit it from the route the spec names, or raise a spec finding if the row restates another spec\'s message',
+    });
+    continue;
+  }
+
+  const inApp = matches(probe, 'apps').filter((f) => !/\.(spec|test)\.tsx?$/.test(f));
+  if (inApp.length) {
+    add({
+      severity: 'note',
+      rule: 'spec/message-duplicated',
+      file: inApp[0],
+      symbol: cells[1],
+      claim: `"${cells[1]}" is in packages/validation and also written out in ${inApp.length} file(s) under apps`,
+      witness: { kind: 'command', detail: `git grep -lF -- ${JSON.stringify(probe)} -- apps\n${inApp.join('\n')}`, source: run.spec },
+      suggestedFix: 'import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message',
+    });
+  }
+}
+
+/* 5. The id list is a contract in both directions: an id the spec requires and nothing renders
+   makes its E2E case unfalsifiable, and an id the diff invents is a selector no spec names. */
+
+const specIds = [...section('Required data-testid Attributes').matchAll(/`([^`]+)`/g)]
+  .map((m) => m[1])
+  .filter((id) => /^[a-z][a-z0-9]*(-[a-z0-9]+)+$/.test(id));
+
+/* An id the screen composes — `` data-testid={`signing-provider-option-${key}`} `` — never
+   appears whole in the source. The prefix alone is not evidence, because it is also a
+   substring of every sibling id spelled out in full; the prefix immediately followed by a
+   substitution is. */
+const rendered = (id) => {
+  if (matches(id, 'apps/web').length) return true;
+  const parts = id.split('-');
+  for (let n = parts.length - 1; n >= 1; n -= 1) {
+    if (matches(`${parts.slice(0, n).join('-')}-\${`, 'apps/web').length) return true;
+  }
+  return false;
+};
+
+for (const id of new Set(specIds)) {
+  if (rendered(id)) continue;
+  add({
+    rule: 'spec/testid-not-rendered',
+    file: run.spec,
+    symbol: id,
+    claim: `the spec requires \`${id}\` and no component under apps/web renders it`,
+    witness: { kind: 'command', detail: `git grep -lF -- ${JSON.stringify(id)} -- apps/web\n(no match)`, source: run.spec },
+    suggestedFix: 'render the id, or raise a spec finding — an id asserted absent that nothing ever renders makes its case pass for every provider and prove nothing',
+  });
+}
+
+if (specText) {
+  for (const chunk of git('diff', '-U0', base, '--', 'apps/web').split(/^diff --git /m)) {
+    const file = chunk.match(/^a\/(\S+)/)?.[1];
+    if (!file) continue;
+    for (const line of chunk.split('\n')) {
+      if (!line.startsWith('+') || line.startsWith('+++')) continue;
+      for (const m of line.matchAll(/data-testid\s*=\s*['"{]?\s*['"]([^'"]+)['"]/g)) {
+        if (specText.includes(m[1])) continue;
+        add({
+          rule: 'spec/testid-unnamed',
+          file,
+          symbol: m[1],
+          claim: `\`${m[1]}\` is added by this diff and named in no spec`,
+          witness: { kind: 'rule', detail: `The diff adds a selector the spec does not name:\n    ${line.slice(1).trim()}`, source: run.spec },
+          suggestedFix: 'use the id the spec names, or raise a spec finding to have it named — selectors are the spec\'s to define',
+        });
+      }
+    }
   }
 }
 
