@@ -1,0 +1,69 @@
+{
+  "status": "blocked",
+  "findings": [
+    {
+      "id": "F1",
+      "target": "code",
+      "severity": "blocker",
+      "rule": "spec/validation-rule-6",
+      "file": "apps/api/src/signature/signwell/signwell-signing-provider.ts",
+      "symbol": "testModeFromEnvironment",
+      "line": 440,
+      "claim": "SIGNWELL_TEST_MODE is only parsed inside createSession, so a malformed value does not throw at boot as validation rule 6 requires — the process starts healthy and the misconfiguration first surfaces to a sender as a provider outage",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Validation rule 6 reads: 'SIGNWELL_TEST_MODE must parse as a boolean at boot — a malformed value throws at startup rather than defaulting, because defaulting to false would mean spending real money and sending real contracts on a typo' (specs/documents/04-signature-providers.md:1043), and the Infrastructure table repeats it: 'Boolean. Malformed values throw at boot (validation rule 6) rather than defaulting' (:683). The only caller of testModeFromEnvironment is signwell-signing-provider.ts:94, inside createSession; nothing calls it from a constructor, from onModuleInit, from signWellHttpClientProvider's factory (signature.provider.ts:44-50 — which is where the sibling boot check for SIGNWELL_DRIVER lives) or from main.ts, and a grep for SIGNWELL_TEST_MODE across apps/api/src finds only that call site and the lenient badge helper testModeConfigured (signing-settings.service.ts:239). Scenario: deploy the task with SIGNWELL_TEST_MODE=yes. The API boots and serves; GET /api/organizations/{orgId}/settings/signing reports signwell configured with testMode true, so an admin selects it and the deploy looks clean. The first POST /api/organizations/{orgId}/envelopes/{id}/send then throws inside createSession, envelopes.service.ts providerSendFailure falls through to its default branch and answers 503 'Signing service is unavailable. Nothing was sent — try again shortly.' The sender is told the provider is down when the deployment is wrong, and the rule exists precisely so the container refuses to start instead. Nothing pins the current behaviour: no test in apps/api/test asserts on testModeFromEnvironment throwing, so a boot-time check breaks nothing.",
+        "source": "specs/documents/04-signature-providers.md:1043"
+      },
+      "suggestedFix": "call testModeFromEnvironment() once at construction — the SignWellSigningProvider constructor or the signWellHttpClientProvider factory, beside the existing SIGNWELL_DRIVER check — and keep the per-send read as-is"
+    },
+    {
+      "id": "F2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/required-testids",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "Required data-testid Attributes",
+      "line": 1116,
+      "claim": "two ids in spec 04's required-testid list contradict the ids spec 02 already ships, and the implementation correctly followed spec 02",
+      "witness": {
+        "kind": "rule",
+        "detail": "Spec 04 lists 'envelope-download-button' (:1118, :1513) and 'sign-signature-canvas' (:1116, :1489). The shipped controls are 'envelope-download-btn' (specs/documents/02-envelopes-and-signing.md:1435, apps/web/app/org/[orgId]/documents/[envelopeId]/page.tsx:259, asserted by e2e/tests/field-autofill.spec.ts:436) and 'signing-signature-canvas' (specs/documents/02-envelopes-and-signing.md:1528, apps/web/src/documents/SignaturePad.tsx:161, asserted by e2e/tests/envelopes-signing.spec.ts:115). Spec 04 requirement 10 forbids editing spec 02's tests to accommodate this work, so renaming was not open to the implementer; e2e/tests/signature-providers.spec.ts:323-326 records the deviation for the download button and silently uses the spec 02 id for the canvas. Two spec sections cannot both be satisfied — the fix belongs in spec 04's list, not in the code.",
+        "source": "specs/documents/04-signature-providers.md:1116"
+      },
+      "suggestedFix": "correct spec 04's testid list and TC-04-E2E-02/05 selectors to envelope-download-btn and signing-signature-canvas"
+    },
+    {
+      "id": "F3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/requirement-40",
+      "file": "apps/api/src/signature/signwell/signwell-signing-provider.ts",
+      "symbol": "cancel",
+      "line": 375,
+      "claim": "requirement 40's re-read after DELETE is not implemented and cannot be, because requirements 41 and 42 forbid calling the provider for an envelope that is already terminal",
+      "witness": {
+        "kind": "rule",
+        "detail": "Requirement 40 says 'The order is: call DELETE, then re-read. A 404 on the re-read is the expected outcome and confirms the void. A 204 followed by a successful read is impossible and is treated as a provider fault' (specs/documents/04-signature-providers.md:512-522). The implementation calls DELETE only (signwell-signing-provider.ts cancel) and the void writes status=voided; the follow-up converge then returns 'ignored_terminal' before fetchState is reached (provider-reconciler.service.ts:196-201), which is what requirements 41 and 42 demand ('converging would call fetchState on a document that no longer exists and read the resulting 404 as a provider fault'; 'the reconciler must treat 404 on a voided envelope as the settled state and stop calling'). So the '204 then a successful read' fault branch has no home, and TC-04-INT-10b's step 2 passes only because no call is made. The implementation resolved the tension the way the spec's own reasoning points; the spec still says both things.",
+        "source": "specs/documents/04-signature-providers.md:512"
+      },
+      "suggestedFix": "reword requirement 40 so the re-read is the void path's own confirmation before the envelope becomes terminal, or drop the re-read and keep 41/42"
+    },
+    {
+      "id": "F4",
+      "target": "code",
+      "severity": "note",
+      "rule": "spec/requirement-34",
+      "file": "apps/web/app/org/[orgId]/documents/[envelopeId]/page.tsx",
+      "symbol": "EnvelopeScreen",
+      "line": 237,
+      "claim": "the provider row is rendered for a draft, where it reads 'Signed via Built-in' about a document nothing has executed",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Requirement 34 says 'The envelope detail screen shows which provider executed the document', and requirement 1 says the draft's providerKey is 'a display default ... Nothing reads it as authority before send'. present() always returns provider (envelopes.service.ts:1693-1712) and the screen renders envelope-provider whenever detail.provider exists, so opening a freshly created draft shows 'Signed via Built-in' beside the Draft badge. Harmless but untrue; no test asserts it either way.",
+        "source": "specs/documents/04-signature-providers.md:457"
+      },
+      "suggestedFix": "render the provider row only once the envelope has been sent (status !== draft), where the pinned columns are authoritative"
+    }
+  ]
+}

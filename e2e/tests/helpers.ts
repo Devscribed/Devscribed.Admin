@@ -1,4 +1,5 @@
 import { request as apiContexts, type APIRequestContext, type Page } from '@playwright/test';
+import { API_ORIGIN } from '../environment';
 
 /**
  * Signup is irreversible by design (no delete endpoint yet), so tests never reuse an
@@ -58,7 +59,7 @@ export async function fillSignup(page: Page, values: SignupValues): Promise<void
  * next.config.mjs — so pointing at the web host is not a shortcut, it is the only route in,
  * and using it means these calls travel the same path a browser's do.
  */
-export const API = process.env.E2E_API_URL ?? process.env.E2E_BASE_URL ?? 'http://localhost:4000';
+export const API = API_ORIGIN;
 
 /**
  * Headers for every `/api/test/*` fixture — the mail sink, the role switch, the membership

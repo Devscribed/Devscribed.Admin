@@ -1,0 +1,67 @@
+{
+  "status": "pass",
+  "stage": "pre_implement",
+  "spec": "specs/documents/04-signature-providers.md",
+  "handoff": ".workflow/runs/2026-08-28T17-26-56_documents-04-signature-providers/handoff.json",
+  "findings": [
+    {
+      "id": "N1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/internal-inconsistency",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "Flows / Flow: First signer signs, step 5",
+      "claim": "The first-signer flow still tells the implementer to consume the SignWell SignWellEmbed SDK event, while requirement 15 says that SDK is deliberately not loaded. Requirement 15 governs, the shipped code follows it, and the CSP makes the other reading unimplementable, so this does not block; it is drift left over from an earlier draft and should be corrected before it teaches the next reader the opposite decision. Carried from the previous run, where it was raised as N1 and has not been fixed since.",
+      "witness": {
+        "kind": "rule",
+        "source": "specs/documents/04-signature-providers.md:896 versus :295",
+        "detail": "Line 896 reads: 5. The SignWellEmbed completed event fires in the parent page; we show our own confirmation and do not treat the message as state. Line 295, inside requirement 15, reads: SignWell SignWellEmbed SDK is deliberately not loaded ... frame-src is widened; script-src is not. The two cannot both be followed. Loading the SDK requires a script from the vendor origin, and the policy in apps/web/next.config.mjs:113 adds that origin to frame-src only, so the vendor script is refused by script-src and no SDK listener can ever run on that page. The implementation resolves it the way requirement 15 and edge cases 19 and 20 demand: apps/web/app/sign/[token]/EmbeddedSigning.tsx renders a plain iframe and checks event.origin before reading anything."
+      },
+      "suggestedFix": "In the first-signer flow, replace the SignWellEmbed sentence with: the widget posts a completed message and our listener checks event.origin against the embed host before reading it - so the flow, requirement 15, edge case 20 and the Blast Radius CSP row all describe one mechanism."
+    },
+    {
+      "id": "N2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/missing-ds-gaps-table",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "UI Description / DS gaps",
+      "claim": "CLAUDE.md requires anything missing from the design system to be recorded in that spec DS gaps table, and two shipped code comments say they have done so, but spec 04 contains no such table - nor does any spec in the documents area. The two gaps this work found, no Skeleton primitive and no selectable option row, are carried in this run handoff.dsGaps, so nothing is lost in this run; the convention is what is missing. Carried from the previous run, where it was raised as N2 and has not been settled since.",
+      "witness": {
+        "kind": "rule",
+        "source": "CLAUDE.md design-system rule versus specs/documents/04-signature-providers.md, which has no DS gaps section in 1553 lines",
+        "detail": "CLAUDE.md states: Anything missing goes into the design system and is recorded in that spec DS gaps table, never improvised per screen. Grepping for the phrase DS gap in specs/documents/04-signature-providers.md returns nothing, and the same grep across every file in specs/documents returns nothing for any of the four specs, while the area index marks the Design column absent for all of them and every user-management spec carries its DS gaps table in a paired design file. Meanwhile apps/web/app/org/[orgId]/settings/signing/ProviderOption.tsx and apps/web/app/org/[orgId]/settings/signing/page.tsx each carry a comment saying the gap is recorded in this spec DS gaps table. Both name a table that does not exist, so a reader who goes looking finds nothing, and the next screen needing an option row has no recorded reason not to copy the local one. apps/web/src/ds.ts exports no Skeleton and no option row, which is what makes both gaps real rather than rhetorical."
+      },
+      "suggestedFix": "Either add a DS gaps subsection to the spec 04 UI Description carrying the two gaps - no Skeleton primitive, and no selectable option row (a bordered row with radio, title, description, trailing status pill and disabled state) - with what closes each, or state in specs/documents/README.md that this area records DS gaps in the implementing handoff and correct the two code comments to say so."
+    },
+    {
+      "id": "N3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/internal-inconsistency",
+      "file": "specs/documents/README.md",
+      "symbol": "Product decisions / Provider choice, and Cross-Spec Side Effects / Organization provider changed",
+      "claim": "The area README still says in two places that an envelope provider is written at creation, which the spec it indexes contradicts in five: the provider is read at SEND. The README own Shared Rules row already says send, so the normative text is right and the plan is unaffected - but the rationale a reader reaches first states the decision that was deliberately rejected, and requirement 1 spends a paragraph explaining why the difference is observable.",
+      "witness": {
+        "kind": "rule",
+        "source": "specs/documents/README.md:31 and :118 versus specs/documents/README.md:57 and specs/documents/04-signature-providers.md:145-160",
+        "detail": "README:31 reads: An envelope provider is written once at creation and never changes, so switching can never reach an in-flight contract. README:118 reads: in-flight envelopes keep the one they were created with. README:57, in Shared Rules, reads: Envelope.providerKey is written at send and never changes afterwards; a draft has no provider yet. Spec 04 requirement 1 reads: Organization.signatureProviderKey is what the send path reads; Envelope.providerKey is written in the same transaction that flips the envelope to sent - and then, At send and not at creation, deliberately, because the difference is observable. Edge case 14 and TC-04-INT-17 pin that observable difference: a draft created before a provider switch and sent after it goes out on the NEW provider. Under the README:31 reading the same draft goes out on the old one, so the two readings differ in which provider executes a real contract and in which of the two evidence formats that contract ends up with."
+      },
+      "suggestedFix": "Correct README:31 to say the provider is pinned at send and never changes afterwards, and README:118 to say in-flight envelopes keep the provider they were sent with, so the Product decisions and Cross-Spec Side Effects rows agree with the Shared Rules row at :57 and with requirement 1."
+    },
+    {
+      "id": "N4",
+      "target": "self",
+      "severity": "note",
+      "rule": "self/plan-shaped-by-resumed-run",
+      "file": ".workflow/runs/2026-08-28T17-26-56_documents-04-signature-providers/handoff.json",
+      "symbol": "runContext",
+      "claim": "This handoff is not a from-zero build plan, and a reader who expects one will misread it. The branch already carries a full implementation of this spec from commit 1b77b06, plus the runbook and comment corrections in 4b391ad. Planning a rebuild would have told the implementer to write files that already exist, so every task states what exists at which path and what this run must still do to it - which is verification against the requirement numbers each task names.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "git log on spec/signwell-provider: 57d55ac, this run diff base, then 1b77b06 the implementation of about 65 files, then 2201c91 which closed six spec defects and touched only specs and scripts, then 4b391ad which settled the deploy order in docs/deployment.md and corrected three stale comments, then 845e8c4 and 38cabfa which touched pipeline scripts only. The previous run, 2026-08-28T16-54-11, blocked at the static gate with two findings of rule pipeline/spec-immutable naming specs/documents/04-signature-providers.md and specs/documents/README.md - files that 2201c91 changed rather than the implement stage, which is what 845e8c4 corrected. I re-verified the tree instead of trusting that report: apps/api/src/signature/signing-provider.ts carries the port and both narrowing interfaces; provider-registry.ts registers an adapter on configuration presence; the five files under apps/api/src/signature/signwell/ carry the adapter, its client with per-route-family limits and a breaker, the projection, the types and a stub; apps/api/src/webhooks/ carries the endpoint, the hash guard, the rate limit, the parser and redaction; provider-reconciler.service.ts exports DEFAULT_PROVIDER_SYNC_STALE_SECONDS of 120 and the four outcomes; envelope-completion.ts branches the certificate on the capability and not on the key; the settings API, the settings screen and the embedded signing surface exist; and docs/deployment.md:94-115 now carries the migrate-first decision that was the previous run only unbuilt deliverable. All forty TC-04 ids appear in the suites, and the only edited assertion in an older suite is the enum count that requirement 10 enumerates as the single permitted exception."
+      },
+      "suggestedFix": "None needed from a human. Recorded so the reviewer, who will diff every file from 57d55ac, knows the plan deliberately describes existing code rather than proposing to write it again, and so a reader of the run digest can tell this apart from a plan that quietly dropped the hard part."
+    }
+  ]
+}

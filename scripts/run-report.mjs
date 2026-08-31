@@ -1,0 +1,996 @@
+/**
+ * A run, walked through step by step: what each agent was given, what it did with it, why it
+ * ruled the way it did, and where the router sent the work next.
+ *
+ * This is not the digest. `run-digest.mjs` writes a small committable record of tool calls;
+ * this writes one self-contained HTML page a person opens to understand a run — or to watch
+ * one that is still going.
+ *
+ * **It must work on an unfinished run.** That is not a nicety: a run you want to look at is
+ * usually a run that is stuck, and the artefacts of a stuck run are exactly the ones that are
+ * missing. So every source is optional and every step reports which of its parts exist. An
+ * attempt with a `.start.json` and no `.log` is *running*; one with neither, whose
+ * `stage-start` the journal recorded anyway, was *killed*.
+ *
+ * Sources, in order of authority:
+ *
+ *   1. `stages/<stage>.attempt-<n>.start.json` and `.prompt.md` — written by `ship.mjs`
+ *      *before* the agent starts: the prompt, the model, the session being resumed. The
+ *      prompt used to exist nowhere, which meant "what did the reviewer actually see?" was
+ *      unanswerable after the fact.
+ *   2. `stages/<stage>.attempt-<n>.log` — the agent's own `--output-format json` summary:
+ *      session, cost, tokens, turns, wall clock, and its closing message.
+ *   3. `stages/<stage>.attempt-<n>.json` — the verdict, and `.md` — the stage report.
+ *   4. `events.jsonl` — tool calls, for timing, and `route` events, which carry the router's
+ *      own reason for every decision. Reconstructing those reasons from the verdicts would be
+ *      a guess; this is the record.
+ *
+ * The journal stamps every call made while the run holds the lock with the *current stage*,
+ * including the operator's own shell, so it is trusted for "how long did this command take"
+ * and never for "who ran it" — attribution goes through session ids taken from (1) and (2).
+ *
+ *   node scripts/run-report.mjs [runId] [--out <path>] [--json] [--open]
+ */
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const RUNS = join(ROOT, '.workflow', 'runs');
+
+const argv = process.argv.slice(2);
+const TAKES_VALUE = new Set(['--out']);
+const flag = (n) => {
+  const i = argv.indexOf(n);
+  return i === -1 ? null : argv[i + 1];
+};
+const asJson = argv.includes('--json');
+const positional = argv.filter((a, i) => !a.startsWith('--') && !TAKES_VALUE.has(argv[i - 1]));
+
+const runId =
+  positional[0] ??
+  readdirSync(RUNS)
+    .filter((d) => statSync(join(RUNS, d)).isDirectory())
+    .sort()
+    .pop();
+
+const dir = join(RUNS, runId);
+if (!existsSync(join(dir, 'run.json'))) {
+  console.error(`no run.json under ${dir}`);
+  process.exit(1);
+}
+const run = JSON.parse(readFileSync(join(dir, 'run.json'), 'utf8'));
+
+const git = (...a) => {
+  try {
+    return execFileSync('git', a, { cwd: ROOT, encoding: 'utf8' });
+  } catch {
+    return '';
+  }
+};
+const readIf = (p) => (existsSync(p) ? readFileSync(p, 'utf8') : null);
+const jsonIf = (p) => {
+  const t = readIf(p);
+  if (!t) return null;
+  try {
+    return JSON.parse(t);
+  } catch {
+    return null;
+  }
+};
+
+const STAGE_ORDER = ['preflight', 'pre_implement', 'implement', 'static_gate', 'review', 'qa'];
+const AGENT_OF = { pre_implement: 'pre-implementer', implement: 'implementer', review: 'code-reviewer', qa: 'qa' };
+
+/* ── the journal ──────────────────────────────────────────────────────────── */
+
+const journal = (readIf(join(dir, 'events.jsonl')) ?? '')
+  .split(/\r?\n/)
+  .filter(Boolean)
+  .map((l) => {
+    try {
+      return JSON.parse(l);
+    } catch {
+      return null;
+    }
+  })
+  .filter(Boolean);
+
+/* ── one step per attempt ─────────────────────────────────────────────────── */
+
+/** The one model that did the work; every invocation also shows a near-free chore model. */
+function principalModel(usage) {
+  const paid = Object.entries(usage ?? {}).filter(([, u]) => (u.costUSD ?? 0) > 0.005);
+  return (paid.sort((a, b) => b[1].costUSD - a[1].costUSD)[0] ?? [null])[0];
+}
+
+const MAX_TEXT = 200_000; // a prompt or a report past this is pathological; say so rather than embed it
+const clip = (s) => (s && s.length > MAX_TEXT ? `${s.slice(0, MAX_TEXT)}\n\n… обрезано, всего ${s.length} символов` : s);
+
+function collectSteps() {
+  const stagesDir = join(dir, 'stages');
+  const seen = new Set();
+  const steps = [];
+
+  const files = existsSync(stagesDir) ? readdirSync(stagesDir) : [];
+  const attemptsFromFiles = new Set();
+  for (const f of files) {
+    const m = f.match(/^(.+?)\.attempt-(\d+)\.(log|json|md|prompt\.md|start\.json)$/);
+    if (m) attemptsFromFiles.add(`${m[1]}|${m[2]}`);
+  }
+  /* An attempt the orchestrator announced and that left nothing behind was killed; the budget
+     it spent bought no verdict, and that is the most interesting kind of step to see. */
+  for (const stage of STAGE_ORDER) {
+    const starts = journal.filter((e) => e.stage === stage && e.event === 'stage-start');
+    starts.forEach((_, i) => attemptsFromFiles.add(`${stage}|${i + 1}`));
+  }
+
+  for (const key of attemptsFromFiles) {
+    const [stage, nStr] = key.split('|');
+    const attempt = Number(nStr);
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const stem = join(stagesDir, `${stage}.attempt-${attempt}`);
+    const start = jsonIf(`${stem}.start.json`);
+    const log = jsonIf(`${stem}.log`);
+    const verdict = jsonIf(`${stem}.json`);
+    const prompt = clip(readIf(`${stem}.prompt.md`));
+    const report = clip(readIf(`${stem}.md`)) ?? clip(readIf(join(stagesDir, `${stage}.md`)));
+
+    const startEvent = journal.filter((e) => e.stage === stage && e.event === 'stage-start')[attempt - 1];
+    /**
+     * When this attempt stopped occupying the pipeline — the first `stage-end` of its own
+     * stage or, sooner, any other stage starting.
+     *
+     * The obvious version, "the Nth `stage-end` of this stage", is wrong the moment an attempt
+     * is killed: a stage with five starts and four ends has no index alignment left, and the
+     * killed attempt silently inherits the end time of the attempt that replaced it. On the
+     * run this was written against that turned a 3-minute abort into a 13-minute one, which
+     * is the difference between "we noticed instantly" and "we wasted a cycle".
+     */
+    const endEvent = startEvent
+      ? journal.find(
+          (e) =>
+            Date.parse(e.ts) > Date.parse(startEvent.ts) &&
+            ((e.event === 'stage-end' && e.stage === stage) || e.event === 'stage-start'),
+        )
+      : null;
+
+    const isScript = !AGENT_OF[stage];
+    let startedAt = start ? Date.parse(start.startedAt) : startEvent ? Date.parse(startEvent.ts) : null;
+    let endedAt = null;
+    let state = 'done';
+
+    if (log) {
+      endedAt = existsSync(`${stem}.log`) ? statSync(`${stem}.log`).mtimeMs : null;
+      if (startedAt == null && endedAt != null) startedAt = endedAt - (log.duration_ms ?? 0);
+    } else if (endEvent) {
+      endedAt = Date.parse(endEvent.ts);
+      state = isScript ? 'done' : 'aborted';
+    } else if (startedAt != null) {
+      state = 'running';
+      endedAt = Date.now();
+    }
+    if (isScript) state = verdict ? 'done' : state;
+    if (!log && !verdict && state !== 'running') state = 'aborted';
+
+    const wallSec = startedAt != null && endedAt != null ? Math.round((endedAt - startedAt) / 1000) : 0;
+
+    steps.push({
+      stage,
+      attempt,
+      agent: isScript ? null : (start?.agent ?? AGENT_OF[stage]),
+      script: isScript,
+      state,
+      model: log ? principalModel(log.modelUsage) : (start?.model ?? null),
+      sessionId: log?.session_id ?? null,
+      resumedSession: start?.resumedSession ?? null,
+      fuseMin: start?.fuseMin ?? null,
+      headAtStart: start?.head ?? null,
+      startedAt,
+      endedAt,
+      wallSec,
+      apiSec: Math.round((log?.duration_api_ms ?? 0) / 1000),
+      turns: log?.num_turns ?? null,
+      costUsd: +(log?.total_cost_usd ?? 0).toFixed(2),
+      stopReason: log?.stop_reason ?? null,
+      tokens: {
+        out: log?.usage?.output_tokens ?? 0,
+        cacheRead: log?.usage?.cache_read_input_tokens ?? 0,
+        cacheWrite: log?.usage?.cache_creation_input_tokens ?? 0,
+      },
+      prompt,
+      result: clip(log?.result ?? null),
+      report,
+      status: verdict?.status ?? (state === 'running' ? 'running' : state === 'aborted' ? 'aborted' : null),
+      findings: verdict?.findings ?? [],
+      covered: verdict?.covered ?? null,
+      suites: verdict?.suites ?? null,
+      has: {
+        prompt: !!prompt,
+        log: !!log,
+        verdict: !!verdict,
+        report: !!report,
+        start: !!start,
+      },
+    });
+  }
+
+  return steps.filter((s) => s.startedAt != null).sort((a, b) => a.startedAt - b.startedAt);
+}
+
+const steps = collectSteps();
+
+/* ── tool calls, attributed by session ────────────────────────────────────── */
+
+function attachTools() {
+  const bySession = new Map();
+  for (const s of steps) {
+    s.tools = [];
+    s.byTool = {};
+    s.toolSec = 0;
+    if (!s.sessionId) continue;
+    if (!bySession.has(s.sessionId)) bySession.set(s.sessionId, []);
+    bySession.get(s.sessionId).push(s);
+  }
+
+  for (const e of journal) {
+    if (e.event !== 'tool' || !e.sessionId) continue;
+    const candidates = bySession.get(e.sessionId);
+    if (!candidates) continue;
+    const t = Date.parse(e.ts);
+    /* A resumed session spans several attempts, so a call belongs to the latest attempt that
+       had already started when it was made. The 30s slack covers the gap between the
+       orchestrator recording a start and the agent's first call landing. */
+    let target = null;
+    for (const c of candidates) if (t >= c.startedAt - 30_000 && (!target || c.startedAt > target.startedAt)) target = c;
+    if (!target) continue;
+    const sec = (e.durationMs ?? 0) / 1000;
+    target.toolSec += sec;
+    target.byTool[e.tool] = (target.byTool[e.tool] ?? 0) + 1;
+    target.tools.push({
+      at: Math.max(0, Math.round((t - target.startedAt) / 1000)),
+      tool: e.tool,
+      sec: +sec.toFixed(1),
+      ok: e.ok !== false,
+      what: String(e.input?.command ?? e.input?.file_path ?? e.input?.pattern ?? e.input?.path ?? '')
+        .replace(/\s+/g, ' ')
+        .slice(0, 400),
+    });
+  }
+  for (const s of steps) {
+    s.toolSec = Math.round(s.toolSec);
+    s.calls = s.tools.length;
+    s.thinkSec = Math.max(0, s.wallSec - s.toolSec);
+    s.thinkPct = s.wallSec ? Math.round((s.thinkSec / s.wallSec) * 100) : 0;
+    s.tokPerSec = s.apiSec ? +(s.tokens.out / s.apiSec).toFixed(1) : null;
+  }
+}
+attachTools();
+
+/* ── what each attempt committed ──────────────────────────────────────────── */
+
+function attachCommits() {
+  const log = git('log', '--format=%H%x09%cI%x09%s', `${run.baseRef}..HEAD`).trim();
+  const commits = log
+    ? log.split('\n').map((l) => {
+        const [sha, iso, subject] = l.split('\t');
+        return { sha, at: Date.parse(iso), subject };
+      })
+    : [];
+  for (const s of steps) {
+    s.commits = commits
+      .filter((c) => s.startedAt != null && c.at >= s.startedAt && c.at <= (s.endedAt ?? Date.now()))
+      .map((c) => ({
+        sha: c.sha.slice(0, 7),
+        subject: c.subject,
+        stat: git('show', '--stat', '--format=', c.sha).trim().split('\n').slice(-1)[0]?.trim() ?? '',
+      }));
+  }
+}
+attachCommits();
+
+/* ── routing: the router's own words ──────────────────────────────────────── */
+
+/** Read from the router rather than copied, so the report cannot drift from the rule. */
+function targetPriority() {
+  const m = (readIf(join(ROOT, 'scripts', 'wf.mjs')) ?? '').match(/const TARGET_PRIORITY = \[([^\]]+)\]/);
+  return m ? m[1].split(',').map((s) => s.trim().replace(/['"]/g, '')).filter(Boolean) : ['spec', 'self', 'handoff', 'code'];
+}
+const PRIORITY = targetPriority();
+const isBlocker = (f) => f.severity !== 'note' && f.severity !== 'info';
+const findingKey = (f) => `${f.rule}@${f.file ?? '-'}#${f.symbol ?? '-'}`;
+
+const decisions = (() => {
+  const out = [];
+  let from = 'preflight';
+  for (const e of journal) {
+    if (e.event === 'stage-end') from = e.name ?? e.stage ?? from;
+    const at = Date.parse(e.ts);
+    if (e.event === 'route') out.push({ at, from, to: e.to, why: e.why, kind: 'route' });
+    if (e.event === 'infra-error')
+      out.push({ at, from: e.stage, to: e.stage, kind: 'infra', why: `сбой среды №${e.count} — попытка не засчитана${e.detail ? `: ${e.detail}` : ''}` });
+    if (e.event === 'halt') out.push({ at, from, to: null, kind: 'halt', why: `${e.reason ?? ''} — ${e.detail ?? ''}` });
+    if (e.event === 'ready') out.push({ at, from, to: null, kind: 'ready', why: 'все гейты пройдены' });
+  }
+  return out;
+})();
+
+const WHY_TARGET = {
+  spec: 'дефект в спеке делает починку кода бессмысленной, поэтому spec выигрывает всегда и прогон останавливается для человека',
+  self: 'гейт сообщает, что неверно его собственное правило — это тоже человек, а не ретрай',
+  handoff: 'виноват план, а не код: чинить код по неверному плану преждевременно, поэтому работа уходит в pre_implement, и счётчик кодовых попыток обнуляется — план другой, отсчёт заново',
+  code: 'обычный путь: работа возвращается реализатору, и это единственный адрес, который вообще ретраится',
+};
+
+function attachRouting() {
+  const firstSeen = new Map();
+  for (const s of steps) {
+    for (const f of s.findings) {
+      const k = findingKey(f);
+      f._key = k;
+      f._carriedFrom = firstSeen.get(k) ?? null;
+      if (!firstSeen.has(k)) firstSeen.set(k, `${s.stage} ${s.attempt}`);
+    }
+
+    s.routedAway = s.endedAt ? (decisions.find((d) => d.at >= s.endedAt - 2500) ?? null) : null;
+    s.routedHere = s.startedAt ? ([...decisions].reverse().find((d) => d.at <= s.startedAt + 2500 && d.to === s.stage) ?? null) : null;
+
+    const blockers = s.findings.filter(isBlocker);
+    if (blockers.length) {
+      const winner = PRIORITY.find((t) => blockers.some((f) => f.target === t)) ?? null;
+      s.routing = {
+        winner,
+        priority: PRIORITY,
+        why: WHY_TARGET[winner] ?? null,
+        cause: blockers.filter((f) => f.target === winner).map((f) => f.id),
+        alongside: blockers.filter((f) => f.target !== winner).map((f) => ({ id: f.id, target: f.target })),
+      };
+    } else s.routing = null;
+  }
+}
+attachRouting();
+
+/* ── review coverage ──────────────────────────────────────────────────────── */
+
+const ROOT_POSIX = ROOT.split('\\').join('/');
+const PREFIXES = [`${ROOT_POSIX}/`, `/${ROOT_POSIX[0].toLowerCase()}${ROOT_POSIX.slice(2)}/`];
+const toRepoPath = (s) => {
+  let t = String(s).split('\\').join('/');
+  for (const p of PREFIXES) t = t.split(p).join('');
+  return t;
+};
+
+function coverage() {
+  const sizes = new Map();
+  for (const line of git('diff', '--numstat', `${run.baseRef}...HEAD`, '--', '.', ':(exclude).workflow').trim().split('\n')) {
+    const [a, r, p] = line.split('\t');
+    if (p) sizes.set(p, (+a || 0) + (+r || 0));
+  }
+  const passes = steps.filter((s) => s.stage === 'review' && s.sessionId);
+  const bySid = new Map(passes.map((p) => [p.sessionId, p.attempt]));
+  const named = new Map();
+  for (const e of journal) {
+    if (e.event !== 'tool') continue;
+    const n = bySid.get(e.sessionId);
+    if (!n) continue;
+    const i = e.input ?? {};
+    const text = toRepoPath([i.file_path, i.command, i.path, i.pattern, i.glob].filter(Boolean).join(' '));
+    for (const p of sizes.keys()) if (text.includes(p)) (named.get(p) ?? named.set(p, new Set()).get(p)).add(n);
+  }
+  for (const p of passes) p.coverageNamed = [...named.values()].filter((s) => s.has(p.attempt)).length;
+  return {
+    files: sizes.size,
+    perPass: passes.map((p) => ({ attempt: p.attempt, named: p.coverageNamed })),
+    never: [...sizes.keys()].filter((p) => !named.has(p)).sort((a, b) => sizes.get(b) - sizes.get(a)).map((p) => ({ path: p, lines: sizes.get(p) })),
+  };
+}
+const cov = coverage();
+
+/* ── totals ───────────────────────────────────────────────────────────────── */
+
+const agents = steps.filter((s) => !s.script && s.state === 'done');
+const t0 = steps.length ? Math.min(...steps.map((s) => s.startedAt)) : Date.now();
+const t1 = steps.length ? Math.max(...steps.map((s) => s.endedAt ?? Date.now())) : Date.now();
+
+const totals = {
+  wallSec: Math.round((t1 - t0) / 1000),
+  apiSec: agents.reduce((a, s) => a + s.apiSec, 0),
+  toolSec: steps.reduce((a, s) => a + s.toolSec, 0),
+  costUsd: +agents.reduce((a, s) => a + s.costUsd, 0).toFixed(2),
+  outTokens: agents.reduce((a, s) => a + s.tokens.out, 0),
+  turns: agents.reduce((a, s) => a + (s.turns ?? 0), 0),
+  calls: steps.reduce((a, s) => a + s.calls, 0),
+  invocations: agents.length,
+  running: steps.filter((s) => s.state === 'running').length,
+  aborted: steps.filter((s) => s.state === 'aborted').length,
+  blockers: steps.reduce((a, s) => a + s.findings.filter(isBlocker).length, 0),
+  notes: steps.reduce((a, s) => a + s.findings.filter((f) => !isBlocker(f)).length, 0),
+};
+totals.tokPerSec = totals.apiSec ? +(totals.outTokens / totals.apiSec).toFixed(1) : 0;
+totals.orchestrationSec = Math.max(0, totals.wallSec - totals.apiSec - totals.toolSec);
+
+const byStage = {};
+for (const s of agents) {
+  const b = (byStage[s.stage] ??= { stage: s.stage, model: s.model, invocations: 0, wallSec: 0, apiSec: 0, toolSec: 0, costUsd: 0, outTokens: 0, turns: 0 });
+  b.invocations++;
+  b.wallSec += s.wallSec;
+  b.apiSec += s.apiSec;
+  b.toolSec += s.toolSec;
+  b.costUsd = +(b.costUsd + s.costUsd).toFixed(2);
+  b.outTokens += s.tokens.out;
+  b.turns += s.turns ?? 0;
+}
+
+const payload = {
+  runId,
+  spec: run.spec,
+  branch: run.branch,
+  status: run.status,
+  baseRef: run.baseRef,
+  halt: run.halt ?? null,
+  budget: run.budget ?? null,
+  contested: run.contested ?? [],
+  findingHistory: run.findingHistory ?? {},
+  diff: git('diff', '--shortstat', `${run.baseRef}...HEAD`, '--', '.', ':(exclude).workflow').trim(),
+  generatedAt: new Date().toISOString(),
+  priority: PRIORITY,
+  t0,
+  t1,
+  totals,
+  byStage: Object.values(byStage),
+  steps,
+  decisions,
+  coverage: cov,
+};
+
+if (asJson) {
+  console.log(JSON.stringify(payload, null, 2));
+  process.exit(0);
+}
+
+/* ── the page ─────────────────────────────────────────────────────────────── */
+
+const DATA = JSON.stringify(payload).split('<').join('\\u003c').split('\u2028').join('\\u2028').split('\u2029').join('\\u2029');
+
+const html = `<!doctype html>
+<html lang="ru"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Прогон · ${runId}</title>
+<style>
+/* Material 3, light scheme, no network dependencies. */
+:root{
+  --primary:#6750A4; --on-primary:#fff; --primary-container:#EADDFF; --on-primary-container:#21005D;
+  --secondary:#625B71; --secondary-container:#E8DEF8; --on-secondary-container:#1D192B;
+  --error:#B3261E; --error-container:#F9DEDC; --on-error-container:#410E0B;
+  --ok:#146C2E; --ok-container:#D7F2DE; --on-ok-container:#052E12;
+  --warn:#7A5900; --warn-container:#FFEFC6; --on-warn-container:#241A00;
+  --surface:#FEF7FF; --surface-1:#F7F2FA; --surface-2:#F3EDF7; --surface-3:#EEE8F4; --surface-5:#E6E0EC;
+  --on-surface:#1D1B20; --on-surface-var:#49454F; --outline:#79747E; --outline-var:#CAC4D0;
+  --e1:0 1px 2px rgba(0,0,0,.30),0 1px 3px 1px rgba(0,0,0,.15);
+  --e2:0 1px 2px rgba(0,0,0,.30),0 2px 6px 2px rgba(0,0,0,.15);
+  --mono:ui-monospace,"Cascadia Mono","Segoe UI Mono",Menlo,Consolas,monospace;
+  --sans:system-ui,"Segoe UI Variable Text","Segoe UI",Roboto,-apple-system,sans-serif;
+  --rail:296px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--surface);color:var(--on-surface);font:400 14px/1.5 var(--sans);
+     -webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+.mono{font-family:var(--mono);font-size:12.5px}
+.dim{color:var(--on-surface-var)}
+
+/* top app bar */
+.appbar{position:sticky;top:0;z-index:30;background:var(--surface-2);box-shadow:var(--e1)}
+.appbar-in{max-width:1500px;margin:0 auto;padding:14px 24px}
+.appbar h1{margin:0;font-size:20px;font-weight:500;letter-spacing:0;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.appbar .meta{margin-top:4px;font-size:12.5px;color:var(--on-surface-var)}
+.metrics{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.metric{background:var(--surface);border-radius:12px;padding:7px 13px;min-width:104px;box-shadow:var(--e1)}
+.metric .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--on-surface-var)}
+.metric .v{font-size:19px;font-weight:500;line-height:1.25;margin-top:1px}
+.metric .s{font-size:11px;color:var(--on-surface-var)}
+
+/* layout */
+.shell{max-width:1500px;margin:0 auto;padding:20px 24px 120px;display:grid;
+       grid-template-columns:var(--rail) minmax(0,1fr);gap:24px;align-items:start}
+@media(max-width:1080px){.shell{grid-template-columns:1fr}.rail{position:static!important;max-height:none!important}}
+
+/* stepper rail */
+.rail{position:sticky;top:150px;max-height:calc(100vh - 176px);overflow:auto;
+      background:var(--surface-1);border-radius:16px;padding:10px;box-shadow:var(--e1)}
+.rail h3{margin:6px 8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--on-surface-var);font-weight:600}
+.stepitem{display:grid;grid-template-columns:26px 1fr auto;gap:9px;align-items:center;width:100%;
+          background:none;border:0;text-align:left;padding:8px 9px;border-radius:12px;cursor:pointer;position:relative}
+.stepitem:hover{background:var(--surface-3)}
+.stepitem.on{background:var(--secondary-container);color:var(--on-secondary-container)}
+.stepitem .dot{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;
+               font-size:11px;font-weight:600;color:#fff;background:var(--outline)}
+.stepitem .nm{font-size:13px;line-height:1.25}
+.stepitem .nm small{display:block;font-size:11px;color:var(--on-surface-var)}
+.stepitem.on .nm small{color:var(--on-secondary-container);opacity:.8}
+.stepitem .tm{font-family:var(--mono);font-size:11px;color:var(--on-surface-var)}
+.rail .connector{height:8px;margin-left:22px;border-left:2px solid var(--outline-var)}
+
+/* cards */
+.card{background:var(--surface-1);border-radius:16px;box-shadow:var(--e1);margin-bottom:16px;overflow:hidden}
+.card>h2{margin:0;padding:16px 20px 12px;font-size:16px;font-weight:500;display:flex;align-items:center;gap:10px}
+.card .body{padding:0 20px 18px}
+
+/* step card */
+.step{scroll-margin-top:168px}
+.step-head{display:grid;grid-template-columns:34px 1fr auto;gap:12px;align-items:center;
+           width:100%;background:none;border:0;padding:14px 18px;cursor:pointer;text-align:left}
+.step-head:hover{background:var(--surface-2)}
+.step-head .idx{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+                color:#fff;font-weight:600;font-size:13px;background:var(--outline)}
+.step-head .ttl{font-size:15px;font-weight:500;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.step-head .sub{font-size:12px;color:var(--on-surface-var);margin-top:2px}
+.step-head .caret{transition:transform .18s;color:var(--on-surface-var);font-size:18px}
+.step.open .step-head .caret{transform:rotate(180deg)}
+.step .panel{display:none;border-top:1px solid var(--outline-var)}
+.step.open .panel{display:block}
+
+/* tabs */
+.tabs{display:flex;gap:2px;padding:0 12px;border-bottom:1px solid var(--outline-var);overflow-x:auto}
+.tab{background:none;border:0;padding:12px 14px;cursor:pointer;font-size:13px;font-weight:500;
+     color:var(--on-surface-var);border-bottom:3px solid transparent;white-space:nowrap}
+.tab:hover{color:var(--on-surface);background:var(--surface-2)}
+.tab.on{color:var(--primary);border-bottom-color:var(--primary)}
+.tab .badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:6px;border-radius:9px;
+            background:var(--surface-5);font-size:11px;font-weight:600;color:var(--on-surface-var)}
+.tab.on .badge{background:var(--primary-container);color:var(--on-primary-container)}
+.pane{display:none;padding:16px 20px 20px}
+.pane.on{display:block}
+
+/* chips */
+.chip{display:inline-flex;align-items:center;gap:5px;border-radius:8px;padding:2px 9px;
+      font-size:11.5px;font-weight:600;line-height:19px;white-space:nowrap}
+.c-pass{background:var(--ok-container);color:var(--on-ok-container)}
+.c-block{background:var(--error-container);color:var(--on-error-container)}
+.c-note{background:var(--warn-container);color:var(--on-warn-container)}
+.c-info{background:var(--surface-5);color:var(--on-surface-var)}
+.c-run{background:var(--primary-container);color:var(--on-primary-container)}
+.c-code{background:#E0E7FF;color:#312E81}.c-spec{background:#FCE7F3;color:#831843}
+.c-handoff{background:var(--surface-5);color:var(--on-surface-var)}.c-self{background:var(--surface-5);color:var(--on-surface-var)}
+.chip.out{background:none;border:1px solid var(--outline-var);color:var(--on-surface-var);font-weight:500}
+
+/* filter bar */
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 14px}
+.fbtn{border:1px solid var(--outline-var);background:none;border-radius:8px;padding:6px 13px;
+      font-size:13px;cursor:pointer;color:var(--on-surface-var)}
+.fbtn:hover{background:var(--surface-2)}
+.fbtn.on{background:var(--secondary-container);color:var(--on-secondary-container);border-color:transparent;font-weight:500}
+
+/* tables */
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--outline-var);vertical-align:top}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--on-surface-var);font-weight:600;white-space:nowrap}
+td.n,th.n{text-align:right;font-family:var(--mono);font-size:12px;white-space:nowrap}
+tr.tot td{font-weight:600;background:var(--surface-2)}
+
+/* text blocks */
+pre.txt{background:var(--surface-3);border-radius:12px;padding:14px 16px;overflow:auto;
+        max-height:520px;font-family:var(--mono);font-size:12px;line-height:1.55;white-space:pre-wrap;
+        word-break:break-word;margin:0}
+.md{background:var(--surface-3);border-radius:12px;padding:14px 18px;max-height:640px;overflow:auto;
+    font-size:13.5px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.empty{color:var(--on-surface-var);font-style:italic;padding:10px 0}
+
+/* findings */
+.find{border:1px solid var(--outline-var);border-radius:12px;padding:13px 15px;margin-bottom:12px;background:var(--surface)}
+.find.blocker{border-left:4px solid var(--error)}
+.find.note{border-left:4px solid var(--warn)}
+.find .fh{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.find .rule{font-family:var(--mono);font-size:11.5px;color:var(--on-surface-var);margin-bottom:6px;word-break:break-word}
+.find .claim{font-size:13.5px;line-height:1.55}
+.find details{margin-top:9px}
+.find summary{cursor:pointer;font-size:12.5px;color:var(--primary);font-weight:500;user-select:none}
+.find .deep{margin-top:9px;padding:11px 13px;background:var(--surface-2);border-radius:10px;font-size:12.5px;line-height:1.6}
+.find .deep b{display:block;margin:0 0 3px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--on-surface-var)}
+.find .deep .blk+.blk{margin-top:11px}
+
+/* routing callout */
+.route{background:var(--primary-container);color:var(--on-primary-container);border-radius:12px;
+       padding:13px 16px;margin-bottom:14px;font-size:13.5px;line-height:1.6}
+.route .arrow{font-weight:600}
+.prio{display:inline-flex;gap:4px;align-items:center;margin-left:4px}
+.prio i{font-style:normal;background:rgba(255,255,255,.55);border-radius:6px;padding:1px 7px;font-size:11.5px;font-family:var(--mono)}
+.prio i.win{background:var(--primary);color:#fff;font-weight:700}
+
+/* gantt */
+.gantt{padding:6px 20px 14px}
+.grow{position:relative;height:26px;margin-bottom:3px}
+.glab{position:absolute;left:0;top:5px;width:104px;font-family:var(--mono);font-size:11px;color:var(--on-surface-var)}
+.gtrack{position:absolute;left:110px;right:6px;top:0;height:26px}
+.gbar{position:absolute;top:3px;height:20px;border-radius:6px;color:#fff;font-size:11px;line-height:20px;
+      padding:0 7px;white-space:nowrap;overflow:hidden;cursor:pointer;box-shadow:var(--e1)}
+.gbar:hover{filter:brightness(1.12)}
+.gbar.abort{background:repeating-linear-gradient(45deg,#B3261E,#B3261E 5px,#8C1D18 5px,#8C1D18 10px)}
+.gbar.running{background:linear-gradient(90deg,var(--primary),#9A82DB);animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.62}}
+.ggate{position:absolute;top:2px;width:3px;height:22px;background:var(--outline);border-radius:2px}
+.gaxis{position:relative;height:18px;margin:6px 6px 0 110px;border-top:1px solid var(--outline-var)}
+.gtick{position:absolute;font-size:10.5px;color:var(--on-surface-var);transform:translateX(-50%);top:3px;font-family:var(--mono)}
+
+/* bars */
+.sr{display:grid;grid-template-columns:132px 1fr 96px;gap:10px;align-items:center;margin-bottom:6px;font-size:12.5px}
+.sr .n2{font-family:var(--mono);font-size:11.5px;color:var(--on-surface-var);text-align:right}
+.sbar{height:16px;border-radius:8px;overflow:hidden;display:flex;background:var(--surface-5)}
+.sbar i{display:block;height:100%}
+.i-think{background:#B9AEDC}.i-tools{background:var(--primary)}
+
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 18px;font-size:13px;align-items:baseline}
+.kv dt{color:var(--on-surface-var);white-space:nowrap}
+.kv dd{margin:0;font-family:var(--mono);font-size:12.5px;word-break:break-all}
+.note-callout{background:var(--warn-container);color:var(--on-warn-container);border-radius:12px;padding:12px 15px;font-size:13px;line-height:1.6;margin-bottom:14px}
+.fab{position:fixed;right:22px;bottom:22px;z-index:40;display:flex;flex-direction:column;gap:10px}
+.fab button{width:auto;padding:13px 18px;border:0;border-radius:16px;background:var(--primary);color:#fff;
+            box-shadow:var(--e2);cursor:pointer;font-size:13px;font-weight:500}
+.fab button.sec{background:var(--secondary-container);color:var(--on-secondary-container)}
+</style></head>
+<body>
+<div class="appbar"><div class="appbar-in">
+  <h1><span id="hdTitle"></span> <span id="hdStatus"></span></h1>
+  <div class="meta" id="hdMeta"></div>
+  <div class="metrics" id="hdMetrics"></div>
+</div></div>
+
+<div class="shell">
+  <nav class="rail"><h3>Шаги прогона</h3><div id="rail"></div></nav>
+  <div>
+    <div class="card"><h2>Хронология</h2><div class="gantt" id="gantt"></div></div>
+    <div class="toolbar" id="filters"></div>
+    <div id="steps"></div>
+    <div class="card"><h2>Маршрут: каждое решение роутера</h2><div class="body" id="routing"></div></div>
+    <div class="card"><h2>Размышление против инструментов</h2><div class="body" id="split"></div></div>
+    <div class="card"><h2>По стадиям</h2><div class="body" id="stages"></div></div>
+    <div class="card"><h2>Покрытие ревью</h2><div class="body" id="cov"></div></div>
+  </div>
+</div>
+
+<div class="fab">
+  <button class="sec" id="toggleAll">Развернуть всё</button>
+</div>
+
+<script id="run-data" type="application/json">${DATA}</script>
+<script>
+const D = JSON.parse(document.getElementById('run-data').textContent);
+
+const COLOR = { pre_implement:'#7E57C2', implement:'#3B6FD4', review:'#D4761B', qa:'#0F8F82', static_gate:'#79747E', preflight:'#79747E' };
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const mmss = s => Math.floor(s/60) + ':' + String(Math.round(s)%60).padStart(2,'0');
+const hhmm = ms => new Date(ms).toTimeString().slice(0,8);
+const pctOf = (a,b) => b ? Math.round(a/b*100) : 0;
+const nfmt = n => (n ?? 0).toLocaleString('ru-RU');
+const isBlocker = f => f.severity !== 'note' && f.severity !== 'info';
+const stateChip = st => ({done:'', running:'<span class="chip c-run">идёт</span>', aborted:'<span class="chip c-block">убит</span>'}[st] ?? '');
+const verdictChip = s => {
+  const m = { pass:'c-pass', blocked:'c-block', fail:'c-block', error:'c-info', running:'c-run', aborted:'c-block' };
+  return s ? '<span class="chip ' + (m[s]||'c-info') + '">' + esc(s) + '</span>' : '';
+};
+
+/* ── header ─────────────────────────────────────────────────────────── */
+document.getElementById('hdTitle').textContent = D.spec || D.runId;
+document.getElementById('hdStatus').innerHTML =
+  verdictChip(D.status) + (D.totals.running ? ' <span class="chip c-run">прогон идёт</span>' : '') +
+  (D.halt ? ' <span class="chip c-block">halt: ' + esc(D.halt.reason || '') + '</span>' : '');
+document.getElementById('hdMeta').innerHTML =
+  hhmm(D.t0) + ' → ' + hhmm(D.t1) + ' · ветка <span class="mono">' + esc(D.branch) + '</span>' +
+  (D.diff ? ' · ' + esc(D.diff) : '') +
+  (D.budget ? ' · бюджет: код ' + D.budget.codeAttempts + ', переплан ' + D.budget.handoffReplans + ', среда ' + D.budget.infra : '');
+
+const T = D.totals;
+document.getElementById('hdMetrics').innerHTML = [
+  ['Время', mmss(T.wallSec), T.invocations + ' вызовов' + (T.aborted ? ' + ' + T.aborted + ' убит' : '') + (T.running ? ' + ' + T.running + ' идёт' : '')],
+  ['Стоимость', '$' + T.costUsd, T.turns + ' ходов'],
+  ['Токенов', (T.outTokens/1000).toFixed(0) + 'k', T.tokPerSec + ' ток/с'],
+  ['Размышление', pctOf(T.apiSec, T.wallSec) + '%', mmss(T.apiSec) + ' в API'],
+  ['Инструменты', pctOf(T.toolSec, T.wallSec) + '%', T.calls + ' вызовов'],
+  ['Блокеры', String(T.blockers), T.notes + ' заметок'],
+].map(([k,v,s]) => '<div class="metric"><div class="k">' + k + '</div><div class="v">' + v + '</div><div class="s">' + s + '</div></div>').join('');
+
+/* ── gantt ──────────────────────────────────────────────────────────── */
+(function(){
+  const span = Math.max(1, D.t1 - D.t0);
+  const lanes = [...new Set(D.steps.map(s => s.stage))];
+  const rows = lanes.map(lane => {
+    const bars = D.steps.filter(s => s.stage === lane).map(s => {
+      const l = (s.startedAt - D.t0) / span * 100;
+      const w = Math.max(((s.endedAt ?? Date.now()) - s.startedAt) / span * 100, 0.4);
+      if (s.script) return '<div class="ggate" style="left:' + l.toFixed(2) + '%" title="' + esc(s.stage + ' ' + s.attempt + ': ' + (s.status||'')) + '"></div>';
+      const cls = s.state === 'aborted' ? ' abort' : s.state === 'running' ? ' running' : '';
+      const bg = cls ? '' : ';background:' + (COLOR[s.stage] || '#79747E');
+      const label = s.state === 'aborted' ? s.attempt + '✗' : s.attempt + ' · ' + mmss(s.wallSec) + (s.costUsd ? ' · $' + s.costUsd : '');
+      return '<div class="gbar' + cls + '" data-go="' + s.stage + '-' + s.attempt + '" style="left:' + l.toFixed(2) + '%;width:' + w.toFixed(2) + '%' + bg + '" title="' + esc(s.stage + ' ' + s.attempt + ' · ' + (s.status||s.state)) + '">' + esc(label) + '</div>';
+    }).join('');
+    return '<div class="grow"><div class="glab">' + esc(lane) + '</div><div class="gtrack">' + bars + '</div></div>';
+  }).join('');
+  const ticks = Array.from({length:7}, (_,i) => '<div class="gtick" style="left:' + (i/6*100) + '%">' + hhmm(D.t0 + span*i/6) + '</div>').join('');
+  document.getElementById('gantt').innerHTML = rows + '<div class="gaxis">' + ticks + '</div>';
+})();
+
+/* ── rail ───────────────────────────────────────────────────────────── */
+document.getElementById('rail').innerHTML = D.steps.map((s,i) => {
+  const bad = s.findings.some(isBlocker) || s.state === 'aborted';
+  const dot = s.script ? '#79747E' : (COLOR[s.stage] || '#79747E');
+  return (i ? '<div class="connector"></div>' : '') +
+    '<button class="stepitem" data-idx="' + i + '">' +
+      '<span class="dot" style="background:' + dot + '">' + (s.script ? '·' : s.attempt) + '</span>' +
+      '<span class="nm">' + esc(s.stage) + '<small>' + esc(s.model || (s.script ? 'скрипт' : '')) + '</small></span>' +
+      '<span class="tm">' + (s.script ? '—' : mmss(s.wallSec)) + (bad ? ' ●' : '') + '</span>' +
+    '</button>';
+}).join('');
+
+/* ── steps ──────────────────────────────────────────────────────────── */
+function findingHtml(f) {
+  const sev = isBlocker(f) ? 'blocker' : 'note';
+  const w = f.witness;
+  const deep = [
+    w && w.detail ? '<div class="blk"><b>Свидетельство' + (w.kind ? ' · ' + esc(w.kind) : '') + '</b>' + esc(w.detail) + (w.source ? '<br><span class="mono dim">' + esc(w.source) + '</span>' : '') + '</div>' : '',
+    f.suggestedFix ? '<div class="blk"><b>Предложенная починка</b>' + esc(f.suggestedFix) + '</div>' : '',
+  ].join('');
+  return '<div class="find ' + sev + '">' +
+    '<div class="fh">' +
+      '<span class="chip ' + (sev === 'blocker' ? 'c-block' : 'c-note') + '">' + esc(f.severity) + '</span>' +
+      '<span class="chip c-' + esc(f.target) + '">→ ' + esc(f.target) + '</span>' +
+      '<b>' + esc(f.id) + '</b>' +
+      (f._carriedFrom ? '<span class="chip out">повтор из ' + esc(f._carriedFrom) + '</span>' : '') +
+      '<span class="mono dim">' + esc(f.file || '') + (f.symbol ? '#' + esc(f.symbol) : '') + (f.line ? ':' + f.line : '') + '</span>' +
+    '</div>' +
+    '<div class="rule">' + esc(f.rule) + '</div>' +
+    '<div class="claim">' + esc(f.claim) + '</div>' +
+    (deep ? '<details><summary>Свидетельство и починка</summary><div class="deep">' + deep + '</div></details>' : '') +
+  '</div>';
+}
+
+function routeHtml(s) {
+  const bits = [];
+  if (s.routedHere) bits.push('<div><span class="arrow">← пришло сюда:</span> ' + esc(s.routedHere.why) + '</div>');
+  if (s.routing) {
+    const prio = D.priority.map(t => '<i class="' + (t === s.routing.winner ? 'win' : '') + '">' + t + '</i>').join('');
+    bits.push('<div style="margin-top:8px"><span class="arrow">Победил адрес:</span> <b>' + esc(s.routing.winner) + '</b>' +
+      '<span class="prio">' + prio + '</span></div>' +
+      (s.routing.why ? '<div style="margin-top:4px">' + esc(s.routing.why) + '</div>' : '') +
+      '<div style="margin-top:4px">Причина маршрута: <b>' + s.routing.cause.join(', ') + '</b>' +
+      (s.routing.alongside.length
+        ? '. Поехали следом, не будучи причиной: ' + s.routing.alongside.map(a => a.id + ' (' + a.target + ')').join(', ')
+        : '') + '</div>');
+  }
+  if (s.routedAway) bits.push('<div style="margin-top:8px"><span class="arrow">→ ушло в ' + esc(s.routedAway.to || s.routedAway.kind) + ':</span> ' + esc(s.routedAway.why) + '</div>');
+  return bits.length ? '<div class="route">' + bits.join('') + '</div>' : '';
+}
+
+function paneReceived(s) {
+  const meta = '<dl class="kv">' +
+    '<dt>Агент</dt><dd>' + esc(s.agent || 'скрипт') + '</dd>' +
+    '<dt>Модель</dt><dd>' + esc(s.model || '—') + '</dd>' +
+    (s.resumedSession ? '<dt>Продолжает сессию</dt><dd>' + esc(s.resumedSession) + '</dd>' : '') +
+    (s.sessionId ? '<dt>Своя сессия</dt><dd>' + esc(s.sessionId) + '</dd>' : '') +
+    (s.fuseMin ? '<dt>Предохранитель</dt><dd>' + s.fuseMin + ' мин</dd>' : '') +
+    (s.headAtStart ? '<dt>HEAD на старте</dt><dd>' + esc(s.headAtStart.slice(0,10)) + '</dd>' : '') +
+  '</dl>';
+  const prompt = s.prompt
+    ? '<h4 style="margin:16px 0 8px;font-size:13px">Промпт, который получил агент</h4><pre class="txt">' + esc(s.prompt) + '</pre>'
+    : '<div class="note-callout">Промпт не записан: этот прогон старше, чем захват входных данных в <span class="mono">ship.mjs</span>. У новых прогонов здесь будет ровно то, что видел агент.</div>';
+  return routeHtml(s) + meta + prompt;
+}
+
+function paneDid(s) {
+  const commits = s.commits && s.commits.length
+    ? '<h4 style="margin:0 0 8px;font-size:13px">Коммиты в окне этого шага</h4><table><tr><th>SHA</th><th>Сообщение</th><th>Объём</th></tr>' +
+      s.commits.map(c => '<tr><td class="mono">' + esc(c.sha) + '</td><td>' + esc(c.subject) + '</td><td class="dim">' + esc(c.stat) + '</td></tr>').join('') +
+      '</table>'
+    : '';
+  const result = s.result
+    ? '<h4 style="margin:16px 0 8px;font-size:13px">Заключительное сообщение агента</h4><div class="md">' + esc(s.result) + '</div>'
+    : '<div class="empty">Заключительного сообщения нет' + (s.state === 'running' ? ' — шаг ещё идёт.' : s.state === 'aborted' ? ' — процесс был убит.' : '.') + '</div>';
+  const report = s.report
+    ? '<details style="margin-top:14px"><summary style="cursor:pointer;color:var(--primary);font-weight:500">Отчёт стадии целиком (' + s.report.length.toLocaleString('ru-RU') + ' символов)</summary><div class="md" style="margin-top:10px">' + esc(s.report) + '</div></details>'
+    : '';
+  return commits + result + report;
+}
+
+function paneVerdict(s) {
+  if (!s.findings.length && !s.status) return '<div class="empty">Вердикта нет.</div>';
+  const suites = s.suites ? '<h4 style="margin:14px 0 8px;font-size:13px">Прогоны тестов</h4><table><tr><th>Уровень</th><th>Результат</th><th>Комментарий</th></tr>' +
+    ['unit','int','e2e'].map(k => {
+      const x = s.suites[k]; if (!x) return '';
+      const res = x.skipped ? '<span class="chip c-info">пропущен</span>'
+        : (x.passed ?? 0) + ' ✓' + (x.failed ? ' / ' + x.failed + ' ✗' : '') + (x.ms ? ' · ' + (typeof x.ms === 'number' ? (x.ms/1000).toFixed(1) + ' с' : esc(x.ms)) : '');
+      return '<tr><td><b>' + k + '</b></td><td>' + res + '</td><td class="dim" style="font-size:12px">' + esc(x.reason || x.note || (x.files||[]).join(', ')) + '</td></tr>';
+    }).join('') + '</table>' : '';
+  const cov = s.covered ? '<div class="note-callout"><b>Заявленное покрытие:</b> ' +
+      (s.covered.files != null ? s.covered.files + ' из ' + (s.covered.of ?? '?') + ' файлов. ' : '') +
+      esc(s.covered.note || '') +
+      (s.coverageNamed != null ? '<br><b>Измеренное по журналу:</b> ' + s.coverageNamed + ' из ' + D.coverage.files + '.' : '') +
+    '</div>' : (s.coverageNamed != null ? '<div class="note-callout"><b>Измеренное покрытие:</b> ' + s.coverageNamed + ' из ' + D.coverage.files + ' файлов дифа.</div>' : '');
+  const bl = s.findings.filter(isBlocker), nt = s.findings.filter(f => !isBlocker(f));
+  return routeHtml(s) + cov +
+    (bl.length ? '<h4 style="margin:0 0 10px;font-size:13px">Блокеры — ' + bl.length + '</h4>' + bl.map(findingHtml).join('') : '') +
+    (nt.length ? '<h4 style="margin:18px 0 10px;font-size:13px">Заметки — ' + nt.length + ' <span class="dim" style="font-weight:400">(не возвращают работу, копятся для человека)</span></h4>' + nt.map(findingHtml).join('') : '') +
+    (!bl.length && !nt.length ? '<div class="empty">Находок нет — чистый ' + esc(s.status || '') + '.</div>' : '') + suites;
+}
+
+function paneTools(s) {
+  if (!s.tools.length) return '<div class="empty">Вызовов инструментов в журнале нет.</div>';
+  const mix = Object.entries(s.byTool).sort((a,b) => b[1]-a[1])
+    .map(([t,n]) => '<span class="chip out">' + esc(t) + ' · ' + n + '</span>').join(' ');
+  const rows = s.tools.map(t =>
+    '<tr><td class="n">+' + t.at + 'с</td><td>' + esc(t.tool) + '</td><td class="n">' + (t.sec >= 1 ? t.sec + ' с' : '') + '</td>' +
+    '<td class="mono" style="word-break:break-all">' + esc(t.what) + '</td></tr>').join('');
+  return '<div style="margin-bottom:12px;display:flex;gap:6px;flex-wrap:wrap">' + mix + '</div>' +
+    '<table><tr><th class="n">Смещение</th><th>Инструмент</th><th class="n">Длит.</th><th>Что</th></tr>' + rows + '</table>';
+}
+
+function paneMetrics(s) {
+  const bar = '<div class="sr"><span>время шага</span><div class="sbar">' +
+    '<i class="i-think" style="width:' + s.thinkPct + '%"></i><i class="i-tools" style="width:' + (100-s.thinkPct) + '%"></i>' +
+    '</div><span class="n2">' + s.thinkPct + '% / ' + (100-s.thinkPct) + '%</span></div>';
+  return bar + '<dl class="kv" style="margin-top:14px">' + [
+    ['Состояние', s.state + (s.stopReason ? ' · ' + s.stopReason : '')],
+    ['Wall', mmss(s.wallSec)],
+    ['В API (размышление и генерация)', s.apiSec ? mmss(s.apiSec) : '—'],
+    ['В инструментах', s.toolSec + ' с в ' + s.calls + ' вызовах'],
+    ['Ходов', s.turns ?? '—'],
+    ['Выходных токенов', nfmt(s.tokens.out) + (s.tokPerSec ? ' · ' + s.tokPerSec + ' ток/с' : '')],
+    ['Кэш прочитан / записан', nfmt(s.tokens.cacheRead) + ' / ' + nfmt(s.tokens.cacheWrite)],
+    ['Стоимость', s.costUsd ? '$' + s.costUsd : '—'],
+    ['Артефакты', Object.entries(s.has).filter(([,v]) => v).map(([k]) => k).join(', ') || 'нет'],
+  ].map(([k,v]) => '<dt>' + k + '</dt><dd>' + esc(v) + '</dd>').join('') + '</dl>';
+}
+
+const TABS = [
+  ['Получил', paneReceived, s => s.prompt ? 1 : 0],
+  ['Сделал', paneDid, s => (s.commits||[]).length],
+  ['Вердикт', paneVerdict, s => s.findings.length],
+  ['Инструменты', paneTools, s => s.calls],
+  ['Метрики', paneMetrics, () => 0],
+];
+
+document.getElementById('steps').innerHTML = D.steps.map((s,i) => {
+  const bl = s.findings.filter(isBlocker).length, nt = s.findings.length - bl;
+  const color = COLOR[s.stage] || '#79747E';
+  const sub = [
+    s.model || (s.script ? 'скрипт-гейт' : ''),
+    s.script ? null : mmss(s.wallSec) + ' (' + s.thinkPct + '% размышление)',
+    s.costUsd ? '$' + s.costUsd : null,
+    s.turns ? s.turns + ' ходов' : null,
+    s.calls ? s.calls + ' вызовов инстр.' : null,
+    s.resumedSession ? '↻ продолжает сессию' : null,
+  ].filter(Boolean).join(' · ');
+  const tabs = TABS.map(([name,,count], ti) => {
+    const c = count(s);
+    return '<button class="tab' + (ti===0?' on':'') + '" data-s="' + i + '" data-t="' + ti + '">' + name +
+      (c ? '<span class="badge">' + c + '</span>' : '') + '</button>';
+  }).join('');
+  const panes = TABS.map(([,fn], ti) => '<div class="pane' + (ti===0?' on':'') + '" data-s="' + i + '" data-t="' + ti + '">' + (s.script && ti < 4 ? '<div class="empty">Скрипт-гейт: ни промпта, ни модели. Только вердикт.</div>' + (ti===2 ? paneVerdict(s) : '') : fn(s)) + '</div>').join('');
+  return '<div class="card step" id="' + s.stage + '-' + s.attempt + '" data-idx="' + i + '"' +
+    (bl ? ' data-bad="1"' : '') + (s.state !== 'done' ? ' data-odd="1"' : '') + '>' +
+    '<button class="step-head"><span class="idx" style="background:' + color + '">' + (s.script ? '·' : s.attempt) + '</span>' +
+      '<span><span class="ttl">' + esc(s.stage) + ' ' + s.attempt + ' ' + verdictChip(s.status) + ' ' + stateChip(s.state) +
+        (bl ? '<span class="chip c-block">' + bl + ' блок.</span>' : '') +
+        (nt ? '<span class="chip c-note">' + nt + ' зам.</span>' : '') +
+      '</span><span class="sub">' + esc(sub) + '</span></span>' +
+      '<span class="caret">▾</span></button>' +
+    '<div class="panel"><div class="tabs">' + tabs + '</div>' + panes + '</div></div>';
+}).join('');
+
+/* ── interaction ────────────────────────────────────────────────────── */
+const stepEls = [...document.querySelectorAll('.step')];
+function openStep(i, scroll) {
+  const el = stepEls[i]; if (!el) return;
+  el.classList.add('open');
+  document.querySelectorAll('.stepitem').forEach(b => b.classList.toggle('on', +b.dataset.idx === i));
+  if (scroll) el.scrollIntoView({ block:'start' });
+}
+document.addEventListener('click', e => {
+  const head = e.target.closest('.step-head');
+  if (head) { const el = head.closest('.step'); el.classList.toggle('open');
+    if (el.classList.contains('open')) openStep(+el.dataset.idx, false); return; }
+  const tab = e.target.closest('.tab');
+  if (tab) {
+    const { s, t } = tab.dataset;
+    document.querySelectorAll('.tab[data-s="' + s + '"]').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+    document.querySelectorAll('.pane[data-s="' + s + '"]').forEach(p => p.classList.toggle('on', p.dataset.t === t));
+    return;
+  }
+  const item = e.target.closest('.stepitem');
+  if (item) { openStep(+item.dataset.idx, true); return; }
+  const bar = e.target.closest('[data-go]');
+  if (bar) { const el = document.getElementById(bar.dataset.go); if (el) { el.classList.add('open'); openStep(+el.dataset.idx, true); } }
+});
+
+const FILTERS = [
+  ['все', () => true],
+  ['с блокерами', el => el.dataset.bad === '1'],
+  ['незавершённые', el => el.dataset.odd === '1'],
+];
+document.getElementById('filters').innerHTML = FILTERS.map(([n],i) =>
+  '<button class="fbtn' + (i===0?' on':'') + '" data-f="' + i + '">' + n + '</button>').join('') +
+  '<span class="dim" style="margin-left:auto;font-size:12px">клик по полосе на диаграмме открывает шаг · j / k — следующий и предыдущий</span>';
+document.getElementById('filters').addEventListener('click', e => {
+  const b = e.target.closest('.fbtn'); if (!b) return;
+  document.querySelectorAll('.fbtn').forEach(x => x.classList.toggle('on', x === b));
+  const keep = FILTERS[+b.dataset.f][1];
+  stepEls.forEach(el => { el.style.display = keep(el) ? '' : 'none'; });
+});
+
+let allOpen = false;
+document.getElementById('toggleAll').addEventListener('click', e => {
+  allOpen = !allOpen;
+  stepEls.forEach(el => el.classList.toggle('open', allOpen));
+  e.target.textContent = allOpen ? 'Свернуть всё' : 'Развернуть всё';
+});
+
+let cursor = 0;
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input,textarea')) return;
+  if (e.key === 'j' || e.key === 'k') {
+    cursor = Math.max(0, Math.min(stepEls.length - 1, cursor + (e.key === 'j' ? 1 : -1)));
+    stepEls[cursor].classList.add('open'); openStep(cursor, true);
+  }
+});
+
+/* ── routing log ────────────────────────────────────────────────────── */
+document.getElementById('routing').innerHTML =
+  '<p class="dim" style="margin-top:0">Порядок приоритета адресов — <span class="mono">' + D.priority.join(' → ') + '</span>. ' +
+  'Один вердикт может нести блокеры с разными адресами, но маршрут берётся один: побеждает самый приоритетный из присутствующих, ' +
+  'остальные едут следом. Текст в колонке «почему» написан самим роутером в момент решения.</p>' +
+  '<table><tr><th class="n">Время</th><th>Откуда</th><th>Куда</th><th>Почему</th></tr>' +
+  D.decisions.map(d => '<tr><td class="n">' + hhmm(d.at) + '</td><td>' + esc(d.from) + '</td>' +
+    '<td>' + (d.to ? esc(d.to) : '<b>' + esc(d.kind) + '</b>') + '</td><td>' + esc(d.why) + '</td></tr>').join('') +
+  '</table>';
+
+/* ── think/tools split ──────────────────────────────────────────────── */
+document.getElementById('split').innerHTML =
+  '<p class="dim" style="margin-top:0">Время в API почти линейно по выходным токенам — ' + D.totals.tokPerSec +
+  ' ток/с в среднем. Длительность ≈ токены ÷ ' + D.totals.tokPerSec + ' + инструменты (' + mmss(D.totals.apiSec) +
+  ' + ' + mmss(D.totals.toolSec) + ' + ' + D.totals.orchestrationSec + ' с оркестрации = ' + mmss(D.totals.wallSec) + ').</p>' +
+  D.steps.filter(s => !s.script && s.wallSec).map(s =>
+    '<div class="sr"><span>' + esc(s.stage) + ' ' + s.attempt + '</span><div class="sbar">' +
+    '<i class="i-think" style="width:' + s.thinkPct + '%"></i><i class="i-tools" style="width:' + (100-s.thinkPct) + '%"></i>' +
+    '</div><span class="n2">' + s.toolSec + ' с инстр.</span></div>').join('');
+
+/* ── stages ─────────────────────────────────────────────────────────── */
+document.getElementById('stages').innerHTML =
+  '<table><tr><th>Стадия</th><th>Модель</th><th class="n">Вызовов</th><th class="n">Wall</th><th class="n">Ходов</th>' +
+  '<th class="n">Токенов</th><th class="n">% ток.</th><th class="n">$</th><th class="n">% денег</th><th class="n">Размышл.</th></tr>' +
+  D.byStage.map(b => '<tr><td>' + esc(b.stage) + '</td><td class="mono">' + esc(b.model||'') + '</td>' +
+    '<td class="n">' + b.invocations + '</td><td class="n">' + mmss(b.wallSec) + '</td><td class="n">' + b.turns + '</td>' +
+    '<td class="n">' + nfmt(b.outTokens) + '</td><td class="n">' + pctOf(b.outTokens, D.totals.outTokens) + '%</td>' +
+    '<td class="n">' + b.costUsd.toFixed(2) + '</td><td class="n">' + pctOf(b.costUsd*100, D.totals.costUsd*100) + '%</td>' +
+    '<td class="n">' + pctOf(b.wallSec-b.toolSec, b.wallSec) + '%</td></tr>').join('') + '</table>';
+
+/* ── coverage ───────────────────────────────────────────────────────── */
+document.getElementById('cov').innerHTML =
+  D.coverage.perPass.map(p => '<div class="sr"><span>review ' + p.attempt + '</span>' +
+    '<div class="sbar"><i class="i-tools" style="width:' + pctOf(p.named, D.coverage.files) + '%"></i></div>' +
+    '<span class="n2">' + p.named + ' / ' + D.coverage.files + '</span></div>').join('') +
+  '<p style="margin-top:14px">Ни одним проходом не названы: <b>' + D.coverage.never.length + '</b> из ' + D.coverage.files + '.</p>' +
+  (D.coverage.never.length ? '<table><tr><th class="n">Строк</th><th>Файл</th></tr>' +
+    D.coverage.never.map(f => '<tr><td class="n">' + f.lines + '</td><td class="mono">' + esc(f.path) + '</td></tr>').join('') + '</table>' : '') +
+  '<p class="dim" style="font-size:12px">Файл считается названным, когда его путь встретился в собственном вызове инструмента ревью. ' +
+  'Пути нормализуются: <span class="mono">Read</span> на Windows отдаёт абсолютный путь с обратными слэшами, и без нормализации ' +
+  'реестр не засчитывает ни одного чтения.</p>';
+
+if (D.steps.length) openStep(0, false);
+</script>
+</body></html>`;
+
+const out = flag('--out') ?? join(dir, 'report.html');
+writeFileSync(out, html);
+console.log(out);
+console.log(
+  `  ${mmss(totals.wallSec)} · $${totals.costUsd} · ${totals.invocations} вызовов` +
+    `${totals.aborted ? ` (+${totals.aborted} убито)` : ''}${totals.running ? ` (+${totals.running} идёт)` : ''} · ` +
+    `${(totals.outTokens / 1000).toFixed(0)}k токенов при ${totals.tokPerSec} ток/с · ` +
+    `${totals.blockers} блокеров, ${totals.notes} заметок · покрытие ревью ${cov.files - cov.never.length}/${cov.files}`,
+);
+
+function mmss(s) {
+  return `${Math.floor(s / 60)}:${String(Math.round(s) % 60).padStart(2, '0')}`;
+}

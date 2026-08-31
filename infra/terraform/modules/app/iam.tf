@@ -52,7 +52,12 @@ resource "aws_iam_role_policy_attachment" "execution_managed" {
 }
 
 # The managed policy above covers ECR and CloudWatch Logs but deliberately not secrets —
-# AWS cannot know which ones. These are exactly this environment's four.
+# AWS cannot know which ones. These are exactly this environment's own.
+#
+# The two SignWell parameters are named unconditionally, unlike the fixture token: the
+# grant is what makes an out-of-band write usable, so it has to exist *before* the value
+# does. Reading a parameter that holds a placeholder is harmless; discovering at deploy
+# time that the role cannot read the key you just wrote is not.
 data "aws_iam_policy_document" "execution_secrets" {
   statement {
     sid     = "ReadContainerSecrets"
@@ -63,6 +68,8 @@ data "aws_iam_policy_document" "execution_secrets" {
         var.direct_url_parameter_arn,
         aws_ssm_parameter.session_secret.arn,
         aws_ssm_parameter.internal_task_secret.arn,
+        aws_ssm_parameter.signwell_api_key.arn,
+        aws_ssm_parameter.signwell_webhook_secret.arn,
       ],
       aws_ssm_parameter.test_fixture_secret[*].arn,
     )

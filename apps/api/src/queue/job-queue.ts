@@ -2,11 +2,20 @@ import { Logger } from '@nestjs/common';
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 /**
- * The one job the area has today. Named rather than a bare string so a second job type
- * (reminders, a re-render on retry) is a union member and every `switch` over it stops
- * compiling until it is handled.
+ * The jobs the area has. Named rather than bare strings so a new job type is a union
+ * member and every `switch` over it stops compiling until it is handled.
+ *
+ * Spec 04 adds two, and both exist to keep work off a path that must not wait for it:
+ *
+ *  - `provider-reconcile` runs after the webhook has already answered. Requirement 25 is
+ *    the reason: resolving which envelope a `providerRef` names is the one part of
+ *    handling a delivery that could tell a caller which documents we hold, so it happens
+ *    after the response is queued and never before it.
+ *  - `provider-complete` downloads the provider's completed PDF, stores it, and only then
+ *    marks the envelope complete (invariant 10). It is a job rather than part of a
+ *    transaction because invariant 11 forbids a provider call inside one.
  */
-export type JobName = 'pdf-render';
+export type JobName = 'pdf-render' | 'provider-reconcile' | 'provider-complete';
 
 export interface Job {
   name: JobName;

@@ -61,7 +61,13 @@ export type Capability =
   // Spec 03 — field autofill and the member profile behind it.
   | 'ViewMemberProfile'
   | 'ViewMemberProfilePii'
-  | 'EditMemberProfile';
+  | 'EditMemberProfile'
+  // Spec 04 — signature providers. `ManageSigningSettings` is admin only while
+  // `ManageEnvelopes` is admin and manager: choosing the provider changes where every
+  // future contract of the organization is executed and who holds the evidence, which
+  // is a different order of decision from sending one document.
+  | 'ViewSigningSettings'
+  | 'ManageSigningSettings';
 
 /**
  * Permission matrix from spec 01 and spec 02, "Roles & Permission Matrix".
@@ -87,6 +93,8 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     'ViewMemberProfile',
     'ViewMemberProfilePii',
     'EditMemberProfile',
+    'ViewSigningSettings',
+    'ManageSigningSettings',
   ],
   manager: [
     'ViewDocumentTemplates',
@@ -99,6 +107,9 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     // able to create a contract for a member without being able to read that member's
     // passport number, so `ViewMemberProfilePii` and `EditMemberProfile` stop here.
     'ViewMemberProfile',
+    // Spec 04's matrix: a manager sees which provider the organization signs with and
+    // cannot change it. The screen renders read-only and the save button is not drawn.
+    'ViewSigningSettings',
   ],
   // `user` looks empty, but a member reading and editing *their own* contract details is
   // authorized below by `canReadProfile` and friends, not from this table. See the note

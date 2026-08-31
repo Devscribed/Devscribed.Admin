@@ -83,8 +83,36 @@ const fail = (error: string): FieldResult => ({ valid: false, error });
 /** Letters (any script), hyphens, apostrophes and spaces only. */
 const PERSON_NAME_PATTERN = /^[\p{L}\-' ]+$/u;
 
-/** local@domain.tld — a local part, a domain, at least one dot, and a TLD. */
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)*\.[A-Za-z]{2,}$/;
+/**
+ * The characters RFC 5322 allows in an unquoted local part (`atext`). Dots separate
+ * atoms and are handled by `EMAIL_PATTERN`, so they are not in this set.
+ */
+const LOCAL_PART_ATOM = "[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+";
+
+/**
+ * local@domain.tld — a local part, a domain, at least one dot, and a TLD.
+ *
+ * **The local part is ASCII (BUG-002).** It was `[^\s@]+`, which admitted every script
+ * while the domain rule already demanded Latin: `фыв@gmail.com` passed here and was then
+ * refused by the signature provider at the send, two screens after the sender typed it.
+ * A non-Latin local part is only deliverable over SMTPUTF8 and most providers refuse it,
+ * so it is refused at entry instead.
+ *
+ * Two decisions this pattern makes deliberately:
+ *
+ *  - **Plus-addressing is accepted.** `+` is `atext`, and `user+contracts@gmail.com` is
+ *    ordinary real-world usage that a stricter rule would break for existing users.
+ *  - **Quoted local parts are refused.** `"john doe"@example.com` is legal RFC 5322 and
+ *    is accepted almost nowhere: it permits spaces and control characters inside an
+ *    address that then has to survive our mail, a provider's API, and a webhook body.
+ *    A form that cannot express it is not a form anyone is missing.
+ *
+ * The domain half is unchanged, so this refuses strictly more than before and nothing
+ * that validates today under the old domain rule starts failing for a domain reason.
+ */
+const EMAIL_PATTERN = new RegExp(
+  `^${LOCAL_PART_ATOM}(?:\\.${LOCAL_PART_ATOM})*@[^\\s@.]+(?:\\.[^\\s@.]+)*\\.[A-Za-z]{2,}$`,
+);
 
 export function validateOrgName(input: string): FieldResult {
   const value = (input ?? '').trim();
@@ -2492,3 +2520,4 @@ export * from './roles';
 export * from './documents';
 export * from './envelopes';
 export * from './autofill';
+export * from './signing-providers';

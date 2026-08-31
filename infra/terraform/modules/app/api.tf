@@ -45,10 +45,37 @@ locals {
     PDF_RENDERER = "local-chromium"
     JOB_QUEUE    = "inline"
 
-    SIGNATURE_PROVIDER = "internal"
+    # SIGNATURE_PROVIDER used to name the one adapter resolved at boot. Documents spec 04
+    # removed the variable and the function that read it: which provider signs an envelope
+    # is now an organization setting read at send, and which adapters exist is decided by
+    # whether their configuration is present. Nothing in the image reads it any more, so
+    # leaving it here would describe a decision the code no longer makes.
 
     SIGNING_TOKEN_TTL_DAYS = tostring(var.signing_token_ttl_days)
     ENVELOPE_EXPIRY_DAYS   = tostring(var.envelope_expiry_days)
+
+    # ---------------------------------------------------------------------------------
+    # SignWell — documents spec 04. The plain half; the two secrets are in api_secrets.
+    # ---------------------------------------------------------------------------------
+
+    # Names a branding profile so a counterparty signing our contract sees our colours and
+    # logo rather than SignWell's default. Not a secret, and one of the three values the
+    # product checks for presence — empty until the profile exists, which is what keeps
+    # the settings screen honest about what is missing.
+    SIGNWELL_API_APPLICATION_ID = var.signwell_api_application_id
+
+    # Written here rather than taken from a tfvars, and both environments read this one
+    # line. Going live is a deliberate change with a legal review of the counterparty-facing
+    # copy — not a side effect of deploying — and a per-environment value would let a
+    # tfvars edit spend real money. The API refuses to boot on a value that does not parse
+    # as a boolean (validation rule 6), because defaulting to false would send real
+    # contracts on a typo.
+    SIGNWELL_TEST_MODE = "true"
+
+    # How stale a remote envelope's last sync may be before a read re-fetches it. Behaviour
+    # affecting, so it is identical in both environments: an environment that converges on a
+    # different schedule from production is not a test of production.
+    PROVIDER_SYNC_STALE_SECONDS = "120"
   }
 
   api_secrets = merge(
@@ -62,6 +89,15 @@ locals {
     # and every /api/test/* route stays shut on its own.
     var.test_fixtures_enabled ? {
       TEST_FIXTURE_SECRET = aws_ssm_parameter.test_fixture_secret[0].arn
+    } : {},
+    # Absent until someone has written the values the parameters were created to hold —
+    # see the note beside the resources in main.tf. Absent is the honest state and the
+    # product is built for it: the registry reads these two at call time, so the SignWell
+    # row on the settings screen is listed, disabled, and names exactly what is missing
+    # (requirement 32), rather than offering an option whose every send would fail.
+    var.signwell_secrets_provisioned ? {
+      SIGNWELL_API_KEY        = aws_ssm_parameter.signwell_api_key.arn
+      SIGNWELL_WEBHOOK_SECRET = aws_ssm_parameter.signwell_webhook_secret.arn
     } : {},
   )
 

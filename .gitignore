@@ -56,3 +56,7 @@ docker-compose.override.yml
 .workflow/runs/*/.pending.json
 .workflow/runs/*/stages/*.log
 .workflow/runs/*/*.verdict.json.raw
+# The prompt each agent was handed. Kept on the machine that ran it, because a review prompt
+# carries every prior verdict and grows with the run — but `report.html` embeds the prompts it
+# needs, so the committed record still answers "what did the reviewer actually see?".
+.workflow/runs/*/stages/*.prompt.md

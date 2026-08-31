@@ -170,6 +170,18 @@ already up — which is worth knowing, because a stale server left on port 3000 
 adopted silently. If a whole E2E run fails at the login screen, check what is actually
 answering there before looking anywhere else.
 
+It writes to **`devscribed_e2e`**, not to the database you are working in, and it can be
+moved off the dev ports entirely so a run happens beside your work instead of instead of it:
+
+```bash
+E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/<file>.spec.ts
+```
+
+`CI=1` is what turns reuse off, so the run starts its own servers with the stub signing
+provider rather than borrowing yours. Under it, a port that is already taken fails with the
+line above rather than with "port is already in use". See
+[ADR 0005](docs/adr/0005-e2e-runs-beside-a-dev-environment.md).
+
 ### When something is off
 
 | Symptom | Cause |

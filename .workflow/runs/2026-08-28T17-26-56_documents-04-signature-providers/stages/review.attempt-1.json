@@ -1,0 +1,101 @@
+{
+  "status": "blocked",
+  "findings": [
+    {
+      "id": "F1",
+      "target": "handoff",
+      "severity": "blocker",
+      "rule": "specs/documents/04-signature-providers.md - Infrastructure / Configuration",
+      "file": "infra/terraform/modules/app/api.tf",
+      "symbol": "api_environment and api_secrets",
+      "line": 48,
+      "claim": "The spec Infrastructure section is not implemented: the diff touches no file under infra/, so none of SIGNWELL_API_KEY, SIGNWELL_API_APPLICATION_ID or SIGNWELL_WEBHOOK_SECRET ever reaches the ECS task, and the feature is inert in every deployed environment. No task in the handoff names infra/terraform at all.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "git diff 57d55ac...HEAD -- infra/ returns zero files and grep -rn SIGNWELL infra/ returns nothing. The API container environment and secrets are fully enumerated by locals.api_environment and locals.api_secrets in infra/terraform/modules/app/api.tf:16-67; ECS injects nothing that is not listed there. So after make deploy-dev an admin who opens /org/{orgId}/settings/signing sees the SignWell row with a disabled radio and 'Missing: API key, API application id, webhook secret' - SigningProviderRegistry.missingConfiguration (apps/api/src/signature/provider-registry.ts:87-101) reads those three process.env values, and nothing in the repository sets them outside apps/api/.env.example and e2e/playwright.config.ts. PUT .../settings/signing with provider=signwell answers 400 for the same reason (signing-settings.service.ts:99-109). Acceptance criteria 3, 5, 6 and 8 are unreachable on dev and prod. The spec names the mechanism: 'SSM Parameter Store, SecureString, injected by the ECS task definition ... Terraform creates the parameter and the policy that reads it, never the value' - the same shape SESSION_SECRET and INTERNAL_TASK_SECRET already use in locals.api_secrets, which the spec cites by name.",
+        "source": "specs/documents/04-signature-providers.md:694-702"
+      },
+      "suggestedFix": "Add a task covering infra/terraform/modules/app/api.tf and iam.tf: two aws_ssm_parameter SecureStrings (SIGNWELL_API_KEY, SIGNWELL_WEBHOOK_SECRET) added to locals.api_secrets and to the task execution role ssm:GetParameters policy, plus SIGNWELL_API_APPLICATION_ID, SIGNWELL_TEST_MODE and PROVIDER_SYNC_STALE_SECONDS in locals.api_environment - creating the parameters and the policy, never the values. While there, drop the now-dead SIGNATURE_PROVIDER entry at api.tf:48, which no code reads after this change."
+    },
+    {
+      "id": "F2",
+      "target": "code",
+      "severity": "blocker",
+      "rule": "specs/documents/04-signature-providers.md - State Machine, invariant 11",
+      "file": "apps/api/src/signing/signing.service.ts",
+      "symbol": "SigningService.sign",
+      "line": 397,
+      "claim": "A provider port method runs inside a database transaction: applySignature is awaited between the FOR UPDATE lock and the commit, which invariant 11 and acceptance criterion 12 forbid without qualification.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Invariant 11: 'A provider call never runs inside a database transaction. Every adapter method is called before or after one, never within - a five-attempt backoff would hold a row lock for a minute.' Acceptance criterion 12 (line 1266): 'No provider call is made while a database transaction is open.' In apps/api/src/signing/signing.service.ts the transaction opens at line 317, takes SELECT id FROM SigningToken ... FOR UPDATE at line 322, and the port call locally.applySignature(...) is awaited at line 397, inside it. The comment at 388-396 states the deviation is deliberate and justifies it by requirement 10, but that justification does not hold: validateSignature (packages/validation/src/envelopes.ts:408-453) already runs before the transaction and rejects every input InternalSigningProvider.applySignature would reject - a drawn signature must be a PNG data URI with decodable, inked bytes, strictly stricter than signatureImageSrc png|svg test, and a typed signature must be a non-empty trimmed name. Moving the call above the transaction therefore changes no observable behaviour and needs no edit to the spec 02 suite.",
+        "source": "specs/documents/04-signature-providers.md:684"
+      },
+      "suggestedFix": "Compute the applied signature before opening the transaction - every input (method, drawnImage/typedName, signedAt, ipAddress, userAgent) is already available at line 306 - and use the result inside it. If the invariant is instead meant to bind only providers that touch the network, that is a change to invariant 11 and criterion 12 in the spec, not a comment in the implementation."
+    },
+    {
+      "id": "N1",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/documents/04-signature-providers.md - requirement 24a",
+      "file": "apps/api/src/documents/envelopes.service.ts",
+      "symbol": "EnvelopesService.list",
+      "line": 388,
+      "claim": "Lazy convergence is wired into the envelope detail read (EnvelopesService.get) and the signing page read (SigningService.view), but not into the documents list. Requirement 24a says 'any read of a non-terminal envelope'. Detail-only is defensible - the spec own blast radius warns about the provider budget, and converging a page of fifty envelopes would spend fifty calls - but the narrowing is written down nowhere.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Requirement 24a: 'Any read of a non-terminal envelope whose providerKey is remote and whose providerSyncedAt is older than PROVIDER_SYNC_STALE_SECONDS (default 120) triggers a synchronous re-fetch before the response is composed.' Only EnvelopesService.get and SigningService.view call reconciler.convergeIfStale.",
+        "source": "specs/documents/04-signature-providers.md:402"
+      },
+      "suggestedFix": "Say in the reconciler or in the list handler why the list is excluded, or narrow requirement 24a to a single-envelope read."
+    },
+    {
+      "id": "N2",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/documents/04-signature-providers.md - TC-04-E2E-05",
+      "file": "e2e/tests/signature-providers.spec.ts",
+      "symbol": "TC-04-E2E-05",
+      "line": 327,
+      "claim": "envelope-certificate-link is asserted absent, but no element with that testid exists anywhere in apps/web, so the assertion passes vacuously and would keep passing if a certificate link were added for the internal provider only. Relatedly the API now returns provider.certificateIssued and no screen reads it.",
+      "witness": {
+        "kind": "test",
+        "detail": "TC-04-E2E-05 expected result 4, 'No Certificate of Completion is listed'. Searching apps/web for envelope-certificate-link returns nothing; the only occurrence in the repository is the assertion itself at e2e/tests/signature-providers.spec.ts:327. certificateIssued is declared in apps/web/src/documents/envelopes.ts:144 and never referenced by a component.",
+        "source": "specs/documents/04-signature-providers.md:1552"
+      },
+      "suggestedFix": "Either render the certificate link on the detail screen when provider.certificateIssued is true, which makes the absent-assertion meaningful, or record in the spec that the control does not exist yet and retire the assertion."
+    },
+    {
+      "id": "N3",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/documents/04-signature-providers.md - requirement 2",
+      "file": "apps/api/src/organizations/signing-settings.service.ts",
+      "symbol": "SigningSettingsService.liveChecks",
+      "line": 190,
+      "claim": "The live connection check branches on the capability (notifications !== webhook) but then calls the SignWell client specifically, so a second webhook-based provider would be pinged against SignWell /me and /hooks and reported reachable or not on the strength of a different vendor answer.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Requirement 2: 'Every provider declares a ProviderCapabilities record. The envelope service branches on the capability, never on the key, so a third provider needs no new if in the service.' SigningSettingsService injects SignWellHttpClient directly (line 58) and calls this.signwell.ping() and this.signwell.hooks() for any provider whose capabilities.notifications is webhook.",
+        "source": "specs/documents/04-signature-providers.md:164"
+      },
+      "suggestedFix": "Move the reachability and hook checks behind an optional port method on the adapter so the registry answers them per provider."
+    },
+    {
+      "id": "N4",
+      "target": "spec",
+      "severity": "note",
+      "rule": "specs/documents/04-signature-providers.md - requirement 38 and Error Messages",
+      "file": "apps/api/src/documents/envelopes.service.ts",
+      "symbol": "EnvelopesService.providerSendFailure",
+      "line": 1,
+      "claim": "A text-tag materialization failure is reported to the sender with the provider-unavailable copy, 'Signing service is unavailable. Nothing was sent - try again shortly.', but retrying will fail identically every time because the tags will not parse on the next attempt either. The machine-readable error code and the expected/received lists are correct; only the sentence is wrong, and the spec supplies no other.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Requirement 38: 'On mismatch the send deletes the document, leaves the envelope in draft, and reports document_fields_not_materialized naming what was expected and what came back.' The Error Messages table has no row for this case, so the implementation reuses send.providerUnavailable, which is the only string available to it. Nothing in the spec fixes the text, which is why this is a note.",
+        "source": "specs/documents/04-signature-providers.md:513"
+      },
+      "suggestedFix": "Add a row to the Error Messages table for document_fields_not_materialized and put the string in packages/validation alongside the others."
+    }
+  ]
+}

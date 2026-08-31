@@ -20,6 +20,49 @@ const designSystem = path.resolve(here, '../../1_DS for dev');
  */
 const apiOrigin = process.env.API_ORIGIN || 'http://localhost:4000';
 
+/**
+ * The origin the embedded signing widget is served from (documents spec 04).
+ *
+ * **Read at build time, for exactly the reason `API_ORIGIN` above is.** `headers()` is
+ * resolved during `next build` and written into `.next/routes-manifest.json` just like
+ * `rewrites()`, so setting this on a running container does nothing at all, silently, and
+ * the browser goes on refusing the frame.
+ *
+ * It exists because `/sign/*` carries a policy whose `frame-src` is `'self'` — see
+ * `headers()` below — and a `<iframe src="https://www.signwell.com/…">` on that page is
+ * refused outright without it. Nothing else in the policy changes: `script-src` in
+ * particular is **not** widened, because no vendor script is loaded. The widget is hosted
+ * in our own frame with our own origin-checked `postMessage` listener, precisely so that
+ * the one page in the product that renders author-controlled HTML without a session never
+ * executes third-party code.
+ */
+const embedOrigin = process.env.SIGNING_EMBED_ORIGIN || 'https://www.signwell.com';
+
+/**
+ * The two origins the product's typefaces come from (BUG-006).
+ *
+ * The design system pairs Space Grotesk with IBM Plex Sans and loads both from Google:
+ * `@ds/styles.css` imports `tokens/fonts.css`, whose first statement is an `@import` of
+ * `fonts.googleapis.com`. Webpack does not resolve a remote `@import` — it hoists it — so
+ * the request is made by the browser, at runtime, from whatever page loaded the bundle.
+ *
+ * That is invisible on every other route, because `/sign/*` is the only one with a policy.
+ * There it was refused, and the one page a counterparty ever sees was the one page in the
+ * product rendering in the browser's fallback sans-serif — silently, because `display=swap`
+ * paints the fallback first and the swap simply never came.
+ *
+ * **Both are needed and they are not interchangeable.** `fonts.googleapis.com` serves the
+ * stylesheet, which `style-src` governs; that stylesheet's every `src` points at
+ * `fonts.gstatic.com`, which `font-src` governs. Widening one leaves the same fallback
+ * behind a different console message.
+ *
+ * Self-hosting the two faces would remove both — and remove a third-party request made by
+ * a counterparty who never chose us — and is recorded in BUG-006 as the better answer that
+ * was not taken here. The design system's own fonts file documents how.
+ */
+const fontStylesheetOrigin = 'https://fonts.googleapis.com';
+const fontFileOrigin = 'https://fonts.gstatic.com';
+
 /** @type {import('next').NextConfig} */
 export default {
   /**
@@ -70,6 +113,10 @@ export default {
    * middleware. That is an accepted, recorded weakening — and it is not what stands
    * between a malicious template and this page. The empty sandbox is.
    *
+   * `style-src` and `font-src` each name one Google Fonts origin, for the reason given at
+   * `fontStylesheetOrigin` above: the design system's typefaces are loaded from there by
+   * every page, and this is the only page whose policy could refuse them.
+   *
    * `'unsafe-eval'` is added **in development only**. `next dev` compiles client chunks
    * with an `eval`-based devtool, so without it this one route never hydrates at all: the
    * page stops at its loading spinner and no signer can sign locally or under the E2E
@@ -87,11 +134,12 @@ export default {
               `script-src 'self' 'unsafe-inline'${
                 process.env.NODE_ENV === 'production' ? '' : " 'unsafe-eval'"
               }`,
-              "style-src 'self' 'unsafe-inline'",
+              `style-src 'self' 'unsafe-inline' ${fontStylesheetOrigin}`,
               "img-src 'self' data: blob:",
-              "font-src 'self' data:",
+              `font-src 'self' data: ${fontFileOrigin}`,
               "connect-src 'self'",
-              "frame-src 'self'",
+              // Widened by exactly one origin, from the build-time variable above.
+              `frame-src 'self' ${embedOrigin}`,
               "object-src 'none'",
               "base-uri 'none'",
               "form-action 'self'",

@@ -1,0 +1,399 @@
+{
+  "runId": "2026-08-28T13-48-53_documents-04-signature-providers",
+  "spec": "specs/documents/04-signature-providers.md",
+  "specSha": "c1b8461749fba72902637b89c147e3dd6022c29936d70a385dec1c546c1f85c1",
+  "task": "documents-04-signature-providers",
+  "branch": "spec/signwell-provider",
+  "baseRef": "57d55acd03b825aeed9c85836e85138f12b01be1",
+  "status": "halted",
+  "createdAt": "2026-08-28T13:48:53.578Z",
+  "updatedAt": "2026-08-28T16:42:33.823Z",
+  "stages": {
+    "preflight": {
+      "status": "passed",
+      "attempts": 1
+    },
+    "pre_implement": {
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-08-28T13:48:53.771Z",
+      "endedAt": "2026-08-28T14:07:50.146Z",
+      "lastVerdict": "pass"
+    },
+    "implement": {
+      "status": "passed",
+      "attempts": 6,
+      "startedAt": "2026-08-28T16:28:51.481Z",
+      "endedAt": "2026-08-28T16:35:09.563Z",
+      "lastVerdict": "pass"
+    },
+    "static_gate": {
+      "status": "passed",
+      "attempts": 5,
+      "startedAt": "2026-08-28T16:35:09.652Z",
+      "endedAt": "2026-08-28T16:35:09.799Z",
+      "lastVerdict": "pass"
+    },
+    "review": {
+      "status": "blocked",
+      "attempts": 4,
+      "startedAt": "2026-08-28T16:35:09.887Z",
+      "endedAt": "2026-08-28T16:42:33.779Z",
+      "lastVerdict": "blocked"
+    },
+    "qa": {
+      "status": "pending",
+      "attempts": 0
+    }
+  },
+  "budget": {
+    "codeAttempts": 4,
+    "handoffReplans": 0,
+    "infra": 1
+  },
+  "findingHistory": {
+    "pipeline/no-detector-weakening@packages/validation/src/signwell-webhook.test.ts#-": 1,
+    "spec/edge-case-4@apps/api/src/documents/envelopes.service.ts#send": 1,
+    "spec/requirement-33@apps/api/src/organizations/signing-settings.service.ts#inFlightCount": 1,
+    "checklist/partial-failure@apps/api/src/documents/provider-reconciler.service.ts#openNextTurn": 1,
+    "spec/validation-rule-6@apps/api/src/signature/signwell/signwell-signing-provider.ts#testModeFromEnvironment": 1,
+    "specs/documents/04-signature-providers.md/Required data-testid Attributes@specs/documents/04-signature-providers.md#Required data-testid Attributes": 1
+  },
+  "contested": [],
+  "notes": [
+    {
+      "stage": "pre_implement",
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/conflicting-test-id",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "Required data-testid Attributes / TC-04-E2E-05",
+      "claim": "Spec 04 names the envelope-detail download control `envelope-download-button`, while spec 02 defines that same control as `envelope-download-btn` and a shipped E2E test asserts the shipped spelling. Renaming it would edit an existing test, which requirement 10 forbids; keeping it leaves TC-04-E2E-05's selector list wrong.",
+      "witness": {
+        "kind": "rule",
+        "source": "specs/documents/04-signature-providers.md:1118 (\"**Envelope detail:** `envelope-provider`, `envelope-test-badge`, `envelope-download-button`, `envelope-certificate-link` (asserted absent under SignWell)\") and :1513 (TC-04-E2E-05 selectors) versus specs/documents/02-envelopes-and-signing.md:1435 (\"Header actions: `envelope-void-btn`, `envelope-download-btn` (visible only when `canDownload`)\"), the shipped attribute at apps/web/app/org/[orgId]/documents/[envelopeId]/page.tsx:234, and the assertion at e2e/tests/field-autofill.spec.ts:436 (`await expect(page.getByTestId('envelope-download-btn')).toBeEnabled();`).",
+        "detail": "There is exactly one download control on that screen and the two specs spell its id differently. An implementer following spec 04's required list renames the attribute and e2e/tests/field-autofill.spec.ts fails, which spec 04 requirement 10 (\"the existing spec 02 test suite passing unchanged... A test that has to be edited is a defect of this spec's implementation\") and the area README's backward-compatibility item 5 both forbid. An implementer following spec 02 writes TC-04-E2E-05 against a selector spec 04 does not list. The handoff takes the second path — T11 keeps `envelope-download-btn` and TC-04-E2E-05 asserts that id — because it is the only one that does not edit a shipped test. Recorded rather than blocking: the choice is forced, so nothing downstream has to guess, but the spec's list is still wrong and should be corrected rather than left to be rediscovered."
+      },
+      "suggestedFix": "Change `envelope-download-button` to `envelope-download-btn` in spec 04's Required data-testid Attributes list and in TC-04-E2E-05's selectors. While there, note that `envelope-certificate-link` has never existed on that screen, so \"asserted absent\" is vacuously true — either drop it or say which control it would be if a certificate were offered."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/omitted-blast-radius",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "Infrastructure / Blast Radius / TC-04-E2E-02",
+      "claim": "The spec requires an iframe from www.signwell.com on `/sign/{token}`, but `/sign/*` carries a Content-Security-Policy whose `frame-src` is `'self'`, so the browser refuses that frame outright. The spec's Infrastructure and Blast Radius sections do not mention the policy, and widening it is a change to a mitigation the area README lists as required.",
+      "witness": {
+        "kind": "rule",
+        "source": "apps/web/next.config.mjs, headers() for `source: '/sign/:path*'` — the policy array contains `\"frame-src 'self'\"`, alongside the comment \"A restrictive CSP on `/sign/*` and nowhere else.\" specs/documents/README.md, Security surface item 1, lists \"a restrictive CSP on `/sign/*`\" as one of four required mitigations for author-controlled HTML on that page. specs/documents/04-signature-providers.md:1488 (TC-04-E2E-02 expected result 3, \"The frame's `src` is the URL the provider returned\").",
+        "detail": "As the code stands, `<iframe src=\"https://www.signwell.com/docs/...\">` on `/sign/{token}` is blocked by the CSP: TC-04-E2E-02 fails and no counterparty could ever sign through the widget in any environment. The fix is unambiguous and the handoff carries it (T10: widen `frame-src` to `'self'` plus the embed origin, from a build-time variable, changing nothing else in the policy — `headers()` resolves during `next build` exactly like `rewrites()`, so a runtime variable would do nothing, silently). It is recorded rather than blocking because there is only one way forward, but a security control on the product's only session-less, author-HTML-rendering page is being loosened and the spec should say so on the record. The related decision — a plain iframe with our own origin-checked `postMessage` listener rather than SignWell's `SignWellEmbed` SDK, so that `script-src` is NOT widened — is stated in the handoff; the spec's flow text names `SignWellEmbed` while its UI table, TC-04-E2E-02 and edge case 20 all describe our own frame and our own listener."
+      },
+      "suggestedFix": "Add a row to Blast Radius naming the `/sign/*` CSP, the `frame-src` widening the embedded surface requires, and the fact that `script-src` is deliberately not widened because no vendor script is loaded. State in requirement 15 or in the Screens section whether the widget is hosted in our own `<iframe>` with our own `postMessage` listener (which the UI table and edge case 20 imply) or through SignWell's `SignWellEmbed` SDK (which the 'First signer signs' flow, step 5, names), since only the first keeps third-party script off that page."
+    },
+    {
+      "stage": "review",
+      "id": "F1",
+      "target": "code",
+      "severity": "note",
+      "rule": "spec/TC-04-E2E-02",
+      "file": "e2e/tests/signature-providers.spec.ts",
+      "symbol": "FIELDS",
+      "line": 36,
+      "claim": "the E2E template declares a signer-owned field while the SignWell stub materializes only signature fields, so every SignWell send in the E2E suite aborts with document_fields_not_materialized and TC-04-E2E-02, -03 and -05 fail at their precondition",
+      "witness": {
+        "kind": "test",
+        "detail": "TC-04-E2E-02, TC-04-E2E-03 and TC-04-E2E-05 each call useSignWell(request, orgId) and then createEnvelope(..., send: true) against the template built from FIELDS, whose second entry is { key: contractor_bank, required: true, filledBy: signer:contractor } (e2e/tests/signature-providers.spec.ts:31-39), with BODY carrying the literal contractor_bank placeholder (:41). Trace: envelopes.service.openSession sees signingSurface === embedded and calls translateToTextTags, which finds contractor_bank taggable (DEFAULT_SIGNERS in e2e/tests/helpers.ts:204-207 gives role contractor order 2, and createEnvelope fills it) and pushes expectedFields = [{ type: text, recipientNumber: 2, required: true, fieldKey: contractor_bank }] plus one signature per signer (apps/api/src/documents/signwell-text-tags.ts:129-166). StubSignWellHttpClient.createDocument stores one required signature field per recipient and nothing else (apps/api/src/signature/signwell/stub-signwell-http-client.ts:109-118). SignWellSigningProvider.verifyMaterialized then finds no received field of type text for recipient_id 2, so missing names the contractor field, the document is deleted and ProviderFieldsNotMaterializedError is thrown (signwell-signing-provider.ts:230-266), which providerSendFailure turns into 502. e2e/tests/helpers.ts sendEnvelope throws on a non-ok send, so all three cases die in their precondition before a single assertion runs. The stub docstring already states the constraint the spec file violates (stub-signwell-http-client.ts:25-28). TC-04-E2E-01 is unaffected, because its envelope is sent while the organization is still on internal.",
+        "source": "specs/documents/04-signature-providers.md:1483 (TC-04-E2E-02, preconditions: a sent SignWell envelope) and :491 (requirement 38: on mismatch the send deletes the document, leaves the envelope in draft, and reports document_fields_not_materialized)"
+      },
+      "suggestedFix": "Either drop the signer-owned field from the E2E template (make contractor_bank filledBy sender, or remove it from FIELDS and BODY), which is what the stub docstring already assumes, or teach StubSignWellHttpClient.createDocument to materialize a text field per signer-owned tag alongside the signature per recipient.",
+      "demoted": "witness kind \"test\" needs a test id"
+    },
+    {
+      "stage": "review",
+      "id": "F3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/conflicting-test-id",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "Required data-testid Attributes / TC-04-E2E-02",
+      "line": 1116,
+      "claim": "spec 04 names the signing-page canvas sign-signature-canvas, while spec 02 and the shipped component call it signing-signature-canvas; a second instance of the collision pre-implement recorded as P1 for envelope-download-button",
+      "witness": {
+        "kind": "rule",
+        "detail": "Following spec 04 literally would make the TC-04-E2E-02 assertion that our own signature canvas is not rendered vacuously true, since no element has ever carried sign-signature-canvas. The implementation asserts the shipped id instead (e2e/tests/signature-providers.spec.ts:200), which is the only spelling that makes the assertion mean anything and the only one that does not edit a shipped test (requirement 10). Recorded rather than blocking for the same reason P1 was: the choice is forced and the code took the right branch, but the spec 04 selector list is still wrong and should be corrected rather than rediscovered.",
+        "source": "specs/documents/04-signature-providers.md:1116 and :1489 versus specs/documents/02-envelopes-and-signing.md:1467 and apps/web/src/documents/SignaturePad.tsx:161"
+      },
+      "suggestedFix": "Change sign-signature-canvas to signing-signature-canvas in the spec 04 Required data-testid Attributes list and in the TC-04-E2E-02 selectors, alongside the envelope-download-button correction P1 already asked for."
+    },
+    {
+      "stage": "review",
+      "id": "F4",
+      "target": "code",
+      "severity": "note",
+      "rule": "spec/ProviderWebhookEvent.outcome",
+      "file": "apps/api/src/webhooks/signwell-webhook.controller.ts",
+      "symbol": "receive",
+      "line": 117,
+      "claim": "a verified delivery arriving while the adapter is unconfigured is stored with outcome null and processedAt null and is never revisited, and nothing in the codebase ever queries the processedAt index the spec added for exactly that",
+      "witness": {
+        "kind": "scenario",
+        "detail": "The reconcile job is enqueued only when the row was created and the provider is configured (signwell-webhook.controller.ts:117). With SIGNWELL_API_KEY removed (edge case 16) a delivery whose hash still verifies writes a ProviderWebhookEvent row and returns 200, but no job runs, so outcome and processedAt stay null. After the key is restored the row is not revisited: the composite unique key blocks a re-record of the same delivery, and a grep over apps/api/src finds only the create in this controller and the updateMany in provider-reconciler.service.ts:509 - nothing reads by processedAt, which is the index the Data Model adds at :625. Correctness is preserved by requirement 24, since the sweep and the lazy read converge regardless, which is why this is a note: it is timeliness and forensics, but the forensics table accumulates rows whose outcome column claims nothing at all, and the unknown_ref counter does not fire for them either.",
+        "source": "specs/documents/04-signature-providers.md:621 and :625"
+      },
+      "suggestedFix": "Close the row with an explicit outcome when no job is enqueued - a provider_unconfigured value, or reuse error - or add a sweep pass over ProviderWebhookEvent rows with processedAt IS NULL, which is what the processedAt index is for."
+    },
+    {
+      "stage": "review",
+      "id": "F5",
+      "target": "code",
+      "severity": "note",
+      "rule": "pipeline/no-detector-weakening",
+      "file": "packages/validation/src/signwell-webhook.test.ts",
+      "symbol": "readRedacted",
+      "line": 171,
+      "claim": "the returning finding is fixed: the as-any cast is gone and the page grouping it hid is now verified at runtime",
+      "witness": {
+        "kind": "rule",
+        "detail": "A grep for the as-any cast in packages/validation/src/signwell-webhook.test.ts returns nothing. The cast over redacted.data.object.fields has been replaced by readRedacted, which calls redactProviderPayload and then verifies the shape before narrowing: asObject on the root, on event, on data.object and on metadata; asArray on fields and on each page inside it; asArray on recipients (lines 171-196), each throwing a named error on a mismatch. The remaining narrowing at :195 is reached only after those checks and returns the redactor own object rather than a rebuilt copy, so the JSON.stringify totality assertion at :253-270 still covers keys the interface omits. Detection is now stronger than before the cast was introduced: the page count is asserted at :218 and the page array shape at :219, so a redactor flattened to a single map would fail rather than pass hollow.",
+        "source": "packages/validation/src/signwell-webhook.test.ts:171-196 and :212-228"
+      },
+      "suggestedFix": "None - recorded so the fix is on the record rather than inferred from the absence of the finding."
+    },
+    {
+      "stage": "review",
+      "id": "N1",
+      "target": "code",
+      "severity": "note",
+      "rule": "spec/webhook-429-empty-body",
+      "file": "apps/api/src/webhooks/webhook-rate-limit.guard.ts",
+      "symbol": "WebhookRateLimitGuard.canActivate",
+      "line": 58,
+      "claim": "the rate-limited webhook answers 429 with a JSON envelope rather than the empty body the API contract specifies",
+      "witness": {
+        "kind": "rule",
+        "detail": "throw new HttpException('', 429) reaches Nest's default exception layer, which renders a non-object response as { statusCode, message }, so the body on the wire is {\"statusCode\":429,\"message\":\"\"} rather than nothing. There is no global filter (a grep for useGlobalFilters across apps/api/src returns nothing) and WebhookHashRejectedFilter catches only WebhookHashRejected. The 401 path solved exactly this problem the right way: signwell-webhook.guard.ts:70-95 defines a marker exception and a filter that calls response.status(401).end(), with a comment explaining that a JSON envelope is a shape an attacker can compare against. The same reasoning applies one status code over. A note rather than a blocker because the line it contradicts sits in the API Contracts section rather than in a numbered requirement, and the shape it leaks says nothing about which documents we hold.",
+        "source": "specs/documents/04-signature-providers.md:1007 - '- `429` empty body - rate limit'"
+      },
+      "suggestedFix": "Give the 429 the same treatment as the 401: a marker exception plus a filter that ends the response with no body, or extend WebhookHashRejectedFilter to cover both."
+    },
+    {
+      "stage": "review",
+      "id": "N2",
+      "target": "code",
+      "severity": "note",
+      "rule": "checklist/idempotent-paths",
+      "file": "apps/api/src/documents/provider-reconciler.service.ts",
+      "symbol": "applyState",
+      "line": 276,
+      "claim": "convergence has three concurrent triggers and takes no row lock, so two overlapping convergences of one envelope can write the same transition twice and fork the event hash chain",
+      "witness": {
+        "kind": "scenario",
+        "detail": "converge() is reachable from the webhook job (runJob, :113), from any read of a stale envelope (convergeIfStale, called synchronously in EnvelopesService.get at envelopes.service.ts:398) and from the sweep (sweepStale, :157). Its transaction at provider-reconciler.service.ts:276 takes no SELECT ... FOR UPDATE, unlike the send and void paths (envelopes.service.ts:854 and :1328). Scenario: signer 1 signs; SignWell posts document_signed; at the same moment the sender refreshes the envelope page and providerSyncedAt is older than 120 seconds. Both convergences load the envelope with signer 1 still notified, both fetchState and see 'signed', so both write a signed event, both mint a token for signer 2, both write email_accepted and both send an invitation. The two events read the same predecessor, so both carry the same previousEventHash, and verifyChain (packages/validation/src/envelopes.ts:609-628) walks the trail in occurredAt order and reports it broken at the second one - the envelope's own audit tab then says the trail does not verify. Recorded rather than blocking because the codebase already accepts this class of race: the shipped download path writes a downloaded event in a transaction with no envelope lock (envelopes.service.ts:490-497), so two clicks on Download fork the chain the same way today, and holding this diff to a stricter bar than the code it extends would be inventing a standard. It is worth a human's attention because the reconciler is the first writer whose duplicate trigger is the product's own - a webhook overlapping a page load - rather than a user double-clicking.",
+        "source": ".claude/skills/spec/references/checklist.md:20 - 'Every path reachable twice is idempotent, with the mechanism named and a concurrency test.' and :24 - 'Concurrent access to the same row states its locking strategy.'"
+      },
+      "suggestedFix": "Take the same SELECT id FROM \"Envelope\" ... FOR UPDATE the send and void paths take as the first statement of applyState's transaction, and re-read the signers inside it. The provider call already happens before the transaction opens, so invariant 11 is unaffected."
+    },
+    {
+      "stage": "review",
+      "id": "N3",
+      "target": "code",
+      "severity": "note",
+      "rule": "spec/TC-04-E2E-02",
+      "file": "e2e/tests/signature-providers.spec.ts",
+      "symbol": "FIELDS",
+      "line": 39,
+      "claim": "the returning finding is fixed: the E2E template no longer declares a signer-owned field, so no SignWell send in the suite can abort on document_fields_not_materialized",
+      "witness": {
+        "kind": "rule",
+        "detail": "contractor_bank is now { filledBy: 'sender' } (e2e/tests/signature-providers.spec.ts:41-48) and FIELD_VALUES fills both keys (:57-60), so renderEnvelopeDocument substitutes both placeholders and prepareSend's signerOwnedFields is empty (envelopes.service.ts:1113-1120). translateToTextTags then finds no residual {{...}} and emits exactly one signature tag per signer from the signature blocks the renderer appends (signwell-text-tags.ts:155-170, envelope-renderer.ts:190-196), so expectedFields is two required signature fields bound to recipients '1' and '2' - byte for byte what StubSignWellHttpClient.createDocument materializes (stub-signwell-http-client.ts:109-118: one required signature per recipient, recipient_id = String(order)). verifyMaterialized claims both and reports nothing missing. The choice is documented at the head of the file with its reason and with pointers to where the signer-owned tag path is proved instead (TC-04-INT-01, -03a, -03b and TC-04-UNIT-01..03), which is the right level for it.",
+        "source": "e2e/tests/signature-providers.spec.ts:29-48 and apps/api/src/signature/signwell/stub-signwell-http-client.ts:24-28"
+      },
+      "suggestedFix": "None - recorded so the fix is on the record rather than inferred from the absence of the finding."
+    },
+    {
+      "stage": "review",
+      "id": "N4",
+      "target": "code",
+      "severity": "note",
+      "rule": "spec/edge-case-4",
+      "file": "apps/api/src/documents/envelopes.service.ts",
+      "symbol": "abandonSession",
+      "line": 1005,
+      "claim": "the returning finding is fixed: a session the send could not pin is now deleted, and one it could not delete either is marked so the next send adopts it",
+      "witness": {
+        "kind": "rule",
+        "detail": "The catch around the send transaction now calls abandonSession (envelopes.service.ts:955-958), which refuses to touch a document a winning send pinned (the count at :1013-1018 guards the double-click loser against deleting the winner's document), calls provider.cancel, and only if that fails records providerError = ORPHANED_SESSION on the still-draft envelope (:1035-1041). The next send reads the marker and passes adoptExisting (:836-838), and createOrAdopt now searches before creating rather than only after a create that threw (signwell-signing-provider.ts:152-172), so the second send adopts the leftover by metadata.envelope_id instead of opening a second live contract. The double-click half is covered too: the losing send throws notDraft inside the transaction, its own document is not the pinned one, so it is deleted rather than orphaned. One residual window remains and is worth knowing rather than fixing blind: if the provider delete fails and the envelope is no longer draft (the double-click loser), the updateMany at :1035 matches nothing and the leftover survives with only a log line - no marker, and no draft left for a later send to adopt from. That is a double failure, and the cheap alternative would overwrite the winner's providerError, which the code deliberately refuses to do.",
+        "source": "specs/documents/04-signature-providers.md:544 (edge case 4) and :404-417 (requirement 26)"
+      },
+      "suggestedFix": "None required. If the residual window is ever worth closing it wants a place to record an orphan that is not the envelope's own providerError column - a row of its own, or something shaped like the ProviderWebhookEvent forensics table."
+    },
+    {
+      "stage": "review",
+      "id": "N5",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/internal-contradiction",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "Backward Compatibility item 6",
+      "line": 1164,
+      "claim": "backward-compatibility item 6 and the area README's shared-rule table both say providerKey is written at creation and never changes, which requirement 1 and invariant 7 contradict outright",
+      "witness": {
+        "kind": "rule",
+        "detail": "Requirement 1: 'Organization.signatureProviderKey is what the send path reads; Envelope.providerKey is written in the same transaction that flips the envelope to sent' (:147-150), and 'At send and not at creation, deliberately, because the difference is observable' (:152). Invariant 7 agrees: 'written at send ... On a draft it is a default the send overwrites' (:664-667). Backward compatibility 6 then says 'Mechanism: invariant 7 - providerKey is written once at creation and no code path updates it' (:1164), and specs/documents/README.md:57 carries the same stale sentence as a cross-spec shared rule binding spec 02. The implementation follows requirement 1 - creation writes the organization's current key as a display default (envelopes.service.ts:616) and the send overwrites it (:889) - and TC-04-INT-17 pins that reading, so nothing downstream is ambiguous. The guarantee item 6 states (switching never touches an in-flight envelope) does hold; only its mechanism sentence is wrong. A note rather than a halt because the contradiction has exactly one resolution and the code took it.",
+        "source": "specs/documents/04-signature-providers.md:147-152 and :664-667 versus :1164 and specs/documents/README.md:57"
+      },
+      "suggestedFix": "Rewrite item 6's mechanism as 'invariant 7 - providerKey is written at send and no code path updates it afterwards; a draft carries a display default the send overwrites', and correct the README row to 'Envelope.providerKey is written at send and never changes afterwards'."
+    },
+    {
+      "stage": "review",
+      "id": "N6",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/requirement-10",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "requirement 10 / Data Model New Enums",
+      "line": 249,
+      "claim": "requirement 10 forbids editing a spec 02 test while the Data Model requires two new EnvelopeEventType values that a spec 02 unit test counts, so one shipped assertion had to change",
+      "witness": {
+        "kind": "rule",
+        "detail": "Requirement 10: 'The rewrite is verified by the existing spec 02 test suite passing unchanged. A test that has to be edited to accommodate the new port is a signal that behaviour moved, and is a defect of this spec's implementation, not of the test' (:249-251). The Data Model: 'EnvelopeEventType gains provider_synced, provider_error' (:628-630). TC-02-UNIT-02 asserts the enum has exactly fifteen members, so the diff edits it to seventeen (packages/validation/src/envelopes.test.ts:401-412, the only pre-existing assertion this diff changes). No implementation satisfies both sentences. The edit made is the right one - it keeps the count assertion meaningful and names the two additions explicitly - and acceptance criterion 2 narrows the promise to 'Spec 02's integration and E2E suites pass unedited' (:1136), which is what the code delivers: no shipped integration or E2E assertion is touched. Recorded so the next reader does not have to re-derive that the edited unit case is sanctioned.",
+        "source": "specs/documents/04-signature-providers.md:249-251 versus :628-630, and packages/validation/src/envelopes.test.ts:401-412"
+      },
+      "suggestedFix": "Scope requirement 10 the way acceptance criterion 2 already does - the integration and E2E suites pass unedited - and add a clause noting that the enum-count unit assertion moves with the Data Model's two additive values."
+    },
+    {
+      "stage": "review",
+      "id": "F2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/required-testids",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "Required data-testid Attributes",
+      "line": 1116,
+      "claim": "two ids in spec 04's required-testid list contradict the ids spec 02 already ships, and the implementation correctly followed spec 02",
+      "witness": {
+        "kind": "rule",
+        "detail": "Spec 04 lists 'envelope-download-button' (:1118, :1513) and 'sign-signature-canvas' (:1116, :1489). The shipped controls are 'envelope-download-btn' (specs/documents/02-envelopes-and-signing.md:1435, apps/web/app/org/[orgId]/documents/[envelopeId]/page.tsx:259, asserted by e2e/tests/field-autofill.spec.ts:436) and 'signing-signature-canvas' (specs/documents/02-envelopes-and-signing.md:1528, apps/web/src/documents/SignaturePad.tsx:161, asserted by e2e/tests/envelopes-signing.spec.ts:115). Spec 04 requirement 10 forbids editing spec 02's tests to accommodate this work, so renaming was not open to the implementer; e2e/tests/signature-providers.spec.ts:323-326 records the deviation for the download button and silently uses the spec 02 id for the canvas. Two spec sections cannot both be satisfied — the fix belongs in spec 04's list, not in the code.",
+        "source": "specs/documents/04-signature-providers.md:1116"
+      },
+      "suggestedFix": "correct spec 04's testid list and TC-04-E2E-02/05 selectors to envelope-download-btn and signing-signature-canvas"
+    },
+    {
+      "stage": "review",
+      "id": "F3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/requirement-40",
+      "file": "apps/api/src/signature/signwell/signwell-signing-provider.ts",
+      "symbol": "cancel",
+      "line": 375,
+      "claim": "requirement 40's re-read after DELETE is not implemented and cannot be, because requirements 41 and 42 forbid calling the provider for an envelope that is already terminal",
+      "witness": {
+        "kind": "rule",
+        "detail": "Requirement 40 says 'The order is: call DELETE, then re-read. A 404 on the re-read is the expected outcome and confirms the void. A 204 followed by a successful read is impossible and is treated as a provider fault' (specs/documents/04-signature-providers.md:512-522). The implementation calls DELETE only (signwell-signing-provider.ts cancel) and the void writes status=voided; the follow-up converge then returns 'ignored_terminal' before fetchState is reached (provider-reconciler.service.ts:196-201), which is what requirements 41 and 42 demand ('converging would call fetchState on a document that no longer exists and read the resulting 404 as a provider fault'; 'the reconciler must treat 404 on a voided envelope as the settled state and stop calling'). So the '204 then a successful read' fault branch has no home, and TC-04-INT-10b's step 2 passes only because no call is made. The implementation resolved the tension the way the spec's own reasoning points; the spec still says both things.",
+        "source": "specs/documents/04-signature-providers.md:512"
+      },
+      "suggestedFix": "reword requirement 40 so the re-read is the void path's own confirmation before the envelope becomes terminal, or drop the re-read and keep 41/42"
+    },
+    {
+      "stage": "review",
+      "id": "F4",
+      "target": "code",
+      "severity": "note",
+      "rule": "spec/requirement-34",
+      "file": "apps/web/app/org/[orgId]/documents/[envelopeId]/page.tsx",
+      "symbol": "EnvelopeScreen",
+      "line": 237,
+      "claim": "the provider row is rendered for a draft, where it reads 'Signed via Built-in' about a document nothing has executed",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Requirement 34 says 'The envelope detail screen shows which provider executed the document', and requirement 1 says the draft's providerKey is 'a display default ... Nothing reads it as authority before send'. present() always returns provider (envelopes.service.ts:1693-1712) and the screen renders envelope-provider whenever detail.provider exists, so opening a freshly created draft shows 'Signed via Built-in' beside the Draft badge. Harmless but untrue; no test asserts it either way.",
+        "source": "specs/documents/04-signature-providers.md:457"
+      },
+      "suggestedFix": "render the provider row only once the envelope has been sent (status !== draft), where the pinned columns are authoritative"
+    },
+    {
+      "stage": "review",
+      "id": "F2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "specs/documents/04-signature-providers.md/Backward Compatibility 3",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "Backward Compatibility 3",
+      "line": 1151,
+      "claim": "the migration is genuinely additive, but the stated mechanism for deploy-order safety - 'new code tolerates the old schema because every added column has a default it can assume' - is not how the generated Prisma client behaves, so the roll-out window is louder than the spec claims",
+      "witness": {
+        "kind": "scenario",
+        "detail": "make deploy-<env> rolls services out before prisma migrate deploy (CLAUDE.md, 'Watch out for'). In that window the new API is serving against the pre-migration schema. Prisma enumerates columns in its SELECT rather than using SELECT *, so EnvelopesService.load (apps/api/src/documents/envelopes.service.ts, include: { signers, organization, ... }) asks for Envelope.providerTestMode / providerStatus / providerSyncedAt / providerError and EnvelopeSigner.providerRef, and SigningSettingsService.get asks for Organization.signatureProviderKey - every one of which is created by this migration. Until migrate deploy lands, those reads fail with 42703 rather than reading a default, so the document list and detail screens 500 for that window. The migration itself is additive and the rollback direction is fine; what is wrong is the sentence in backward compatibility 3 that says the new code tolerates the old schema. Worth a human's decision because the same shape is true of specs 01-03 and is a property of the deploy runbook, not of this diff.",
+        "source": "specs/documents/04-signature-providers.md:1151"
+      },
+      "suggestedFix": "restate backward compatibility 3 as 'additive, so a rollback needs no schema change' and let the runbook cover the roll-out window, or change the deploy order for migrations that add columns the new code reads on every request"
+    }
+  ],
+  "halt": {
+    "reason": "spec-defect",
+    "detail": "review found a defect in the spec: specs/documents/04-signature-providers.md/Required data-testid Attributes (specs/documents/04-signature-providers.md)",
+    "at": "2026-08-28T16:42:33.822Z"
+  },
+  "preflight": {
+    "at": "2026-08-28T13:48:53.716Z",
+    "checks": [
+      {
+        "name": "branch-not-protected",
+        "ok": true,
+        "detail": "on \"spec/signwell-provider\""
+      },
+      {
+        "name": "spec-unchanged",
+        "ok": true,
+        "detail": "spec sha256 matches the one recorded at init"
+      },
+      {
+        "name": "api-env-present",
+        "ok": true,
+        "detail": "apps/api/.env exists (untracked — a fresh worktree does not get one)"
+      },
+      {
+        "name": "node-modules-present",
+        "ok": true,
+        "detail": "dependencies installed"
+      },
+      {
+        "name": "e2e-ports-free",
+        "ok": true,
+        "detail": "3000 and 4000 are free for the e2e suite"
+      },
+      {
+        "name": "prisma-client-generated",
+        "ok": true,
+        "detail": "prisma client generated (postinstall runs it from apps/api)"
+      },
+      {
+        "name": "migration-baseline",
+        "ok": true,
+        "detail": "11 migrations recorded as the baseline"
+      },
+      {
+        "name": "worktree-clean",
+        "ok": true,
+        "detail": "nothing in flight outside .workflow/"
+      }
+    ],
+    "migrations": [
+      "20260724114549_init",
+      "20260824080000_documents_templates",
+      "20260824090000_documents_envelopes",
+      "20260824100000_documents_member_profile",
+      "20260826121829_add_invitations_and_job_title",
+      "20260827090541_spec_06_account_settings",
+      "20260827093348_spec_07_member_financials",
+      "20260827120241_spec_08_vacation_reserve",
+      "20260827123444_spec_09_vacation_requests",
+      "20260827145447_spec_11_projects",
+      "20260827153333_spec_12_time_tracking"
+    ]
+  }
+}

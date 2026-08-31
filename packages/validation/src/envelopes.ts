@@ -66,7 +66,13 @@ export type PdfStatus = 'not_required' | 'pending' | 'ready' | 'failed';
 
 export const PDF_STATUSES: readonly PdfStatus[] = ['not_required', 'pending', 'ready', 'failed'];
 
-/** The fifteen event types of the audit trail (Data Model → EnvelopeEvent). */
+/**
+ * The event types of the audit trail (Data Model → EnvelopeEvent).
+ *
+ * Spec 04 adds the last two. A `provider_synced` event records the provider key and the
+ * provider's own status string and **nothing else** — no field values, no field keys —
+ * which is spec 02 requirement 40 unchanged rather than relaxed for a second writer.
+ */
 export type EnvelopeEventType =
   | 'created'
   | 'sent'
@@ -82,7 +88,11 @@ export type EnvelopeEventType =
   | 'completed'
   | 'downloaded'
   | 'pdf_failed'
-  | 'tamper_detected';
+  | 'tamper_detected'
+  // Spec 04 — written by the reconciler when a remote provider's state was read and our
+  // rows were moved to it.
+  | 'provider_synced'
+  | 'provider_error';
 
 export const ENVELOPE_EVENT_TYPES: readonly EnvelopeEventType[] = [
   'created',
@@ -100,6 +110,8 @@ export const ENVELOPE_EVENT_TYPES: readonly EnvelopeEventType[] = [
   'downloaded',
   'pdf_failed',
   'tamper_detected',
+  'provider_synced',
+  'provider_error',
 ];
 
 /**

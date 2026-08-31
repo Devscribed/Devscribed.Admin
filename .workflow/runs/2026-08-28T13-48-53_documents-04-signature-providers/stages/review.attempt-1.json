@@ -1,0 +1,87 @@
+{
+  "stage": "review",
+  "status": "blocked",
+  "base": "57d55acd03b825aeed9c85836e85138f12b01be1",
+  "findings": [
+    {
+      "id": "F1",
+      "target": "code",
+      "severity": "blocker",
+      "rule": "spec/TC-04-E2E-02",
+      "file": "e2e/tests/signature-providers.spec.ts",
+      "symbol": "FIELDS",
+      "line": 36,
+      "claim": "the E2E template declares a signer-owned field while the SignWell stub materializes only signature fields, so every SignWell send in the E2E suite aborts with document_fields_not_materialized and TC-04-E2E-02, -03 and -05 fail at their precondition",
+      "witness": {
+        "kind": "test",
+        "detail": "TC-04-E2E-02, TC-04-E2E-03 and TC-04-E2E-05 each call useSignWell(request, orgId) and then createEnvelope(..., send: true) against the template built from FIELDS, whose second entry is { key: contractor_bank, required: true, filledBy: signer:contractor } (e2e/tests/signature-providers.spec.ts:31-39), with BODY carrying the literal contractor_bank placeholder (:41). Trace: envelopes.service.openSession sees signingSurface === embedded and calls translateToTextTags, which finds contractor_bank taggable (DEFAULT_SIGNERS in e2e/tests/helpers.ts:204-207 gives role contractor order 2, and createEnvelope fills it) and pushes expectedFields = [{ type: text, recipientNumber: 2, required: true, fieldKey: contractor_bank }] plus one signature per signer (apps/api/src/documents/signwell-text-tags.ts:129-166). StubSignWellHttpClient.createDocument stores one required signature field per recipient and nothing else (apps/api/src/signature/signwell/stub-signwell-http-client.ts:109-118). SignWellSigningProvider.verifyMaterialized then finds no received field of type text for recipient_id 2, so missing names the contractor field, the document is deleted and ProviderFieldsNotMaterializedError is thrown (signwell-signing-provider.ts:230-266), which providerSendFailure turns into 502. e2e/tests/helpers.ts sendEnvelope throws on a non-ok send, so all three cases die in their precondition before a single assertion runs. The stub docstring already states the constraint the spec file violates (stub-signwell-http-client.ts:25-28). TC-04-E2E-01 is unaffected, because its envelope is sent while the organization is still on internal.",
+        "source": "specs/documents/04-signature-providers.md:1483 (TC-04-E2E-02, preconditions: a sent SignWell envelope) and :491 (requirement 38: on mismatch the send deletes the document, leaves the envelope in draft, and reports document_fields_not_materialized)"
+      },
+      "suggestedFix": "Either drop the signer-owned field from the E2E template (make contractor_bank filledBy sender, or remove it from FIELDS and BODY), which is what the stub docstring already assumes, or teach StubSignWellHttpClient.createDocument to materialize a text field per signer-owned tag alongside the signature per recipient."
+    },
+    {
+      "id": "F2",
+      "target": "code",
+      "severity": "blocker",
+      "rule": "spec/edge-case-4",
+      "file": "apps/api/src/documents/envelopes.service.ts",
+      "symbol": "send",
+      "line": 816,
+      "claim": "a remote document created by createSession is orphaned forever when the transaction after it fails, because the retry never looks for it: createOrAdopt searches by metadata.envelope_id only when the create itself failed",
+      "witness": {
+        "kind": "scenario",
+        "detail": "An organization on signwell sends an envelope whose SES invitation the transport rejects. send() calls openSession outside the transaction (envelopes.service.ts:816), so SignWell document D1 is created, polled to Sent and verified. The transaction then throws MailDeliveryFailure at :933, everything rolls back, and the response is 502 mail_delivery_failed with the envelope still draft; nothing in the catch at :955-962 cancels or records D1, so D1 stays open on SignWell with the real counterparties as recipients and live embedded_signing_url values. The sender presses Send again. SignWellSigningProvider.createOrAdopt calls http.createDocument first and falls into findOrphan only when that throws (signwell-signing-provider.ts:152-167); the create succeeds, so the orphan is never searched for. Document D2 is created, the envelope pins D2, and D1 is never adopted, never deleted and never reachable again - every webhook it fires records outcome = unknown_ref. Spec edge case 4 requires the opposite: an orphan exists on their side, the next send adopts it by metadata.envelope_id (requirement 26), and the envelope stays draft meanwhile. The same hole is reachable a second way, by double-click: two concurrent sends both pass this.assertDraft(envelope) at :800 before either reaches the FOR UPDATE lock at :828, so both call createSession; the losing transaction throws notDraft and its document is orphaned with no draft left for a later send to adopt from, which also breaks requirement 5 (createSession is called exactly once per envelope).",
+        "source": "specs/documents/04-signature-providers.md:544 (edge case 4) and :203 (requirement 5)"
+      },
+      "suggestedFix": "Search for the orphan before creating rather than only after a failed create - have createOrAdopt run findOrphan(envelopeId) first when the envelope holds no providerRef yet, or pass a flag from the send path saying a previous attempt may have left one. Separately, delete the document the send just created when the transaction rolls back (deleteQuietly or provider.cancel in the catch at envelopes.service.ts:955), which closes the double-click case where no draft remains to adopt from."
+    },
+    {
+      "id": "F3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/conflicting-test-id",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "Required data-testid Attributes / TC-04-E2E-02",
+      "line": 1116,
+      "claim": "spec 04 names the signing-page canvas sign-signature-canvas, while spec 02 and the shipped component call it signing-signature-canvas; a second instance of the collision pre-implement recorded as P1 for envelope-download-button",
+      "witness": {
+        "kind": "rule",
+        "detail": "Following spec 04 literally would make the TC-04-E2E-02 assertion that our own signature canvas is not rendered vacuously true, since no element has ever carried sign-signature-canvas. The implementation asserts the shipped id instead (e2e/tests/signature-providers.spec.ts:200), which is the only spelling that makes the assertion mean anything and the only one that does not edit a shipped test (requirement 10). Recorded rather than blocking for the same reason P1 was: the choice is forced and the code took the right branch, but the spec 04 selector list is still wrong and should be corrected rather than rediscovered.",
+        "source": "specs/documents/04-signature-providers.md:1116 and :1489 versus specs/documents/02-envelopes-and-signing.md:1467 and apps/web/src/documents/SignaturePad.tsx:161"
+      },
+      "suggestedFix": "Change sign-signature-canvas to signing-signature-canvas in the spec 04 Required data-testid Attributes list and in the TC-04-E2E-02 selectors, alongside the envelope-download-button correction P1 already asked for."
+    },
+    {
+      "id": "F4",
+      "target": "code",
+      "severity": "note",
+      "rule": "spec/ProviderWebhookEvent.outcome",
+      "file": "apps/api/src/webhooks/signwell-webhook.controller.ts",
+      "symbol": "receive",
+      "line": 117,
+      "claim": "a verified delivery arriving while the adapter is unconfigured is stored with outcome null and processedAt null and is never revisited, and nothing in the codebase ever queries the processedAt index the spec added for exactly that",
+      "witness": {
+        "kind": "scenario",
+        "detail": "The reconcile job is enqueued only when the row was created and the provider is configured (signwell-webhook.controller.ts:117). With SIGNWELL_API_KEY removed (edge case 16) a delivery whose hash still verifies writes a ProviderWebhookEvent row and returns 200, but no job runs, so outcome and processedAt stay null. After the key is restored the row is not revisited: the composite unique key blocks a re-record of the same delivery, and a grep over apps/api/src finds only the create in this controller and the updateMany in provider-reconciler.service.ts:509 - nothing reads by processedAt, which is the index the Data Model adds at :625. Correctness is preserved by requirement 24, since the sweep and the lazy read converge regardless, which is why this is a note: it is timeliness and forensics, but the forensics table accumulates rows whose outcome column claims nothing at all, and the unknown_ref counter does not fire for them either.",
+        "source": "specs/documents/04-signature-providers.md:621 and :625"
+      },
+      "suggestedFix": "Close the row with an explicit outcome when no job is enqueued - a provider_unconfigured value, or reuse error - or add a sweep pass over ProviderWebhookEvent rows with processedAt IS NULL, which is what the processedAt index is for."
+    },
+    {
+      "id": "F5",
+      "target": "code",
+      "severity": "note",
+      "rule": "pipeline/no-detector-weakening",
+      "file": "packages/validation/src/signwell-webhook.test.ts",
+      "symbol": "readRedacted",
+      "line": 171,
+      "claim": "the returning finding is fixed: the as-any cast is gone and the page grouping it hid is now verified at runtime",
+      "witness": {
+        "kind": "rule",
+        "detail": "A grep for the as-any cast in packages/validation/src/signwell-webhook.test.ts returns nothing. The cast over redacted.data.object.fields has been replaced by readRedacted, which calls redactProviderPayload and then verifies the shape before narrowing: asObject on the root, on event, on data.object and on metadata; asArray on fields and on each page inside it; asArray on recipients (lines 171-196), each throwing a named error on a mismatch. The remaining narrowing at :195 is reached only after those checks and returns the redactor own object rather than a rebuilt copy, so the JSON.stringify totality assertion at :253-270 still covers keys the interface omits. Detection is now stronger than before the cast was introduced: the page count is asserted at :218 and the page array shape at :219, so a redactor flattened to a single map would fail rather than pass hollow.",
+        "source": "packages/validation/src/signwell-webhook.test.ts:171-196 and :212-228"
+      },
+      "suggestedFix": "None - recorded so the fix is on the record rather than inferred from the absence of the finding."
+    }
+  ]
+}

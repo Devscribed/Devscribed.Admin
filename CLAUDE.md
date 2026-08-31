@@ -74,9 +74,15 @@ in its spec as `- **Retired.**` naming what covers the rule now.
 **Agents run tests targeted, never whole.** `npm run test:unit` runs in full — it is under a
 second. `npm run test:int` and `npm run test:e2e` are for a person and for the deploy gate; an
 agent runs the files its diff touches (`npm test -- test/<file>.spec.ts` from `apps/api`,
-`CI=1 npx playwright test tests/<file>.spec.ts tests/regressions.spec.ts` from `e2e`). Jest here
-is 29, where the file filter is a positional path: `--testPathPatterns` is the Jest 30 spelling
-and this version ignores it silently, running everything while the log says otherwise.
+`E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/<file>.spec.ts
+tests/regressions.spec.ts` from `e2e`). Jest here is 29, where the file filter is a positional
+path: `--testPathPatterns` is the Jest 30 spelling and this version ignores it silently,
+running everything while the log says otherwise.
+
+**An agent's e2e run holds its own ports**, as above — 3000 and 4000 belong to whoever is
+working, and the database follows the ports and is never `devscribed_dev`. Reusing a running
+dev server is not the alternative: it is configured for development and its signing provider
+is the real one. To look at a screen, start a pair on those ports rather than borrowing one.
 
 **Navigation.** No dead links. A nav item that the current role cannot use is not rendered.
 
@@ -94,6 +100,11 @@ and this version ignores it silently, running everything while the log says othe
 - **`prisma generate` runs from `apps/api`**, which is where `postinstall` runs it. Running it
   from the repository root produces a client that cannot find `apps/api/.env`, and the app then
   starts and fails its first query with "client password must be a string".
+- **Never write file content through a shell heredoc.** A backslash escape does not survive the
+  trip: `'\n'` arrives as a real newline and the file no longer parses. Use the editor tool for
+  file content; when a script must build a newline, `String.fromCharCode(10)`.
+- **Probe a busy port by connecting, not by binding.** On Windows a server on `0.0.0.0` does not
+  prevent a second bind to `127.0.0.1`, so a bind test reports every port free.
 - Migrations should be **additive**. `make deploy-<env>` rolls the services out and *then* runs
   `prisma migrate deploy`, so the new code is serving before the schema changes — which is only
   safe because migrations are additive. This is a rule, not an observation about the current
@@ -120,3 +131,35 @@ contests halts the run for a person instead of spending another attempt. The run
 
 The pipeline stops at a green branch. It never merges and never pushes — see the note about
 `main` above.
+
+**Agent prompts are rules only.** A definition under `.claude/agents/` states the desired
+behaviour and the prohibitions, in as few words as state them. Never put in a prompt:
+
+- measurements, counts, timings or costs from this project;
+- what happened on an earlier run, or what some agent did last time;
+- why a rule exists, what it replaced, or a link to the reasoning.
+
+Write the conclusion, not the evidence for it. "Never run the whole E2E suite" is the rule; the
+numbers that made it true belong in `docs/`, written for people. Every sentence of
+justification is paid for on every invocation and changes no behaviour.
+
+## Record what you learn
+
+Two directories, two readers, and neither is an agent at runtime.
+
+**[docs/adr/](docs/adr/) — decisions.** One file per decision that was not obvious, cost
+something to learn, or will be re-litigated. Write it when a rule changes: a new convention, a
+reversed one, a constraint nobody would guess from the code. Say what the rule is, what it
+replaced, what it costs. Never delete a superseded record — mark it superseded and leave the
+evidence, because the next person to propose the old idea needs to find it.
+
+**[docs/research/](docs/research/) — measurements.** Write one when a change is driven by a
+number: a benchmark, an experiment, a comparison of two approaches. State the ground truth
+first and how it was established, then every configuration you ran and what came back.
+
+**Record the hypotheses that died.** A measurement that killed an idea is the most valuable
+thing in either directory, and the easiest to lose, because nobody writes down what they
+stopped believing. Give it a heading of its own and name what disproved it.
+
+Numbers come from artefacts on disk — a log, a transcript, a verdict — never from an agent's
+summary of itself. A claim you cannot point at is not a measurement.

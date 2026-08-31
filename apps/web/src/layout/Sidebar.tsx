@@ -137,6 +137,24 @@ function navigation(
     groups.push({ label: 'Documents', entries: documents });
   }
 
+  // Spec 04 — the product's first settings destination. Gated on `ViewSigningSettings`,
+  // so `user` and `viewer` see no Settings group at all: the row is omitted rather than
+  // drawn-and-disabled, and the group with no rows is dropped label and all by the filter
+  // below. No dead links.
+  if (hasCapability(role, 'ViewSigningSettings')) {
+    groups.push({
+      label: 'Settings',
+      entries: [
+        {
+          testId: 'nav-settings',
+          label: 'Signing',
+          href: `/org/${orgId}/settings/signing`,
+          icon: <DocumentsIcon />,
+        },
+      ],
+    });
+  }
+
   return groups.filter((group) => group.entries.length > 0);
 }
 

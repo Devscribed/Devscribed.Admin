@@ -52,24 +52,27 @@ Code and tests that satisfy the handoff, plus a stage report at
 ## Before you report done
 
 Run what you can run: `npm run test:unit`, a type check, and **the integration suites your
-diff touches** — from `apps/api`, `npm test -- test/<file>.spec.ts`, naming the files. Do not
-hand work to the next stage that you have not tried yourself: a stage that reports success it
-did not verify wastes an entire downstream cycle.
+diff touches** — from `apps/api`, `npm test -- test/<file>.spec.ts`, naming the files. Never
+report a check you did not run.
 
-**Do not run E2E, and do not run integration in full.** E2E costs about eight seconds a case
-and the full integration suite about a minute; both already run, sharded, on the deploy gate,
-and QA runs the targeted set right after you. Jest here is 29, so the file filter is a
-positional path — `--testPathPatterns` is silently ignored and runs all 334 tests while the
-log says you filtered.
+**Do not run E2E, and do not run integration in full.** Filter Jest with a positional path;
+never `--testPathPatterns`, which this version ignores in silence and runs everything while
+your log says you filtered.
 
 **Then commit, on the working branch, in one commit.** Not optional: the reviewer reads
 `git diff <baseRef>...HEAD`, so work left uncommitted makes that diff empty and the review
 silently falls back to the whole worktree — every unrelated edit on the machine included. A
 verdict about the wrong set of files is worse than no verdict.
 
-On a retry, amend rather than stack: one run, one commit, so the diff the reviewer reads is
-always the finished state and never a history of attempts. Never `git push` — the pipeline
-stops at a green branch and a person opens the PR.
+**On a retry, add a commit. Never amend, never rebase, never force.** Every gate downstream
+needs a permanent name for the state it judged. Name the commit for the attempt and the
+findings it closes:
+
+```
+implement 4: never repeat a create that may already have landed (review 2 F1)
+```
+
+Never `git push` — the pipeline stops at a green branch and a person opens the PR.
 
 ## Your verdict
 

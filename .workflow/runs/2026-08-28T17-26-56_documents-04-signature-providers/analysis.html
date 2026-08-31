@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Разбор прогона — spec documents/04 signature-providers</title>
+<style>
+  :root{
+    --ink:#16181d; --muted:#6b7280; --line:#e3e6ea; --bg:#fbfbfc; --card:#fff;
+    --pre:#8b5cf6; --imp:#2563eb; --rev:#e0761b; --qa:#0d9488; --gate:#94a3b8;
+    --bad:#dc2626; --ok:#16a34a; --warn:#ca8a04;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1120px;margin:0 auto;padding:40px 28px 96px}
+  h1{font-size:30px;line-height:1.2;margin:0 0 6px;letter-spacing:-.02em}
+  h2{font-size:21px;margin:52px 0 4px;letter-spacing:-.01em;padding-top:18px;border-top:1px solid var(--line)}
+  h3{font-size:16px;margin:28px 0 8px}
+  .sub{color:var(--muted);margin:0 0 28px}
+  p{margin:10px 0}
+  code,.mono{font-family:var(--mono);font-size:12.5px}
+  code{background:#f2f3f5;padding:1px 5px;border-radius:4px}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-weight:600;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em;
+     border-bottom:1px solid #cfd4da;white-space:nowrap}
+  td.n,th.n{text-align:right;font-family:var(--mono);font-size:12.5px;white-space:nowrap}
+  tr.tot td{font-weight:700;border-top:2px solid #cfd4da;border-bottom:none;background:#f6f7f9}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:12px;margin:22px 0 6px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:13px 15px}
+  .card .k{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .card .v{font-size:25px;font-weight:660;letter-spacing:-.02em;margin-top:3px}
+  .card .n{font-size:12px;color:var(--muted);margin-top:2px}
+  .gantt{position:relative;background:var(--card);border:1px solid var(--line);border-radius:9px;
+         padding:16px 16px 8px;margin:18px 0}
+  .row{position:relative;height:25px;margin-bottom:3px}
+  .lab{position:absolute;left:0;top:4px;width:112px;font-size:11.5px;color:var(--muted);font-family:var(--mono)}
+  .track{position:absolute;left:118px;right:8px;top:0;height:25px}
+  .bar{position:absolute;top:3px;height:19px;border-radius:4px;color:#fff;font-size:11px;line-height:19px;
+       padding:0 6px;white-space:nowrap;overflow:hidden}
+  .bar.pre{background:var(--pre)} .bar.imp{background:var(--imp)} .bar.rev{background:var(--rev)}
+  .bar.qa{background:var(--qa)} .bar.abort{background:repeating-linear-gradient(45deg,#dc2626,#dc2626 5px,#b91c1c 5px,#b91c1c 10px)}
+  .gate{position:absolute;top:1px;width:3px;height:23px;background:var(--gate);border-radius:2px}
+  .mark{position:absolute;top:0;bottom:22px;width:2px;background:#111;opacity:.5}
+  .marklab{position:absolute;font-size:10px;color:#111;font-family:var(--mono);white-space:nowrap;
+           transform:translateX(-50%);background:#fff;padding:0 3px}
+  .axis{position:relative;height:18px;margin-left:118px;margin-right:8px;border-top:1px solid var(--line);margin-top:6px}
+  .tick{position:absolute;font-size:10.5px;color:var(--muted);transform:translateX(-50%);top:2px;font-family:var(--mono)}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:8px 0 0 118px}
+  .sw{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:5px}
+  .split{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:15px 16px;margin:16px 0}
+  .sr{display:grid;grid-template-columns:112px 1fr 74px;gap:10px;align-items:center;margin-bottom:5px;font-size:12px}
+  .sr .n2{font-family:var(--mono);color:var(--muted);text-align:right;font-size:11.5px}
+  .sbar{height:15px;border-radius:3px;overflow:hidden;display:flex;background:#eef0f3}
+  .sbar i{display:block;height:100%}
+  .think{background:#c7d2fe} .tools{background:#1e3a8a}
+  .hbar{height:14px;border-radius:3px;background:#dbe3f5;position:relative;min-width:2px}
+  .hbar i{display:block;height:100%;border-radius:3px;background:var(--imp)}
+  blockquote{margin:14px 0;padding:11px 15px;background:#fff;border-left:3px solid var(--warn);
+             border-radius:0 7px 7px 0;font-size:13.5px}
+  blockquote.bad{border-left-color:var(--bad)}
+  blockquote.ok{border-left-color:var(--ok)}
+  .pill{display:inline-block;font-size:11px;padding:1px 7px;border-radius:20px;font-weight:600;white-space:nowrap}
+  .p-block{background:#fee2e2;color:#991b1b} .p-pass{background:#dcfce7;color:#166534}
+  .p-note{background:#fef3c7;color:#854d0e} .p-err{background:#e0e7ff;color:#3730a3}
+  .p-code{background:#eef2ff;color:#3730a3} .p-spec{background:#fce7f3;color:#9d174d}
+  .p-handoff{background:#f1f5f9;color:#334155} .p-self{background:#f1f5f9;color:#334155}
+  .foot{color:var(--muted);font-size:12.5px;margin-top:8px}
+  ul{margin:9px 0;padding-left:22px} li{margin:5px 0}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  @media(max-width:820px){.two{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Прогон spec <span class="mono">documents/04-signature-providers</span></h1>
+<p class="sub">28 августа 2026, 20:26:59 → 23:12:43 · ветка <span class="mono">spec/signwell-provider</span> ·
+   финальный статус <b>ready</b> · всё измерено по <span class="mono">stages/*.log</span> и
+   <span class="mono">events.jsonl</span> самого прогона, не по отчётам агентов о себе.</p>
+
+<div class="cards">
+  <div class="card"><div class="k">Общее время</div><div class="v">2 ч 46 м</div><div class="n">9 944 с от первого агента до последнего</div></div>
+  <div class="card"><div class="k">Стоимость</div><div class="v">$108.61</div><div class="n">13 вызовов агентов</div></div>
+  <div class="card"><div class="k">Диф</div><div class="v">84 файла</div><div class="n">+11 678 / −752</div></div>
+  <div class="card"><div class="k">Возвратов</div><div class="v">4</div><div class="n">3 от review, 1 от QA</div></div>
+  <div class="card"><div class="k">Блокеров</div><div class="v">6</div><div class="n">все закрыты, 0 оспорено</div></div>
+  <div class="card"><div class="k">Заметок</div><div class="v">21</div><div class="n">не блокируют, ждут человека</div></div>
+</div>
+
+<blockquote class="ok"><b>Короткий вывод.</b> Пайплайн отработал ровно так, как задуман: спека дошла до зелёной ветки,
+шесть блокеров были найдены раньше человека, ни один не был оспорен. Но <b>82 % времени — это размышление модели, а не
+выполнение команд</b>, поэтому «убрать лишние проверки» скорость почти не даёт. Реальный рычаг — не заставлять агента
+выводить контекст заново, и это подтвердилось: после включения <code>--resume</code> и передачи прошлых вердиктов
+ревью реализация упала со <b>139 до 36 ходов</b>, а ревью перестало возвращать блокеры порциями.</blockquote>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<h2>1. Хронология</h2>
+<p class="sub" style="margin-bottom:10px">Каждая полоса — один вызов агента. Серые риски — статический гейт
+(миллисекунды, поэтому не виден). Чёрные вертикали — правки самого пайплайна, внесённые <b>на лету</b>, прямо во
+время прогона.</p>
+
+<div class="gantt">
+  <div style="position:relative;height:16px;margin-left:118px;margin-right:8px">
+    <div class="marklab" style="left:47.1%">be64d7c</div>
+    <div class="marklab" style="left:57.4%">7e79f72</div>
+    <div class="marklab" style="left:74.8%">a68b7a6</div>
+  </div>
+  <div style="position:relative;height:16px;margin-left:118px;margin-right:8px">
+    <div class="marklab" style="left:49.5%">0f79bd5</div>
+    <div class="marklab" style="left:60.4%">e981dcd</div>
+  </div>
+
+  <div style="position:relative">
+    <div style="position:absolute;left:118px;right:8px;top:0;bottom:26px;pointer-events:none">
+      <div class="mark" style="left:47.07%"></div>
+      <div class="mark" style="left:49.49%"></div>
+      <div class="mark" style="left:57.36%"></div>
+      <div class="mark" style="left:60.35%"></div>
+      <div class="mark" style="left:74.83%"></div>
+    </div>
+
+    <div class="row"><div class="lab">pre-implement</div><div class="track">
+      <div class="bar pre" style="left:0%;width:11.45%">1 · 19 м · $7.62</div>
+      <div class="bar pre" style="left:31.28%;width:7.85%">2 · 13 м · $5.16</div>
+    </div></div>
+
+    <div class="row"><div class="lab">implement</div><div class="track">
+      <div class="bar imp" style="left:11.49%;width:10.47%">1 · 17 м · $15.68</div>
+      <div class="bar imp" style="left:39.18%;width:10.09%">2 · 17 м · $18.88</div>
+      <div class="bar abort" style="left:55.52%;width:1.85%" title="attempt 3 — убит оператором через 34 с">3✗</div>
+      <div class="bar imp" style="left:57.40%;width:6.23%">4 · 10 м · $9.19</div>
+      <div class="bar imp" style="left:81.87%;width:9.93%">5 · 16 м · $15.81</div>
+    </div></div>
+
+    <div class="row"><div class="lab">static gate</div><div class="track">
+      <div class="gate" style="left:21.96%"></div>
+      <div class="gate" style="left:49.27%"></div>
+      <div class="gate" style="left:63.64%"></div>
+      <div class="gate" style="left:91.79%"></div>
+    </div></div>
+
+    <div class="row"><div class="lab">code review</div><div class="track">
+      <div class="bar rev" style="left:22.01%;width:9.23%">1 · 15 м · $11.10</div>
+      <div class="bar rev" style="left:49.32%;width:6.20%">2 · 10 м · $8.23</div>
+      <div class="bar rev" style="left:63.69%;width:7.98%">3 · 13 м · $8.23</div>
+      <div class="bar rev" style="left:91.83%;width:7.01%">4 · 12 м · $6.89</div>
+    </div></div>
+
+    <div class="row"><div class="lab">QA</div><div class="track">
+      <div class="bar qa" style="left:71.71%;width:1.65%">1✗</div>
+      <div class="bar qa" style="left:73.40%;width:8.42%">2 · 14 м · $1.16</div>
+      <div class="bar qa" style="left:98.87%;width:1.13%">3</div>
+    </div></div>
+  </div>
+
+  <div class="axis">
+    <div class="tick" style="left:0%">20:27</div>
+    <div class="tick" style="left:18.1%">21:00</div>
+    <div class="tick" style="left:36.2%">21:30</div>
+    <div class="tick" style="left:54.3%">22:00</div>
+    <div class="tick" style="left:72.4%">22:30</div>
+    <div class="tick" style="left:90.5%">23:00</div>
+    <div class="tick" style="left:100%">23:13</div>
+  </div>
+  <div class="legend">
+    <span><i class="sw" style="background:var(--pre)"></i>pre-implement (opus)</span>
+    <span><i class="sw" style="background:var(--imp)"></i>implement (opus)</span>
+    <span><i class="sw" style="background:var(--rev)"></i>review (opus)</span>
+    <span><i class="sw" style="background:var(--qa)"></i>QA (sonnet)</span>
+    <span><i class="sw" style="background:var(--gate)"></i>static gate (скрипт)</span>
+    <span><i class="sw" style="background:#dc2626"></i>прерванная попытка</span>
+  </div>
+</div>
+
+<h3>Что означают чёрные вертикали</h3>
+<table>
+  <tr><th>Время</th><th>Коммит</th><th>Что поменяли прямо в прогоне</th><th>С какого шага действует</th></tr>
+  <tr><td class="n">21:45</td><td class="mono">be64d7c</td><td>дайджест считает работу прогона, а не оператора</td><td>implement 4</td></tr>
+  <tr><td class="n">21:49</td><td class="mono">0f79bd5</td><td>реестр покрытия ревью получил тот же скоуп, что и сам ревью (перестал звать читать <span class="mono">digest.json</span> на 8 184 строки)</td><td>review 3</td></tr>
+  <tr><td class="n">22:02</td><td class="mono">7e79f72</td><td><code>--resume</code> берёт id сессии из отчёта агента, а не из журнала</td><td>implement 4</td></tr>
+  <tr><td class="n">22:07</td><td class="mono">e981dcd</td><td>ревью обязано пройти весь диф и только потом писать вердикт; реестр показывает покрытие <i>текущего</i> прохода</td><td>review 3</td></tr>
+  <tr><td class="n">22:31</td><td class="mono">a68b7a6</td><td>тестовая БД узнаёт порт из <span class="mono">.env</span>; стадия отдаёт дальше только свой последний вердикт, а не «первый найденный с блокерами»</td><td>QA 2/3</td></tr>
+</table>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<h2>2. Все вызовы: модель, время, деньги, вердикт</h2>
+
+<table>
+<tr>
+  <th>#</th><th>Стадия</th><th>Модель</th><th class="n">Wall</th><th class="n">API</th>
+  <th class="n">Ходов</th><th class="n">$</th><th class="n">Инстр.</th><th>Вердикт</th><th>Что вернул</th>
+</tr>
+<tr><td class="n">1</td><td>pre-implement 1</td><td class="mono">opus-5</td><td class="n">19:00</td><td class="n">18:43</td><td class="n">80</td><td class="n">7.62</td><td class="n">18 с</td><td><span class="pill p-pass">pass</span></td><td>4 заметки к спеке и к себе</td></tr>
+<tr><td class="n">2</td><td>implement 1</td><td class="mono">opus-5</td><td class="n">17:21</td><td class="n">14:27</td><td class="n">139</td><td class="n">15.68</td><td class="n">177 с</td><td><span class="pill p-pass">pass</span></td><td>10 задач хендоффа</td></tr>
+<tr><td class="n">3</td><td>static gate 1</td><td>—</td><td class="n">&lt;1 с</td><td class="n">—</td><td class="n">—</td><td class="n">0</td><td class="n">—</td><td><span class="pill p-pass">pass</span></td><td>2 правила</td></tr>
+<tr><td class="n">4</td><td>review 1</td><td class="mono">opus-5</td><td class="n">15:18</td><td class="n">13:03</td><td class="n">88</td><td class="n">11.10</td><td class="n">136 с</td><td><span class="pill p-block">blocked</span></td><td><b>2 блокера</b> + 4 заметки</td></tr>
+<tr><td class="n">5</td><td>pre-implement 2</td><td class="mono">opus-5</td><td class="n">13:01</td><td class="n">12:47</td><td class="n">66</td><td class="n">5.16</td><td class="n">18 с</td><td><span class="pill p-pass">pass</span></td><td>переплан (1 из 1 разрешённого)</td></tr>
+<tr><td class="n">6</td><td>implement 2 <span class="mono">↻</span></td><td class="mono">opus-5</td><td class="n">16:43</td><td class="n">14:37</td><td class="n">92</td><td class="n">18.88</td><td class="n">127 с</td><td><span class="pill p-pass">pass</span></td><td>закрыл F1, F2, N1–N3</td></tr>
+<tr><td class="n">7</td><td>static gate 2</td><td>—</td><td class="n">&lt;1 с</td><td class="n">—</td><td class="n">—</td><td class="n">0</td><td class="n">—</td><td><span class="pill p-pass">pass</span></td><td></td></tr>
+<tr><td class="n">8</td><td>review 2</td><td class="mono">opus-5</td><td class="n">10:17</td><td class="n">9:28</td><td class="n">78</td><td class="n">8.23</td><td class="n">53 с</td><td><span class="pill p-block">blocked</span></td><td><b>1 блокер</b> + 3 заметки</td></tr>
+<tr style="background:#fff5f5"><td class="n">9</td><td>implement 3</td><td class="mono">opus-5</td><td class="n">3:04</td><td class="n">0:34</td><td class="n">—</td><td class="n">0</td><td class="n">—</td><td><span class="pill p-err">убит</span></td><td>ресюмнул чужую сессию — дефект пайплайна, не кода</td></tr>
+<tr><td class="n">10</td><td>implement 4 <span class="mono">↻</span></td><td class="mono">opus-5</td><td class="n">10:20</td><td class="n">8:49</td><td class="n">36</td><td class="n">9.19</td><td class="n">91 с</td><td><span class="pill p-pass">pass</span></td><td>закрыл F1 + N1</td></tr>
+<tr><td class="n">11</td><td>static gate 3</td><td>—</td><td class="n">&lt;1 с</td><td class="n">—</td><td class="n">—</td><td class="n">0</td><td class="n">—</td><td><span class="pill p-pass">pass</span></td><td></td></tr>
+<tr><td class="n">12</td><td>review 3</td><td class="mono">opus-5</td><td class="n">13:14</td><td class="n">12:57</td><td class="n">86</td><td class="n">8.23</td><td class="n">18 с</td><td><span class="pill p-pass">pass</span></td><td>0 блокеров, 6 заметок, впервые заявлено покрытие</td></tr>
+<tr><td class="n">13</td><td>QA 1</td><td class="mono">sonnet-5</td><td class="n">2:44</td><td class="n">1:37</td><td class="n">20</td><td class="n">0.41</td><td class="n">65 с</td><td><span class="pill p-err">error</span></td><td>порт 5433 занят двумя серверами — среда, не код</td></tr>
+<tr><td class="n">14</td><td>QA 2</td><td class="mono">sonnet-5</td><td class="n">13:57</td><td class="n">7:28</td><td class="n">57</td><td class="n">1.16</td><td class="n">390 с</td><td><span class="pill p-block">fail</span></td><td><b>3 блокера</b> — падают E2E-01, 02, 04</td></tr>
+<tr><td class="n">15</td><td>implement 5 <span class="mono">↻</span></td><td class="mono">opus-5</td><td class="n">16:27</td><td class="n">9:49</td><td class="n">57</td><td class="n">15.81</td><td class="n">399 с</td><td><span class="pill p-pass">pass</span></td><td>починил три браузерных кейса</td></tr>
+<tr><td class="n">16</td><td>static gate 4</td><td>—</td><td class="n">&lt;1 с</td><td class="n">—</td><td class="n">—</td><td class="n">0</td><td class="n">—</td><td><span class="pill p-pass">pass</span></td><td></td></tr>
+<tr><td class="n">17</td><td>review 4</td><td class="mono">opus-5</td><td class="n">11:37</td><td class="n">11:25</td><td class="n">72</td><td class="n">6.89</td><td class="n">11 с</td><td><span class="pill p-pass">pass</span></td><td>0 блокеров, 2 заметки</td></tr>
+<tr><td class="n">18</td><td>QA 3</td><td class="mono">sonnet-5</td><td class="n">1:52</td><td class="n">0:46</td><td class="n">12</td><td class="n">0.25</td><td class="n">64 с</td><td><span class="pill p-pass">pass</span></td><td>unit 941, int 45, e2e 14 — всё зелёное</td></tr>
+<tr class="tot"><td></td><td>13 вызовов агентов</td><td></td><td class="n">2:45:44</td><td class="n">2:16:22</td><td class="n">883</td><td class="n">108.61</td><td class="n">1 567 с</td><td></td><td></td></tr>
+</table>
+<p class="foot"><span class="mono">↻</span> — вызов с <code>--resume</code>, продолжает ту же сессию
+<span class="mono">1509bc9e</span>. «Инстр.» — суммарное время всех вызовов инструментов, из журнала.</p>
+
+<h3>Модели и effort</h3>
+<table>
+<tr><th>Стадия</th><th>Заявлено в конфиге</th><th>Реально в логах</th><th>Ходов всего</th><th class="n">$</th></tr>
+<tr><td>pre-implement</td><td class="mono">opus, effort: high</td><td class="mono">claude-opus-5</td><td class="n">146</td><td class="n">12.78</td></tr>
+<tr><td>implement</td><td class="mono">opus</td><td class="mono">claude-opus-5</td><td class="n">324</td><td class="n">59.56</td></tr>
+<tr><td>review</td><td class="mono">opus</td><td class="mono">claude-opus-5</td><td class="n">324</td><td class="n">34.45</td></tr>
+<tr><td>QA</td><td class="mono">sonnet</td><td class="mono">claude-sonnet-5</td><td class="n">89</td><td class="n">1.82</td></tr>
+</table>
+
+<blockquote class="bad"><b>Дефект конфига.</b> <code>"effort": "high"</code> у <span class="mono">pre_implement</span> не читает
+никто. В <span class="mono">ship.mjs</span> в командную строку уходит ровно один флаг модели:
+<code>if (model) args.push('--model', model)</code> — слова <span class="mono">effort</span> в скриптах нет вообще
+(проверено <span class="mono">grep</span>: единственное вхождение — сама строка конфига). То есть все четыре агента шли
+на дефолтном уровне рассуждения, а строчка в конфиге создаёт ложную уверенность, что pre-implement настроен иначе.
+Либо прокинуть флаг, либо убрать поле.</blockquote>
+
+<p>В каждом логе дополнительно засветился <span class="mono">claude-haiku-4-5</span> — 1–2 тыс. входных токенов и
+десяток выходных на вызов, $0.00. Это служебная модель рантайма (заголовки сессий и подобное), к работе стадий
+отношения не имеет.</p>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<h2>3. Кто что вернул, кому и почему</h2>
+
+<p>Правило маршрутизации: возвращают <b>только</b> находки с адресом <span class="pill p-code">code</span>.
+<span class="pill p-spec">spec</span> и <span class="pill p-handoff">handoff</span> останавливают прогон или идут в
+переплан, <span class="pill p-note">note</span> не возвращает никогда — накапливается для человека.</p>
+
+<h3>review 1 → 2 блокера</h3>
+<table>
+<tr><th>ID</th><th>Адрес</th><th>Где</th><th>Претензия</th><th>Что сделали</th></tr>
+<tr><td class="mono">F1</td><td><span class="pill p-handoff">handoff</span></td><td class="mono">infra/terraform/…/api.tf</td>
+    <td>Раздел Infrastructure спеки не реализован: диф не трогает <span class="mono">infra/</span>, три переменные
+        SignWell не доезжают до ECS — фича мертва в любом задеплоенном окружении. Ни одна задача хендоффа не называет
+        <span class="mono">infra/</span>.</td>
+    <td><b>Переплан.</b> Адрес <span class="mono">handoff</span> — значит виноват план, а не код. Роутер отправил
+        работу в pre-implement (1 из 1 разрешённого переплана), появились задачи T11/T12, и implement 2 добавил
+        8 файлов терраформа.</td></tr>
+<tr><td class="mono">F2</td><td><span class="pill p-code">code</span></td><td class="mono">signing.service.ts#sign</td>
+    <td>Вызов провайдера внутри транзакции: <span class="mono">applySignature</span> ждётся между
+        <span class="mono">FOR UPDATE</span> и коммитом — инвариант 11 запрещает это без оговорок.</td>
+    <td>Исправлено в implement 2: сетевой вызов вынесен за границу транзакции.</td></tr>
+</table>
+<p class="foot">Плюс 4 заметки: ленивая сходимость только в detail-чтении (24a), пустая ассерция
+<span class="mono">envelope-certificate-link</span>, live-check спрашивает SignWell про любого провайдера,
+и текст ошибки для непарсящихся тегов советует «повторить позже» там, где повтор гарантированно упадёт так же.</p>
+
+<h3>review 2 → 1 блокер</h3>
+<table>
+<tr><th>ID</th><th>Адрес</th><th>Где</th><th>Претензия</th><th>Что сделали</th></tr>
+<tr><td class="mono">F1</td><td><span class="pill p-code">code</span></td><td class="mono">signwell-http-client.ts#attempt</td>
+    <td><span class="mono">POST /documents</span> ретраится до пяти раз внутри HTTP-клиента, а поиск «сироты» идёт
+        только <i>после</i> того, как все пять попыток провалились. Один <span class="mono">createSession</span> может
+        создать два живых документа SignWell на один конверт — ровно дубликат, против которого написано требование 26.</td>
+    <td>Исправлено в implement 4: <span class="mono">createDocument</span> требует колбэк
+        <span class="mono">beforeUnsafeRetry</span>, который ищет сироту <b>перед</b> каждым повторным POST.
+        Коммит <span class="mono">e1cece1</span>.</td></tr>
+</table>
+<p class="foot">Заметка N3 этого прохода — важная и до сих пор открытая: терраформ-обвязка появилась, но
+<span class="mono">signwell_secrets_provisioned = false</span> в обоих tfvars, так что после деплоя фича всё равно
+инертна, пока человек не положит секреты.</p>
+
+<h3>QA 2 → 3 блокера (все в тестах, не в продукте)</h3>
+<table>
+<tr><th>Кейс</th><th>Симптом</th><th>Настоящая причина</th><th>Починка (implement 5)</th></tr>
+<tr><td class="mono">TC-04-E2E-01</td><td><span class="mono">check()</span> висит 30 с: «<span class="mono">&lt;span&gt;</span> перехватывает указатель»</td>
+    <td>Дизайн-система прячет настоящий <span class="mono">&lt;input type="radio"&gt;</span> под
+        <span class="mono">pointer-events:none</span> — кликать надо по label, как человек</td>
+    <td>Клик по <span class="mono">…-option-signwell label</span></td></tr>
+<tr><td class="mono">TC-04-E2E-02</td><td>Плейсхолдер <span class="mono">sign-embedded-loading</span> не наблюдается</td>
+    <td>Стаб грузится в процессе мгновенно и выигрывает гонку у ассерции; под этим нашлась вторая проблема — глобальная фикстура в параллельном сьюте</td>
+    <td>Маршрут удерживается открытым, пока состояние загрузки не подтверждено; фикстура локализована</td></tr>
+<tr><td class="mono">TC-04-E2E-04</td><td><span class="mono">logout-button</span> не находится 30 с</td>
+    <td>Кнопка живёт внутри меню аккаунта — выход это два клика</td>
+    <td>Тот же паттерн, что в <span class="mono">app-shell.spec.ts</span></td></tr>
+</table>
+
+<blockquote>Это ровно та категория, ради которой E2E и держат: три поломки, которых <b>не увидит</b> ни один
+интеграционный тест — CSS-перехват указателя, гонка рендера и то, что контрол спрятан в меню. И симметрично: ни одна
+из них не была дефектом сервера.</blockquote>
+
+<h3>Куда адресовались все находки прогона</h3>
+<div class="split">
+  <div class="sr"><span>code</span><div class="sbar"><i class="tools" style="width:63%"></i></div><span class="n2">17</span></div>
+  <div class="sr"><span>spec</span><div class="sbar"><i class="think" style="width:26%"></i></div><span class="n2">7</span></div>
+  <div class="sr"><span>self</span><div class="sbar"><i style="background:#94a3b8;width:7.4%"></i></div><span class="n2">2</span></div>
+  <div class="sr"><span>handoff</span><div class="sbar"><i style="background:#0f172a;width:3.7%"></i></div><span class="n2">1</span></div>
+</div>
+<p class="foot">Из 27 находок блокеров шесть, и все шесть — <span class="pill p-code">code</span>, кроме одной
+<span class="pill p-handoff">handoff</span>, которая и вызвала переплан. <b>Оспорено ноль.</b> Ни одна находка не
+повторилась дважды подряд (<span class="mono">findingHistory</span> — все счётчики = 1), то есть автосоглашение
+после двух попыток не срабатывало ни разу.</p>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<h2>4. Куда ушло время</h2>
+
+<div class="cards">
+  <div class="card"><div class="k">Размышление</div><div class="v">82 %</div><div class="n">8 156 с в API</div></div>
+  <div class="card"><div class="k">Инструменты</div><div class="v">16 %</div><div class="n">1 567 с</div></div>
+  <div class="card"><div class="k">Вызовов инстр.</div><div class="v">869</div><div class="n">в среднем 1.8 с</div></div>
+  <div class="card"><div class="k">Оркестрация</div><div class="v">221 с</div><div class="n">2 % на весь прогон</div></div>
+</div>
+
+<blockquote class="ok"><b>Время в API линейно по выходным токенам — и это самое полезное, что удалось измерить.</b>
+По всем тринадцати вызовам скорость держится на <b>74.1 токена в секунду</b> (разброс 71–84; единственное
+исключение — QA 2 с 59, у которого между ходами стояли двухминутные прогоны Playwright). Отсюда точная модель:
+<br><br>
+<span class="mono" style="font-size:14px">длительность = выходные токены ÷ 74 + время инструментов + 221 с оркестрации</span>
+<br><br>
+Проверка: 604 168 ÷ 74.1 = 8 156 с, плюс 1 567 с инструментов, плюс 221 с — итого 9 944 с, ровно измеренная
+длительность прогона. Практический вывод жёсткий: <b>прогон можно ускорить только одним способом — заставив его
+писать меньше токенов.</b> Ни параллелизм, ни более быстрое железо, ни выбрасывание проверок на это не влияют.
+Куда уходят токены: implement 35 %, review 34 %, pre-implement 25 %, QA 6 %.</blockquote>
+
+<div class="split">
+  <div class="sr" style="font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase">
+     <span>Вызов</span><span>◼ размышление · ◼ инструменты</span><span class="n2">инстр.</span></div>
+  <div class="sr"><span>pre-implement 1</span><div class="sbar"><i class="think" style="width:98.4%"></i><i class="tools" style="width:1.6%"></i></div><span class="n2">18 с</span></div>
+  <div class="sr"><span>pre-implement 2</span><div class="sbar"><i class="think" style="width:97.7%"></i><i class="tools" style="width:2.3%"></i></div><span class="n2">18 с</span></div>
+  <div class="sr"><span>implement 1</span><div class="sbar"><i class="think" style="width:83.0%"></i><i class="tools" style="width:17.0%"></i></div><span class="n2">177 с</span></div>
+  <div class="sr"><span>implement 2</span><div class="sbar"><i class="think" style="width:87.3%"></i><i class="tools" style="width:12.7%"></i></div><span class="n2">127 с</span></div>
+  <div class="sr"><span>implement 4</span><div class="sbar"><i class="think" style="width:85.3%"></i><i class="tools" style="width:14.7%"></i></div><span class="n2">91 с</span></div>
+  <div class="sr"><span>implement 5</span><div class="sbar"><i class="think" style="width:59.6%"></i><i class="tools" style="width:40.4%"></i></div><span class="n2">399 с</span></div>
+  <div class="sr"><span>review 1</span><div class="sbar"><i class="think" style="width:85.2%"></i><i class="tools" style="width:14.8%"></i></div><span class="n2">136 с</span></div>
+  <div class="sr"><span>review 2</span><div class="sbar"><i class="think" style="width:91.4%"></i><i class="tools" style="width:8.6%"></i></div><span class="n2">53 с</span></div>
+  <div class="sr"><span>review 3</span><div class="sbar"><i class="think" style="width:97.7%"></i><i class="tools" style="width:2.3%"></i></div><span class="n2">18 с</span></div>
+  <div class="sr"><span>review 4</span><div class="sbar"><i class="think" style="width:98.4%"></i><i class="tools" style="width:1.6%"></i></div><span class="n2">11 с</span></div>
+  <div class="sr"><span>QA 1</span><div class="sbar"><i class="think" style="width:60.4%"></i><i class="tools" style="width:39.6%"></i></div><span class="n2">65 с</span></div>
+  <div class="sr"><span>QA 2</span><div class="sbar"><i class="think" style="width:53.4%"></i><i class="tools" style="width:46.6%"></i></div><span class="n2">390 с</span></div>
+  <div class="sr"><span>QA 3</span><div class="sbar"><i class="think" style="width:42.9%"></i><i class="tools" style="width:57.1%"></i></div><span class="n2">64 с</span></div>
+</div>
+
+<p>Форма понятная и устойчивая: <b>чем ближе стадия к запуску тестов, тем больше в ней настоящей работы</b>. QA —
+единственная стадия, где инструменты перевешивают размышление (43–57 % времени в командах), и единственная, которую
+имеет смысл ускорять железом. Все остальные упираются в модель.</p>
+
+<blockquote class="bad"><b>Одна команда съела 120 секунд из 136 у review 1</b> —
+<code>grep -rn "SIGNATURE_PROVIDER" --include=* -l .</code>. Звёздочка в
+<span class="mono">--include</span> отключает фильтр, и греп пошёл по всему дереву. Это <b>88 % всего инструментального
+времени первого ревью</b> в одном вызове. Ревью 3 и 4, у которых был реестр покрытия и явный список
+непрочитанного, потратили на инструменты 18 и 11 секунд соответственно — они знали, куда идти, и не искали.</blockquote>
+
+<h3>Самые дорогие вызовы инструментов</h3>
+<table>
+<tr><th>Стадия</th><th class="n">Секунд</th><th>Команда</th></tr>
+<tr><td>review 1</td><td class="n">120</td><td class="mono">grep -rn "SIGNATURE_PROVIDER" --include=* -l .</td></tr>
+<tr><td>QA 2</td><td class="n">120</td><td class="mono">CI=1 npx playwright test tests/signature-providers…</td></tr>
+<tr><td>QA 2</td><td class="n">113</td><td class="mono">CI=1 PW_WORKERS=2 npx playwright test …</td></tr>
+<tr><td>QA 2</td><td class="n">71</td><td class="mono">CI=1 npx playwright test … (третий, изолирующий прогон)</td></tr>
+<tr><td>implement 1</td><td class="n">64</td><td class="mono">npm run build (apps/web)</td></tr>
+<tr><td>QA 1</td><td class="n">52</td><td class="mono">npm test -- test/signwell-client.spec.ts</td></tr>
+<tr><td>implement 5</td><td class="n">47 + 43 + 42 + 42</td><td class="mono">четыре прогона playwright и сборка web</td></tr>
+</table>
+<p class="foot">Верхние семь строк — 40 % всего инструментального времени прогона. Из них четыре — Playwright.</p>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<h2>5. Что дали правки на лету</h2>
+
+<h3>5.1 <code>--resume</code> у реализатора</h3>
+<p>Все четыре успешные попытки реализации шли в одной сессии <span class="mono">1509bc9e</span>. Ревью, наоборот,
+каждый раз стартует холодным и получает четыре разных id — это не забыли, это правило: сходящейся работе память
+помогает, судящей мешает (защищала бы прошлую позицию вместо новой оценки).</p>
+
+<table>
+<tr><th>Попытка</th><th>Что чинила</th><th class="n">Ходов</th><th class="n">Wall</th><th class="n">$</th><th class="n">Кэш прочитан</th></tr>
+<tr><td>implement 1</td><td>10 задач с нуля</td><td class="n">139</td><td class="n">17:21</td><td class="n">15.68</td><td class="n">22.7 M</td></tr>
+<tr><td>implement 2 <span class="mono">↻</span></td><td>2 блокера + 4 заметки + весь терраформ</td><td class="n">92</td><td class="n">16:43</td><td class="n">18.88</td><td class="n">32.1 M</td></tr>
+<tr><td>implement 4 <span class="mono">↻</span></td><td>1 блокер + 1 заметка</td><td class="n">36</td><td class="n">10:20</td><td class="n">9.19</td><td class="n">15.1 M</td></tr>
+<tr><td>implement 5 <span class="mono">↻</span></td><td>3 браузерных кейса</td><td class="n">57</td><td class="n">16:27</td><td class="n">15.81</td><td class="n">28.1 M</td></tr>
+</table>
+
+<div style="margin:14px 0">
+  <div class="sr"><span>implement 1</span><div class="hbar"><i style="width:100%"></i></div><span class="n2">139 ходов</span></div>
+  <div class="sr"><span>implement 2</span><div class="hbar"><i style="width:66%"></i></div><span class="n2">92</span></div>
+  <div class="sr"><span>implement 4</span><div class="hbar"><i style="width:26%"></i></div><span class="n2">36</span></div>
+  <div class="sr"><span>implement 5</span><div class="hbar"><i style="width:41%"></i></div><span class="n2">57</span></div>
+</div>
+
+<p><b>Честная оговорка.</b> Падение 139 → 36 — это <i>не</i> чистый эффект <code>--resume</code>: у попыток разный
+объём работы. Но у попытки 4 всего 36 ходов на исправление, которое стоило 25 строк в HTTP-клиенте плюс три новых
+интеграционных кейса, и это самая дешёвая попытка прогона ($9.19). Попытка 5 дороже при меньшем изменении именно
+потому, что 40 % её времени ушло в четыре прогона Playwright — то есть в инструменты, где память не помогает.</p>
+
+<blockquote class="bad"><b>За <code>--resume</code> заплатили одной убитой попыткой.</b> В 21:59 реализатору
+подсунули сессию <span class="mono">95a9fa13</span> — <i>сессию оператора</i>. Причина: старая
+<span class="mono">lastSessionId</span> искала последний <span class="mono">sessionId</span> в журнале по стадии, а
+журнал штампует текущей стадией <b>любой</b> вызов, сделанный пока прогон держит лок, включая операторский. Фильтр по
+<span class="mono">agentType</span> не спас: ровно один из 22 операторских вызовов оказался помечен
+<span class="mono">implementer</span>, и одного хватило. Агента остановили через 34 с, за 3 минуты починили
+(<span class="mono">7e79f72</span> — брать id из собственного отчёта агента) и перезапустили. Стоимость ошибки:
+184 секунды и $0.</blockquote>
+
+<h3>5.2 Ревью: «сначала весь диф, потом вердикт» + прошлые вердикты</h3>
+<p>Правило появилось в 22:07, то есть действовало на проходах 3 и 4. До него ревью останавливалось на первом-втором
+блокере и писало вердикт.</p>
+
+<table>
+<tr><th>Проход</th><th>Правило</th><th class="n">Блокеров</th><th class="n">Заметок</th><th class="n">Wall</th><th class="n">$</th><th class="n">Время в инстр.</th><th>Заявило покрытие</th></tr>
+<tr><td>review 1</td><td>старое</td><td class="n">2</td><td class="n">4</td><td class="n">15:18</td><td class="n">11.10</td><td class="n">136 с</td><td>нет поля</td></tr>
+<tr><td>review 2</td><td>старое</td><td class="n">1</td><td class="n">3</td><td class="n">10:17</td><td class="n">8.23</td><td class="n">53 с</td><td>нет поля</td></tr>
+<tr><td>review 3</td><td><b>новое</b></td><td class="n">0</td><td class="n">6</td><td class="n">13:14</td><td class="n">8.23</td><td class="n">18 с</td><td>28/83 Read, ≈53/83 по сути</td></tr>
+<tr><td>review 4</td><td><b>новое</b></td><td class="n">0</td><td class="n">2</td><td class="n">11:37</td><td class="n">6.89</td><td class="n">11 с</td><td>38/84, перечислен непрочитанный остаток</td></tr>
+</table>
+
+<p>Что изменилось предметно:</p>
+<ul>
+  <li><b>Ревью перестало возвращать блокеры порциями.</b> На прошлом большом прогоне блокеры приходили 2, 2, 1, 1 —
+      четыре цикла там, где хватило бы одного. Здесь: 2, 1, 0, 0. Оба нулевых прохода — уже под новым правилом.</li>
+  <li><b>Заметки стали конкретнее и перестали дублироваться вслепую.</b> Проходы 2 и 3 явно помечают
+      «carried from review 1 (N4)» и говорят, что изменилось после конкретного коммита. Это прямое следствие того,
+      что ревью получает прошлые вердикты как <i>заявления, которые надо проверить</i>, а не как приговор.</li>
+  <li><b>Инструментальное время упало в 12 раз</b> (136 → 11 с). Реестр покрытия отвечает на вопрос «куда идти»,
+      и ревью больше не ищет это грепом по всему дереву.</li>
+  <li><b>Появилось поле <code>covered</code>.</b> «Прошло ревью» и «было отревьюено» — разные утверждения, и до
+      правки в пайплайне ничего их не различало.</li>
+</ul>
+
+<blockquote>Дешевле не стало почти совсем: $19.33 за первые два прохода против $15.12 за вторые два. Правка покупала
+не деньги, а <b>циклы</b> — каждый возврат ревью стоит связку implement + gate + review, то есть ≈ 25 минут и ≈ $25.
+Один сэкономленный возврат окупает всю разницу впятеро.</blockquote>
+
+<h3>5.3 «Не тащить дальше уже закрытые находки»</h3>
+<p>Старая <span class="mono">lastBlockers</span> шла по попыткам назад, пока не находила вердикт с блокерами — и
+стадия, которая заблокировала, была удовлетворена, а потом прошла, всё равно передавала дальше свои старые находки.
+QA 1 открылось с заданием проверить дефект, закрытый двумя попытками ранее, и потратило на это ходы (видно в его
+вердикте: <span class="mono">F1 … (prior QA finding) … is fixed in commit e1cece1</span>). Починено в
+<span class="mono">a68b7a6</span>: стадия отдаёт только свой последний вердикт.</p>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<h2>6. Покрытие ревью: сколько дифа реально посмотрели</h2>
+
+<p>Реестр выводится из журнала, а не из самоотчёта: файл считается открытым, когда его путь назвал собственный
+вызов инструмента ревью.</p>
+
+<div class="split">
+  <div class="sr" style="font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase">
+     <span>Проход</span><span>файлов дифа названо (из 84)</span><span class="n2"></span></div>
+  <div class="sr"><span>review 1</span><div class="hbar"><i style="width:70%"></i></div><span class="n2">59 · 70 %</span></div>
+  <div class="sr"><span>review 2</span><div class="hbar"><i style="width:55%"></i></div><span class="n2">46 · 55 %</span></div>
+  <div class="sr"><span>review 3</span><div class="hbar"><i style="width:60%"></i></div><span class="n2">50 · 60 %</span></div>
+  <div class="sr"><span>review 4</span><div class="hbar"><i style="width:52%"></i></div><span class="n2">44 · 52 %</span></div>
+  <div class="sr" style="margin-top:8px"><span><b>накопительно</b></span><div class="hbar"><i style="width:89%;background:var(--ok)"></i></div><span class="n2">75 · 89 %</span></div>
+</div>
+<p class="foot">Накопительно по проходам: 59 → 64 → 71 → 75 из 84. Ни одним ревью не названы 9 файлов: восемь из них —
+<span class="mono">infra/terraform/*</span> и <span class="mono">.env.example</span> (их содержательно разбирала
+заметка N3 второго прохода, но через общий <span class="mono">git diff</span>, где путь отдельно не звучит), плюс
+удалённый <span class="mono">signature-provider.ts</span>, по которому проверяли грепом, что на него никто не
+ссылается.</p>
+
+<blockquote class="bad"><b>Дефект реестра, найденный при подготовке этого разбора.</b>
+<span class="mono">review-coverage.mjs</span> сверяет пути через
+<code>text.includes(path)</code>, где <span class="mono">path</span> — POSIX-путь от корня репозитория. Но инструмент
+<span class="mono">Read</span> на Windows передаёт абсолютный путь с обратными слэшами. В журнале этого прогона
+<b>123 вызова Read из 123 — с обратными слэшами</b>, то есть реестр не засчитал <i>ни одного</i>: всё, что он
+показывал, приходило из строк bash-команд.<br><br>
+Практический эффект: команда <code>node scripts/review-coverage.mjs</code> сегодня утверждает, что 23 файла не открыл
+никто — включая <span class="mono">provider-reconciler.service.ts</span> (621 строка), который review 4 честно
+прочитал целиком. Реестр вводил ревьюера в заблуждение <i>в обратную сторону</i> — гнал его перечитывать уже
+прочитанное. Цифры выше пересчитаны с нормализацией слэшей. Починка — одна строка: привести путь к POSIX и срезать
+префикс корня перед сравнением.</blockquote>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<h2>7. Тесты: сколько стоят, где применялись и зачем</h2>
+
+<h3>Измерено на этом прогоне</h3>
+<table>
+<tr><th>Уровень</th><th>Чем</th><th class="n">Кейсов</th><th class="n">Время</th><th class="n">На кейс</th><th>Когда запускался</th></tr>
+<tr><td><b>unit</b></td><td>Vitest, <span class="mono">packages/validation</span></td><td class="n">941</td><td class="n">0.89–3.7 с</td><td class="n">≈ 0.001 с</td><td>полностью, в каждой попытке implement и в каждом проходе QA — дешевле, чем решать, надо ли</td></tr>
+<tr><td><b>integration</b> точечно</td><td>Jest + Supertest, 7 файлов</td><td class="n">45</td><td class="n">14.9 с</td><td class="n">≈ 0.33 с</td><td>в каждой попытке implement и в QA 2/3 — только файлы, которых касается диф</td></tr>
+<tr><td><b>integration</b> полностью</td><td>35 сьютов</td><td class="n">432 + 2 skip</td><td class="n">≈ 60 с</td><td class="n">≈ 0.14 с</td><td>только в финальной ручной сверке; агентам запрещено — это работа гейта деплоя</td></tr>
+<tr><td><b>e2e</b> точечно</td><td>Playwright, 2 файла</td><td class="n">14</td><td class="n">34.4 с</td><td class="n">≈ 2.5 с wall</td><td>QA 2/3 и implement 5 — свой спек-файл плюс <span class="mono">regressions.spec.ts</span></td></tr>
+<tr><td><b>e2e</b> полностью</td><td>21 файл</td><td class="n">66</td><td class="n">157 с</td><td class="n">≈ 2.4 с wall<br>≈ 8 с worker</td><td>только в финальной сверке и на гейте деплоя</td></tr>
+</table>
+
+<p>Соотношение стоимости кейса — <b>1 : 330 : 2 400</b> (unit : integration : e2e по времени стены). Именно поэтому
+правило «какой уровень» сформулировано жёстко: серверное правило — код ответа, текст сообщения, состояние токена,
+решение об авторизации — живёт в integration <i>даже если его показывает экран</i>.</p>
+
+<h3>Что этот диф добавил</h3>
+<table>
+<tr><th></th><th class="n">Было (база)</th><th class="n">Стало</th><th class="n">Δ</th></tr>
+<tr><td>unit-кейсов (validation)</td><td class="n">—</td><td class="n">941</td><td class="n">+6 с TC-04</td></tr>
+<tr><td>интеграционных кейсов</td><td class="n">376</td><td class="n">421</td><td class="n">+45</td></tr>
+<tr><td>e2e-кейсов</td><td class="n">61</td><td class="n">66</td><td class="n">+5</td></tr>
+</table>
+
+<h3>Инвентарь TC-04</h3>
+<div class="split">
+  <div class="sr"><span>UNIT</span><div class="hbar"><i style="width:15%"></i></div><span class="n2">6</span></div>
+  <div class="sr"><span>INT</span><div class="hbar"><i style="width:72.5%"></i></div><span class="n2">29</span></div>
+  <div class="sr"><span>E2E</span><div class="hbar"><i style="width:12.5%"></i></div><span class="n2">5</span></div>
+</div>
+<p>В спеке 40 кейсов, в коде 40 идентификаторов TC-04. Совпадают 39.</p>
+<ul>
+  <li><span class="mono">TC-04-INT-20</span> есть в спеке и отсутствует в коде — и правильно: это не кейс, а
+      инструкция «прогнать интеграционный сьют спеки 02 неотредактированным». Проверено вручную в финальной сверке:
+      из тестов спеки 02 изменён ровно один файл и ровно одна ассерция — счётчик значений enum, который к тому же
+      <i>усилен</i> (теперь проверяет и присутствие обоих новых значений).</li>
+  <li><span class="mono">TC-04-E2E-09</span> есть в коде и отсутствует в этой спеке — это чужой идентификатор из
+      <span class="mono">members-list.spec.ts</span>, приехавший ещё коммитом <span class="mono">07aff4f</span>
+      (спека 04 <i>другой</i> области). К этому прогону отношения не имеет, но показывает, что префикс
+      <span class="mono">TC-NN</span> без имени области не уникален по репозиторию.</li>
+</ul>
+
+<h3>Пять E2E-кейсов спеки 04 и почему именно они</h3>
+<table>
+<tr><th>Кейс</th><th>Что проверяет</th><th>Почему не integration</th></tr>
+<tr><td class="mono">E2E-01</td><td>Админ переключает организацию на SignWell</td><td>Переключение — это радио дизайн-системы с настоящим кликом и модалкой подтверждения; сервер здесь только принимает результат</td></tr>
+<tr><td class="mono">E2E-02</td><td>Страница подписания держит виджет на нашем origin</td><td>CSP <span class="mono">frame-src</span>, iframe и переход loading → frame существуют только в браузере</td></tr>
+<tr><td class="mono">E2E-03</td><td>Недоступный провайдер не ломает ссылку</td><td>Деградация экрана при мёртвом апстриме</td></tr>
+<tr><td class="mono">E2E-04</td><td>Менеджер видит настройку, но не может её менять</td><td>«Контрол, который не должен быть нарисован» — единственный способ проверить это честно</td></tr>
+<tr><td class="mono">E2E-05</td><td>Карточка конверта называет провайдера и метит тестовый документ</td><td>Токены и разметка</td></tr>
+</table>
+<p class="foot">Все остальные 35 кейсов — на дешёвых уровнях: 29 интеграционных (HMAC вебхука, редактирование
+payload, идемпотентность создания, схождение состояний, 404 вместо 403 при чужом orgId, лимитер и предохранитель) и
+6 юнитовых (парсинг текстовых тегов, форма подписи вебхука, перечень провайдеров).</p>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<h2>8. Дефекты самого пайплайна, вскрытые прогоном</h2>
+
+<table>
+<tr><th>#</th><th>Что</th><th>Как проявилось</th><th>Статус</th></tr>
+<tr><td class="n">1</td><td><code>lastSessionId</code> брал сессию из журнала</td><td>Реализатору подсунули сессию оператора; попытка 3 убита</td><td><span class="pill p-pass">починено</span> <span class="mono">7e79f72</span></td></tr>
+<tr><td class="n">2</td><td><code>lastBlockers</code> шёл назад до первого вердикта с блокерами</td><td>QA 1 проверяло находку, закрытую двумя попытками ранее</td><td><span class="pill p-pass">починено</span> <span class="mono">a68b7a6</span></td></tr>
+<tr><td class="n">3</td><td>Реестр покрытия имел скоуп шире, чем ревью</td><td>Первой строкой звал читать <span class="mono">digest.json</span> на 8 184 строки</td><td><span class="pill p-pass">починено</span> <span class="mono">0f79bd5</span></td></tr>
+<tr><td class="n">4</td><td>Дайджест считал вызовы оператора</td><td>6 % и 12 % чужих вызовов в двух прогонах</td><td><span class="pill p-pass">починено</span> <span class="mono">be64d7c</span></td></tr>
+<tr><td class="n">5</td><td>Ревью писало вердикт на первом блокере</td><td>Блокеры порциями 2, 2, 1, 1 на прошлом прогоне</td><td><span class="pill p-pass">починено</span> <span class="mono">e981dcd</span></td></tr>
+<tr><td class="n">6</td><td>Тестовая БД жёстко знала порт 5433</td><td>QA 1 вернуло <span class="mono">error</span>: два сервера на порту</td><td><span class="pill p-pass">починено</span> <span class="mono">a68b7a6</span></td></tr>
+<tr><td class="n">7</td><td>Реестр покрытия не видит <span class="mono">Read</span> на Windows</td><td>123 из 123 вызовов Read не засчитаны; реестр врёт про 23 непрочитанных файла</td><td><span class="pill p-block">открыто</span></td></tr>
+<tr><td class="n">8</td><td>Дайджест недосчитал $16.06 (15 %)</td><td>$92.55 против $108.61 по логам: нумерация попыток выводится из пауз в журнале, оператор создаёт фантомные блоки и сдвигает её — потерялись <span class="mono">implement 5</span> и <span class="mono">qa 3</span></td><td><span class="pill p-block">открыто</span></td></tr>
+<tr><td class="n">9</td><td><code>"effort": "high"</code> не читает никто</td><td>Конфиг обещает то, чего нет</td><td><span class="pill p-block">открыто</span></td></tr>
+</table>
+
+<p><b>Вывод по семёрке-девятке:</b> все три — дефекты <i>измерения</i>, а не исполнения. Прогон от них не пострадал,
+но выводы о прогоне — да: без пересчёта покрытие выглядело как 27 %, а стоимость как $92.55.</p>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<h2>9. Что осталось человеку</h2>
+
+<h3>По спеке 04 (три заметки, которые ревью держало все четыре прохода)</h3>
+<ul>
+  <li><b>Строка в таблице Error Messages для <span class="mono">document_fields_not_materialized</span>.</b> Сейчас
+      переиспользуется текст «сервис недоступен, попробуйте позже» — но повтор упадёт ровно так же, потому что теги
+      не распарсятся и в следующий раз. Отправителю говорят делать бесполезное.</li>
+  <li><b>Сузить требование 24a</b> до чтения одного конверта: ленивая сходимость сознательно не подключена к списку
+      документов, и текст «любое чтение неоконченного конверта» этому противоречит.</li>
+  <li><b><span class="mono">envelope-certificate-link</span></b> — id объявлен обязательным для контрола, которого
+      нет, поэтому ассерция в <span class="mono">TC-04-E2E-05</span> проходит впустую.</li>
+</ul>
+
+<h3>По деплою</h3>
+<ul>
+  <li><span class="mono">signwell_secrets_provisioned = false</span> в <span class="mono">dev.tfvars</span> и
+      <span class="mono">prod.tfvars</span>, <span class="mono">signwell_api_application_id</span> пуст. Обвязка есть,
+      секретов нет — после деплоя фича инертна, пока человек их не положит.</li>
+  <li><b><span class="mono">main</span> красный</b> — 6 воспроизводимых падений e2e в
+      <span class="mono">projects</span> (спека 11) и <span class="mono">time-tracking</span> (спека 12) из PR #6.
+      К этой ветке отношения не имеет: наша правка сайдбара чисто аддитивная, а
+      <span class="mono">gh run list</span> показывает merge-прогон PR #6 уже упавшим.</li>
+</ul>
+
+<h3>По пайплайну</h3>
+<ul>
+  <li>Дефекты 7, 8, 9 из таблицы выше.</li>
+  <li>Ветка <span class="mono">spec/signwell-provider</span> зелёная и <b>не запушена</b>, PR не открыт — по правилу
+      «пайплайн останавливается на зелёной ветке, PR открывает человек».</li>
+</ul>
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<h2>10. Что бы я поменял дальше</h2>
+
+<p>По убыванию ожидаемой отдачи, с учётом того, что 82 % времени — размышление:</p>
+<ol>
+  <li><b>Дать ревью диф, а не репозиторий.</b> Проходы 3 и 4 потратили на инструменты 18 и 11 секунд против 136 у
+      первого — просто потому, что знали, куда смотреть. Следующий шаг того же рода: подавать в промпт сам
+      <span class="mono">git diff</span> нужных файлов, а не приглашение его добыть.</li>
+  <li><b>Починить измерение (7, 8, 9).</b> Пока реестр слеп к <span class="mono">Read</span>, а дайджест теряет 15 %
+      стоимости, любое следующее сравнение «до/после» будет спорить с самим собой.</li>
+  <li><b>Отделять инфраструктурные попытки от кодовых по факту, а не по вердикту.</b> Убитая попытка 3 съела бюджет
+      кодовых попыток ровно ничего не сделав; она не должна была считаться.</li>
+  <li><b>Не запускать Playwright из реализатора четыре раза.</b> В implement 5 это 40 % времени попытки. QA прогонит
+      те же файлы через минуту; реализатору достаточно одного прогона своего спек-файла.</li>
+</ol>
+
+<p class="foot" style="margin-top:34px;padding-top:14px;border-top:1px solid var(--line)">
+Источники: <span class="mono">.workflow/runs/2026-08-28T17-26-56_documents-04-signature-providers/</span> —
+<span class="mono">stages/*.log</span> (собственные отчёты агентов: сессия, стоимость, токены, ходы),
+<span class="mono">stages/*.json</span> (вердикты), <span class="mono">events.jsonl</span> (1 022 события журнала),
+<span class="mono">run.json</span> (маршрутизация, бюджеты, заметки).
+Стоимость и длительности взяты из логов стадий, а не из <span class="mono">digest.json</span> — см. дефект 8.
+</p>
+
+</div>
+</body>
+</html>

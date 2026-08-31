@@ -1,5 +1,13 @@
 import { cpus } from 'node:os';
 import { defineConfig, devices } from '@playwright/test';
+import {
+  API_ORIGIN,
+  API_PORT,
+  E2E_DATABASE_URL,
+  REMOTE,
+  WEB_ORIGIN,
+  WEB_PORT,
+} from './environment';
 
 /**
  * Where the suite points.
@@ -10,16 +18,23 @@ import { defineConfig, devices } from '@playwright/test';
  *
  *   E2E_BASE_URL=https://<host> npm run test:e2e
  *
- * Note what that second mode really tests. Locally the browser talks to :3000 and the
- * suite talks to :4000 directly; against a deployment there is only one address, because
- * the API has no public one and every /api/* call goes through the web app's rewrite. So a
- * remote run exercises the proxy path too, which the local run cannot.
+ * Note what that second mode really tests. Locally the browser talks to the web port and
+ * the suite talks to the API port directly; against a deployment there is only one address,
+ * because the API has no public one and every /api/* call goes through the web app's
+ * rewrite. So a remote run exercises the proxy path too, which the local run cannot.
+ *
+ * **The ports and the database are both movable, and that is the point.** Defaults are the
+ * dev pair, 3000 and 4000, so nothing about running the suite changes. Set `E2E_WEB_PORT`
+ * and `E2E_API_PORT` and the whole run relocates — servers, `baseURL`, the rewrite target
+ * and the signing links in the mail sink — so it can happen beside a dev environment
+ * somebody is using rather than instead of it. See `environment.ts`.
  */
-const REMOTE = process.env.E2E_BASE_URL;
-const WEB = REMOTE ?? 'http://localhost:3000';
+const WEB = WEB_ORIGIN;
 
 export default defineConfig({
   testDir: './tests',
+  // Creates the E2E database if it is missing and migrates it. Skipped for a remote run.
+  globalSetup: './global-setup.ts',
 
   /**
    * Parallel, and safe to be: every test mints its own account, and signup creates a
@@ -71,6 +86,15 @@ export default defineConfig({
       // area reads (bucket names, queue URLs, SES settings) is deliberately absent — a
       // hermetic run must not have a value to reach for.
       env: {
+        // Its own port, and its own database.
+        //
+        // Neither used to be said here, and both defaulted to whatever a developer's
+        // machine already had: the suite could only run on the ports `npm run dev` holds,
+        // and it wrote into the database `apps/api/.env` names — the one being worked in.
+        // A green run said nothing about which server it had talked to.
+        PORT: String(API_PORT),
+        DATABASE_URL: E2E_DATABASE_URL,
+        DIRECT_URL: E2E_DATABASE_URL,
         // The sink transport keeps reset links and signing invitations readable from the
         // tests; it is also what unlocks /api/test/mail, which stays 404 under any real
         // transport.
@@ -85,8 +109,19 @@ export default defineConfig({
         JOB_QUEUE: 'inline',
         // Signing links must point at the web server this config starts.
         APP_PUBLIC_URL: WEB,
+        // Spec 04. The stub driver answers every SignWell call from memory and is
+        // refused outright when NODE_ENV is production, so the suite stays hermetic and
+        // spends none of the ten-documents-a-minute create budget. The three
+        // configuration values are named because *registration* is decided by their
+        // presence: without them the provider is unconfigured and TC-04-E2E-01 could
+        // never select it.
+        SIGNWELL_DRIVER: 'stub',
+        SIGNWELL_API_KEY: 'e2e-signwell-api-key',
+        SIGNWELL_API_APPLICATION_ID: 'e2e-signwell-application',
+        SIGNWELL_WEBHOOK_SECRET: 'e2e-signwell-webhook-id',
+        SIGNWELL_TEST_MODE: 'true',
       },
-      port: 4000,
+      port: API_PORT,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
       // Playwright discards a web server's output by default, and that default cost a long
@@ -99,7 +134,15 @@ export default defineConfig({
     {
       command: 'npm run dev --workspace @devscribed/web',
       cwd: '..',
-      port: 3000,
+      env: {
+        // `next dev` takes its port from PORT, which is why the script no longer hardcodes
+        // one. API_ORIGIN is the rewrite's destination and is read when next.config.mjs
+        // loads, so a moved API port has to be said here or every /api/* call in the
+        // browser lands on the dev server instead.
+        PORT: String(WEB_PORT),
+        API_ORIGIN,
+      },
+      port: WEB_PORT,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
       stdout: 'pipe',
