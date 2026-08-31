@@ -35,6 +35,11 @@ Never write a spec from the prompt alone. Read the code first and produce two ex
 Also read two or three existing specs in `specs/` first. Match their structure, their register, and
 their level of detail.
 
+When the spec depends on a system this repository does not own, reconnaissance includes that system
+too: probe it, in the state the product will meet it in, and record what came back. Documentation
+and a plausible reading of an API are not observations. What you cannot probe is written down as
+unproven rather than as fact.
+
 ### 2. Resolve the forks with the user
 
 Identify the two to four genuine architectural forks — the ones where different answers produce
@@ -78,6 +83,16 @@ area README with the alternative and why it lost.
 **Cite what you reuse.** Name the file. `apps/api/src/auth/session.guard.ts`, not "the existing
 auth guard".
 
+**Verify a premise against the file that implements it.** Deploy order, what a script does, what
+the pipeline runs — read `infra/deploy.sh`, `.github/workflows/`, the Makefile, and cite the path.
+CLAUDE.md, an earlier spec and a code comment are claims about the code, not the code. Where they
+disagree with it, the spec says so and CLAUDE.md is amended in the same change.
+
+**An absolute rule is checked against the code it already governs.** Before writing "never",
+"always" or "every", find the call sites the rule forbids today. Each is fixed by this spec, carved
+out in the rule's own sentence, or named in Out of Scope. An unqualified invariant the current code
+violates is a contradiction you are shipping, not a standard you are setting.
+
 **Put a port where a vendor might change.** Define the interface, ship one implementation, and add
 the columns the future adapter needs (`ProviderKey`, `ProviderRef`) in the first migration. A port
 that requires a migration to use is not a port.
@@ -102,6 +117,18 @@ PDF is derived. Identify the irreplaceable thing in your feature and protect it 
 redeliveries, webhook replays. State the mechanism (a `UsedAt` set in the same transaction, a FIFO
 group key) and write a concurrency test for it.
 
+**Retry policy is stated per route, not per client.** For every outbound call say whether it is
+idempotent, and for one that is not, what runs between attempts. A generic retry loop wrapped
+around a create is the default failure.
+
+**A scope key is required, never defaulted.** When a rule is "per organization", "per tenant",
+"per signer", say that the key is a required argument on every method of the port and that there
+is no fallback value. A default turns the rule into its opposite and no test sees it.
+
+**A guard is evaluated on the row the transaction locked.** Say which writer takes the lock, what
+is re-read inside the transaction, and that the decision is made against that read. A value loaded
+before the transaction is already stale when it is tested.
+
 **Do not leak through error responses.** Unknown and unauthorized must be byte-identical, with no
 timing signal. Spell this out where a public surface exists.
 
@@ -121,6 +148,46 @@ rules go in the area README, not duplicated per spec.
 
 **The `data-testid` list is a contract.** Every id in the selectors section appears in an E2E case,
 and every selector an E2E case names appears in the list.
+
+## Depending on a system you do not own
+
+A third-party API, a browser policy, a rendering engine. Everything the spec says about it is a
+claim, and the `## External Contracts` section is where each one is written down with its
+evidence.
+
+**An observation covers the states you saw and nothing else.** Never extend a verified list with a
+plausible member. A value that belongs in the list but was not observed is written as unobserved,
+in the same table, and carries no requirement.
+
+**An observation taken in one state says nothing about the others.** Statuses read before anyone
+acted are not statuses after. Name the state the probe was in.
+
+**Record how each observation was established** — the call, the account or fixture, what came back.
+An observation without its method cannot be re-run when it stops holding.
+
+**Where an unverified premise carries the design, it gets its own Known Gaps row**, naming what
+would falsify it and what falls with it.
+
+**The double is specified against the external system, never against this spec.** For every
+property the spec relies on, the double reproduces the real behaviour including the hostile half —
+a refusal, an empty result, a word we do not use. A double built from the spec's own sentences
+turns the suite into a second copy of the premise, and every test passes while nothing works. List
+the behaviours the double must have.
+
+**Every value crossing the boundary names its unit and its vocabulary on both sides**, and what
+detects a mismatch. A number the other side stores and echoes without validating is a value nothing
+checks for you.
+
+**An unrecognized value from outside stalls; it never defaults.** Map what is known, log what is
+not, and stop. A default at a boundary turns a state you cannot read into a state you claim to
+know.
+
+**A permanent refusal is not an outage.** Separate a request the other side refuses from one it
+could not answer. A refusal names the field where the body identifies one, and compensation for a
+partial write runs only where a partial write was possible.
+
+**An allow-list names every entry with the reason it is there, and its test fails on any refused
+resource** — not only on the ones enumerated when it was written.
 
 ## Infrastructure sections
 
@@ -159,6 +226,10 @@ second as something not to reproduce.
   blocked.
 - Inventing a mechanism that already exists three directories away.
 - Copying an infrastructure pattern from another repository without judging it.
+- Writing "Observed:" over a list whose last members were never seen.
+- Describing what a test double should do by restating the spec instead of the system it stands in
+  for.
+- Restating a rule about the pipeline from CLAUDE.md without opening the script that implements it.
 
 ## Reference files
 

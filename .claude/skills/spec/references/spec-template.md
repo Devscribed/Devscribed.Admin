@@ -85,6 +85,34 @@ status code, then an `**Errors:**` list where every entry is a real status plus 
 Group public/unauthenticated endpoints separately and state their rate limits and non-leakage
 rules.
 
+### `## External Contracts`
+
+Only when the spec depends on a system this repository does not own. Three tables.
+
+**Observations** — every claim about the external system's behaviour, one row each:
+
+```
+| Claim | How established | Ran against | State the probe was in | Observed / Assumed |
+```
+
+A row marked `Assumed` may not carry a requirement. A claim of which one half was seen and the
+other inferred is two rows, not one.
+
+**Boundary values** — every value crossing the boundary in either direction:
+
+```
+| Value | Our unit or vocabulary | Theirs | Converted where | What detects a mismatch |
+```
+
+Coordinates, currencies, times, status words, identifiers, address formats.
+
+**What the double must reproduce** — the behaviours a test double needs for the suite to mean
+anything, including the ones that make tests fail:
+
+```
+| Provider behaviour | Why a double without it certifies nothing |
+```
+
 ### `## Validation Rules`
 
 Numbered, each with the constraint and the exact error message. Close with a paragraph on what the
