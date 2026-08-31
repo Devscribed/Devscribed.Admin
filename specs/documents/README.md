@@ -258,3 +258,15 @@ Recorded deliberately, each with the reason it is acceptable for this release:
 | The dev stand carries `/api/test/*` fixtures the product has no replacement for: a simulated mailbox, an envelope-expiry write, and the user-management area's own preconditions | The suite cannot build them otherwise — the signing link exists only inside the message, and nothing ages an envelope or fast-forwards a seven-day invitation. One token opens them all; `prod` creates none, so every route is 404 there. The envelope-expiry write additionally requires a session that is already an **admin of the organization** it writes to, so the token alone is not authority over anything. The membership move and the role switch that used to be here are **gone**: spec 04's invitations and spec 05's `PUT .../members/:memberId` replaced them, and the suite now builds its people the way a person does | A mail provider retires the sink. `test_fixtures_enabled` goes false and the routes are deleted with it |
 | Where mail is simulated, an admin or manager can read their own organization's outbox on screen (`/org/:orgId/outbox`) — including live signing links | Without a provider the message is delivered nowhere and the signing link exists nowhere else, so "send it and open what the signer got" is otherwise impossible on a deployment. It is a product screen with the ordinary guard stack — session, org scope, `ManageEnvelopes` — scoped to the caller's own organization, and password resets are excluded because a reset link is an account takeover | A mail provider. `MailService` stops being the in-memory sink, every route answers 404, `features.mailOutbox` goes false, and the screen is not drawn |
 
+## Open bug investigations
+
+Both are follow-ups the spec owes before spec 04's SignWell path can work, per
+[specs/bugs](../bugs/README.md):
+
+- **[BUG-001](../bugs/BUG-001-signwell-text-tags-materialize-no-fields.md)** — `SPEC-DEFECT`.
+  Requirement 13's recorded observation does not reproduce: SignWell materializes no fields
+  from text tags, so requirements 14 and 38 rest on a premise that does not hold and need
+  rewriting before any code changes.
+- **[BUG-002](../bugs/BUG-002-email-validation-looser-than-the-provider.md)** — `SPEC-GAP`.
+  Two edge cases missing: a signer address the provider will not accept, and a provider `4xx`
+  reported to the sender as an outage.

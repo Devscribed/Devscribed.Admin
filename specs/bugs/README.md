@@ -31,7 +31,8 @@ more than the diagnosis.
 
 | # | Title | Severity | Surface | Verdict | Owning spec | Regression test | Status |
 |---|-------|----------|---------|---------|-------------|-----------------|--------|
-| — | *no investigations recorded yet* | | | | | | |
+| [001](BUG-001-signwell-text-tags-materialize-no-fields.md) | SignWell materializes no fields from our text tags | blocker | api | `SPEC-DEFECT` | documents/04 | TC-04-INT-21 | open |
+| [002](BUG-002-email-validation-looser-than-the-provider.md) | A signer address we accept, the provider refuses | major | api | `SPEC-GAP` | documents/04 | TC-04-INT-22 | open |
 
 Add a row when the report lands, and close it out when the fix merges. When the verdict is
 `SPEC-GAP` or `SPEC-DEFECT`, also note the follow-up in the owning area's README — otherwise

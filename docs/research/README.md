@@ -14,3 +14,4 @@ itself.
 | date | subject |
 |---|---|
 | [2026-08-30](2026-08-30-review-sharding.md) | Does splitting a review across parallel subagents find more? What does model, effort and shard size change? |
+| [2026-08-31](2026-08-31-what-review-cannot-see.md) | Twenty-three review passes against forty minutes of clicking: which defects each kind of check can reach |
