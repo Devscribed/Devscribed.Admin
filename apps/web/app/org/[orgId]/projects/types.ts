@@ -16,6 +16,8 @@ export interface ProjectListItem {
   totalHours: number;
   /** ISO-8601 creation timestamp. */
   createdAt: string;
+  /** Spec 13 — 2–10 uppercase letters; null until the caller sets it. */
+  key?: string | null;
 }
 
 export interface ProjectsResponse {
@@ -28,6 +30,8 @@ export interface ProjectSummary {
   name: string;
   status: ProjectStatus;
   createdAt: string;
+  /** Spec 13 — 2–10 uppercase letters; null until the caller sets it. */
+  key?: string | null;
 }
 
 /**

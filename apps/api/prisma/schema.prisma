@@ -183,6 +183,8 @@ model Membership {
   projectMemberships  ProjectMember[]
   timeEntries         TimeEntry[]
   runningTimer        RunningTimer?
+  tasksAssigned       Task[]                       @relation("TaskAssignee")
+  tasksReported       Task[]                       @relation("TaskReporter")
 
   @@index([organizationId])
 }
@@ -641,6 +643,14 @@ model Project {
   /// 'active' | 'archived'. Documented string column, matching the Membership.status
   /// convention — not a Prisma enum. Archiving is the soft-delete.
   status             String   @default("active")
+  /// Spec 13 — human-readable prefix for task keys (2–10 uppercase ASCII letters).
+  /// Nullable; unique per org via partial index (added in the spec-13 migration SQL,
+  /// since Prisma cannot express `WHERE key IS NOT NULL` on a `@@unique`). Immutable
+  /// once set — the service enforces that rule.
+  key                String?
+  /// Spec 13 — atomically-allocated per-project task counter. Advanced inside a
+  /// `SELECT ... FOR UPDATE` transaction on the project row before every task insert.
+  nextTaskNumber     Int      @default(1)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   /// Account that created the project (audit trail; set from the session).
@@ -651,8 +661,75 @@ model Project {
   members       ProjectMember[]
   timeEntries   TimeEntry[]
   runningTimers RunningTimer[]
+  columns       BoardColumn[]
+  tasks         Task[]
 
   @@index([organizationId])
+}
+
+/// Spec 13 — a column on a project's Kanban board. Lazy-created on first `GET /board`
+/// (three defaults: To Do / In Progress / Done). Names are unique per project
+/// case-insensitively (functional unique index added in the migration SQL); positions
+/// are 0-based and unique per project via `@@unique([projectId, position])`.
+model BoardColumn {
+  id        String   @id @default(uuid())
+  projectId String
+  name      String
+  position  Int
+  /// 'todo' | 'in_progress' | 'done' | 'custom'. Informational — drives visual styling
+  /// on the board only. Defaults get their fixed categories at lazy-init.
+  category  String   @default("custom")
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks   Task[]
+
+  @@unique([projectId, position])
+  @@index([projectId])
+}
+
+/// Spec 13 — a task on a project board. Identified by the human-readable key
+/// `{Project.key}-{taskNumber}` (built at read time via `formatTaskKey`). Hierarchy is
+/// self-referential (parent → children). Position is fractional so drag-and-drop can
+/// re-index one row without touching neighbours.
+model Task {
+  id          String    @id @default(uuid())
+  projectId   String
+  /// Per-project sequence, atomically allocated via `SELECT ... FOR UPDATE` on the
+  /// project row. Never re-used — deleting MOB-1 does not free the number.
+  taskNumber  Int
+  /// 'epic' | 'task' | 'bug' | 'story' | 'subtask' (spec 13 FR-9).
+  type        String
+  /// 1–200 codepoints (validation layer).
+  title       String
+  /// Markdown, max 10,000 codepoints (validation layer). Nullable.
+  description String?
+  /// 'low' | 'medium' | 'high' | 'critical' or null.
+  priority    String?
+  columnId    String
+  /// Fractional index — inserting between 2.0 and 3.0 uses 2.5, no other row rewrites.
+  position    Float
+  /// 0–999, nullable (validation layer).
+  storyPoints Int?
+  assigneeId  String?
+  reporterId  String
+  parentId    String?
+  /// Nullable date (no time component).
+  dueDate     DateTime? @db.Date
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project  Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  column   BoardColumn @relation(fields: [columnId], references: [id])
+  assignee Membership? @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  reporter Membership  @relation("TaskReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  parent   Task?       @relation("TaskHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children Task[]      @relation("TaskHierarchy")
+
+  @@unique([projectId, taskNumber])
+  @@index([projectId, columnId])
+  @@index([assigneeId])
+  @@index([parentId])
 }
 
 /// Assignment of an organization member to a project (spec 11). A member may belong to

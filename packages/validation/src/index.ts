@@ -511,7 +511,17 @@ export type MemberCapability =
   | 'view-time-tracking'
   | 'manage-own-time-entries'
   | 'manage-all-time-entries'
-  | 'use-timer';
+  | 'use-timer'
+  /**
+   * Spec 13 additions — the Kanban Board & Tasks capabilities.
+   * `view-board`: view the board / list / task detail (admin, manager, user).
+   * `manage-tasks`: create/edit/move/delete tasks (admin, manager, user).
+   * `manage-board-columns`: create/rename/reorder/delete columns (admin, manager).
+   * `user` role is further scoped by `ProjectMember` in the service layer.
+   */
+  | 'view-board'
+  | 'manage-tasks'
+  | 'manage-board-columns';
 
 /**
  * Pure lookup against spec 04's Roles & Permission Matrix (TC-04-UNIT-05), widened by
@@ -541,6 +551,9 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-own-time-entries': true,
     'manage-all-time-entries': true,
     'use-timer': true,
+    'view-board': true,
+    'manage-tasks': true,
+    'manage-board-columns': true,
   },
   manager: {
     'view-list': true,
@@ -562,6 +575,9 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-own-time-entries': true,
     'manage-all-time-entries': true,
     'use-timer': true,
+    'view-board': true,
+    'manage-tasks': true,
+    'manage-board-columns': true,
   },
   user: {
     'view-list': true,
@@ -583,6 +599,9 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-own-time-entries': true,
     'manage-all-time-entries': false,
     'use-timer': true,
+    'view-board': true,
+    'manage-tasks': true,
+    'manage-board-columns': false,
   },
   viewer: {
     'view-list': true,
@@ -604,6 +623,9 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-own-time-entries': false,
     'manage-all-time-entries': false,
     'use-timer': false,
+    'view-board': false,
+    'manage-tasks': false,
+    'manage-board-columns': false,
   },
 };
 
@@ -2478,6 +2500,302 @@ export function gmtLabel(tz: string, instant: Date): string {
   const hours = Math.floor(abs / 60);
   const mins = abs % 60;
   return `GMT${sign}${hours}${mins > 0 ? `:${pad2(mins)}` : ''}`;
+}
+
+// ===========================================================================
+// spec 13 — Kanban Board & Tasks
+// ---------------------------------------------------------------------------
+// Pure helpers for project key, board columns, tasks: types, priorities,
+// validators, hierarchy rules, sort options, and the one source of truth for
+// every spec-13 error/toast/empty string. Capabilities (`view-board`,
+// `manage-tasks`, `manage-board-columns`) live in CAPABILITY_MATRIX above and
+// are gated via `can(...)`.
+// ===========================================================================
+
+/** Verbatim from spec 13 §Error Messages — API + web share this table. */
+export const KANBAN_MESSAGES = {
+  projectKeyRequired: 'Set a project key before using the board',
+  projectKeyTooShort: 'Project key must be at least 2 characters',
+  projectKeyTooLong: 'Project key must be at most 10 characters',
+  projectKeyInvalidFormat: 'Project key must contain only uppercase letters',
+  projectKeyDuplicate: 'A project with this key already exists in your organization',
+  projectKeyImmutable: 'Project key cannot be changed after creation',
+  columnNameRequired: 'Column name is required',
+  columnNameTooLong: 'Column name must be at most 50 characters',
+  columnNameDuplicate: 'A column with this name already exists',
+  columnNotFound: 'Column not found',
+  columnNotEmpty:
+    'Cannot delete a column that contains tasks. Move or delete the tasks first.',
+  columnDeleteLast: 'A board must have at least one column',
+  columnIdsMismatch: 'All column IDs must be provided',
+  taskTitleRequired: 'Task title is required',
+  taskTitleTooLong: 'Task title must be at most 200 characters',
+  descriptionTooLong: 'Description must be at most 10,000 characters',
+  typeRequired: 'Task type is required',
+  typeInvalid: 'Task type must be one of: epic, task, bug, story, subtask',
+  priorityInvalid: 'Priority must be one of: low, medium, high, critical',
+  storyPointsInvalid: 'Story points must be an integer between 0 and 999',
+  dueDateInvalid: 'Invalid due date',
+  epicCannotHaveParent: 'Epics cannot have a parent task',
+  subtaskRequiresParent: 'Subtasks must have a parent task',
+  subtaskParentInvalid:
+    'Subtask parent must be a task, bug, or story (not an epic or subtask)',
+  taskParentMustBeEpic: 'Parent of a task, bug, or story must be an epic',
+  parentNotFound: 'Parent task not found',
+  parentWrongProject: 'Parent task must be in the same project',
+  circularReference: 'Cannot create a circular parent reference',
+  assigneeInvalid: 'Assignee must be an active member of the organization',
+  taskNotFound: 'Task not found',
+  projectArchived: 'Cannot modify tasks in an archived project',
+  boardPermissionDenied: 'You do not have permission to view this board',
+  tasksPermissionDenied: 'You do not have permission to manage tasks in this project',
+  columnsPermissionDenied: 'You do not have permission to manage board columns',
+  toastTaskCreated: 'Task created',
+  toastTaskUpdated: 'Task updated',
+  toastTaskDeleted: 'Task deleted',
+  toastTaskMoved: 'Task moved',
+  toastColumnCreated: 'Column created',
+  toastColumnUpdated: 'Column updated',
+  toastColumnDeleted: 'Column deleted',
+  emptyBoard: 'No tasks yet. Create your first task to get started.',
+  emptyColumn: 'No tasks in this column.',
+  emptyList: 'No tasks match your filters.',
+  genericError: 'Something went wrong. Please try again.',
+} as const;
+
+/** Bounds shared by API + web (spec 13 §Validation). */
+export const KANBAN_LIMITS = {
+  projectKeyMin: 2,
+  projectKeyMax: 10,
+  columnNameMax: 50,
+  taskTitleMax: 200,
+  taskDescriptionMax: 10000,
+  storyPointsMin: 0,
+  storyPointsMax: 999,
+} as const;
+
+/** Task types (spec 13 FR-9). */
+export const TASK_TYPES = ['epic', 'task', 'bug', 'story', 'subtask'] as const;
+export type TaskType = (typeof TASK_TYPES)[number];
+export function isValidTaskType(input: unknown): input is TaskType {
+  return typeof input === 'string' && (TASK_TYPES as readonly string[]).includes(input);
+}
+
+/** Task priority (spec 13 FR-14). Null / unset is a fifth valid value. */
+export const TASK_PRIORITIES = ['low', 'medium', 'high', 'critical'] as const;
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];
+export function isValidTaskPriority(input: unknown): input is TaskPriority {
+  return (
+    typeof input === 'string' && (TASK_PRIORITIES as readonly string[]).includes(input)
+  );
+}
+
+/** BoardColumn.category values (spec 13 FR-7). */
+export const COLUMN_CATEGORIES = ['todo', 'in_progress', 'done', 'custom'] as const;
+export type ColumnCategory = (typeof COLUMN_CATEGORIES)[number];
+export function isValidColumnCategory(input: unknown): input is ColumnCategory {
+  return (
+    typeof input === 'string' && (COLUMN_CATEGORIES as readonly string[]).includes(input)
+  );
+}
+
+/** Project key pattern: 2-10 uppercase ASCII letters. */
+const PROJECT_KEY_PATTERN = /^[A-Z]+$/;
+
+/**
+ * Project key (spec 13 FR-1 / TC-13-UNIT-01..06). Trim first; empty → required;
+ * length checked in codepoints (safe for ASCII since [A-Z] only, but we keep the
+ * codepoint idiom shared with other validators).
+ */
+export function validateProjectKey(input: string): FieldResult {
+  const value = (input ?? '').trim();
+  if (value.length === 0) return fail(KANBAN_MESSAGES.projectKeyRequired);
+  const len = [...value].length;
+  if (len < KANBAN_LIMITS.projectKeyMin) return fail(KANBAN_MESSAGES.projectKeyTooShort);
+  if (len > KANBAN_LIMITS.projectKeyMax) return fail(KANBAN_MESSAGES.projectKeyTooLong);
+  if (!PROJECT_KEY_PATTERN.test(value)) return fail(KANBAN_MESSAGES.projectKeyInvalidFormat);
+  return ok(value);
+}
+
+/**
+ * Column name (spec 13 FR-4 / TC-13-UNIT-14..15). Trim, 1-50 codepoints.
+ */
+export function validateColumnName(input: string): FieldResult {
+  const value = (input ?? '').trim();
+  if (value.length === 0) return fail(KANBAN_MESSAGES.columnNameRequired);
+  if ([...value].length > KANBAN_LIMITS.columnNameMax) {
+    return fail(KANBAN_MESSAGES.columnNameTooLong);
+  }
+  return ok(value);
+}
+
+/**
+ * Task title (spec 13 FR-18 / TC-13-UNIT-07..10). Trim, 1-200 codepoints.
+ */
+export function validateTaskTitle(input: string): FieldResult {
+  const value = (input ?? '').trim();
+  if (value.length === 0) return fail(KANBAN_MESSAGES.taskTitleRequired);
+  if ([...value].length > KANBAN_LIMITS.taskTitleMax) {
+    return fail(KANBAN_MESSAGES.taskTitleTooLong);
+  }
+  return ok(value);
+}
+
+/**
+ * Task description (spec 13 FR-17). Nullable; empty/whitespace normalized to null.
+ * The result carries a nullable value that the API can persist as-is.
+ */
+export type NullableFieldResult =
+  | { valid: true; value: string | null }
+  | { valid: false; error: string };
+
+export function validateTaskDescription(
+  input: string | null | undefined,
+): NullableFieldResult {
+  if (input == null) return { valid: true, value: null };
+  const value = String(input).trim();
+  if (value.length === 0) return { valid: true, value: null };
+  if ([...value].length > KANBAN_LIMITS.taskDescriptionMax) {
+    return { valid: false, error: KANBAN_MESSAGES.descriptionTooLong };
+  }
+  return { valid: true, value };
+}
+
+/** Story points (spec 13 FR-15). Nullable integer 0-999. */
+export type NumericNullableFieldResult =
+  | { valid: true; value: number | null }
+  | { valid: false; error: string };
+
+export function validateStoryPoints(
+  input: number | string | null | undefined,
+): NumericNullableFieldResult {
+  if (input == null) return { valid: true, value: null };
+  if (typeof input === 'string' && input.trim().length === 0) {
+    return { valid: true, value: null };
+  }
+  const num = typeof input === 'number' ? input : Number(String(input).trim());
+  if (!Number.isFinite(num)) return { valid: false, error: KANBAN_MESSAGES.storyPointsInvalid };
+  if (!Number.isInteger(num)) return { valid: false, error: KANBAN_MESSAGES.storyPointsInvalid };
+  if (num < KANBAN_LIMITS.storyPointsMin || num > KANBAN_LIMITS.storyPointsMax) {
+    return { valid: false, error: KANBAN_MESSAGES.storyPointsInvalid };
+  }
+  return { valid: true, value: num };
+}
+
+/**
+ * Due date (spec 13 FR-16 / Validation Rule 8). Nullable; accepts 'YYYY-MM-DD' or an
+ * ISO datetime string. Returns the canonical 'YYYY-MM-DD' or null.
+ */
+export function validateDueDate(input: string | null | undefined): NullableFieldResult {
+  if (input == null) return { valid: true, value: null };
+  const value = String(input).trim();
+  if (value.length === 0) return { valid: true, value: null };
+  // Accept 'YYYY-MM-DD' or a valid ISO timestamp; canonicalize to 'YYYY-MM-DD'.
+  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!dateMatch) return { valid: false, error: KANBAN_MESSAGES.dueDateInvalid };
+  const [, y, m, d] = dateMatch;
+  const parsed = Date.parse(`${y}-${m}-${d}T00:00:00Z`);
+  if (!Number.isFinite(parsed)) return { valid: false, error: KANBAN_MESSAGES.dueDateInvalid };
+  // Round-trip check to reject impossible days (e.g. 2026-02-31).
+  const dt = new Date(parsed);
+  const yy = dt.getUTCFullYear();
+  const mm = dt.getUTCMonth() + 1;
+  const dd = dt.getUTCDate();
+  if (yy !== Number(y) || mm !== Number(m) || dd !== Number(d)) {
+    return { valid: false, error: KANBAN_MESSAGES.dueDateInvalid };
+  }
+  return { valid: true, value: `${y}-${m}-${d}` };
+}
+
+/** Task type validator wrapper for pure form use. */
+export function validateTaskType(input: unknown): FieldResult {
+  if (input == null || input === '') return fail(KANBAN_MESSAGES.typeRequired);
+  if (!isValidTaskType(input)) return fail(KANBAN_MESSAGES.typeInvalid);
+  return ok(input);
+}
+
+/**
+ * Task priority. Null / undefined / '' → valid null; otherwise must be in enum.
+ */
+export function validateTaskPriority(
+  input: unknown,
+): { valid: true; value: TaskPriority | null } | { valid: false; error: string } {
+  if (input == null || input === '') return { valid: true, value: null };
+  if (!isValidTaskPriority(input)) return { valid: false, error: KANBAN_MESSAGES.priorityInvalid };
+  return { valid: true, value: input };
+}
+
+/**
+ * Format the human-readable task key from project key + task number
+ * (spec 13 FR-8 / TC-13-UNIT-22).
+ */
+export function formatTaskKey(projectKey: string, taskNumber: number): string {
+  return `${projectKey}-${taskNumber}`;
+}
+
+/**
+ * Which type can be a parent to which type (spec 13 FR-10). Returns null on OK, or the
+ * spec-13 error message when the transition is illegal. Pure — the service does the DB
+ * lookups for existence, same-project, and circular checks separately.
+ *
+ *   - epic         → must NOT have a parent
+ *   - task/bug/story → optional parent; if set, parent must be epic
+ *   - subtask      → parent required; parent must be task/bug/story
+ */
+export function checkTaskHierarchy(
+  childType: TaskType,
+  parentType: TaskType | null,
+): string | null {
+  if (childType === 'epic') {
+    if (parentType != null) return KANBAN_MESSAGES.epicCannotHaveParent;
+    return null;
+  }
+  if (childType === 'subtask') {
+    if (parentType == null) return KANBAN_MESSAGES.subtaskRequiresParent;
+    if (parentType === 'epic' || parentType === 'subtask') {
+      return KANBAN_MESSAGES.subtaskParentInvalid;
+    }
+    return null;
+  }
+  // task / bug / story — parent optional; if provided must be epic.
+  if (parentType == null) return null;
+  if (parentType !== 'epic') return KANBAN_MESSAGES.taskParentMustBeEpic;
+  return null;
+}
+
+/** Valid `sort` query values for the list view (spec 13 GET .../tasks). */
+export const TASK_LIST_SORT_VALUES = [
+  'created_desc',
+  'created_asc',
+  'priority_desc',
+  'priority_asc',
+  'due_date_asc',
+  'due_date_desc',
+  'story_points_desc',
+  'title_asc',
+] as const;
+export type TaskListSort = (typeof TASK_LIST_SORT_VALUES)[number];
+export function parseTaskListSort(value: string | undefined | null): TaskListSort {
+  return (TASK_LIST_SORT_VALUES as readonly string[]).includes(value ?? '')
+    ? (value as TaskListSort)
+    : 'created_desc';
+}
+
+/**
+ * Auto-suggest a project key from a name (design spec 13, Create Project modal):
+ * take the first letter of each word, uppercase, filter to A-Z, cap at 10 chars.
+ * "Mobile App" → "MA"; "Awesome Backend Rewrite" → "ABR". Purely presentation —
+ * server validates whatever the user sends.
+ */
+export function suggestProjectKey(name: string): string {
+  return (name ?? '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '')
+    .slice(0, KANBAN_LIMITS.projectKeyMax);
 }
 
 /* ------------------------------------------------------------------ *

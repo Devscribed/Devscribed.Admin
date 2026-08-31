@@ -136,3 +136,143 @@ export function ChevronRightIcon({ size = 16 }: { size?: number }) {
     </svg>
   );
 }
+
+/* ------------------------------------------------------------------ *
+ * Spec 13 — Kanban Board & Tasks
+ * Icons for task types, priorities, and the misc kanban controls
+ * (gear, plus, drag handle, back arrow). All inline SVG, `currentColor`,
+ * sizes settable via a prop so the same glyph works in a 16px card row
+ * and a 22px board button.
+ * ------------------------------------------------------------------ */
+
+/** Task type — Epic. Filled lightning-bolt glyph, violet accent ink. */
+export function EpicIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="currentColor" aria-hidden>
+      <path d="M9.2 1.2 3 9h4l-1.2 5.6L12 6h-4l1.2-4.8Z" />
+    </svg>
+  );
+}
+
+/** Task type — Task. Rounded checkmark-square glyph. */
+export function TaskTypeIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="currentColor" aria-hidden>
+      <path d="M3.75 2h8.5A1.75 1.75 0 0 1 14 3.75v8.5A1.75 1.75 0 0 1 12.25 14h-8.5A1.75 1.75 0 0 1 2 12.25v-8.5A1.75 1.75 0 0 1 3.75 2Zm7.53 3.72a.75.75 0 0 0-1.06-1.06L7 7.88 5.78 6.66a.75.75 0 0 0-1.06 1.06l1.75 1.75c.3.3.77.3 1.06 0l3.75-3.75Z" />
+    </svg>
+  );
+}
+
+/** Task type — Bug. Six-legged bug body glyph. */
+export function BugIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="currentColor" aria-hidden>
+      <path d="M8 2.2a2.5 2.5 0 0 1 2.4 1.8H5.6A2.5 2.5 0 0 1 8 2.2Zm-4.6 3.3H2a.7.7 0 0 0 0 1.4h1.2v.6a4.8 4.8 0 0 0 .3 1.7H2a.7.7 0 0 0 0 1.4h1.9c.5.9 1.3 1.6 2.3 1.9v-4a.75.75 0 0 1 1.5 0v4.1a3.9 3.9 0 0 0 .6.05c.2 0 .4-.02.6-.05V9.5a.75.75 0 0 1 1.5 0v4c1-.3 1.8-1 2.3-1.9H14a.7.7 0 0 0 0-1.4h-1.5a4.8 4.8 0 0 0 .3-1.7v-.6H14a.7.7 0 0 0 0-1.4h-1.4a4.8 4.8 0 0 0-.6-1.3H4a4.8 4.8 0 0 0-.6 1.3Z" />
+    </svg>
+  );
+}
+
+/** Task type — Story. Bookmark/flag glyph. */
+export function StoryIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="currentColor" aria-hidden>
+      <path d="M4 2.5A1.5 1.5 0 0 0 2.5 4v10.25a.75.75 0 0 0 1.2.6L8 11.7l4.3 3.15a.75.75 0 0 0 1.2-.6V4A1.5 1.5 0 0 0 12 2.5H4Z" />
+    </svg>
+  );
+}
+
+/** Task type — Subtask. Small nested-checkbox glyph. */
+export function SubtaskIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="currentColor" aria-hidden>
+      <path d="M2 3.25a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-.75.75h-4.5A.75.75 0 0 1 2 6.75v-3.5Zm6.5 6a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-.75.75h-4.5A.75.75 0 0 1 8.5 12.75v-3.5Zm-1-.5V11a.75.75 0 0 0 .75.75H10a.75.75 0 0 0 0-1.5H9V8.75a.75.75 0 0 0-1.5 0Z" />
+    </svg>
+  );
+}
+
+/** Priority — Low. Single down chevron. */
+export function PriorityLowIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="currentColor" aria-hidden>
+      <path d="M3.72 6.22a.75.75 0 0 1 1.06 0L8 9.44l3.22-3.22a.75.75 0 1 1 1.06 1.06l-3.75 3.75a.75.75 0 0 1-1.06 0L3.72 7.28a.75.75 0 0 1 0-1.06Z" />
+    </svg>
+  );
+}
+
+/** Priority — Medium. Equals/level dash glyph. */
+export function PriorityMediumIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="currentColor" aria-hidden>
+      <rect x="3" y="6" width="10" height="1.6" rx="0.8" />
+      <rect x="3" y="9.4" width="10" height="1.6" rx="0.8" />
+    </svg>
+  );
+}
+
+/** Priority — High. Single up chevron. */
+export function PriorityHighIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="currentColor" aria-hidden>
+      <path d="M3.72 9.78a.75.75 0 0 0 1.06 0L8 6.56l3.22 3.22a.75.75 0 0 0 1.06-1.06L8.53 4.97a.75.75 0 0 0-1.06 0L3.72 8.72a.75.75 0 0 0 0 1.06Z" />
+    </svg>
+  );
+}
+
+/** Priority — Critical. Double up chevron. */
+export function PriorityCriticalIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="currentColor" aria-hidden>
+      <path d="M3.72 7.78a.75.75 0 0 0 1.06 0L8 4.56l3.22 3.22a.75.75 0 0 0 1.06-1.06L8.53 2.97a.75.75 0 0 0-1.06 0L3.72 6.72a.75.75 0 0 0 0 1.06Zm0 4.5a.75.75 0 0 0 1.06 0L8 9.06l3.22 3.22a.75.75 0 0 0 1.06-1.06L8.53 7.47a.75.75 0 0 0-1.06 0l-3.75 3.75a.75.75 0 0 0 0 1.06Z" />
+    </svg>
+  );
+}
+
+/** Gear glyph — the "Board Settings" trigger. */
+export function GearIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 20 20" width={size} height={size} fill="currentColor" aria-hidden>
+      <path d="M9.05 1.5a.9.9 0 0 0-.9.75l-.28 1.75a6.5 6.5 0 0 0-1.5.87L4.7 4.28a.9.9 0 0 0-1.11.4l-.95 1.65a.9.9 0 0 0 .21 1.15l1.36 1.13a6.6 6.6 0 0 0 0 1.78L2.85 11.5a.9.9 0 0 0-.21 1.15l.95 1.65a.9.9 0 0 0 1.11.4l1.68-.6a6.5 6.5 0 0 0 1.5.88l.28 1.76a.9.9 0 0 0 .9.76h1.9a.9.9 0 0 0 .9-.76l.28-1.76a6.5 6.5 0 0 0 1.5-.88l1.68.6a.9.9 0 0 0 1.11-.4l.95-1.65a.9.9 0 0 0-.21-1.15l-1.36-1.13a6.6 6.6 0 0 0 0-1.78l1.36-1.13a.9.9 0 0 0 .21-1.15l-.95-1.65a.9.9 0 0 0-1.11-.4l-1.68.59a6.5 6.5 0 0 0-1.5-.87l-.28-1.75a.9.9 0 0 0-.9-.75h-1.9ZM10 7.25a2.75 2.75 0 1 1 0 5.5 2.75 2.75 0 0 1 0-5.5Z" />
+    </svg>
+  );
+}
+
+/** Plus glyph — inline "add" affordances (columns, subtasks). */
+export function PlusIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="currentColor" aria-hidden>
+      <path d="M8 2.5a.75.75 0 0 1 .75.75v4h4a.75.75 0 0 1 0 1.5h-4v4a.75.75 0 0 1-1.5 0v-4h-4a.75.75 0 0 1 0-1.5h4v-4A.75.75 0 0 1 8 2.5Z" />
+    </svg>
+  );
+}
+
+/** Drag handle (≡) — board settings row grip. */
+export function DragHandleIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="currentColor" aria-hidden>
+      <circle cx="6" cy="4" r="1.2" />
+      <circle cx="10" cy="4" r="1.2" />
+      <circle cx="6" cy="8" r="1.2" />
+      <circle cx="10" cy="8" r="1.2" />
+      <circle cx="6" cy="12" r="1.2" />
+      <circle cx="10" cy="12" r="1.2" />
+    </svg>
+  );
+}
+
+/** Back arrow glyph — the top-left "← Back" link on nested surfaces. */
+export function BackArrowIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="currentColor" aria-hidden>
+      <path d="M6.78 3.22a.75.75 0 0 1 0 1.06L3.81 7.25H13a.75.75 0 0 1 0 1.5H3.81l2.97 2.97a.75.75 0 0 1-1.06 1.06L1.47 8.53a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z" />
+    </svg>
+  );
+}
+
+/** Check glyph — the "done" indicator on task children rows. */
+export function CheckIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 16 16" width={size} height={size} fill="currentColor" aria-hidden>
+      <path d="M13.28 4.22a.75.75 0 0 1 0 1.06l-6.5 6.5a.75.75 0 0 1-1.06 0l-3-3a.75.75 0 1 1 1.06-1.06l2.47 2.47 5.97-5.97a.75.75 0 0 1 1.06 0Z" />
+    </svg>
+  );
+}

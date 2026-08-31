@@ -2,12 +2,19 @@
 
 import Link from 'next/link';
 import { notFound, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
-import { Badge, Button, Card, IconButton } from '@/ds';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { Badge, Button, Card, IconButton, Input } from '@/ds';
 import { PencilIcon } from '@/layout/icons';
 import { useSession } from '@/layout/session-context';
 import { useToast } from '@/toast';
-import { PROJECT_MESSAGES, can, type Role } from '@devscribed/validation';
+import { errorNode } from '@/field-error';
+import {
+  KANBAN_MESSAGES,
+  PROJECT_MESSAGES,
+  can,
+  validateProjectKey,
+  type Role,
+} from '@devscribed/validation';
 import { AvatarInitials } from '../../members/[memberId]/AvatarInitials';
 import { ProjectModal } from '../ProjectModal';
 import type {
@@ -64,6 +71,12 @@ export function ProjectDetailScreen({ orgId, projectId }: { orgId: string; proje
   const [archiving, setArchiving] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+
+  // Spec 13 — inline "Add Key" affordance: expands into an Input + Save/Cancel.
+  const [addingKey, setAddingKey] = useState(false);
+  const [keyDraft, setKeyDraft] = useState('');
+  const [keyError, setKeyError] = useState<string | null>(null);
+  const [savingKey, setSavingKey] = useState(false);
 
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -146,6 +159,47 @@ export function ProjectDetailScreen({ orgId, projectId }: { orgId: string; proje
     setArchiving(false);
   }
 
+  async function saveProjectKey(event?: FormEvent): Promise<void> {
+    if (event) event.preventDefault();
+    if (savingKey) return;
+    if (state.kind !== 'ready') return;
+    const result = validateProjectKey(keyDraft);
+    if (!result.valid) {
+      setKeyError(result.error);
+      return;
+    }
+    setKeyError(null);
+    setSavingKey(true);
+    try {
+      const response = await fetch(`/api/organizations/${orgId}/projects/${projectId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ name: state.project.name, key: result.value }),
+      });
+      if (response.ok) {
+        showToast('toast-project-updated', PROJECT_MESSAGES.toastUpdated);
+        setAddingKey(false);
+        setKeyDraft('');
+        await load();
+      } else {
+        const body = await response.json().catch(() => null);
+        if (response.status === 409 || body?.error === 'key_duplicate') {
+          setKeyError(KANBAN_MESSAGES.projectKeyDuplicate);
+        } else if (body?.errors?.key) {
+          setKeyError(body.errors.key);
+        } else if (body?.error === 'key_immutable') {
+          setKeyError(KANBAN_MESSAGES.projectKeyImmutable);
+        } else {
+          showToast('toast-project-updated', body?.message ?? PROJECT_MESSAGES.genericError, 'error');
+        }
+      }
+    } catch {
+      showToast('toast-project-updated', PROJECT_MESSAGES.genericError, 'error');
+    }
+    setSavingKey(false);
+  }
+
   async function handleRestore(): Promise<void> {
     if (restoring) return;
     setRestoring(true);
@@ -207,7 +261,7 @@ export function ProjectDetailScreen({ orgId, projectId }: { orgId: string; proje
         <Card>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-10)' }}>
             {/* Title row */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minWidth: 0, flexWrap: 'wrap' }}>
               <h1
                 data-testid="project-detail-name"
                 style={{
@@ -225,6 +279,79 @@ export function ProjectDetailScreen({ orgId, projectId }: { orgId: string; proje
               >
                 {state.project.name}
               </h1>
+              {state.project.key ? (
+                <span
+                  data-testid="project-key-badge"
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 'var(--fs-12)',
+                    color: 'var(--text-muted)',
+                    background: 'var(--bg-sunken)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '2px 8px',
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  {state.project.key}
+                </span>
+              ) : addingKey ? (
+                <form
+                  onSubmit={saveProjectKey}
+                  style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}
+                >
+                  <Input
+                    autoFocus
+                    value={keyDraft}
+                    onChange={(event: { target: { value: string } }) => {
+                      setKeyDraft(event.target.value.toUpperCase());
+                      if (keyError) setKeyError(null);
+                    }}
+                    placeholder="e.g. MOB"
+                    data-testid="project-key-input"
+                    aria-invalid={keyError ? true : undefined}
+                    aria-describedby={keyError ? 'field-error-projectKey' : undefined}
+                    error={keyError ? errorNode('projectKey', keyError) : undefined}
+                    style={{ width: 120 }}
+                    wrapperStyle={{ gap: 0 }}
+                  />
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="sm"
+                    loading={savingKey}
+                    data-testid="project-key-save-btn"
+                  >
+                    Save
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={savingKey}
+                    onClick={() => {
+                      setAddingKey(false);
+                      setKeyDraft('');
+                      setKeyError(null);
+                    }}
+                    data-testid="project-key-cancel-btn"
+                  >
+                    Cancel
+                  </Button>
+                </form>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setAddingKey(true);
+                    setKeyDraft('');
+                    setKeyError(null);
+                  }}
+                  data-testid="project-add-key-btn"
+                >
+                  Add Key
+                </Button>
+              )}
               <Badge
                 tone={STATUS_META[state.project.status].tone}
                 data-testid="project-status-badge"
@@ -239,6 +366,43 @@ export function ProjectDetailScreen({ orgId, projectId }: { orgId: string; proje
                 <PencilIcon />
               </IconButton>
             </div>
+
+            {/* Board / List tabs — appear once the project has a key. */}
+            {state.project.key && (
+              <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+                <Link
+                  href={`/org/${orgId}/projects/${projectId}/board`}
+                  data-testid="project-board-tab"
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontWeight: 600,
+                    fontSize: 'var(--fs-13)',
+                    color: 'var(--accent)',
+                    background: 'var(--accent-soft)',
+                    padding: '8px 14px',
+                    borderRadius: 'var(--radius-lg)',
+                    textDecoration: 'none',
+                  }}
+                >
+                  Board
+                </Link>
+                <Link
+                  href={`/org/${orgId}/projects/${projectId}/list`}
+                  data-testid="project-list-tab"
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontWeight: 600,
+                    fontSize: 'var(--fs-13)',
+                    color: 'var(--text-sub)',
+                    padding: '8px 14px',
+                    borderRadius: 'var(--radius-lg)',
+                    textDecoration: 'none',
+                  }}
+                >
+                  List
+                </Link>
+              </div>
+            )}
 
             {/* Members section */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-5)' }}>

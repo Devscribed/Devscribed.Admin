@@ -6,10 +6,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  KANBAN_MESSAGES,
   PROJECT_MESSAGES,
   can,
   parseProjectStatusFilter,
   validateMembershipIds,
+  validateProjectKey,
   validateProjectName,
   type Role,
 } from '@devscribed/validation';
@@ -17,7 +19,7 @@ import { Prisma } from '@prisma/client';
 import type { SessionPayload } from '../auth/session.service';
 import { PrismaService } from '../prisma.service';
 
-/** A single row of the projects list (spec 11 GET .../projects contract). */
+/** A single row of the projects list (spec 11 GET .../projects contract, extended by spec 13). */
 export interface ProjectListItem {
   id: string;
   name: string;
@@ -25,14 +27,20 @@ export interface ProjectListItem {
   memberCount: number;
   totalHours: number;
   createdAt: string;
+  /** Spec 13 — the project's task-key prefix, or null when not set. */
+  key: string | null;
 }
 
-/** The `POST`/`PUT` project response shape (spec 11 API contracts). */
+/** The `POST`/`PUT` project response shape (spec 11 API contracts, extended by spec 13). */
 export interface ProjectSummary {
   id: string;
   name: string;
   status: string;
   createdAt: string;
+  /** Spec 13 — the project's task-key prefix, or null when not set. */
+  key: string | null;
+  /** Spec 13 — atomically-allocated task counter. */
+  nextTaskNumber: number;
 }
 
 /** A single assigned-member row (spec 11 GET .../members contract). */
@@ -47,6 +55,8 @@ export interface ProjectMemberItem {
 
 export interface CreateProjectInput {
   name?: unknown;
+  /** Spec 13 — optional at creation, optional-and-immutable-once-set on PUT. */
+  key?: unknown;
 }
 
 export interface AddMembersInput {
@@ -148,6 +158,7 @@ export class ProjectsService {
         memberCount: p._count.members,
         totalHours: Math.round(((minutesByProject.get(p.id) ?? 0) / 60) * 10) / 10,
         createdAt: p.createdAt.toISOString(),
+        key: p.key,
       })),
     };
   }
@@ -173,17 +184,32 @@ export class ProjectsService {
 
     await this.assertNameAvailable(caller.organizationId, name, null);
 
+    const key = await this.parseAndAssertKeyAvailable(input.key, caller.organizationId, null);
+
     try {
       const project = await this.prisma.project.create({
         data: {
           organizationId: caller.organizationId,
           name,
+          key,
           createdByAccountId: caller.accountId,
         },
       });
       return this.toSummary(project);
     } catch (e) {
       if (this.isUniqueViolation(e)) {
+        // Two unique indexes on Project: (org, LOWER(name)) and partial (org, key).
+        // The pre-checks above catch the common paths; a race here maps back to the
+        // spec-correct 409 for whichever conflict fired.
+        const meta = (e as Prisma.PrismaClientKnownRequestError).meta;
+        const target =
+          meta && typeof meta === 'object' && 'target' in meta ? String((meta as { target?: unknown }).target ?? '') : '';
+        if (target.includes('key')) {
+          throw new ConflictException({
+            error: 'key_duplicate',
+            message: KANBAN_MESSAGES.projectKeyDuplicate,
+          });
+        }
         throw new ConflictException({
           error: 'duplicate_name',
           message: PROJECT_MESSAGES.nameDuplicate,
@@ -220,14 +246,44 @@ export class ProjectsService {
 
     await this.assertNameAvailable(caller.organizationId, name, project.id);
 
+    // Spec 13 — key is optional on PUT; when supplied, must be either the same value
+    // (idempotent no-op) or a new value on a project that currently has no key.
+    const keyProvided = input.key !== undefined && input.key !== null;
+    let keyToSet: string | undefined;
+    if (keyProvided) {
+      const parsed = this.parseKeyInput(input.key);
+      if (project.key !== null) {
+        if (project.key === parsed) {
+          keyToSet = undefined; // no-op, skip the write
+        } else {
+          throw new BadRequestException({
+            error: 'key_immutable',
+            message: KANBAN_MESSAGES.projectKeyImmutable,
+          });
+        }
+      } else {
+        await this.assertKeyAvailable(caller.organizationId, parsed, project.id);
+        keyToSet = parsed;
+      }
+    }
+
     try {
       const updated = await this.prisma.project.update({
         where: { id: project.id },
-        data: { name },
+        data: { name, ...(keyToSet !== undefined ? { key: keyToSet } : {}) },
       });
       return this.toSummary(updated);
     } catch (e) {
       if (this.isUniqueViolation(e)) {
+        const meta = (e as Prisma.PrismaClientKnownRequestError).meta;
+        const target =
+          meta && typeof meta === 'object' && 'target' in meta ? String((meta as { target?: unknown }).target ?? '') : '';
+        if (target.includes('key')) {
+          throw new ConflictException({
+            error: 'key_duplicate',
+            message: KANBAN_MESSAGES.projectKeyDuplicate,
+          });
+        }
         throw new ConflictException({
           error: 'duplicate_name',
           message: PROJECT_MESSAGES.nameDuplicate,
@@ -475,13 +531,65 @@ export class ProjectsService {
     name: string;
     status: string;
     createdAt: Date;
+    key: string | null;
+    nextTaskNumber: number;
   }): ProjectSummary {
     return {
       id: project.id,
       name: project.name,
       status: project.status,
       createdAt: project.createdAt.toISOString(),
+      key: project.key,
+      nextTaskNumber: project.nextTaskNumber,
     };
+  }
+
+  /**
+   * Spec 13 — parse+validate a caller-supplied key. Empty/whitespace/null → null (the
+   * caller may omit it), otherwise runs the shared validator and 400s on failure.
+   */
+  private parseKeyInput(input: unknown): string {
+    const raw = typeof input === 'string' ? input : '';
+    const result = validateProjectKey(raw);
+    if (!result.valid) {
+      throw new BadRequestException({ errors: { key: result.error } });
+    }
+    return result.value;
+  }
+
+  /** Wraps `parseKeyInput` + duplicate check for create. Returns null when omitted. */
+  private async parseAndAssertKeyAvailable(
+    input: unknown,
+    organizationId: string,
+    excludeProjectId: string | null,
+  ): Promise<string | null> {
+    if (input === undefined || input === null) return null;
+    if (typeof input === 'string' && input.trim().length === 0) return null;
+    const key = this.parseKeyInput(input);
+    await this.assertKeyAvailable(organizationId, key, excludeProjectId);
+    return key;
+  }
+
+  /** Spec 13 — pre-check for the 409 key_duplicate on the common path. */
+  private async assertKeyAvailable(
+    organizationId: string,
+    key: string,
+    excludeProjectId: string | null,
+  ): Promise<void> {
+    const existing = await this.prisma.project.findFirst({
+      where: {
+        organizationId,
+        key,
+        ...(excludeProjectId ? { id: { not: excludeProjectId } } : {}),
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new ConflictException({
+        error: 'key_duplicate',
+        message: KANBAN_MESSAGES.projectKeyDuplicate,
+      });
+    }
   }
 
   /** Caller's own active membership, resolved from the session — mirrors `RequestsService`. */
