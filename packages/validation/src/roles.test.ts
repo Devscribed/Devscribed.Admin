@@ -52,6 +52,9 @@ describe('ROLE_CAPABILITIES matrix', () => {
         'ViewMemberProfile',
         'ViewMemberProfilePii',
         'EditMemberProfile',
+        // Spec 04: choosing the provider is admin only.
+        'ViewSigningSettings',
+        'ManageSigningSettings',
       ],
       manager: [
         'ViewDocumentTemplates',
@@ -62,6 +65,8 @@ describe('ROLE_CAPABILITIES matrix', () => {
         'ViewEnvelopeAudit',
         // Spec 03: the masked view and nothing more.
         'ViewMemberProfile',
+        // Spec 04: a manager sees the setting and cannot change it.
+        'ViewSigningSettings',
       ],
       // Spec 03's "user (own)" column is not a row here — see `canReadProfile` below.
       user: [],
@@ -108,6 +113,8 @@ describe('capabilitiesFor', () => {
       'ViewMemberProfile',
       'ViewMemberProfilePii',
       'EditMemberProfile',
+      'ViewSigningSettings',
+      'ManageSigningSettings',
     ]);
     expect(capabilitiesFor('manager')).toEqual([
       'ViewDocumentTemplates',
@@ -117,6 +124,7 @@ describe('capabilitiesFor', () => {
       'DownloadSignedDocument',
       'ViewEnvelopeAudit',
       'ViewMemberProfile',
+      'ViewSigningSettings',
     ]);
     expect(capabilitiesFor('member')).toEqual([]);
     expect(capabilitiesFor(null)).toEqual([]);
@@ -290,5 +298,39 @@ describe('canReadProfile / canReadProfilePii / canEditProfile', () => {
       expect(canReadProfilePii(role, false)).toBe(hasCapability(role, 'ViewMemberProfilePii'));
       expect(canEditProfile(role, false)).toBe(hasCapability(role, 'EditMemberProfile'));
     }
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Spec 04 — the two signing-settings capabilities
+ *
+ * The whole point of the split: `ManageSigningSettings` is admin only while
+ * `ManageEnvelopes` is admin and manager, because choosing the provider changes where
+ * every future contract of the organization is executed and who holds the evidence.
+ * ------------------------------------------------------------------ */
+
+describe('spec 04 signing-settings capabilities', () => {
+  const GRANTED: Record<string, readonly Capability[]> = {
+    admin: ['ViewSigningSettings', 'ManageSigningSettings'],
+    manager: ['ViewSigningSettings'],
+    user: [],
+    viewer: [],
+    // The legacy column value must behave exactly like `user`.
+    member: [],
+    nonsense: [],
+  };
+
+  for (const [role, granted] of Object.entries(GRANTED)) {
+    for (const capability of ['ViewSigningSettings', 'ManageSigningSettings'] as const) {
+      const expected = granted.includes(capability);
+      it(`${role} ${expected ? 'has' : 'lacks'} ${capability}`, () => {
+        expect(hasCapability(role, capability)).toBe(expected);
+      });
+    }
+  }
+
+  it('never lets a manager change the provider while letting them send documents', () => {
+    expect(hasCapability('manager', 'ManageEnvelopes')).toBe(true);
+    expect(hasCapability('manager', 'ManageSigningSettings')).toBe(false);
   });
 });

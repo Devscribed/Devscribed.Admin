@@ -1,0 +1,52 @@
+{
+  "status": "pass",
+  "suites": {
+    "unit": {
+      "passed": 941,
+      "failed": 0,
+      "ms": 887
+    },
+    "int": {
+      "passed": 45,
+      "failed": 0,
+      "ms": 14879,
+      "files": [
+        "test/signing-settings.spec.ts",
+        "test/signing-embedded.spec.ts",
+        "test/signwell-client.spec.ts",
+        "test/signwell-completion.spec.ts",
+        "test/signwell-reconcile.spec.ts",
+        "test/signwell-send.spec.ts",
+        "test/signwell-webhook.spec.ts"
+      ]
+    },
+    "e2e": {
+      "passed": 14,
+      "failed": 0,
+      "ms": 34400,
+      "files": [
+        "tests/signature-providers.spec.ts",
+        "tests/regressions.spec.ts"
+      ]
+    }
+  },
+  "flaky": [],
+  "findings": [],
+  "priorFindingsAddressed": [
+    {
+      "id": "TC-04-E2E-01",
+      "status": "fixed",
+      "how": "Replaced `signwell.check()` (which targets the visually-hidden `<input type=\"radio\">` under `pointer-events: none`) with `page.getByTestId('signing-provider-option-signwell').locator('label').click()`, the same pattern already used for the DS checkbox elsewhere in this suite. Verified: TC-04-E2E-01 passes in a full run (`CI=1 npx playwright test tests/signature-providers.spec.ts tests/regressions.spec.ts`), no retry needed."
+    },
+    {
+      "id": "TC-04-E2E-02",
+      "status": "fixed",
+      "how": "The test now routes `**/api/test/signwell/widget*` and holds it open until after asserting `sign-embedded-loading` is visible, then releases it and asserts the frame replaces the loading state — so the loading→frame transition is actually observed instead of racing the stub's fast in-process load. Verified: TC-04-E2E-02 passes."
+    },
+    {
+      "id": "TC-04-E2E-04",
+      "status": "fixed",
+      "how": "Logout now opens the account menu first (`topbar-account-button`) before clicking `logout-button`, matching the pattern in app-shell.spec.ts. Verified: TC-04-E2E-04 passes."
+    }
+  ]
+}

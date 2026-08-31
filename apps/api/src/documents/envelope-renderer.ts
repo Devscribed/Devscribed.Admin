@@ -1,4 +1,23 @@
 import { escapeHtml, substitute } from '@devscribed/validation';
+import {
+  SIGNATURES_CLOSE,
+  SIGNATURES_END,
+  SIGNATURES_OPEN,
+  SIGNATURES_START,
+  executionPageRowBox,
+  fieldBoxAttributes,
+} from './signwell-text-tags';
+
+/*
+ * Spec 04 requirement 14e — the execution page. A provider that places fields by coordinate
+ * needs a page number and a box per field, and nothing here can measure one, so this
+ * renderer stamps each signature row with the box the grid computes for it and the copy
+ * that goes to such a provider hoists the section onto a page of its own.
+ *
+ * The grid lives in `signwell-text-tags.ts` — which is where it is read back, and which
+ * stays free of every import this file has, because the unit suite loads it without the
+ * shared validation package built.
+ */
 
 export interface RenderSigner {
   /** The template's role key. It is what anchors this signer's signature block. */
@@ -185,15 +204,23 @@ export function renderEnvelopeDocument(input: RenderEnvelopeInput): string {
 
   const body = substitute(input.bodyHtml ?? '', frozen);
 
+  // The geometry rides on a wrapper rather than on the block itself, and that is not
+  // cosmetic: spec 02's suite asserts `<div class="signature-block" data-signer-role="…">`
+  // byte for byte, and requirement 10 says that suite passes unedited.
   const signatures = [...input.signers]
     .sort((a, b) => a.order - b.order)
     .map(
-      (signer) =>
+      (signer, index) =>
+        `<div class="signature-slot"${fieldBoxAttributes(
+          'signature',
+          signer.roleKey,
+          executionPageRowBox(index),
+        )}>` +
         `<div class="signature-block" data-signer-role="${escapeHtml(signer.roleKey)}">` +
         // The slot is empty at send and filled on the way out — see `drawSignatures`.
         `<div class="signature-line">${signatureSlot(signer.roleKey)}</div>` +
         `<div class="signature-label">${escapeHtml(signer.roleLabel)}</div>` +
-        `<div class="signature-name">${escapeHtml(signer.name)}</div></div>`,
+        `<div class="signature-name">${escapeHtml(signer.name)}</div></div></div>`,
     )
     .join('');
 
@@ -210,6 +237,7 @@ body { font-family: Georgia, 'Times New Roman', serif; font-size: 12pt; line-hei
 table { border-collapse: collapse; }
 td, th { border: 1px solid #999; padding: 0.25rem 0.5rem; }
 .signatures { display: flex; gap: 3rem; margin-top: 4rem; }
+.signature-slot { flex: 1; }
 .signature-block { flex: 1; }
 /* The line keeps its height whether or not it carries an image, so a part-signed
    document and a signed one lay out identically. */
@@ -217,11 +245,24 @@ td, th { border: 1px solid #999; padding: 0.25rem 0.5rem; }
 .signature-mark img { max-height: 2.4rem; max-width: 100%; }
 .signature-label { font-weight: bold; margin-top: 0.25rem; }
 .signature-name { color: #444; font-size: 10pt; }
+/* The execution page — spec 04 requirement 14e. The class is added only to the copy sent
+   to a provider that places fields by coordinate, so on the internal path every rule below
+   matches nothing and the document renders exactly as it always did. Lengths are in points
+   because the grid the field boxes are computed on is in points. */
+.execution-page { display: block; margin: 0; padding: 0; break-after: page; page-break-after: always; }
+.execution-page .execution-heading { height: 48pt; margin: 0; padding: 0; font-size: 14pt; line-height: 48pt; font-weight: bold; }
+.execution-page .signature-slot,
+.execution-page .signer-entry { display: block; height: 72pt; width: 240pt; margin: 0; padding: 0; }
+.execution-page .signature-block { display: block; height: 72pt; margin: 0; padding: 0; }
+.execution-page .signature-line { height: 40pt; margin: 0; }
+.execution-page .signature-label { height: 16pt; margin: 0; font-size: 11pt; line-height: 16pt; }
+.execution-page .signature-name { height: 16pt; margin: 0; font-size: 10pt; line-height: 16pt; }
+.signer-entry-ref { color: #444; }
 </style>
 </head>
 <body>
 <div class="document-body">${body}</div>
-<div class="signatures">${signatures}</div>
+${SIGNATURES_START}${SIGNATURES_OPEN}${signatures}${SIGNATURES_CLOSE}${SIGNATURES_END}
 </body>
 </html>`;
 }

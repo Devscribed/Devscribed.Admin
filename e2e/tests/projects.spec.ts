@@ -63,12 +63,12 @@ async function openProjectsPage(page: Page): Promise<void> {
 
 /**
  * Drives the DS `Select` status filter: the `data-testid` sits on the trigger button, and
- * options render as `<a>` links inside the popover, so `getByRole('link', …)` targets the
- * option unambiguously. Mirrors `requests-page.spec.ts`'s custom-Select helper.
+ * options are `<a>` elements with `role="option"` (the explicit ARIA role wins over the link
+ * one), so they surface via `getByRole('option', …)` — same pattern as invitation/regressions.
  */
 async function selectStatusFilter(page: Page, label: string): Promise<void> {
   await page.getByTestId('projects-status-filter').click();
-  await page.getByRole('link', { name: label, exact: true }).click();
+  await page.getByRole('option', { name: label, exact: true }).click();
 }
 
 test.describe('11 — Projects', () => {

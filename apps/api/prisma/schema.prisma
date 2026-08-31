@@ -57,6 +57,7 @@ model Account {
   templateVersionsCreated   DocumentTemplateVersion[]    @relation("TemplateVersionsCreated")
   envelopesCreated          Envelope[]                   @relation("EnvelopesCreated")
   envelopesVoided           Envelope[]                   @relation("EnvelopesVoided")
+  signatureProvidersSet     Organization[]               @relation("SignatureProviderSetBy")
   envelopeEventsActed       EnvelopeEvent[]              @relation("EnvelopeEventsActed")
   memberProfilesUpdated     MemberProfile[]              @relation("MemberProfilesUpdated")
   pendingEmailChanges       PendingEmailChange[]
@@ -145,6 +146,16 @@ model Organization {
   id        String   @id @default(uuid())
   name      String
   createdAt DateTime @default(now())
+  /// Documents spec 04 requirement 1 — the provider **new** envelopes are sent
+  /// through. Read once at the start of a send and pinned onto the envelope in the
+  /// transaction that flips it to `sent`; never read as authority afterwards. The
+  /// default is what makes every organization that predates the column keep the
+  /// in-house engine without a backfill.
+  signatureProviderKey   String    @default("internal")
+  signatureProviderSetAt DateTime?
+  signatureProviderSetBy String?
+
+  signatureProviderSetByAccount Account? @relation("SignatureProviderSetBy", fields: [signatureProviderSetBy], references: [id], onDelete: SetNull)
 
   memberships       Membership[]
   documentTemplates DocumentTemplate[]
@@ -352,6 +363,10 @@ enum EnvelopeEventType {
   downloaded
   pdf_failed
   tamper_detected
+  /// Spec 04 — written by the reconciler when a remote provider's state was read and
+  /// converged. Carries the provider key and the provider's status string, nothing else.
+  provider_synced
+  provider_error
 }
 
 /// One contract in flight: a pinned template version, the values filled into it,
@@ -379,6 +394,18 @@ model Envelope {
   /// third-party adapter later is a class and an env var, not a migration.
   providerKey       String         @default("internal")
   providerRef       String         @default("")
+  /// Spec 04. Written at send beside `providerKey`, and never read from configuration
+  /// at display time: switching test mode off must not relabel a document that was
+  /// signed while it was on (edge case 17).
+  providerTestMode  Boolean        @default(false)
+  /// The provider's own status string, verbatim ("Sent", "Completed"). For support,
+  /// never for logic — every decision reads our own status column.
+  providerStatus    String?
+  /// Drives lazy convergence (requirement 24a). Written at send, so a freshly-sent
+  /// envelope is fresh and costs no provider call on its first read.
+  providerSyncedAt  DateTime?
+  /// Last provider-side error, cleared on the next successful sync.
+  providerError     String?
   expiresAt         DateTime?
   sentAt            DateTime?
   completedAt       DateTime?
@@ -396,6 +423,7 @@ model Envelope {
   voidedBy        Account?                @relation("EnvelopesVoided", fields: [voidedByAccountId], references: [id])
   signers         EnvelopeSigner[]
   events          EnvelopeEvent[]
+  webhookEvents   ProviderWebhookEvent[]
 
   @@index([organizationId, status])
   @@index([templateVersionId])
@@ -411,6 +439,11 @@ model EnvelopeSigner {
   email              String         @default("")
   order              Int
   status             SignerStatus   @default(pending)
+  /// Spec 04 — the remote recipient id. Empty for `internal`, which is why there is
+  /// deliberately no `@@unique([envelopeId, providerRef])`: the empty string would
+  /// collide across every internal signer. Uniqueness is enforced in the reconciler,
+  /// which is the only writer.
+  providerRef        String         @default("")
   membershipId       String?
   signedAt           DateTime?
   declinedAt         DateTime?
@@ -477,6 +510,46 @@ model EnvelopeEvent {
   actor    Account?        @relation("EnvelopeEventsActed", fields: [actorAccountId], references: [id], onDelete: SetNull)
 
   @@index([envelopeId, occurredAt])
+}
+
+/// One webhook delivery from a signing provider, stored for forensics and for
+/// deduplication (spec 04 requirements 22 and 35).
+///
+/// **Nothing here is ever read as state.** The reconciler re-reads the provider's API
+/// on every accepted notification, so this table records that a doorbell rang, not what
+/// it claimed. `payload` is the body with the signing URLs, every field value, and every
+/// foreign metadata key replaced by "[redacted]" *before* the first write.
+model ProviderWebhookEvent {
+  id                 String    @id @default(uuid())
+  providerKey        String
+  /// The document id the notification named.
+  providerRef        String
+  /// Null when we do not recognize the reference — a document of another account, or
+  /// one whose send transaction has not committed yet.
+  envelopeId         String?
+  /// The provider's own event string, stored raw.
+  eventType          String
+  eventTime          DateTime
+  /// Normalized lowercase; empty when the event names no signer, which is the common
+  /// case — `related_signer` was absent from both captured deliveries.
+  relatedSignerEmail String    @default("")
+  hashVerified       Boolean
+  payload            Json
+  /// Null until the reconciler has converged.
+  processedAt        DateTime?
+  /// `converged` | `ignored_terminal` | `unknown_ref` | `error`.
+  outcome            String?
+  receivedAt         DateTime  @default(now())
+
+  envelope Envelope? @relation(fields: [envelopeId], references: [id], onDelete: SetNull)
+
+  /// SignWell issues no event id, so this composite is the best key available. Two
+  /// genuinely distinct events of the same type, for the same signer, in the same
+  /// second collapse into one — which loses nothing, because convergence is
+  /// state-based and the second would have read the same state.
+  @@unique([providerKey, providerRef, eventType, eventTime, relatedSignerEmail])
+  @@index([processedAt])
+  @@index([envelopeId])
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

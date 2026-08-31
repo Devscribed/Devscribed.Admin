@@ -1,0 +1,97 @@
+{
+  "status": "pass",
+  "covered": {
+    "files": 38,
+    "of": 84,
+    "note": "21 diff files opened in full with Read this pass: provider-reconciler.service.ts, signwell-http-client.ts, the whole webhooks cluster (controller, hash guard, rate-limit guard, redact-payload, signwell-notification), provider-registry.ts, signwell-text-tags.ts, signwell-projection.ts, signwell-types.ts, signing-settings.controller.ts, job-queue.ts, the three settings-screen components, EmbeddedSigning.tsx, the stub client, the stub controller, e2e/tests/signature-providers.spec.ts, and four sections of the spec. Seventeen more were reviewed through their complete diff rather than a Read: all eight infra/terraform files, .env.example, playwright.config.ts, setup-env.ts, database-url.ts, signing-settings.dto.ts, next.config.mjs, Sidebar.tsx, roles.ts, and the ProviderWebhookEvent half of the migration. Every file the ledger listed as never opened by any pass is now covered except the two deleted adapters, checked by grep for surviving references instead of re-read. Read as evidence from outside the diff: the design system Radio.jsx and Checkbox.jsx, e2e/tests/helpers.ts, test-support/fixture-gate.ts, documents/envelope-renderer.ts, layout/Topbar.tsx.",
+    "unreached": [
+      "apps/api/src/documents/envelopes.service.ts (judged reviews 1-3; unchanged since e1cece1)",
+      "apps/api/src/signing/signing.service.ts (judged reviews 1-3; only the applySignature and transaction boundary re-verified here)",
+      "apps/api/src/signature/signwell/signwell-signing-provider.ts (judged reviews 2-3; only createOrAdopt, findOrphan, signerAccess and the create metadata re-checked by grep)",
+      "apps/api/src/signature/signing-provider.ts, internal-signing-provider.ts, envelope-completion.ts, certificate-of-completion.ts (judged review 2, unchanged since)",
+      "apps/api/src/organizations/signing-settings.service.ts (judged reviews 2-3; only liveChecks re-checked by grep)",
+      "apps/api/test/*.spec.ts and signwell-fixtures.ts (judged reviews 1 and 3, unchanged since)",
+      "packages/validation/src/signing-providers.ts and its tests, signwell-webhook.test.ts, signwell-text-tags.test.ts (judged reviews 1-3)",
+      "apps/web/app/sign/[token]/page.tsx, apps/web/src/documents/envelopes.ts, apps/web/app/org/[orgId]/documents/[envelopeId]/page.tsx (judged reviews 1-3)",
+      "apps/api/prisma/schema.prisma and the non-webhook half of the migration (judged reviews 2-3)",
+      "scripts/*.mjs, .claude/ai-workflow.config.json, docs/deployment.md (pipeline files; judged review 3)",
+      "apps/api/src/signature/internal-signature-provider.ts and signature-provider.ts (deleted; verified by grep that nothing imports them or selectSignatureProvider)"
+    ]
+  },
+  "qaFindings": [
+    {
+      "id": "qa/TC-04-E2E-01",
+      "state": "closed",
+      "evidence": "The witness was that check() can never satisfy Playwright actionability against the DS Radio. Confirmed and unchangeable from here: the design system Radio.jsx renders the real input at one pixel with pointerEvents none behind a decorative span, and Checkbox.jsx does the same. signature-providers.spec.ts:188 now clicks the option row label, and the DS Radio root is a single label wrapping both the hidden input and the visible content, so the click lands on the label or a descendant and the browser turns it into activation of the control; pointer-events none is irrelevant to label activation. Strict mode holds: ProviderOption.tsx renders exactly one label in that row. The assertions at :189-190 make a row that stops being clickable fail on the state rather than on a thirty-second timeout, which is what the finding asked for. The same treatment is applied to signing-change-confirm at :202, and that testid lands on the DS Checkbox own label, because ChangeProviderModal.tsx:71-76 spreads data-testid through rest."
+    },
+    {
+      "id": "qa/TC-04-E2E-02",
+      "state": "closed",
+      "evidence": "The witness was that EmbeddedSigning.tsx unmounts the placeholder on the iframe own load, which against an in-process stub beats the first poll of the assertion. The component is unchanged, the placeholder condition still at EmbeddedSigning.tsx:129, and the test removes the race instead of the transition: signature-providers.spec.ts:263-270 installs a route on the widget URL that holds the response on a promise the test resolves, so the placeholder provably cannot have been replaced when :284 asserts it. The route pattern matches what the stub returns, since stub-signwell-http-client.ts:111 builds embedded_signing_url from APP_PUBLIC_URL plus /api/test/signwell/widget with a query carrying no slash. Two follow-ons are also right: goto with waitUntil domcontentloaded at :279 avoids deadlocking load against the held subresource, and :303-304 compares the page origin to WEB and the pathname to link, which is correct because helpers.ts:410 returns a pathname. The spec expected result, appears and is replaced, is still what is asserted, including toHaveCount zero for the placeholder at :292."
+    },
+    {
+      "id": "qa/TC-04-E2E-04",
+      "state": "closed",
+      "evidence": "The witness was that logout-button lives inside the account menu. signature-providers.spec.ts:390-391 now clicks topbar-account-button first and then logout-button, which is the pair app-shell.spec.ts:34-35 and account-settings.spec.ts:44 use; topbar-account-button exists at apps/web/src/layout/Topbar.tsx:72."
+    },
+    {
+      "id": "qa/side-effect-stub-health",
+      "state": "reviewed, sound",
+      "evidence": "The same commit changed test-support code no review had opened, so I checked it rather than taking the commit message for it. The stub global healthy boolean became a per-organization set keyed on metadata.organization_id, which SignWellSigningProvider always sets at signwell-signing-provider.ts:123 and the stub stores on the document at stub:99, so organizationOf resolves for every path TC-04-E2E-03 exercises: the signer page calls signerAccess at :346, which reads getDocument and is health gated. The fixture route now refuses rather than falling back to a global at signwell-stub.controller.ts:112-117, and resolveFixtureScope outside production returns the named orgId, so the E2E call is well formed. No other caller of setHealthy or isHealthy exists in the tree. The two account-wide calls, ping and hooks, were made unconditionally healthy, which is finding N1 and a note rather than a defect."
+    }
+  ],
+  "priorBlockers": [
+    {
+      "id": "review-1/F1",
+      "target": "handoff",
+      "state": "closed",
+      "evidence": "Re-verified against the witness rather than against review 3. The diff against infra now returns eight files: modules/app/main.tf creates aws_ssm_parameter.signwell_api_key and signwell_webhook_secret as SecureStrings holding a placeholder with lifecycle ignore_changes on value, never a real value; iam.tf:68-72 adds both ARNs to the execution role ssm GetParameters document unconditionally, with the reason stated; api.tf adds SIGNWELL_API_APPLICATION_ID, SIGNWELL_TEST_MODE and PROVIDER_SYNC_STALE_SECONDS to api_environment, gates the two secret ARNs on var.signwell_secrets_provisioned, and drops the dead SIGNATURE_PROVIDER entry; both tfvars carry the flag false with the put-parameter commands. Behaviour affecting values are written once in api.tf and read by both environments."
+    },
+    {
+      "id": "review-1/F2",
+      "target": "code",
+      "state": "closed",
+      "evidence": "apps/api/src/signing/signing.service.ts: applySignature is awaited at :340; the transaction opens at :361 and takes its FOR UPDATE on the signing token at :365. No port method runs between the lock and the commit, which is invariant 11 and acceptance criterion 12."
+    },
+    {
+      "id": "review-2/F1",
+      "target": "code",
+      "state": "closed",
+      "evidence": "Verified this pass by reading signwell-http-client.ts in full rather than the hunk. createDocument takes the lookup as a required second parameter at :54-57 and :193-196 and passes it as beforeUnsafeRetry at :209-212. In attempt, couldHaveLanded is true on a transport error at :424 and on a 5xx at :412 and explicitly false on a 429 at :405, and the hook runs after the backoff and before the next request at :383. A found document leaves the loop as AdoptedExisting and is returned rather than re-created at :218-227. The scan runs on the read lane while the create holds the organization lane at :325, so it cannot deadlock against the call it protects."
+    }
+  ],
+  "findings": [
+    {
+      "id": "N1",
+      "target": "code",
+      "severity": "note",
+      "rule": "not a written rule - judgement",
+      "file": "apps/api/src/signature/signwell/stub-signwell-http-client.ts",
+      "symbol": "ping and hooks",
+      "line": 181,
+      "claim": "After 5cbc193 the E2E stub answers ping with an unconditional true and hooks with no health check, so no browser case can produce an unreachable or unregistered live check on the settings screen. Together with the integration suite that leaves reachable and webhookRegistered, two fields of the GET contract at spec lines 970-978 and the mechanism the Blast Radius row on a stale webhook registration relies on, asserted by no test at any level. A note rather than a blocker: the spec test matrix has no case for them and requirement 32 makes them display only, never a gate.",
+      "witness": {
+        "kind": "test",
+        "detail": "Grepping reachable and webhookRegistered across apps/api/test, e2e/tests and packages/validation returns only prose and the service own declarations, and no assertion in any spec file. The per-organization health change is right for TC-04-E2E-03, which goes through getDocument, but it removed the only lever a browser case had over the account wide calls the settings screen makes.",
+        "source": "specs/documents/04-signature-providers.md:1165"
+      },
+      "suggestedFix": "One integration case over GET /api/organizations/{orgId}/settings/signing with the SignWell client stubbed to fail /me and to return a hook whose callback_url is somebody else's, asserting reachable false, webhookRegistered false, and that configured and selectability are unaffected."
+    },
+    {
+      "id": "N2",
+      "target": "code",
+      "severity": "note",
+      "rule": "not a written rule - judgement",
+      "file": "apps/api/src/signature/signwell/signwell-http-client.ts",
+      "symbol": "HttpSignWellClient.attempt",
+      "line": 430,
+      "claim": "The last failure of an exhausted retry sequence is counted twice by the breaker: recordFailure runs inside the loop for the 5xx and transport error branches and again at :430 after the loop, so one exhausted call contributes six consecutive failures rather than five. Not wrong against the spec, since five consecutive failures is about failures rather than calls and opening one attempt early is the safe direction, but the counter no longer means what its name says and the 429 path, which never records inside the loop, is counted differently from the others.",
+      "witness": {
+        "kind": "rule",
+        "detail": "recordFailure appears at :413 for a 5xx, :425 for a transport error and :430 after the loop, with no guard against the last iteration having already recorded. TC-04-INT-21 asserts the breaker opens after five consecutive failures and closes after its window, and both hold either way, so nothing observable moves.",
+        "source": "apps/api/src/signature/signwell/signwell-http-client.ts:430"
+      },
+      "suggestedFix": "Record the failure once per attempt: drop the call at :430, or make it conditional on the loop having exited without recording, which is the 429 only path."
+    }
+  ]
+}

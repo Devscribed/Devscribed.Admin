@@ -81,10 +81,38 @@ digest out of the state, so a web deploy cannot silently roll the API forward or
 are applied with `wait_for_steady_state`, so `make deploy-dev` failing means the deploy failed —
 not that it was merely submitted.
 
-**Migrations run after the rollout**, from the same image the API runs. That is safe because
-migrations here are additive by rule (see [CLAUDE.md](../CLAUDE.md)): the deploy and the migration are
-independent and either order must work. They have to run inside the VPC because the database has no
-route out of it, which is also why they cannot be run from a laptop or a CI runner directly.
+**Migrations run after the rollout by default**, from the same image the API runs, and they have to
+run inside the VPC because the database has no route out of it — which is also why they cannot be run
+from a laptop or a CI runner directly.
+
+Migrations here are additive by rule (see [CLAUDE.md](../CLAUDE.md)), and it is worth being exact
+about what that buys. **Additive makes the rollback safe, not the roll-out window.** Nothing is
+renamed, dropped or narrowed, so the previous release's code keeps running against the new schema and
+a code rollback never needs a schema rollback. It says nothing about the gap between the new tasks
+going healthy and `prisma migrate deploy` finishing.
+
+**A release that adds columns to a table the running code reads must migrate first.** Prisma's
+generated client enumerates columns in its `SELECT` rather than using `SELECT *`, so from the moment
+the new tasks are serving until the migration lands, every read of that table asks for a column that
+does not exist yet and fails with Postgres `42703`. A column default protects a row that is written;
+it does not protect a query naming a column that is absent. For that class of release the order is:
+
+```bash
+make migrate-dev          # additive, so the release currently running ignores what it adds
+make deploy-dev           # then roll the services out onto the schema they expect
+```
+
+`make deploy-<env>` still runs `prisma migrate deploy` at the end; having migrated first only makes
+that step a no-op. And because push to `main` deploys `dev` by itself through `infra/deploy.sh` —
+rollout first, migration second — a release in this class has its migration applied **before** the
+merge, not after it.
+
+The first release that needs this order is **spec 04, signature providers**: it adds
+`Organization.signatureProviderKey`, four `Envelope.provider*` columns and
+`EnvelopeSigner.providerRef` to tables the documents list and detail read on every request, so
+deploying first answers 500 from both screens for the length of the rollout. Releases that only add a
+table nothing yet reads, or a column only the new code touches, are unaffected and keep the default
+order.
 
 ## Pausing an environment
 
@@ -275,9 +303,15 @@ produced a web app that proxied to a namespace that had never been created, and 
 every API call. `infra/deploy.sh` derives that origin deterministically rather than reading it back
 for exactly this reason.
 
-**Migrations run after the rollout.** A green rollout followed by a red migration means the new code
-is already serving; the environment is not broken, the schema is behind. Fix forward with
-`make migrate-dev` rather than rolling the services back.
+**Migrations run after the rollout, unless the release ordered them first.** A green rollout followed
+by a red migration means the new code is already serving against the old schema — so whether the
+environment is broken depends on what the migration adds. If the new code reads columns the migration
+was going to create, every such read is failing with `42703` right now and the screens over them are
+answering 500; that is an outage, and the fix is to get `make migrate-dev` green immediately.
+If the new code only writes what the migration adds, or reads nothing it creates, the environment is
+serving normally and the schema is merely behind. Either way, fix forward with `make migrate-dev`
+rather than rolling the services back — the migration is additive, so rolling back does not undo it
+and re-running it is safe. See *Every day* above for which releases must migrate before the rollout.
 
 **A stuck Terraform lock.** State is in S3 with native locking. An apply killed mid-run (a laptop
 closing, a CI job cancelled) can leave the lock file behind; `terraform force-unlock <id>` in
@@ -312,7 +346,7 @@ aws ecs execute-command --cluster devscribed-dev   --task <task-id> --container 
 ## How the application is configured
 
 Storage, mail, PDF rendering, deferred work, and signing each sit behind a port in `apps/api/src/`
-— `FileStorage`, `MailService`, `PdfRenderer`, `JobQueue`, `SignatureProvider` — registered globally
+— `FileStorage`, `MailService`, `PdfRenderer`, `JobQueue`, `SigningProviderRegistry` — registered globally
 in `core.module.ts`, with the driver chosen in each port's own `*.provider.ts`. The rule is the one
 `MAIL_TRANSPORT` already followed: an explicit environment variable always wins, and the **local
 driver is the default whenever `NODE_ENV` is not `production`**.
@@ -327,6 +361,112 @@ types a secret. `SESSION_SECRET` and `INTERNAL_TASK_SECRET` are generated by Ter
 SSM `SecureString` parameters; the database URL is assembled and stored the same way; the container
 resolves all three through its execution role. **No secret value is ever written to a `.tfvars`
 file.**
+
+### Turning SignWell on
+
+Signature providers are chosen per organization on `/org/{orgId}/settings/signing`, and SignWell is
+offered there only when its configuration is **present** — the API key, the API application id, and
+the webhook id. Until then the row is visible, disabled, and names what is absent, which is the
+state both environments ship in: every organization signs with the in-house engine, which is what
+they default to anyway.
+
+It ships that way because two of the three values are a third party's. Terraform creates the
+parameters and the execution-role grant that reads them and **never the values**, exactly as it does
+not create the value behind `DATABASE_URL`. So enabling it is four steps, and one of them happens
+outside this repository:
+
+```bash
+# 1. Write the key. The sandbox account's for dev, the production account's for prod.
+aws ssm put-parameter --type SecureString --overwrite \
+  --name /devscribed-dev/SIGNWELL_API_KEY --value '<the key>'
+
+# 2. Register a webhook against this environment's public address and write back the id it
+#    returns. The id IS the secret: it is the only input to delivery hash verification.
+aws ssm put-parameter --type SecureString --overwrite \
+  --name /devscribed-dev/SIGNWELL_WEBHOOK_SECRET --value '<the webhook id>'
+```
+
+3. In `infra/terraform/environments/dev.tfvars`, set `signwell_secrets_provisioned = true` and
+   `signwell_api_application_id` to the branding profile, then `make apply-dev`.
+4. `make deploy-dev`, because a task definition change is what puts the new values in front of a
+   running container.
+
+**Why the flag, rather than injecting the parameters always.** An SSM `SecureString` cannot hold an
+empty string, so a parameter waiting for its value holds a placeholder — and the application asks
+whether the variable is *present*, not whether it is real. A placeholder in the container would make
+the settings screen report SignWell configured, let an admin select it, and turn every send through
+it into a 503. The flag is how "configured" keeps meaning what the screen says it means.
+
+**Step 2 has a prerequisite neither stand has yet:** a public address SignWell can reach. Until one
+exists the webhook is registered against a developer tunnel, or not at all. That costs timeliness
+and not correctness — every envelope converges on the next read of it and on the hourly sweep
+regardless of whether a notification ever arrives — so an environment with no registration works, it
+is merely slower. A registration is deleted the moment its callback address stops being ours:
+deliveries carry a working signing link per recipient, so a tunnel hostname that gets reassigned
+hands the ability to sign as a counterparty to whoever answers there.
+
+#### Registering a webhook against a local tunnel
+
+Step 2's prerequisite is a public address, and on a workstation that means a tunnel. The
+procedure is the same one an environment will use; only the hostname differs.
+
+1. **Tunnel the API, not the web app.** Deliveries arrive at `POST /api/webhooks/signwell`
+   (`apps/api/src/webhooks/signwell-webhook.controller.ts:49`), which is Nest on `:4000`.
+   Next on `:3000` is not involved — SignWell calls the API directly.
+
+   ```bash
+   ngrok http 4000
+   ```
+
+2. **Register the callback.** In SignWell, *Settings → API → Workspace Callback URLs*, set the
+   Event Callback URL to `https://<host>/api/webhooks/signwell` and save.
+
+3. **Read back the id, because the id is the secret.** SignWell shows the URL but not the
+   registration's id, and this repository's client only lists hooks
+   (`signwell-http-client.ts:285`), so ask the API directly:
+
+   ```bash
+   curl -s -H "X-Api-Key: $SIGNWELL_API_KEY" https://www.signwell.com/api/v1/hooks/
+   ```
+
+   Take the `id` of the entry whose `callback_url` is yours. `verifySignWellHash`
+   (`apps/api/src/webhooks/signwell-notification.ts:40`) computes
+   `HMAC-SHA256(webhookId, "<type>@<time>")`, so the registration id **is** the HMAC key.
+   There is no separate secret to find.
+
+4. **Point the API at it** and restart, since the environment is read once at boot:
+
+   ```
+   SIGNWELL_WEBHOOK_SECRET="<the id>"
+   SIGNWELL_DRIVER="http"
+   ```
+
+5. **Watch a delivery.** ngrok's inspector on `http://127.0.0.1:4040` shows the body. A hash
+   that does not verify answers 401 and writes nothing but the fact that a notification
+   arrived, which is requirement 21.
+
+**Delete the registration when the tunnel goes away.** A free tunnel hands out a new hostname
+each time it starts, and the one you abandoned goes to somebody else — together with
+deliveries carrying a working `embedded_signing_url` per recipient. That is the ability to
+sign as a counterparty, handed to whoever answers there. The same rule the environments follow
+applies here and is easier to forget.
+
+`SIGNWELL_API_APPLICATION_ID` is not a secret and is not the API key: it is the **Unique ID**
+under *Settings → API → API Apps*, which names the branding profile the widget wears.
+
+#### Exercising the whole journey locally, without SignWell
+
+`SIGNWELL_DRIVER=stub` answers the provider boundary from memory and is refused outright when
+`NODE_ENV` is production. With it, no account, tunnel or registration is needed: set
+`SIGNWELL_WEBHOOK_SECRET` to any non-empty string — `provider-registry.ts:95` tests presence,
+not validity — and the settings screen, the provider switch, the send and the signing surface
+all work end to end. It is the fastest way to see the feature, and the only thing it cannot
+show you is a real delivery.
+
+`SIGNWELL_TEST_MODE` is deliberately not a variable. It is written once in `modules/app/api.tf` and
+both environments read that line, because going live is a change with a legal review of the
+counterparty-facing copy attached to it and not a side effect of editing a tfvars file. This release
+ships `true` everywhere.
 
 ## Terraform layout
 

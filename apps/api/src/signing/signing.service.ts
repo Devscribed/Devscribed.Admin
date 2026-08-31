@@ -1,6 +1,9 @@
 import {
   ENVELOPE_MESSAGES,
+  SIGNING_PROVIDER_MESSAGES,
   effectiveStatus,
+  signingProviderName,
+  signingSurfaceOf,
   filterSubmittedValues,
   isTerminal,
   validateReason,
@@ -40,8 +43,16 @@ import {
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma.service';
 import { JobQueue } from '../queue/job-queue';
-import { SignatureProvider } from '../signature/signature-provider';
-import { hashSigningToken } from '../signature/signing-token';
+import { ProviderReconcilerService } from '../documents/provider-reconciler.service';
+import { SigningProviderRegistry } from '../signature/provider-registry';
+import { isLocallySigned } from '../signature/signing-provider';
+import type { LocallySigned, SigningProvider } from '../signature/signing-provider';
+import {
+  generateSigningToken,
+  hashSigningToken,
+  signingPageUrl,
+  signingTokenTtlDays,
+} from '../signature/signing-token';
 import { FileStorage, PRESIGNED_URL_TTL_SECONDS } from '../storage/file-storage';
 
 /** The `state` values the signing page renders, from the `GET /api/sign/{token}` contract. */
@@ -95,7 +106,8 @@ export class SigningService {
     private readonly prisma: PrismaService,
     private readonly events: EnvelopeEventsService,
     private readonly mail: MailService,
-    private readonly signature: SignatureProvider,
+    private readonly providers: SigningProviderRegistry,
+    private readonly reconciler: ProviderReconcilerService,
     private readonly storage: FileStorage,
     private readonly queue: JobQueue,
   ) {}
@@ -105,12 +117,41 @@ export class SigningService {
    * ---------------------------------------------------------------- */
 
   async view(rawToken: string, req: Request) {
-    const { token, state } = await this.resolve(rawToken);
+    let resolution = await this.resolve(rawToken);
+
+    // Requirement 24a — lazily, on read. Only once the link has been accepted **and** the
+    // turn is open: a terminal envelope and a wrong-turn visitor are both decided from our
+    // own rows above and cost no provider call at all (requirement 16, edge case 18).
+    if (
+      resolution.state === 'ready_to_sign' &&
+      (await this.reconciler.convergeIfStale(resolution.token.signer.envelopeId))
+    ) {
+      resolution = await this.resolve(rawToken);
+    }
+
+    const { token, state } = resolution;
     const signer = token.signer;
     const envelope = signer.envelope;
 
     // Requirement 17 — opening a valid link records a `viewed` event once per signer.
     if (state === 'ready_to_sign') await this.recordViewed(token, req);
+
+    /* ------------------------------------------------------------------ *
+     * Spec 04 requirements 6, 15 and 16 — our shell, our token, our access rules.
+     *
+     * `surface: "ours"` returns spec 02's payload **unchanged**, so nothing about an
+     * internal envelope moves. Only when the provider hosts the widget does the payload
+     * grow, and only after `resolve()` has already decided from **our own rows** that
+     * this signer's turn is open.
+     *
+     * That ordering is requirement 16 and it is a security rule, not an optimization:
+     * observed, the embedded URL for recipient 2 is handed out at creation and is
+     * byte-identical before and after recipient 1's turn, with only `recipients[].status`
+     * distinguishing them. Possession of the URL is therefore not proof that a signer's
+     * turn is open, and a wrong-turn visitor is refused above, before any call is even
+     * considered.
+     * ------------------------------------------------------------------ */
+    const embedded = await this.embeddedSurface(token, state);
 
     const roles = readSignerRoles(envelope.templateVersion.signerRoles);
     const fields = readFields(envelope.templateVersion.fieldsSnapshot);
@@ -119,6 +160,19 @@ export class SigningService {
 
     return {
       state,
+      surface: embedded.surface,
+      // The name the attribution line prints ("Signed through SignWell on behalf of …").
+      // From the envelope's own `providerKey`, so it is the provider that executed *this*
+      // document rather than whatever the organization uses today.
+      providerName: signingProviderName(envelope.providerKey),
+      // Present only under an embedded surface. Fetched per request and never persisted,
+      // never cached: storing a live signing URL would create a second credential for the
+      // document, one our own access control does not gate and our token expiry does not
+      // reach (requirement 6).
+      ...(embedded.embeddedSigningUrl ? { embeddedSigningUrl: embedded.embeddedSigningUrl } : {}),
+      // From the envelope's own column, written at send — never from configuration at
+      // display time, so a document signed in test mode stays marked as a test forever.
+      testMode: envelope.providerTestMode,
       envelope: {
         title: envelope.title,
         senderOrganizationName: envelope.organization.name,
@@ -252,6 +306,50 @@ export class SigningService {
     const ipAddress = clientIp(req);
     const userAgent = userAgentOf(req);
 
+    /* ------------------------------------------------------------------ *
+     * Spec 04 invariant 11 and acceptance criterion 12 — **no provider call while a
+     * database transaction is open**, and that binds every adapter method without
+     * qualification, not only the ones that reach the network.
+     *
+     * An earlier draft of this file kept `applySignature` inside the transaction and
+     * argued the invariant from its stated *reason* — a five-attempt backoff holding a
+     * row lock — which a provider whose signing surface is ours can never incur. That
+     * reasoning was wrong twice over: an invariant is not the argument that motivated
+     * it, and the deviation bought nothing. Every input this call takes is already in
+     * hand here, so it costs nothing to obey the rule as written, and a reader no
+     * longer has to decide whether an exception applies to the provider in front of
+     * them.
+     *
+     * Nothing is *recorded* here. `applySignature` turns ink into an artefact and
+     * returns it — it touches no row, sends no mail and writes no event (requirement 4)
+     * — so the document-hash check, the turn check and the field validation below still
+     * gate every write, in the order spec 02 fixes them. And it cannot fail on input
+     * that reached this line: `validateSignature` above already rejects everything
+     * `InternalSigningProvider.applySignature` would (a drawn signature must be a PNG
+     * data URI whose bytes decode and carry ink, which is strictly stricter than the
+     * renderer's `png|svg` test; a typed one must be a non-empty trimmed name), so no
+     * error precedence moves with the call.
+     * ------------------------------------------------------------------ */
+    const signingSigner = resolved.token.signer;
+    const signingEnvelope = signingSigner.envelope;
+    // The moment the signature was captured, and the one the rows below all record.
+    const signedAt = new Date();
+    // `LocallySigned` narrows the port to providers that declared
+    // `signingSurface: 'ours'` — a provider cannot be asked to turn ink into an artefact
+    // when the ink never reached us.
+    const applied = await this.localProviderFor(signingEnvelope.providerKey).applySignature({
+      envelopeId: signingEnvelope.id,
+      signerId: signingSigner.id,
+      signerName: signingSigner.name,
+      method: signature.value.type,
+      drawnImage: signature.value.type === 'drawn' ? signature.value.image : undefined,
+      typedName: signature.value.type === 'typed' ? signature.value.name : undefined,
+      signedAt,
+      consentAcceptedAt: signedAt,
+      ipAddress,
+      userAgent,
+    });
+
     // Set inside the transaction, awaited after it commits. See the note at the
     // assignment for why the second invitation is not inside the failure boundary.
     let notify: (() => Promise<void>) | null = null;
@@ -329,20 +427,6 @@ export class SigningService {
             throw new BadRequestException({ message: errors[Object.keys(errors)[0]], errors });
           }
 
-          const signedAt = new Date();
-          const applied = await this.signature.applySignature({
-            envelopeId: envelope.id,
-            signerId: signer.id,
-            signerName: signer.name,
-            method: signature.value.type,
-            drawnImage: signature.value.type === 'drawn' ? signature.value.image : undefined,
-            typedName: signature.value.type === 'typed' ? signature.value.name : undefined,
-            signedAt,
-            consentAcceptedAt: signedAt,
-            ipAddress,
-            userAgent,
-          });
-
           await tx.envelopeSigner.update({
             where: { id: signer.id },
             data: {
@@ -385,21 +469,17 @@ export class SigningService {
             // Requirement 14 — the next signer's link comes into existence now, and not
             // one moment earlier.
             const next = remaining[0];
-            const invitation = await this.signature.issueInvitation({
-              envelopeId: envelope.id,
-              signerId: next.id,
-              signerName: next.name,
-              signerEmail: next.email,
-            });
+            // Token minting was always ours and stayed ours when the port lost
+            // `issueInvitation`: a third-party provider mints nothing of ours.
+            const { token, tokenHash } = generateSigningToken();
+            const ttl = new Date(Date.now() + signingTokenTtlDays() * 24 * 60 * 60 * 1000);
             const expiresAt =
-              envelope.expiresAt && envelope.expiresAt < invitation.expiresAt
-                ? envelope.expiresAt
-                : invitation.expiresAt;
+              envelope.expiresAt && envelope.expiresAt < ttl ? envelope.expiresAt : ttl;
 
             await tx.signingToken.create({
               data: {
                 envelopeSignerId: next.id,
-                tokenHash: invitation.tokenHash,
+                tokenHash,
                 expiresAt,
               },
             });
@@ -425,7 +505,7 @@ export class SigningService {
                 organizationName: envelope.organization.name,
                 organizationId: envelope.organizationId,
                 senderName: `${envelope.createdBy.firstName} ${envelope.createdBy.lastName}`.trim(),
-                signingUrl: invitation.signingUrl,
+                signingUrl: signingPageUrl(token),
                 expiresAt,
               });
             };
@@ -667,6 +747,87 @@ export class SigningService {
   /* ---------------------------------------------------------------- *
    * Internals
    * ---------------------------------------------------------------- */
+
+  /**
+   * The surface this token's envelope is signed on, and the provider's URL when there is
+   * one.
+   *
+   * Every decision here is made from the capability rather than from the provider key, so
+   * a third provider that embeds a widget needs no change to this method — and a terminal
+   * envelope makes **no provider call at all** (edge case 18: spec 02 requirement 25's
+   * read-only view applies unchanged).
+   */
+  private async embeddedSurface(
+    token: ResolvedToken,
+    state: SigningState,
+  ): Promise<{ surface: 'ours' | 'embedded'; embeddedSigningUrl: string | null }> {
+    const envelope = token.signer.envelope;
+    const provider = this.providers.find(envelope.providerKey);
+
+    if (!provider) {
+      // Edge case 16 — the adapter unregistered while this envelope was in flight. The
+      // signer is told the service is unavailable rather than shown an empty frame, and
+      // their token is not consumed.
+      if (envelope.providerKey === 'internal') return { surface: 'ours', embeddedSigningUrl: null };
+      throw this.providerUnavailable();
+    }
+
+    const surface = signingSurfaceOf(provider.capabilities);
+    if (surface === 'ours') return { surface, embeddedSigningUrl: null };
+    // A signer who cannot sign right now needs no widget: a terminal envelope, an
+    // already-signed link, or a turn that has not started.
+    if (state !== 'ready_to_sign') return { surface, embeddedSigningUrl: null };
+
+    try {
+      const access = await provider.signerAccess({
+        providerRef: envelope.providerRef,
+        signerProviderRef: token.signer.providerRef,
+        signerEmail: token.signer.email,
+        signerOrder: token.signer.order,
+      });
+      if (!access.embeddedSigningUrl) throw this.providerUnavailable();
+      return { surface, embeddedSigningUrl: access.embeddedSigningUrl };
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      this.log.warn(
+        `Fetching a signing URL for envelope ${envelope.id} failed: ${
+          error instanceof Error ? error.message : error
+        }`,
+      );
+      throw this.providerUnavailable();
+    }
+  }
+
+  /**
+   * Deliberately distinct from an invalid token, and deliberately not a 404: the signer's
+   * link is still good, the token was not consumed, and telling them otherwise would be
+   * wrong.
+   */
+  private providerUnavailable(): HttpException {
+    return new HttpException(
+      {
+        error: 'provider_unavailable',
+        message: SIGNING_PROVIDER_MESSAGES.signing.providerUnavailableApi,
+      },
+      503,
+    );
+  }
+
+  /**
+   * The provider that can turn this signer's ink into an artefact. A provider whose
+   * signing surface is not ours never reaches here — `sign()` is only reachable when the
+   * page offered a canvas — so a missing narrowing is a wiring bug, not a signer error.
+   */
+  private localProviderFor(providerKey: string): SigningProvider & LocallySigned {
+    const provider = this.providers.find(providerKey);
+    if (!provider || !isLocallySigned(provider)) {
+      throw new InternalServerErrorException({
+        error: 'provider_cannot_apply_signature',
+        message: ENVELOPE_MESSAGES.signing.integrityFailure,
+      });
+    }
+    return provider;
+  }
 
   private async recordViewed(token: ResolvedToken, req: Request): Promise<void> {
     // Idempotent by the trail itself rather than by the signer's status: a signer who

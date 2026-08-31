@@ -340,7 +340,15 @@ function cmdInit(args) {
     specSha: sha256(readFileSync(specPath, 'utf8')),
     task: args.title ?? slug,
     branch,
-    baseRef: git('rev-parse', 'HEAD'),
+    /* The diff every gate reads is measured from here. It defaults to HEAD because a run
+       normally starts before any code exists — but a run that resumes work after a spec was
+       corrected starts with the implementation already committed, and taking HEAD there would
+       hand the reviewer an empty diff and a clean bill of health for code nobody looked at. */
+    baseRef: git('rev-parse', args.from ?? 'HEAD'),
+    /* Where the branch actually stood when this run began. Equal to `baseRef` for a normal
+       run and earlier than it for a `--from` one, which is the difference that matters to any
+       gate asking "what did *this run* change" rather than "what does the diff contain". */
+    headAtInit: git('rev-parse', 'HEAD'),
     status: 'preflight',
     createdAt: now(),
     updatedAt: now(),

@@ -20,6 +20,8 @@ import { KanbanModule } from './kanban/kanban.module';
 import { InvitationsController } from './invitations/invitations.controller';
 import { InvitationsService } from './invitations/invitations.service';
 import { OutboxController } from './mail/outbox.controller';
+import { SigningSettingsController } from './organizations/signing-settings.controller';
+import { SigningSettingsService } from './organizations/signing-settings.service';
 import { TestMailController } from './mail/test-mail.controller';
 import { SigningModule } from './signing/signing.module';
 import { MeController } from './members/me.controller';
@@ -37,6 +39,8 @@ import { TimeTrackingController } from './time-tracking/time-tracking.controller
 import { TimeTrackingService } from './time-tracking/time-tracking.service';
 import { TestFixturesController } from './test/test-fixtures.controller';
 import { TestEnvelopeExpiryController } from './test-support/envelope-expiry.controller';
+import { TestSignWellStubController } from './test-support/signwell-stub.controller';
+import { WebhooksModule } from './webhooks/webhooks.module';
 import { VacationController } from './vacation/vacation.controller';
 import { VacationRequestsService } from './vacation/vacation-requests.service';
 import { VacationService } from './vacation/vacation.service';
@@ -73,6 +77,10 @@ import { VacationService } from './vacation/vacation.service';
     // is what stops a guard from being applied to the wrong half by accident.
     SigningModule,
     InternalModule,
+    // A third, for the same reason: the webhook route has no session, no cookies and no
+    // CSRF, and its guard — "the body carries a hash we recognize" — must never be
+    // reachable from an org-scoped controller.
+    WebhooksModule,
     // Spec 13 — board columns + tasks. Its own module so the shared
     // `KanbanAccessService` isn't fanned out into every other controller.
     KanbanModule,
@@ -99,6 +107,10 @@ import { VacationService } from './vacation/vacation.service';
     // member profile is a member-management resource that the documents area reads,
     // not a documents resource.
     MemberProfileController,
+    // Spec 04's signing settings. Flat here rather than in `DocumentsModule`: it is an
+    // organization setting that the documents area reads, not a documents resource — the
+    // same reasoning that put `MemberProfileController` above.
+    SigningSettingsController,
     // The dev outbox. A product screen with the ordinary guard stack, not a fixture —
     // see the note at the top of the controller for why it is not a `/api/test/*` route.
     OutboxController,
@@ -110,6 +122,9 @@ import { VacationService } from './vacation/vacation.service';
     // The one fixture no product feature retires: nothing lets a test age an envelope,
     // and nothing should.
     TestEnvelopeExpiryController,
+    // The provider stub's control surface, behind the same fence as every other fixture
+    // and 404 under any driver but the stub.
+    TestSignWellStubController,
   ],
   providers: [
     SignupService,
@@ -125,6 +140,7 @@ import { VacationService } from './vacation/vacation.service';
     ProjectsService,
     TimeTrackingService,
     AccrualService,
+    SigningSettingsService,
   ],
 })
 export class AppModule {}

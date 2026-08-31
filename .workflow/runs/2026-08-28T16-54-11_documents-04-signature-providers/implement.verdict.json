@@ -1,0 +1,35 @@
+{
+  "status": "pass",
+  "findings": [
+    {
+      "id": "I1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/internal-inconsistency",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "Flows / Flow: First signer signs, step 5",
+      "claim": "Confirming pre-implement's note N1 from the implementation side, because the handoff asks for it to be recorded here: the 'First signer signs' flow still says the SignWellEmbed SDK's completed event fires in the parent page, while requirement 15 says that SDK is deliberately not loaded. I implemented requirement 15 and the other reading is not implementable under the shipped CSP, so this blocks nothing; the flow text should be corrected before it teaches the next reader the opposite decision.",
+      "witness": {
+        "kind": "rule",
+        "source": "specs/documents/04-signature-providers.md:896 versus :295",
+        "detail": "apps/web/next.config.mjs:113 widens frame-src by exactly one origin and :105 leaves script-src at \"'self' 'unsafe-inline'\", so a vendor script from www.signwell.com is refused and an SDK listener could never run on /sign/{token}. The shipped surface is a plain iframe with our own listener checking event.origin before reading anything (apps/web/app/sign/[token]/EmbeddedSigning.tsx:14 and :76). grep over apps/web finds no vendor script tag at all."
+      },
+      "suggestedFix": "In the 'First signer signs' flow, replace 'The `SignWellEmbed` `completed` event fires in the parent page' with 'The widget posts a `completed` message; our listener checks `event.origin` against the embed host before reading it'."
+    },
+    {
+      "id": "I2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/missing-ds-gaps-table",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "UI Description / DS gaps",
+      "claim": "Confirming pre-implement's note N2: two shipped comments say a design-system gap is 'recorded in this spec's DS gaps table' and spec 04 has no such table, nor does any spec in the documents area. The two gaps are carried in this run's handoff.dsGaps, so nothing is lost, but I could not correct the comments to point at anything real without either editing specs/ - which is not mine to edit - or inventing a convention for the area.",
+      "witness": {
+        "kind": "rule",
+        "source": "CLAUDE.md:59 versus specs/documents/04-signature-providers.md",
+        "detail": "apps/web/app/org/[orgId]/settings/signing/ProviderOption.tsx:12 and page.tsx:216 both name a 'DS gaps table' in this spec. `grep -n 'DS gap' specs/documents/*.md` returns nothing for any of the four documents specs, while every user-management spec carries its gaps in a paired .design.md. The gaps themselves are real and unchanged: no Skeleton primitive, and no selectable option row (bordered row with radio, title, description, trailing status pill, disabled state)."
+      },
+      "suggestedFix": "Either add a 'DS gaps' subsection to spec 04's UI Description carrying both gaps, or state in specs/documents/README.md that this area records DS gaps in the implementing handoff, after which the two code comments can be corrected to say so."
+    }
+  ]
+}

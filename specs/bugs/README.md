@@ -31,7 +31,23 @@ more than the diagnosis.
 
 | # | Title | Severity | Surface | Verdict | Owning spec | Regression test | Status |
 |---|-------|----------|---------|---------|-------------|-----------------|--------|
-| — | *no investigations recorded yet* | | | | | | |
+| [001](BUG-001-signwell-text-tags-materialize-no-fields.md) | SignWell materializes no fields from our text tags | blocker | api | `SPEC-DEFECT` | documents/04 | TC-04-INT-25 | fixed |
+| [002](BUG-002-email-validation-looser-than-the-provider.md) | A signer address we accept, the provider refuses | major | api | `SPEC-GAP` | documents/04 | TC-04-INT-23 | fixed |
+| [003](BUG-003-embedded-signing-url-refuses-framing.md) | The embedded signing URL refuses to be framed | blocker | ui | `SPEC-GAP` | documents/04 | TC-04-INT-26 | fixed |
+| [004](BUG-004-field-geometry-sent-in-points-not-provider-pixels.md) | Field geometry sent in points, placed in pixels | blocker | api | `SPEC-GAP` | documents/04 | TC-04-INT-27 | fixed |
+| [005](BUG-005-recipient-completed-not-signed.md) | A signed recipient reads `completed`, so the turn never closes | blocker | api | `SPEC-DEFECT` | documents/04 | TC-04-INT-28 | fixed |
+| [006](BUG-006-signing-page-csp-blocks-the-product-font.md) | The signing page's CSP refuses the product's own fonts | minor | ui | `SPEC-GAP` | documents/04 | TC-04-E2E-07 | fixed |
+
+## These were found and fixed by hand
+
+BUG-001 onwards did not come from the pipeline and were not fixed through it. They were found
+by a person using the product against the live provider, investigated in a chat session, and
+the fixes were written and committed there too — no `/ship` run, no static gate, no review
+stage, no QA stage. The commits say so in their trailers.
+
+That is worth knowing when reading them: they carry the strengths of manual work — a live API,
+a real screen, measurements — and its weaknesses. Two suites were left red by the parallel
+agents that made the earlier fixes, and nothing caught it until the next person ran them.
 
 Add a row when the report lands, and close it out when the fix merges. When the verdict is
 `SPEC-GAP` or `SPEC-DEFECT`, also note the follow-up in the owning area's README — otherwise

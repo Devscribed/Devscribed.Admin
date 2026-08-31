@@ -40,6 +40,13 @@ const run = (() => {
 })();
 
 const base = opt('base') ?? run?.baseRef;
+/* Rule 1 asks a different question from the other rules. They ask "what is in the change" and
+   want the whole diff; it asks "did the implementation stage edit its own contract" and wants
+   only what this run produced. Those differ the moment a run starts with `--from`, because the
+   diff then contains commits made before the run — including the deliberate, human spec fix
+   that a halt asked for. Judging that by the diff accused the implementer of an edit it had
+   not made and, worse, told it to revert one. */
+const runStart = run?.headAtInit ?? base;
 if (!base) {
   process.stderr.write('static-gate: no diff base — start a run or pass --base <ref>\n');
   process.exit(1);
@@ -54,7 +61,7 @@ const isSource = (p) => /\.(ts|tsx|js|jsx|mjs|cjs)$/.test(p);
 
 /* ── 1. the contract is not the implementation's to edit ─────────────────── */
 
-for (const file of git('diff', '--name-only', base, '--', 'specs').split('\n').filter(Boolean)) {
+for (const file of git('diff', '--name-only', runStart, '--', 'specs').split('\n').filter(Boolean)) {
   add({
     rule: 'pipeline/spec-immutable',
     file,

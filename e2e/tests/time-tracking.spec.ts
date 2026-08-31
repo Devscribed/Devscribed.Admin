@@ -51,12 +51,13 @@ async function openTimeTracking(page: Page): Promise<void> {
 }
 
 /**
- * Picks an option from a DS `Select` (the `data-testid` sits on the trigger button; options
- * render as `<a>` links inside the popover). Mirrors the projects-spec custom-Select helper.
+ * Picks an option from a DS `Select`: the `data-testid` sits on the trigger button, and options
+ * are `<a>` elements with `role="option"` (explicit ARIA role wins over the link one), so they
+ * surface via `getByRole('option', …)` — same pattern as invitation/regressions.
  */
 async function selectOption(page: Page, triggerTestId: string, label: string): Promise<void> {
   await page.getByTestId(triggerTestId).click();
-  await page.getByRole('link', { name: label, exact: true }).click();
+  await page.getByRole('option', { name: label, exact: true }).click();
 }
 
 // --- Local date helpers, matching the app's local-calendar `todayISO` / `formatMonthLabel`. ---

@@ -1,0 +1,34 @@
+{
+  "status": "pass",
+  "findings": [
+    {
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-infrastructure-description",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "Infrastructure / The webhook route",
+      "claim": "Two sentences about how the webhook becomes reachable describe a topology this repository does not have: the API has no load balancer and therefore no listener rule, and the deployed stands do have a public address. It does not block the plan - requirement 32 makes registration a displayed check and never a gate, so the feature works either way - but an implementer following the text would go looking for a listener rule to widen and find no load balancer at all, and the 'no public address' sentence is the stated reason the deployed environments are expected to run on convergence alone.",
+      "witness": {
+        "kind": "rule",
+        "source": "specs/documents/04-signature-providers.md, '### The webhook route' versus infra/terraform/main.tf:1-11, infra/terraform/outputs.tf and apps/web/next.config.mjs:66",
+        "detail": "The spec reads: 'POST /api/webhooks/signwell must be reachable from the public internet ... It sits on the same load balancer as the rest of the API, on a path the listener rule allows without a session', and then 'the dev stand has no public address today'. The built topology says the opposite twice. infra/terraform/main.tf:1-11: 'the web app on ECS Express Mode, which is the only public address in the account ... the API on a plain service with no load balancer at all, reached only by the web app's existing Next.js rewrite through Cloud Map'. infra/terraform/outputs.tf describes api_service_name as 'API service. No load balancer, no public address' and exports app_url as 'The address people open. AWS-issued HTTPS; the only public entry point in the account.' apps/web/next.config.mjs:66 rewrites '/api/:path*' to the API origin unconditionally, so POST {app_url}/api/webhooks/signwell already reaches the controller with no new resource. There is consequently no listener rule to write, and a registration against {app_url} is possible today rather than blocked on lead time."
+      },
+      "suggestedFix": "Replace the load-balancer sentence with: the route is reached through the web app's public Express Mode endpoint, which rewrites /api/* to the API, so no network resource is added; and replace 'the dev stand has no public address today' with a note that the callback URL is {app_url}/api/webhooks/signwell and that registering it is an out-of-band API call. Keep the requirement 32 rule unchanged - it is what makes an unregistered environment merely slower."
+    },
+    {
+      "id": "P2",
+      "target": "self",
+      "severity": "note",
+      "rule": "self/replan-over-written-code",
+      "file": ".workflow/runs/2026-08-28T17-26-56_documents-04-signature-providers/handoff.json",
+      "symbol": "runContext",
+      "claim": "This is the second plan of the run and it is not a from-zero build plan; a reader who expects one will misread it. Nine of the eleven tasks describe code that already exists on the branch and say what to verify in it. Exactly two things are to be built: T11, the Terraform that carries the three SignWell values to the ECS task, of which nothing exists; and the first section of T3, which moves the one provider call that still runs inside a database transaction out of it. Both are the review stage's blockers, addressed rather than contested.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "The review verdict carried F1 (target handoff) and F2 (target code). Per scripts/wf.mjs the handoff target has the higher priority, so the whole set routed to pre_implement and handoffReplans went to 1; findingHistory records both keys at 1, so a second appearance of either halts the run. I therefore re-verified both witnesses in the tree instead of replanning around them. F1: git diff 57d55ac...HEAD -- infra/ is empty, grep -rn SIGNWELL infra/ is empty, and locals.api_environment at infra/terraform/modules/app/api.tf:16-52 plus locals.api_secrets at :54-68 are the whole of what the task definition injects at :79-80 - so the three names provider-registry.ts:87-101 reads can never be set, and acceptance criteria 3, 5, 6 and 8 are unreachable on a deployed stand. F2: the transaction opens at signing.service.ts:317, the row lock is taken at :322, and locally.applySignature is awaited at :397; validateSignature at :303 already rejects every input InternalSigningProvider.applySignature would reject, because PNG_DATA_URI (packages/validation/src/envelopes.ts:396) is a strict subset of SIGNATURE_IMAGE (apps/api/src/documents/envelope-renderer.ts:99) and both require a trimmed non-empty typed name, so the call is total and the move changes nothing observable. The one part of the deviation comment that is true - error precedence, because localProviderFor at :801-810 throws its 500 after the turn, tamper and field checks - is preserved by T3 step 4, which leaves the registry lookup inside the transaction as a guard and moves only the awaited port method. Coverage after the replan was checked mechanically: requirements 1-42 all assigned, all 40 TC-04 ids mapped, every cited path present on disk, one additive migration."
+      },
+      "suggestedFix": "None needed from a human. Recorded so the reviewer, who diffs every file from 57d55ac, can tell a plan that deliberately describes existing code from one that quietly dropped the hard part - and so the three spec notes from attempt 1 (the SignWellEmbed sentence in the first-signer flow, the missing DS-gaps table, and the area README saying an envelope's provider is written at creation) are not read as fixed. They are unchanged and still stand in run.json."
+    }
+  ]
+}

@@ -221,3 +221,35 @@ variable "envelope_expiry_days" {
   description = "Default envelope expiry, in days, applied at send."
   type        = number
 }
+
+variable "signwell_api_application_id" {
+  description = <<-EOT
+    The SignWell API application whose branding the embedded widget wears. Not a secret —
+    it names a profile — so it travels as a plain task environment value and differs
+    between environments, which is the row the spec's "What differs" table gives it.
+
+    Empty until the profile exists. The product checks all three SignWell values for
+    presence, so an empty one simply keeps the provider listed and disabled with "API
+    application id" among the missing items, which is the truth.
+  EOT
+  type        = string
+  default     = ""
+}
+
+variable "signwell_secrets_provisioned" {
+  description = <<-EOT
+    Whether `/{prefix}/SIGNWELL_API_KEY` and `/{prefix}/SIGNWELL_WEBHOOK_SECRET` hold real
+    values yet, and so whether the task is given them. **False by default**, because this
+    module creates those parameters but never their values — a vendor key and a webhook
+    registration id are not things Terraform can invent.
+
+    It is a flag rather than an inference because there is nothing to infer from: a
+    `SecureString` cannot hold an empty string, so a parameter awaiting its value holds a
+    placeholder, and a placeholder handed to the container would read as *present*. The
+    settings screen would then offer SignWell to an admin and every send through it would
+    fail at the provider. Flipping this after the out-of-band write is what makes
+    "configured" mean what requirement 32 says it means.
+  EOT
+  type        = bool
+  default     = false
+}

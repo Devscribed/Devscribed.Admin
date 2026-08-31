@@ -1,0 +1,35 @@
+{
+  "stage": "static_gate",
+  "status": "blocked",
+  "base": "57d55acd03b825aeed9c85836e85138f12b01be1",
+  "findings": [
+    {
+      "id": "S1",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "pipeline/spec-immutable",
+      "file": "specs/documents/04-signature-providers.md",
+      "claim": "the implementation stage modified a specification file",
+      "witness": {
+        "kind": "rule",
+        "detail": "CLAUDE.md: \"When behaviour and spec disagree, the spec wins — change the spec first, deliberately.\" A run that edits its own contract can no longer be checked against it.",
+        "source": "CLAUDE.md"
+      },
+      "suggestedFix": "revert the spec edit and raise a finding with target \"spec\" instead — that halts the run for a human, which is the intended path"
+    },
+    {
+      "id": "S2",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "pipeline/spec-immutable",
+      "file": "specs/documents/README.md",
+      "claim": "the implementation stage modified a specification file",
+      "witness": {
+        "kind": "rule",
+        "detail": "CLAUDE.md: \"When behaviour and spec disagree, the spec wins — change the spec first, deliberately.\" A run that edits its own contract can no longer be checked against it.",
+        "source": "CLAUDE.md"
+      },
+      "suggestedFix": "revert the spec edit and raise a finding with target \"spec\" instead — that halts the run for a human, which is the intended path"
+    }
+  ]
+}

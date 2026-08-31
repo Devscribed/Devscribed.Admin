@@ -137,6 +137,9 @@ module "app" {
   signing_token_ttl_days = var.signing_token_ttl_days
   envelope_expiry_days   = var.envelope_expiry_days
 
+  signwell_api_application_id  = var.signwell_api_application_id
+  signwell_secrets_provisioned = var.signwell_secrets_provisioned
+
   test_fixtures_enabled = var.test_fixtures_enabled
 }
 

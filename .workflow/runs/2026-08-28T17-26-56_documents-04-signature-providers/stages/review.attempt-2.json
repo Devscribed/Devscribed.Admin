@@ -1,0 +1,69 @@
+{
+  "status": "blocked",
+  "findings": [
+    {
+      "id": "F1",
+      "target": "code",
+      "severity": "blocker",
+      "rule": "specs/documents/04-signature-providers.md - requirement 26",
+      "file": "apps/api/src/signature/signwell/signwell-http-client.ts",
+      "symbol": "HttpSignWellClient.attempt",
+      "line": 291,
+      "claim": "POST /documents is retried up to five times inside the HTTP client with no orphan lookup between attempts, so one createSession can create two live SignWell documents for one envelope - the duplicate requirement 26 exists to prevent. The client-side metadata scan runs only after all five attempts have failed.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Requirement 26 (spec:414-416): POST /documents is not idempotent on SignWells side and our retry must not create two documents for one envelope. Before retrying a create that failed without a response, the client looks for a document already carrying this envelopes id in metadata. Requirement 19 (spec:351) repeats it: a retried POST /documents is not safe to repeat blindly - see requirement 26. In HttpSignWellClient.attempt the retry loop at line 291 is shared by every route family (the family argument is used only by readRateLimit at 307) and createDocument enters it at line 157. Scenario: a sender sends envelope E on SignWell; the POST to /documents exceeds the 10s AbortController deadline in fetchTransport (line 404) while SignWell has already committed document D1; the catch at 323 records the failure, the loop sleeps backoffMs and re-POSTs the identical body, and the second attempt returns 201 for a new document D2. Both documents are live, both carry the real counterparties and an embedded_signing_url each, and the envelope pins only D2 - D1 is invisible to us (no ORPHANED_SESSION marker is written, because createSession returned successfully), fires webhooks recorded as outcome=unknown_ref (provider-reconciler.service.ts:106-113), and leaves a counterparty holding a working signing link for a contract we do not track. The same is reachable on a 5xx that nonetheless created the document (line 315). SignWellSigningProvider.createOrAdopt (signwell-signing-provider.ts:193-203) calls findOrphan only after the whole five-attempt sequence has thrown, so it never runs before retrying. Nothing covers this: TC-04-INT-03 (apps/api/test/signwell-send.spec.ts:224-254) stubs SignWellHttpClient itself, so the retry loop never executes and countOf(createDocument) counts adapter calls rather than HTTP attempts.",
+        "source": "specs/documents/04-signature-providers.md:414"
+      },
+      "suggestedFix": "Do not repeat a create blindly: either give the create-document family maxAttempts of 1 and let SignWellSigningProvider.createOrAdopt own the retry, running findOrphan before each re-POST, or pass the client a before-retry hook that createDocument uses to scan metadata.envelope_id and adopt on an exact match. A case at the transport seam (the harness in apps/api/test/signwell-client.spec.ts) answering a timeout and then a 201 should be able to assert exactly one POST /documents."
+    },
+    {
+      "id": "N1",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/documents/04-signature-providers.md - TC-04-E2E-05",
+      "file": "e2e/tests/signature-providers.spec.ts",
+      "symbol": "TC-04-E2E-05",
+      "line": 327,
+      "claim": "Carried from review 1 (N2) and still true after 4af8c9b. envelope-certificate-link is asserted absent, but no element with that testid exists anywhere in apps/web, so the assertion passes vacuously and would keep passing if a certificate link were added for the internal provider only. The detail screen now names the evidence format in prose (documentIncludes) with a comment saying it deliberately coins no testid, so the spec Required data-testid list and the code disagree in writing.",
+      "witness": {
+        "kind": "test",
+        "detail": "TC-04-E2E-05 expected result 4, No Certificate of Completion is listed, selector envelope-certificate-link (asserted absent). Grepping apps/web for envelope-certificate-link returns nothing; the only occurrence in tracked source is the assertion itself. The envelope detail page renders the evidence-format sentence with the comment: there is deliberately no link and no testid.",
+        "source": "specs/documents/04-signature-providers.md:1553"
+      },
+      "suggestedFix": "Either render the certificate link when provider.certificateIssued is true, which makes the absent-assertion meaningful, or drop envelope-certificate-link from the spec Required data-testid list and from TC-04-E2E-05 selectors."
+    },
+    {
+      "id": "N2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "specs/documents/04-signature-providers.md - requirement 38 and Error Messages",
+      "file": "apps/api/src/documents/envelopes.service.ts",
+      "symbol": "EnvelopesService.providerSendFailure",
+      "line": 1274,
+      "claim": "Carried from review 1 (N4) and unchanged. A text-tag materialization failure is reported to the sender with the provider-unavailable copy, Signing service is unavailable. Nothing was sent - try again shortly., but a retry will fail identically because the tags will not parse on the next attempt either. The machine-readable code and the expected/received lists are right; only the sentence is wrong, and the spec supplies no other.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Requirement 38: on mismatch the send deletes the document, leaves the envelope in draft, and reports document_fields_not_materialized naming what was expected and what came back. The Error Messages table has no row for this case, so providerSendFailure reuses SIGNING_PROVIDER_MESSAGES.send.providerUnavailable, the only string available to it.",
+        "source": "specs/documents/04-signature-providers.md:513"
+      },
+      "suggestedFix": "Add a row to the Error Messages table for document_fields_not_materialized and put the string in packages/validation beside the others."
+    },
+    {
+      "id": "N3",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/documents/04-signature-providers.md - Infrastructure / Configuration",
+      "file": "infra/terraform/environments/dev.tfvars",
+      "symbol": "signwell_secrets_provisioned",
+      "line": 88,
+      "claim": "Review 1 F1 is structurally closed - the two SecureString parameters, the execution-role grant and the three plain values now exist - but the feature is still inert on dev and prod after a deploy: signwell_secrets_provisioned is false in both tfvars and signwell_api_application_id is empty, so the settings screen shows SignWell disabled with all three items missing until someone writes both secrets out of band, creates a branding profile, flips the flag and redeploys. That matches the spec, which forbids Terraform from holding the value, and the commands are in the tfvars comments; it is recorded only so nobody reads infra landed as SignWell is available on dev.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Spec Infrastructure/Configuration: Terraform creates the parameter and the policy that reads it, never the value, so no secret reaches the state file. Requirement 32: an unconfigured provider is listed, disabled, with the missing items named. infra/terraform/modules/app/api.tf injects SIGNWELL_API_KEY and SIGNWELL_WEBHOOK_SECRET only when var.signwell_secrets_provisioned is true, and both environments set it false.",
+        "source": "specs/documents/04-signature-providers.md:694"
+      },
+      "suggestedFix": "No code change. If the go-live steps deserve a home outside a tfvars comment, docs/deployment.md is where the rest of the runbook lives."
+    }
+  ]
+}

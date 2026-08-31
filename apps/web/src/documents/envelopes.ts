@@ -130,6 +130,23 @@ export interface EnvelopeDetail {
   canSend: boolean;
   canVoid: boolean;
   canDownload: boolean;
+  /**
+   * Spec 04 requirement 34 — which provider executed this document, read from the
+   * envelope's own columns and never from configuration at display time. A config change
+   * must not relabel history: a test-mode document stays marked as a test after test mode
+   * is switched off (edge case 17).
+   */
+  provider?: {
+    key: string;
+    name: string;
+    testMode: boolean;
+    /** False under a provider that supplies its own audit page (requirement 28). */
+    certificateIssued: boolean;
+    /** The provider is no longer configured; the envelope is waiting rather than stuck. */
+    unconfigured: boolean;
+  };
+  providerStatus?: string | null;
+  providerError?: string | null;
 }
 
 export interface CreateEnvelopeResponse {
@@ -207,6 +224,18 @@ export interface SigningField {
 
 export interface SigningPayload {
   state: SigningState;
+  /**
+   * Spec 04. `ours` is spec 02's payload unchanged — our document and our canvas — while
+   * `embedded` means the provider hosts the widget and `embeddedSigningUrl` carries the
+   * frame's source. The URL is fetched per request and is never stored anywhere, here or
+   * on the server (requirement 6), so it is read straight into the iframe and dropped.
+   */
+  surface?: 'ours' | 'embedded';
+  embeddedSigningUrl?: string;
+  /** From the envelope's own column, so it survives a later configuration change. */
+  testMode?: boolean;
+  /** The provider that executed *this* document, for the attribution line. */
+  providerName?: string;
   envelope?: {
     title: string;
     senderOrganizationName: string;
@@ -397,6 +426,11 @@ const EVENT_LABELS: Record<EnvelopeEventType, string> = {
   downloaded: 'Downloaded',
   pdf_failed: 'PDF failed',
   tamper_detected: 'Tamper detected',
+  // Spec 04 — the reconciler's own rows. "Synced" rather than "Provider synced": the
+  // Activity tab already names the provider on the envelope header, and a row that reads
+  // like plumbing tells a sender nothing about their document.
+  provider_synced: 'Synced with provider',
+  provider_error: 'Provider error',
 };
 
 export function eventLabel(type: EnvelopeEventType): string {
@@ -418,3 +452,33 @@ export function ownerLabel(
   const roleKey = filledBy.startsWith('signer:') ? filledBy.slice('signer:'.length) : filledBy;
   return signers.find((signer) => signer.roleKey === roleKey)?.label ?? roleKey;
 }
+
+/* ------------------------------------------------------------------ *
+ * Spec 04 — signature providers
+ * ------------------------------------------------------------------ */
+
+export interface SigningProviderOption {
+  key: string;
+  name: string;
+  description: string;
+  /** Configuration is present. This is the whole gate — requirement 32. */
+  configured: boolean;
+  /** What is absent, named. Rendered beside a provider that cannot be selected. */
+  missing: string[];
+  /** A live check displayed beside the option, never a gate on it. */
+  reachable: boolean;
+  testMode: boolean;
+  webhookRegistered?: boolean;
+}
+
+export interface SigningSettings {
+  current: string;
+  setAt: string | null;
+  setBy: { id: string; name: string } | null;
+  /** Envelopes that stay with the old provider. The confirmation modal names it. */
+  inFlightCount: number;
+  providers: SigningProviderOption[];
+}
+
+export const signingSettingsUrl = (orgId: string) =>
+  `/api/organizations/${orgId}/settings/signing`;

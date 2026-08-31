@@ -2,7 +2,13 @@
 
 import { notFound } from 'next/navigation';
 import { use, useCallback, useEffect, useRef, useState } from 'react';
-import { ENVELOPE_MESSAGES, effectiveStatus, hasCapability } from '@devscribed/validation';
+import {
+  ENVELOPE_MESSAGES,
+  SIGNING_PROVIDER_MESSAGES,
+  effectiveStatus,
+  hasCapability,
+  isTerminal as isTerminalStatus,
+} from '@devscribed/validation';
 import { Badge, Button, Card, InfoBanner, Spinner, Tabs } from '@/ds';
 import { PageHeader } from '@/layout/PageHeader';
 import { useSession } from '@/layout/session-context';
@@ -220,6 +226,56 @@ function EnvelopeScreen({ orgId, envelopeId }: { orgId: string; envelopeId: stri
             <Badge tone={envelopeStatusTone(status)} data-testid="envelope-status">
               {envelopeStatusLabel(status)}
             </Badge>
+            {/* Spec 04 requirement 34 — which provider executed this document, and, in
+                test mode, an unmissable badge. Both read the envelope's **own** columns,
+                written at send: a configuration change must not relabel history, so a
+                test-mode document stays marked as a test forever (edge case 17). A
+                test-mode document has no legal weight and must never be mistaken for one
+                that does, which is why the badge carries its own words. */}
+            {detail.provider && (
+              <span
+                data-testid="envelope-provider"
+                style={{ fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}
+              >
+                {SIGNING_PROVIDER_MESSAGES.envelope.signedVia(detail.provider.name)}
+              </span>
+            )}
+            {detail.provider?.testMode && (
+              <Badge tone="warning" data-testid="envelope-test-badge">
+                {SIGNING_PROVIDER_MESSAGES.envelope.testDocument}
+              </Badge>
+            )}
+            {/* Which evidence format the stored PDF carries — our own Certificate of
+                Completion, bound into the document, or the provider's audit page
+                (requirement 28). Two formats coexist in an organization that has
+                switched, and the Known Gaps table accepts that only because the detail
+                screen says which one this document has.
+
+                `envelope-certificate-link` is the spec's own id and it is spelled its
+                way. It goes on this element, and only when our certificate is the one
+                issued, because that is what makes TC-04-E2E-05's "no Certificate of
+                Completion is listed" a real assertion rather than one that passes
+                because nothing anywhere carries the id.
+
+                It is text and not an anchor, and that is not a shortcut: the
+                certificate is bound into the signed PDF by `assembleCompletedDocument`
+                rather than stored beside it, so there is one file under either
+                provider and nothing separate to link to. Rendering a second download
+                would put two documents in the record for one act — the thing
+                requirement 28 refuses. `envelope-download-btn` is what fetches it. */}
+            {detail.provider && canDownload && (
+              <span
+                data-testid={
+                  detail.provider.certificateIssued ? 'envelope-certificate-link' : undefined
+                }
+                style={{ fontSize: 'var(--fs-13)', color: 'var(--text-muted)' }}
+              >
+                {SIGNING_PROVIDER_MESSAGES.envelope.documentIncludes(
+                  detail.provider.name,
+                  detail.provider.certificateIssued,
+                )}
+              </span>
+            )}
             {canVoid && (
               <Button variant="danger" data-testid="envelope-void-btn" onClick={() => setVoidOpen(true)}>
                 Void
@@ -240,6 +296,16 @@ function EnvelopeScreen({ orgId, envelopeId }: { orgId: string; envelopeId: stri
           </div>
         }
       />
+
+      {/* Edge case 16 — the provider this document is waiting on is no longer configured.
+          Said plainly rather than left as an envelope that silently stops advancing. */}
+      {detail.provider?.unconfigured && !isTerminalStatus(status) && (
+        <div style={{ marginBottom: 'var(--sp-8)' }}>
+          <InfoBanner tone="warning" data-testid="envelope-provider-unconfigured">
+            {SIGNING_PROVIDER_MESSAGES.envelope.unconfiguredInFlight}
+          </InfoBanner>
+        </div>
+      )}
 
       {pdfFailed && (
         <div style={{ marginBottom: 'var(--sp-8)' }}>

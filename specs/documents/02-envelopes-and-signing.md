@@ -25,6 +25,12 @@ signing transport sits behind a `SignatureProvider` port so a third-party provid
 Documenso, DocuSign) can be added later without touching the state machine, the data model, or
 any API contract in this spec.
 
+> **Superseded in part by spec 04.** The port named here was replaced by a session-scoped one
+> when the first real vendor was integrated: a third-party service hosts the signing page, mints
+> the link, captures the signature and produces the PDF itself, so the three methods described
+> below describe our own engine rather than a transport. Every requirement in this spec still
+> holds for an `internal` envelope, unchanged and unedited — see spec 04, requirement 10.
+
 **Depends on:** Spec 01 (DocumentTemplate, DocumentTemplateVersion, TemplateField).
 
 ## Actors & Preconditions

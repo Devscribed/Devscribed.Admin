@@ -1,0 +1,21 @@
+{
+  "stage": "static_gate",
+  "status": "blocked",
+  "base": "57d55acd03b825aeed9c85836e85138f12b01be1",
+  "findings": [
+    {
+      "id": "S1",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "pipeline/no-detector-weakening",
+      "file": "packages/validation/src/signwell-webhook.test.ts",
+      "claim": "an `as any` cast was added",
+      "witness": {
+        "kind": "rule",
+        "detail": "The diff adds an `as any` cast:\n    const pages = redacted.data.object.fields as any[][];\nA change that makes the checks weaker passes the gate without making the code correct.",
+        "source": "CLAUDE.md"
+      },
+      "suggestedFix": "fix the underlying defect, or contest this finding with the reason the suppression is correct here"
+    }
+  ]
+}
