@@ -30,7 +30,8 @@ npm run spec -- <what to spec>     # opens Claude Code on /spec
 npm run bug  -- <what is broken>   # /bug
 npm run ship -- <spec path>        # /ship — the skill, which checks the branch and reads the outcome
 npm run ship:run -- <spec path>    # scripts/ship.mjs alone, no model either side
-npm run watch                      # the live run report on http://localhost:4300
+npm run board                      # the run report, opened in a browser — pick the run in the page
+npm run watch                      # the same, without opening anything
 ```
 
 Under yarn the `--` is unnecessary: `yarn spec projects and their members`. Install with npm

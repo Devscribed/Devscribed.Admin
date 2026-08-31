@@ -19,6 +19,7 @@
     "bug": "node scripts/claude-cmd.mjs bug",
     "ship": "node scripts/claude-cmd.mjs ship",
     "ship:run": "node scripts/ship.mjs",
+    "board": "node scripts/run-watch.mjs --open",
     "watch": "node scripts/run-watch.mjs",
     "wf": "node scripts/wf.mjs",
     "wf:status": "node scripts/wf.mjs status",

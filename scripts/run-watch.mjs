@@ -149,7 +149,13 @@ watch(RUNS, { recursive: true }, (_ev, file) => {
   }, 400);
 });
 
-createServer((req, res) => {
+const open = (url) => {
+  const [cmd, args] = process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url]]
+    : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]];
+  spawn(cmd, args, { detached: true, stdio: 'ignore' }).unref();
+};
+
+const server = createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
 
   if (url.pathname === '/feed') {
@@ -180,12 +186,22 @@ createServer((req, res) => {
 
   res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
   res.end('not found\n');
-}).listen(PORT, '127.0.0.1', () => {
+});
+
+/* Asked to open the board twice, open the board — do not fail because the first one is still
+   up. The port being taken is the ordinary case for a command someone runs whenever they want
+   to look at a run, and the watcher already there serves every run on disk, so it is the same
+   page either way. */
+server.on('error', (e) => {
+  const url = `http://localhost:${PORT}`;
+  if (e.code !== 'EADDRINUSE') { process.stderr.write(`run-watch: ${e.message}\n`); process.exit(1); }
+  process.stdout.write(`run-watch: already serving on ${PORT}\n  ${url}\n`);
+  if (argv.includes('--open')) open(url);
+  process.exit(0);
+});
+
+server.listen(PORT, '127.0.0.1', () => {
   const url = `http://localhost:${PORT}`;
   process.stdout.write(`run-watch: ${runs.length} run(s), opening ${defaultRun}\n  ${url}\n  watching ${RUNS}\n`);
-  if (argv.includes('--open')) {
-    const [cmd, args] = process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url]]
-      : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]];
-    spawn(cmd, args, { detached: true, stdio: 'ignore' }).unref();
-  }
+  if (argv.includes('--open')) open(url);
 });
