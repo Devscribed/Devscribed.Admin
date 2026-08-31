@@ -1,5 +1,7 @@
 import {
   HttpSignWellClient,
+  ProviderRejectedRequestError,
+  fieldPathsFromErrorBody,
   type SignWellRawRequest,
   type SignWellRawResponse,
 } from '../src/signature/signwell/signwell-http-client';
@@ -24,7 +26,22 @@ const CREATE_BODY: SignWellCreateDocumentBody = {
     { id: '1', name: 'Pat Owner', email: 'company@acme.com', signing_order: 1, send_email: false },
   ],
   apply_signing_order: true,
-  text_tags: true,
+  text_tags: false,
+  fields: [
+    [
+      {
+        api_id: 'Signature_1',
+        type: 'signature',
+        recipient_id: '1',
+        page: 1,
+        x: 81,
+        y: 136.7,
+        width: 240,
+        height: 36,
+        required: true,
+      },
+    ],
+  ],
   embedded_signing: true,
   embedded_signing_notifications: false,
   reminders: false,
@@ -219,6 +236,97 @@ describe('SignWell HTTP client', () => {
       // Reads are a hundred and twenty a minute and creates are ten, but a rejection that
       // was never processed cannot have created anything, so none is spent here.
       expect(lookups).toBe(0);
+    });
+  });
+
+  /**
+   * **TC-04-INT-24, at the layer that can see it.** BUG-002.
+   *
+   * The other half is in `signwell-send.spec.ts`, where the real adapter proves it runs
+   * no orphan scan after a refusal. This half needs the real client: the mapping from a
+   * status to an error, and the field path taken out of the body, are its own and are
+   * invisible from a suite that stubs it.
+   */
+  describe('TC-04-INT-24: A 4xx is a permanent refusal, not an outage', () => {
+    /** The body a refused create actually came back with. */
+    const refusal = (): SignWellRawResponse => ({
+      status: 422,
+      headers: {},
+      body: Buffer.from(
+        JSON.stringify({
+          errors: {
+            files: {
+              file_1: {
+                file_data: ['is invalid', 'The document could not be read'],
+              },
+            },
+          },
+        }),
+        'utf8',
+      ),
+    });
+
+    it('names the field, spends one attempt, and asks for no orphan', async () => {
+      const { client, requests, delays } = harness(refusal);
+
+      let lookups = 0;
+      const failure = await client
+        .createDocument(CREATE_BODY, async () => {
+          lookups += 1;
+          return null;
+        })
+        .then(
+          () => null,
+          (error: unknown) => error,
+        );
+
+      expect(failure).toBeInstanceOf(ProviderRejectedRequestError);
+      // The distinction the sender feels: this is not an outage, and nothing that
+      // branches on one may treat it as one.
+      expect(failure).not.toBeInstanceOf(ProviderUnavailableError);
+      expect(failure).toMatchObject({ status: 422, fieldPath: 'files.file_1.file_data' });
+
+      // Retrying a refusal changes nothing, and nothing was created to adopt.
+      expect(requests).toHaveLength(1);
+      expect(delays).toHaveLength(0);
+      expect(lookups).toBe(0);
+    });
+
+    it('keeps the address and discards the provider’s prose', () => {
+      const body = refusal().body;
+      expect(fieldPathsFromErrorBody(body)).toEqual(['files.file_1.file_data']);
+      // Requirement 36 — the projection may be logged; the body may not. Nothing the
+      // provider wrote about the document survives the extraction.
+      expect(JSON.stringify(fieldPathsFromErrorBody(body))).not.toContain('could not be read');
+    });
+
+    it('degrades to a refusal with no field when the body names none', async () => {
+      const { client } = harness(() => ({
+        status: 403,
+        headers: {},
+        body: Buffer.from('Forbidden', 'utf8'),
+      }));
+
+      const failure = await client.createDocument(CREATE_BODY, NO_EXISTING_DOCUMENT).then(
+        () => null,
+        (error: unknown) => error,
+      );
+
+      expect(failure).toBeInstanceOf(ProviderRejectedRequestError);
+      expect(failure).toMatchObject({ status: 403, fieldPath: null, detail: 'status_403' });
+    });
+
+    it('leaves a 5xx an outage, retried on the same budget', async () => {
+      const { client, requests } = harness(() => ({
+        status: 503,
+        headers: {},
+        body: Buffer.alloc(0),
+      }));
+
+      await expect(
+        client.createDocument(CREATE_BODY, NO_EXISTING_DOCUMENT),
+      ).rejects.toBeInstanceOf(ProviderUnavailableError);
+      expect(requests).toHaveLength(5);
     });
   });
 });

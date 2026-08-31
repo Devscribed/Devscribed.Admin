@@ -33,6 +33,95 @@ import type {
 export type AdoptExisting = () => Promise<SignWellDocument | null>;
 
 /**
+ * A `4xx` other than `429` — the provider understood us and refused, permanently.
+ *
+ * It is **not** a `ProviderUnavailableError`, and the difference is the whole of BUG-002.
+ * A refusal is a fault in something we sent: retrying it changes nothing, no document was
+ * created, and telling the sender the provider is down hides a field error behind an
+ * infrastructure one. Two behaviours follow from the type alone:
+ *
+ *  - the adapter's post-failure orphan scan is guarded on `ProviderUnavailableError`, so a
+ *    refusal skips it — nothing was created, so there is nothing to adopt;
+ *  - anything that retries an outage must not retry this.
+ *
+ * `429` is deliberately excluded: the limiter refuses *before* processing, the budget
+ * refills, and it is already retried as the outage it is.
+ */
+export class ProviderRejectedRequestError extends Error {
+  constructor(
+    readonly status: number,
+    /**
+     * The dotted path the error body addressed, e.g. `files.file_1.file_data`, or `null`
+     * when the body named no field. A path, never a value — see `fieldPathsFromErrorBody`.
+     */
+    readonly fieldPath: string | null,
+    readonly detail: string,
+  ) {
+    super('provider_rejected');
+    this.name = 'ProviderRejectedRequestError';
+  }
+}
+
+/** How deep the walk over an error body goes, and how many paths it keeps. */
+const ERROR_PATH_MAX_DEPTH = 6;
+const ERROR_PATH_MAX_COUNT = 5;
+/**
+ * What a key has to look like to be treated as a field name. Anything outside this is
+ * not a path we will repeat — the projection requirement 36 permits is the *address* of
+ * the offending input, and a key that looks like prose is not one.
+ */
+const ERROR_PATH_KEY = /^[A-Za-z0-9_-]{1,64}$/;
+
+/**
+ * The field paths an error body addresses, and nothing else.
+ *
+ * SignWell answers a refused create with `{"errors":{"files":{"file_1":{"file_data":
+ * ["…"]}}}}` — a field-addressed list, whose *keys* say which input was refused and whose
+ * *leaves* are the provider's prose. Requirement 36 permits the projection to be logged;
+ * the whole body is document content, a field path is not. So the walk keeps the keys,
+ * stops at the first non-object, and never reads the leaf.
+ *
+ * Exported for the test that proves the leaf text does not survive it.
+ */
+export function fieldPathsFromErrorBody(body: Buffer | string): string[] {
+  const text = typeof body === 'string' ? body : body.toString('utf8');
+  if (!text) return [];
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return [];
+  }
+
+  const root =
+    isPlainObject(parsed) && isPlainObject(parsed.errors) ? parsed.errors : parsed;
+  if (!isPlainObject(root)) return [];
+
+  const paths: string[] = [];
+  const walk = (node: Record<string, unknown>, trail: readonly string[]): void => {
+    for (const [key, value] of Object.entries(node)) {
+      if (paths.length >= ERROR_PATH_MAX_COUNT) return;
+      if (!ERROR_PATH_KEY.test(key)) continue;
+      const next = [...trail, key];
+      // A nested object is more address; anything else — a list of messages, a string, a
+      // number — is where the address ends and the provider's prose begins.
+      if (isPlainObject(value) && next.length < ERROR_PATH_MAX_DEPTH) {
+        walk(value, next);
+      } else {
+        paths.push(next.join('.'));
+      }
+    }
+  };
+  walk(root, []);
+  return paths;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
  * Thrown by the guard when the lookup found the document the failed create had already
  * made, and caught by `createDocument` a few frames up. Control flow rather than an error:
  * it is how the retry loop is stopped from *inside* the pause between attempts without
@@ -472,11 +561,33 @@ export class HttpSignWellClient extends SignWellHttpClient {
   }
 
   /**
-   * The error a non-retryable status becomes. The provider's body is **not** included:
-   * only the projection may be logged (requirement 36), and an error body carries the
-   * whole document.
+   * The error a non-retryable status becomes — and which of the two it is.
+   *
+   * A `4xx` is a **permanent refusal of something we sent** (BUG-002): the provider was
+   * reached, understood us, and said no. Calling that `provider_unavailable` reports an
+   * outage for a field error, at the last step instead of the first, and sends the
+   * adapter looking for an orphan that a refused create never made. Everything else here
+   * — a `3xx`, an unexpected `2xx` — stays an outage, because we cannot say what happened.
+   *
+   * The provider's body is still **not** included: only the projection may be logged
+   * (requirement 36), and an error body carries the whole document. What is extracted is
+   * the field path, which is an address and not content.
    */
-  private failure(operation: string, response: SignWellRawResponse): ProviderUnavailableError {
+  private failure(operation: string, response: SignWellRawResponse): Error {
+    // 429 is not permanent — the limiter refused before processing and the budget
+    // refills. It is retried above and never reaches here.
+    if (response.status >= 400 && response.status < 500 && response.status !== 429) {
+      const paths = fieldPathsFromErrorBody(response.body);
+      this.log.warn(
+        `SignWell ${operation} refused ${response.status}` +
+          (paths.length > 0 ? ` at ${paths.join(', ')}` : ''),
+      );
+      return new ProviderRejectedRequestError(
+        response.status,
+        paths[0] ?? null,
+        `status_${response.status}`,
+      );
+    }
     this.log.warn(`SignWell ${operation} answered ${response.status}`);
     return new ProviderUnavailableError('provider_unavailable', `status_${response.status}`);
   }
