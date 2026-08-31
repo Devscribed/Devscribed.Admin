@@ -405,6 +405,64 @@ is merely slower. A registration is deleted the moment its callback address stop
 deliveries carry a working signing link per recipient, so a tunnel hostname that gets reassigned
 hands the ability to sign as a counterparty to whoever answers there.
 
+#### Registering a webhook against a local tunnel
+
+Step 2's prerequisite is a public address, and on a workstation that means a tunnel. The
+procedure is the same one an environment will use; only the hostname differs.
+
+1. **Tunnel the API, not the web app.** Deliveries arrive at `POST /api/webhooks/signwell`
+   (`apps/api/src/webhooks/signwell-webhook.controller.ts:49`), which is Nest on `:4000`.
+   Next on `:3000` is not involved — SignWell calls the API directly.
+
+   ```bash
+   ngrok http 4000
+   ```
+
+2. **Register the callback.** In SignWell, *Settings → API → Workspace Callback URLs*, set the
+   Event Callback URL to `https://<host>/api/webhooks/signwell` and save.
+
+3. **Read back the id, because the id is the secret.** SignWell shows the URL but not the
+   registration's id, and this repository's client only lists hooks
+   (`signwell-http-client.ts:285`), so ask the API directly:
+
+   ```bash
+   curl -s -H "X-Api-Key: $SIGNWELL_API_KEY" https://www.signwell.com/api/v1/hooks/
+   ```
+
+   Take the `id` of the entry whose `callback_url` is yours. `verifySignWellHash`
+   (`apps/api/src/webhooks/signwell-notification.ts:40`) computes
+   `HMAC-SHA256(webhookId, "<type>@<time>")`, so the registration id **is** the HMAC key.
+   There is no separate secret to find.
+
+4. **Point the API at it** and restart, since the environment is read once at boot:
+
+   ```
+   SIGNWELL_WEBHOOK_SECRET="<the id>"
+   SIGNWELL_DRIVER="http"
+   ```
+
+5. **Watch a delivery.** ngrok's inspector on `http://127.0.0.1:4040` shows the body. A hash
+   that does not verify answers 401 and writes nothing but the fact that a notification
+   arrived, which is requirement 21.
+
+**Delete the registration when the tunnel goes away.** A free tunnel hands out a new hostname
+each time it starts, and the one you abandoned goes to somebody else — together with
+deliveries carrying a working `embedded_signing_url` per recipient. That is the ability to
+sign as a counterparty, handed to whoever answers there. The same rule the environments follow
+applies here and is easier to forget.
+
+`SIGNWELL_API_APPLICATION_ID` is not a secret and is not the API key: it is the **Unique ID**
+under *Settings → API → API Apps*, which names the branding profile the widget wears.
+
+#### Exercising the whole journey locally, without SignWell
+
+`SIGNWELL_DRIVER=stub` answers the provider boundary from memory and is refused outright when
+`NODE_ENV` is production. With it, no account, tunnel or registration is needed: set
+`SIGNWELL_WEBHOOK_SECRET` to any non-empty string — `provider-registry.ts:95` tests presence,
+not validity — and the settings screen, the provider switch, the send and the signing surface
+all work end to end. It is the fastest way to see the feature, and the only thing it cannot
+show you is a real delivery.
+
 `SIGNWELL_TEST_MODE` is deliberately not a variable. It is written once in `modules/app/api.tf` and
 both environments read that line, because going live is a change with a legal review of the
 counterparty-facing copy attached to it and not a side effect of editing a tfvars file. This release
