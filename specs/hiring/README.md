@@ -126,15 +126,21 @@ user-management 01 Organization Creation
 ## Design Layer
 
 Same split as user-management: business specs own behaviour, API contracts, and validation
-messages; a paired `NN-name.design.md` owns visuals and references Teammerly Meridian
-(`1_DS for dev/`) by component and token, never by hex value or pixel size.
+messages; a paired `NN-name.design.md` owns visuals and references Teammerly Original DS
+(`1_DS for dev/`) by component and token, never by hex value or pixel size. The design system is
+being reskinned off the earlier Meridian prototype — see
+[`specs/design-system/README.md`](../design-system/README.md) for the decision record, and each
+design spec's own header for whether it has been reconciled yet.
 
 - **Light theme only** this release, matching user-management. The public booking page follows the
   same rule.
 - **Copy ownership** — validation messages belong to the business spec; headings, placeholders,
   hints, and micro-labels belong to the design spec.
-- **DS gaps** go into the design system, not into the screen. The one new surface this set
-  introduces is `BookingLayout`, the public shell — see [02 design](02-booking-page.design.md).
+- **DS gaps** go into the design system, not into the screen, and every addition to the vendored
+  copy is numbered in the [divergence ledger](../design-system/ledger.md). Five of this set's
+  surfaces have no counterpart in the shipping product and are therefore *designed, not measured*:
+  `BookingLayout` (the public shell — see [02 design](02-booking-page.design.md)), `FileInput`,
+  `Calendar`, `BoardCard` and `BoardColumn`.
 - **The signed-in shell** — every `/org/{orgId}/hiring/*` route renders inside the existing
   `AppShell` (user-management `00-app-shell.design.md`). The public booking page renders inside
   neither `AppShell` nor `AuthLayout`.

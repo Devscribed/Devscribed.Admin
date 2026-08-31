@@ -14,7 +14,7 @@ boundaries and the rules that are easy to mistake for omissions.
 |---|---|
 | API | NestJS 11, Prisma, PostgreSQL (Docker locally, Neon in production) |
 | Web | Next.js 15 (App Router), React 19 |
-| UI | Teammerly Meridian (`1_DS for dev/`), imported through `@ds` — no hardcoded colors or sizes |
+| UI | Teammerly Original DS (`1_DS for dev/`), imported through `@ds` — no hardcoded colors or sizes |
 | Unit tests | Vitest |
 | Integration tests | Jest + Supertest against a disposable Postgres database |
 | E2E | Playwright |
@@ -851,147 +851,159 @@ record the exposure that leaves open rather than implying the endpoints are prot
 
 ## Design-system notes
 
+> **The reskin is in flight.** The app is moving off yellow (Teammerly Meridian, the prototype
+> skin) and onto blue (Teammerly Original DS, the system measured from the live Teamplay/Teammerly
+> product). The notes below describe blue and the rules the migration carries across.
+> [`specs/design-system/README.md`](specs/design-system/README.md) is the decision record — the
+> token map, the component inventory, and the eight numbered decisions everything else cites — and
+> [`specs/design-system/ledger.md`](specs/design-system/ledger.md) records what the vendored copy
+> adds beyond upstream. Until the first migration phase vendors blue, `1_DS for dev/` still holds
+> yellow and `npm run ds:drift` reports the gap.
+
 - Components come from `1_DS for dev/index.js` via the `@ds` alias
   (`experimental.externalDir`), re-exported through `apps/web/src/ds.ts` — a single
   `'use client'` boundary, since the DS uses hooks and ships no directives.
-- `Input` has no way to tag its error message node, so the app passes the message as a
-  node carrying `field-error-{fieldName}`. A first-class `errorId` prop belongs in the
-  DS; see the "DS gaps" table in the design spec.
-- Hiring closed several gaps the design specs had already recorded, in the design system
-  rather than in the screens: `BookingLayout`, `Textarea`, `FileInput`, `Toast`,
-  `Skeleton`, `Calendar`, `Menu`, `Tooltip`, `BoardColumn`, `BoardCard` and `Combobox`
-  are new components; `Textarea` gained a
-  `trailing` slot in its label row — where `Input`'s sits inside the field, which a
-  multi-line field has no unambiguous place for — so the candidate card's saved-at
-  indicator can appear and change without moving the field below it, and a real
-  `<label for>`, since the micro-label was previously only sitting above the field
-  rather than naming it; `Button` gained `as="a"` for an action that is a navigation,
-  because a CV download through an onClick would lose middle-click, copy-address and the
-  browser's own download handling; `SelectOption` gained
-  `disabled`, `hint` and `testId` so an ineligible interviewer can be shown-but-disabled
-  with its reason;
-  `Select`'s popover now scrolls, because a time-zone picker is hundreds of rows and
-  would otherwise run off the viewport; `Table` gained `rowHref`/`rowTestId`; `Toggle`
-  and `Modal` now forward unknown props, matching `Card` and `AuthLayout`. `Button`'s
-  disabled state drops to a sunken field with faint ink instead of fading the violet fill
-  — a 55%-opacity primary still reads as the primary action, which is the one thing a
-  disabled CTA must not do.
-- **`Modal` became a real dialog**: `role="dialog"`, `aria-modal`, `Escape` closes it, focus is
-  trapped while it is open and returned to the invoking control on close, and `initialFocusRef`
-  says what opens focused. That went into the component rather than into its callers because
+- **Blue is a measurement, not a design**, and that distinction settles most arguments. Where blue
+  made a choice it wins, layout included. Where blue merely never wrote something down — rest-prop
+  forwarding, `ref`, aria hooks, keyboard handling — it is silent rather than authoritative: blue's
+  `Modal` has no focus trap because production never wrote one. Those get added to the vendored
+  copy, numbered in the ledger, and pushed back upstream in one batch. `npm run ds:drift` is what
+  keeps that from happening quietly — it diffs `index.js`'s exports against `_ds_manifest.json` and
+  exits non-zero when they disagree.
+- **Blue's components are closed.** `Button` destructures exactly seven props with no `...rest`, so
+  `data-testid`, `ref`, `aria-*`, `className` and `style` all vanish without an error — 81
+  attributes feeding 632 e2e selectors. It also hardcodes `width: '100%'`. Opening them changes no
+  pixels and is the first task after vendoring.
+- **`Modal` has to become a real dialog**: `role="dialog"`, `aria-modal`, `Escape` closes it, focus
+  trapped while it is open and returned to the invoking control on close, and `initialFocusRef` to
+  say what opens focused. That goes into the component rather than into its callers because
   [07's design spec](specs/hiring/07-manage-booking.design.md) refused a second dialog component
   precisely to stop focus behaviour forking — and a cancellation dialog has to open on its
-  dismissive control, never on the button that cannot be undone. `Button` now declares `ref`,
-  which React 19 passes through as an ordinary prop, so a caller can name that control without a
-  `forwardRef` wrapper.
-- `BoardCard` gained `cancelledTooltip`. The badge is deliberately truncated to a first name
-  because a board card is a glance, so the tooltip carries the whole fact — and is the badge's
-  accessible name rather than what is drawn.
-- `Combobox` is `Select` with the four things a library-backed field needs and `Select` has
-  none of: typing, filtering, multi-select, and a `Create "…"` row for what is missing.
-  Its filter folds case deliberately — an option that already exists must never hide
-  behind a create row over a difference in capitalisation, because creating it is exactly
-  what the API will refuse. The create row now appears only when the typed text matches
-  **nothing at all**, not merely when it is not an exact match: somebody typing `Eng`
-  while `English` exists is looking for English, and offering to create `Eng` beside it is
-  precisely how a library fills with near-duplicates ([06 §04.21](specs/hiring/06-libraries.md)). Like `Calendar` it is presentational: it never writes
-  anything. `onCreate` hands the typed name back and the caller decides what that means,
-  which is what lets the vacancy dialog hold a pending category and create it in the same
-  submit as the vacancy — so cancelling the dialog leaves no orphan behind. Spec 03's
-  filters are its next caller; spec 04's criteria autocomplete is already one.
-- **The scale editor is composed in the app, not added to the DS.** Its chips carry a drag
-  handle and a remove control, and [04's design spec](specs/hiring/04-candidate-card.design.md)
-  already recorded the rule that decides this: a `Badge` is a `<span>` with text, and a
-  chip carrying controls is a screen concern rather than a token concern. The criterion
-  chips on the candidate card are composed the same way, for the same reason. Reordering
-  is operable by pointer and by keyboard against one list — `Space` picks a value up,
-  arrows move it, `Space` drops it, each step announced — because this dialog opens
-  mid-interview and a member with both hands on the keyboard should not have to find a
-  mouse to put `B1` above `A2`.
-- `Calendar` is presentational by construction: it is handed the weeks to draw, which
-  dates may be chosen, and the bounds it may navigate between. Availability, the booking
-  window and the time zone are business rules and stay on the page. It owns the grid
-  semantics and the keyboard — arrows by day and by week, `Home`/`End`, `PageUp`/
-  `PageDown`, and focus that only ever lands on a selectable date.
-- The public booking page and the candidate card are the two screens with real
-  breakpoints, and inline styles cannot express a media query, so their layout classes
-  live in `apps/web/app/globals.css`. Every value there is still a token.
-- `Menu` and `Tooltip` are a pair. A blocked action — Delete on a vacancy that has
-  candidates, and the last-admin guard when spec 04 lands — is **disabled rather than
-  hidden**, because a missing action is indistinguishable from a bug. That only works if
-  the reason is reachable, so a disabled item keeps `tabIndex` and `aria-disabled`
-  instead of the `disabled` attribute, which would take it out of the tab order and the
-  reason with it. The `Tooltip` bubble stays in the accessibility tree at all times and
-  only changes visibility, so `aria-describedby` always resolves.
-- `BoardColumn` and `BoardCard` are Meridian's only drag-and-drop primitive, and the
-  pick-up/gap/drop visual language is now the system's rather than one screen's, so a
-  second board would not invent its own. They are presentational and drag-mechanical only:
-  a column turns a pointer position into a **slot index** and hands it back, and what the
-  slots mean, which columns exist, and what a drop writes all stay in the app.
-- **One placeholder, and it travels.** A card dragged with a pointer is not rendered at
-  all; the gap it would fill is a single card-sized placeholder that moves to wherever the
-  drop would land. Its height is measured from the card at pick-up, so the gap is exactly
-  the size of the thing going into it. The slot index counts **cards only** — the
-  placeholder is never a slot — which is what keeps the arithmetic stable while the gap
-  moves around under the pointer, and it means every index everywhere is an index into the
-  column as it will be *without* the card in flight: the same list the server resolves
-  neighbours against, with no rendered-versus-model conversion anywhere.
-  [05's design spec](specs/hiring/05-board.design.md) originally paired a placeholder at
-  the *source* with a 2px insertion line at the target; two grey marks for one card read
-  as two cards in flight, and the line was too slight to say what size the gap would be.
-  The spec's Interactions section records the revision and why.
-- **A keyboard-held card stays where it is** and only the placeholder travels. Moving it
-  would re-parent the element between columns, and a focused node moved to a new parent is
-  blurred — which would take the arrow keys, `Escape` and the drop itself with it, one
-  keystroke into the drag.
-- **Two things about HTML5 drag that are not optional here.** The browser rasterizes the
-  drag image at the end of the `dragstart` handler, and React flushes a discrete event's
-  state update before that handler returns — so the card is unmounted one frame *later*,
-  via `requestAnimationFrame`, or the pointer drags a blank. And because the source element
-  is gone for the length of the drag, `dragend` is delivered to a detached node that bubbles
-  nowhere: a native `once` listener is attached to the node itself at pick-up, which is what
-  ends a drag released over no column at all. Without it the gap stays on screen for good
-  and the next drag begins on a board still holding the last one. Both have regression tests
-  that fail without them.
-- `BoardCard` is the one `role="button"` in Meridian that does **not** activate on `Space`:
-  `Space` picks the card up and `Enter` opens it. A board whose cards activated on `Space`
-  could not be dragged with a keyboard at all, and the drag is the screen's whole purpose.
-  The hint that says so is rendered once by the board, not repeated on every card, and
-  `prefers-reduced-motion` drops the lift while keeping the placeholder, which is what
-  carries the information.
-- `Tabs` became a real `tablist`. Its tabs were anchors to `#`, which a screen reader
-  announces as links that go nowhere, and it is a control that chooses which panel is shown
-  rather than a set of destinations — so they are buttons now, with `aria-selected`,
-  `aria-controls`, roving focus and arrow-key movement, plus a `testId` per item. The count
-  on the board's mobile tabs rides in the item's `label` node: a strip that grew a `count`
-  prop would then need a badge, and an icon.
-- `Pagination` is new, and it exists because of a rejected alternative rather than a
-  missing widget: the candidate database is paginated precisely because infinite scroll
-  cannot answer "how many match?". Bounds are disabled rather than hidden — a Previous
-  that vanishes on page 1 moves Next under the cursor — and a long range windows around
-  the current page while keeping the first and last reachable, since those are the two
-  anybody jumps to.
-- **A `Card` clipped every popover opened inside it.** Cards clip to their radius, which
-  is what rounds an edge-to-edge `Table`'s square corners — and it also cut a `Select` or
-  `Combobox` list off at the card's edge, so the options below the fold were invisible and
-  unclickable. `clip` (default `true`) is the opt-out, and every card that hosts a popover
-  passes `clip={false}`: the candidate database's filter bar, the candidate card's
-  application section, and the two library cards on hiring settings, whose row menus were
-  clipped the same way below 768px. The regression test hit-tests the option's own coordinates rather
-  than clicking it: a clipped popover keeps its layout box and still scrolls into view
-  inside the card hiding it, so a click passes either way and only what is *painted* there
-  tells the two apart.
-- `Table` gained `busy`, which dims the body and sets `aria-busy` while a refetch is in
-  flight. It went into the DS rather than into the screen so every filterable table gets
-  the same treatment: the alternative is each page dimming its own rows slightly
-  differently, and the one thing this state must do is stay unremarkable. It also gained
-  `hideHeader`, which drops the uppercase rule and keeps the column widths — My
-  interviews is two groups of a few rows each, already named by the `SectionLabel` above
-  them, and a header rule over three rows reads as a report rather than as a glance at
-  today.
-- Still outstanding: promoting the template's `P` glyph dictionary to real icon exports —
-  raised for the fourth time now, since My interviews borrows the `timesheets` clock. The
-  booking page's time-zone selector is still a plain `Select` and therefore a long
-  unsearchable list — the whole IANA set is offered, because a shortlist would strand
-  anyone whose zone it left out, and moving it onto `Combobox` is the obvious next use of
-  the control the libraries introduced.
+  dismissive control, never on the button that cannot be undone. `Button` declares `ref` for the
+  same reason; React 19 passes it through as an ordinary prop, so a caller can name that control
+  without a `forwardRef` wrapper.
+- **`TextInput` has no way to tag its error message node**, so the app passes the message as a node
+  carrying `field-error-{fieldName}`. A first-class `errorId` prop belongs in the DS, along with
+  `id`, `name`, `required` and `aria-describedby`.
+- **`TextArea`'s trailing slot belongs in the label row, not in the field.** `TextInput`'s sits
+  inside the field, which a multi-line field has no unambiguous place for. The candidate card's
+  saved-at indicator lives in that slot so it can appear and change without moving the field below
+  it — the alternative shifts the layout on every autosave. `TextArea` also needs a real
+  `<label for>`; a micro-label sitting above a field never names it.
+- **`Button` needs `as="a"`** for an action that is really a navigation. The CV download is one: a
+  download through an `onClick` loses middle-click, copy-address and the browser's own download
+  handling.
+- **`Select isSearchable` replaces `Combobox`** — the capability exists in blue, production just
+  never enables it. The rules the libraries screen established travel with it. Its filter folds
+  case deliberately: an option that already exists must never hide behind a create row over a
+  difference in capitalisation, because creating it is exactly what the API will refuse. The create
+  row appears only when the typed text matches **nothing at all**, not merely when it is not an
+  exact match — somebody typing `Eng` while `English` exists is looking for English, and offering
+  to create `Eng` beside it is precisely how a library fills with near-duplicates
+  ([06 §04.21](specs/hiring/06-libraries.md)). Like `Calendar` it is presentational: it never
+  writes anything. `onCreate` hands the typed name back and the caller decides what that means,
+  which is what lets the vacancy dialog hold a pending category and create it in the same submit as
+  the vacancy — so cancelling the dialog leaves no orphan behind.
+- **`SelectOption` needs `disabled`, `hint` and `testId`**, so an ineligible interviewer is shown
+  disabled with its reason rather than dropped from the list. `Select`'s popover also has to
+  scroll: the booking page offers the whole IANA time-zone set, because a shortlist would strand
+  anyone whose zone it left out.
+- **A `Card` clips every popover opened inside it.** Cards clip to their radius, which is what
+  rounds an edge-to-edge `Table`'s square corners — and it also cuts a `Select` list off at the
+  card's edge, so the options below the fold are invisible and unclickable. `clip` (default `true`)
+  is the opt-out, and it has to exist from the moment `Card` is built, because four surfaces pass
+  `clip={false}`: the candidate database's filter bar, the candidate card's application section,
+  and the two library cards on hiring settings, whose row menus clip the same way below 768px. The
+  regression test hit-tests the option's own coordinates rather than clicking it — a clipped
+  popover keeps its layout box and still scrolls into view inside the card hiding it, so a click
+  passes either way and only what is *painted* there tells the two apart.
+- **`Table` needs `busy` and `hideHeader`.** `busy` dims the body and sets `aria-busy` while a
+  refetch is in flight, and belongs in the DS rather than in the screen so every filterable table
+  gets the same treatment: the alternative is each page dimming its own rows slightly differently,
+  and the one thing this state must do is stay unremarkable. `hideHeader` drops the uppercase rule
+  and keeps the column widths — My interviews is two groups of a few rows each, and a header rule
+  over three rows reads as a report rather than as a glance at today.
+- **Six of yellow's components go away rather than get repainted**, because blue already has the
+  pattern: `SectionLabel` → headings, `Skeleton` → `Preloader`, `Toast` → `InfoBanner`, `Tooltip` →
+  native `title`, `Pagination` → infinite scroll, `Toggle` → `ToggleButton`. Three of those
+  overturn a decision this repo made deliberately, and each needs a call rather than a swap:
+  - `Pagination` exists **because** infinite scroll cannot answer "how many match?", and its bounds
+    are disabled rather than hidden so a vanishing Previous never slides Next under the cursor.
+    Adopting infinite scroll means the candidate database has to re-home the match count.
+  - `Tooltip` and `Menu` are a pair. A blocked action — Delete on a vacancy that has candidates, or
+    the last-admin guard — is **disabled rather than hidden**, because a missing action is
+    indistinguishable from a bug. That only works because the disabled item keeps `tabIndex` and
+    `aria-disabled` instead of the `disabled` attribute, which would take it out of the tab order
+    and the reason with it, and because the bubble stays in the accessibility tree at all times so
+    `aria-describedby` always resolves. Native `title` is not keyboard-reachable in any major
+    browser, so this is a free swap for a pointer and a regression for everyone else.
+  - `Toast` → `InfoBanner` turns transient into persistent, which needs both a slot and a
+    dismissal story on five screens.
+- **`BoardColumn` and `BoardCard` are the only drag-and-drop primitive in either system**, and
+  production has no kanban at all — so they are designed rather than measured, and the
+  pick-up/gap/drop visual language is the system's rather than one screen's. They stay
+  presentational and drag-mechanical only: a column turns a pointer position into a **slot index**
+  and hands it back, and what the slots mean, which columns exist, and what a drop writes all stay
+  in the app.
+- **One placeholder, and it travels.** A card dragged with a pointer is not rendered at all; the
+  gap it would fill is a single card-sized placeholder that moves to wherever the drop would land.
+  Its height is measured from the card at pick-up, so the gap is exactly the size of the thing
+  going into it. The slot index counts **cards only** — the placeholder is never a slot — which is
+  what keeps the arithmetic stable while the gap moves around under the pointer, and it means every
+  index everywhere is an index into the column as it will be *without* the card in flight: the same
+  list the server resolves neighbours against, with no rendered-versus-model conversion anywhere.
+  [05's design spec](specs/hiring/05-board.design.md) originally paired a placeholder at the
+  *source* with a 2px insertion line at the target; two grey marks for one card read as two cards
+  in flight, and the line was too slight to say what size the gap would be. The spec's Interactions
+  section records the revision and why.
+- **A keyboard-held card stays where it is** and only the placeholder travels. Moving it would
+  re-parent the element between columns, and a focused node moved to a new parent is blurred —
+  which would take the arrow keys, `Escape` and the drop itself with it, one keystroke into the
+  drag.
+- **Two things about HTML5 drag that are not optional here.** The browser rasterizes the drag image
+  at the end of the `dragstart` handler, and React flushes a discrete event's state update before
+  that handler returns — so the card is unmounted one frame *later*, via `requestAnimationFrame`,
+  or the pointer drags a blank. And because the source element is gone for the length of the drag,
+  `dragend` is delivered to a detached node that bubbles nowhere: a native `once` listener is
+  attached to the node itself at pick-up, which is what ends a drag released over no column at all.
+  Without it the gap stays on screen for good and the next drag begins on a board still holding the
+  last one. Both have regression tests that fail without them.
+- **`BoardCard` is the one `role="button"` that does not activate on `Space`**: `Space` picks the
+  card up and `Enter` opens it. A board whose cards activated on `Space` could not be dragged with
+  a keyboard at all, and the drag is the screen's whole purpose. The hint that says so is rendered
+  once by the board, not repeated on every card, and `prefers-reduced-motion` drops the lift while
+  keeping the placeholder, which is what carries the information.
+- **The cancelled badge is truncated to a first name** because a board card is a glance, so the
+  whole fact rides in the badge's accessible name rather than in what is drawn. That has to be an
+  `aria-label`: a native `title` on an element that already has text content is a *description*,
+  and the text content still wins the name computation.
+- **`PageTabs` is a real `tablist`.** Yellow's `Tabs` were anchors to `#`, which a screen reader
+  announces as links that go nowhere, and it is a control that chooses which panel is shown rather
+  than a set of destinations — so they are buttons, with `aria-selected`, `aria-controls`, roving
+  focus, arrow-key movement and a `testId` per item. The count on the board's mobile tabs rides in
+  the item's `label` node: a strip that grew a `count` prop would then need a badge, and an icon.
+- **The scale editor is composed in the app, not added to the DS.** Its chips carry a drag handle
+  and a remove control, and [04's design spec](specs/hiring/04-candidate-card.design.md) already
+  records the rule that decides this: a `Badge` is a `<span>` with text, and a chip carrying
+  controls is a screen concern rather than a token concern. The criterion chips on the candidate
+  card are composed the same way, for the same reason. Reordering is operable by pointer and by
+  keyboard against one list — `Space` picks a value up, arrows move it, `Space` drops it, each step
+  announced — because this dialog opens mid-interview and a member with both hands on the keyboard
+  should not have to find a mouse to put `B1` above `A2`.
+- **`Calendar` is presentational by construction**: it is handed the weeks to draw, which dates may
+  be chosen, and the bounds it may navigate between. Availability, the booking window and the time
+  zone are business rules and stay on the page. It owns the grid semantics and the keyboard —
+  arrows by day and by week, `Home`/`End`, `PageUp`/`PageDown`, and focus that only ever lands on a
+  selectable date. Blue's `DateField` is a 140px text field holding a formatted date and is not a
+  substitute; the grid is modelled on `react-datepicker`'s defaults, which is what production
+  actually renders.
+- The public booking page and the candidate card are the two screens with real breakpoints, and
+  inline styles cannot express a media query, so their layout classes live in
+  `apps/web/app/globals.css`. Every value there is still a token.
+- **Still outstanding.** Promoting the template's `P` glyph dictionary to real icon exports —
+  raised for the fourth time now, since My interviews borrows the `timesheets` clock. Blue's icon
+  rules say how (geometric, filled, `currentColor`, 12–24px, no icon font), but hiring keeps its
+  own glyphs: production's nav items and glyphs are content, not design language. The booking
+  page's time-zone selector is still a plain `Select` and therefore a long unsearchable list;
+  moving it onto `Select isSearchable` is the obvious next use of the control the libraries
+  introduced.

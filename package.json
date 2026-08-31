@@ -11,6 +11,7 @@
     "test:unit": "npm run test --workspace @devscribed/validation",
     "test:int": "npm run test --workspace @devscribed/api",
     "test:e2e": "npm run test --workspace @devscribed/e2e",
+    "ds:drift": "node scripts/ds-drift.js",
     "dev": "npm run dev --workspace @devscribed/api & npm run dev --workspace @devscribed/web",
     "build": "npm run build --workspaces --if-present"
   }
