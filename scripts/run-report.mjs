@@ -439,6 +439,11 @@ const payload = {
   priority: PRIORITY,
   t0,
   t1,
+  /* When the journal last moved, and when this payload was built. A page following a run
+     needs both: the difference between them is the silence, and silence is the only thing
+     that tells a thinking agent from a dead one. */
+  lastEventAt: journal.reduce((m, e) => Math.max(m, Date.parse(e?.ts) || 0), 0) || null,
+  generatedAt: Date.now(),
   totals,
   byStage: Object.values(byStage),
   steps,
@@ -634,6 +639,12 @@ pre.txt{background:var(--surface-3);border-radius:12px;padding:14px 16px;overflo
 .livebadge{position:fixed;left:22px;bottom:22px;z-index:40;padding:8px 14px;border-radius:14px;
   background:var(--secondary-container);color:var(--on-secondary-container);font-size:12px;font-variant-numeric:tabular-nums}
 .livebadge.lost{background:#F9DEDC;color:#410E0B}
+/* Quiet is not yet wrong — an agent thinking is quiet. Stalled has crossed the point where a
+   person should look, so it says so instead of pulsing reassuringly. */
+.livebadge.quiet{background:#FFF3D6;color:#4A3B00}
+.livebadge.stalled{background:#F9DEDC;color:#410E0B;animation:pulse 1.6s ease-in-out infinite}
+.gbar{transition:width .5s ease,left .5s ease}
+.gbar.running{transition:none}
 .fab{position:fixed;right:22px;bottom:22px;z-index:40;display:flex;flex-direction:column;gap:10px}
 .fab button{width:auto;padding:13px 18px;border:0;border-radius:16px;background:var(--primary);color:#fff;
             box-shadow:var(--e2);cursor:pointer;font-size:13px;font-weight:500}
@@ -678,12 +689,17 @@ let first = true;
 let allOpen = false;
 let cursor = 0;
 let activeFilter = 0;
+let viewT0 = 0;
+let viewSpan = 1;
 const openIds = new Set();
 const activeTab = new Map();
 
 const COLOR ={ pre_implement:'#7E57C2', implement:'#3B6FD4', review:'#D4761B', qa:'#0F8F82', static_gate:'#79747E', preflight:'#79747E' };
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const mmss = s => Math.floor(s/60) + ':' + String(Math.round(s)%60).padStart(2,'0');
+/* Round once, then split. Flooring the minutes off an unrounded value while rounding the
+   seconds prints 0:60 for anything just under a minute — which only shows up once a caller
+   passes a live, fractional number. */
+const mmss = s => { const t = Math.round(s); return Math.floor(t/60) + ':' + String(t%60).padStart(2,'0'); };
 const hhmm = ms => new Date(ms).toTimeString().slice(0,8);
 const pctOf = (a,b) => b ? Math.round(a/b*100) : 0;
 const nfmt = n => (n ?? 0).toLocaleString('ru-RU');
@@ -720,6 +736,7 @@ document.getElementById('hdMetrics').innerHTML = [
 /* ── gantt ──────────────────────────────────────────────────────────── */
 (function(){
   const span = Math.max(1, D.t1 - D.t0);
+  viewT0 = D.t0; viewSpan = span;
   const lanes = [...new Set(D.steps.map(s => s.stage))];
   const rows = lanes.map(lane => {
     const bars = D.steps.filter(s => s.stage === lane).map(s => {
@@ -729,7 +746,8 @@ document.getElementById('hdMetrics').innerHTML = [
       const cls = s.state === 'aborted' ? ' abort' : s.state === 'running' ? ' running' : '';
       const bg = cls ? '' : ';background:' + (COLOR[s.stage] || '#79747E');
       const label = s.state === 'aborted' ? s.attempt + '✗' : s.attempt + ' · ' + mmss(s.wallSec) + (s.costUsd ? ' · $' + s.costUsd : '');
-      return '<div class="gbar' + cls + '" data-go="' + s.stage + '-' + s.attempt + '" style="left:' + l.toFixed(2) + '%;width:' + w.toFixed(2) + '%' + bg + '" title="' + esc(s.stage + ' ' + s.attempt + ' · ' + (s.status||s.state)) + '">' + esc(label) + '</div>';
+      const grows = s.state === 'running' ? ' data-start="' + s.startedAt + '" data-attempt="' + s.attempt + '"' : '';
+      return '<div class="gbar' + cls + '" data-go="' + s.stage + '-' + s.attempt + '"' + grows + ' style="left:' + l.toFixed(2) + '%;width:' + w.toFixed(2) + '%' + bg + '" title="' + esc(s.stage + ' ' + s.attempt + ' · ' + (s.status||s.state)) + '">' + esc(label) + '</div>';
     }).join('');
     return '<div class="grow"><div class="glab">' + esc(lane) + '</div><div class="gtrack">' + bars + '</div></div>';
   }).join('');
@@ -1028,6 +1046,29 @@ bound = true;
 if (first) { first = false; if (D.steps.length) openStep(0, false); }
 }
 
+/* ── the second hand ────────────────────────────────────────────────────
+   Between two pushes nothing arrives, and an agent can think for minutes without touching a
+   tool. Redrawing the page on a timer would be a lie about new data; not moving at all is a
+   lie about being stuck. So the clock — and only the clock — advances locally: the running
+   bar grows, its own elapsed time counts, and the silence is named. Everything that is a
+   fact about the run still arrives from the run. */
+function tick() {
+  const now = Date.now();
+  const span = Math.max(viewSpan, now - viewT0);
+
+  document.querySelectorAll('.gbar.running[data-start]').forEach(el => {
+    const startedAt = +el.dataset.start;
+    const sec = (now - startedAt) / 1000;
+    el.style.width = Math.min(100 - (startedAt - viewT0) / span * 100, Math.max((now - startedAt) / span * 100, 0.4)).toFixed(2) + '%';
+    el.textContent = el.dataset.attempt + ' · ' + mmss(sec);
+  });
+
+  const wall = document.querySelector('#hdMetrics .metric .v');
+  if (wall && D.totals.running) wall.textContent = mmss(D.totals.wallSec + (now - D.generatedAt) / 1000);
+
+  return now;
+}
+
 render();
 
 /* ── live ───────────────────────────────────────────────────────────────
@@ -1075,11 +1116,28 @@ if (location.protocol === 'http:' || location.protocol === 'https:') {
       if (next.runId !== shown) { reset(); shown = next.runId; pick.value = shown; }
       D = next;
       render();
-      live.textContent = '● обновлено ' + new Date().toTimeString().slice(0, 8);
+      beat();
     });
 
-    es.onerror = () => { live.textContent = '○ связь потеряна'; live.classList.add('lost'); };
+    es.onerror = () => { live.textContent = '○ связь потеряна'; live.className = 'livebadge lost'; };
   }
+
+  /* What the badge says is the difference between "thinking" and "stopped", which is the one
+     question a page like this has to answer and the one an animation cannot. A run in flight
+     shows how long the journal has been quiet; a finished one shows when it last changed. */
+  function beat() {
+    const now = tick();
+    if (!D.totals.running) {
+      live.className = 'livebadge';
+      live.textContent = '● обновлено ' + new Date(D.generatedAt).toTimeString().slice(0, 8);
+      return;
+    }
+    const quiet = D.lastEventAt ? (now - D.lastEventAt) / 1000 : null;
+    live.className = 'livebadge' + (quiet != null && quiet > 180 ? ' stalled' : quiet != null && quiet > 60 ? ' quiet' : '');
+    live.textContent = quiet == null ? '● идёт' : '● идёт · тихо ' + mmss(quiet);
+  }
+
+  setInterval(beat, 1000);
 
   pick.addEventListener('change', () => {
     location.hash = pick.value;
