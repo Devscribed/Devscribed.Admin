@@ -48,6 +48,16 @@ export interface RecordEventInput {
 @Injectable()
 export class EnvelopeEventsService {
   async record(tx: Prisma.TransactionClient, input: RecordEventInput) {
+    // Serialize the hash-linked chain per envelope. Without this, two concurrent
+    // transactions writing to the same envelope both read the same "last event" under
+    // READ COMMITTED, both compute the same `previousEventHash`, and one of the two
+    // commits an event that does not link to the other's — the chain forks, and the
+    // audit verifier reports it as tampered at whichever event lost the ordering tie
+    // (TC-04-INT-13, previously flaky under Ubuntu CI). The row-level lock is held for
+    // the duration of the caller's transaction, so a caller that records several events
+    // in one transaction pays for the lock once and their events are naturally ordered.
+    await tx.$queryRaw`SELECT id FROM "Envelope" WHERE id = ${input.envelopeId} FOR UPDATE`;
+
     const previous = await tx.envelopeEvent.findFirst({
       where: { envelopeId: input.envelopeId },
       orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
