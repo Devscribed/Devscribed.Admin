@@ -69,7 +69,7 @@ test_fixtures_enabled = true
 # logo rather than SignWell's default. Empty until one is created in the sandbox SignWell
 # account; while it is empty the provider stays listed and disabled with "API application
 # id" among the missing items.
-signwell_api_application_id = ""
+signwell_api_application_id = "cf61942b-7932-49dc-9975-549464382e7e"
 
 # The two secrets the app module creates parameters for and never values. Flip this to true
 # only after both have been written out of band, against the sandbox account:
@@ -86,7 +86,7 @@ signwell_api_application_id = ""
 # front of it: neither stand has a public address SignWell can reach yet. That costs
 # timeliness and not correctness — reads and the hourly sweep converge the same rows — but
 # it is why this cannot be provisioned from here.
-signwell_secrets_provisioned = false
+signwell_secrets_provisioned = true
 
 # ---------------------------------------------------------------------------------------
 # CI/CD — provisioned, and off by default. See .github/workflows/deploy.yml.
