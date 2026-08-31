@@ -1,10 +1,6 @@
 import React from 'react';
 import { CloseIcon } from '../icons/Icon.jsx';
-
-const FOCUSABLE = [
-  'a[href]', 'button:not([disabled])', 'input:not([disabled])', 'select:not([disabled])',
-  'textarea:not([disabled])', '[tabindex]:not([tabindex="-1"])',
-].join(',');
+import { useDialogFocus } from './useDialogFocus.js';
 
 /**
  * Modal — centered dialog recreated from components/shared/Modal.
@@ -14,57 +10,15 @@ export function Modal({
   title, open, onClose, children,
   /* §8 — prod's Modal is a plain <div> that closes only by click, so blue measured no dialog
      role, no `Escape`, no focus trap and no focus return. None of that is a design decision;
-     it is a keyboard user being unable to use the dialog at all. */
+     it is a keyboard user being unable to use the dialog at all. The behaviour itself moved to
+     `useDialogFocus` when §40 found `ConfirmDialog` had the identical gap. */
   initialFocusRef, style, ...rest
 }) {
   const [closeHover, setCloseHover] = React.useState(false);
   const panelRef = React.useRef(null);
   const titleId = React.useId();
-  const returnFocusTo = React.useRef(null);
 
-  React.useEffect(() => {
-    if (!open) return undefined;
-
-    returnFocusTo.current = document.activeElement;
-    const panel = panelRef.current;
-    const target = (initialFocusRef && initialFocusRef.current)
-      || (panel && panel.querySelector(FOCUSABLE))
-      || panel;
-    if (target) target.focus();
-
-    function onKeyDown(event) {
-      if (event.key === 'Escape') {
-        event.stopPropagation();
-        onClose && onClose();
-        return;
-      }
-      if (event.key !== 'Tab' || !panel) return;
-      const items = Array.from(panel.querySelectorAll(FOCUSABLE)).filter((el) => el.offsetParent !== null);
-      if (items.length === 0) {
-        event.preventDefault();
-        return;
-      }
-      const first = items[0];
-      const last = items[items.length - 1];
-      // Wrap at both ends, and pull focus back in if it has escaped the panel entirely.
-      if (event.shiftKey && (document.activeElement === first || !panel.contains(document.activeElement))) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-
-    document.addEventListener('keydown', onKeyDown, true);
-    return () => {
-      document.removeEventListener('keydown', onKeyDown, true);
-      const restore = returnFocusTo.current;
-      // The opener is often unmounted by the time the dialog closes; only return focus to
-      // something still in the document, or the page loses focus to <body> silently.
-      if (restore && document.contains(restore)) restore.focus();
-    };
-  }, [open, onClose, initialFocusRef]);
+  useDialogFocus({ open, onClose, panelRef, initialFocusRef });
 
   if (!open) return null;
   return (

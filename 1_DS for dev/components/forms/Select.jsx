@@ -80,11 +80,19 @@ export function Select({
 
   /* hideSelectedOptions defaults to true when isMulti; the search then narrows what is left,
      which is what react-select's own default filter does (case-insensitive substring). */
+  const matches = (opt) => labelOf(opt).toLowerCase().includes(query.trim().toLowerCase());
   const visible = options
     .filter((opt) => !isMulti || !selectedList.some((s) => keyOf(s) === keyOf(opt)))
-    .filter((opt) => !isSearchable || !query || labelOf(opt).toLowerCase().includes(query.trim().toLowerCase()));
-  const exact = options.some((opt) => labelOf(opt).toLowerCase() === query.trim().toLowerCase());
-  const rows = allowCreate && query.trim() && !exact
+    .filter((opt) => !isSearchable || !query || matches(opt));
+  /* §29 — "when the query matches **no option**", which is what the prop has always claimed and
+     what every spec that asks for this row says: 01's flow and 06 §04.21 both offer `Create "…"`
+     only for a name that matches nothing. It was written as *no exact match*, which is
+     react-select/creatable's default and offers `Create "Eng"` while `English` is sitting in the
+     list above it. The test is run over `options` rather than over `visible`, so a name already
+     chosen in an `isMulti` control still counts as matching — otherwise picking `React` would
+     make the next `React` look creatable. */
+  const unmatched = !options.some(matches);
+  const rows = allowCreate && query.trim() && unmatched
     ? visible.concat([{ value: CREATE, label: `Create "${query.trim()}"` }])
     : visible;
 

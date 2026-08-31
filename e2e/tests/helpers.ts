@@ -299,24 +299,47 @@ export async function createVacancy(
  * candidates on it, not the thing under test — the booking page has its own suite.
  *
  * `slotIndex` picks a later slot when a test needs two interviews that do not collide.
+ *
+ * The availability endpoint answers one month at a time and defaults to the window's first,
+ * so asking once means asking about *this* month only. On the last afternoon of one there is
+ * almost nothing left in it — `bookingWindow` runs from today to the same day next month, and
+ * clipped to today's month that is a few hours of one weekday. Every suite that seeds an
+ * interview then fails a precondition for a reason that has nothing to do with what it tests.
+ * So the next month is read too, and only when the first does not have enough.
  */
+/** `2026-09` — the month after the one the booking window starts in. */
+function nextMonth(): string {
+  const now = new Date();
+  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+  return `${next.getUTCFullYear()}-${String(next.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
 export async function bookInterview(
   request: APIRequestContext,
   publicSlug: string,
   candidate: { firstName?: string; lastName?: string; email?: string; slotIndex?: number } = {},
 ): Promise<{ startUtc: string }> {
-  const availability = await request.get(`${API}/api/book/${publicSlug}/availability`, {
-    params: { timeZone: 'UTC' },
-  });
-  if (!availability.ok()) {
-    throw new Error(`Precondition failed: availability answered ${availability.status()}`);
+  const wanted = candidate.slotIndex ?? 0;
+  const slots: string[] = [];
+  // `undefined` is the window's own first month; the second is next month, named explicitly.
+  for (const month of [undefined, nextMonth()]) {
+    const availability = await request.get(`${API}/api/book/${publicSlug}/availability`, {
+      params: month ? { timeZone: 'UTC', month } : { timeZone: 'UTC' },
+    });
+    if (!availability.ok()) {
+      throw new Error(`Precondition failed: availability answered ${availability.status()}`);
+    }
+    const dates: Record<string, string[]> = (await availability.json()).dates ?? {};
+    slots.push(...Object.keys(dates).sort().flatMap((date) => dates[date]));
+    if (slots.length > wanted) break;
   }
 
-  const dates: Record<string, string[]> = (await availability.json()).dates ?? {};
-  const startUtc = Object.keys(dates)
-    .sort()
-    .flatMap((date) => dates[date])[candidate.slotIndex ?? 0];
-  if (!startUtc) throw new Error('Precondition failed: the window offers no slots');
+  const startUtc = slots[wanted];
+  if (!startUtc) {
+    throw new Error(
+      `Precondition failed: the window offers ${slots.length} slot(s), and slot ${wanted} was asked for`,
+    );
+  }
 
   const booked = await request.post(`${API}/api/book/${publicSlug}`, {
     multipart: {

@@ -5,11 +5,16 @@ One numbered entry per component or prop added, under
 [§D3](README.md) — *edit the vendored copy in place, but never silently*.
 
 Phase 0 created this file; Phase 1 wrote §1–§11, Phase 2 wrote §12–§18, Phase 3 wrote
-§19–§29, Phase 4 wrote §30–§36 and Phase 5 wrote §37–§38. `npm run ds:drift` currently reports
-eight local-only components — `AuthLayout`, `Calendar`, `Card`, `Chip`, `CrossIcon`,
-`IconButton`, `Eye`, `EyeOff` — and each of them is numbered below, which is the bar this file
-exists to hold. Phase 5 added no ninth: both of its entries are props on components already
-numbered.
+§19–§29, Phase 4 wrote §30–§36, Phase 5 wrote §37–§38 and Phase 6 wrote §39–§41.
+`npm run ds:drift` currently reports eight local-only components — `AuthLayout`, `Calendar`,
+`Card`, `Chip`, `CrossIcon`, `IconButton`, `Eye`, `EyeOff` — and each of them is numbered below,
+which is the bar this file exists to hold. Neither Phase 5 nor Phase 6 added a ninth: every one
+of their entries is props on a component already numbered.
+
+Phase 6 also left two things that are **not** new numbers, because neither adds anything — both
+make an existing entry do what it already said it did. They are written up as notes at the end:
+[§8 and nested `Escape`](#a-note-on-8-and-nested-escape), and
+[§29 and *matches nothing*](#a-note-on-29-and-matches-nothing).
 
 ## Numbering convention
 
@@ -81,6 +86,9 @@ Each entry is one of three, because the distinction decides what the upstream pu
 
 | 37 | `Chip` | `trailing` — a node between the label and the cross — and `removeTestId`. Blue draws `Chip` only inside `Select isMulti`, where the token is a label and a cross and nothing else, so its label span is `overflow: hidden` + `text-overflow: ellipsis` + `white-space: nowrap`, and it is the only slot there is. A screen showing a chosen thing *with a value set on it* cannot use that slot: a control placed there is clipped, and one that opens a list is cut off at the chip's own edge — which is `Card`'s `clip` problem ([reversal 6](README.md)) one level down, answered the same way, by putting the thing that opens outside the box that hides it. The criterion chip is the call site. It is also why §20's conditional pointer cursor needed a third reading: this chip *can* be removed, so `Chip` paints `cursor: pointer` across the whole token, but only the cross and the value control are clickable and the name between them promises nothing — so the caller turns it off, which is §18's rule on `Table`'s rows at chip scale. `removeTestId` is the smaller half: the cross is drawn by the component, exactly as §16's `nameTestId` / `menuTestId` and §21's `chipTestId` are. One painted value changes, and only when `trailing` is given — the chip centres its children instead of stretching them, because everything blue puts in a chip is one line of 14px text and `stretch` and `center` are identical until something taller arrives. | `omission` | [§D2](README.md) | 5 | [04](../hiring/04-candidate-card.design.md) |
 | 38 | `Button` | `as`, which is `'button'` or `'a'`. Blue measured a `<button>` because prod has no control that navigates — every download it offers is a row in a table — so this is §18's `rowHref` gap on a different component, and `Table` already makes the identical swap for a row that does navigate (`const Row = href ? 'a' : 'div'`). The CV's View and Download are navigations wearing a button: routing them through `onClick` gives up middle-click, copy-address, open-in-new-tab and the browser's own `download` handling, and no amount of script gets any of it back — `hiring-candidate-card.spec.ts` asserts three of the four. An anchor drops `type` and `disabled`, which it does not have; a `disabled` anchor still paints disabled and takes `aria-disabled`, so the treatment cannot say one thing while the accessibility tree says another. Everything else — the paint, the hover, the preloader, `aria-busy` — is untouched, plus `text-decoration: none`, which a `<button>` never needed. | `omission` | [§D2](README.md) | 5 | [04](../hiring/04-candidate-card.design.md) |
+| 39 | `Chip` | `leading`, `removeDisabled` and `removeDescribedBy`. All three are the same gap §37 found from the other side: blue draws `Chip` only inside `Select isMulti`, where a token is a label and a cross, nothing ever precedes the label, and the cross always works. **`leading`** is `trailing`'s mirror — a node before the label, which the scale editor's chip needs for its drag handle. Putting the handle in `trailing` was the alternative and it is the wrong one: it would seat a control that *picks the value up* immediately beside one that *deletes it*, and blue's chip already has a grip edge to lead from in its 7px `--color-blue` left border. **`removeDisabled`** blocks the cross without taking it away — `aria-disabled` and still focusable, never the `disabled` attribute — which is §22's rule on `Popover`'s rows applied to the control `Chip` draws for itself; a value that has been assessed against may not be removed, and a cross that vanished would be indistinguishable from a bug. **`removeDescribedBy`** is what makes that readable: the cross keeps `Remove {label}` as its *name* and the reason is a *description*, drawn by the consumer where there is room for a sentence. Naming it the reason instead would read the same sentence twice, which is the thing Phase 5 discovered about native `title` ([reversal 2](README.md)) and the reason this prop exists rather than a `removeReason` string. | `omission` | [§D2](README.md) | 6 | [06](../hiring/06-libraries.design.md) |
+| 40 | `ConfirmDialog` | `...rest`, `style`, `acceptTestId` / `declineTestId`, and §8's dialog semantics — `role="dialog"`, `aria-modal`, a real `aria-labelledby` on the title, focus trapped while open, focus returned to the opener on close, and `Escape`. Blue destructures eight props and forwards none, so `data-testid` reached neither the panel nor either button, and it draws both buttons itself so a caller had no way to tag them: §2's gap and §37's `removeTestId`, on the second dialog. The keyboard half is §8 verbatim — blue has *two* dialog shells and prod's overlays are plain `<div>`s that close only by click, so both were measured with no roles, no trap and no `Escape`, and §8 happened to fix only the one Phase 1 needed. The implementation moved into `useDialogFocus.js` rather than being copied, because a second copy is how the two shells drift apart. One more thing changes and it is too small to number but too silent to leave out: the close cross gets `type="button"`, which `Modal`'s already had — without it the control submits any form it is nested in. What is **not** changed: the scrim still refuses to close on click, and the accept button is still primary blue even on a destructive confirmation — both are blue's own, and the category delete adopts them. | `omission` | [§D2](README.md) | 6 | [06](../hiring/06-libraries.design.md) |
+| 41 | `ConfirmDialog` | `busy` and `closeOnAccept`. Blue dismisses the moment accept is pressed and has no notion of a request being in flight, which is true to prod: every confirmation there starts work nobody waits on the result of. Ours await one. `busy` paints the accept button's preloader and blocks both controls; `closeOnAccept={false}` leaves the dialog standing so the caller closes it on the *outcome* rather than on the click. It is `InfoBanner`'s §24 in a different shape — *prod's banners report a state and go away when the state does; one reporting an event that already happened cannot* — and, like §24, the default is blue's behaviour unchanged. The scale reorder is the call site and the only one: accepting it saves the criterion, which can come back with a duplicate name belonging to the form behind this dialog, so dismissing on the click would flash that form up mid-flight and take it away again. The category delete passes neither and gets blue's dismiss-on-accept, which is right for it. | `omission` | [§D2](README.md) | 6 | [06](../hiring/06-libraries.design.md) |
 
 ### A note on §22 and reversal 2
 
@@ -168,6 +176,72 @@ direction, fill is finality*: only the two terminal states are solid, which is w
 "sparingly" true when the badge is repeated down a table. It also corrects an inversion Meridian
 had — `Offer` was the outlined variant of `Passed`, so the strongest status in the funnel was drawn
 with the least emphasis.
+
+### A note on reversal 2's last two sites
+
+[Reversal 2](README.md) counted three `<Tooltip>` call sites and said each phase that hit one had
+to choose between visible text, a visually-hidden node wired to `aria-describedby`, and an accepted
+regression. Phase 5 called itself the second of three and left "the last site" to Phase 6. **Phase 6
+holds two**, not one — the count of three was of the component's uses, and the vacancies menu that
+§22 answered was a `Menu` `tooltip` *prop*, not one of them. Both are settled here, and they take
+**different answers**, which is the point of the reversal being per-site:
+
+**The criterion's blocked Delete takes the accepted regression, and it costs nothing** — Phase 5's
+answer, for Phase 5's reason. `criterionDeleteBlockedMessage` is already the button's `aria-label`;
+`hiring-libraries.spec.ts` asserts exactly that (`toHaveAccessibleName('Archive this instead — it
+has 1 assessment')`), so the bubble was drawing a sentence a reader already had as the control's
+name. Adding `title` on top would make it the *description* and read it twice. What makes the loss
+cheap is the same test as Phase 5's: **the screen draws the fact anyway.** The count the message
+interpolates is on the row's second line, and the alternative the message names is not a sentence
+at all but the `Archive` button sitting immediately to its left. A pointer user is being told to
+press the control their cursor is already next to.
+
+**The same row's narrow layout takes visible text** — Phase 3's answer, because below 768px those
+three buttons become a `Popover` and a menu row has nowhere to put a sentence except in itself.
+§22's `description` slot is already there; the row keeps `aria-disabled` and its place in the
+keyboard walk. One site, two answers, chosen by which control is on screen — the reversal did not
+anticipate a site that changes shape, and this is what that looks like.
+
+**The scale editor's blocked remove takes the middle answer, the one nobody had used yet**: the
+reason is drawn under the chip list and wired as the cross's `aria-describedby` (§39), and the
+cross keeps `Remove {label}` as its name. Neither of the other two works here. The accepted
+regression fails because *this* screen does **not** draw the fact anywhere else — a dialog of
+chips has no second line to put a count on, which is exactly the distinction Phase 5 drew between
+a card with a history log and a menu without one. And making the reason the name reads it twice
+for anyone who has the description too. So the reversal's three answers are now one each, and the
+thing that decided every one of them was not the component but **whether the screen had somewhere
+to say it**.
+
+### A note on §8 and nested `Escape`
+
+§8 handled `Escape` in the same `document` capture listener as the `Tab` trap. Capture was right
+for `Tab` and wrong for `Escape`: a capture listener on `document` fires before the event has been
+anywhere near the element with focus, so the dialog always won and no control inside one could own
+the key. §22 had already written `e.stopPropagation()` into `Popover`'s open menu expecting to be
+able to; it never was.
+
+Phase 6 found it because the scale editor holds a chip mid-reorder and `Escape` has to put it back
+— and instead closed the whole dialog, discarding the edit. `Escape` now listens on the **bubble**
+and skips a `defaultPrevented` event; `Tab` still traps on capture. Nothing gains a prop, and both
+of blue's dialogs get it because both take the behaviour from `useDialogFocus`.
+
+### A note on §29 and *matches nothing*
+
+§29 says, and has always said, that `allowCreate` offers a `Create "…"` row *"when the query
+matches no option"*. It was implemented as **no exact match**, which is react-select/creatable's
+default and not what the sentence says — so typing `Eng` offered `Create "Eng"` with `English`
+listed directly above it.
+
+Every spec that asks for this row agrees with the prop rather than with the code:
+[01](../hiring/01-vacancies.md)'s flow says *"when nothing matches case-insensitively"*, and
+[06 §04.21](../hiring/06-libraries.md) says *"a name that matches nothing"*. So this is §29 being
+made to do what §29 claims, not a change of behaviour, and it takes no new number. The match is
+tested over `options` rather than over the filtered list, so a name already chosen in an `isMulti`
+control still counts — otherwise picking `React` would make the next `React` look creatable.
+
+It had gone unnoticed because the only test that reaches the case is `hiring-libraries.spec.ts`'s
+first criteria flow, which has been failing earlier in its own body since the migration began.
+Phase 6 unblocked it, and it caught this on the next line.
 
 ## Closed
 

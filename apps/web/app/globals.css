@@ -178,17 +178,18 @@
 }
 
 /*
- * A library row on the hiring settings screen (spec 06). The name takes the slack, the
- * usage count sits immediately left of the actions, and the universal Meridian row hover
- * raises the actions from muted to full ink.
+ * A library row on the hiring settings screen (spec 06). The name takes the slack and the
+ * usage count sits immediately left of the actions. The hover is blue's own neutral
+ * `--color-row-hover` — yellow tinted it violet, and a list of settings is not a place the
+ * product should suddenly acquire an accent it has nowhere else.
  */
 .library-row {
   display: flex;
   align-items: center;
-  gap: var(--sp-6);
-  padding: var(--sp-5) var(--sp-4);
-  border-radius: var(--radius-sm);
-  border-bottom: 1px solid var(--divider);
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-3);
+  border-radius: var(--radius-l);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .library-row:last-of-type {
@@ -196,7 +197,7 @@
 }
 
 .library-row:hover {
-  background: var(--hover-bg-tint);
+  background: var(--color-row-hover);
 }
 
 /*
@@ -214,14 +215,14 @@
 .criterion-row-head {
   display: flex;
   align-items: center;
-  gap: var(--sp-4);
+  gap: var(--space-3);
   min-width: 0;
 }
 
 .criterion-row-actions {
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--space-1);
   margin-left: auto;
   flex-shrink: 0;
 }
@@ -229,9 +230,9 @@
 .criterion-row-meta {
   display: flex;
   align-items: baseline;
-  gap: var(--sp-6);
-  font-size: var(--fs-12);
-  color: var(--text-muted);
+  gap: var(--space-5);
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
 }
 
 @media (max-width: 767px) {

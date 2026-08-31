@@ -12,7 +12,16 @@ import {
   valueInUseMessage,
   type CriterionType,
 } from '@devscribed/validation';
-import { Badge, Button, IconButton, Input, Modal, Tooltip } from '@/ds';
+import {
+  Button,
+  Chip,
+  ConfirmDialog,
+  FieldLabel,
+  FormActions,
+  InfoBanner,
+  Modal,
+  TextInput,
+} from '@/ds';
 import type { Criterion } from '@/hiring/types';
 
 /** One row of the scale editor. `key` is stable across a reorder; `id` exists once saved. */
@@ -111,12 +120,17 @@ export function CriterionDialog({
     setValuesError(null);
   }
 
-  async function save(): Promise<void> {
+  /**
+   * `confirmed` is passed rather than read off state: the confirmation calls this from its
+   * own accept handler, and whether it has been answered is that handler's fact, not a
+   * render's.
+   */
+  async function save(confirmed = false): Promise<void> {
     if (submitting) return;
 
     // The confirmation goes up before the request does, so cancelling leaves the saved
     // order untouched rather than undoing a write (06 design §States).
-    if (reordered && !confirming) {
+    if (reordered && !confirmed) {
       setConfirming(true);
       return;
     }
@@ -180,33 +194,21 @@ export function CriterionDialog({
         open={open && !confirming}
         title={editing ? 'Edit criteria' : 'New criteria'}
         onClose={onClose}
-        width={520}
         data-testid="criterion-dialog"
-        actions={
-          <>
-            <Button variant="secondary" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={save}
-              loading={submitting}
-              data-testid="criterion-submit-button"
-            >
-              {editing ? 'Save' : 'Create'}
-            </Button>
-          </>
-        }
+        style={{ width: 520 }}
       >
-        <div style={{ display: 'grid', gap: 'var(--sp-10)' }}>
+        {/* 20px is blue's form rhythm and the room every field's message slot needs — the
+            error is pinned under the control rather than pushing it. */}
+        <div style={{ display: 'grid', gap: 'var(--space-7)' }}>
           {banner && (
-            <div role="alert" style={{ fontSize: 'var(--fs-13)', color: 'var(--error-500)' }}>
+            <InfoBanner variant="error" role="alert" aria-live="polite" data-testid="criterion-dialog-error">
               {banner}
-            </div>
+            </InfoBanner>
           )}
 
-          <Input
+          <TextInput
             label="Name"
+            id="criterion-name-input"
             placeholder="English"
             autoFocus
             value={name}
@@ -217,24 +219,28 @@ export function CriterionDialog({
               void save();
             }}
             error={nameError ?? undefined}
+            errorId="criterion-name-error"
             aria-invalid={nameError ? true : undefined}
+            aria-describedby={nameError ? 'criterion-name-error' : undefined}
             data-testid="criterion-name-input"
           />
 
           {/*
-            Native radios rather than the DS `RadioGroup`, which has no way to tag an
-            option — the same decision the vacancy dialog's interview length made, and for
-            the same reason.
+            Native radios rather than a design-system control, which blue does not have —
+            the same shape the vacancy dialog's interview length takes, down to `FieldLabel`
+            being blue's own label so this row matches the fields above it exactly.
           */}
           {!editing && (
-            <fieldset style={{ margin: 0, padding: 0, border: 'none' }}>
-              <legend style={MICRO_LABEL}>Type</legend>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-8)' }}>
+            <div role="radiogroup" aria-labelledby="criterion-type-label">
+              <FieldLabel>
+                <span id="criterion-type-label">Type</span>
+              </FieldLabel>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-6)' }}>
                 {CRITERION_TYPES.map((option) => (
                   <label
                     key={option}
                     data-testid={`criterion-type-${option}`}
-                    style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', cursor: 'pointer' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer' }}
                   >
                     <input
                       type="radio"
@@ -242,17 +248,17 @@ export function CriterionDialog({
                       value={option}
                       checked={type === option}
                       onChange={() => setType(option)}
-                      style={{ accentColor: 'var(--accent)' }}
+                      style={{ accentColor: 'var(--action-primary)' }}
                     />
-                    <span style={{ fontSize: 'var(--fs-14)' }}>{CRITERION_TYPE_LABELS[option]}</span>
+                    <span style={{ fontSize: 'var(--font-size-s)' }}>{CRITERION_TYPE_LABELS[option]}</span>
                   </label>
                 ))}
               </div>
               {/* Why the choice matters, rather than a restatement of the four options. */}
-              <p style={{ margin: 'var(--sp-4) 0 0', fontSize: 'var(--fs-12)', color: 'var(--text-muted)' }}>
+              <p style={{ margin: '5px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
                 {CRITERION_MESSAGES.type.hint}
               </p>
-            </fieldset>
+            </div>
           )}
 
           {/* Hidden entirely for the other three types, never disabled. */}
@@ -266,36 +272,45 @@ export function CriterionDialog({
               onChange={setValues}
             />
           )}
+
+          <FormActions align="full">
+            <Button onClick={onClose}>Cancel</Button>
+            <Button
+              variant="primary"
+              onClick={() => void save()}
+              preloader={submitting}
+              data-testid="criterion-submit-button"
+            >
+              {editing ? 'Save' : 'Create'}
+            </Button>
+          </FormActions>
         </div>
       </Modal>
 
-      <Modal
+      {/*
+        The only edit in either library with retroactive effect, so it is the only one that
+        confirms — and it is a confirmation rather than a second form, which is blue's
+        `ConfirmDialog` rather than another `Modal`. Renaming a value opens nothing:
+        comparison reads positions, never labels.
+
+        `closeOnAccept={false}` (§41) because accepting starts a request that can come back
+        with a duplicate name on the field behind this dialog. Blue dismisses on accept, since
+        prod never has a result to show; dismissing here would flash the edit dialog back up
+        mid-flight and then take it away again.
+      */}
+      <ConfirmDialog
         open={open && confirming}
         title="Reorder these values?"
+        description={CRITERION_MESSAGES.values.reorderConfirmation}
+        acceptBtnText="Save"
+        declineBtnText="Cancel"
+        busy={submitting}
+        closeOnAccept={false}
+        onAccept={() => void save(true)}
         onClose={() => setConfirming(false)}
+        acceptTestId="criterion-reorder-confirm-button"
         data-testid="criterion-reorder-confirm"
-        actions={
-          <>
-            <Button variant="secondary" onClick={() => setConfirming(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={save}
-              loading={submitting}
-              data-testid="criterion-reorder-confirm-button"
-            >
-              Save
-            </Button>
-          </>
-        }
-      >
-        <p style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}>
-          {/* The only edit in either library with retroactive effect, so it is the only
-              one that confirms. Renaming a value does not — comparison reads positions. */}
-          {CRITERION_MESSAGES.values.reorderConfirmation}
-        </p>
-      </Modal>
+      />
     </>
   );
 }
@@ -353,7 +368,9 @@ function ScaleEditor({
     if (event.key === 'Escape') {
       event.preventDefault();
       // Put it back: a cancel that only let go would leave the value wherever the last
-      // arrow key happened to land it, which is not what cancelling means.
+      // arrow key happened to land it, which is not what cancelling means. The
+      // `preventDefault` above is also what stops `Modal` closing underneath — a dialog
+      // only takes `Escape` that nothing inside it has claimed (§8's note).
       if (beforePickUp.current) onChange(beforePickUp.current);
       beforePickUp.current = null;
       setHeld(null);
@@ -377,11 +394,15 @@ function ScaleEditor({
     );
   }
 
+  const inUse = values
+    .map((value, index) => ({ value, index }))
+    .filter((entry) => entry.value.assessmentCount > 0);
+
   return (
     <div>
-      <span style={MICRO_LABEL} id="criterion-values-label">
-        {CRITERION_MESSAGES.values.label}
-      </span>
+      <FieldLabel>
+        <span id="criterion-values-label">{CRITERION_MESSAGES.values.label}</span>
+      </FieldLabel>
 
       {/* An ordered list, so the order is conveyed structurally and not only visually. */}
       <ol
@@ -389,65 +410,104 @@ function ScaleEditor({
         style={{
           display: 'flex',
           flexWrap: 'wrap',
-          gap: 'var(--sp-3)',
+          gap: 'var(--space-1)',
           listStyle: 'none',
-          margin: '0 0 var(--sp-6)',
+          margin: '0 0 var(--space-2)',
           padding: 0,
         }}
       >
-        {values.map((value, index) => (
-          <li
-            key={value.key}
-            draggable
-            onDragStart={() => setDragging(index)}
-            onDragEnd={() => setDragging(null)}
-            onDragOver={(event) => event.preventDefault()}
-            onDragEnter={() => {
-              if (dragging === null || dragging === index) return;
-              move(dragging, index);
-              setDragging(index);
-            }}
-            data-testid={`criterion-value-input-${index}`}
-            style={{
-              display: 'inline-flex',
-              borderRadius: 'var(--radius-pill)',
-              boxShadow: dragging === index || held === index ? 'var(--shadow-pop)' : 'none',
-              outline: held === index ? '1.5px solid var(--accent)' : 'none',
-              transition: 'box-shadow var(--duration-base)',
-            }}
-          >
-            <Badge tone="neutral" dot={false} style={{ paddingLeft: 4, paddingRight: 4, gap: 2 }}>
-              <button
-                type="button"
-                aria-label={`Reorder ${value.label}, position ${index + 1} of ${values.length}`}
-                aria-pressed={held === index}
-                aria-describedby="criterion-values-hint"
-                onKeyDown={(event) => onHandleKeyDown(event, index)}
-                data-testid={`criterion-value-handle-${index}`}
-                style={{
-                  border: 'none',
-                  background: 'none',
-                  padding: '0 2px',
-                  cursor: 'grab',
-                  color: 'var(--text-muted)',
-                  fontSize: 'var(--fs-12)',
-                  lineHeight: 1,
-                }}
-              >
-                <span aria-hidden="true">⠿</span>
-              </button>
-              {value.label}
-              <ValueRemove
-                value={value}
-                index={index}
+        {values.map((value, index) => {
+          const blocked = value.assessmentCount > 0;
+          return (
+            <li
+              key={value.key}
+              draggable
+              onDragStart={() => setDragging(index)}
+              onDragEnd={() => setDragging(null)}
+              onDragOver={(event) => event.preventDefault()}
+              onDragEnter={() => {
+                if (dragging === null || dragging === index) return;
+                move(dragging, index);
+                setDragging(index);
+              }}
+              data-testid={`criterion-value-input-${index}`}
+              style={{
+                display: 'inline-flex',
+                borderRadius: 'var(--radius-l)',
+                boxShadow: dragging === index || held === index ? 'var(--shadow-popover)' : 'none',
+                outline: held === index ? '1.5px solid var(--action-primary)' : 'none',
+                transition: 'box-shadow var(--duration-fast)',
+              }}
+            >
+              {/*
+                `Chip`, not a composed `Badge` — the call Phase 5 settled on the candidate
+                card and this spec's DS-gaps table used to make the other way. The handle is
+                the `leading` slot (§39): putting it in `trailing` would sit a control that
+                picks the value up next to one that deletes it.
+              */}
+              <Chip
+                label={value.label}
+                style={{ margin: 0, minWidth: 0 }}
+                leading={
+                  <button
+                    type="button"
+                    aria-label={`Reorder ${value.label}, position ${index + 1} of ${values.length}`}
+                    aria-pressed={held === index}
+                    aria-describedby="criterion-values-hint"
+                    onKeyDown={(event) => onHandleKeyDown(event, index)}
+                    data-testid={`criterion-value-handle-${index}`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '0 2px',
+                      background: 'none',
+                      cursor: 'grab',
+                      color: 'var(--text-secondary)',
+                    }}
+                  >
+                    <GripIcon />
+                  </button>
+                }
                 onRemove={() => onChange(values.filter((_, i) => i !== index))}
+                removeLabel={`Remove ${value.label}`}
+                removeTestId={`criterion-value-remove-${index}`}
+                // Blocked rather than gone, and the reason is drawn under the list rather
+                // than made this cross's name — a name and a description saying the same
+                // sentence is that sentence read twice (§39, and reversal 2).
+                removeDisabled={blocked || undefined}
+                removeDescribedBy={blocked ? `criterion-value-in-use-${index}` : undefined}
               />
-            </Badge>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ol>
 
-      <Input
+      {/*
+        Why a cross does nothing, in the one place this dialog has room for a sentence.
+        The settings screen behind it can let the blocked control carry its own reason,
+        because the count it interpolates is already drawn two lines below on the row; a
+        chip in a wrapping list has no such neighbour, so the reason is drawn here.
+      */}
+      {inUse.length > 0 && (
+        <ul
+          data-testid="criterion-values-in-use"
+          style={{
+            listStyle: 'none',
+            margin: '0 0 var(--space-2)',
+            padding: 0,
+            fontSize: 'var(--font-size-xs)',
+            color: 'var(--text-secondary)',
+          }}
+        >
+          {inUse.map(({ value, index }) => (
+            <li key={value.key} id={`criterion-value-in-use-${index}`}>
+              {valueInUseMessage(value.label, value.assessmentCount)}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <TextInput
         placeholder={CRITERION_MESSAGES.values.addPlaceholder}
         aria-label="Add value"
         value={draft}
@@ -465,7 +525,7 @@ function ScaleEditor({
 
       <p
         id="criterion-values-hint"
-        style={{ margin: 'var(--sp-4) 0 0', fontSize: 'var(--fs-12)', color: 'var(--text-muted)' }}
+        style={{ margin: '5px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}
       >
         Press Space on a handle to pick a value up, arrows to move it, Space to drop,
         Escape to cancel.
@@ -479,55 +539,21 @@ function ScaleEditor({
 }
 
 /**
- * A value's remove control, disabled once anything has been assessed against it.
- *
- * Disabled rather than hidden, and still focusable, so the reason is reachable: a missing
- * control is indistinguishable from a bug (06 design §Accessibility).
+ * The grip, drawn rather than typed: blue's icons are geometric, filled and `currentColor`,
+ * and it has no drag handle of its own because nothing in prod is draggable.
  */
-function ValueRemove({
-  value,
-  index,
-  onRemove,
-}: {
-  value: ValueRow;
-  index: number;
-  onRemove: () => void;
-}) {
-  const blocked = value.assessmentCount > 0;
-  const reason = blocked ? valueInUseMessage(value.label, value.assessmentCount) : undefined;
-
+function GripIcon() {
   return (
-    <Tooltip content={reason}>
-      {(tooltipId: string) => (
-        <IconButton
-          label={blocked ? `${reason}` : `Remove ${value.label}`}
-          size={20}
-          aria-describedby={blocked ? tooltipId : undefined}
-          aria-disabled={blocked || undefined}
-          onClick={() => {
-            if (blocked) return;
-            onRemove();
-          }}
-          data-testid={`criterion-value-remove-${index}`}
-        >
-          <span aria-hidden="true" style={{ fontSize: 'var(--fs-12)', lineHeight: 1 }}>
-            ×
-          </span>
-        </IconButton>
-      )}
-    </Tooltip>
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+      <circle cx="4" cy="2.5" r="1" />
+      <circle cx="8" cy="2.5" r="1" />
+      <circle cx="4" cy="6" r="1" />
+      <circle cx="8" cy="6" r="1" />
+      <circle cx="4" cy="9.5" r="1" />
+      <circle cx="8" cy="9.5" r="1" />
+    </svg>
   );
 }
-
-const MICRO_LABEL = {
-  display: 'block',
-  fontFamily: 'var(--font-display)',
-  fontSize: 'var(--fs-11)',
-  letterSpacing: 1,
-  textTransform: 'uppercase',
-  color: 'var(--text-muted)',
-  marginBottom: 6,
-} as const;
 
 /** Present to a screen reader, absent to everything else. */
 const VISUALLY_HIDDEN = {

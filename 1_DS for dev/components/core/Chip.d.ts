@@ -7,6 +7,12 @@ export interface ChipProps extends HTMLAttributes<HTMLDivElement> {
   onRemove?: () => void;
   /** Accessible name for the cross. Defaults to `Remove {label}`. */
   removeLabel?: string;
+  /** §39 — a node before the label: a drag handle, a leading glyph. `trailing`'s mirror. */
+  leading?: ReactNode;
+  /** §39 — blocks the cross without removing it: `aria-disabled`, still focusable. */
+  removeDisabled?: boolean;
+  /** §39 — id of the node saying why it is blocked, wired as the cross's `aria-describedby`. */
+  removeDescribedBy?: string;
   /** §37 — `data-testid` for the cross, which the component draws itself. */
   removeTestId?: string;
   /** §37 — a node between the label and the cross: a value control, a count. Not inside the

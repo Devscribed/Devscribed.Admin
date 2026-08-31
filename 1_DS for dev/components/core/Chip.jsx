@@ -16,6 +16,12 @@ import { CrossIcon } from '../icons/Icon.jsx';
  */
 export function Chip({
   label, onRemove, removeLabel, style, children,
+  /* §39 — a node *before* the label, which blue has no slot for at all. Same measurement gap as
+     `trailing`, on the other side: inside `Select isMulti` nothing ever leads the label, so the
+     only thing at the chip's left edge is the 7px blue border. A chip that can be picked up and
+     moved needs a grip there, and putting one in `trailing` would sit it beside the cross —
+     a control that reorders adjacent to one that deletes. */
+  leading,
   /* §37 — a node between the label and the cross. The label span is the only slot blue has, and
      it is `overflow: hidden` + `text-overflow: ellipsis` + `white-space: nowrap`, because inside
      `Select isMulti` it only ever holds one line of text. Anything else put there is clipped —
@@ -25,6 +31,15 @@ export function Chip({
   /* §37 — the cross is drawn by the component, so a caller has no way to tag it. §16's
      `nameTestId` / `menuTestId` and §21's `chipTestId` are the same gap in the same shape. */
   removeTestId,
+  /* §39 — the cross, blocked. `aria-disabled` and still focusable, never the `disabled`
+     attribute: prod's chip can always be removed, so blue never had to say what an unavailable
+     one does, and a cross that vanishes is indistinguishable from a bug. §22's rule on
+     `Popover`'s rows, on the control `Chip` draws for itself. */
+  removeDisabled,
+  /* §39 — id of the node carrying *why*, drawn by the consumer where there is room for a
+     sentence. The cross keeps `Remove {label}` as its name, so the reason is a description and
+     is not read twice. */
+  removeDescribedBy,
   ...rest
 }) {
   const [hover, setHover] = React.useState(false);
@@ -36,14 +51,15 @@ export function Chip({
         display: 'flex', minWidth: 0, margin: 2, background: '#fff',
         border: '1px solid var(--border-default)', borderLeft: '7px solid var(--color-blue)',
         borderRadius: 8, padding: onRemove ? '4px 0 4px 4px' : '4px 7px 4px 4px', color: '#000',
-        cursor: onRemove ? 'pointer' : 'default', boxSizing: 'border-box',
+        cursor: onRemove && !removeDisabled ? 'pointer' : 'default', boxSizing: 'border-box',
         /* §37 — everything blue puts in a chip is one line of 14px text, so `stretch` and
            `center` paint identically and blue never had to choose. A trailing control is taller
            than the label beside it, and only then does the choice exist. */
-        ...(trailing ? { alignItems: 'center' } : null),
+        ...(trailing || leading ? { alignItems: 'center' } : null),
         ...style,
       }}
     >
+      {leading && <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{leading}</span>}
       <span style={{ fontSize: 14, fontWeight: 400, padding: '0 3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{text}</span>
       {trailing && <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{trailing}</span>}
       {onRemove && (
@@ -51,11 +67,13 @@ export function Chip({
           type="button"
           aria-label={removeLabel || (typeof text === 'string' ? `Remove ${text}` : 'Remove')}
           data-testid={removeTestId}
-          onClick={(e) => { e.stopPropagation(); onRemove(); }}
+          aria-disabled={removeDisabled || undefined}
+          aria-describedby={removeDescribedBy}
+          onClick={(e) => { e.stopPropagation(); if (!removeDisabled) onRemove(); }}
           onMouseDown={(e) => e.stopPropagation()}
           onMouseEnter={() => setHover(true)}
           onMouseLeave={() => setHover(false)}
-          style={{ display: 'flex', alignItems: 'center', paddingLeft: 4, paddingRight: 4, background: '#fff', borderRadius: 12, color: hover ? 'var(--border-default)' : 'var(--text-secondary)', fontWeight: 400 }}
+          style={{ display: 'flex', alignItems: 'center', paddingLeft: 4, paddingRight: 4, background: '#fff', borderRadius: 12, color: hover && !removeDisabled ? 'var(--border-default)' : 'var(--text-secondary)', fontWeight: 400, cursor: removeDisabled ? 'default' : 'pointer', opacity: removeDisabled ? 0.5 : 1 }}
         >
           <CrossIcon />
         </button>

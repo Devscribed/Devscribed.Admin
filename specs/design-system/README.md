@@ -77,9 +77,9 @@ value-identical; typography is the only place the scales genuinely collide.
 | `--fs-14` | 14 | `--font-size-s` | 14 | 35 | identical |
 | `--fs-16` | 16 | `--font-size-base` | 16 | 1 | ✅ **settled in Phase 5** — and not onto that row. The one use was the application panel's heading, which is now a real `<h2>` at blue's headline-6: also 16px, but with the weight, line and tracking that make it a heading. The third row to leave the map by becoming a component's own type rather than by being remapped |
 | `--fs-24` | 24 | `--headline-4-size` | 24 | 2 | identical |
-| `--fs-11` | 11 | `--font-size-xs` | 12 | 3 | +1px — 1 closed in Phase 3, into `FieldLabel`. Phase 5 closed its own by deletion: the archived marker is part of the chip label's line, so it takes the label's own 14px rather than a size of its own. 1 left, Phase 6 |
-| `--fs-13` | 13 | `--font-size-s` | 14 | 14 | +1px — 1 closed in Phase 3, into `InfoBanner` (which is 12px, so **−1px**); Phase 4 closed 3 more, none of them a remap. Phase 5 closed 2, both remapped as written: an "Applied as" note and a history row, each still a bare `<p>`/`<li>` with no component to inherit type from. 3 left |
-| `--fs-15` | 15 | `--font-size-base` | 16 | 11 | +1px — 1 closed in Phase 3, snapped; Phase 4 closed 1 more into `Calendar`'s own header type. Phase 5 closed 2, both snapped. 7 left |
+| ~~`--fs-11`~~ | 11 | `--font-size-xs` | 12 | 3 | ✅ **settled in Phase 6, and never once remapped.** 1 closed in Phase 3 into `FieldLabel`; Phase 5 closed one by deletion (the archived marker is part of the chip label's line and takes its 14px). Phase 6's last one went the way Phase 3's did — the criterion dialog's uppercase micro-caps became `FieldLabel`, in sentence case, with blue's own type. **No use left** |
+| ~~`--fs-13`~~ | 13 | `--font-size-s` | 14 | 14 | ✅ **settled in Phase 6.** 1 closed in Phase 3 into `InfoBanner` (12px, so **−1px**); Phase 4 closed 3, none a remap; Phase 5 closed 2, both remapped as written. Phase 6's last three: the category usage count remapped up to 14px as the table says, and the dialog's two hand-built error lines became `InfoBanner` and `TextInput error`, arriving with their own type. **No use left** |
+| `--fs-15` | 15 | `--font-size-base` | 16 | 11 | +1px — 1 closed in Phase 3, snapped; Phase 4 closed 1 more into `Calendar`'s own header type. Phase 5 closed 2, both snapped; Phase 6 closed 2, both snapped (a category's name and a criterion's). 5 left, all Phases 7–8 |
 | `--fs-22` | 22 | `--headline-5-size` | 20 | 1 | −2px |
 | `--fs-27` | 27 | `--headline-4-size` | 24 | 1 | ✅ **settled in Phase 2** — the page header is blue's `PageTitle`, whose type steps 16 → 20 → 24px with the viewport rather than holding one size. The single use is gone. |
 | `--fs-34` | 34 | *none* | — | 2 | ⚠ no counterpart — decide per site |
@@ -95,11 +95,11 @@ value-identical; typography is the only place the scales genuinely collide.
 | `--text` | `--text-primary` `#1B1B1B` | 17 | |
 | `--text-sub` | `--text-tertiary` `#54595E` | 20 | |
 | `--text-muted` | `--text-secondary` `#64748B` | 48 | |
-| `--text-faint` | `--text-secondary` | 4 | ⚠ blue has 3 text levels, yellow has 4 — collapses. **The pattern settled in Phase 3**: a shown-but-unavailable thing (an ineligible option, a blocked menu row) is `--text-secondary`. Phase 4 closed 2 by inheriting it — a past interview's date and a character count are *receded*, which is the same reading. Phase 5 closed a third, a history row's timestamp, without reopening it. 1 left, Phase 6 |
+| ~~`--text-faint`~~ | `--text-secondary` | 4 | ✅ **settled across Phases 3–6.** Blue has 3 text levels, yellow had 4. The pattern is Phase 3's: a shown-but-unavailable thing is `--text-secondary`. Phase 4 closed 2 by inheriting it, Phase 5 a third. **Phase 6's last one is the case the pattern was named for** — a blocked `Delete` — and it needed one addition: `--text-secondary` is also what an *available* secondary control paints, so the button carries `opacity: .6` as well, which is blue's own disabled treatment on `Button`. Recede by one level and dim, rather than inventing a fourth ink. **No use left** |
 | `--accent` | `--action-primary` `#007AFF` | 14 | |
 | `--accent-soft` | `--color-blue-light` `#EFF6FF` | 2 | |
 | `--accent-border` | `--color-blue-lighter` `#E8F2FE` | 1 | |
-| `--hover-bg-tint` | `--color-row-hover` | 2 | ⚠ yellow tints hover violet; blue's row hover is neutral grey. One of the two was the top bar's logout row and is gone (Phase 2, onto blue's own popover hover); the other is `.library-row:hover`, Phase 6 |
+| ~~`--hover-bg-tint`~~ | `--color-row-hover` | 2 | ✅ **settled across Phases 2 and 6.** Yellow tinted hover violet; blue's row hover is neutral grey. The top bar's logout row went in Phase 2 onto blue's own popover hover; `.library-row:hover` went in Phase 6, straight onto `--color-row-hover`. A list of settings is not where the product should acquire an accent it has nowhere else. **No use left** |
 | `--error-500` | `--status-error` `#D80027` | 5 | |
 | `--amber-500` | `--status-warning` `#FFD02B` | 2 | ⚠ confirm each site is a warning. Both remaining uses are Phase 8's public surfaces. The third caller — `/login`'s deactivation banner, which reached amber through `InfoBanner tone="warning"` — was settled in Phase 1: see reversal 9. |
 | `--tracker` | `--color-tracker-blue` `#2AA7FF` | 1 | both systems reserve a tracker hue |
@@ -118,17 +118,20 @@ value-identical; typography is the only place the scales genuinely collide.
 
 ### The seven rows that need a human call
 
-`--fs-34` (2 uses, no counterpart — both Phase 8) · `--fs-13` / `--fs-15` / `--fs-11` (11 uses
-left, ±1px) · ~~`--sp-7`~~ (**settled in Phase 1** → `--space-7`, 20px) · ~~`--text-faint`~~
-(**pattern settled in Phase 3**, applied in Phases 4 and 5; 1 use left, Phase 6) ·
-~~`--bg-panel-2`~~ (**settled across Phases 2, 4 and 5** — `--surface-card` for a shell panel,
-`--surface-sunken` for a control surface; **no uses left**) ·
-`--amber-500` (2 uses left, both Phase 8) · ~~`--hover-bg-tint`~~ (**half settled in Phase 2**;
-1 use left, Phase 6).
+**Five of the seven are closed.** `--fs-34` (2 uses, no counterpart — both Phase 8) ·
+~~`--fs-13`~~ / ~~`--fs-11`~~ (**both settled in Phase 6**, and between them only one use was ever
+a remap) · `--fs-15` (5 uses left, ±1px, all Phases 7–8) · ~~`--sp-7`~~ (**settled in Phase 1** →
+`--space-7`, 20px) · ~~`--text-faint`~~ (**settled in Phase 6**, on the blocked control the pattern
+was named for) · ~~`--bg-panel-2`~~ (**settled across Phases 2, 4 and 5**) ·
+`--amber-500` (2 uses left, both Phase 8) · ~~`--hover-bg-tint`~~ (**settled across Phases 2
+and 6**).
 
-**No Phase 4 or Phase 5 file carries a yellow token**, and neither do the candidate card's rules
-in `globals.css`. The four that still do are Phases 6–8's, plus those phases' own rules in that
-file.
+Only `--fs-34` and `--amber-500` still need a human call, and both wait on Phase 8's public
+surfaces. `--fs-15` is the one remaining ±1px row and D5 already decides it — snap up.
+
+**No Phase 4, 5 or 6 file carries a yellow token**, and neither do the candidate card's or the
+libraries' rules in `globals.css`. The three files that still do are Phases 7 and 8's, plus those
+phases' own rules in that file.
 
 Two rows left the map entirely in Phase 2 rather than being remapped: `--fs-27` and `--fs-21`,
 both because the element that carried them is now a design-system component with its own type.
@@ -205,9 +208,9 @@ upstream push:
 | Yellow | Uses | Blue's pattern | Cost |
 |---|---|---|---|
 | `SectionLabel` | 13 | headings / `PageTabs` / `FieldLabel` | Blue captions nothing; `PageTabs` is its only uppercase. Needs a heading decision per screen. |
-| `Skeleton` | 9 | `Preloader` — 3-dot loader, `overlay` mode | Content pops in rather than resolving in place. |
-| `Toast` | 5 | `InfoBanner` | Transient becomes persistent; needs a slot on 5 screens. |
-| `Tooltip` | 3 | native `title` | Not the free swap it looks like — see *Reversals* below. |
+| `Skeleton` | 9 | `Preloader` — 3-dot loader, `overlay` mode | Content pops in rather than resolving in place. Phase 6 took the last two on an internal screen; only the board's remain. |
+| `Toast` | 5 | `InfoBanner` | Transient becomes persistent; needs a slot on 5 screens. Phase 6's slot also absorbed the screen's separate error banner — one press, one answer, one place. |
+| ~~`Tooltip`~~ | 3 | *nothing, a `Popover` row, and an `aria-describedby` target* | ✅ **gone in Phase 6**, and never once as native `title`. Three sites, three different answers — see *Reversals* 2. |
 | ~~`Pagination`~~ | 1 | infinite scroll | ✅ **gone in Phase 4.** `Table footer` ([§34](ledger.md)) holding prod's own `.loadNextTableIndicator` at `Preloader size=8 margin=5`, fetched by an `IntersectionObserver`. The match count never moved — see *Reversals* 1. |
 | ~~`Toggle`~~ | 1 | `ToggleButton` | ✅ **gone in Phase 4.** Yellow's was already a segmented pill, so the swap was the prop shape (`value1`/`value2`/`selectedValue`) plus [§31](ledger.md), which made two buttons one `radiogroup`. |
 
@@ -215,11 +218,11 @@ upstream push:
 
 | Yellow | Blue | Uses | Note |
 |---|---|---|---|
-| `Input` | `TextInput` | 16 | needs `id`, `name`, `required`, `aria-describedby` added (D2) |
+| `Input` | `TextInput` | 16 | needs `id`, `name`, `required`, `aria-describedby` added (D2). Phase 6 took the last on an internal screen |
 | `Spinner` | `Preloader` | 6 | arc becomes three bouncing dots |
-| `Combobox` | `Select isSearchable` | 5 | capability already exists; prod just never enables it |
+| ~~`Combobox`~~ | `Select isSearchable` | 5 | ✅ **gone by Phase 5**; Phase 6 verified both library autocompletes against 06 §04.21 and found `allowCreate` offering a create row for a *prefix* — see the ledger's note on §29 |
 | `Textarea` | `TextArea` | 4 | case change only |
-| `Menu` | `Popover` | 3 | `items[]` shape |
+| ~~`Menu`~~ | `Popover` | 3 | ✅ **gone in Phase 6.** `items[]` shape, and §22's `description` is what the narrow blocked delete needed |
 | `SearchField` | `SearchInput` | 2 | |
 | `Tabs` | `PageTabs` | 1 | labels become uppercase |
 | `NavItem` | `Sidebar` | 1 | a whole component, not an item — see the relayout below |
@@ -304,10 +307,29 @@ and so a reviewer can tell a considered reversal from an accident.
    *was* the whole cancellation, and the truncated `Cancelled by Pat` is only what is painted. So
    the `aria-label` stays and the bubble goes. It also found the thing this reversal did not
    anticipate: on an element that already has a name, native `title` becomes the accessible
-   **description**, so adding one would have read the same sentence twice. What makes the loss
-   cheap is that the screen draws the fact anyway, in the scheduling history a few rows below —
-   the vacancies menu had no such place, which is why it had to draw one. Phase 6 holds the last
-   site, and is bound by neither answer.
+   **description**, so adding one would have read the same sentence twice.
+
+   ✅ **Settled in Phase 6, and native `title` was never used once.** Phase 5 called itself the
+   second of three and left "the last site" to Phase 6; the count of three was of the component's
+   uses, and Phase 6 held **two** of them — the vacancies menu §22 answered was a `Menu` `tooltip`
+   *prop*, not a `<Tooltip>`. Both are settled, and between them the three sites used all three of
+   the answers this reversal offered, once each:
+
+   | Site | Phase | Answer |
+   |---|---|---|
+   | Vacancy's blocked delete (a menu row) | 3 | Visible text, drawn in the row ([§22](ledger.md)) |
+   | Candidate card's cancelled badge | 5 | Accepted regression — the `aria-label` was already the whole fact |
+   | Criterion's blocked delete, ≥ 768px | 6 | Accepted regression — same reason, and `hiring-libraries.spec.ts` asserts that name |
+   | Criterion's blocked delete, < 768px | 6 | Visible text in the `Popover` row — the same site, in the shape it takes below the breakpoint |
+   | Scale value's blocked remove | 6 | The middle answer, unused until now: the reason drawn under the chip list and wired as the cross's `aria-describedby` ([§39](ledger.md)) |
+
+   **What decided every one of them was not the component but whether the screen already had
+   somewhere to say it.** The vacancies menu had nowhere and had to draw one; the candidate card
+   draws the cancellation in its history log; the criterion row draws the count on its second line
+   and the alternative as the `Archive` button beside it; the scale editor draws nothing, so it had
+   to. That is the rule this reversal was actually looking for, and it is worth more than the
+   three-way choice it started with. Phase 7's `BoardCard` is item 3 below and is `aria-label`,
+   not this.
 
 3. **`BoardCard`'s `cancelledTooltip` is an accessible *name*, not a description.** The badge is
    deliberately truncated to a first name because a board card is a glance, so the tooltip carries
@@ -378,7 +400,12 @@ and so a reviewer can tell a considered reversal from an accident.
    past interview's date and a character count are *receded*, which is the same reading as a
    shown-but-unavailable option, so both take `--text-secondary`. **Phase 5 applied it a third
    time** — a scheduling-history row's timestamp, beside the fact it dates — for the same reason.
-   One use left, in Phase 6.
+
+   ✅ **Closed in Phase 6**, on the case the pattern was actually named for: a `Delete` that is
+   blocked. One addition was needed. `--text-secondary` is also what an *available* secondary
+   control paints, so on a control it is not by itself a signal — the button takes `opacity: .6`
+   with it, which is blue's own `Button` disabled treatment. Recede one level and dim, rather than
+   invent the fourth ink back.
 
 8. **`--shadow-card` is removed, not remapped.** Blue separates static surfaces with a border and
    reserves shadow for hover. Anywhere yellow used elevation to stack surfaces needs a border.
@@ -405,7 +432,7 @@ Full detail in [`plans/yellow-to-blue-migration.md`](../../plans/yellow-to-blue-
 | 3 | vacancies list + detail, `VacancyDialog` | First deletions: `Toast`, `SectionLabel`, `Skeleton`, `Menu`, `Combobox` · `Select` opened into a real combobox · `Chip` · ledger §19–§29 |
 | 4 | candidates, my interviews, reschedule/cancel | `Calendar` · `Toggle`→`ToggleButton` · `Pagination`→infinite scroll |
 | 5 | candidate card | `Tooltip` deleted, not replaced · `TextArea` trailing slot consumed (§33) · `Chip trailing` §37 · `Button as="a"` §38 |
-| 6 | hiring settings, `CriterionDialog` | `ConfirmDialog` · `Select isSearchable` |
+| 6 | hiring settings, `CriterionDialog` | Last of `Tooltip`, `Menu`, `Toast`, `Skeleton`, `Input` · `ConfirmDialog` §40/§41 · `Chip leading` §39 · reversal 2 settled · §8 and §29 corrected |
 | 7 | vacancy board | `BoardCard` + `BoardColumn` fresh, *designed not measured* |
 | 8 | `/book/{slug}`, `/manage/{slug}/{token}` | `BookingLayout` · `FileInput` · `globals.css` breakpoints |
 
