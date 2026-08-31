@@ -218,6 +218,58 @@ describe('TC-01-UNIT-06 email format and length', () => {
       error: 'Email must be at most 254 characters',
     });
   });
+
+  /*
+   * BUG-002 — the local part is the ASCII set RFC 5322 permits unquoted. The domain half
+   * already demanded Latin letters in the TLD; the local part demanded nothing, so an
+   * address the signature provider refuses passed here and failed two screens later as
+   * "the provider is unavailable".
+   */
+  it.each([
+    'фывфывфыв@gmail.com',
+    'ｕｓｅｒ@example.com',
+    'user name@example.com',
+    'josé@example.com',
+  ])('rejects %s - the local part is not ASCII', (input) => {
+    expect(validateEmail(input)).toEqual({ valid: false, error: MESSAGES.email.invalid });
+  });
+
+  it('refuses a quoted local part, deliberately', () => {
+    expect(validateEmail('"john doe"@example.com')).toEqual({
+      valid: false,
+      error: MESSAGES.email.invalid,
+    });
+  });
+
+  it.each(['.user@example.com', 'user.@example.com', 'us..er@example.com'])(
+    'rejects %s — a dot separates atoms, it does not lead, trail or repeat',
+    (input) => {
+      expect(validateEmail(input)).toEqual({ valid: false, error: MESSAGES.email.invalid });
+    },
+  );
+
+  it('accepts plus-addressing', () => {
+    expect(validateEmail('User+Contracts@Gmail.com')).toEqual({
+      valid: true,
+      value: 'user+contracts@gmail.com',
+    });
+  });
+
+  it('accepts the rest of the permitted punctuation', () => {
+    const email = "a!#$%&'*+/=?^_`{|}~-b@example.com";
+    expect(validateEmail(email)).toEqual({ valid: true, value: email });
+  });
+
+  it('accepts dotted and hyphenated real addresses', () => {
+    expect(validateEmail('ivan.demchenko.dev@gmail.com')).toEqual({
+      valid: true,
+      value: 'ivan.demchenko.dev@gmail.com',
+    });
+    expect(validateEmail('first_last-1@sub.example.co.uk')).toEqual({
+      valid: true,
+      value: 'first_last-1@sub.example.co.uk',
+    });
+  });
 });
 
 // FR-15: whole-form validation, ordered top-to-bottom
