@@ -616,7 +616,14 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
                       },
                     ]),
                 {
-                  label: 'Latest application',
+                  /*
+                    The heading moves with the scope, because the column's contents do
+                    (03 §08.44). In `All` this is the candidate's most recent application.
+                    In `Assigned to me` it is the viewer's own interview — the nearest one
+                    ahead, or their most recent behind — and calling that "latest" would
+                    be the row disagreeing with the order it is sorted by, in words.
+                  */
+                  label: scope === 'mine' ? 'Interview' : 'Latest application',
                   flex: 2,
                   render: (row) => (
                     <div data-testid={`candidate-latest-${row.id}`} style={{ minWidth: 0 }}>

@@ -1,21 +1,23 @@
 /**
  * My interviews — spec 03 §06.
  *
- * The other half of the candidate database's spec, and deliberately the opposite screen
- * in every way. The database is one row per **person**, filterable, paginated, and
- * `admin`/`manager` only. This is one row per **application**, unfiltered, unpaginated,
- * and gated on **assignment rather than role** — it is the whole of hiring for a `user`
- * who interviews.
+ * It was a screen once: one row per **application**, unfiltered, unpaginated, and gated
+ * on **assignment rather than role**, because the candidate database beside it was
+ * closed to the people it served. It exists at all because without it the candidate card
+ * would be reachable from nowhere but the calendar invite (03 §06.27), and an
+ * interviewer who lost that email would have lost the access with it.
  *
- * It exists because without it the candidate card would be reachable from nowhere but
- * the calendar invite (03 §06.27): an interviewer who lost that email would have lost
- * the access with it.
+ * The database is open to them now, so the screen is the `Assigned to me` **scope** of
+ * it (03 §08.35) — one row per **person**, with the search, filters and paging the old
+ * screen never had. What survives the move is the one rule it actually owned: which
+ * interviews are still ahead, and what order each group reads in (03 §06.28). Folded
+ * onto people rather than applications, that is this list's order, which is why the fold
+ * is here too.
  *
- * What is here is the one rule the screen has — which interviews are still ahead, and
- * what order each group reads in. It is shared rather than written beside the query
- * because the API sorts the two groups and the page renders them, and a screen that
- * disagreed with its own response about which interview is "next" would be a bug nobody
- * could reproduce on their own machine.
+ * It is shared rather than written beside the query because both the sort and the row it
+ * chooses come out of the same partition, and an answer that ordered by one interview
+ * while speaking about another would be a bug nobody could reproduce on their own
+ * machine.
  */
 
 /** Verbatim from the Copy table of `specs/hiring/03-candidate-database.design.md`. */
@@ -76,4 +78,44 @@ export function partitionInterviews<T extends InterviewOccurrence>(
   past.sort((left, right) => right.start.getTime() - left.start.getTime());
 
   return { upcoming, past };
+}
+
+/** One interview, as the fold needs it: whose it is, and which application it is. */
+export interface CandidateInterview {
+  candidateId: string;
+  /** The `Application` the row draws its vacancy, date and status from. */
+  applicationId: string;
+}
+
+/**
+ * The same two groups, folded onto people — which is the order `Assigned to me` reads in
+ * (03 §08.42), and the row each candidate is represented by while it does.
+ *
+ * The old screen listed interviews, so a person seen twice was two rows and each one
+ * spoke for itself. This list is candidate-grain, so one of that person's interviews has
+ * to speak for them, and **which one is not a separate decision from where they sit**:
+ * whatever placed the row is what the row says. Sorting by the interview on Tuesday and
+ * then printing last month's date beside it is the one way this screen could contradict
+ * itself, and taking both from one pass is what makes that unrepresentable.
+ *
+ * `upcoming` is walked whole before `past` is touched, so a candidate with anything ahead
+ * is placed by their nearest one and their history can no longer speak for them. Everyone
+ * else follows, most recent first. Within each group the input's own order breaks a tie,
+ * exactly as `partitionInterviews` leaves it.
+ */
+export function orderCandidatesByInterview<
+  T extends InterviewOccurrence & { id: string; candidateId: string },
+>(interviews: readonly T[], now: Date): CandidateInterview[] {
+  const { upcoming, past } = partitionInterviews(interviews, now);
+
+  const placed = new Set<string>();
+  const order: CandidateInterview[] = [];
+
+  for (const interview of [...upcoming, ...past]) {
+    if (placed.has(interview.candidateId)) continue;
+    placed.add(interview.candidateId);
+    order.push({ candidateId: interview.candidateId, applicationId: interview.id });
+  }
+
+  return order;
 }

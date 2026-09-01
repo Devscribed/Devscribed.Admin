@@ -4,7 +4,7 @@ title: Candidate Database
 routes: ["/org/{orgId}/hiring/candidates", "/org/{orgId}/hiring/my-interviews (redirect)"]
 api: ["GET /api/organizations/{orgId}/hiring/candidates", "GET /api/organizations/{orgId}/hiring/my-interviews"]
 entities: [Candidate, Application, ApplicationCriterion]
-tags: [candidates, search, filters, criteria-filter, pagination, my-interviews, scope, rollup]
+tags: [candidates, search, filters, criteria-filter, pagination, my-interviews, scope, ordering, rollup]
 depends-on: ["01", "02", "04", "06"]
 ---
 
@@ -38,10 +38,14 @@ me?* — chosen by a tab rather than by a sidebar row.
    a candidate matches when any application satisfies a position or category clause.
 2. Each row shows:
    - Full name and email.
-   - The **most recent application's** vacancy title, interview date and time, and status.
-   - The number of applications, when more than one.
+   - **The application the row speaks for** — its vacancy title, interview date and time, and
+     status. Which application that is depends on the scope (§08.44); in `All` it is the
+     candidate's most recent one.
+   - The number of applications, when more than one. Their whole history, in either scope.
    - The categories of the vacancies they have applied to, deduplicated.
-3. Default order is most recently added first — newest candidates at the top.
+3. **Each scope has its own order** (§08.42), because they answer different questions. In `All`,
+   every candidate with a `scheduled` application precedes every candidate without one, most
+   recently added first inside each group.
 4. Times render in the viewing member's zone (`Account.timezone`), falling back to the
    organization's first-created interviewer mailbox zone when it is null. The zone is named once,
    above the table.
@@ -118,12 +122,15 @@ The screen is gone; every clause below survives it, restated against the `Assign
     `/org/{orgId}/hiring/candidates?scope=mine`.
 26. It is **candidate-grain** like the rest of the list. The old screen was application-grain
     because it was a different screen; a person the interviewer has seen twice is one row here, and
-    the row speaks about the interview that scope is sorted by.
+    the row speaks about the interview that scope is sorted by (§08.44).
 27. It exists because without it the candidate card would be reachable from nowhere but a calendar
     invite: a `user` interviewer has no vacancies, no board and no library. Losing the email would
     lose the access.
 28. Ordering within the scope answers *what is next for me?* — the nearest upcoming interview on
-    top, then past ones most-recent-first.
+    top, then past ones most-recent-first. Folded onto people (§08.42): the interviews are the
+    **viewer's own**, a candidate appears once, and the one that placed them is the one their row
+    speaks about. It is what the old screen's two groups carried, which is why they did not have to
+    survive as groups.
 29. Each row opens that candidate's card, scoped as [04 §01](04-candidate-card.md) describes — the
     interviewer sees only their own applications there.
 30. The scope is available to `admin` and `manager` too, showing the same thing: their own
@@ -159,6 +166,30 @@ The screen is gone; every clause below survives it, restated against the `Assign
     reflects that answer and never enforces it.
 41. A caller who may not see the whole database gets **no tab strip at all** — not a disabled one,
     not a single-tab one — and no count for the scope they may not see.
+42. **The two scopes read in two orders**, because they ask two questions and a tab that only
+    filtered would be a filter.
+
+    | Scope | Question | Order |
+    |---|---|---|
+    | `All` | *who do I know?* | every candidate with a `scheduled` application, then everyone without one; most recently added first inside each group |
+    | `Assigned to me` | *what is next for me?* | the viewer's nearest upcoming interview ascending, then everyone else by their most recent past one, descending |
+
+    **A cancelled interview still counts in both.** `isCancelled` says the interview did not take
+    place and deliberately nothing about the candidate's standing
+    ([07 §01.1](07-manage-booking.md)), so it neither drops a candidate out of `All`'s first group
+    nor out of `Assigned to me`'s upcoming half — which is what the old screen did too, listing
+    them where they fell and marking them, rather than hiding an appointment somebody may still
+    have in their calendar.
+43. Ordering is **stable across a page boundary** — page 2 never repeats or drops a row from page 1.
+    The `Assigned to me` split between upcoming and past is read from **one instant per request**,
+    so a single response is ordered against a single clock. Between two requests it moves, and an
+    interview that ends in between changes group — the same way a candidate created in between
+    moves the list, and no more preventable.
+44. In `Assigned to me`, the application a row speaks for is the **viewer's own** nearest upcoming
+    interview, or their most recent past one when they have nothing ahead — the same application
+    the order placed them by, so the row can never disagree with the position it sits in. In `All`
+    it is the candidate's most recent application, whoever is interviewing it. The column heading
+    moves with it; the two readings are not the same claim.
 
 ## Screens
 
@@ -203,11 +234,17 @@ first. An interviewer's whole hiring navigation is `Members` and `Candidates`.
 │                                                                               │
 │  4 of 128 candidates                                                          │
 │  ┌─────────────────────────────────────────────────────────────────────────┐  │
+│  │ Name          │ Email            │ Interview              │ Status      │  │
+│  ├───────────────┼──────────────────┼────────────────────────┼─────────────┤  │
 │  │ Jane Doe      │ jane@example.com │ Senior React Eng.      │ Scheduled   │  │
 │  │               │                  │ 26 Aug 2026, 14:00     │             │  │
 │  └─────────────────────────────────────────────────────────────────────────┘  │
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
+
+The third column is headed `Interview` rather than `Latest application`, and holds a different
+interview: the viewer's own, nearest first (§08.44). Jane is at the top because 26 August is the
+soonest thing this interviewer has, not because she booked most recently.
 
 ## Flows
 
@@ -276,7 +313,12 @@ Response `200`:
 
 - `total` is the **org-wide, unfiltered** count and keeps that meaning in either scope; `matched`
   is the filtered one, for the scope that was applied. Both are shown.
-- `scope` is what was **applied**, which may differ from what was asked.
+- `scope` is what was **applied**, which may differ from what was asked. It also decides the order
+  the `candidates` array arrives in (§08.42) and which application each `latestApplication` is
+  (§08.44) — neither is negotiable from the query string, and there is no sort parameter.
+- `latestApplication` keeps `All`'s name in both scopes: in `mine` it is the viewer's own nearest
+  upcoming interview, or their most recent past one. Its `id` is always an application the row's
+  candidate holds, so the card it opens is the same one either way.
 - `scopeCounts` are computed under the filters already applied, and feed the tab labels.
   `scopeCounts.all` is **absent** when `canSeeAll` is false — a caller who may not see the whole
   database may not learn its size under an arbitrary filter either.
@@ -361,7 +403,8 @@ candidates sit in a list they cannot see.
 - Deleting or merging candidates.
 - Emailing candidates from this screen.
 - Searching notes, conclusions, or criteria values as free text.
-- Sorting by an arbitrary column — the order is fixed at most-recent-first.
+- Sorting by an arbitrary column, or any sort control at all — each scope's order is fixed by the
+  question it answers (§08.42).
 
 ## Test Cases
 
@@ -403,6 +446,20 @@ candidates sit in a list they cannot see.
 - **Expected Result:**
   1. `scale` offers is / is not / at least / at most; `number` offers = ≠ ≥ ≤; `boolean` offers is yes / is no; `text` offers contains / is.
   2. No type offers an operator outside its row.
+
+### TC-H03-UNIT-05: The `Assigned to me` order folds interviews onto people
+- **Level:** Unit
+- **Preconditions:** one interviewer's applications, spanning several candidates, some of whom hold more than one.
+- **Steps:**
+  1. Order a set where every interview is ahead.
+  2. Order a set where every interview is behind.
+  3. Order a candidate holding a past interview, one on Tuesday, and one next month.
+  4. Order two candidates whose interviews start at the same instant, both ways round.
+- **Expected Result:**
+  1. Nearest first.
+  2. Most recent first.
+  3. The candidate appears once, placed by Tuesday, and the entry names **Tuesday's** application — the order and the row it speaks about come out of one pass.
+  4. The caller's own order decides, so a page boundary falls in the same place on two consecutive requests.
 
 ### TC-H03-INT-01: The headline query
 - **Level:** Integration
@@ -491,6 +548,31 @@ candidates sit in a list they cannot see.
   1. `scopeCounts` carries both scopes, and both numbers narrow under the filter.
   2. `scopeCounts` carries `mine` only; `all` is absent, so the database's size under an arbitrary filter is never disclosed.
   3. `total` stays the org-wide unfiltered count in every case, including in `mine`.
+
+### TC-H03-INT-10: `All` lists the people still in play first
+- **Level:** Integration
+- **Preconditions:** four candidates added on known days; two of their applications moved off `scheduled`, one of them cancelled rather than moved.
+- **Steps:**
+  1. `GET` candidates with no scope.
+  2. `GET` page 1 and page 2 with a page size that cuts across the boundary between the two groups.
+- **Expected Result:**
+  1. Every candidate with a `scheduled` application precedes every candidate without one, most recently added first inside each group.
+  2. The cancelled interview is still `scheduled` and its candidate is in the first group.
+  3. The two pages hold the whole list once — the boundary falling inside a page repeats nothing and drops nothing.
+
+### TC-H03-INT-11: `Assigned to me` answers what is next for me
+- **Level:** Integration
+- **Preconditions:** four candidates of the viewer's own, at +1 day, +5 days, −1 day and −30 days; and a candidate the viewer sees in two days whose *latest* application is a month away with somebody else.
+- **Steps:**
+  1. `GET` candidates with `scope=mine`.
+  2. `GET` the same, paged in two.
+  3. `GET` with no scope, and compare.
+  4. Read the two-interviewer candidate's `latestApplication` in each scope.
+- **Expected Result:**
+  1. Nearest ahead first, then the rest by their most recent behind.
+  2. Page 2 repeats and drops nothing.
+  3. The same people, in a different order — the scopes are two orders, not one order behind a filter.
+  4. In `mine` it is the viewer's own interview in two days; in `all` it is the other interviewer's, a month away. `applicationCount` is 2 in both — the scope narrows who is listed, not what is read about them.
 
 ### TC-H03-E2E-01: Filter by category and criterion, and read the count
 - **Level:** E2E

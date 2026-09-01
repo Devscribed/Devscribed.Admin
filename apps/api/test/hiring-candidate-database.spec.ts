@@ -79,6 +79,42 @@ describe('Hiring — candidate database', () => {
   const emails = (response: { body: { candidates: Array<{ email: string }> } }): string[] =>
     response.body.candidates.map((candidate) => candidate.email).sort();
 
+  /** The same addresses **as listed** — the only way to assert about an order. */
+  const listed = (response: { body: { candidates: Array<{ email: string }> } }): string[] =>
+    response.body.candidates.map((candidate) => candidate.email);
+
+  /** As much of a row as the ordering cases read. */
+  interface ListedRow {
+    email: string;
+    applicationCount: number;
+    latestApplication: { id: string; vacancyTitle: string };
+  }
+
+  /**
+   * Moves an interview to a fixed instant, which is the only way to test the `mine`
+   * order: every slot the fake calendar offers is in the future by construction, and a
+   * past interview is not something the booking endpoint will create.
+   */
+  async function moveTo(applicationId: string, start: Date, durationMinutes = 60): Promise<void> {
+    await prisma.application.update({
+      where: { id: applicationId },
+      data: { start, end: new Date(start.getTime() + durationMinutes * 60_000) },
+    });
+  }
+
+  /**
+   * Fixes when a candidate was added, because `all`'s order reads it.
+   *
+   * Two bookings in a seeding loop are milliseconds apart and could land inside the same
+   * tick, where the `id` tiebreak decides — correctly, and at random. A suite asserting
+   * about the order has to state it rather than rely on how long an upload took.
+   */
+  async function addedAt(candidateId: string, createdAt: Date): Promise<void> {
+    await prisma.candidate.update({ where: { id: candidateId }, data: { createdAt } });
+  }
+
+  const daysFromNow = (days: number): Date => new Date(Date.now() + days * 24 * 60 * 60_000);
+
   beforeAll(async () => {
     const harness = await bootHiringApp();
     app = harness.app;
@@ -571,6 +607,229 @@ describe('Hiring — candidate database', () => {
   });
 
   /* ---------------------------------------------------------------- *
+   * Ordering — two questions, two orders
+   * ---------------------------------------------------------------- */
+
+  /**
+   * TC-H03-INT-10 — `All` puts the people still in play on top.
+   *
+   * *Who do I know?* is answered by the pipeline first and the archive second, so a
+   * `scheduled` application floats a candidate above everyone whose interviews have all
+   * been dispositioned — newest added first inside each group, which is the order the
+   * whole list used to read in (03 §08.42).
+   */
+  it('lists everyone with a scheduled application first, newest added first within each group', async () => {
+    const { admin, reactVacancy, slots } = await seedDatabase();
+
+    const first = await book(reactVacancy, { email: 'first@example.com', startUtc: slots[0] });
+    const second = await book(reactVacancy, { email: 'second@example.com', startUtc: slots[1] });
+    const third = await book(reactVacancy, { email: 'third@example.com', startUtc: slots[2] });
+    const fourth = await book(reactVacancy, { email: 'fourth@example.com', startUtc: slots[3] });
+
+    for (const [index, candidate] of [first, second, third, fourth].entries()) {
+      await addedAt(candidate.candidateId, daysFromNow(-10 + index));
+    }
+
+    // Two of them have been moved off the board's first column, so their interview is no
+    // longer ahead of anybody — whichever way it went.
+    await prisma.application.update({
+      where: { id: second.applicationId },
+      data: { status: 'passed' },
+    });
+    await prisma.application.update({
+      where: { id: fourth.applicationId },
+      data: { status: 'didnt_pass' },
+    });
+
+    const response = await list(admin);
+
+    expect(listed(response)).toEqual([
+      // Still scheduled, newest added of the two first.
+      'third@example.com',
+      'first@example.com',
+      // Dispositioned, and in the same order among themselves.
+      'fourth@example.com',
+      'second@example.com',
+    ]);
+  });
+
+  /**
+   * A cancelled interview is still scheduled, because `isCancelled` says the interview
+   * did not take place and deliberately nothing about the candidate's standing
+   * (07 §01.1). An order that read it would make exactly the claim the flag refuses to.
+   */
+  it('keeps a candidate whose interview was cancelled in the scheduled group', async () => {
+    const { admin, reactVacancy, slots } = await seedDatabase();
+
+    const cancelled = await book(reactVacancy, { email: 'cancelled@example.com', startUtc: slots[0] });
+    const passed = await book(reactVacancy, { email: 'passed@example.com', startUtc: slots[1] });
+
+    await addedAt(cancelled.candidateId, daysFromNow(-10));
+    // Added later, so only the grouping can put them second.
+    await addedAt(passed.candidateId, daysFromNow(-1));
+
+    await prisma.application.update({
+      where: { id: cancelled.applicationId },
+      data: { isCancelled: true },
+    });
+    await prisma.application.update({
+      where: { id: passed.applicationId },
+      data: { status: 'passed' },
+    });
+
+    expect(listed(await list(admin))).toEqual(['cancelled@example.com', 'passed@example.com']);
+  });
+
+  it('cuts a page across the boundary between the two groups without repeating a row', async () => {
+    const { admin, reactVacancy, slots } = await seedDatabase();
+
+    const booked: Array<{ candidateId: string; applicationId: string }> = [];
+    for (const [index, name] of ['a', 'b', 'c', 'd'].entries()) {
+      booked.push(await book(reactVacancy, { email: `${name}@example.com`, startUtc: slots[index] }));
+      await addedAt(booked[index].candidateId, daysFromNow(-10 + index));
+    }
+
+    // Only `d`, the newest, is still scheduled — so the boundary between the two groups
+    // falls one row into a page, which is the arrangement a single query never had to get
+    // right and this one is cut across.
+    for (const candidate of booked.slice(0, 3)) {
+      await prisma.application.update({
+        where: { id: candidate.applicationId },
+        data: { status: 'maybe' },
+      });
+    }
+
+    const first = await list(admin, { page: 1, pageSize: 3 });
+    const second = await list(admin, { page: 2, pageSize: 3 });
+
+    expect(listed(first)).toEqual(['d@example.com', 'c@example.com', 'b@example.com']);
+    expect(listed(second)).toEqual(['a@example.com']);
+  });
+
+  /**
+   * TC-H03-INT-11 — `Assigned to me` answers *what is next for me?*
+   *
+   * The order the standalone My interviews screen had (03 §06.28), folded onto people:
+   * the nearest interview ahead on top, then everyone else by their most recent one
+   * behind. It is the whole of what the two groups carried, and the reason they did not
+   * need to survive as groups.
+   */
+  it('orders the mine scope by the nearest interview ahead, then by the most recent behind', async () => {
+    const { admin, reactVacancy, slots } = await seedDatabase();
+
+    const soon = await book(reactVacancy, { email: 'soon@example.com', startUtc: slots[0] });
+    const later = await book(reactVacancy, { email: 'later@example.com', startUtc: slots[1] });
+    const yesterday = await book(reactVacancy, { email: 'yesterday@example.com', startUtc: slots[2] });
+    const lastMonth = await book(reactVacancy, { email: 'lastmonth@example.com', startUtc: slots[3] });
+
+    // Added in the order they are named, so `all` would read them backwards.
+    for (const [index, candidate] of [soon, later, yesterday, lastMonth].entries()) {
+      await addedAt(candidate.candidateId, daysFromNow(-10 + index));
+    }
+
+    await moveTo(soon.applicationId, daysFromNow(1));
+    await moveTo(later.applicationId, daysFromNow(5));
+    await moveTo(yesterday.applicationId, daysFromNow(-1));
+    await moveTo(lastMonth.applicationId, daysFromNow(-30));
+
+    // The admin interviews for this vacancy, so `mine` is available to them too and shows
+    // their own assigned interviews (03 §06.30).
+    expect(listed(await list(admin, { scope: 'mine' }))).toEqual([
+      'soon@example.com',
+      'later@example.com',
+      'yesterday@example.com',
+      'lastmonth@example.com',
+    ]);
+
+    // The same four on the other tab, in the other order — two questions, two answers,
+    // not one order with a filter in front of it.
+    expect(listed(await list(admin))).toEqual([
+      'lastmonth@example.com',
+      'yesterday@example.com',
+      'later@example.com',
+      'soon@example.com',
+    ]);
+
+    // And cut in two: the boundary falls in one place, so nothing is repeated across it
+    // and nothing is dropped through it.
+    const first = await list(admin, { scope: 'mine', page: 1, pageSize: 2 });
+    const second = await list(admin, { scope: 'mine', page: 2, pageSize: 2 });
+    expect(listed(first)).toEqual(['soon@example.com', 'later@example.com']);
+    expect(listed(second)).toEqual(['yesterday@example.com', 'lastmonth@example.com']);
+  });
+
+  /**
+   * 03 §08.44 — the row speaks about the interview that placed it.
+   *
+   * Which is a different application from `all`'s, twice over: it is the viewer's own,
+   * and among those it is the *nearest ahead* rather than the latest. A row sorted by
+   * Tuesday and printed with next month's date is the one way this screen could
+   * contradict itself.
+   */
+  it('speaks about the viewer’s own next interview rather than the candidate’s latest', async () => {
+    const { admin, interviewer, theirs, ours } = await seedScopes();
+
+    // One person, two interviewers. The one the viewer holds is the sooner of the two,
+    // which is what makes the other one the candidate's *latest* application.
+    const withThem = await book(theirs, {
+      email: 'sam@example.com',
+      startUtc: (await firstSlots(app, theirs.slug, 1))[0],
+    });
+    const withUs = await book(ours, {
+      email: 'sam@example.com',
+      startUtc: (await firstSlots(app, ours.slug, 1))[0],
+    });
+    await moveTo(withThem.applicationId, daysFromNow(2));
+    await moveTo(withUs.applicationId, daysFromNow(30));
+
+    const sam = (rows: ListedRow[]): ListedRow =>
+      rows.find((candidate) => candidate.email === 'sam@example.com')!;
+
+    const mine = sam((await list(interviewer)).body.candidates);
+    expect(mine.latestApplication).toMatchObject({
+      id: withThem.applicationId,
+      vacancyTitle: theirs.title,
+    });
+    // Their whole history is still read: the scope narrows who is listed, not what the
+    // row says about them.
+    expect(mine.applicationCount).toBe(2);
+
+    // The same person on the other tab, spoken about by their most recent application —
+    // whoever is interviewing it.
+    const all = sam((await list(admin)).body.candidates);
+    expect(all.latestApplication).toMatchObject({
+      id: withUs.applicationId,
+      vacancyTitle: ours.title,
+    });
+  });
+
+  it('places a candidate by their past interview when the viewer has none ahead of them', async () => {
+    const { interviewer, theirs, ours } = await seedScopes();
+
+    const withThem = await book(theirs, {
+      email: 'sam@example.com',
+      startUtc: (await firstSlots(app, theirs.slug, 1))[0],
+    });
+    const withUs = await book(ours, {
+      email: 'sam@example.com',
+      startUtc: (await firstSlots(app, ours.slug, 1))[0],
+    });
+
+    await moveTo(withThem.applicationId, daysFromNow(-3));
+    // Ahead, but not the viewer's — an interview they have nothing to do with must not
+    // lift the row into the group of people they are about to see.
+    await moveTo(withUs.applicationId, daysFromNow(10));
+
+    const rows: Array<{ email: string; latestApplication: { id: string } }> = (
+      await list(interviewer)
+    ).body.candidates;
+
+    // `ann` and `both` still hold interviews ahead with this interviewer, so Sam is last.
+    expect(rows[rows.length - 1].email).toBe('sam@example.com');
+    expect(rows[rows.length - 1].latestApplication.id).toBe(withThem.applicationId);
+  });
+
+  /* ---------------------------------------------------------------- *
    * Search, counts and paging
    * ---------------------------------------------------------------- */
 
@@ -639,17 +898,16 @@ describe('Hiring — candidate database', () => {
     expect(new Set([...emails(first), ...emails(second)]).size).toBe(3);
   });
 
-  it('orders most recently added first, and clamps an oversized page size', async () => {
+  it('orders most recently added first within a group, and clamps an oversized page size', async () => {
     const { admin, reactVacancy, slots } = await seedDatabase();
     await book(reactVacancy, { email: 'first@example.com', startUtc: slots[0] });
     await book(reactVacancy, { email: 'second@example.com', startUtc: slots[1] });
 
     const response = await list(admin, { pageSize: 500 });
 
-    expect(response.body.candidates.map((c: { email: string }) => c.email)).toEqual([
-      'second@example.com',
-      'first@example.com',
-    ]);
+    // Both are still scheduled, so the split above them decides nothing and what is left
+    // is the order the whole list used to read in.
+    expect(listed(response)).toEqual(['second@example.com', 'first@example.com']);
     expect(response.body.pageSize).toBe(CANDIDATE_PAGE_SIZE_MAX);
   });
 

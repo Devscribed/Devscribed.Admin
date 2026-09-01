@@ -3,8 +3,10 @@ import {
   candidateFilterPlan,
   latestAssessment,
   matchesEveryCriterion,
+  orderCandidatesByInterview,
   referencedFilterIds,
   resolveCandidateScope,
+  type ApplicationStatus,
   type CandidateAssessment,
   type CandidateFilterLibrary,
   type CandidateFilterPlan,
@@ -16,7 +18,7 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import { ViewerTimeZoneService } from './viewer-time-zone.service';
 
-/** One row of the list: a **person**, with their latest application beside them. */
+/** One row of the list: a **person**, with the application it speaks for beside them. */
 export interface PresentedCandidate {
   id: string;
   fullName: string;
@@ -24,6 +26,15 @@ export interface PresentedCandidate {
   applicationCount: number;
   /** Deduplicated across every vacancy they have applied to (03 §01.2). */
   categories: Array<{ id: string; name: string }>;
+  /**
+   * The one application the row draws a vacancy, a date and a status from — and, in
+   * `mine`, the one the row's position was decided by (03 §08.44).
+   *
+   * In `all` it is the candidate's most recent application, whoever interviewed it. In
+   * `mine` it is the **viewer's own** nearest upcoming interview, or their most recent
+   * past one when they have nothing ahead. The name is `all`'s reading because that is
+   * the scope that is asked for by default; §08.44 is the whole of the difference.
+   */
   latestApplication: {
     id: string;
     vacancyTitle: string;
@@ -31,6 +42,91 @@ export interface PresentedCandidate {
     status: string;
   } | null;
 }
+
+/** One row as the query reads it: the candidate, and every application they hold. */
+interface CandidateRecord {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  applications: Array<{
+    id: string;
+    status: string;
+    start: Date;
+    vacancy: { title: string; categories: Array<{ category: { id: string; name: string } }> };
+  }>;
+}
+
+/**
+ * A candidate's whole history, latest interview first, whichever scope listed them.
+ *
+ * Unnarrowed on purpose: the scope decides which **people** are listed, not which of
+ * their history is read, so the application count and the category chips say the same
+ * thing on either tab.
+ */
+const ROW_APPLICATIONS = {
+  applications: {
+    orderBy: [{ start: 'desc' }, { id: 'asc' }],
+    select: {
+      id: true,
+      status: true,
+      start: true,
+      vacancy: {
+        select: {
+          title: true,
+          categories: { select: { category: { select: { id: true, name: true } } } },
+        },
+      },
+    },
+  },
+} satisfies Prisma.CandidateInclude;
+
+/**
+ * Most recently added first (03 §01.3); `id` keeps two candidates created in the same
+ * millisecond in a stable order, so page 2 never repeats a row from page 1.
+ */
+const NEWEST_FIRST = [
+  { createdAt: 'desc' },
+  { id: 'asc' },
+] satisfies Prisma.CandidateOrderByWithRelationInput[];
+
+/**
+ * The board column an interview sits in until somebody moves it — which is what "still
+ * in play" means on a list that has no column of its own (03 §08.42).
+ *
+ * A cancelled interview still counts. `isCancelled` says the interview did not take
+ * place and deliberately nothing about the candidate's standing (07 §01.1), and an order
+ * that read it would be making exactly the claim that flag refuses to make.
+ */
+const SCHEDULED: ApplicationStatus = 'scheduled';
+const HAS_SCHEDULED: Prisma.CandidateWhereInput = {
+  applications: { some: { status: SCHEDULED } },
+};
+/** Nobody's interview is still in play — including a candidate holding no application. */
+const HAS_NO_SCHEDULED: Prisma.CandidateWhereInput = {
+  applications: { none: { status: SCHEDULED } },
+};
+
+/** One more clause on a candidate query, without reaching into how it was built. */
+const also = (
+  where: Prisma.CandidateWhereInput,
+  clause: Prisma.CandidateWhereInput,
+): Prisma.CandidateWhereInput => ({ AND: [where, clause] });
+
+/**
+ * One page, in the applied scope's order, and — where the scope decided it — which
+ * application each row speaks about (03 §08.44).
+ *
+ * The two travel together because in `mine` they come out of one pass, and separating
+ * them is how a row would end up sorted by one interview and printed with another.
+ */
+interface Listed {
+  rows: CandidateRecord[];
+  speaksFor: ReadonlyMap<string, string>;
+}
+
+/** `all` chooses no application: the row takes its own latest, as it always has. */
+const NONE_CHOSEN: ReadonlyMap<string, string> = new Map();
 
 /**
  * How many candidates each scope holds **under the filters already applied** — the
@@ -81,6 +177,16 @@ export interface CandidateDatabasePage {
  * It also answers what used to be a screen of its own. **My interviews is the `mine`
  * scope** (03 §08.35): one more `some` clause, over the vacancies the viewer interviews
  * for, applied on the server and never negotiable from the query string.
+ *
+ * The **order** splits along the same line, and for the same reason. The two scopes ask
+ * different questions — *who do I know?* and *what is next for me?* — so they read in
+ * different orders (03 §08.42), and neither is a column this table holds. `all` sorts on
+ * a predicate over a relation, which Prisma will filter by and will not order by, so its
+ * page is cut across two queries over disjoint sets rather than taken from one over a
+ * computed column. `mine` needs a correlated per-candidate minimum over the *viewer's
+ * own* applications, which Prisma cannot state at all — the same shape of problem as the
+ * criteria rollup, answered the same way, with a second round trip and the rule itself
+ * kept in `@devscribed/validation` where both sides read it.
  */
 @Injectable()
 export class CandidateDatabaseService {
@@ -116,34 +222,18 @@ export class CandidateDatabaseService {
     const assessed = await this.candidateIdsMatchingCriteria(organizationId, plan, library);
     const where = this.where(organizationId, plan, assessed, scope, viewer.accountId);
 
-    const [total, scopeCounts, rows] = await Promise.all([
+    // One instant for the whole request, so every row of one response is ordered against
+    // the same clock. Across two requests it moves, and an interview that ends between
+    // page 1 and page 2 changes group — which is the same thing a candidate created
+    // between them does, and no more fixable (03 §08.43).
+    const now = new Date();
+
+    const [total, scopeCounts, listed] = await Promise.all([
       this.prisma.candidate.count({ where: { organizationId } }),
       this.scopeCounts(organizationId, plan, assessed, viewer),
-      this.prisma.candidate.findMany({
-        where,
-        // Most recently added first (03 §01.3); `id` keeps two candidates created in the
-        // same millisecond in a stable order, so page 2 never repeats a row from page 1.
-        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
-        skip: (plan.page - 1) * plan.pageSize,
-        take: plan.pageSize,
-        include: {
-          applications: {
-            // Latest interview first, so the row's headline application is `[0]`.
-            orderBy: [{ start: 'desc' }, { id: 'asc' }],
-            select: {
-              id: true,
-              status: true,
-              start: true,
-              vacancy: {
-                select: {
-                  title: true,
-                  categories: { select: { category: { select: { id: true, name: true } } } },
-                },
-              },
-            },
-          },
-        },
-      }),
+      scope === 'mine'
+        ? this.byOwnNextInterview(organizationId, plan, where, viewer.accountId, now)
+        : this.scheduledFirst(plan, where),
     ]);
 
     return {
@@ -164,7 +254,116 @@ export class CandidateDatabaseService {
           ? await this.ownEmail(viewer.accountId)
           : await this.firstInterviewerEmail(organizationId),
       ),
-      candidates: rows.map((candidate) => this.present(candidate)),
+      candidates: listed.rows.map((candidate) =>
+        this.present(candidate, listed.speaksFor.get(candidate.id)),
+      ),
+    };
+  }
+
+  /**
+   * The page in `all`'s order: everyone with a `scheduled` application, newest added
+   * first, then everyone without one, newest added first (03 §08.42).
+   *
+   * *Who do I know?* is answered best by the people still in play, and "still in play" is
+   * a predicate over a relation. Prisma will filter by one and will not order by one, so
+   * the two groups are queried separately and the page's slice is cut across the join
+   * between them — one extra `count` to know where that join falls.
+   *
+   * The database still takes the slice, which is what makes this cheap and what keeps the
+   * order true across a page boundary: neither group is read to find out where the next
+   * page starts.
+   */
+  private async scheduledFirst(
+    plan: CandidateFilterPlan,
+    where: Prisma.CandidateWhereInput,
+  ): Promise<Listed> {
+    const skip = (plan.page - 1) * plan.pageSize;
+    const inPlay = also(where, HAS_SCHEDULED);
+
+    const scheduled = await this.prisma.candidate.count({ where: inPlay });
+
+    const take = Math.min(plan.pageSize, Math.max(0, scheduled - skip));
+    const head =
+      take === 0
+        ? []
+        : await this.prisma.candidate.findMany({
+            where: inPlay,
+            orderBy: NEWEST_FIRST,
+            skip,
+            take,
+            include: ROW_APPLICATIONS,
+          });
+    if (head.length === plan.pageSize) return { rows: head, speaksFor: NONE_CHOSEN };
+
+    const tail = await this.prisma.candidate.findMany({
+      where: also(where, HAS_NO_SCHEDULED),
+      orderBy: NEWEST_FIRST,
+      // Whatever the first group did not answer for. Negative before the clamp exactly
+      // when this page began inside the first group, where the second one starts at its top.
+      skip: Math.max(0, skip - scheduled),
+      take: plan.pageSize - head.length,
+      include: ROW_APPLICATIONS,
+    });
+
+    return { rows: [...head, ...tail], speaksFor: NONE_CHOSEN };
+  }
+
+  /**
+   * The page in `mine`'s order: the nearest upcoming interview of the viewer's own on
+   * top, then everyone else by their most recent past one (03 §06.28, §08.42).
+   *
+   * There is no query for this. It is a per-candidate minimum over a *filtered* set of
+   * their applications — the ones the viewer holds — and Prisma has no correlated
+   * subquery to state it with. So the viewer's own applications are read and folded, the
+   * same second round trip the criteria rollup already makes for the same reason, and
+   * bounded by the same thing that let My interviews go unpaginated at all: one person's
+   * own calendar.
+   *
+   * The fold answers both halves at once — the order, and which interview each row
+   * speaks about — because they are one fact (03 §08.44).
+   *
+   * A cancelled interview still places a row, which is what the old screen did: it listed
+   * cancelled interviews in whichever group they fell into and marked them, rather than
+   * hiding an appointment somebody may still have in their calendar.
+   */
+  private async byOwnNextInterview(
+    organizationId: string,
+    plan: CandidateFilterPlan,
+    where: Prisma.CandidateWhereInput,
+    viewerAccountId: string,
+    now: Date,
+  ): Promise<Listed> {
+    const own = await this.prisma.application.findMany({
+      where: {
+        organizationId,
+        vacancy: { interviewerAccountId: viewerAccountId },
+        // The same people the list is showing, so the order is computed over exactly the
+        // rows it will order — a filter narrows this alongside everything else.
+        candidate: where,
+      },
+      // Only a tiebreak: the fold is what orders the list. Sorting here as well keeps
+      // two interviews booked at the same instant in one order between requests.
+      orderBy: [{ start: 'asc' }, { id: 'asc' }],
+      select: { id: true, candidateId: true, start: true, end: true },
+    });
+
+    const order = orderCandidatesByInterview(own, now);
+    const page = order.slice((plan.page - 1) * plan.pageSize, plan.page * plan.pageSize);
+
+    const rows = await this.prisma.candidate.findMany({
+      where: { id: { in: page.map((entry) => entry.candidateId) } },
+      include: ROW_APPLICATIONS,
+    });
+
+    // `in` answers in the database's order, not in the one asked for, so the page is
+    // rebuilt against the fold rather than against what came back.
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return {
+      rows: page.flatMap((entry) => {
+        const row = byId.get(entry.candidateId);
+        return row ? [row] : [];
+      }),
+      speaksFor: new Map(page.map((entry) => [entry.candidateId, entry.applicationId])),
     };
   }
 
@@ -398,18 +597,15 @@ export class CandidateDatabaseService {
     return account?.email;
   }
 
-  private present(candidate: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    applications: Array<{
-      id: string;
-      status: string;
-      start: Date;
-      vacancy: { title: string; categories: Array<{ category: { id: string; name: string } }> };
-    }>;
-  }): PresentedCandidate {
+  /**
+   * One row. `speaksFor` names the application the scope's order placed it by, and is
+   * absent in `all`, where the row takes the candidate's own most recent one.
+   *
+   * The lookup covers one thing the fold cannot: an application it listed and that was
+   * gone by the time the row was read. A row with a date from the wrong interview would
+   * be the exact disagreement §08.44 rules out; a row with no date is merely thin.
+   */
+  private present(candidate: CandidateRecord, speaksFor?: string): PresentedCandidate {
     const categories = new Map<string, { id: string; name: string }>();
     for (const application of candidate.applications) {
       for (const assignment of application.vacancy.categories) {
@@ -417,7 +613,10 @@ export class CandidateDatabaseService {
       }
     }
 
-    const [latest] = candidate.applications;
+    // Applications arrive latest interview first, so `all`'s headline is simply the first.
+    const headline = speaksFor
+      ? candidate.applications.find((application) => application.id === speaksFor)
+      : candidate.applications[0];
 
     return {
       id: candidate.id,
@@ -425,14 +624,16 @@ export class CandidateDatabaseService {
       // `Application.submittedName` is the frozen one and belongs to the application.
       fullName: `${candidate.firstName} ${candidate.lastName}`,
       email: candidate.email,
+      // Their whole history on either tab: the scope narrows who is listed, not what is
+      // read about them.
       applicationCount: candidate.applications.length,
       categories: [...categories.values()],
-      latestApplication: latest
+      latestApplication: headline
         ? {
-            id: latest.id,
-            vacancyTitle: latest.vacancy.title,
-            startUtc: latest.start.toISOString(),
-            status: latest.status,
+            id: headline.id,
+            vacancyTitle: headline.vacancy.title,
+            startUtc: headline.start.toISOString(),
+            status: headline.status,
           }
         : null,
     };

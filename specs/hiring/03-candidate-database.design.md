@@ -268,10 +268,18 @@ the old screen drew has an answer here.
 - The `Assigned to me` empty state is the old screen's own line, *No upcoming interviews.*, with no
   clear-filters action beside it — nothing was filtered out, and offering to undo a filter that was
   never applied is worse than saying nothing.
+- **The third column's heading moves with the scope**: `Latest application` in `All`,
+  `Interview` in `Assigned to me`. The column holds a different application in each
+  ([03 §08.44](03-candidate-database.md)) — the candidate's most recent one, against the viewer's
+  own nearest — and the second is what the rows are *sorted by*. A heading that said "latest" over
+  a date the list ordered ascending would be the row contradicting its own position, in words.
+  Nothing else about the column changes: same two lines, same testid, same width.
 
 The old screen's two groups, `Upcoming` and `Past`, do not survive as groups: this list is
 candidate-grain, so a person seen twice is one row. What they carried — *what is next for me* — is
-carried by the scope's ordering instead ([03 §06.28](03-candidate-database.md)).
+carried by the scope's ordering instead ([03 §06.28](03-candidate-database.md), [§08.42](03-candidate-database.md)).
+The order is the server's answer and arrives in it; this screen renders the array as it came, and
+there is no sort control to draw.
 
 `Table hideHeader` ([§34](../design-system/ledger.md)) loses its only consumer with those groups.
 The prop stays; the argument for it — a short grouped list already named by the surface it sits in

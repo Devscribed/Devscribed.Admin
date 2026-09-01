@@ -246,7 +246,7 @@ export interface Board {
  * ------------------------------------------------------------------ */
 
 /**
- * One row of the database: a **person**, with their latest application beside them.
+ * One row of the database: a **person**, with one of their applications beside them.
  *
  * `fullName` is the candidate's current name, which the latest booking may have
  * corrected — the frozen `submittedName` belongs to an application and stays on the card.
@@ -255,10 +255,18 @@ export interface CandidateRow {
   id: string;
   fullName: string;
   email: string;
-  /** Rendered only when it is more than one (03 §01.2). */
+  /** Rendered only when it is more than one (03 §01.2). Their whole history, on either tab. */
   applicationCount: number;
   /** Deduplicated across every vacancy they have applied to. */
   categories: Array<{ id: string; name: string }>;
+  /**
+   * The application the row speaks about — **which the scope decides** (03 §08.44).
+   *
+   * In `all` it is the candidate's most recent one, whoever is interviewing it. In `mine`
+   * it is the viewer's own nearest upcoming interview, or their most recent past one,
+   * which is also the application that placed the row where it sits. The column heading
+   * moves with it, because the two readings are not the same claim.
+   */
   latestApplication: {
     id: string;
     vacancyTitle: string;
