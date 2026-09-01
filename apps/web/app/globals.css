@@ -274,20 +274,27 @@
  */
 .board-scroll {
   overflow-x: auto;
-  padding-bottom: var(--sp-4);
+  padding-bottom: var(--space-3);
 }
 
 .board-columns {
   display: grid;
   grid-template-columns: repeat(5, minmax(220px, 1fr));
-  gap: var(--sp-6);
+  gap: var(--space-5);
   align-items: start;
 }
 
-/* Each column scrolls on its own; the page keeps its header in view while it does. */
+/*
+ * Each column scrolls on its own; the page keeps its header in view while it does. Every
+ * term is named rather than rolled into one constant, because the navbar is the one that
+ * moved: blue's is 80px against Meridian's 68, and 60px again below the breakpoint. The
+ * rest is `AppShell`'s own 25px padding, top and bottom, plus the page header.
+ */
 .board-columns > *,
 .board-single > * {
-  max-height: calc(100vh - 240px);
+  max-height: calc(
+    100vh - var(--layout-navbar-height-desktop) - 2 * var(--space-9) - 120px
+  );
 }
 
 @media (max-width: 1199px) {
@@ -295,11 +302,18 @@
     width: max-content;
     min-width: 100%;
   }
+
+  .board-columns > *,
+  .board-single > * {
+    max-height: calc(
+      100vh - var(--layout-navbar-height-mobile) - 2 * var(--space-9) - 120px
+    );
+  }
 }
 
 .board-single {
   display: grid;
-  margin-top: var(--sp-6);
+  margin-top: var(--space-5);
 }
 
 /*

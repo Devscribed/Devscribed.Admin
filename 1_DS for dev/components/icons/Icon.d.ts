@@ -31,6 +31,9 @@ export function EyeIcon(props: GlyphProps): JSX.Element;
 export function EyeOffIcon(props: GlyphProps): JSX.Element;
 export { EyeIcon as Eye, EyeOffIcon as EyeOff };
 
+/** §44 — the board's missing-conclusion mark, drawn rather than typed. Prod flags nothing. */
+export function FlagIcon(props: GlyphProps): JSX.Element;
+
 export interface IconProps extends GlyphProps {
   /** Export name of the glyph, e.g. "TrashIcon". Unknown names render nothing. */
   name: string;

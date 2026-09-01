@@ -261,7 +261,7 @@ Errors:
   - `board-card-{applicationId}`, `board-card-name-{applicationId}`,
     `board-card-when-{applicationId}`, `board-card-cv-{applicationId}`,
     `board-card-cancelled-{applicationId}`, `board-card-no-conclusion-{applicationId}`
-  - `board-empty-state`, `board-loading-skeleton`, `toast-move-failed`
+  - `board-empty-state`, `board-loading`, `toast-move-failed`
 
 ## Out of Scope
 

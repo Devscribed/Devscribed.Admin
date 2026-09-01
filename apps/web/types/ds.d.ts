@@ -23,6 +23,8 @@ declare module '@ds' {
   export * from '@ds/components/core/PageTitle';
   export * from '@ds/components/core/ToggleButton';
 
+  export * from '@ds/components/data/BoardCard';
+  export * from '@ds/components/data/BoardColumn';
   export * from '@ds/components/data/Calendar';
   export * from '@ds/components/data/CircleList';
   export * from '@ds/components/data/CircleSelect';

@@ -5,16 +5,22 @@ One numbered entry per component or prop added, under
 [§D3](README.md) — *edit the vendored copy in place, but never silently*.
 
 Phase 0 created this file; Phase 1 wrote §1–§11, Phase 2 wrote §12–§18, Phase 3 wrote
-§19–§29, Phase 4 wrote §30–§36, Phase 5 wrote §37–§38 and Phase 6 wrote §39–§41.
-`npm run ds:drift` currently reports eight local-only components — `AuthLayout`, `Calendar`,
-`Card`, `Chip`, `CrossIcon`, `IconButton`, `Eye`, `EyeOff` — and each of them is numbered below,
-which is the bar this file exists to hold. Neither Phase 5 nor Phase 6 added a ninth: every one
-of their entries is props on a component already numbered.
+§19–§29, Phase 4 wrote §30–§36, Phase 5 wrote §37–§38, Phase 6 wrote §39–§41 and Phase 7 wrote
+§42–§45. `npm run ds:drift` currently reports eleven local-only components — `AuthLayout`,
+`BoardCard`, `BoardColumn`, `Calendar`, `Card`, `Chip`, `CrossIcon`, `IconButton`, `Eye`,
+`EyeOff`, `FlagIcon` — and each of them is numbered below, which is the bar this file exists to
+hold. Phase 7 added the last three of those; Phases 5 and 6 added none, because every one of
+their entries is props on a component already numbered.
 
 Phase 6 also left two things that are **not** new numbers, because neither adds anything — both
 make an existing entry do what it already said it did. They are written up as notes at the end:
 [§8 and nested `Escape`](#a-note-on-8-and-nested-escape), and
 [§29 and *matches nothing*](#a-note-on-29-and-matches-nothing).
+
+**Three of the four remaining `designed` entries are Phase 7's**, and they are the only ones in
+this file with no production counterpart of any kind — not a treatment stated in a readme, not a
+library blue already recreates, nothing. See
+[§42 and what "designed" is allowed to mean](#a-note-on-42-and-what-designed-is-allowed-to-mean).
 
 ## Numbering convention
 
@@ -89,6 +95,77 @@ Each entry is one of three, because the distinction decides what the upstream pu
 | 39 | `Chip` | `leading`, `removeDisabled` and `removeDescribedBy`. All three are the same gap §37 found from the other side: blue draws `Chip` only inside `Select isMulti`, where a token is a label and a cross, nothing ever precedes the label, and the cross always works. **`leading`** is `trailing`'s mirror — a node before the label, which the scale editor's chip needs for its drag handle. Putting the handle in `trailing` was the alternative and it is the wrong one: it would seat a control that *picks the value up* immediately beside one that *deletes it*, and blue's chip already has a grip edge to lead from in its 7px `--color-blue` left border. **`removeDisabled`** blocks the cross without taking it away — `aria-disabled` and still focusable, never the `disabled` attribute — which is §22's rule on `Popover`'s rows applied to the control `Chip` draws for itself; a value that has been assessed against may not be removed, and a cross that vanished would be indistinguishable from a bug. **`removeDescribedBy`** is what makes that readable: the cross keeps `Remove {label}` as its *name* and the reason is a *description*, drawn by the consumer where there is room for a sentence. Naming it the reason instead would read the same sentence twice, which is the thing Phase 5 discovered about native `title` ([reversal 2](README.md)) and the reason this prop exists rather than a `removeReason` string. | `omission` | [§D2](README.md) | 6 | [06](../hiring/06-libraries.design.md) |
 | 40 | `ConfirmDialog` | `...rest`, `style`, `acceptTestId` / `declineTestId`, and §8's dialog semantics — `role="dialog"`, `aria-modal`, a real `aria-labelledby` on the title, focus trapped while open, focus returned to the opener on close, and `Escape`. Blue destructures eight props and forwards none, so `data-testid` reached neither the panel nor either button, and it draws both buttons itself so a caller had no way to tag them: §2's gap and §37's `removeTestId`, on the second dialog. The keyboard half is §8 verbatim — blue has *two* dialog shells and prod's overlays are plain `<div>`s that close only by click, so both were measured with no roles, no trap and no `Escape`, and §8 happened to fix only the one Phase 1 needed. The implementation moved into `useDialogFocus.js` rather than being copied, because a second copy is how the two shells drift apart. One more thing changes and it is too small to number but too silent to leave out: the close cross gets `type="button"`, which `Modal`'s already had — without it the control submits any form it is nested in. What is **not** changed: the scrim still refuses to close on click, and the accept button is still primary blue even on a destructive confirmation — both are blue's own, and the category delete adopts them. | `omission` | [§D2](README.md) | 6 | [06](../hiring/06-libraries.design.md) |
 | 41 | `ConfirmDialog` | `busy` and `closeOnAccept`. Blue dismisses the moment accept is pressed and has no notion of a request being in flight, which is true to prod: every confirmation there starts work nobody waits on the result of. Ours await one. `busy` paints the accept button's preloader and blocks both controls; `closeOnAccept={false}` leaves the dialog standing so the caller closes it on the *outcome* rather than on the click. It is `InfoBanner`'s §24 in a different shape — *prod's banners report a state and go away when the state does; one reporting an event that already happened cannot* — and, like §24, the default is blue's behaviour unchanged. The scale reorder is the call site and the only one: accepting it saves the criterion, which can come back with a duplicate name belonging to the form behind this dialog, so dismissing on the click would flash that form up mid-flight and take it away again. The category delete passes neither and gets blue's dismiss-on-accept, which is right for it. | `omission` | [§D2](README.md) | 6 | [06](../hiring/06-libraries.design.md) |
+
+| 42 | `BoardCard` | New component. Prod has no kanban, so there is no card to reproduce — but this is a *composition* of two things blue draws rather than an invention, and the split between them is the point. The surface is `Card`'s (§12): `--surface-card`, a 1px `--border-default` hairline, `--radius-l`, no shadow. The hover is `NavigationCard`'s, measured: the border goes `transparent` as `--shadow-card-hover` paints, `scale(1.01)`, over `--transition-card-hover`. §12 **refused** that hover on the grounds that it "belongs to `NavigationCard`, which is a control; painting it on a static container promises a click that is not there" — and this card *is* a control, so the same sentence admits it. The two are one rule read twice. What is genuinely designed is the state prod has no analogue for at all: **held**, `--action-primary` border over `--shadow-popover` and `translateY(-1px)`, which only a keyboard drag ever renders, because a card dragged with a pointer is not drawn and what lifts under the cursor is the browser's own drag image. Two smaller calls come with it. **`Space` picks the card up rather than activating it** — the one `role="button"` in this app that does not — because a board whose cards activated on `Space` could not be dragged with a keyboard, and the drag is the screen's whole purpose; `Enter` opens it. And the **past** date recedes `--text-tertiary` → `--text-secondary` rather than sharing one ink: see the note below. **Must be pushed upstream as designed, not measured.** | `designed` | [§D1](README.md), [§D6](README.md) | 7 | [05](../hiring/05-board.design.md) |
+| 43 | `BoardColumn` | New component, and the shape is one blue already draws twice. The column is a `Card` (§12) whose body is a `--surface-sunken` well holding white cards — `AppShell`'s own arrangement one level down, and blue's single answer to "a container of things": a recessed ground with white panels on it. The head is `Card`'s title row, and the name is a real `<h2>` at headline-6 in **sentence case**, not Meridian's uppercase caption: blue's content rule spends its one uppercase on `PageTabs`, which the narrow board already uses (§45). The designed part is the drag mechanics, which nothing in blue has: the column converts a pointer position into a **slot index** and hands it back, and that index counts **cards only** — the placeholder carries no `data-board-card`, so the gap it opens never counts itself as a slot, which is what keeps the arithmetic stable while the gap moves around under the pointer. The placeholder itself is the well showing through, outlined 1px dashed in `--action-primary`; a filled one would be a second object on a board that must only ever show one mark. Which columns exist, what a slot means, and what a drop writes are all the caller's. **Must be pushed upstream as designed, not measured.** | `designed` | [§D1](README.md), [§D6](README.md) | 7 | [05](../hiring/05-board.design.md) |
+| 44 | `Icon` | `FlagIcon`, registered in the dispatcher. This is §9's position exactly, on a different glyph: prod is a time tracker and flags nothing, so there is no mark to measure, and blue's icon rules are explicit enough to draw one to (geometric, filled, `currentColor`, 12–24px, viewBox matching the intrinsic size, no icon font). What forces it is that the rules admit no exception — *"every icon is a hand-authored inline SVG React component"*, *"no PNG/raster icons and no emoji are used as icons anywhere in the app"* — and Meridian's missing-conclusion mark was the dingbat character `⚑`. The glyph picks no hue; the caller paints it, and the board paints it `--status-warning` rather than the tracker blue the token map would have mapped Meridian's amber onto. That is the one row in that table which must not be taken mechanically — see the note below. | `packaging` | [§D2](README.md) | 7 | [05](../hiring/05-board.design.md) |
+| 45 | `PageTabs` | The tab row made a tab row, plus an object form. Blue's tabs are `<a href="#">` whose click handler calls `preventDefault` and swaps a panel: a screen reader announces them as links that go nowhere, none of them can be reached or moved between by keyboard, and there is no `aria-selected` to say which is chosen — the paint was the only signal, which is §31's finding on `ToggleButton` and §21's on `Select`, a third time. Prod gets away with it because prod's tab rows are three words on a members screen that nothing arrives at by keyboard, and the narrow board makes this **the control that chooses which column is shown**. They are `role="tab"` buttons inside a `role="tablist"` now, with `aria-selected`, `aria-controls`, a single tab stop, arrow keys plus `Home`/`End`, and `--shadow-focus-input` — the source declares no `:focus` state at all, which is §31's other half. Selection follows focus, because the panel is already rendered and making a keyboard user press twice for what a pointer does once is the thing the pattern exists to avoid. The object form (`value` / `label` / `testId` / `controls`) sits beside prod's `string[]`, which is §18's shape on `Table` and for §18's reason: the pair blue measured is what a hand-written kit screen passes. Both forms still work and every painted value is untouched. There is deliberately **no `count` prop** — a count composes into the `label` node, and a strip that grew one would then need a badge for it, and an icon. | `omission` | [§D2](README.md) | 7 | [05](../hiring/05-board.design.md) |
+
+### A note on §42 and what "designed" is allowed to mean
+
+Four entries in this file are `designed` rather than `omission` or `packaging`, and three of them
+are Phase 7's. That concentration is not an accident — the board is the one surface in the app with
+no production counterpart of any kind — but it makes the kind worth pinning down before the upstream
+push has to defend it.
+
+`designed` has meant three different strengths so far, and they are not equally hard to justify:
+
+| Entry | What was missing | What it was drawn from |
+|---|---|---|
+| §7 `InfoBanner success` | prod has no green banner | its own palette, at the 10%-of-status tint its other two already use |
+| §11 `AuthLayout` | prod has no signed-out screen | the well, the card, the headline scale — all blue's, recomposed |
+| §29 `Select allowCreate` | prod uses react-select, not creatable | the library's own documented pattern, drawn as one more option row |
+| §30 `Calendar` | prod books nothing | **blue's own `DateRangePicker`**, which is its recreation of the react-datepicker the product ships |
+| §32 `Badge info`/`warning` | prod's badge has two states, a funnel has five | the palette's other half, in `ActivityBadge`'s treatment |
+| §42 / §43 `BoardCard` / `BoardColumn` | prod has no kanban | `Card` (§12), `NavigationCard`'s hover, `AppShell`'s well-and-panel arrangement |
+
+Every row's right-hand column is the same claim: *the values are blue's, the arrangement is ours.*
+That is the strongest form the label can take, and it is the form the push should make in each case
+— **"composed from measured parts"**, not "invented". The genuinely unprecedented part of §42 and
+§43 is smaller than the components are, and it is worth naming precisely so the push does not have
+to over-claim: the **held** card state, the **travelling placeholder**, and the **slot index** that
+counts cards and not gaps. Nothing in blue does any of those, because nothing in blue drags.
+
+### A note on §44 and the one row the token map must not be taken on
+
+The token map carries Meridian's `--tracker` onto blue's `--color-tracker-blue`, on the reasonable
+grounds that *"both systems reserve a tracker hue"*. There is exactly one use of `--tracker` in the
+tree and it is the board's missing-conclusion mark, where the mapping is wrong in both directions.
+
+Meridian's `--tracker` was **amber**, and the design spec says why the mark used it: *"Amber is
+Meridian's reserved warning hue and this is precisely a guarded state."* The token's *name* was the
+coincidence; its *meaning* on this element was warning. Blue's `--color-tracker-blue` is `#2AA7FF`
+and blue is unusually explicit that it belongs to one thing — *"used only by the floating time
+tracker widget — intentionally different from the primary blue, not a mistake to normalize away"*.
+So the mechanical mapping would paint a warning in the one hue blue has already spoken for, on a
+product that has no tracker at all.
+
+`--status-warning` is the mark's colour, which is what the readme scopes to *"real state"* and what
+§32 already established this app may reach for. The row is closed in the map as **not remapped**,
+the way `--fs-27` and `--fs-21` closed in Phase 2 — by the thing that carried it turning out to mean
+something else.
+
+### A note on §42 and the fourth ink, one more time
+
+[Reversal 7](README.md) closed in Phase 6 with *"no use left"*, and that was true: it counted
+`--text-faint` in `apps/web`, and Phase 6 spent the last one. Meridian's `BoardCard` had a fifth,
+inside the design system rather than in a screen, and Phase 7 met it after the closure.
+
+It is also the one site where the collapse would have erased a distinction rather than a nuance,
+and the reason is arithmetic. Everywhere the reversal has been applied so far, something receded
+**from `--text-primary`** — a past interview's row in My interviews, a character count, a history
+timestamp, a blocked control — so dropping to `--text-secondary` still left a step. On this card the
+date is *already* receded: Meridian drew it `--text-muted` and the past variant `--text-faint`, two
+of its lower three. Map both mechanically and they land on the same ink, and 05 §05.18's *"the date
+reading as past"* becomes nothing at all.
+
+Blue has three inks, not two, and the order is `--text-primary` → `--text-tertiary` → 
+`--text-secondary` — tertiary is `#54595E` and darker than secondary's `#64748B`, which the names
+invert. So the card reads primary / tertiary / secondary down its three lines, and a past date steps
+tertiary → secondary, landing on the level the CV footnote already occupies. No fourth ink, no lost
+distinction, and the pattern is unchanged: **recede by one level.** Phase 6 needed `opacity: .6`
+alongside it because its site was a *control*, where `--text-secondary` is also what an available
+one paints; a date is not a control and needs nothing.
 
 ### A note on §22 and reversal 2
 

@@ -860,9 +860,11 @@ record the exposure that leaves open rather than implying the endpoints are prot
 > [`specs/design-system/README.md`](specs/design-system/README.md) is the decision record — the
 > token map, the component inventory, and the eight numbered decisions everything else cites — and
 > [`specs/design-system/ledger.md`](specs/design-system/ledger.md) records what the vendored copy
-> adds beyond upstream. `1_DS for dev/` holds blue as of Phase 1; the signed-out screens and the
-> signed-in frame are on it, and the hiring screens are not yet. `npm run ds:drift` reports the
-> gap and is expected to, until every disagreement it names carries a ledger number.
+> adds beyond upstream. `1_DS for dev/` holds blue. Every signed-in screen is on it as of Phase 7 —
+> the shell, vacancies, candidates, my interviews, the candidate card, the libraries and the board;
+> the two public surfaces, `/book/{slug}` and `/manage/{slug}/{token}`, are the last and are Phase
+> 8's. `npm run ds:drift` reports the gap and is expected to, until every disagreement it names
+> carries a ledger number — which, as of Phase 7, every one of them does.
 
 - Components come from `1_DS for dev/index.js` via the `@ds` alias
   (`experimental.externalDir`), re-exported through `apps/web/src/ds.ts` — a single
@@ -961,7 +963,16 @@ record the exposure that leaves open rather than implying the endpoints are prot
     replacing it**: the cancelled badge's `aria-label` was already the whole cancellation and the
     painted text only a truncation of it, and the scheduling history below draws the same fact as
     a real row. It also found what makes `title` worse than nothing on a named element — it
-    becomes the *description*, so the sentence is read twice. The last-admin guard is still open.
+    becomes the *description*, so the sentence is read twice. **Phase 6 settled the last two
+    sites** — the criterion's blocked Delete keeps its `aria-label` above 768px and gets visible
+    text in the `Popover` row below it, and the scale value's blocked remove takes the answer
+    nobody had used, a reason drawn under the chip list and wired to the cross's
+    `aria-describedby`. What decided all five was not the component but **whether the screen
+    already had somewhere to say it**. **Phase 7 then found the one place `title` is free**: the
+    board's missing-conclusion glyph is `aria-hidden` decoration with no name of its own, so a
+    bubble there cannot shadow anything, and the reader gets a hidden node the card points
+    `aria-describedby` at. `title` is harmful exactly when the element already has a name.
+    The last-admin guard is still open.
   - `Toast` → `InfoBanner` turns transient into persistent, which needs both a slot and a
     dismissal story on five screens. **Phase 3 set both**: the slot is directly under
     `PageHeader`, above the page body; dismissal is `InfoBanner onDismiss`
@@ -972,7 +983,12 @@ record the exposure that leaves open rather than implying the endpoints are prot
   pick-up/gap/drop visual language is the system's rather than one screen's. They stay
   presentational and drag-mechanical only: a column turns a pointer position into a **slot index**
   and hands it back, and what the slots mean, which columns exist, and what a drop writes all stay
-  in the app.
+  in the app. *Designed* is narrower than it sounds, and the ledger's note on
+  [§42](specs/design-system/ledger.md) pins it down for the upstream push: the card is `Card`'s
+  surface wearing `NavigationCard`'s measured hover, and the column is a `Card` whose body is a
+  `--surface-sunken` well — which is what `AppShell` does one level up. Only three things have no
+  precedent anywhere: the **held** card state, the **travelling placeholder**, and the slot index
+  itself. Nothing in blue does any of them, because nothing in blue drags.
 - **One placeholder, and it travels.** A card dragged with a pointer is not rendered at all; the
   gap it would fill is a single card-sized placeholder that moves to wherever the drop would land.
   Its height is measured from the card at pick-up, so the gap is exactly the size of the thing
@@ -1005,11 +1021,15 @@ record the exposure that leaves open rather than implying the endpoints are prot
   whole fact rides in the badge's accessible name rather than in what is drawn. That has to be an
   `aria-label`: a native `title` on an element that already has text content is a *description*,
   and the text content still wins the name computation.
-- **`PageTabs` is a real `tablist`.** Yellow's `Tabs` were anchors to `#`, which a screen reader
+- **`PageTabs` is a real `tablist`.** Both systems drew it as anchors to `#`, which a screen reader
   announces as links that go nowhere, and it is a control that chooses which panel is shown rather
-  than a set of destinations — so they are buttons, with `aria-selected`, `aria-controls`, roving
-  focus, arrow-key movement and a `testId` per item. The count on the board's mobile tabs rides in
+  than a set of destinations — so they are buttons, with `aria-selected`, `aria-controls`, a single
+  tab stop, arrow-key movement and a `testId` per item ([§45](specs/design-system/ledger.md)).
+  Selection follows focus, because the panel is already rendered and a keyboard user should not
+  have to press twice for what a pointer does once. The count on the board's mobile tabs rides in
   the item's `label` node: a strip that grew a `count` prop would then need a badge, and an icon.
+  This is also the one place the app spends blue's single uppercase, which is why the board's
+  column headings are sentence-case `<h2>`s rather than the captions Meridian drew.
 - **The scale editor is composed in the app, not added to the DS.** Its chips carry a drag handle
   and a remove control, and [04's design spec](specs/hiring/04-candidate-card.design.md) already
   records the rule that decides this: a `Badge` is a `<span>` with text, and a chip carrying

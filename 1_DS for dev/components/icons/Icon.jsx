@@ -194,6 +194,22 @@ export function EyeOffIcon(props) {
   );
 }
 
+/* §44 — the missing-conclusion marker on a `BoardCard`. Meridian drew it as `⚑`, a dingbat
+   character; blue's iconography rule is absolute — "every icon is a hand-authored inline SVG
+   React component, not glyphs from Lucide/Heroicons/Font Awesome", and "no PNG/raster icons and
+   no emoji are used as icons anywhere in the app" — so the mark is drawn rather than typed. Prod
+   flags nothing and has no pennant to measure, which is §9's position exactly: blue's rules are
+   explicit enough to draw to (geometric, filled, `currentColor`, 12-24px, viewBox matching the
+   intrinsic size, no icon font). The caller paints it; nothing here picks a hue. */
+export function FlagIcon(props) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 12 12" fill="currentColor" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <path d="M2.75 0.5C3.1642 0.5 3.5 0.8358 3.5 1.25V10.75C3.5 11.1642 3.1642 11.5 2.75 11.5C2.3358 11.5 2 11.1642 2 10.75V1.25C2 0.8358 2.3358 0.5 2.75 0.5Z" />
+      <path d="M4.5 1.5H10.4C10.79 1.5 11.01 1.95 10.77 2.26L9.05 4.5L10.77 6.74C11.01 7.05 10.79 7.5 10.4 7.5H4.5V1.5Z" />
+    </svg>
+  );
+}
+
 /* §20 — react-select's own clear/remove cross, the glyph the app's `Select` draws on a multi
    value and on the clear indicator. It was inlined inside `Select.jsx`, which is where it had
    to be duplicated from the moment `Chip` was promoted out of that file. Moved here unchanged;
@@ -216,7 +232,7 @@ const ICONS = {
   ArrowIcon, CloseIcon, MagnifyIcon, TrashIcon, ThreeDotsIcon, UserIcon, PersonCircleIcon,
   MailOutlineIcon, TimeOutlineIcon, InfoCircleIcon, CloudDownloadOutlineIcon, SettingsIcon,
   CheckIcon, MenuIcon, TimesheetsIcon, ProjectManagementIcon, PeopleIcon, ReportsIcon,
-  TimeOffIcon, OrgIcon, EyeIcon, EyeOffIcon, CrossIcon,
+  TimeOffIcon, OrgIcon, EyeIcon, EyeOffIcon, FlagIcon, CrossIcon,
 };
 
 export function Icon({ name, ...props }) {

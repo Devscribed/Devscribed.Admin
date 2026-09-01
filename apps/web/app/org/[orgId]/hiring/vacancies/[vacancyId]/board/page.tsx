@@ -13,7 +13,7 @@ import {
   formatShortWhen,
   type ApplicationStatus,
 } from '@devscribed/validation';
-import { BoardCard, BoardColumn, Button, Card, InfoBanner, Skeleton, Tabs, Toast } from '@/ds';
+import { BoardCard, BoardColumn, Button, Card, InfoBanner, PageTabs, Preloader } from '@/ds';
 import { PageHeader } from '@/layout/PageHeader';
 import type { Board, BoardCardData } from '@/hiring/types';
 import { useMediaQuery } from '@/hiring/useMediaQuery';
@@ -233,7 +233,12 @@ export default function BoardPage({
   if (state.status === 'loading') {
     return (
       <Card>
-        <Skeleton rows={5} height={64} data-testid="board-loading-skeleton" />
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <Preloader data-testid="board-loading" aria-hidden />
+          <span aria-live="polite" style={VISUALLY_HIDDEN}>
+            Loading board
+          </span>
+        </div>
       </Card>
     );
   }
@@ -243,15 +248,10 @@ export default function BoardPage({
     // sentence — nothing has been dragged yet.
     return (
       <Card data-testid="board-load-error">
-        <InfoBanner tone="error">
-          <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+        <InfoBanner variant="error" role="alert">
+          <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
             {MESSAGES.generic}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => void load()}
-              data-testid="board-load-retry"
-            >
+            <Button onClick={() => void load()} data-testid="board-load-retry">
               {HIRING_MESSAGES.card.retry}
             </Button>
           </span>
@@ -289,7 +289,7 @@ export default function BoardPage({
     if (nudge(event.key)) event.preventDefault();
   }
 
-  const renderColumn = (status: ApplicationStatus) => {
+  const renderColumn = (status: ApplicationStatus, asPanel = false) => {
     const column = columns.find((entry) => entry.status === status)!;
     const aimedHere = drag !== null && drag.to.status === status;
 
@@ -321,6 +321,9 @@ export default function BoardPage({
       <BoardColumn
         key={status}
         id={`board-panel-${status}`}
+        // Below 768px the column *is* the panel the tab strip chose, and that strip points
+        // `aria-controls` at this id. Above it there is no strip and no panel to be.
+        {...(asPanel ? { role: 'tabpanel' } : null)}
         status={status}
         name={APPLICATION_STATUS_LABELS[status]}
         count={column.cards.length}
@@ -394,7 +397,6 @@ export default function BoardPage({
         }
         action={
           <Button
-            variant="secondary"
             onClick={() => router.push(`/org/${orgId}/hiring/vacancies/${vacancyId}`)}
             data-testid="board-details-link"
           >
@@ -403,22 +405,43 @@ export default function BoardPage({
         }
       />
 
+      {/*
+        The announcement's one slot, directly under the header and above the board — the
+        position reversal 4 settled in Phase 3, for its reason: the notice is about the page,
+        and in flow it pushes the board down rather than covering the column somebody is
+        looking at. A new notice replaces the old rather than stacking, and nothing
+        auto-dismisses.
+      */}
+      {notice && (
+        <InfoBanner
+          variant="error"
+          role="alert"
+          onDismiss={() => setNotice(null)}
+          style={{ marginBottom: 'var(--space-7)' }}
+          data-testid={
+            notice === HIRING_MESSAGES.board.staleBoard ? 'toast-board-stale' : 'toast-move-failed'
+          }
+        >
+          {notice}
+        </InfoBanner>
+      )}
+
       {total === 0 ? (
         <Card>
           <p
             data-testid="board-empty-state"
-            style={{ margin: 0, fontSize: 'var(--fs-15)', color: 'var(--text-muted)' }}
+            style={{ margin: 0, fontSize: 'var(--font-size-base)', color: 'var(--text-secondary)' }}
           >
             {HIRING_MESSAGES.board.emptyBoard}
           </p>
         </Card>
       ) : narrow ? (
         <>
-          <Tabs
+          <PageTabs
             label="Board columns"
-            value={visibleColumn}
+            active={visibleColumn}
             onChange={(value) => setVisibleColumn(value as ApplicationStatus)}
-            items={BOARD_COLUMNS.map((status) => ({
+            tabs={BOARD_COLUMNS.map((status) => ({
               value: status,
               testId: `board-tab-${status}`,
               controls: `board-panel-${status}`,
@@ -427,18 +450,20 @@ export default function BoardPage({
               label: (
                 <>
                   {APPLICATION_STATUS_LABELS[status]}{' '}
-                  <span style={{ color: 'var(--text-muted)' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>
                     {columns.find((entry) => entry.status === status)!.cards.length}
                   </span>
                 </>
               ),
             }))}
           />
-          <div className="board-single">{renderColumn(visibleColumn)}</div>
+          <div className="board-single">{renderColumn(visibleColumn, true)}</div>
         </>
       ) : (
         <div className="board-scroll">
-          <div className="board-columns">{BOARD_COLUMNS.map(renderColumn)}</div>
+          <div className="board-columns">
+            {BOARD_COLUMNS.map((status) => renderColumn(status))}
+          </div>
         </div>
       )}
 
@@ -447,18 +472,6 @@ export default function BoardPage({
       <p aria-live="polite" data-testid="board-live-region" style={VISUALLY_HIDDEN}>
         {live}
       </p>
-
-      {notice && (
-        <Toast
-          tone="error"
-          onDismiss={() => setNotice(null)}
-          data-testid={
-            notice === HIRING_MESSAGES.board.staleBoard ? 'toast-board-stale' : 'toast-move-failed'
-          }
-        >
-          {notice}
-        </Toast>
-      )}
     </div>
   );
 }

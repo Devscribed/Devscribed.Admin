@@ -79,7 +79,7 @@ value-identical; typography is the only place the scales genuinely collide.
 | `--fs-24` | 24 | `--headline-4-size` | 24 | 2 | identical |
 | ~~`--fs-11`~~ | 11 | `--font-size-xs` | 12 | 3 | ✅ **settled in Phase 6, and never once remapped.** 1 closed in Phase 3 into `FieldLabel`; Phase 5 closed one by deletion (the archived marker is part of the chip label's line and takes its 14px). Phase 6's last one went the way Phase 3's did — the criterion dialog's uppercase micro-caps became `FieldLabel`, in sentence case, with blue's own type. **No use left** |
 | ~~`--fs-13`~~ | 13 | `--font-size-s` | 14 | 14 | ✅ **settled in Phase 6.** 1 closed in Phase 3 into `InfoBanner` (12px, so **−1px**); Phase 4 closed 3, none a remap; Phase 5 closed 2, both remapped as written. Phase 6's last three: the category usage count remapped up to 14px as the table says, and the dialog's two hand-built error lines became `InfoBanner` and `TextInput error`, arriving with their own type. **No use left** |
-| `--fs-15` | 15 | `--font-size-base` | 16 | 11 | +1px — 1 closed in Phase 3, snapped; Phase 4 closed 1 more into `Calendar`'s own header type. Phase 5 closed 2, both snapped; Phase 6 closed 2, both snapped (a category's name and a criterion's). 5 left, all Phases 7–8 |
+| `--fs-15` | 15 | `--font-size-base` | 16 | 11 | +1px — 1 closed in Phase 3, snapped; Phase 4 closed 1 more into `Calendar`'s own header type. Phase 5 closed 2, both snapped; Phase 6 closed 2, both snapped (a category's name and a criterion's). Phase 7 closed 2 — the empty-board sentence snapped, and the board card's name became `BoardCard`'s own type. **4 left, all Phase 8** |
 | `--fs-22` | 22 | `--headline-5-size` | 20 | 1 | −2px |
 | `--fs-27` | 27 | `--headline-4-size` | 24 | 1 | ✅ **settled in Phase 2** — the page header is blue's `PageTitle`, whose type steps 16 → 20 → 24px with the viewport rather than holding one size. The single use is gone. |
 | `--fs-34` | 34 | *none* | — | 2 | ⚠ no counterpart — decide per site |
@@ -98,11 +98,11 @@ value-identical; typography is the only place the scales genuinely collide.
 | ~~`--text-faint`~~ | `--text-secondary` | 4 | ✅ **settled across Phases 3–6.** Blue has 3 text levels, yellow had 4. The pattern is Phase 3's: a shown-but-unavailable thing is `--text-secondary`. Phase 4 closed 2 by inheriting it, Phase 5 a third. **Phase 6's last one is the case the pattern was named for** — a blocked `Delete` — and it needed one addition: `--text-secondary` is also what an *available* secondary control paints, so the button carries `opacity: .6` as well, which is blue's own disabled treatment on `Button`. Recede by one level and dim, rather than inventing a fourth ink. **No use left** |
 | `--accent` | `--action-primary` `#007AFF` | 14 | |
 | `--accent-soft` | `--color-blue-light` `#EFF6FF` | 2 | |
-| `--accent-border` | `--color-blue-lighter` `#E8F2FE` | 1 | |
+| ~~`--accent-border`~~ | `--action-primary` | 1 | ✅ **settled in Phase 7, and not onto the row it was written for.** The one use was Meridian's board — the held card's edge and the drop placeholder's dashed outline — and `#E8F2FE` on a `--surface-sunken` well is invisible. Both are the *current* thing on a board that shows one mark at a time, which is what blue spends `--action-primary` on. **No use left** |
 | ~~`--hover-bg-tint`~~ | `--color-row-hover` | 2 | ✅ **settled across Phases 2 and 6.** Yellow tinted hover violet; blue's row hover is neutral grey. The top bar's logout row went in Phase 2 onto blue's own popover hover; `.library-row:hover` went in Phase 6, straight onto `--color-row-hover`. A list of settings is not where the product should acquire an accent it has nowhere else. **No use left** |
 | `--error-500` | `--status-error` `#D80027` | 5 | |
 | `--amber-500` | `--status-warning` `#FFD02B` | 2 | ⚠ confirm each site is a warning. Both remaining uses are Phase 8's public surfaces. The third caller — `/login`'s deactivation banner, which reached amber through `InfoBanner tone="warning"` — was settled in Phase 1: see reversal 9. |
-| `--tracker` | `--color-tracker-blue` `#2AA7FF` | 1 | both systems reserve a tracker hue |
+| ~~`--tracker`~~ | `--status-warning` `#FFD02B` | 1 | ⚠ ✅ **settled in Phase 7 — and this is the one row in the table that must not be taken as written.** Both systems reserve a tracker hue, but Meridian's is *amber* and its single use is the board's missing-conclusion mark, drawn amber because amber was Meridian's warning colour. Blue's is `#2AA7FF` and belongs to the floating tracker widget alone — *"intentionally different from the primary blue, not a mistake to normalize away"*. Mapping by name would paint a warning in the one hue blue has spoken for, on a product with no tracker. Full argument in the [ledger](ledger.md). **No use left** |
 | `--bg` | `--surface-page` | 3 | the well is `#f8fafc`, set in `AppShell` |
 | `--bg-panel` | `--surface-card` | 1 | |
 | `--bg-panel-2` | `--surface-sunken` `#EEF2F5` | 4 | ✅ **settled across Phases 2, 4 and 5.** Two went to `--surface-card` in Phase 2 — blue's shell is white panels around a `#f8fafc` well, not the reverse. The candidates filter bar went the other way in Phase 4, to `--surface-sunken`, because a control surface is neither a white panel nor the well. **Phase 5's is the last, and it follows Phase 4:** the candidate card's scheduling history is a log inset into the panel it belongs to, which is a recessed surface rather than a second white card floating inside a white one |
@@ -112,8 +112,8 @@ value-identical; typography is the only place the scales genuinely collide.
 | `--radius-md` / `--radius-lg` | `--radius-l` | 2 | 10 → 8; blue's workhorse radius |
 | `--radius-pill` | `--radius-pill` | 1 | 20px both |
 | `--shadow-card` | *remove* | 1 | ✅ **settled in Phase 2** — `Card` was built with a border and no shadow at all (ledger §12). Blue's hover shadow belongs to `NavigationCard`, which is a control; a static container must not claim a click |
-| `--shadow-pop` | `--shadow-popover` | 1 | |
-| `--duration-base` | `--duration-fast` | 1 | 150ms both |
+| `--shadow-pop` | `--shadow-popover` | 1 | ✅ **closed in Phase 7**, straight across, on the one thing in the app that floats without being an overlay: a board card held by the keyboard |
+| `--duration-base` | `--duration-fast` | 1 | 150ms both — ✅ **closed in Phase 7 and not by this row.** The one use was the board card's own transition, which is now `--transition-card-hover`, blue's measured card motion at `--duration-quick`. A third row that left the map by the element becoming a component with its own values |
 | `--fw-semibold` | `--font-weight-semibold` | — | blue also has 450 / 500 / 550 |
 
 ### The seven rows that need a human call
@@ -129,9 +129,15 @@ and 6**).
 Only `--fs-34` and `--amber-500` still need a human call, and both wait on Phase 8's public
 surfaces. `--fs-15` is the one remaining ±1px row and D5 already decides it — snap up.
 
-**No Phase 4, 5 or 6 file carries a yellow token**, and neither do the candidate card's or the
-libraries' rules in `globals.css`. The three files that still do are Phases 7 and 8's, plus those
-phases' own rules in that file.
+**Phase 7 closed five more rows and only one of them was a remap**, which is the pattern Phase 3
+named and every phase since has repeated: `--shadow-pop` went straight across, and `--accent-border`,
+`--tracker` and `--duration-base` all left the map by meaning something the mapping did not.
+`--tracker` is the only row in the whole table that is actively **wrong** if taken as written, and
+it is flagged in place.
+
+**No Phase 3–7 file carries a yellow token**, and neither do the candidate card's, the libraries'
+or the board's rules in `globals.css`. The two files that still do are Phase 8's — `BookingScreen`
+and `ManageScreen` — plus that phase's own rules in `globals.css`.
 
 Two rows left the map entirely in Phase 2 rather than being remapped: `--fs-27` and `--fs-21`,
 both because the element that carried them is now a design-system component with its own type.
@@ -203,13 +209,23 @@ upstream push:
   documentation. Only three things are genuinely designed — the Monday week start, the blank
   adjacent-month cells, and the keyboard grid — and all three are argued in the ledger's note.
 
+  `BoardCard` and `BoardColumn` landed in Phase 7 as [§42](ledger.md) and [§43](ledger.md), and the
+  same thing happened a second time: the card is `Card`'s surface (§12) wearing `NavigationCard`'s
+  measured hover, and the column is a `Card` whose body is a `--surface-sunken` well — which is
+  `AppShell`'s own well-and-panel arrangement one level down. What is genuinely without precedent
+  is smaller than the components: the **held** card state, the **travelling placeholder**, and the
+  **slot index** that counts cards and not gaps. Nothing in blue does any of those, because nothing
+  in blue drags. The ledger's note on §42 sets out the three strengths `designed` has meant across
+  this migration, so the upstream push can claim *composed from measured parts* where that is true
+  and *invented* only where it is.
+
 ### Delete — 6, replaced by blue's pattern (D4)
 
 | Yellow | Uses | Blue's pattern | Cost |
 |---|---|---|---|
-| `SectionLabel` | 13 | headings / `PageTabs` / `FieldLabel` | Blue captions nothing; `PageTabs` is its only uppercase. Needs a heading decision per screen. |
-| `Skeleton` | 9 | `Preloader` — 3-dot loader, `overlay` mode | Content pops in rather than resolving in place. Phase 6 took the last two on an internal screen; only the board's remain. |
-| `Toast` | 5 | `InfoBanner` | Transient becomes persistent; needs a slot on 5 screens. Phase 6's slot also absorbed the screen's separate error banner — one press, one answer, one place. |
+| `SectionLabel` | 13 | headings / `PageTabs` / `FieldLabel` | Blue captions nothing; `PageTabs` is its only uppercase. Needs a heading decision per screen. Phase 7 spent that uppercase deliberately — the board's column names are sentence-case `<h2>`s *because* the narrow board's tab strip is the `PageTabs`. **2 left, both Phase 8** |
+| `Skeleton` | 9 | `Preloader` — 3-dot loader, `overlay` mode | Content pops in rather than resolving in place. Phase 6 took two on an internal screen and this row said the board's was the last; it was wrong by one. Phase 7 took the board's. **1 left, on `ManageScreen` — Phase 8** |
+| ~~`Toast`~~ | 5 | `InfoBanner` | ✅ **gone in Phase 7.** Transient became persistent, which needed a slot and a dismissal story on five screens; Phase 3 set both and the four after it followed without reopening either. Phase 6's slot also absorbed its screen's separate error banner — one press, one answer, one place. See *Reversals* 4. |
 | ~~`Tooltip`~~ | 3 | *nothing, a `Popover` row, and an `aria-describedby` target* | ✅ **gone in Phase 6**, and never once as native `title`. Three sites, three different answers — see *Reversals* 2. |
 | ~~`Pagination`~~ | 1 | infinite scroll | ✅ **gone in Phase 4.** `Table footer` ([§34](ledger.md)) holding prod's own `.loadNextTableIndicator` at `Preloader size=8 margin=5`, fetched by an `IntersectionObserver`. The match count never moved — see *Reversals* 1. |
 | ~~`Toggle`~~ | 1 | `ToggleButton` | ✅ **gone in Phase 4.** Yellow's was already a segmented pill, so the swap was the prop shape (`value1`/`value2`/`selectedValue`) plus [§31](ledger.md), which made two buttons one `radiogroup`. |
@@ -224,7 +240,7 @@ upstream push:
 | `Textarea` | `TextArea` | 4 | case change only |
 | ~~`Menu`~~ | `Popover` | 3 | ✅ **gone in Phase 6.** `items[]` shape, and §22's `description` is what the narrow blocked delete needed |
 | `SearchField` | `SearchInput` | 2 | |
-| `Tabs` | `PageTabs` | 1 | labels become uppercase |
+| ~~`Tabs`~~ | `PageTabs` | 1 | ✅ **gone in Phase 7**, and blue's had the same defect Meridian's did — `<a href="#">` for a control that swaps a panel. [§45](ledger.md) makes it a real `tablist` and adds the object form; the labels become uppercase because `PageTabs`' own CSS does it |
 | `NavItem` | `Sidebar` | 1 | a whole component, not an item — see the relayout below |
 
 ### Open and remap props — 6
@@ -328,14 +344,34 @@ and so a reviewer can tell a considered reversal from an accident.
    draws the cancellation in its history log; the criterion row draws the count on its second line
    and the alternative as the `Archive` button beside it; the scale editor draws nothing, so it had
    to. That is the rule this reversal was actually looking for, and it is worth more than the
-   three-way choice it started with. Phase 7's `BoardCard` is item 3 below and is `aria-label`,
-   not this.
+   three-way choice it started with.
+
+   **Phase 7 found the one place a native `title` is not a regression, and it is the exception
+   that proves the rule the other three sites established.** The board's missing-conclusion marker
+   is a glyph with **no accessible name of its own** — it is `aria-hidden` decoration inside a
+   `role="button"` whose name the caller supplies. So `title` there cannot shadow a name or be
+   read as a second sentence after one; it is a pointer affordance and nothing else. A reader gets
+   the middle answer instead, a visually-hidden node the card points `aria-describedby` at, which
+   a board card needs because three lines have nowhere to put a sentence. `title` is not a
+   *substitute* for that — it is a free addition on top of it, which is precisely what the PRD
+   thought the swap was everywhere and what it turned out to be nowhere else.
+
+   Item 3 below is the board's *other* mark, and it goes the opposite way: `aria-label`, never
+   `title`, because that element does have a name.
 
 3. **`BoardCard`'s `cancelledTooltip` is an accessible *name*, not a description.** The badge is
    deliberately truncated to a first name because a board card is a glance, so the tooltip carries
    the whole fact and is the badge's accessible name rather than what is drawn. A native `title`
    on an element that already has text content is a *description* — the text content still wins the
    name computation. **Phase 7 needs `aria-label`**, not `title`, to preserve that behaviour.
+
+   ✅ **Settled in Phase 7 exactly as written**, and it turned out to be the smallest of the three
+   tooltip calls, because Phase 5 had already reached the same conclusion on the same fact from the
+   other side: the candidate card's cancelled badge takes `aria-label` for identical reasons, and
+   `cancelledBadgeLabel` / `cancelledTooltip` are one pair of helpers serving both surfaces. Two
+   screens, one component, one answer. The board's *other* mark went the other way — see the note
+   at the end of reversal 2 — and the two together are what makes the rule legible: **`title` is
+   harmful exactly when the element already has a name, and harmless exactly when it does not.**
 
 4. **`Toast` → `InfoBanner` changes the affordance, not just the component.** Transient becomes
    persistent, so five screens need both a slot and a dismissal story. Phase 3 sets the pattern the
@@ -346,6 +382,13 @@ and so a reviewer can tell a considered reversal from an accident.
    old one, so they never stack. **Nothing auto-dismisses**: a banner that removed itself after a
    few seconds would be a toast wearing a different component, which is the thing blue does not
    have. Full detail in [`01-vacancies.design.md`](../hiring/01-vacancies.design.md).
+
+   ✅ **Closed in Phase 7 on the fifth screen, and no phase reopened the pattern.** That is the
+   result worth recording: of the four reversals that named a decision rather than a component,
+   this is the only one where the first phase's answer held unmodified at every later site. The
+   board is also the site with the strongest case for covering content instead — a toast over a
+   kanban does not push five columns down — and it still takes the slot, because the alternative
+   is a notice floating over the column somebody is looking at while they try to drag in it.
 
 5. **`SectionLabel` → headings orphans `Table hideHeader`'s rationale.** `hideHeader` exists because
    My interviews' two groups are "already named by the `SectionLabel` above them". Remove
@@ -407,6 +450,19 @@ and so a reviewer can tell a considered reversal from an accident.
    with it, which is blue's own `Button` disabled treatment. Recede one level and dim, rather than
    invent the fourth ink back.
 
+   **Phase 7 met a fifth site after the closure, and it is the only one where the collapse would
+   have erased a distinction rather than a nuance.** The four uses this reversal counted were in
+   `apps/web`; Meridian's `BoardCard` had another, inside the design system. It matters because
+   the arithmetic is different: everywhere else something receded *from `--text-primary`*, so
+   dropping to `--text-secondary` still left a step. On a board card the date is already receded —
+   Meridian drew it `--text-muted` and its past variant `--text-faint` — so mapping both
+   mechanically lands them on one ink and 05 §05.18's *"the date reading as past"* becomes nothing
+   at all. Blue's three inks run `--text-primary` → `--text-tertiary` → `--text-secondary` (tertiary
+   is `#54595E`, darker than secondary's `#64748B`, which the names invert), so the card reads
+   primary / tertiary / secondary down its three lines and a past date steps tertiary → secondary.
+   The pattern is unchanged — **recede by one level** — and it survives at a level the reversal had
+   not been applied at. Argued in the [ledger](ledger.md).
+
 8. **`--shadow-card` is removed, not remapped.** Blue separates static surfaces with a border and
    reserves shadow for hover. Anywhere yellow used elevation to stack surfaces needs a border.
 
@@ -433,7 +489,7 @@ Full detail in [`plans/yellow-to-blue-migration.md`](../../plans/yellow-to-blue-
 | 4 | candidates, my interviews, reschedule/cancel | `Calendar` · `Toggle`→`ToggleButton` · `Pagination`→infinite scroll |
 | 5 | candidate card | `Tooltip` deleted, not replaced · `TextArea` trailing slot consumed (§33) · `Chip trailing` §37 · `Button as="a"` §38 |
 | 6 | hiring settings, `CriterionDialog` | Last of `Tooltip`, `Menu`, `Toast`, `Skeleton`, `Input` · `ConfirmDialog` §40/§41 · `Chip leading` §39 · reversal 2 settled · §8 and §29 corrected |
-| 7 | vacancy board | `BoardCard` + `BoardColumn` fresh, *designed not measured* |
+| 7 | vacancy board | `BoardCard` + `BoardColumn` §42/§43, *designed not measured* · `FlagIcon` §44 · `PageTabs` made a real `tablist` §45 · last of `Toast` and `Tabs` · reversals 3 and 4 settled |
 | 8 | `/book/{slug}`, `/manage/{slug}/{token}` | `BookingLayout` · `FileInput` · `globals.css` breakpoints |
 
 Phase 1 goes first because `app-shell`, `org-scope`, `signup` and `hiring-my-interviews` all
@@ -474,11 +530,16 @@ that must be re-created on blue:
 `_ds_manifest.json`'s component list and exits non-zero when they disagree. It is a local check;
 CI is unchanged (D8).
 
-Today it reports 23 declared upstream against 33 exported here, and names the 10 that the design
-project cannot see: `BoardCard`, `BoardColumn`, `BookingLayout`, `Calendar`, `FileInput`, `Menu`,
-`Skeleton`, `Textarea`, `Toast`, `Tooltip`. That is the state D3 exists to make loud — it is
-expected to fail for the length of the migration. The bar at the end is not that it passes, but
-that **every disagreement carries a ledger number**.
+On the day it was written it reported 23 declared upstream against 33 exported here, and named the
+10 that the design project could not see: `BoardCard`, `BoardColumn`, `BookingLayout`, `Calendar`,
+`FileInput`, `Menu`, `Skeleton`, `Textarea`, `Toast`, `Tooltip` — every one of them yellow's. That
+is the state D3 exists to make loud, and it is expected to fail for the length of the migration.
+
+**As of Phase 7 it reports 65 against 76, and names 11 — a different 11.** `AuthLayout`,
+`BoardCard`, `BoardColumn`, `Calendar`, `Card`, `Chip`, `CrossIcon`, `Eye`, `EyeOff`, `FlagIcon`,
+`IconButton`: not one is a leftover, and each carries a number in the [ledger](ledger.md). That is
+the bar — not that the check passes, but that **every disagreement it reports is a deliberate
+addition somebody wrote down**.
 
 ### Upstream
 

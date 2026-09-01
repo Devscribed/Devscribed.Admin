@@ -17,6 +17,8 @@ export {
   AppShell,
   AuthLayout,
   Badge,
+  BoardCard,
+  BoardColumn,
   Button,
   Calendar,
   Card,

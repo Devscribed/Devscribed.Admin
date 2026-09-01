@@ -5,7 +5,7 @@ title: Board — Design
 pairs-with: 05-board.md
 routes: ["/org/{orgId}/hiring/vacancies/{vacancyId}/board"]
 design-system: "1_DS for dev"
-tags: [board, kanban, drag-drop, columns, meridian, light-only]
+tags: [board, kanban, drag-drop, columns, teammerly, light-only]
 ---
 
 # 05 — Board · Design
@@ -13,76 +13,156 @@ tags: [board, kanban, drag-drop, columns, meridian, light-only]
 Visual and interaction specification for the per-vacancy board. Pairs with
 [05-board.md](05-board.md), which owns the rules.
 
-**Design system:** Teammerly Meridian. **Theme:** light only. Renders inside `AppShell`.
+**Design system:** Teammerly Original DS (blue), vendored at `1_DS for dev/`.
+**Theme:** light only. Renders inside `AppShell`.
+
+This is the one surface with **no production precedent anywhere** — Teamplay has no kanban — so
+both of its primitives are marked *designed, not measured* in the
+[divergence ledger](../design-system/ledger.md) and must be labelled that way when they are pushed
+upstream. "Designed" is not the same as "invented": every value below is taken from something blue
+already draws, and the sections that follow say which.
 
 ## Layout
 
 ```
   Senior React Engineer                                    [ Details ]   ← PageHeader
-  Board · times in Europe/Minsk
+  Board · times in Europe/Berlin
   ────────────────────────────────────────────────────────────────────
-  ┌ SCHEDULED  4 ┐┌ DIDN'T PASS 7┐┌ MAYBE     2 ┐┌ PASSED   3 ┐┌ OFFER 1 ┐
+  ┌ Scheduled  4 ┐┌ Didn't pass 7┐┌ Maybe     2 ┐┌ Passed   3 ┐┌ Offer 1 ┐
   │┌────────────┐││┌────────────┐││             ││            ││         │
   ││ Jane Doe   ││││ Ann Lee  ⚑ ││                                       
   ││ 26 Aug 14:00││││ 18 Aug 11:00                                       
-  ││ 📄          ││││ 📄                                                 
+  ││ CV          ││││ CV                                                 
   │└────────────┘││└────────────┘│
 ```
 
-- Five equal columns in a `grid-template-columns: repeat(5, minmax(220px, 1fr))`, gap `--sp-6`.
-- Column head: `SectionLabel` for the name plus the count in Grotesk 600 `--text-muted`, on
-  `--bg-sunken`, `--radius-xl` top corners, sticky within the column.
-- Column body: `--bg-panel-2`, 1px `--border`, its own `overflow-y: auto`, `min-height` one card.
+- Five equal columns in a `grid-template-columns: repeat(5, minmax(220px, 1fr))`, gap `--space-5`.
+- Columns are top-aligned rather than stretched to a common height: a board with one long column
+  would otherwise paint four screen-tall wells of nothing.
 - The time zone is stated once in the page-header subtitle, never per card.
 
-## Card
+## The column
+
+**`BoardColumn` is a `Card` whose body is a well.** That is blue's one answer to "a container of
+things", and it is `AppShell`'s own arrangement one level down: a recessed ground with white panels
+on it. The column takes `Card`'s treatment ([§12](../design-system/ledger.md)) — `--surface-card`,
+a 1px `--border-default` hairline, `--radius-l`, **no shadow** — and its body is `--surface-sunken`
+holding white cards.
+
+| Part | Treatment |
+|---|---|
+| Head | `--surface-card`, `--space-4` / `--space-5` padding, a 1px `--border-default` rule beneath |
+| Column name | A real `<h2>` at blue's headline-6 (16px / `--font-weight-medium` / `-0.32px`), **sentence case** |
+| Count | `--font-size-s`, `--font-weight-medium`, `--text-secondary`, tabular-nums |
+| Body | `--surface-sunken`, `--space-3` padding and gap, its own `overflow-y: auto`, `min-height: 84` — one card's worth, so an empty column is still worth aiming at |
+
+The column names were uppercase under Meridian and are not any more. Blue's content rule is
+explicit — *"Sentence case for everything except nav section titles… Tab labels (`PageTabs`) are the
+one place text is fully UPPERCASE"* — and the narrow board's tab strip **is** `PageTabs`, so the one
+uppercase on this screen is already spent. `SectionLabel` → headings (D4) supplies the rest: the
+name is the column's own `<h2>` in the outline under `PageTitle`'s `<h1>`, not a caption.
+
+## The card
 
 ```
 ┌──────────────────────────┐
-│ Jane Doe               ⚑ │   ← Grotesk 500 --fs-15 · marker trailing
-│ 26 Aug 2026, 14:00       │   ← Grotesk 400 --fs-13 --text-muted, tabular-nums
-│ 📄 CV                    │   ← --fs-12 --text-sub
+│ Jane Doe               ⚑ │   ← --font-size-base / medium / --text-primary
+│ 26 Aug 2026, 14:00       │   ← --font-size-s / --text-tertiary, tabular-nums
+│ CV                       │   ← --font-size-xs / --text-secondary
 └──────────────────────────┘
 ```
 
-- `--bg-panel`, 1px `--border`, `--radius-xl`, `--shadow-card` at rest.
-- Hover `--hover-bg-tint`. **Held** — `--shadow-pop`, `translateY(-1px)` and an `--accent-border`
-  edge. Only a keyboard-held card ever renders this: a card dragged with a pointer is not drawn at
-  all, and what lifts under the cursor is the browser's own drag image.
-- **Cancelled** — the whole card at `opacity: .65` with a `Badge tone="inactive"` that **names who
-  cancelled**. Never removed from its column.
+**`BoardCard` takes `Card`'s surface and `NavigationCard`'s hover, and the second half is the
+interesting one.** §12 built `Card` *without* blue's `--shadow-card-hover` and `scale(1.01)` on the
+stated grounds that they "belong to `NavigationCard`, which is a control; painting them on a static
+container promises a click that is not there." A board card **is** a control — it opens the
+candidate — so the promise is true and the treatment is correct here. §12's refusal and §42's
+adoption are the same rule read twice, not a disagreement.
 
-  | Actor | Badge | `Tooltip` |
-  |---|---|---|
-  | Candidate | Cancelled by candidate | Cancelled by {submittedName} on {date} |
-  | Member | Cancelled by {firstName} | Cancelled by {memberFullName} on {date} — {reason} |
+| State | Treatment |
+|---|---|
+| Rest | `--surface-card`, 1px `--border-default`, `--radius-l`, no shadow |
+| Hover | Border to `transparent`, `--shadow-card-hover`, `scale(1.01)`, over `--transition-card-hover` — `NavigationCard`'s measured hover, unchanged |
+| Focus | `--shadow-focus-input`, composed with whatever shadow the card already carries |
+| **Held** (keyboard only) | `--action-primary` border, `--shadow-popover`, `translateY(-1px)`. A card dragged with a *pointer* is not drawn at all; what lifts under the cursor is the browser's own drag image |
+| **Cancelled** | The whole card at `opacity: .65`, with a `Badge status="inactive"` that names who cancelled. Never removed from its column |
+| **Past interview** | The date recedes by one level. Nothing else changes; the card does not move |
 
-  **First name only** on the badge: a board card is a glance, and the tooltip carries the full name,
-  the date, and the reason when one was given. **"Cancelled by candidate"** rather than the
-  candidate's own name, because their name is already the card's title and repeating it reads as a
-  bug. The badge's accessible name is the full tooltip text, never the truncated form.
-- **Past interview** — the date renders in `--text-faint`. Nothing else changes; the card does not
-  move.
-- `⚑` is the missing-conclusion marker, `--tracker` amber, only in `Didn't pass` and `Offer`, with
-  a tooltip reading "No conclusion recorded". Amber is Meridian's reserved warning hue and this is
-  precisely a guarded state, so it is the correct use of it.
+### The cancelled mark
+
+| Actor | Badge | Accessible name |
+|---|---|---|
+| Candidate | Cancelled by candidate | Cancelled by {submittedName} on {date} |
+| Member | Cancelled by {firstName} | Cancelled by {memberFullName} on {date} — {reason} |
+
+**First name only** on the badge: a board card is a glance, and the accessible name carries the full
+name, the date, and the reason when one was given. **"Cancelled by candidate"** rather than the
+candidate's own name, because their name is already the card's title and repeating it reads as a
+bug.
+
+That full sentence is an **`aria-label`, never a native `title`** — [reversal 3](../design-system/README.md),
+settled here as written. On an element that already has text content, `title` is the accessible
+*description*; the text content still wins the name computation, so a `title` would leave the badge
+named `Cancelled by Pat` with the whole fact read after it as a second sentence. The candidate card
+reached the same conclusion from the other side in Phase 5, and the badge here is the same
+component drawing the same fact.
+
+### The missing-conclusion marker
+
+`⚑` marks a card in `Didn't pass` or `Offer` with no conclusion recorded. Three things about it:
+
+- **It is drawn, not typed.** Meridian used the dingbat character `⚑`. Blue's iconography rule
+  admits no exceptions — *"every icon is a hand-authored inline SVG React component"*, *"no
+  PNG/raster icons and no emoji are used as icons anywhere in the app"* — so the mark is
+  `FlagIcon` ([§44](../design-system/ledger.md)), drawn to blue's stated rules the way `Eye` and
+  `EyeOff` were in Phase 1. 14px, filled, `currentColor`.
+- **It is `--status-warning`, not the tracker hue.** The token map would have carried Meridian's
+  `--tracker` amber onto `--color-tracker-blue`, and that is the one mapping in the table that must
+  not be taken: blue reserves `#2AA7FF` for the floating time tracker and says so in as many words
+  — *"intentionally different from the primary blue, not a mistake to normalize away"*. A warning
+  mark painted in the tracker's colour would be borrowing the one hue blue has already spoken for.
+  `--status-warning` is what the readme scopes to *"real state"*, and a recorded outcome with no
+  reason behind it is precisely that. It is also what [§32](../design-system/ledger.md) already
+  established the app may reach for.
+- **The colour is never the only signal.** The glyph is `aria-hidden`; the sentence *No conclusion
+  recorded* is a visually-hidden node wired as the card's `aria-describedby`, and the glyph also
+  carries it as a native `title`.
+
+That last line is the one place in this migration where native `title` is not a regression, and it
+is worth saying why, because [reversal 2](../design-system/README.md) spent three sites concluding
+the opposite. `title` is harmful on an element that **already has a name** — it becomes the
+description and the same sentence is read twice. This glyph has no name: it is an `aria-hidden`
+decoration inside a `role="button"` whose name the caller supplies. So the bubble gives a pointer
+user something and takes nothing from a reader, who has the always-resolving description instead.
+The rule reversal 2 actually found — *whether the screen already has somewhere to say it* — is what
+forces the hidden node here: a card is three lines and has nowhere.
+
+### The CV mark
+
+`📄 CV` becomes `CV`. The emoji was decoration beside a text label that already said the same thing,
+and blue forbids emoji outright, so it goes and nothing replaces it. No glyph was drawn for this:
+`CloudDownloadOutlineIcon` is blue's only document-adjacent mark and it means *download*, which this
+is not — the card navigates, it does not fetch a file.
 
 ## Component map
 
 | Screen element | DS component | Props | `data-testid` |
 |---|---|---|---|
 | Page header | `PageHeader` | `title`, `subtitle`, `action` | `page-title` |
-| Column head | `SectionLabel` | — | `board-column-count-{status}` |
-| Column | **`BoardColumn`** (new) | `status`, `placeholderIndex`, `placeholderHeight`, `onDragOverIndex`, `onDrop` | `board-column-{status}` |
-| Drop placeholder | **`BoardColumn`** (new) | — | `board-placeholder-{status}` |
-| Card | **`BoardCard`** (new) | `draggable`, `lifted`, `onDragStart`, `onDragEnd`, `onKeyDown`, `onOpen` | `board-card-{applicationId}` |
-| Cancelled mark | `Badge` + `Tooltip` | `tone="inactive"` | `board-card-cancelled-{applicationId}` |
-| Missing conclusion | `Tooltip` + inline glyph | — | `board-card-no-conclusion-{applicationId}` |
-| Move failure | `Toast` | `tone="error"` | `toast-move-failed` |
-| Loading | `Skeleton` | — | `board-loading-skeleton` |
+| Column | **`BoardColumn`** ([§43](../design-system/ledger.md)) | `status`, `name`, `count`, `nameAs`, `placeholderIndex`, `placeholderHeight`, `onDragOverIndex`, `onDrop` | `board-column-{status}` · `board-column-count-{status}` · `board-column-empty-{status}` |
+| Drop placeholder | **`BoardColumn`** | — | `board-placeholder-{status}` |
+| Card | **`BoardCard`** ([§42](../design-system/ledger.md)) | `draggable`, `lifted`, `past`, `flag`, `onDragStart`, `onDragEnd`, `onKeyDown`, `onOpen` | `board-card-{id}` · `board-card-name-{id}` · `board-card-when-{id}` · `board-card-cv-{id}` |
+| Cancelled mark | `Badge` | `status="inactive"`, `aria-label` | `board-card-cancelled-{id}` |
+| Missing conclusion | `FlagIcon` ([§44](../design-system/ledger.md)) | `title`, `aria-hidden` | `board-card-no-conclusion-{id}` |
+| Narrow column picker | `PageTabs` ([§45](../design-system/ledger.md)) | `tabs` (object form), `active`, `onChange`, `label` | `board-tab-{status}` |
+| Move failure · stale board | `InfoBanner` | `variant="error"`, `onDismiss`, `role="alert"` | `toast-move-failed` · `toast-board-stale` |
+| Loading | `Preloader` | default 12/7, centred in the card | `board-loading` |
+| Load failure | `InfoBanner` + `Button` | `variant="error"` | `board-load-error` · `board-load-retry` |
 
-`Tooltip`, `Toast`, and `Skeleton` are the components introduced in
-[01-vacancies.design.md](01-vacancies.design.md).
+The `toast-*` ids stay. They name the **announcement**, not the component that draws it, which is
+the call Phase 3 made when the first five of these moved off `Toast`, and a rename would churn the
+suite for nothing. `board-loading-skeleton` does not stay: it named the component, there is no
+skeleton, and Phase 3's `vacancies-loading` is the shape to follow.
 
 `BoardColumn` owns the placeholder, because the placeholder is a slot in the column rather than a
 state of the card — the card being dragged is not rendered at all while it is in flight. The column
@@ -94,31 +174,40 @@ slot means, and what a drop writes are all the screen's.
 | Slot | Text |
 |---|---|
 | Page subtitle | Board · times in {zone} |
-| Column names | SCHEDULED · DIDN'T PASS · MAYBE · PASSED · OFFER |
+| Column names | Scheduled · Didn't pass · Maybe · Passed · Offer |
+| Narrow tab labels | The same, uppercased by `PageTabs`' own CSS, with the count beside them |
 | Empty column | Nothing here yet. |
 | Empty board | No candidates yet. Share the booking link to start. |
-| Missing conclusion tooltip | No conclusion recorded |
+| Missing conclusion | No conclusion recorded |
 | Cancelled badge · candidate | Cancelled by candidate |
 | Cancelled badge · member | Cancelled by {firstName} |
-| Cancelled tooltip · candidate | Cancelled by {submittedName} on {date} |
-| Cancelled tooltip · member | Cancelled by {memberFullName} on {date} — {reason} |
+| Cancelled name · candidate | Cancelled by {submittedName} on {date} |
+| Cancelled name · member | Cancelled by {memberFullName} on {date} — {reason} |
 | Keyboard hint (visually hidden) | Press Space to pick up, arrow keys to move, Space to drop. |
 
 ## Interactions
 
 - **Drag** — the card being dragged is **not rendered**. In its place a single card-sized
-  placeholder — `--bg-sunken`, `--radius-xl`, 1px dashed `--accent-border` — opens the gap the drop
-  would land in, and **travels** to follow the pointer between and within columns.
+  placeholder — the `--surface-sunken` well showing through, outlined 1px dashed in
+  `--action-primary` — opens the gap the drop would land in, and **travels** to follow the pointer
+  between and within columns.
 
   There is one mark on the board at a time, never two. An earlier revision of this spec paired a
   placeholder at the *source* with a 2px insertion line at the target; two grey marks for one card
   read as two cards in flight, and the line was too slight to say what size the gap would be. The
   travelling placeholder shows the shape of the result instead of pointing at it.
 
+  Its outline is `--action-primary` rather than a tint, for the same reason: the placeholder is the
+  only thing on the board that should be reading as *here*, and blue carries almost all emphasis in
+  one colour. A filled placeholder would be a second object.
+
   Its height is **measured from the card at pick-up**, so the gap is exactly the size of the thing
   going into it and the column does not resize as the card leaves it.
-- **Optimistic move** — the card renders in its new place before the request resolves. On failure
-  it animates back and `toast-move-failed` appears.
+- **Optimistic move** — the card renders in its new place before the request resolves. On failure it
+  returns and `toast-move-failed` appears **directly under `PageHeader`**, in flow, which is the
+  banner slot [reversal 4](../design-system/README.md) settled in Phase 3. It pushes the board down
+  rather than covering the column being looked at, a new notice replaces the old rather than
+  stacking, and nothing auto-dismisses — that would be a toast wearing a different component.
 - **Drop into `Didn't pass` or `Offer`** — the move completes, then the card page opens with
   Conclusion focused. The navigation happens *after* the move is confirmed, so a failed move never
   navigates.
@@ -129,10 +218,11 @@ slot means, and what a drop writes are all the screen's.
   unlike a pointer drag, where the card is not drawn at all. Moving it would re-parent the element
   between columns, and a focused node moved to a new parent is blurred, which would take the arrow
   keys, `Escape` and the drop itself with it one keystroke into the drag.
-- **No drop animation longer than `--duration-base`.** Meridian's motion rule is fast and
-  unstyled; a board that eases slowly reads as sluggish under repeated use.
-- `prefers-reduced-motion` removes the lift and the return animation, keeping the placeholder,
-  which carries the information.
+- **Motion is blue's**: `--transition-card-hover` (`--duration-quick`, 0.1s) on the card's own
+  states and nothing longer anywhere. Blue's rule is *"minimal and utilitarian… no bounce, no spring
+  physics"*, and a board that eases slowly reads as sluggish under repeated use.
+- `prefers-reduced-motion` removes the lift, the hover scale and the return, keeping the
+  placeholder, which carries the information.
 
 **Two mechanics of HTML5 drag that this design depends on**, recorded because both are invisible
 until they break:
@@ -153,35 +243,50 @@ until they break:
 |---|---|
 | ≥ 1200px | Five columns, scrolling as a group only if they do not fit |
 | 768–1199px | The column group scrolls horizontally **inside its own container**; the page body does not |
-| < 768px | Columns become a `Tabs` strip — one column at a time, the tab label carrying the count. Drag is replaced by the status control on the card page, which the board links to |
+| < 768px | Columns become a `PageTabs` strip — one column at a time, the tab label carrying the count. Drag is replaced by the status control on the card page, which the board links to |
 
-The first row is about the viewport, but the columns live inside the shell: with the 252px sidebar
-and the page's own padding, five columns at their 220px minimum need roughly **1464px of viewport**
-before they all fit. Between 1200px and that, the group still scrolls. This is deliberate rather
-than a breakpoint to add — the invariant that matters is the one the middle row states, and it
-holds at every width: the group scrolls inside its own container and the page body never does.
+The first row is about the viewport, but the columns live inside the shell: with blue's 290px
+sidebar and `AppShell`'s own 25px padding, five columns at their 220px minimum need roughly
+**1510px of viewport** before they all fit. Between 1200px and that, the group still scrolls. This
+is deliberate rather than a breakpoint to add — the invariant that matters is the one the middle row
+states, and it holds at every width: the group scrolls inside its own container and the page body
+never does.
+
+The columns' `max-height` names every term it subtracts rather than rolling them into one constant,
+because the relayout moved one of them: the navbar is 80px in blue against Meridian's 68, and 60px
+again below `--layout-breakpoint-desktop`. So it reads
+`100vh - var(--layout-navbar-height-desktop) - 2 * var(--space-9) - 120px`, with the mobile navbar
+token swapped in below the breakpoint.
 
 Below 768px, drag-and-drop is deliberately not attempted: a touch drag across a horizontally
 scrolling container is unreliable, and the card's own status control does the same job.
 
+**The narrow column keeps its head.** It duplicates the chosen tab, which looks redundant and is
+not: the tab strip is the control that *chooses*, the head is the column's own identity, and it
+carries the count in the position it holds at every other width. Dropping it would leave a scrolled
+board showing a list of names with nothing saying which column they are in.
+
 ## Accessibility
 
-- Each column is a labelled region whose accessible name includes its count.
+- Each column is a labelled region whose accessible name includes its count. Below 768px it is also
+  the `role="tabpanel"` its tab points `aria-controls` at.
 - Cards are `role="button"` with an accessible name of "{name}, {status}, {date}".
 - Drag is fully keyboard operable, with pick-up, target, and drop announced through a polite live
   region.
 - The placeholder is paired with the announcement — position is never conveyed by the gap alone.
   It is `aria-hidden`: it is the visible half of something the live region already says, and a
   reader that met it as an element would hear an empty node between two cards.
-- The missing-conclusion marker's meaning lives in its tooltip text, referenced by
-  `aria-describedby`, not in the amber alone.
+- The missing-conclusion marker's meaning lives in a visually-hidden node the card points
+  `aria-describedby` at, which is in the tree at all times and always resolves — not in the amber
+  alone and not in a bubble that only exists on hover.
 - Focus returns to the moved card after a drop, so a keyboard user does not lose their place.
 
 ## DS gaps
 
 | Gap | Resolution |
 |---|---|
-| **`BoardColumn` / `BoardCard`** | `components/data/Board*.jsx`. Presentational and drag-mechanical only — the five statuses, the ordering rule, and every permission live in the app |
-| No drag-and-drop primitive anywhere in Meridian | The pick-up/gap/drop visual language above becomes part of the design system with these components, so a second board would not invent its own |
-| `Tabs` was not a `tablist` | Its tabs were anchors to `#`, which a screen reader announces as links to nowhere, and the mobile board makes it the control that chooses which column is shown. They are buttons now, with `aria-selected`, `aria-controls`, roving focus and arrow-key movement, plus a `testId` per item |
-| `Tabs` has no count slot | `TabItem`'s object form takes a `label: ReactNode`, so the count composes without a DS change — recorded so nobody adds a `count` prop |
+| **`BoardCard`** | [§42](../design-system/ledger.md) — `components/data/BoardCard.jsx`. Presentational and drag-mechanical only; the five statuses, the ordering rule and every permission live in the app. **Designed, not measured** |
+| **`BoardColumn`** | [§43](../design-system/ledger.md) — `components/data/BoardColumn.jsx`, same split. The pick-up/gap/drop visual language becomes part of the design system with these two, so a second board would not invent its own. **Designed, not measured** |
+| No warning glyph anywhere in blue | [§44](../design-system/ledger.md) — `FlagIcon`, drawn to blue's icon rules. §9's position on `Eye`/`EyeOff`: prod flags nothing, so there is nothing to measure, and the rules are explicit enough to draw to |
+| `PageTabs` was not a `tablist` | [§45](../design-system/ledger.md) — its tabs were `<a href="#">`, which a screen reader announces as links to nowhere, and the narrow board makes it the control that chooses which column is shown. They are buttons now, with `aria-selected`, `aria-controls`, a single tab stop and arrow keys |
+| `PageTabs` took only `string[]` | Same entry — an object form beside it (`value` / `label` / `testId` / `controls`), which is §18's shape on `Table`. There is deliberately **no `count` prop**: a count composes into the `label` node, and a strip that grew one would then need a badge, and an icon |
