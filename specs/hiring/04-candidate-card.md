@@ -47,6 +47,35 @@ a real route and not a modal over the board.
 6. An unknown candidate id shows the not-found state and reveals nothing.
 7. `?application={applicationId}` opens the page with that application's section expanded and
    scrolled into view — this is the form the calendar invite uses.
+8. The card carries a **back link naming the list it was opened from** — `Board` for a vacancy's
+   board, `Candidates` for the candidate database. Not "Back", which names no place, and not one
+   fixed destination, which would send somebody who was working a board to a screen they were
+   never on.
+
+   It returns to **that list's own address**, so the scope, the filters, the search and the page
+   are all still applied when they get there ([03 §09.53](03-candidate-database.md)). The list
+   records where it is while it is on screen and the card reads the last record: a row click, a
+   row's `href`, `View candidate` and `Reschedule interview` are four doors onto the same card,
+   and the one that forgot to record would be a back link that lied.
+
+   An arrival with **no list behind it** — the calendar invite's deep link, in a fresh tab and
+   often a fresh sign-in — offers `Candidates`, pointing at the database with the member's
+   remembered scope. That is the one list every caller who may read a card may also read, since
+   the scopes were folded together ([03 §07.33](03-candidate-database.md)); a board would have
+   been a guess at which vacancy.
+
+   The record is **per tab and per organization**. Per tab because it describes this visit; per
+   organization because the shell has a switcher, and an address remembered under one is not a
+   place the next can go. It is kept out of the card's own URL deliberately: the address being
+   remembered carries the list's **search term**, which may be a person's name, and a `?back=`
+   parameter would copy that into this page's address, its history entry and every link shared
+   out of it.
+
+   It is present on **every** state of this route, the loading state and the not-found state
+   included. A link that appeared only once the record had arrived would push the page down by its
+   own height as it did, which is a layout shift on the one screen that must not have any; and a
+   card that `404`s because a colleague deleted the person while it was being read is exactly when
+   somebody needs a way back.
 
 ### 02. Candidate Information
 
@@ -74,6 +103,15 @@ a real route and not a modal over the board.
     whole record. On success the page goes to the candidate database, which raises the
     confirmation — this card `404`s the instant the flag is set and cannot report its own outcome
     ([03 §11.65](03-candidate-database.md)).
+12. The email carries a **copy control** beside it, and copying confirms. The address is the one
+    thing on this page anybody re-types — into a mail client, into an invite, into a
+    spreadsheet — and a re-typed address is how a letter reaches the wrong person.
+
+    A refused clipboard **says so**. It can be denied by permission or by an insecure origin, and
+    a control that appeared to work and did not is worse than one that admits it: the member finds
+    out at the point of pasting nothing. The refusal says to select the address instead, because
+    unlike the vacancy's booking link ([01 §07.25](01-vacancies.md)) this one is drawn in full,
+    right beside the control, and has nothing that needs reciting.
 
 ### 03. Per Application
 
@@ -347,11 +385,21 @@ Streams the file with its stored content type and the original filename in
 | Actions menu | "Delete candidate" |
 | Delete confirmation | as [03 §11.62](03-candidate-database.md) — one wording, two doors |
 | Delete failed | "Something went wrong. Please try again." |
+| Email copied | "Email copied" |
+| Clipboard refused | "The clipboard is unavailable. Select the address to copy it." |
 
-The announcement slot under `PageHeader` carries both outcomes and refusals now. A failure paints
-`error` and takes `role="alert"`; an outcome paints `success` and takes `role="status"` — a refusal
-rendered in the success green would be a banner contradicting its own words, which the status
-change's own failure did until the delete needed the distinction.
+The page announces on **two** surfaces, split by grain, and the split is the reason both exist.
+
+The banner under `PageHeader` reports what happened to an **application** — a status moved, an
+interview rescheduled or called off. It sits in flow, above the sections it is about, which is
+where [reversal 4](../design-system/README.md) put it. A failure there paints `error` and takes
+`role="alert"`; an outcome paints `success` and takes `role="status"` — a refusal rendered in the
+success green would be a banner contradicting its own words.
+
+A **toast** reports what the header's own controls did: the copy, and a delete that was refused.
+Neither changes anything in the body, and pushing every section down by a banner's height to say
+"Email copied" would move the interview notes under a hand that is typing into them — which is the
+one thing this screen exists not to do.
 
 ## UI Notes
 
@@ -361,6 +409,8 @@ change's own failure did until the delete needed the distinction.
   next one.
 - Required `data-testid` attributes:
   - `candidate-card`, `candidate-name`, `candidate-email`, `candidate-not-found`
+  - `candidate-back-link`, `candidate-email-copy`, `toast-email-copied`,
+    `toast-email-copy-failed`
   - `candidate-actions`, `candidate-action-delete`, `candidate-delete-dialog`,
     `candidate-delete-confirm`, `card-delete-failed`
   - `application-section-{applicationId}`, `application-vacancy-{applicationId}`,
@@ -578,3 +628,38 @@ change's own failure did until the delete needed the distinction.
 - **Expected Result:**
   1. The card renders in full — this is their interview — and there is no actions menu on it at all. An assignment is authority over an interview, never over somebody's record ([03 §11.60](03-candidate-database.md)).
 - **Selectors:** `candidate-card`, `candidate-name`, `candidate-actions`.
+
+### TC-H04-E2E-08: Back returns to the filtered list that opened the card
+- **Level:** E2E
+- **Preconditions:** logged in as `admin`; several candidates, at least one of them matching a status filter.
+- **Steps:**
+  1. Open the candidate database, switch to a scope, apply a filter from the drawer and type a search.
+  2. Open a candidate from a row.
+  3. Read the back link, then follow it.
+- **Expected Result:**
+  1. The list's address carries the scope, the filter and the search ([03 §09.53](03-candidate-database.md)).
+  2. The card's back link reads `Candidates`.
+  3. It lands back on the list with the same scope, the same filter chip and the same search still applied — not on an emptied list that happens to be on the right tab.
+- **Selectors:** `candidate-back-link`, `candidates-scope-mine`, `candidates-filters-open`, `candidates-search-input`.
+
+### TC-H04-E2E-09: Back from a board says Board, and a deep link says Candidates
+- **Level:** E2E
+- **Preconditions:** logged in as `admin`; one vacancy with a booked interview.
+- **Steps:**
+  1. Open the vacancy, then open a candidate from a board card.
+  2. Read the back link and follow it.
+  3. In a fresh tab, open the same card through the calendar invite's deep link and read the back link.
+- **Expected Result:**
+  1. The link reads `Board`.
+  2. It lands on the vacancy the board belongs to.
+  3. With no list behind it, the deep link's card offers `Candidates` ([§01.8](#01-access)).
+- **Selectors:** `candidate-back-link`, `vacancy-detail`, `board-card-{applicationId}`.
+
+### TC-H04-E2E-10: Copying the email confirms
+- **Level:** E2E
+- **Preconditions:** logged in as `admin`; one candidate reached through the invite's deep link.
+- **Steps:**
+  1. Press the control beside the email.
+- **Expected Result:**
+  1. The clipboard holds the address, a toast says `Email copied`, and nothing on the page moves — no section shifts, and focus stays where it was.
+- **Selectors:** `candidate-email`, `candidate-email-copy`, `toast-email-copied`.

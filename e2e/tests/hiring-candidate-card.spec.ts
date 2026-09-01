@@ -22,6 +22,10 @@ import {
  * database lands.
  */
 test.describe('Candidate card', () => {
+  // The copy affordance beside the email writes to the real clipboard, which is where the
+  // assertion has to look — the same grant the vacancy's booking link needs (04 §02.12).
+  test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
+
   /** An organization with one vacancy and one booked interview, plus its invite link. */
   async function seed(
     request: APIRequestContext,
@@ -360,5 +364,153 @@ test.describe('Candidate card', () => {
     await expect(page.getByTestId('candidate-card')).toBeVisible();
     await expect(page.getByTestId('candidate-name')).toHaveText('Tom Fisher');
     await expect(page.getByTestId('candidate-actions')).toHaveCount(0);
+  });
+
+  /**
+   * TC-H04-E2E-08 — the back link returns to the list as it stood, not to a fresh one.
+   *
+   * The whole point of §01.8 is the second half of that sentence. A link that landed on
+   * `/hiring/candidates` would pass a naive reading and still throw away the scope, the
+   * filter and the search the member set before opening the card — which is the state the
+   * back link exists to protect.
+   */
+  test('goes back to the filtered list that opened the card', async ({ page, request }) => {
+    const org = await registerOrganization(request, uniqueEmail('card-back-list'));
+    const vacancy = await createVacancy(request, org, { title: 'Senior React Engineer' });
+    await bookInterview(request, vacancy.publicSlug, {
+      firstName: 'Jane',
+      lastName: 'Doe',
+      email: uniqueEmail('jane'),
+      slotIndex: 0,
+    });
+    await bookInterview(request, vacancy.publicSlug, {
+      firstName: 'Tom',
+      lastName: 'Fisher',
+      email: uniqueEmail('tom'),
+      slotIndex: 1,
+    });
+
+    await signIn(page, org.email);
+    await page.goto(`/org/${org.organizationId}/hiring/candidates`);
+
+    const count = page.getByTestId('candidates-count');
+    await expect(count).toHaveText('2 candidates');
+
+    // A filter from the drawer and a search in the toolbar — two different homes, and
+    // both have to survive the round trip.
+    await page.getByTestId('candidates-filters-open').click();
+    await page.getByTestId('candidates-filter-status').click();
+    await page.getByTestId('candidates-filter-status-option-scheduled').click();
+    await page.getByTestId('candidates-filters-apply').click();
+    await page.getByTestId('candidates-search-input').fill('Jane');
+    await expect(count).toHaveText('1 of 2 candidates');
+
+    const row = page.getByTestId('candidates-list').locator('[data-testid^="candidate-row-"]');
+    await expect(row).toHaveCount(1);
+    await row.click();
+    await expect(page.getByTestId('candidate-card')).toBeVisible();
+    await expect(page.getByTestId('candidate-name')).toHaveText('Jane Doe');
+
+    // It names the list, never a bare "Back", and it is a real anchor over a real address.
+    const back = page.getByTestId('candidate-back-link');
+    await expect(back).toHaveText('Candidates');
+    await expect(back).toHaveAttribute('href', /\/hiring\/candidates\?/);
+
+    await back.click();
+    await expect(page.getByTestId('candidates-search-input')).toHaveValue('Jane');
+    await expect(page.getByTestId('candidates-filters-open')).toHaveText('Filters (1)');
+    await expect(page.getByTestId('candidates-count')).toHaveText('1 of 2 candidates');
+
+    // And the list rewrites its address onto its **own** path. The screen mounts before
+    // the browser's location has caught up with a client-side navigation, so a query
+    // spliced onto whatever `window.location` said would have landed the filters on the
+    // candidate's URL (03 §09.53).
+    await expect(page).toHaveURL(/\/hiring\/candidates\?[^/]*$/);
+  });
+
+  /**
+   * TC-H04-E2E-09 — the label is the list, and an arrival with no list has an answer too.
+   *
+   * Both halves in one case, because they are the same rule read from its two ends: the
+   * card says where it came from, and when nothing came before it, it says the one place
+   * every caller who can read the card can also reach.
+   */
+  test('says Board coming from a board, and Candidates coming from the invite', async ({
+    page,
+    request,
+  }) => {
+    const org = await registerOrganization(request, uniqueEmail('card-back-board'));
+    const vacancy = await createVacancy(request, org, { title: 'Senior React Engineer' });
+    await bookInterview(request, vacancy.publicSlug, {
+      firstName: 'Jane',
+      lastName: 'Doe',
+      email: uniqueEmail('jane'),
+    });
+    const invite = await latestInviteLink(request);
+    const detail = `/org/${org.organizationId}/hiring/vacancies/${vacancy.id}`;
+
+    await signIn(page, org.email);
+
+    // A fresh tab that has been on no list at all: the deep link's own arrival.
+    await page.goto(invite.path);
+    await expect(page.getByTestId('candidate-back-link')).toHaveText('Candidates');
+
+    // And the same card reached from the board it sits on.
+    await page.goto(detail);
+    await expect(page.getByTestId('vacancy-detail')).toBeVisible();
+    await page.getByTestId(`board-card-${invite.applicationId}`).click();
+
+    const back = page.getByTestId('candidate-back-link');
+    await expect(page.getByTestId('candidate-card')).toBeVisible();
+    await expect(back).toHaveText('Board');
+    await expect(back).toHaveAttribute('href', detail);
+
+    await back.click();
+    await expect(page.getByTestId('vacancy-detail')).toBeVisible();
+  });
+
+  /**
+   * TC-H04-E2E-10 — copying the address confirms, and moves nothing.
+   *
+   * The second half is the one this screen cares about: a confirmation that pushed the
+   * interview notes down would be a worse answer than no confirmation at all.
+   */
+  test('copies the email and confirms it without moving the page', async ({ page, request }) => {
+    const { org, invite } = await seed(request, 'card-copy');
+    await signIn(page, org.email);
+    await page.goto(invite.path);
+
+    const email = await page.getByTestId('candidate-email').innerText();
+    const notes = page.getByTestId('card-notes-input');
+    await expect(notes).toBeVisible();
+
+    /*
+      How far the field sits **below the page title**, rather than where it sits on screen.
+
+      The two are not the same question here, and only one of them is about the product.
+      The deep link opens on its own application, so the shell's scroller is already part
+      way down, and pressing a control back up at the header scrolls it into view — a
+      viewport-relative reading would call that a layout shift. The gap between two
+      elements in the same scroller does not move when the scroller does, and it is exactly
+      what a banner opening in the flow between them would change.
+    */
+    const gap = () =>
+      page.evaluate(() => {
+        const top = (id: string) =>
+          document.querySelector(`[data-testid="${id}"]`)!.getBoundingClientRect().top;
+        return Math.round(top('card-notes-input') - top('page-title'));
+      });
+    const before = await gap();
+
+    const copy = page.getByTestId('candidate-email-copy');
+    await expect(copy).toHaveAttribute('aria-label', 'Copy email');
+    await copy.click();
+
+    await expect(page.getByTestId('toast-email-copied')).toHaveText('Email copied');
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(email);
+
+    // Nothing moved, and nothing took focus off the control that was pressed.
+    expect(await gap()).toBe(before);
+    await expect(copy).toBeFocused();
   });
 });

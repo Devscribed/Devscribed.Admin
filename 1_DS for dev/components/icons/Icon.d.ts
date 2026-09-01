@@ -34,6 +34,9 @@ export { EyeIcon as Eye, EyeOffIcon as EyeOff };
 /** §44 — the board's missing-conclusion mark, drawn rather than typed. Prod flags nothing. */
 export function FlagIcon(props: GlyphProps): JSX.Element;
 
+/** §57 — the copy affordance beside the candidate's email. Prod copies nothing. */
+export function CopyIcon(props: GlyphProps): JSX.Element;
+
 export interface IconProps extends GlyphProps {
   /** Export name of the glyph, e.g. "TrashIcon". Unknown names render nothing. */
   name: string;

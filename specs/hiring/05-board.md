@@ -98,7 +98,9 @@ viewport, the header stays put, and the columns scroll inside what is left of it
     automatic movement, and no separate "past" treatment beyond the date reading as past.
 19. Opening a card navigates to [04](04-candidate-card.md). It is a real page, not a modal over the
     board — it must be linkable from a calendar invite, and an intercepting-route modal is a lot of
-    machinery for one screen.
+    machinery for one screen. The card it opens carries a back link reading **`Board`**, returning
+    to this vacancy ([04 §01.8](04-candidate-card.md)); the screen records that while it is on
+    display, so every column and every card share one way back rather than each carrying its own.
 20. A **deleted candidate** ([03 §11](03-candidate-database.md)) has no card here, and their
     application is not counted in its column's header. The application itself is untouched and
     keeps its `status` and its `position`, so it reappears exactly where it was if the same address

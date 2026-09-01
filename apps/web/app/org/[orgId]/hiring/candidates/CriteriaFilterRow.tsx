@@ -5,6 +5,7 @@ import {
   CANDIDATE_MESSAGES,
   operatorsFor,
   valueControlFor,
+  type CriterionFilter,
   type FilterOperator,
   type FilterOperatorOption,
 } from '@devscribed/validation';
@@ -58,6 +59,33 @@ export const newCriteriaRow = (criterion: Criterion): CriteriaFilterRowState => 
   operatorKey: operatorKey(operatorsFor(criterion.type)[0]),
   value: '',
 });
+
+/**
+ * Chips rebuilt from the address bar (03 §09.53).
+ *
+ * Called twice, and the two calls are the point. **Without the library** it is the state
+ * this screen opens on, and every row it makes sends exactly the parameter it was built
+ * from — `completeRows` reads a bare operator's value off the row, and a baked-in one off
+ * the operator, and both spell the same query. **With the library** it fixes up the one
+ * type that cannot be told from the parameter alone: a `boolean` keeps its value *inside*
+ * the operator ("is yes"), because a two-valued criterion has two questions and no value
+ * control, and a row that kept them apart would draw an operator no option matches.
+ */
+export function restoreCriteriaRows(
+  filters: readonly CriterionFilter[],
+  library?: readonly Criterion[],
+): CriteriaFilterRowState[] {
+  const byId = new Map((library ?? []).map((criterion) => [criterion.id, criterion]));
+  return filters.map((filter) =>
+    byId.get(filter.criterionId)?.type === 'boolean'
+      ? {
+          criterionId: filter.criterionId,
+          operatorKey: `${filter.operator}:${filter.value}`,
+          value: '',
+        }
+      : { criterionId: filter.criterionId, operatorKey: filter.operator, value: filter.value },
+  );
+}
 
 /** The other direction: what the row actually sends. */
 export function readOperatorKey(key: string): { operator: FilterOperator; value?: string } | null {

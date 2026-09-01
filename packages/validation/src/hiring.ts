@@ -190,6 +190,22 @@ export const HIRING_MESSAGES = {
      */
     criterionPresent: 'Already assessed — edit the existing value',
     criterionTextTooLong: 'Text must be at most 500 characters',
+    /**
+     * The back link's two destinations (04 §01.8).
+     *
+     * The card is opened from a board and from the candidate database, and the link says
+     * which — not "Back", which names no place. `Candidates` is also the arrival that has
+     * no list behind it at all: the calendar invite's deep link opens this page in a tab
+     * of its own, and the database is the one list every caller who can read this card
+     * can also read (03 §07.33).
+     */
+    backToBoard: 'Board',
+    backToCandidates: 'Candidates',
+    /**
+     * The copy control's accessible name. A glyph-only button beside the address, so the
+     * name is the only thing that says what pressing it does.
+     */
+    copyEmail: 'Copy email',
   },
   board: {
     /**
@@ -338,6 +354,8 @@ export const HIRING_MESSAGES = {
     /** Completed by `interviewMovedToast` — the new time is the whole point of it. */
     interviewRescheduled: 'Interview moved to {when}',
     interviewCancelled: 'Interview cancelled',
+    /** The candidate card's copy affordance (04 §02.12). */
+    emailCopied: 'Email copied',
   },
 } as const;
 
@@ -431,6 +449,16 @@ export const vacancyDeleteConfirmation = (title: string): string =>
  */
 export const clipboardUnavailableLink = (url: string): string =>
   `The clipboard is unavailable. The link is ${url}`;
+
+/**
+ * The same refusal on the candidate card, which needs no address said out loud (04 §02.12).
+ *
+ * The vacancy's link is a 60-character slug behind a button, so a refused clipboard had to
+ * recite it. An email address is drawn on this page, in full, right beside the control —
+ * so the honest instruction is the shorter one: select it.
+ */
+export const CLIPBOARD_UNAVAILABLE_EMAIL =
+  'The clipboard is unavailable. Select the address to copy it.';
 
 
 const ok = (value: string): FieldResult => ({ valid: true, value });

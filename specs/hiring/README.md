@@ -44,6 +44,7 @@ disagree, this set wins; the six deliberate departures are recorded below.
 | A reschedule moves the existing application; a rebooking creates a new one | 07 | 02, 05 |
 | Nothing hiring writes is ever deleted — CVs included | 00 | 04, 07 |
 | Removing a **candidate** is a flag; their record survives and revives on re-booking | 03 | 01, 02, 04, 05 |
+| A list's whole query lives in its URL; a detail page comes back to the address, not the screen | 03 | 04, 05 |
 
 ## Roles & Permission Matrix
 

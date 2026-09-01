@@ -5,6 +5,7 @@ import { use, useCallback, useEffect, useRef, useState } from 'react';
 import {
   APPLICATION_STATUS_LABELS,
   CANDIDATE_MESSAGES,
+  CLIPBOARD_UNAVAILABLE_EMAIL,
   CONCLUSION_PROMPTING_STATUSES,
   HIRING_MESSAGES,
   MESSAGES,
@@ -16,11 +17,25 @@ import {
   interviewMovedToast,
   type ApplicationStatus,
 } from '@devscribed/validation';
-import { Button, Card, ConfirmDialog, InfoBanner, Popover, Preloader } from '@/ds';
+import {
+  BackTo,
+  Button,
+  Card,
+  ConfirmDialog,
+  CopyIcon,
+  IconButton,
+  InfoBanner,
+  Popover,
+  Preloader,
+  Toast,
+  ToastHost,
+} from '@/ds';
 import { focusByTestId } from '@/field-error';
 import { PageHeader } from '@/layout/PageHeader';
 import { useSession } from '@/layout/session-context';
 import { rememberDeletedCandidate } from '@/hiring/candidate-deleted';
+import { readCandidateOrigin } from '@/hiring/candidate-origin';
+import { useToasts } from '@/hiring/useToasts';
 import type {
   CandidateCard,
   CardApplication,
@@ -125,6 +140,39 @@ export default function CandidateCardPage({
   /** Whether the delete confirmation is up, and whether its request is in flight. */
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  /**
+   * The list this card was opened from, read once (04 §01.8).
+   *
+   * Once, because the answer must not change under a member who is reading it: the list
+   * records itself while it is on screen, and a card that re-read on every render would
+   * be re-reading a value nothing here can change anyway.
+   *
+   * **The database is the fallback, not the board.** A card reached from the calendar
+   * invite's deep link has no list behind it at all — it is a fresh tab, often a fresh
+   * sign-in — and the candidate database is the one list every caller who can read this
+   * card can also read, interviewers included since the scopes were folded together
+   * (03 §07.33). A board would have been a guess at which vacancy.
+   */
+  const [origin] = useState(
+    () =>
+      readCandidateOrigin(orgId) ?? {
+        label: HIRING_MESSAGES.card.backToCandidates,
+        href: `/org/${orgId}/hiring/candidates`,
+      },
+  );
+  /**
+   * The page's other announcement surface, and the split between the two is by **grain**.
+   *
+   * The `InfoBanner` below reports what happened to an *application*: a status moved, an
+   * interview was rescheduled or called off. It sits in flow, under the header and above
+   * the sections it is about, which is where reversal 4 put it and where it stays.
+   *
+   * A toast reports what happened to the *page's own* controls — the header's copy button
+   * and its menu — and those change nothing in the body. Pushing every section down by a
+   * banner's height to say "Email copied" would move the interview notes under a hand
+   * that is typing into them, which is the one thing this screen exists not to do.
+   */
+  const { toasts, push, dismiss } = useToasts();
 
   const loadLibrary = useCallback(async (): Promise<void> => {
     const response = await fetch(
@@ -268,45 +316,78 @@ export default function CandidateCardPage({
     [patch],
   );
 
+  /**
+   * Drawn on **every** state, not only on a loaded card (04 §01.8).
+   *
+   * Two reasons, and the second is this screen's own rule. A card that 404s is where a
+   * member lands when a colleague deleted the person while they were reading about them —
+   * without this, the only way out of that is the browser's own Back. And a link that
+   * appeared once the record arrived would push the whole page down by its own height as
+   * it did, which is a layout shift on the one screen that must not have any.
+   */
+  const back = (
+    <BackTo
+      label={origin.label}
+      href={origin.href}
+      data-testid="candidate-back-link"
+      onClick={(event) => {
+        if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+        event.preventDefault();
+        router.push(origin.href);
+      }}
+    />
+  );
+
   if (state.status === 'gone') {
     // Rendered here rather than through Next's `notFound()`: this state has its own
     // sentence, and it is the same one for a candidate that does not exist and for one
     // this caller may not see. Which of those it is, is exactly what it must not say.
     return (
-      <Card data-testid="candidate-not-found">
-        <p style={{ margin: 0, fontSize: 'var(--font-size-base)', color: 'var(--text-tertiary)' }}>
-          {HIRING_MESSAGES.card.notFound}
-        </p>
-      </Card>
+      <>
+        {back}
+        <Card data-testid="candidate-not-found">
+          <p
+            style={{ margin: 0, fontSize: 'var(--font-size-base)', color: 'var(--text-tertiary)' }}
+          >
+            {HIRING_MESSAGES.card.notFound}
+          </p>
+        </Card>
+      </>
     );
   }
 
   if (state.status === 'loading') {
     return (
-      <Card>
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-7)' }}>
-          {/* The dots carry no text, so the announcement is made beside them. */}
-          <Preloader data-testid="card-loading" aria-hidden />
-          <span aria-live="polite" style={VISUALLY_HIDDEN}>
-            Loading candidate
-          </span>
-        </div>
-      </Card>
+      <>
+        {back}
+        <Card>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-7)' }}>
+            {/* The dots carry no text, so the announcement is made beside them. */}
+            <Preloader data-testid="card-loading" aria-hidden />
+            <span aria-live="polite" style={VISUALLY_HIDDEN}>
+              Loading candidate
+            </span>
+          </div>
+        </Card>
+      </>
     );
   }
 
   if (state.status === 'error') {
     return (
-      <Card data-testid="card-load-error">
-        <InfoBanner variant="error" role="alert">
-          <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-            {MESSAGES.generic}
-            <Button onClick={() => void load()} data-testid="card-load-retry">
-              Retry
-            </Button>
-          </span>
-        </InfoBanner>
-      </Card>
+      <>
+        {back}
+        <Card data-testid="card-load-error">
+          <InfoBanner variant="error" role="alert">
+            <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+              {MESSAGES.generic}
+              <Button onClick={() => void load()} data-testid="card-load-retry">
+                Retry
+              </Button>
+            </span>
+          </InfoBanner>
+        </Card>
+      </>
     );
   }
 
@@ -341,7 +422,7 @@ export default function CandidateCardPage({
       if (!response.ok) {
         setDeleting(false);
         setConfirmingDelete(false);
-        setNotice({ message: MESSAGES.generic, testId: 'card-delete-failed', tone: 'error' });
+        push({ message: MESSAGES.generic, tone: 'error', testId: 'card-delete-failed' });
         return;
       }
       rememberDeletedCandidate(candidateName);
@@ -349,7 +430,36 @@ export default function CandidateCardPage({
     } catch {
       setDeleting(false);
       setConfirmingDelete(false);
-      setNotice({ message: MESSAGES.generic, testId: 'card-delete-failed', tone: 'error' });
+      push({ message: MESSAGES.generic, tone: 'error', testId: 'card-delete-failed' });
+    }
+  }
+
+  /**
+   * Copying the address (04 §02.12).
+   *
+   * The email is the one field on this page anybody re-types — into a mail client, into a
+   * calendar invite, into a spreadsheet — and re-typing an address is how a letter goes to
+   * the wrong person. A refusal is said out loud rather than swallowed: the clipboard can
+   * be denied by permission or by an insecure origin, and a button that appeared to work
+   * and did not is worse than one that says so, because the member finds out at the point
+   * of pasting nothing.
+   */
+  async function copyEmail(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(candidate.email);
+      push({
+        message: HIRING_MESSAGES.toast.emailCopied,
+        tone: 'success',
+        testId: 'toast-email-copied',
+      });
+    } catch {
+      // The address is drawn in full right beside the control, so the instruction is to
+      // select it — there is nothing this has to recite.
+      push({
+        message: CLIPBOARD_UNAVAILABLE_EMAIL,
+        tone: 'error',
+        testId: 'toast-email-copy-failed',
+      });
     }
   }
 
@@ -394,13 +504,30 @@ export default function CandidateCardPage({
 
   return (
     <div data-testid="candidate-card">
+      {back}
+
       <PageHeader
         title={<span data-testid="candidate-name">{candidateName}</span>}
         subtitle={
-          <>
-            <span data-testid="candidate-email">{candidate.email}</span> · first seen{' '}
-            {formatShortDate(new Date(candidate.createdAt), viewerTimeZone)}
-          </>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-1)' }}>
+            <span data-testid="candidate-email">{candidate.email}</span>
+            {/*
+              The copy affordance the design puts against the address. `IconButton` rather
+              than a bare glyph, because a glyph-only control still needs a name, a hit
+              area and a focus treatment, and blue already specifies all three (ledger §10).
+            */}
+            <IconButton
+              label={HIRING_MESSAGES.card.copyEmail}
+              size={28}
+              data-testid="candidate-email-copy"
+              onClick={() => void copyEmail()}
+            >
+              <CopyIcon width={16} height={16} aria-hidden />
+            </IconButton>
+            <span>
+              · first seen {formatShortDate(new Date(candidate.createdAt), viewerTimeZone)}
+            </span>
+          </span>
         }
         /*
           A person-grain action, so it belongs to the page rather than to any one
@@ -540,6 +667,23 @@ export default function CandidateCardPage({
           data-testid="candidate-delete-dialog"
         />
       )}
+
+      {/*
+        The header's own outcomes, which change nothing in the body — see the queue's own
+        note above. They float rather than push, because the body is being typed into.
+      */}
+      <ToastHost>
+        {toasts.map((toast) => (
+          <Toast
+            key={toast.id}
+            tone={toast.tone}
+            data-testid={toast.testId}
+            onDismiss={() => dismiss(toast.id)}
+          >
+            {toast.message}
+          </Toast>
+        ))}
+      </ToastHost>
     </div>
   );
 }

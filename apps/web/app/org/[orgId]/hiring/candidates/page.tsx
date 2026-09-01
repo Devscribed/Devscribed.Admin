@@ -1,6 +1,6 @@
 'use client';
 
-import { notFound, useRouter } from 'next/navigation';
+import { notFound, useRouter, useSearchParams } from 'next/navigation';
 import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   APPLICATION_STATUSES,
@@ -16,7 +16,6 @@ import {
   candidateFiltersLabel,
   candidateResultLabel,
   candidateScopeTabLabel,
-  criterionFilterParam,
   formatShortDate,
   formatSlotTime,
   interviewerPickerLabel,
@@ -48,7 +47,13 @@ import { useSession } from '@/layout/session-context';
 import { CancelInterviewDialog } from '@/hiring/CancelInterviewDialog';
 import { StatusBadge } from '@/hiring/StatusBadge';
 import { takeDeletedCandidate } from '@/hiring/candidate-deleted';
-import { initialCandidateScope, rememberCandidateScope } from '@/hiring/candidate-scope';
+import {
+  candidateListHref,
+  candidateListQuery,
+  readCandidateListAddress,
+  rememberCandidateList,
+} from '@/hiring/candidate-list';
+import { rememberCandidateOrigin } from '@/hiring/candidate-origin';
 import { valuesOf } from '@/hiring/select';
 import { useMediaQuery } from '@/hiring/useMediaQuery';
 import { useToasts } from '@/hiring/useToasts';
@@ -64,6 +69,7 @@ import {
   CriteriaFilterRow,
   completeRows,
   newCriteriaRow,
+  restoreCriteriaRows,
   type CriteriaFilterRowState,
 } from './CriteriaFilterRow';
 
@@ -118,6 +124,13 @@ const EMPTY_LIBRARY: FilterLibrary = { vacancies: [], categories: [], criteria: 
 export default function CandidatesPage({ params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = use(params);
   const router = useRouter();
+  /**
+   * The query the **router** reports, which is not the same thing as `window.location`'s
+   * during a client-side navigation — see `readCandidateListAddress`. A card's back link
+   * arrives here through `router.push`, and this is the only source that is already
+   * holding the address it pushed.
+   */
+  const asked = useSearchParams();
   const viewer = useSession().account;
 
   const [phase, setPhase] = useState<Phase>('loading');
@@ -135,19 +148,39 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
   const [interviewers, setInterviewers] = useState<InterviewerOption[]>([]);
 
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const [query, setQuery] = useState('');
-  const [statuses, setStatuses] = useState<ApplicationStatus[]>([]);
-  const [vacancyIds, setVacancyIds] = useState<string[]>([]);
-  const [categoryIds, setCategoryIds] = useState<string[]>([]);
-  const [interviewerIds, setInterviewerIds] = useState<string[]>([]);
-  const [criteriaRows, setCriteriaRows] = useState<CriteriaFilterRowState[]>([]);
-  const [page, setPage] = useState(1);
+  /**
+   * The question this screen opened on, read once from the URL and the remembered scope.
+   *
+   * Once, and in one place: every field below initialises from it, and a second read would
+   * be a second answer the moment this screen rewrote its own address — which it does on
+   * the first render.
+   */
+  const [opened] = useState(() => readCandidateListAddress(asked.toString()));
+  const [search, setSearch] = useState(opened.search);
+  const [query, setQuery] = useState(opened.search);
+  const [statuses, setStatuses] = useState<ApplicationStatus[]>(opened.statuses);
+  const [vacancyIds, setVacancyIds] = useState<string[]>(opened.vacancyIds);
+  const [categoryIds, setCategoryIds] = useState<string[]>(opened.categoryIds);
+  const [interviewerIds, setInterviewerIds] = useState<string[]>(opened.interviewerIds);
+  /**
+   * Restored **without the library**, which has not arrived yet and which the first
+   * request must not wait for.
+   *
+   * A row rebuilt from the URL alone sends exactly the parameter it was built from — see
+   * `restoreCriteriaRows` — so the opening request asks the question the address states.
+   * What it cannot know is which criteria are `boolean`, whose two questions live inside
+   * the operator rather than beside it; that is the one thing the library fixes up when it
+   * lands, and until then the chip simply is not drawn.
+   */
+  const [criteriaRows, setCriteriaRows] = useState<CriteriaFilterRowState[]>(() =>
+    restoreCriteriaRows(opened.criteria),
+  );
+  const [page, setPage] = useState(opened.page);
   /**
    * Read once, from the URL and then from the last choice — never recomputed, or a
    * `replaceState` of our own would reopen the question we just answered.
    */
-  const [scope, setScope] = useState<CandidateScope>(initialCandidateScope);
+  const [scope, setScope] = useState<CandidateScope>(opened.scope);
   const narrow = useMediaQuery(NARROW);
   /**
    * Toasts, and the one row whose interview is being called off.
@@ -168,13 +201,6 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
   const [deleting, setDeleting] = useState<CandidateRow | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
 
-  // The address and the memory follow the applied scope, including the server's own
-  // correction of one it refused: an interviewer who typed `?scope=all` ends up with a
-  // URL that says what they are actually looking at.
-  useEffect(() => {
-    rememberCandidateScope(scope);
-  }, [scope]);
-
   /**
    * A delete taken on the candidate card lands here (03 §11.65).
    *
@@ -194,13 +220,20 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
 
   // Typing debounces; every other filter is a discrete choice and refetches at once —
   // waiting 300 ms on a click reads as lag rather than as care (03 design §Interactions).
+  //
+  // A run that would apply the term already applied does nothing at all, and that guard is
+  // load-bearing rather than an optimisation: this effect also fires on mount, and a list
+  // opened at `?page=3` would otherwise be returned to page 1 three hundred milliseconds
+  // after arriving on it (§09.53). Typing back to what was already searched is the same
+  // non-event and gets the same answer.
   useEffect(() => {
+    if (search === query) return undefined;
     const timer = setTimeout(() => {
       setQuery(search);
       setPage(1);
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [search]);
+  }, [search, query]);
 
   /**
    * Every change to what is being asked returns to the first page, which is also what
@@ -217,10 +250,7 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
   }
 
   /** Only complete chips travel; one without a value is not yet a filter. */
-  const criteria = useMemo(
-    () => completeRows(criteriaRows).map((row) => criterionFilterParam(row)),
-    [criteriaRows],
-  );
+  const criteria = useMemo(() => completeRows(criteriaRows), [criteriaRows]);
   // Keyed by content rather than by identity: the array is rebuilt whenever a chip is
   // touched, and choosing a criterion — a chip that is not yet a filter — must not fire a
   // request that asks exactly what the last one did.
@@ -266,21 +296,61 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
   const narrowed = filtered || scope === 'mine';
 
   /**
+   * The whole question, in the one shape the request and the address bar share.
+   *
+   * Built here rather than in each of them, because the URL claiming a list the server was
+   * never asked for is precisely the bug a back link is supposed to be immune to.
+   */
+  const address = useMemo(
+    () => ({
+      scope,
+      search: query,
+      statuses,
+      vacancyIds,
+      categoryIds,
+      interviewerIds: appliedInterviewerIds,
+      criteria,
+      page,
+    }),
+    // `criteriaKey` stands in for `criteria` for the reason given above it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [scope, query, statuses, vacancyIds, categoryIds, appliedInterviewerIds, criteriaKey, page],
+  );
+
+  /** Where this list currently is — one string, written to two places. */
+  const listHref = useMemo(() => candidateListHref(orgId, address), [orgId, address]);
+
+  /**
+   * The address bar and the remembered scope follow what is actually applied — the
+   * server's own correction of a scope it refused included, so an interviewer who typed
+   * `?scope=all` ends up with a URL that says what they are looking at (03 §08.40).
+   */
+  useEffect(() => {
+    rememberCandidateList(listHref, address.scope);
+  }, [listHref, address.scope]);
+
+  /**
+   * And the same address is what a candidate card comes back to (04 §01.8).
+   *
+   * Recorded from this screen rather than from each door out of it: a row click, a row's
+   * `href`, `View candidate` and `Reschedule interview` are four ways to the same card,
+   * and the one that forgot to record would be a back link that lied.
+   */
+  useEffect(() => {
+    rememberCandidateOrigin(orgId, {
+      label: HIRING_MESSAGES.card.backToCandidates,
+      href: listHref,
+    });
+  }, [orgId, listHref]);
+
+  /**
    * Which request is the current one. A page-2 fetch that lands after a filter change
    * would otherwise append rows from the question before last onto the answer to this one.
    */
   const currentRequest = useRef(0);
 
   const load = useCallback(async (): Promise<void> => {
-    const params = new URLSearchParams();
-    if (query.trim()) params.set('search', query.trim());
-    for (const status of statuses) params.append('status', status);
-    for (const id of vacancyIds) params.append('vacancyId', id);
-    for (const id of categoryIds) params.append('categoryId', id);
-    for (const id of appliedInterviewerIds) params.append('interviewerId', id);
-    for (const filter of criteria) params.append('criterion', filter);
-    if (scope === 'mine') params.set('scope', scope);
-    if (page > 1) params.set('page', String(page));
+    const params = candidateListQuery(address);
 
     const request = ++currentRequest.current;
     setPending(true);
@@ -316,20 +386,10 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
     } finally {
       if (currentRequest.current === request) setPending(false);
     }
-    // `criteriaKey` stands in for `criteria` — see above; the array itself is what
-    // travels, and its content is what decides when to refetch.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    orgId,
-    query,
-    statuses,
-    vacancyIds,
-    categoryIds,
-    appliedInterviewerIds,
-    criteriaKey,
-    scope,
-    page,
-  ]);
+    // One dependency, because there is one question: `address` is already memoised on
+    // `criteriaKey` rather than on the array's identity, so a chip touched without being
+    // completed still does not refetch.
+  }, [orgId, address]);
 
   useEffect(() => {
     void load();
@@ -369,6 +429,21 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
       cancelled = true;
     };
   }, [orgId]);
+
+  /**
+   * The chips this screen opened on, redrawn now that their criteria are known.
+   *
+   * Once, and only for the rows the URL supplied: the picker cannot offer a criterion
+   * before the library holds one, so nothing the member did can be sitting here to
+   * overwrite. Every row already sends the right parameter — this is what makes the
+   * `boolean` ones **drawable** (03 §09.53).
+   */
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || !library || opened.criteria.length === 0) return;
+    restored.current = true;
+    setCriteriaRows(restoreCriteriaRows(opened.criteria, library.criteria));
+  }, [library, opened]);
 
   /**
    * The interviewer list, and only for the caller the Interviewer field is drawn for.

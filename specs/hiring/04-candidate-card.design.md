@@ -31,8 +31,9 @@ stops being a `Badge`, and [reversal 2](#the-cancelled-badge) gets its second of
 ## Layout
 
 ```
+  ‹ Candidates                                                         ← BackTo (§56)
   Jane Doe                                                         ⋮  ← PageHeader + Popover
-  jane@example.com · first seen 12 Aug 2026
+  jane@example.com ⧉ · first seen 12 Aug 2026                          ← IconButton + CopyIcon
   ┌──────────────────────────────────────────────────────────────────┐
   │ ⓘ Moved to Didn't pass                                        ×  │  ← InfoBanner, in flow
   └──────────────────────────────────────────────────────────────────┘
@@ -71,6 +72,17 @@ stops being a `Badge`, and [reversal 2](#the-cancelled-badge) gets its second of
   the cards below are each about one interview, and deleting somebody is not something that happens
   to an interview. Drawn for `admin`/`manager` only, and **absent** for an assigned interviewer
   ([03 §11.60](03-candidate-database.md)).
+- The **back link** is above the title, and it names the list rather than saying `Back` — `Board`
+  from a vacancy's board, `Candidates` from the database, `Candidates` again for an arrival that
+  had no list at all ([04 §01.8](04-candidate-card.md)). It is a real anchor over a real address
+  ([§56](../design-system/ledger.md)), and the address is the list's own, filters and all
+  ([03 §09.53](03-candidate-database.design.md)). It is drawn on **every** state this route has —
+  loading, loaded, failed and not-found — so nothing shifts when the record arrives, and a card
+  that `404`s because somebody else deleted the person is not a dead end.
+- The **copy control** sits between the address and the `·`, inside the subtitle's own line. It is
+  an `IconButton` at 28px rather than blue's 34 — the row is `--font-size-s`, and a control taller
+  than the line it sits in would set the subtitle's height instead of the text doing it. The glyph
+  is [`CopyIcon`](../design-system/ledger.md) at 16px.
 - One `Card` per application, gap `--space-6`. The most recent is expanded; the rest collapse to a
   single summary row with a chevron.
 - **Every application `Card` passes `clip={false}`.** The status `Select` in its header and every
@@ -177,14 +189,43 @@ below**, in the scheduling history, with the actor, the timestamp and the reason
 vacancies menu ([§22](../design-system/ledger.md)) had nowhere to put a sentence and therefore had
 to draw one; a card with a history log does not.
 
+## The two announcement surfaces
+
+[Reversal 4](../design-system/README.md) put this page's announcement *in flow*, under
+`PageHeader`, at a time when `Toast` did not exist and `InfoBanner` in a fixed container was the
+only thing standing in for one. `Toast` exists now ([§54](../design-system/ledger.md)), and the
+question it reopens is not *which component* but *which announcements*.
+
+The answer is **grain**, and it draws the line exactly where the controls are.
+
+| Grain | Surface | What raises it |
+|---|---|---|
+| An **application** | `InfoBanner`, in flow under `PageHeader` | a status moved, an interview rescheduled or cancelled |
+| The **page's own header** | `Toast` | the email was copied, or a delete was refused |
+
+The banner stays where reversal 4 put it, and for reversal 4's reason: it reports a change to a
+record that is *on this page*, it sits above the sections it is about, and pushing them down is
+how the member knows the panel below is the one that changed. The status change's focus move still
+waits for it to be laid out.
+
+A toast reports something that changed **nothing in the body**. `Email copied` has no referent
+below it, and a delete that was refused leaves the page exactly as it was. Pushing every
+application section down by a banner's height to say either of those would move the interview notes
+under a hand typing into them — which is the one thing this screen exists not to do.
+
+Neither surface ever draws the same event twice: no action on this page raises both.
+
 ## Component map
 
 | Screen element | DS component | Props | `data-testid` |
 |---|---|---|---|
+| Back link | **`BackTo`** | `label`, **`href`** + `onClick` ([§56](../design-system/ledger.md)) | `candidate-back-link` |
 | Page header | `PageHeader` → `PageTitle` | `title`, `subtitle`, **`action`** | `page-title` |
+| Copy email | `IconButton` + **`CopyIcon`** | `label`, `size={28}` ([§10](../design-system/ledger.md), [§57](../design-system/ledger.md)) | `candidate-email-copy` |
 | Page actions | **`Popover`** | `label`, `items` *(one, `danger`)* | `candidate-actions` · `candidate-action-delete` |
 | Delete confirmation | **`ConfirmDialog`** | `busy`, **`closeOnAccept={false}`** ([§41](../design-system/ledger.md)) | `candidate-delete-dialog` · `candidate-delete-confirm` |
-| Announcement | `InfoBanner` | `variant="success"`, `onDismiss`, `role="status"` | `card-status-toast` · `toast-interview-rescheduled` · `toast-interview-cancelled` |
+| Announcement · application | `InfoBanner` | `variant="success"`, `onDismiss`, `role="status"` | `card-status-toast` · `toast-interview-rescheduled` · `toast-interview-cancelled` |
+| Announcement · header | **`ToastHost` > `Toast`** | `tone`, `onDismiss` ([§54](../design-system/ledger.md)) | `toast-email-copied` · `toast-email-copy-failed` · `card-delete-failed` |
 | Application panel | `Card` | **`clip={false}`** | `application-section-{applicationId}` |
 | Panel heading | native `<h2>` (+ `<button aria-expanded>` when collapsible) | — | `application-toggle-{applicationId}` |
 | Status | `Select` | `options`, `value` *(the option, not the id)* | `application-status-select-{applicationId}` |
@@ -224,7 +265,11 @@ named a component that no longer exists.
 
 | Slot | Text |
 |---|---|
+| Back link | Board · Candidates |
 | Page subtitle | {email} · first seen {date} |
+| Copy control's name | Copy email |
+| Email copied | Email copied |
+| Clipboard refused | The clipboard is unavailable. Select the address to copy it. |
 | Submitted-as | Applied as "{submittedName}" |
 | Section captions | Candidate's note · Criteria |
 | Field labels | Interview notes · Conclusion |
@@ -297,6 +342,13 @@ card floating inside a white card.
   by the banner's own height. It waits for the banner to be laid out.
 - **`?application=`** expands that section and scrolls it into view with `scroll-margin-top` clear
   of the fixed top bar, `block: 'nearest'` so a section already on screen is left where it is.
+- **Copying the email** writes the address, raises a toast, and changes nothing else. Focus stays
+  on the control it was pressed from, nothing scrolls, and no section moves — this page is worked
+  on during a call. A refused clipboard raises the same toast in `error` rather than staying quiet.
+- **The back link** is read once, on arrival, and does not change under the member while they are
+  looking at it. Modified clicks are left to the browser; an unmodified one is handed to the client
+  router, which is [§56](../design-system/ledger.md)'s whole point and the same pair `Table`'s
+  `rowHref`/`onRowClick` already established.
 
 ## Responsive
 
@@ -331,6 +383,13 @@ blue token.
   copy-address, open-in-new-tab and the browser's own download handling all work.
 - Focus is never moved by an autosave, by the banner, or by a background refetch — and the one focus
   move there is waits for the layout to settle first.
+- The back link is a real anchor with a real destination, so middle-click, copy-address and
+  open-in-new-tab all work and a reader is told "link, Candidates" about a link that goes there.
+- The copy control is glyph-only, so its accessible name is the whole of what it says it does —
+  `Copy email`, not the address, which the reader has just been read.
+- The two announcement surfaces do not compete: the banner is `role="status"` in flow, and the
+  toasts are the polite region [§54](../design-system/ledger.md) owns. Only one of them speaks per
+  action, because no action raises both.
 
 ## DS gaps
 
@@ -348,9 +407,12 @@ index.
 | `Select` is not a combobox, and `isSearchable` did nothing | [§21](../design-system/ledger.md) / [§29](../design-system/ledger.md) |
 | `TextInput` cannot size its own box | [§35](../design-system/ledger.md) |
 | `Preloader` and `InfoBanner` forward nothing | [§23](../design-system/ledger.md) / [§6](../design-system/ledger.md) / [§24](../design-system/ledger.md) |
+| The icon set has no copy mark | [§57](../design-system/ledger.md) — `CopyIcon` |
+| `BackTo` is a link with no destination | [§56](../design-system/ledger.md) — landed in desktop 8 |
+| No `Toast`, for the header's own outcomes | [§54](../design-system/ledger.md) — landed in desktop 5; the application-grain announcement stays in reversal 4's slot |
 | ~~`Badge` cannot host an interactive child~~ | Not composed in the app after all — `Chip` is the component, [§37](../design-system/ledger.md) is the slot |
 | ~~`Tooltip`~~ | Deleted, not replaced — see [The cancelled badge](#the-cancelled-badge) |
 | ~~`Skeleton`~~ | `Preloader`, with the announcement beside it |
 | ~~`SectionLabel`~~ | Headings — see [Headings](#headings) |
-| ~~`Toast`~~ | `InfoBanner` in reversal 4's slot |
 | ~~`Combobox`~~ | `Select isSearchable allowCreate` |
+| ~~An outline `PersonIcon`~~ | Nothing draws one — the application header's facts are a dot-separated line, not a column of icon-and-value rows, so the interviewer's name has no glyph beside it to be missing |

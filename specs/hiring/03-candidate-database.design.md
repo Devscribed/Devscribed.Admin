@@ -470,7 +470,13 @@ the old screen drew has an answer here.
   flashes in and out.
 - The scope is in the address (`?scope=mine`, `all` implied by its absence) and remembered per
   browser. A tab press is `history.replaceState`, never a push — Back leaves the screen rather than
-  walking the tab strip.
+  walking the tab strip. **So is everything else the toolbar and the drawer are asking**: the
+  search, the four filters and the page all join it, written the same way and for the same reason
+  ([03 §09.53](03-candidate-database.md)). That is what a candidate card's back link comes back
+  to — the list as it stood, not the tab it was on ([04 §01.8](04-candidate-card.md)) — and it is
+  why the drawer can be closed, the card opened and the drawer found holding the same chips
+  afterwards. Defaults stay absent from the URL, so the canonical address of the list is still the
+  one the rail links to.
 - Switching keeps the search and every filter, and returns to page 1. The strip survives
   `Clear filters` and is not counted in `Filters (n)`: it is navigation, not a filter chip. The
   one filter it *does* change is Interviewer, which is not offered in `Assigned to me` at all —

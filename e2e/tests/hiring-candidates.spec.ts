@@ -397,6 +397,46 @@ test.describe('Candidate database', () => {
 
 
   /**
+   * TC-H03-E2E-10 — the whole question lives in the address (§09.53).
+   *
+   * The scope was already there; this is the rest of it. What makes it worth a case of its
+   * own rather than a line inside the drawer test is the **round trip**: the URL is only
+   * useful if the screen reads back what it wrote, and the two halves are written in
+   * different places. A reload is the cheapest way to make it prove both at once.
+   */
+  test('carries the search, the filters and the page in the address, and reads them back', async ({
+    page,
+    request,
+  }) => {
+    const { org, react, path } = await seed(request, 'cand-address');
+
+    await signIn(page, org.email);
+    await page.goto(path);
+
+    const count = page.getByTestId('candidates-count');
+    await expect(count).toHaveText('3 candidates');
+
+    await openFilters(page);
+    await chooseInSelect(page, 'candidates-filter-category', `candidates-filter-category-option-${react.id}`);
+    await expect(count).toHaveText('2 of 3 candidates');
+    await page.getByTestId('candidates-filters-apply').click();
+
+    await page.getByTestId('candidates-search-input').fill('Jane');
+    await expect(count).toHaveText('1 of 3 candidates');
+
+    // Written as they are applied, and the defaults stay out: no `scope`, no `page`.
+    await expect(page).toHaveURL(new RegExp(`\\?(?=.*search=Jane)(?=.*categoryId=${react.id})`));
+    await expect(page).not.toHaveURL(/scope=/);
+    await expect(page).not.toHaveURL(/page=/);
+
+    // And read back: a reload is not a reset. The field, the chip and the count all return.
+    await page.reload();
+    await expect(page.getByTestId('candidates-search-input')).toHaveValue('Jane');
+    await expect(page.getByTestId('candidates-filters-open')).toHaveText('Filters (1)');
+    await expect(count).toHaveText('1 of 3 candidates');
+  });
+
+  /**
    * TC-H03-E2E-07 — the page strip.
    *
    * Reversal 1, back the other way: pagination returns, and the count it was once traded

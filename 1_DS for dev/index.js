@@ -52,6 +52,7 @@ export {
   ArrowIcon,
   CloseIcon,
   CrossIcon,
+  CopyIcon,
   MagnifyIcon,
   TrashIcon,
   ThreeDotsIcon,

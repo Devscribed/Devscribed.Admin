@@ -183,7 +183,10 @@ The screen is gone; every clause below survives it, restated against the `Assign
     survives "Clear all", and it does not decide between the two filter-shaped empty states.
 37. It is addressable — `?scope=mine` — so a link, a bookmark and a Back from a candidate card all
     open the tab they left. Absent from the URL, the last choice is remembered per browser;
-    absent that too, it is `all`.
+    absent that too, it is `all`. It was the first thing to live in the query string and is no
+    longer the only one: §09.53 put the rest of the question there for this same reason. The
+    **memory** is still the scope's alone — a habit is worth keeping across days; a filter set
+    nobody remembers building is not.
 38. Each tab's label carries **how many candidates that scope holds under the filters already
     applied**, so a tab answers what the other one would show before it is pressed.
 39. Switching scope preserves the search and every filter, and returns to page 1.
@@ -263,6 +266,37 @@ Five kinds of filter is a query builder, and this screen is a list. So the contr
     therefore gets a drawer holding Status alone, rather than four pickers that answer `No
     options` — and the same rule covers an organization that has not made a category yet. What is
     hidden is only the control: a filter already applied is still applied, and still counted.
+53. **The whole question is in the query string**, not the scope alone: the search, the four
+    filters and the page join `?scope=` in the address bar, written as they are applied. §08.37
+    gave the reason for the scope and it is the same reason here — *a link, a bookmark and a Back
+    from a candidate card all land on the list they left* — and a Back that restored the tab while
+    discarding the four controls the member had just set would honour the letter of that and
+    nothing else.
+
+    Three things follow, and all three are wanted. A **reload keeps the query**. A **Back from a
+    candidate card restores it exactly** ([04 §01.8](04-candidate-card.md)), because the card
+    remembers an address rather than a screen. And the query **can be sent to somebody**, which is
+    the line *Out of Scope*'s "shareable filter URLs beyond the query string" draws rather than
+    the one it forbids.
+
+    Written with `history.replaceState`, never a push: nothing changes on the server, and one
+    history entry per keystroke would make Back walk the filter drawer instead of leaving the
+    screen. Defaults are **absent** rather than spelled out — `?scope=all&page=1` is the same list
+    as no query at all, and the canonical address has to stay the one the rail links to.
+
+    Read back from the **router**, not from the browser's own location. A card's back link is a
+    client-side navigation, and during one the screen mounts before `window.location` has caught
+    up — a list restored from the window opened empty and then wrote its emptiness back over the
+    address it had just been handed. The two agree everywhere else, which is what makes this worth
+    stating: it is the one arrival where they do not, and it is also the arrival this whole
+    requirement exists for.
+
+    **Nothing in the query is validated by the client.** An id from another organization, a
+    criterion naming a deleted one, an operator a type does not answer — every one of those is the
+    server's `422 invalid_filter` to give (§Validation), and a client that quietly dropped them
+    would draw an unfiltered list under an address claiming otherwise. Only values that are not of
+    the right *kind* are ignored, because a `status` of `banana` names no column this screen can
+    draw a chip for.
 
 ### 10. Row Actions
 
@@ -1089,3 +1123,17 @@ candidates sit in a list they cannot see.
 - **Expected Result:**
   1. The candidate card opens on that application with the reschedule dialog already open — one press, not two.
 - **Selectors:** `candidate-action-reschedule-{id}`, `candidate-card`, `application-reschedule-dialog-{id}`.
+
+### TC-H03-E2E-10: The query is in the address, and the screen reads it back
+- **Level:** E2E
+- **Preconditions:** logged in as `admin`; three candidates, two of them on a categorised vacancy.
+- **Steps:**
+  1. Apply a category filter from the drawer, then type a search in the toolbar.
+  2. Read the address bar.
+  3. Reload.
+- **Expected Result:**
+  1. The count moves twice, as it does for any filter.
+  2. The address carries `search` and `categoryId`, and carries **neither** `scope` nor `page` — defaults are absent, not spelled out ([§09.53](#09-filter-drawer)).
+  3. The reload is not a reset: the search field, the `Filters (1)` count and the count line all come back as they were.
+- **Selectors:** `candidates-filter-category`, `candidates-search-input`, `candidates-filters-open`, `candidates-count`.
+

@@ -210,6 +210,22 @@ export function FlagIcon(props) {
   );
 }
 
+/* §57 — the copy affordance beside the candidate's email. Prod copies nothing anywhere, so there
+   is no mark to measure, which is §9's and §44's position exactly: blue's icon rules are explicit
+   enough to draw to (geometric, filled, `currentColor`, 12-24px, viewBox matching the intrinsic
+   size, no icon font). Drawn **filled**, not to the four Ionicons outline glyphs the vendored set
+   also carries — those arrived verbatim from prod and are what prod happened to have, not a family
+   the readme licenses new members of. The sheet behind is an open band rather than a second solid
+   square, so the two read as two sheets at 18px instead of one blot. */
+export function CopyIcon(props) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <path d="M2.75 1C1.7835 1 1 1.7835 1 2.75V12.25C1 12.6642 1.33579 13 1.75 13C2.16421 13 2.5 12.6642 2.5 12.25V2.75C2.5 2.61193 2.61193 2.5 2.75 2.5H12.25C12.6642 2.5 13 2.16421 13 1.75C13 1.33579 12.6642 1 12.25 1H2.75Z" />
+      <path fillRule="evenodd" clipRule="evenodd" d="M7.25 5C6.00736 5 5 6.00736 5 7.25V16.75C5 17.9926 6.00736 19 7.25 19H16.75C17.9926 19 19 17.9926 19 16.75V7.25C19 6.00736 17.9926 5 16.75 5H7.25ZM6.5 7.25C6.5 6.83579 6.83579 6.5 7.25 6.5H16.75C17.1642 6.5 17.5 6.83579 17.5 7.25V16.75C17.5 17.1642 17.1642 17.5 16.75 17.5H7.25C6.83579 17.5 6.5 17.1642 6.5 16.75V7.25Z" />
+    </svg>
+  );
+}
+
 /* §20 — react-select's own clear/remove cross, the glyph the app's `Select` draws on a multi
    value and on the clear indicator. It was inlined inside `Select.jsx`, which is where it had
    to be duplicated from the moment `Chip` was promoted out of that file. Moved here unchanged;
@@ -232,7 +248,7 @@ const ICONS = {
   ArrowIcon, CloseIcon, MagnifyIcon, TrashIcon, ThreeDotsIcon, UserIcon, PersonCircleIcon,
   MailOutlineIcon, TimeOutlineIcon, InfoCircleIcon, CloudDownloadOutlineIcon, SettingsIcon,
   CheckIcon, MenuIcon, TimesheetsIcon, ProjectManagementIcon, PeopleIcon, ReportsIcon,
-  TimeOffIcon, OrgIcon, EyeIcon, EyeOffIcon, FlagIcon, CrossIcon,
+  TimeOffIcon, OrgIcon, EyeIcon, EyeOffIcon, FlagIcon, CrossIcon, CopyIcon,
 };
 
 export function Icon({ name, ...props }) {

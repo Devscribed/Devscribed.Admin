@@ -27,6 +27,7 @@ export {
   Checkbox,
   Chip,
   CloseIcon,
+  CopyIcon,
   ConfirmDialog,
   EmptyState,
   Eye,

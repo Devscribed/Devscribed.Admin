@@ -22,6 +22,7 @@ import {
   Toast,
   ToastHost,
 } from '@/ds';
+import { rememberCandidateOrigin } from '@/hiring/candidate-origin';
 import { useToasts } from '@/hiring/useToasts';
 import type { Board, Vacancy } from '@/hiring/types';
 import { VacancyDialog } from '../VacancyDialog';
@@ -99,6 +100,20 @@ export default function VacancyDetailPage({
     });
     router.replace(`/org/${orgId}/hiring/vacancies/${vacancyId}`);
   }, [search, push, router, orgId, vacancyId]);
+
+  /**
+   * A card opened from a column comes back here, and the link says `Board` (04 §01.8).
+   *
+   * Recorded from the screen rather than from `BoardCard`'s own `href`, for the reason the
+   * candidate list records it from the screen too: there is one place a member can be, and
+   * counting the ways out of it is how one of them gets missed.
+   */
+  useEffect(() => {
+    rememberCandidateOrigin(orgId, {
+      label: HIRING_MESSAGES.card.backToBoard,
+      href: `/org/${orgId}/hiring/vacancies/${vacancyId}`,
+    });
+  }, [orgId, vacancyId]);
 
   const load = useCallback(async (): Promise<void> => {
     const response = await fetch(`/api/organizations/${orgId}/hiring/vacancies/${vacancyId}`, {
