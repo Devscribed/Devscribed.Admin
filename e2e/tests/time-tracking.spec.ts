@@ -184,9 +184,15 @@ test.describe('12 — Time Tracking', () => {
     const userEmail = await addMember(request, adminEmail, 'user', 'Uma', 'User');
     const user = await findMember(request, org.organizationId, userEmail);
     // Seed entries in the current month so the grid (not the empty state) renders.
-    const firstOfMonth = addMonthsFirst(today, 0);
+    // The extra-day seed lands on the 1st of the month, unless today already IS the
+    // 1st — that collision would double the `today` cell's hours and break the
+    // assertion below (2h → 6h). On a 1st we fall back to the 2nd, which is still
+    // in the current month and still off `today`.
+    const [ty, tm, td] = today.split('-');
+    const otherDayInMonth =
+      td === '01' ? `${ty}-${tm}-02` : addMonthsFirst(today, 0);
     await createTimeEntryViaApi(request, org.organizationId, {
-      membershipId: user.id, date: firstOfMonth, durationMinutes: 240, task: 'Kickoff',
+      membershipId: user.id, date: otherDayInMonth, durationMinutes: 240, task: 'Kickoff',
     });
     await createTimeEntryViaApi(request, org.organizationId, {
       membershipId: user.id, date: today, durationMinutes: 120, task: 'Today work',
