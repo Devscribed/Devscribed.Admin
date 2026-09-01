@@ -45,6 +45,7 @@ const LOCATION: FilterCriterion = { id: 'crit-location', type: 'text', values: [
 const LIBRARY = {
   vacancyIds: new Set(['vac-react', 'vac-node', 'vac-dotnet']),
   categoryIds: new Set(['cat-senior', 'cat-react']),
+  interviewerIds: new Set(['acct-sam', 'acct-ines']),
   criteria: new Map([ENGLISH, YEARS, LATE_HOURS, LOCATION].map((c) => [c.id, c])),
 };
 
@@ -96,6 +97,48 @@ describe('candidateFilterPlan', () => {
         applicationClauses: [{ vacancyIds: ['vac-react'] }, { categoryIds: ['cat-senior'] }],
       },
     });
+  });
+
+  /**
+   * The two kinds the drawer added (03 §09.47, §09.48). They are clauses like the other
+   * three — their own `some`, so they AND across kinds while each is satisfied by any one
+   * application — and neither is folded into a clause already there.
+   */
+  it('gives the status and the interviewer a clause each', () => {
+    const result = candidateFilterPlan(
+      { status: ['passed', 'offer'], interviewerId: 'acct-sam', categoryId: 'cat-senior' },
+      LIBRARY,
+    );
+
+    expect(result).toMatchObject({
+      valid: true,
+      plan: {
+        applicationClauses: [
+          { categoryIds: ['cat-senior'] },
+          { statuses: ['passed', 'offer'] },
+          { interviewerAccountIds: ['acct-sam'] },
+        ],
+        filtered: true,
+      },
+    });
+  });
+
+  /**
+   * The five statuses are a closed set, so a sixth is unevaluable rather than empty — and
+   * an unevaluable filter is refused, never dropped (03 §Validation.7). The interviewer
+   * follows the rule every other id already follows.
+   */
+  it('refuses an unknown status and an interviewer this organization does not hold', () => {
+    for (const params of [
+      { status: ['archived'] },
+      { status: ['passed', 'Scheduled'] },
+      { interviewerId: ['acct-nobody'] },
+    ]) {
+      expect(candidateFilterPlan(params, LIBRARY)).toMatchObject({
+        valid: false,
+        error: 'invalid_filter',
+      });
+    }
   });
 
   it('keeps two criterion rows as a conjunction, and requires both to hold', () => {

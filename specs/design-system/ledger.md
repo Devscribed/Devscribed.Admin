@@ -7,14 +7,16 @@ One numbered entry per component or prop added, under
 Phase 0 created this file; Phase 1 wrote §1–§11, Phase 2 wrote §12–§18, Phase 3 wrote
 §19–§29, Phase 4 wrote §30–§36, Phase 5 wrote §37–§38, Phase 6 wrote §39–§41, Phase 7 wrote
 §42–§45 and Phase 8 wrote §46–§47, plus §48–§50 from the narrow-viewport bug report that
-followed it. `npm run ds:drift` currently reports thirteen local-only
+followed it. The **desktop-design** phases append to the same list, and their
+rows say so in the phase column: `desktop 4` wrote §51–§52. `npm run ds:drift` currently reports thirteen local-only
 components — `AuthLayout`, `BoardCard`, `BoardColumn`, `BookingLayout`, `Calendar`, `Card`,
 `Chip`, `CrossIcon`, `FileInput`, `FlagIcon`, `IconButton`, `Eye`, `EyeOff` — and each of them is
 numbered below, which is the bar this file exists to hold. Phase 8 added the last two; Phases 5
 and 6 added none, because every one of their entries is props on a component already numbered.
 
-**This file is now the push list.** Phase 8 is the last phase, so nothing further will be added
-to it before the batched `DesignSync` goes upstream, and the split that push has to defend is
+**This file is now the push list.** The migration's Phase 8 was its last, and the desktop-design
+work that followed adds to it rather than reopening it — §51 and §52 are both `omission`s on
+components already numbered. The split that push has to defend is
 [the one below](#a-note-on-42-and-what-designed-is-allowed-to-mean): ten `designed` entries, three
 `packaging`, and everything else an `omission` — a gap in the measurement rather than a change to
 the design.
@@ -115,6 +117,8 @@ Each entry is one of three, because the distinction decides what the upstream pu
 | 48 | `Table` | `minHeight` in place of prod's flat `height: 70`, 8px of vertical padding, and the header label truncated the way every body cell already was. All three are the same omission: **prod's every cell holds one line**, so blue measured a table that never had to contain anything taller or narrower than itself. Ours hold two — a vacancy title over its category chips, a candidate name over an email — and a fixed height does not clip that content, it lets it paint over the row beneath. `minHeight` is identical to `height` for every row prod has, so the measured 70px is untouched; the padding is only ever visible on a row that has grown, because `box-sizing: border-box` keeps a one-line row at exactly 70px. The header is the third: body cells carried `overflow: hidden` from the start and the header carried nothing, so a column narrower than its own label painted straight over its neighbour. It needs a child element to truncate in, not just `overflow` — an anonymous flex item is not a line box, which is why the ellipsis never appeared on the body cells either. | `omission` | [§D2](README.md) | 8 | [01](../hiring/01-vacancies.design.md), [03](../hiring/03-candidate-database.design.md) |
 | 49 | `ToggleButton` | `width: '100%'` beside prod's measured `max-width: 160px`. In prod this root is a block in a stacked form, so it fills its parent and the cap is the only thing limiting it — which means `max-width` alone was a faithful measurement of a value that was never doing the work on its own. Put in a flex row, the same declaration collapses the control: a flex item sizes to content, both segments are `flex-basis: 0`, and the whole thing shrinks to the width of the string `24h12h` with the active segment's 36px pill painting over its neighbour. The booking page's format toggle shares a row with a zone `Select`, which is the first flex row prod's version has ever been in. Restoring the block behaviour changes nothing anywhere the cap already decided the width. | `omission` | [§D2](README.md) | 8 | [02](../hiring/02-booking-page.design.md) |
 | 50 | `Popover` | The item label no longer wraps; only its `description` does. §22 added the description and switched the whole row to `white-space: normal` so it could, which took the label with it — `Delete vacancy` broke across two lines in a 160px menu while the sentence beneath it wrapped correctly. The label was always meant to be the row, and the description a second line under it. | `omission` | [§D2](README.md) | 8 | [01](../hiring/01-vacancies.design.md), [06](../hiring/06-libraries.design.md) |
+| 51 | `MenuDrawer` | `top`, `...rest` on the panel, an accessible name and a test id for the close button, focus moved in on open and returned to the opener on close, `Escape`, and `inert` while shut. The `top` is the entry's reason: blue pins the panel and its scrim at `top: 60px`, which is not a drawer measurement but `--layout-navbar-height-mobile` written as a number, so above 1200px — where this shell's navbar is 80px (§14) — both covered the last 20px of the header they hang from. The default now reads the shell's own switch out of `base.css` rather than naming a third value, and `top` overrides it. The rest is the same omission in the same place: blue's drawer forwards nothing, its close button is an unnamed icon, nothing moves focus into a panel that has just covered the page, `Escape` does not leave it, and everything inside it stays tabbable while it is translated off-screen. `AppShell` needed all of it the moment its rail *became* this drawer and got it there; this is the same treatment on the component that lends it the geometry — three rules rather than `Modal`'s four, because like the rail this is a panel a reader may Tab out of. | `omission` | [§D2](README.md) | desktop 4 | [03](../hiring/03-candidate-database.design.md) |
+| 52 | `TableToolbar` | `tabsLabel`, `tabsTestId`, `searchLabel`, `searchTestId`, `...rest` on the row, and the object form of `tabs` in the types. A composition that draws two controls and gives no way to address either: §45 gave `PageTabs` a `label` and an object form and this swallowed both, and the `SearchInput` it renders takes neither a name nor a test id. Blue's own list screens never had to care — their tab rows are three words nothing arrives at by keyboard, and their search is the only field on the page. Nothing here is a new number for `PageTabs` or `SearchInput`: both already take these props, and this is the wrapper learning to pass them. Same shape as §16, §21, §37 and §40. | `omission` | [§D2](README.md) | desktop 4 | [03](../hiring/03-candidate-database.design.md) |
 
 ### A note on §48–§50 and the width nobody had looked at
 
@@ -388,6 +392,29 @@ control still counts — otherwise picking `React` would make the next `React` l
 It had gone unnoticed because the only test that reaches the case is `hiring-libraries.spec.ts`'s
 first criteria flow, which has been failing earlier in its own body since the migration began.
 Phase 6 unblocked it, and it caught this on the next line.
+
+### A note on §21 and `Escape` inside a dialog
+
+Not a new number, and the same shape as the two notes above: it makes an existing entry do what it
+already said it did.
+
+§21 gave `Select` react-select's keyboard, and its `Escape` closes the listbox and calls
+`stopPropagation()` so the dialog around it does not also close. §22 wrote the same line into
+`Popover`. §8's correction then taught every dialog shell to skip an `Escape` that something
+inside had already answered — but it tests `event.defaultPrevented`, and neither control was
+setting it.
+
+That mismatch was survivable while the only dialogs were `Modal` and `ConfirmDialog`, whose
+listeners are added at the same `document` React dispatches from. **Listeners on one node fire in
+registration order, and `stopPropagation` does not stop the ones still queued on that node** — it
+only stops ancestors. Under Next's App Router React hydrates `document` itself, so "an ancestor"
+is not where any of this is happening: a `Select` inside `MenuDrawer` (§51) closed its listbox and
+the drawer, in one keypress, discarding the panel somebody was filtering in.
+
+Both controls now `preventDefault()` **as well as** `stopPropagation()`. The two answer different
+listeners and both are needed — propagation for a host bound to a real ancestor, `defaultPrevented`
+for one bound where React already is. Nothing gains a prop, and `MenuDrawer`, `Modal` and
+`ConfirmDialog` all get it because all three read the same flag.
 
 ## Closed
 

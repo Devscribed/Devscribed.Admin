@@ -1,11 +1,14 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import {
+  addMember,
+  archiveCriterion,
   assessCriterion,
   bookInterview,
   columnCards,
   createCategory,
   createCriterion,
   createVacancy,
+  createVacancyFor,
   registerOrganization,
   signIn,
   uniqueEmail,
@@ -17,9 +20,13 @@ import {
 /**
  * The candidate database (spec 03) — the screen the two libraries exist to serve.
  *
- * Both cases below are about the same thing seen from two angles: **the count is the
- * feedback**. It is what a filter change is judged by, what a search has to compose
+ * Most of what is below is about the same thing seen from several angles: **the count is
+ * the feedback**. It is what a filter change is judged by, what a search has to compose
  * with, and the one thing on the page that is announced.
+ *
+ * Since the filters moved into a drawer (§09), it is also what says the drawer works: the
+ * panel covers a strip of the list and never the count, so every case here reads the
+ * effect of a filter without closing the thing that set it.
  */
 test.describe('Candidate database', () => {
   interface Seed {
@@ -81,23 +88,24 @@ test.describe('Candidate database', () => {
     return { org, react, english, path: `/org/${org.organizationId}/hiring/candidates` };
   }
 
-  /** Picks an option out of a `Combobox`, which opens on focus. */
-  async function chooseInCombobox(page: Page, field: string, option: string): Promise<void> {
-    await page.getByTestId(field).click();
-    await page.getByTestId(option).click();
-  }
-
-  /** Picks an option out of a `Select`, which opens on click. */
+  /** Picks an option out of a `Select`, searchable or not: both open on click. */
   async function chooseInSelect(page: Page, field: string, option: string): Promise<void> {
     await page.getByTestId(field).click();
     await page.getByTestId(option).click();
   }
 
+  /** Every filter is behind this one button now (03 §09.45). */
+  async function openFilters(page: Page): Promise<void> {
+    await page.getByTestId('candidates-filters-open').click();
+    await expect(page.getByTestId('candidates-filters')).toBeVisible();
+  }
+
   /**
    * TC-H03-E2E-01 — filter by category and criterion, and read the count.
    *
-   * The headline query, built one control at a time, with the count checked after each:
-   * it is the only thing that says whether a filter did anything.
+   * The headline query, built one control at a time inside the drawer, with the count
+   * checked after each: it is the only thing that says whether a filter did anything, and
+   * it stays readable while the panel that set it is still open.
    */
   test('narrows the count with each filter and widens it when a chip is removed', async ({
     page,
@@ -108,46 +116,53 @@ test.describe('Candidate database', () => {
     await page.goto(path);
 
     const count = page.getByTestId('candidates-count');
+    const filters = page.getByTestId('candidates-filters-open');
     await expect(count).toHaveText('3 candidates');
     await expect(page.getByTestId('candidates-list')).toBeVisible();
+    // Nothing applied, so the button is a word rather than a count (03 §09.46).
+    await expect(filters).toHaveText('Filters');
+
+    await openFilters(page);
 
     // The category: two of the three applied to a React-categorised vacancy.
-    await chooseInCombobox(
+    await chooseInSelect(
       page,
       'candidates-filter-category',
       `candidates-filter-category-option-${react.id}`,
     );
     await expect(count).toHaveText('2 of 3 candidates');
+    await expect(filters).toHaveText('Filters (1)');
 
-    // The criterion: of those two, one is at B1 and one is below it.
-    await page.getByTestId('candidates-criteria-filter-add').click();
-    await chooseInCombobox(
+    // The criterion: of those two, one is at B1 and one is below it. Choosing it from the
+    // picker is what creates the chip, and the chip arrives with `is` already set.
+    await chooseInSelect(
       page,
-      'criteria-filter-criterion-0',
-      `criteria-filter-criterion-0-option-${english.id}`,
+      'candidates-criteria-filter-add',
+      `candidates-criteria-option-${english.id}`,
     );
+    await expect(page.getByTestId('criteria-filter-criterion-0')).toHaveText('English');
     await chooseInSelect(page, 'criteria-filter-op-0', 'criteria-filter-op-0-option-gte');
 
-    // Choosing the criterion alone must not narrow anything: a row with no value yet is
-    // half-built, not a filter that matches nobody (03 design §Interactions).
+    // A chip with no value yet is half-built, not a filter that matches nobody — it
+    // narrows nothing and is not counted (03 design §Interactions).
     await expect(count).toHaveText('2 of 3 candidates');
+    await expect(filters).toHaveText('Filters (1)');
 
     const b1 = english.values.find((value) => value.label === 'B1')!.id;
     await chooseInSelect(page, 'criteria-filter-value-0', `criteria-filter-value-0-option-${b1}`);
     await expect(count).toHaveText('1 of 3 candidates');
+    await expect(filters).toHaveText('Filters (2)');
     await expect(page.getByTestId('candidate-name-' + (await onlyRowId(page)))).toHaveText('Jane Doe');
 
-    // Removing the chip widens the set in place — the criterion row still holds.
+    // Removing the chip widens the set in place — the criterion chip still holds.
     await page.getByTestId(`candidates-filter-chip-${react.id}`).getByRole('button').click();
     await expect(count).toHaveText('1 of 3 candidates');
+    await expect(filters).toHaveText('Filters (1)');
 
-    // Removing a chip returns focus to the field, which reopens its option list over the
-    // row below. A pointer would dismiss it on the way down; a test has to say so.
-    await page.keyboard.press('Escape');
-
-    // And removing the criterion row restores the unfiltered list.
+    // And removing the criterion chip restores the unfiltered list.
     await page.getByTestId('criteria-filter-remove-0').click();
     await expect(count).toHaveText('3 candidates');
+    await expect(filters).toHaveText('Filters');
   });
 
   /**
@@ -172,7 +187,8 @@ test.describe('Candidate database', () => {
     const count = page.getByTestId('candidates-count');
     await expect(count).toHaveText('3 candidates');
 
-    await chooseInCombobox(
+    await openFilters(page);
+    await chooseInSelect(
       page,
       'candidates-filter-category',
       `candidates-filter-category-option-${react.id}`,
@@ -195,44 +211,54 @@ test.describe('Candidate database', () => {
   });
 
   /**
-   * The criterion list is longer than the card it opens inside, and a `Card` clips to its
-   * radius by default — which cut the popover off at the card's edge and left the options
-   * below the fold unclickable. `clip={false}` is what makes this pass.
+   * The criterion picker offers the whole library — archived entries below the active
+   * ones and badged, because history stays filterable and that is the whole difference
+   * between archiving a criterion and deleting one (03 §04.19).
+   *
+   * The archived one is also the case that pins down *where* the marker goes. It is the
+   * option's `hint`, not part of its label, so the badge is visible and the criterion is
+   * still findable by typing its name — which is what the second half of this asserts.
    */
-  test('offers every criterion, including one whose row falls past the card edge', async ({
+  test('offers every criterion, archived last and badged, and still findable by name', async ({
     page,
     request,
   }) => {
-    const { org, path } = await seed(request, 'cand-popover');
-    await createCriterion(request, org, { name: 'Availability', type: 'boolean' });
+    const { org, english, path } = await seed(request, 'cand-picker');
     const zone = await createCriterion(request, org, { name: 'Zone', type: 'text' });
+    const legacy = await createCriterion(request, org, { name: 'Ancient skill', type: 'text' });
+    await archiveCriterion(request, org, legacy.id);
+
     await signIn(page, org.email);
     await page.goto(path);
+    await openFilters(page);
 
-    await page.getByTestId('candidates-criteria-filter-add').click();
-    await page.getByTestId('criteria-filter-criterion-0').click();
+    const picker = page.getByTestId('candidates-criteria-filter-add');
+    await picker.click();
 
-    // Last of the three, so its row falls below where the card ends.
-    const option = page.getByTestId(`criteria-filter-criterion-0-option-${zone.id}`);
-    const box = (await option.boundingBox())!;
+    // Alphabetically among the active ones, and the archived one last however its name
+    // sorts — `Ancient skill` would lead the list if archiving did not move it.
+    const options = page.locator('[data-testid^="candidates-criteria-option-"]');
+    await expect(options).toHaveCount(3);
+    await expect(options.nth(0)).toHaveText(/English/);
+    await expect(options.nth(1)).toHaveText(/Zone/);
+    await expect(options.nth(2)).toHaveText(/Ancient skill/);
+    await expect(
+      page.getByTestId(`candidates-criteria-option-${legacy.id}`),
+    ).toContainText('Archived');
 
-    // Hit-testing rather than clicking, and rather than comparing boxes. A clipped
-    // popover keeps its layout geometry and still scrolls into view inside the card that
-    // hides it, so Playwright would click it happily either way — what actually differs
-    // is whether anything is *painted* where the option appears to be.
-    const painted = await page.evaluate(
-      ({ x, y }) =>
-        document
-          .elementFromPoint(x, y)
-          ?.closest('[data-testid]')
-          ?.getAttribute('data-testid') ?? null,
-      { x: box.x + box.width / 2, y: box.y + box.height / 2 },
-    );
-    expect(painted).toBe(`criteria-filter-criterion-0-option-${zone.id}`);
+    // The badge is beside the name, not inside it: typing the name still finds the row.
+    await picker.pressSequentially('Ancient');
+    await expect(options).toHaveCount(1);
+    await page.getByTestId(`candidates-criteria-option-${legacy.id}`).click();
+    await expect(page.getByTestId('criteria-filter-criterion-0')).toHaveText('Ancient skill');
+    await expect(page.getByTestId('criteria-filter-archived-0')).toBeVisible();
 
-    await option.click();
-    await chooseInSelect(page, 'criteria-filter-op-0', 'criteria-filter-op-0-option-contains');
-    await expect(page.getByTestId('criteria-filter-value-0')).toBeVisible();
+    // A chosen criterion leaves the picker, so the same filter cannot be added twice.
+    await chooseInSelect(page, 'candidates-criteria-filter-add', `candidates-criteria-option-${zone.id}`);
+    await expect(page.getByTestId('criteria-filter-criterion-1')).toHaveText('Zone');
+    await picker.click();
+    await expect(page.locator('[data-testid^="candidates-criteria-option-"]')).toHaveCount(1);
+    await expect(page.getByTestId(`candidates-criteria-option-${english.id}`)).toBeVisible();
   });
 
   test('opens the candidate card from a row', async ({ page, request }) => {
@@ -270,6 +296,103 @@ test.describe('Candidate database', () => {
     // Clearing brings the list back rather than leaving a dead end.
     await page.getByTestId('candidates-clear-all').click();
     await expect(page.getByTestId('candidates-count')).toHaveText('3 candidates');
+  });
+
+  /**
+   * TC-H03-E2E-06 — the filters are in a drawer, and the scope is not one of them.
+   *
+   * Three separate claims, and each one is a rule the drawer could plausibly have broken:
+   * a filter applies without an Apply, it survives a tab change, and the tab survives
+   * `Clear filters`. The fourth is that `Interviewer` is **absent** in `Assigned to me`
+   * rather than disabled — in that scope the interviewer is the viewer, so there is
+   * nothing there to enable.
+   */
+  test('applies filters from the drawer, and keeps the scope out of them', async ({
+    page,
+    request,
+  }) => {
+    const org = await registerOrganization(request, uniqueEmail('cand-drawer'));
+    const ines = await addMember(request, {
+      email: uniqueEmail('ines'),
+      role: 'user',
+      firstName: 'Ines',
+      lastName: 'Interviewer',
+    });
+
+    const mine = await createVacancy(request, org, { title: 'React Engineer' });
+    const theirs = await createVacancyFor(request, org, ines.accountId, {
+      title: 'Node Engineer',
+    });
+    await bookInterview(request, mine.publicSlug, {
+      firstName: 'Jane',
+      lastName: 'Doe',
+      email: uniqueEmail('jane'),
+      slotIndex: 0,
+    });
+    await bookInterview(request, theirs.publicSlug, {
+      firstName: 'Tom',
+      lastName: 'Fisher',
+      email: uniqueEmail('tom'),
+      slotIndex: 1,
+    });
+
+    await signIn(page, org.email);
+    await page.goto(`/org/${org.organizationId}/hiring/candidates`);
+
+    const count = page.getByTestId('candidates-count');
+    const filters = page.getByTestId('candidates-filters-open');
+    await expect(count).toHaveText('2 candidates');
+    await expect(page.getByTestId('candidates-scope-all')).toHaveText('All (2)');
+    await expect(page.getByTestId('candidates-scope-mine')).toHaveText('Assigned to me (1)');
+
+    await openFilters(page);
+
+    // The viewer is labelled `(me)`, so the field and the tab are visibly one person.
+    await page.getByTestId('candidates-filter-interviewer').click();
+    await expect(
+      page.getByTestId(`candidates-filter-interviewer-option-${org.accountId}`),
+    ).toHaveText('Pat Owner (me)');
+    await expect(
+      page.getByTestId(`candidates-filter-interviewer-option-${ines.accountId}`),
+    ).toHaveText('Ines Interviewer');
+
+    // Escape dismisses the list a control opened and **not** the panel it sits in: the
+    // control answers the key first and marks it handled (ledger, the note on §21).
+    await page.keyboard.press('Escape');
+    await expect(
+      page.getByTestId(`candidates-filter-interviewer-option-${ines.accountId}`),
+    ).toHaveCount(0);
+    await expect(page.getByTestId('candidates-filters')).toBeVisible();
+
+    // A status applies at once — the count moves while the drawer is still open.
+    await chooseInSelect(page, 'candidates-filter-status', 'candidates-filter-status-option-scheduled');
+    await expect(count).toHaveText('2 of 2 candidates');
+    await expect(filters).toHaveText('Filters (1)');
+
+    // `Show results` only dismisses; nothing is applied by it, and focus comes home.
+    await page.getByTestId('candidates-filters-apply').click();
+    await expect(page.getByTestId('candidates-filters')).toBeHidden();
+    await expect(filters).toHaveText('Filters (1)');
+    await expect(filters).toBeFocused();
+
+    // The tab is navigation: it keeps every filter and returns to page 1.
+    await page.getByTestId('candidates-scope-mine').click();
+    await expect(count).toHaveText('1 of 2 candidates');
+    await expect(filters).toHaveText('Filters (1)');
+
+    await openFilters(page);
+    await expect(page.getByTestId('candidates-filter-status')).toBeVisible();
+    // Absent, not disabled — there is no interviewer to choose in this scope.
+    await expect(page.getByTestId('candidates-filter-interviewer')).toHaveCount(0);
+
+    // And `Clear filters` empties the filters while leaving the tab exactly where it is.
+    await page.getByTestId('candidates-clear-filters').click();
+    await expect(filters).toHaveText('Filters');
+    await expect(count).toHaveText('1 of 2 candidates');
+    await expect(page.getByTestId('candidates-scope-mine')).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
   });
 
   /** The id of the single row on screen — the tests above narrow to one before asking. */

@@ -102,6 +102,22 @@ test.describe('Hiring — candidates, assigned to me', () => {
     // The other interviewer's candidate is absent from the page, not merely unlisted.
     expect(await page.content()).not.toContain('Jane Doe');
 
+    // Their drawer holds Status and nothing else (03 §09.52). The other four filters read
+    // libraries this role may not GET, so drawing them would be four pickers answering
+    // `No options` — and Interviewer would be asking who the viewer is.
+    await page.getByTestId('candidates-filters-open').click();
+    await expect(page.getByTestId('candidates-filter-status')).toBeVisible();
+    for (const absent of [
+      'candidates-filter-position',
+      'candidates-filter-category',
+      'candidates-filter-interviewer',
+      'candidates-criteria-filter-add',
+    ]) {
+      await expect(page.getByTestId(absent)).toHaveCount(0);
+    }
+    await page.getByTestId('candidates-filters-close').click();
+    await expect(page.getByTestId('candidates-filters')).toBeHidden();
+
     // And asking for the whole database by hand does not produce it: the scope is
     // resolved on the server, and the screen only reflects what came back.
     await page.goto(`/org/${org.organizationId}/hiring/candidates?scope=all`);

@@ -4,7 +4,7 @@ title: Candidate Database
 routes: ["/org/{orgId}/hiring/candidates", "/org/{orgId}/hiring/my-interviews (redirect)"]
 api: ["GET /api/organizations/{orgId}/hiring/candidates", "GET /api/organizations/{orgId}/hiring/my-interviews"]
 entities: [Candidate, Application, ApplicationCriterion]
-tags: [candidates, search, filters, criteria-filter, pagination, my-interviews, scope, ordering, rollup]
+tags: [candidates, search, filters, filter-drawer, criteria-filter, pagination, my-interviews, scope, ordering, rollup]
 depends-on: ["01", "02", "04", "06"]
 ---
 
@@ -61,21 +61,27 @@ me?* — chosen by a tab rather than by a sidebar row.
 
 ### 03. Filters
 
-9. Three filter kinds, all optional, all composable:
+9. Five filter kinds, all optional, all composable. Every one of them lives in the filter drawer
+   (§09):
 
    | Filter | Control | Semantics |
    |---|---|---|
+   | Status | multi-select of the five board statuses | matches **any** selected (OR) |
    | Position | multi-select of vacancies | matches **any** selected (OR) |
    | Category | multi-select of categories | matches **any** selected (OR) |
-   | Criterion | repeatable `criterion / operator / value` row | each row must hold (AND) |
+   | Interviewer | multi-select of members | matches **any** selected (OR); absent in `Assigned to me` (§09.48) |
+   | Criterion | repeatable `criterion / operator / value` chip | each chip must hold (AND) |
 
 10. Filters combine as **AND across kinds, OR within a multi-select**. So
     `(React OR Node) AND (Senior) AND (English ≥ B1) AND (AI Skills ≥ Good)`.
 11. Search composes with every filter — the term narrows the already-filtered set.
 12. A category filter matches a candidate when any of their applications is to a vacancy carrying
-    that category.
-13. Every applied filter is shown as a removable chip, with a "Clear all" when more than one is
-    active.
+    that category. Status and interviewer are read the same way, and each against **any** of the
+    applications: a candidate whose React application was passed and whose .NET application is
+    still scheduled matches `React AND Scheduled`, because the row is the person.
+13. Every applied filter is a removable chip **inside the drawer**, and the count of them is on
+    the button that opens it (§09.46). Outside the drawer nothing is drawn per filter: the number
+    is what says the list is narrowed, and one press is what says by what.
 
 ### 04. Criteria Filters
 
@@ -191,6 +197,47 @@ The screen is gone; every clause below survives it, restated against the `Assign
     it is the candidate's most recent application, whoever is interviewing it. The column heading
     moves with it; the two readings are not the same claim.
 
+### 09. Filter Drawer
+
+Five kinds of filter is a query builder, and this screen is a list. So the controls move off it.
+
+45. Every filter lives in a **drawer** opened from one button in the toolbar. The toolbar itself
+    carries only the scope tabs (§08), the search field and that button; nothing else on the
+    screen narrows the list.
+46. The button carries **how many filters are applied** — `Filters (3)`. That count is what makes
+    hiding them legitimate: a filter nobody can see is a filter nobody can undo. Two things are
+    deliberately **not** counted in it — the **search**, which has its own always-visible field and
+    can never be lost track of, and the **scope**, which is navigation (§08.36).
+47. **Status** filters on the five board statuses. It is a filter rather than a sixth tab: the
+    strip above the list already answers *whose candidates*, and a second strip answering *at what
+    stage* would make two rows of tabs the first thing on the screen.
+48. **Interviewer** filters on the vacancy's assigned interviewer. It answers a question `Position`
+    only answers by hand — *everything Sam is running* — and it is the one filter that is not
+    offered in both scopes:
+    - In `Assigned to me` the field is **absent**, not disabled. There is nothing to enable: the
+      interviewer in that scope is the viewer, by definition.
+    - A value carried into that scope from the other tab is **ignored** while it is applied, and
+      is not counted in `Filters (n)`. It is not discarded — switching back restores it.
+    - The viewer is labelled `{name} (me)` in the picker, so the filter and the `Assigned to me`
+      tab are visibly the same person rather than two mechanisms for it.
+49. **Criteria** are added from a single autocomplete over the library and shown as **chips**, one
+    per criterion, each carrying the criterion's name, its operator and its value and reading as
+    the sentence *English · at least · B1*. A criterion already on a chip is not offered again;
+    archived ones are offered below the active ones and badged (§04.19).
+50. Every control applies **at once** — there is no Apply. `Show results` only dismisses the panel
+    covering the list it has been changing, and `Clear filters` empties every filter while leaving
+    the search and the scope alone (§08.36). Any change returns to page 1, and the drawer stays
+    open while the count behind it moves.
+51. The drawer is a dialog: focus moves into it when it opens and back to the button when it
+    closes, and `Escape`, the scrim, the close control and `Show results` all leave it. A control
+    inside it that owns `Escape` — an open picker — answers the key first, and the drawer stays.
+52. **A filter with nothing to choose in it is not drawn.** Status is the only one whose options
+    are constant; Position, Category, Interviewer and Criteria are read from libraries that are
+    `admin`/`manager` only, GET included ([06 §Actors](06-libraries.md)). An assigned interviewer
+    therefore gets a drawer holding Status alone, rather than four pickers that answer `No
+    options` — and the same rule covers an organization that has not made a category yet. What is
+    hidden is only the control: a filter already applied is still applied, and still counted.
+
 ## Screens
 
 ### Candidate database
@@ -199,14 +246,10 @@ The screen is gone; every clause below survives it, restated against the `Assign
 ┌───────────────────────────────────────────────────────────────────────────────┐
 │  Candidates                                             Times in Europe/Minsk │
 │                                                                               │
-│  ┌ ALL (128) ┐ ASSIGNED TO ME (4)                                             │
-│  ─────────────────────────────────────────────────────────────────────────────│
+│  ┌ ALL (128) ┐ ASSIGNED TO ME (4)   [🔍 Search name or email…] [ Filters (3) ]│
+│  ─────────────                                                                │
 │                                                                               │
-│  [🔍 Search name or email…]                                                   │
-│  Position [ React Eng. ×] [+]   Category [ Senior ×] [+]                      │
-│  Criteria [ English  ▾ ][ at least ▾ ][ B1 ▾ ] ×     [ + Add criteria filter ]│
-│                                                                               │
-│  12 of 128 candidates                                     [ Clear all ]       │
+│  12 of 128 candidates                                                         │
 │  ┌─────────────────────────────────────────────────────────────────────────┐  │
 │  │ Name          │ Email            │ Latest application     │ Status      │  │
 │  ├───────────────┼──────────────────┼────────────────────────┼─────────────┤  │
@@ -219,6 +262,32 @@ The screen is gone; every clause below survives it, restated against the `Assign
 │                                          ‹ 1  2  3 ›                          │
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
+
+### The filter drawer
+
+```
+                                          ┌──────────────────────────────────┐
+                                          │ ×                                │
+                                          │ Filters                          │
+                                          │ Status                           │
+                                          │ [ ▌Scheduled ×            ▾ ]    │
+                                          │ Position                         │
+                                          │ [ ▌Senior React Eng. ×    ▾ ]    │
+                                          │ Category                         │
+                                          │ [ Any category            ▾ ]    │
+                                          │ Interviewer                      │
+                                          │ [ ▌Sam Rowe (me) ×        ▾ ]    │
+                                          │ Criteria                         │
+                                          │ [ Type a criterion…       ▾ ]    │
+                                          │ ▌English [at least ▾][ B1 ▾] ×   │
+                                          │                                  │
+                                          │ [        Show results        ]   │
+                                          │ [       Clear filters        ]   │
+                                          └──────────────────────────────────┘
+```
+
+The panel hangs from the navbar rather than over it, and the list stays visible beside it: every
+control applies at once, so the count under the toolbar moves while the drawer is still open.
 
 ### Assigned to me
 
@@ -278,8 +347,12 @@ soonest thing this interviewer has, not because she booked most recently.
 
 Query params:
 - `search` (optional) — name or email, case-insensitive partial.
+- `status` (optional, repeatable) — one of `scheduled`, `didnt_pass`, `maybe`, `passed`, `offer`.
+  OR within.
 - `vacancyId` (optional, repeatable) — OR within.
 - `categoryId` (optional, repeatable) — OR within.
+- `interviewerId` (optional, repeatable) — an account with an active membership in this
+  organization. OR within, and **not applied** when the resolved scope is `mine` (§09.48).
 - `criterion` (optional, repeatable) — `{criterionId}:{op}:{value}`, AND across. `op` is one of
   `is`, `not`, `gte`, `lte`, `contains`. `value` is a `CriterionValue` id for scales, a literal for
   the other types.
@@ -323,8 +396,10 @@ Response `200`:
   `scopeCounts.all` is **absent** when `canSeeAll` is false — a caller who may not see the whole
   database may not learn its size under an arbitrary filter either.
 - `403` is never returned — a `viewer` and an unassigned `user` receive `404`.
-- `422` `{ error: "invalid_filter" }` for a malformed `criterion` triple or an operator the
-  criterion's type does not support.
+- `422` `{ error: "invalid_filter" }` for a malformed `criterion` triple, an operator the
+  criterion's type does not support, an unknown `status`, or an `interviewerId` this organization
+  does not hold. An `interviewerId` is validated in **both** scopes and applied in only one: it is
+  refused when this organization has never heard of it, and ignored when the scope is `mine`.
 
 ### GET /api/organizations/{orgId}/hiring/my-interviews
 
@@ -358,6 +433,14 @@ Response `200`:
 5. Search is parameterised; special characters are data, never syntax.
 6. `scope` is the one parameter that is **clamped rather than refused**, in both directions: an
    unrecognised value becomes `all`, and `all` becomes `mine` for a caller who may not see it.
+7. Every `status` must be one of the five. The set is closed, so a sixth value is a filter this
+   product cannot evaluate rather than one that matches nobody, and it is `422` like any other.
+8. Every `interviewerId` must name an account with an active membership in this organization —
+   membership rather than role, because a member whose role has since narrowed may still be the
+   assigned interviewer on a vacancy, and filtering by them is still a question with an answer.
+9. A valid `interviewerId` is **dropped, not refused**, when the applied scope is `mine`, and it
+   is dropped from the `mine` half of `scopeCounts` too — a tab label counted under a clause that
+   tab would not apply is a label that lies.
 
 ## Error Messages
 
@@ -370,6 +453,12 @@ Response `200`:
 | `Assigned to me`, nothing filtered, nothing to show | "No upcoming interviews." |
 | Criterion picker — archived marker | "Archived" |
 | Scope tabs | "All (n)" · "Assigned to me (n)" |
+| Filters button | "Filters" · "Filters (n)" |
+| Drawer title | "Filters" |
+| Drawer field labels | Status · Position · Category · Interviewer · Criteria |
+| Drawer placeholders | Any status · Any position · Any category · Any interviewer · Type a criterion… |
+| Drawer actions | "Show results" · "Clear filters" |
+| Interviewer picker — the viewer | "{name} (me)" |
 
 The empty-database message is driven by `total` — org-wide and unfiltered — and never by a scoped
 count. An interviewer with no interviews must not be told to share a booking link while 35
@@ -377,18 +466,23 @@ candidates sit in a list they cannot see.
 
 ## UI Notes
 
-- The result count sits directly above the table and updates with every request.
-- Filter chips are removable individually; "Clear all" appears with two or more active.
-- The criterion filter's operator and value controls re-render when the criterion changes, and the
-  value resets rather than carrying a meaningless leftover across types.
+- The result count sits directly above the table and updates with every request. It is the only
+  thing left between the toolbar and the table.
+- Filter chips are removable individually, inside the drawer; `Clear filters` appears there
+  whenever one is applied.
+- A criterion chip's operator and value are its own, and changing the operator resets the value
+  rather than carrying a meaningless leftover across the question it answers.
 - Rows link to the card; the whole row is the target.
 - Required `data-testid` attributes:
   - `candidates-list`, `candidates-search-input`, `candidates-count`, `candidates-timezone`
-  - `candidates-filter-position`, `candidates-filter-category`, `candidates-filter-chip-{id}`,
-    `candidates-clear-filters`
-  - `candidates-criteria-filter-add`, `criteria-filter-row-{index}`,
-    `criteria-filter-criterion-{index}`, `criteria-filter-op-{index}`,
-    `criteria-filter-value-{index}`, `criteria-filter-remove-{index}`
+  - `candidates-filters-open`, `candidates-filters`, `candidates-filters-close`,
+    `candidates-filters-apply`, `candidates-clear-filters`
+  - `candidates-filter-status`, `candidates-filter-position`, `candidates-filter-category`,
+    `candidates-filter-interviewer`, `candidates-filter-chip-{id}`
+  - `candidates-criteria-filter-add`, `candidates-criteria-option-{id}`,
+    `criteria-filter-row-{index}`, `criteria-filter-criterion-{index}`,
+    `criteria-filter-op-{index}`, `criteria-filter-value-{index}`,
+    `criteria-filter-remove-{index}`, `criteria-filter-archived-{index}`
   - `candidate-row-{id}`, `candidate-name-{id}`, `candidate-email-{id}`,
     `candidate-latest-{id}`, `candidate-status-{id}`, `candidate-app-count-{id}`
   - `candidates-pagination`, `candidates-page-{n}`
@@ -461,6 +555,16 @@ candidates sit in a list they cannot see.
   3. The candidate appears once, placed by Tuesday, and the entry names **Tuesday's** application — the order and the row it speaks about come out of one pass.
   4. The caller's own order decides, so a page boundary falls in the same place on two consecutive requests.
 
+### TC-H03-UNIT-06: Status and interviewer are clauses like every other kind
+- **Level:** Unit
+- **Preconditions:** a filter library holding two interviewer ids.
+- **Steps:**
+  1. Plan `status=passed&status=offer&interviewerId={id}&categoryId={id}`.
+  2. Plan `status=archived`, then `interviewerId={unknown}`.
+- **Expected Result:**
+  1. Three clauses, one per kind — never folded into one, so each is satisfied by any of the candidate's applications.
+  2. `invalid_filter` both times: the five statuses are a closed set, and an unknown id is refused rather than dropped.
+
 ### TC-H03-INT-01: The headline query
 - **Level:** Integration
 - **Preconditions:** candidates across a React-categorised vacancy and a .NET one, with a spread of English assessments.
@@ -498,13 +602,17 @@ candidates sit in a list they cannot see.
 
 ### TC-H03-INT-05: An invalid filter is rejected, not ignored
 - **Level:** Integration
-- **Preconditions:** a `boolean` criterion and a vacancy in another organization.
+- **Preconditions:** a `boolean` criterion, a vacancy in another organization, and a member of another organization.
 - **Steps:**
   1. `GET` with `criterion={booleanId}:gte:true`.
   2. `GET` with a `vacancyId` from the other organization.
+  3. `GET` with `status=archived`.
+  4. `GET` with an `interviewerId` from the other organization.
 - **Expected Result:**
   1. `422` `invalid_filter`.
   2. `422` — the id is rejected rather than dropped, so the result can never be broader than the filter implies.
+  3. `422` — the five statuses are a closed set, so a sixth is unevaluable rather than empty.
+  4. `422`, in **both** scopes: an id is refused for being unknown before it is dropped for being inapplicable.
 
 ### TC-H03-INT-06: viewer and unassigned user receive 404 for the database
 - **Level:** Integration
@@ -574,19 +682,44 @@ candidates sit in a list they cannot see.
   3. The same people, in a different order — the scopes are two orders, not one order behind a filter.
   4. In `mine` it is the viewer's own interview in two days; in `all` it is the other interviewer's, a month away. `applicationCount` is 2 in both — the scope narrows who is listed, not what is read about them.
 
+### TC-H03-INT-12: Status is a filter over any of the candidate's applications
+- **Level:** Integration
+- **Preconditions:** a candidate with two applications, one `scheduled` and one moved to `passed`; a second candidate with one `scheduled` application.
+- **Steps:**
+  1. `GET` with `status=passed`.
+  2. `GET` with `status=passed&status=scheduled`.
+  3. `GET` with `status=passed` and a `categoryId` only the second candidate's vacancy carries.
+- **Expected Result:**
+  1. Only the first candidate — the status is satisfied by any one of their applications.
+  2. Both, ORed within the kind.
+  3. Nobody: the two kinds AND, and no candidate satisfies both.
+
+### TC-H03-INT-13: The interviewer filter narrows `all` and is dropped in `mine`
+- **Level:** Integration
+- **Preconditions:** two vacancies with two different interviewers, one candidate on each; the caller is a manager who interviews for one of them.
+- **Steps:**
+  1. `GET` with `interviewerId={other}`.
+  2. `GET` with `interviewerId={other}&scope=mine`.
+  3. Read `scopeCounts` from the first response.
+- **Expected Result:**
+  1. Only the other interviewer's candidate.
+  2. The caller's own candidate — the clause is dropped, not intersected, and the response is not an error.
+  3. `scopeCounts.mine` is counted without the interviewer clause, so it equals what pressing the tab shows.
+
 ### TC-H03-E2E-01: Filter by category and criterion, and read the count
 - **Level:** E2E
 - **Preconditions:** logged in as `admin`; seeded candidates with categories and English assessments.
 - **Steps:**
   1. Open Candidates and note the count.
-  2. Add the category filter `React`.
-  3. Add a criterion filter `English / at least / B1`.
+  2. Open the filter drawer and add the category filter `React`.
+  3. Add the criterion `English`, then set its operator to `at least` and its value to `B1`.
   4. Remove the category chip.
 - **Expected Result:**
-  1. The count shows the unfiltered total.
-  2. It narrows after each filter and reads "n of total".
-  3. Removing a chip widens the result set and updates the count.
-- **Selectors:** `candidates-count`, `candidates-filter-category`, `candidates-criteria-filter-add`, `criteria-filter-criterion-0`, `criteria-filter-op-0`, `criteria-filter-value-0`, `candidates-filter-chip-{id}`.
+  1. The count shows the unfiltered total and the button reads `Filters`.
+  2. It narrows after each filter, reads "n of total", and the button counts what is applied.
+  3. A criterion chip with no value yet narrows nothing and is not counted.
+  4. Removing a chip widens the result set and updates both the count and the button.
+- **Selectors:** `candidates-count`, `candidates-filters-open`, `candidates-filter-category`, `candidates-criteria-filter-add`, `candidates-criteria-option-{id}`, `criteria-filter-op-0`, `criteria-filter-value-0`, `candidates-filter-chip-{id}`.
 
 ### TC-H03-E2E-02: Search debounces and composes with filters
 - **Level:** E2E
@@ -604,15 +737,17 @@ candidates sit in a list they cannot see.
 - **Preconditions:** logged in as a `user` who is the interviewer on one vacancy with candidates, in an organization holding another interviewer's candidates too.
 - **Steps:**
   1. Inspect the sidebar.
-  2. Open Candidates and open a row.
-  3. Navigate to `…/hiring/candidates?scope=all` by hand.
-  4. Navigate directly to the vacancies and board URLs.
+  2. Open Candidates and open the filter drawer.
+  3. Open a row.
+  4. Navigate to `…/hiring/candidates?scope=all` by hand.
+  5. Navigate directly to the vacancies and board URLs.
 - **Expected Result:**
   1. Opening the Hiring group shows Candidates alone; Vacancies, Libraries and any My interviews row are not there, and none flashes during load.
-  2. No tab strip is drawn; only their own candidates are listed; the row opens the card, showing only their own vacancy's application.
-  3. The list is unchanged — the other interviewer's candidate is absent from the page.
-  4. Each renders the not-found state.
-- **Selectors:** the `Hiring` group title by accessible name, `nav-candidates`, `nav-vacancies` · `nav-hiring-settings` · `nav-my-interviews` (all asserted absent), `candidates-scope-tabs` (asserted absent), `candidates-list`, `candidate-card`.
+  2. No tab strip is drawn, and the drawer holds **Status alone** — the other four read libraries this role may not GET (§09.52).
+  3. Only their own candidates are listed; the row opens the card, showing only their own vacancy's application.
+  4. The list is unchanged — the other interviewer's candidate is absent from the page.
+  5. Each renders the not-found state.
+- **Selectors:** the `Hiring` group title by accessible name, `nav-candidates`, `nav-vacancies` · `nav-hiring-settings` · `nav-my-interviews` (all asserted absent), `candidates-scope-tabs` (asserted absent), `candidates-filters-open`, `candidates-filter-status`, `candidates-filter-position` · `candidates-filter-category` · `candidates-filter-interviewer` · `candidates-criteria-filter-add` (all asserted absent), `candidates-list`, `candidate-card`.
 
 ### TC-H03-E2E-04: Candidates is absent for a member with no assignment
 - **Level:** E2E
@@ -641,3 +776,18 @@ candidates sit in a list they cannot see.
   4. The same tab is selected, with the same rows.
   5. It redirects to `…/hiring/candidates?scope=mine`.
 - **Selectors:** `candidates-scope-all`, `candidates-scope-mine`, `candidates-list`.
+
+### TC-H03-E2E-06: Filters live in a drawer, and the scope is not one of them
+- **Level:** E2E
+- **Preconditions:** logged in as an `admin` who interviews for one of two vacancies, each with a candidate.
+- **Steps:**
+  1. Open Candidates, open the drawer and apply a status filter.
+  2. Press `Show results`.
+  3. Switch to `Assigned to me` and reopen the drawer.
+  4. Press `Clear filters`.
+- **Expected Result:**
+  1. The list narrows while the drawer is still open, and the button reads `Filters (1)`.
+  2. The drawer closes, the filter stays applied, and focus returns to the button that opened it.
+  3. The status filter survived the tab change; the Interviewer field is **absent** in this scope.
+  4. Every filter is dropped and the tab is not — the list is still `Assigned to me`.
+- **Selectors:** `candidates-filters-open`, `candidates-filters`, `candidates-filter-status`, `candidates-filter-interviewer`, `candidates-filters-apply`, `candidates-clear-filters`, `candidates-scope-mine`, `candidates-count`.

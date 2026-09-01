@@ -59,7 +59,8 @@ export function Popover({
   }
 
   function onMenuKeyDown(e) {
-    if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); return; }
+    // Both, for the reason `Select`'s Escape gives — see the note on §21 in the ledger.
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setOpen(false); return; }
     if (e.key === 'Tab') { setOpen(false); return; }
     const step = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
     if (step && entries.length) {

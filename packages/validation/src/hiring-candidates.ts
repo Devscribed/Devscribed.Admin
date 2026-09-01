@@ -25,6 +25,8 @@
  * library would come to disagree about `at least`.
  */
 
+import { isApplicationStatus } from './hiring';
+import type { ApplicationStatus } from './hiring';
 import { CRITERION_MESSAGES, compareScale, scalePosition } from './hiring-libraries';
 import type { CriterionType, ScaleOperator, ScalePosition } from './hiring-libraries';
 
@@ -45,10 +47,39 @@ export const CANDIDATE_MESSAGES = {
   invalidFilter: "That filter isn't valid for this criterion",
   loadFailed: "We couldn't load candidates. Try again.",
   searchPlaceholder: 'Search name or email…',
-  clearFilters: 'Clear all',
-  addCriteriaFilter: '+ Add criteria filter',
+  clearFilters: 'Clear filters',
   /** The one marker in the criterion picker, shared with the settings screen. */
   archived: CRITERION_MESSAGES.archivedBadge,
+  /**
+   * The filter drawer (03 §09). Everything that narrows the list lives behind one
+   * button now, so the words that used to label rows inside a card have to name a
+   * surface as well as its fields.
+   */
+  filters: {
+    /** The toolbar's button, and the drawer's own heading — the same word both ways. */
+    button: 'Filters',
+    /** The drawer is a dialog, and a dialog is named. */
+    title: 'Filters',
+    /** Dismisses the drawer without undoing anything — the filters are already applied. */
+    showResults: 'Show results',
+    close: 'Close filters',
+    /** Field labels, in the order the drawer stacks them. */
+    status: 'Status',
+    position: 'Position',
+    category: 'Category',
+    interviewer: 'Interviewer',
+    criteria: 'Criteria',
+    anyStatus: 'Any status',
+    anyPosition: 'Any position',
+    anyCategory: 'Any category',
+    anyInterviewer: 'Any interviewer',
+  },
+  /**
+   * The criteria autocomplete, which is what `+ Add criteria filter` became (03 §09.49):
+   * a field labelled `Criteria`, so the placeholder says what typing into it does rather
+   * than naming the control a second time.
+   */
+  addCriterion: { placeholder: 'Type a criterion…' },
   /**
    * The two scope tabs. `Assigned to me` is what the separate My interviews screen
    * became: the same list, narrowed to the vacancies the viewer interviews for.
@@ -117,6 +148,26 @@ export const resolveCandidateScope = (
 /** `All (128)` — the count the design puts inside the tab label rather than beside it. */
 export const candidateScopeTabLabel = (scope: CandidateScope, count: number): string =>
   `${CANDIDATE_MESSAGES.scope[scope]} (${count})`;
+
+/**
+ * `Filters (3)` — how many filters are applied, on the control that opens them (03 §09.46).
+ *
+ * The count is the whole reason the drawer is allowed to hide them: a filter nobody can
+ * see is a filter nobody can undo, and this is what puts it back on screen. **The scope
+ * is not in it.** The tab strip is navigation, it survives `Clear filters`, and counting
+ * it would make `Assigned to me` read as one filter that cannot be removed here.
+ */
+export const candidateFiltersLabel = (count: number): string =>
+  count > 0 ? `${CANDIDATE_MESSAGES.filters.button} (${count})` : CANDIDATE_MESSAGES.filters.button;
+
+/**
+ * The interviewer as the picker names them, with the viewer marked (03 §09.48).
+ *
+ * `(me)` rather than a separate `Me` entry, so the filter and the `Assigned to me` tab
+ * are visibly the same person: one mechanism said twice, not two mechanisms.
+ */
+export const interviewerPickerLabel = (fullName: string, isViewer: boolean): string =>
+  isViewer ? `${fullName} (me)` : fullName;
 
 /* ------------------------------------------------------------------ *
  * Operators
@@ -384,6 +435,15 @@ export const pageCount = (matched: number, pageSize: number): number =>
 export interface ApplicationClause {
   vacancyIds?: string[];
   categoryIds?: string[];
+  /** The five board statuses (03 §09.47). */
+  statuses?: ApplicationStatus[];
+  /**
+   * The vacancy's assigned interviewer (03 §09.48).
+   *
+   * Dropped rather than applied in the `mine` scope, where the interviewer is the viewer
+   * by definition — which is why it is its own clause and not folded into any other.
+   */
+  interviewerAccountIds?: string[];
 }
 
 export interface CandidateFilterPlan {
@@ -411,6 +471,8 @@ export type CandidatePlanResult =
 export interface CandidateFilterLibrary {
   vacancyIds: ReadonlySet<string>;
   categoryIds: ReadonlySet<string>;
+  /** Active memberships — who this organization could name as an interviewer at all. */
+  interviewerIds: ReadonlySet<string>;
   criteria: ReadonlyMap<string, FilterCriterion>;
 }
 
@@ -419,6 +481,10 @@ export interface CandidateQueryParams {
   /** Repeatable: one value arrives as a string, several as an array. */
   vacancyId?: unknown;
   categoryId?: unknown;
+  /** Repeatable: one of the five board statuses (03 §09.47). */
+  status?: unknown;
+  /** Repeatable: an account id this organization holds an active membership for. */
+  interviewerId?: unknown;
   criterion?: unknown;
   page?: unknown;
   pageSize?: unknown;
@@ -447,11 +513,13 @@ const asList = (input: unknown): string[] =>
 export function referencedFilterIds(params: CandidateQueryParams): {
   vacancyIds: string[];
   categoryIds: string[];
+  interviewerIds: string[];
   criterionIds: string[];
 } {
   return {
     vacancyIds: asList(params.vacancyId),
     categoryIds: asList(params.categoryId),
+    interviewerIds: asList(params.interviewerId),
     // A malformed triple names nothing to look up; the plan refuses it either way.
     criterionIds: asList(params.criterion)
       .map(parseCriterionFilterParam)
@@ -480,8 +548,19 @@ export function candidateFilterPlan(
 ): CandidatePlanResult {
   const vacancyIds = asList(params.vacancyId);
   const categoryIds = asList(params.categoryId);
+  const interviewerIds = asList(params.interviewerId);
+  const statuses = asList(params.status);
   if (vacancyIds.some((id) => !library.vacancyIds.has(id))) return invalid();
   if (categoryIds.some((id) => !library.categoryIds.has(id))) return invalid();
+  if (interviewerIds.some((id) => !library.interviewerIds.has(id))) return invalid();
+  /**
+   * A status is refused the same way an unknown id is, and for the same reason
+   * (03 §Validation.7): the five are a closed set, so a sixth is a filter this product
+   * cannot evaluate rather than one that matches nobody. Refusing it is also what keeps
+   * the two counts honest — a dropped clause would return more people than the drawer's
+   * chips claim to allow.
+   */
+  if (statuses.some((status) => !isApplicationStatus(status))) return invalid();
 
   const criteria: CriterionFilter[] = [];
   for (const raw of asList(params.criterion)) {
@@ -496,9 +575,14 @@ export function candidateFilterPlan(
     criteria.push(filter);
   }
 
+  // One clause per kind, so they AND across kinds while each is satisfied by any one
+  // application — the status and the interviewer join that rule rather than qualifying
+  // the clauses already there (03 §03.12, §09.47).
   const applicationClauses: ApplicationClause[] = [];
   if (vacancyIds.length > 0) applicationClauses.push({ vacancyIds });
   if (categoryIds.length > 0) applicationClauses.push({ categoryIds });
+  if (statuses.length > 0) applicationClauses.push({ statuses: statuses as ApplicationStatus[] });
+  if (interviewerIds.length > 0) applicationClauses.push({ interviewerAccountIds: interviewerIds });
 
   const search = typeof params.search === 'string' ? params.search.trim() : '';
 

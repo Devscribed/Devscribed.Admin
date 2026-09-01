@@ -2,30 +2,39 @@
 
 import { useEffect, useState } from 'react';
 import {
-  CRITERION_MESSAGES,
+  CANDIDATE_MESSAGES,
   operatorsFor,
   valueControlFor,
   type FilterOperator,
   type FilterOperatorOption,
 } from '@devscribed/validation';
-import { CloseIcon, IconButton, Select, TextInput, type SelectOption } from '@/ds';
+import { Badge, Chip, Select, TextInput, type SelectOption } from '@/ds';
 import { valueOf } from '@/hiring/select';
 import type { Criterion } from '@/hiring/types';
 
 /**
- * One `criterion / operator / value` row of the criteria filter.
+ * One criteria filter, as the drawer draws it: a **chip** carrying the criterion's name,
+ * the operator and the value, reading as the sentence *English · at least · B1*
+ * (03 §09.49).
  *
- * It is the only three-part control on the screen, and the reason the filter bar has to
- * work hard not to read as a query builder: everything else is a chip.
+ * It is deliberately the same object the candidate card draws for an assessment — blue's
+ * `Chip`, the criterion as plain text, the controls in its `trailing` slot (ledger §37) —
+ * because it is the same thing said in the other direction: the card records *this
+ * candidate's English is B1*, and this asks *whose English is at least B1*. The filter
+ * needs one control the card does not, and the operator sits between the name and the
+ * value, where it reads as part of that sentence.
+ *
+ * The three-`Select` row it replaces was a query builder in the middle of a list screen.
+ * The criterion is no longer chosen here at all: it is chosen once, in the autocomplete
+ * above the chips, and picking it is what creates the chip — which is why nothing here
+ * has to answer for a half-built row with no criterion in it.
  */
 export interface CriteriaFilterRowState {
-  criterionId: string | null;
+  criterionId: string;
   /** The operator as the `Select` addresses it — see `operatorKey`. */
   operatorKey: string;
   value: string;
 }
-
-export const EMPTY_ROW: CriteriaFilterRowState = { criterionId: null, operatorKey: '', value: '' };
 
 /**
  * `boolean` bakes its value into the operator — "is yes" and "is no" are the two
@@ -36,6 +45,20 @@ export const EMPTY_ROW: CriteriaFilterRowState = { criterionId: null, operatorKe
 export const operatorKey = (option: FilterOperatorOption): string =>
   option.value === undefined ? option.operator : `${option.operator}:${option.value}`;
 
+/**
+ * A chip for a criterion just chosen, with its type's first operator already set.
+ *
+ * The operator is never blank: a chip that read *English · … · B1* would be asking the
+ * member to fill in a control whose only sensible default is sitting right there. For a
+ * `boolean` that also makes the chip a complete filter the moment it appears, which is
+ * correct — `is yes` is a whole question.
+ */
+export const newCriteriaRow = (criterion: Criterion): CriteriaFilterRowState => ({
+  criterionId: criterion.id,
+  operatorKey: operatorKey(operatorsFor(criterion.type)[0]),
+  value: '',
+});
+
 /** The other direction: what the row actually sends. */
 export function readOperatorKey(key: string): { operator: FilterOperator; value?: string } | null {
   if (!key) return null;
@@ -45,7 +68,7 @@ export function readOperatorKey(key: string): { operator: FilterOperator; value?
 
 /**
  * The complete rows, as query parameters. An **incomplete** row is skipped rather than
- * sent: a row whose value is still empty is a row somebody is halfway through building,
+ * sent: a chip whose value is still empty is one somebody is halfway through building,
  * and treating it as a filter would empty the list under them (03 design §Interactions).
  */
 export function completeRows(
@@ -67,97 +90,78 @@ export function completeRows(
 export function CriteriaFilterRow({
   index,
   row,
-  criteria,
+  criterion,
   onChange,
   onRemove,
 }: {
   index: number;
   row: CriteriaFilterRowState;
-  criteria: Criterion[];
+  /** The criterion this chip is about. The chip does not exist without one. */
+  criterion: Criterion;
   onChange: (next: CriteriaFilterRowState) => void;
   onRemove: () => void;
 }) {
-  const criterion = criteria.find((entry) => entry.id === row.criterionId) ?? null;
-  const control = criterion ? valueControlFor(criterion.type) : 'none';
+  const control = valueControlFor(criterion.type);
 
-  const criterionOptions: SelectOption[] = criteria.map((entry) => ({
-    value: entry.id,
-    /**
-     * The archived marker is part of the label rather than a trailing node: the control
-     * filters on its options' text, so a node here would make an archived criterion
-     * unfindable by typing its name. Archived criteria stay filterable — that is the whole
-     * difference from deleting one (03 §04.19) — and the list already sorts them below the
-     * active ones.
-     */
-    label: entry.isArchived
-      ? `${entry.name} · ${CRITERION_MESSAGES.archivedBadge}`
-      : entry.name,
-    testId: `criteria-filter-criterion-${index}-option-${entry.id}`,
+  const operatorOptions: SelectOption[] = operatorsFor(criterion.type).map((option) => ({
+    value: operatorKey(option),
+    label: option.label,
+    testId: `criteria-filter-op-${index}-option-${operatorKey(option)}`,
   }));
 
-  const operatorOptions: SelectOption[] = (criterion ? operatorsFor(criterion.type) : []).map(
-    (option) => ({
-      value: operatorKey(option),
-      label: option.label,
-      testId: `criteria-filter-op-${index}-option-${operatorKey(option)}`,
-    }),
-  );
-
   return (
-    <div
-      className="candidates-criteria-row"
-      role="group"
-      aria-label={`Criteria filter ${index + 1}`}
-      data-testid={`criteria-filter-row-${index}`}
-    >
-      {/* `Select isSearchable` — blue's own control with the capability prod never switches
-          on (ledger §21), not a second combobox beside it. */}
-      <Select
-        isSearchable
-        value={criterionOptions.find((option) => option.value === row.criterionId)}
-        options={criterionOptions}
-        // Changing the criterion resets the operator and the value rather than carrying
-        // a meaningless leftover across types (03 §UI Notes).
-        onChange={(option) => onChange({ ...EMPTY_ROW, criterionId: valueOf(option) || null })}
-        placeholder="Criterion…"
-        aria-label="Criterion"
-        data-testid={`criteria-filter-criterion-${index}`}
-        wrapperStyle={{ flex: '2 1 200px', minWidth: 0 }}
-      />
+    <li className="candidates-criteria-chip">
+      {/*
+        The pointer cursor `Chip` paints when it can be removed is turned off, and for the
+        card's own reason: only the cross and the two controls are clickable, and the name
+        between them promises nothing.
+      */}
+      <Chip
+        role="group"
+        aria-label={`Criteria filter ${index + 1}`}
+        data-testid={`criteria-filter-row-${index}`}
+        onRemove={onRemove}
+        removeLabel={`Remove ${criterion.name}`}
+        removeTestId={`criteria-filter-remove-${index}`}
+        style={{ cursor: 'default', margin: 0, minWidth: 0, flexWrap: 'wrap' }}
+        trailing={
+          <span className="candidates-criteria-controls">
+            <Select
+              value={operatorOptions.find((option) => option.value === row.operatorKey)}
+              options={operatorOptions}
+              onChange={(option) => onChange({ ...row, operatorKey: valueOf(option), value: '' })}
+              placeholder="Operator"
+              aria-label={`Operator for ${criterion.name}`}
+              data-testid={`criteria-filter-op-${index}`}
+              wrapperStyle={{ flex: '1 1 110px', minWidth: 0 }}
+            />
 
-      <Select
-        value={operatorOptions.find((option) => option.value === row.operatorKey)}
-        options={operatorOptions}
-        onChange={(option) => onChange({ ...row, operatorKey: valueOf(option), value: '' })}
-        placeholder="Operator"
-        isDisabled={!criterion}
-        aria-label="Operator"
-        data-testid={`criteria-filter-op-${index}`}
-        wrapperStyle={{ flex: '1 1 130px', minWidth: 0 }}
-      />
-
-      {/* A boolean's answer travelled with its operator, so there is nothing to ask. */}
-      {control !== 'none' && (
-        <ValueControl
-          index={index}
-          control={control}
-          criterion={criterion}
-          value={row.value}
-          onChange={(value) => onChange({ ...row, value })}
-        />
-      )}
-
-      <IconButton
-        label={`Remove criteria filter ${index + 1}`}
-        size={34}
-        onClick={onRemove}
-        data-testid={`criteria-filter-remove-${index}`}
+            {/* A boolean's answer travelled with its operator, so there is nothing to ask. */}
+            {control !== 'none' && (
+              <ValueControl
+                index={index}
+                control={control}
+                criterion={criterion}
+                value={row.value}
+                onChange={(value) => onChange({ ...row, value })}
+              />
+            )}
+          </span>
+        }
       >
-        {/* Blue's own close glyph, the one `Modal` and `InfoBanner` dismiss with, rather
-            than a path drawn here. */}
-        <CloseIcon width="10" height="10" />
-      </IconButton>
-    </div>
+        <span data-testid={`criteria-filter-criterion-${index}`}>{criterion.name}</span>
+      </Chip>
+      {/*
+        Outside the chip's label, which ellipsises to one line. An archived criterion is
+        still filterable — that is the whole difference from deleting one (03 §04.19) — and
+        the badge is what says the library no longer offers it.
+      */}
+      {criterion.isArchived && (
+        <Badge status="inactive" outlined data-testid={`criteria-filter-archived-${index}`}>
+          {CANDIDATE_MESSAGES.archived}
+        </Badge>
+      )}
+    </li>
   );
 }
 
@@ -171,17 +175,17 @@ function ValueControl({
 }: {
   index: number;
   control: 'scale' | 'number' | 'text';
-  criterion: Criterion | null;
+  criterion: Criterion;
   value: string;
   onChange: (value: string) => void;
 }) {
   const testId = `criteria-filter-value-${index}`;
-  const style = { flex: '1 1 140px', minWidth: 0 };
+  const wrapperStyle = { flex: '1 1 100px', minWidth: 0 };
 
   if (control === 'scale') {
     // Worst to best, the order the scale itself is stored in — and the order every
     // `at least` reads against.
-    const options: SelectOption[] = [...(criterion?.values ?? [])]
+    const options: SelectOption[] = [...criterion.values]
       .sort((left, right) => left.position - right.position)
       .map((entry) => ({
         value: entry.id,
@@ -195,24 +199,21 @@ function ValueControl({
         options={options}
         onChange={(option) => onChange(valueOf(option))}
         placeholder="Value"
-        isDisabled={!criterion}
-        aria-label="Value"
+        aria-label={`Value for ${criterion.name}`}
         data-testid={testId}
-        wrapperStyle={style}
+        wrapperStyle={wrapperStyle}
       />
     );
   }
 
-  // Keyed by the criterion, so switching to another one of the same type starts the
-  // field empty rather than holding what was typed against a different question.
   return (
     <TypedValue
-      key={criterion?.id ?? 'none'}
       control={control}
       value={value}
       onChange={onChange}
       testId={testId}
-      style={style}
+      label={`Value for ${criterion.name}`}
+      wrapperStyle={wrapperStyle}
     />
   );
 }
@@ -231,18 +232,20 @@ function TypedValue({
   value,
   onChange,
   testId,
-  style,
+  label,
+  wrapperStyle,
 }: {
   control: 'number' | 'text';
   value: string;
   onChange: (value: string) => void;
   testId: string;
-  style: React.CSSProperties;
+  label: string;
+  wrapperStyle: React.CSSProperties;
 }) {
   const [draft, setDraft] = useState(value);
 
-  // The applied value is the source of truth: changing the criterion resets the row, and
-  // the field has to follow rather than keep what was typed against a different question.
+  // The applied value is the source of truth: clearing the filters resets the chip, and
+  // the field has to follow rather than keep what was typed against a question that is gone.
   useEffect(() => setDraft(value), [value]);
 
   const commit = (): void => {
@@ -257,14 +260,14 @@ function TypedValue({
       onBlur={commit}
       onKeyDown={(event) => {
         if (event.key !== 'Enter') return;
-        // The row is not a form, so Enter has nothing else to mean here.
+        // The chip is not a form, so Enter has nothing else to mean here.
         event.preventDefault();
         commit();
       }}
       placeholder="Value"
-      aria-label="Value"
+      aria-label={label}
       data-testid={testId}
-      wrapperStyle={style}
+      wrapperStyle={wrapperStyle}
     />
   );
 }

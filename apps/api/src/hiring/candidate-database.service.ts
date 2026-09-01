@@ -408,7 +408,7 @@ export class CandidateDatabaseService {
   ): Promise<CandidateFilterLibrary> {
     const referenced = referencedFilterIds(params);
 
-    const [vacancies, categories, criteria] = await Promise.all([
+    const [vacancies, categories, interviewers, criteria] = await Promise.all([
       referenced.vacancyIds.length === 0
         ? []
         : this.prisma.vacancy.findMany({
@@ -420,6 +420,20 @@ export class CandidateDatabaseService {
         : this.prisma.category.findMany({
             where: { organizationId, id: { in: referenced.categoryIds } },
             select: { id: true },
+          }),
+      referenced.interviewerIds.length === 0
+        ? []
+        : this.prisma.membership.findMany({
+            // Membership rather than role: a member whose role has since narrowed may
+            // still be the assigned interviewer on a vacancy, and filtering by them is
+            // still a question with an answer. What the organization does not hold at
+            // all is what gets refused.
+            where: {
+              organizationId,
+              status: 'active',
+              accountId: { in: referenced.interviewerIds },
+            },
+            select: { accountId: true },
           }),
       referenced.criterionIds.length === 0
         ? []
@@ -434,6 +448,7 @@ export class CandidateDatabaseService {
     return {
       vacancyIds: new Set(vacancies.map((vacancy) => vacancy.id)),
       categoryIds: new Set(categories.map((category) => category.id)),
+      interviewerIds: new Set(interviewers.map((membership) => membership.accountId)),
       criteria: new Map<string, FilterCriterion>(
         criteria.map((criterion): [string, FilterCriterion] => [
           criterion.id,
@@ -521,6 +536,14 @@ export class CandidateDatabaseService {
    * the filters AND across kinds while each one is satisfied by *any* application: a
    * candidate whose React application and whose Senior-tagged application are two
    * different applications still matches `React AND Senior` (03 §03.12).
+   *
+   * The **interviewer clause is dropped in `mine`** (03 §09.48). Not intersected with the
+   * scope, not refused: in that scope the interviewer is the viewer by definition, the
+   * drawer does not draw the field, and a value left in the query string from the other
+   * tab must not quietly narrow a list whose control for it is not on screen. It is
+   * dropped here rather than out of the plan because `scopeCounts` builds both scopes'
+   * queries from **one** plan, and a tab label counted under a clause the tab would not
+   * apply is a label that lies.
    */
   private where(
     organizationId: string,
@@ -529,16 +552,22 @@ export class CandidateDatabaseService {
     scope: CandidateScope,
     viewerAccountId: string,
   ): Prisma.CandidateWhereInput {
-    const and: Prisma.CandidateWhereInput[] = plan.applicationClauses.map((clause) => ({
-      applications: {
-        some: {
-          ...(clause.vacancyIds ? { vacancyId: { in: clause.vacancyIds } } : {}),
-          ...(clause.categoryIds
-            ? { vacancy: { categories: { some: { categoryId: { in: clause.categoryIds } } } } }
-            : {}),
+    const and: Prisma.CandidateWhereInput[] = plan.applicationClauses
+      .filter((clause) => !(scope === 'mine' && clause.interviewerAccountIds))
+      .map((clause) => ({
+        applications: {
+          some: {
+            ...(clause.vacancyIds ? { vacancyId: { in: clause.vacancyIds } } : {}),
+            ...(clause.statuses ? { status: { in: clause.statuses } } : {}),
+            ...(clause.categoryIds
+              ? { vacancy: { categories: { some: { categoryId: { in: clause.categoryIds } } } } }
+              : {}),
+            ...(clause.interviewerAccountIds
+              ? { vacancy: { interviewerAccountId: { in: clause.interviewerAccountIds } } }
+              : {}),
+          },
         },
-      },
-    }));
+      }));
 
     // The scope is one more clause of the same shape, and that is the whole of it: a
     // candidate is mine when **any** of their applications is to a vacancy I interview

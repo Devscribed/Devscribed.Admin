@@ -5,7 +5,7 @@ title: Candidate Database — Design
 pairs-with: 03-candidate-database.md
 routes: ["/org/{orgId}/hiring/candidates", "/org/{orgId}/hiring/my-interviews (redirect)"]
 design-system: "1_DS for dev"
-tags: [candidates, filters, filter-builder, infinite-scroll, scope-tabs, teammerly, light-only]
+tags: [candidates, filters, filter-drawer, infinite-scroll, scope-tabs, teammerly, light-only]
 ---
 
 # 03 — Candidate Database · Design
@@ -21,8 +21,10 @@ carry numbers in the [ledger](../design-system/ledger.md).
 **Theme:** light only. The screen renders inside the `AppShell`
 (`specs/user-management/00-app-shell.design.md`) and draws no chrome of its own.
 
-The design problem here is the filter bar: three kinds of filter, one of which is a repeatable
-three-part row, on a screen that must still read as a list rather than a query builder.
+The design problem here is the filters: five kinds, one of which is a repeatable three-part
+object, on a screen that must still read as a list rather than a query builder. The answer is that
+they are **not on the screen** — they are in a drawer behind one counted button, and what stays
+above the table is the scope, the search and the count.
 
 Two things settled elsewhere land on this screen for the first time, and both are recorded below:
 the [status palette](#status-badges) stops being a five-tone scale, and the
@@ -34,16 +36,9 @@ the [status palette](#status-badges) stops being a five-tone scale, and the
   Candidates                                                          ← PageHeader
   Times in Europe/Minsk
   ────────────────────────────────────────────────────────────────────
-  ALL (128)   ASSIGNED TO ME (4)                                      ← PageTabs
-  ══════════
-  [🔍 Search name or email…]
-  ┌──────────────────────────────────────────────────────────────────┐
-  │ Position   ⟨▌Senior React Eng. ×⟩                                │  ← filter Card
-  │ Category   ⟨▌Senior ×⟩                                           │     --surface-sunken
-  │ Criteria   [ English ▾][ at least ▾][ B1 ▾] ×                    │
-  │            [ + Add criteria filter ]                             │
-  └──────────────────────────────────────────────────────────────────┘
-  12 of 128 candidates                                 [ Clear all ]
+  ALL (128)  ASSIGNED TO ME (4)   [🔍 Search name or email…] [Filters (3)]  ← TableToolbar
+  ═════════
+  12 of 128 candidates
   ┌──────────────────────────────────────────────────────────────────┐
   │ Name          │ Email            │ Latest application │ Status   │
   │ Jane Doe      │ jane@example.com │ Senior React Eng.  │ Scheduled│
@@ -53,65 +48,126 @@ the [status palette](#status-badges) stops being a five-tone scale, and the
   └──────────────────────────────────────────────────────────────────┘
 ```
 
-- The filter `Card` is `--surface-sunken` (`#EEF2F5`) rather than `--surface-card`, so it reads as
-  a control surface distinct from the data below it. This is the last of the four `--bg-panel-2`
-  uses in the token map; the shell's two were settled in Phase 2 the other way, onto
-  `--surface-card`, because blue's shell is white panels around a `#f8fafc` well. A filter bar is
-  neither — it is the sunken tone blue already uses behind a `Table`'s own header row.
-- **The filter `Card` passes `clip={false}`.** Every control inside it opens a list into the card,
-  and a `Card` clips to its radius by default. This is the surface
-  [reversal 6](../design-system/README.md) was written for, and the first one to actually exercise
-  it — Phase 3's two popovers opened from a `Modal` and from `PageHeader`, neither of which is a
-  `Card`.
-- Each filter kind is one row with a `FieldLabel` in a fixed 96px leading column, so the three
-  labels align and the controls start at the same x. They are sentence case, not the uppercase
-  Meridian drew: blue's only uppercase is `PageTabs`, and these are labels for the controls beside
-  them rather than captions over a section.
-- The count line sits between the filters and the table — the hinge between "what I asked for" and
-  "what I got" — with `Clear all` trailing, present only when two or more filters are active.
+- The row above the table is blue's own `TableToolbar` — the geometry Projects, Clients, Members,
+  ToDo, Policies and Holidays all share: the strip on the left, a 250px search and the actions on
+  the right, 20px gaps, 20px down to the table. It gained nothing but the ability to be *addressed*
+  ([§52](../design-system/ledger.md)); every number in it is blue's.
+- `Filters` is a `Button variant="primary"`, and it carries its own count — `Filters (3)`. The
+  count is what buys the hiding: a filter nobody can see is a filter nobody can undo. The search is
+  not in it (it has its own field, always visible) and neither is the scope (it is navigation).
+- **The filter `Card` is gone**, and with it the last of the four `--bg-panel-2` uses in the token
+  map. It was `--surface-sunken` with `clip={false}` — the surface
+  [reversal 6](../design-system/README.md) was written for and the only thing that ever exercised
+  it. The prop stays on `Card`; the argument for it is unchanged, and the next list that opens a
+  control inside a card will need it. Nothing on this screen does any more.
+- The count line now sits alone between the toolbar and the table — still the hinge between "what
+  I asked for" and "what I got", and still the only thing on the screen that announces itself.
+  `Clear all` left with the filters: it is `Clear filters` now, at the bottom of the drawer, beside
+  the controls it clears.
 - The table is edge to edge inside a `Card padded={false}`, the same one surface at every state
   that the vacancies list uses ([01](01-vacancies.design.md)): the card gives the table its border
   and rounds its first and last rows, and the loader, the empty message and the load-more row all
   sit inside it rather than replacing it.
 
-## The criteria filter row
+## The filter drawer
 
 ```
-[ English        ▾ ][ at least ▾ ][ B1      ▾ ]  ×
-  Select              Select        Select | TextInput
-  isSearchable
+                                       ┌────────────────────────────────┐
+                                       │ ×                              │  ← MenuDrawer, 340px
+                                       │ Filters                        │
+                                       │                                │
+                                       │ Status                         │
+                                       │ [ ▌Scheduled ×             ▾ ] │  ← Select isMulti
+                                       │ Position                       │
+                                       │ [ ▌Senior React Eng. ×     ▾ ] │
+                                       │ Category                       │
+                                       │ [ Any category             ▾ ] │
+                                       │ Interviewer                    │
+                                       │ [ ▌Sam Rowe (me) ×         ▾ ] │
+                                       │ Criteria                       │
+                                       │ [ Type a criterion…        ▾ ] │  ← Select isSearchable
+                                       │ ▌English [at least ▾][B1 ▾] ×  │  ← Chip
+                                       │                                │
+                                       │ [       Show results       ]   │
+                                       │ [      Clear filters       ]   │
+                                       └────────────────────────────────┘
 ```
 
-- Three controls at `--space-1` gap, then a remove `IconButton size={34}`.
-- The **criterion** control is `Select isSearchable` — blue's own control with the capability
-  prod never switches on ([§21](../design-system/ledger.md)), not a second combobox.
-- The **operator** control's options are derived from the chosen criterion's type; changing the
-  criterion resets both the operator and the value rather than carrying a meaningless leftover
-  across types.
+- Blue's `MenuDrawer`: 340px, `--shadow-drawer`, `translateX(105%)` at rest and a 0.3s slide,
+  25/30 padding. It hangs from the navbar rather than over it —
+  [§51](../design-system/ledger.md) replaces its hard-coded `top: 60px` (which was
+  `--layout-navbar-height-mobile`, not a drawer measurement) with the shell's own switch.
+- Five fields, stacked full width at `--space-6`, each one the same `Select`. The gap is the one
+  the fields *need* rather than the one they look like they need: every `Select` hangs its
+  error/hint slot below itself, and a tighter stack would sit a message on the label under it.
+- Labels are `Select`'s own `label` prop — sentence case, blue's measured `10px 0 0 10px` label
+  geometry — not the 96px leading column the card used. In a 340px panel a leading label column
+  would leave 200px for a control that has to hold chips.
+- **Interviewer is absent in `Assigned to me`**, not disabled. There is nothing to enable: the
+  interviewer in that scope is the viewer. The viewer reads `{name} (me)` in the picker, so the
+  field and the tab are visibly one mechanism rather than two.
+- **A field with no options is not drawn at all** (03 §09.52). Four of the five read a library an
+  interviewer may not GET, so their drawer is Status and nothing else — one honest control instead
+  of five, four of which would answer `No options`. It is the one place this screen's two kinds of
+  caller differ inside the panel, and it is the same shape as the missing tab strip.
+- `Show results` is `Button variant="primary"`; `Clear filters` sits under it, and only while
+  something is applied. Stacked rather than side by side, so the one that undoes work is never
+  adjacent to the one that merely dismisses.
+- Nothing here applies anything. Every control fires on change, the count under the toolbar moves
+  while the drawer is still open, and `Show results` just gets the panel out of the way.
+
+## The criteria filter chip
+
+```
+  [ Type a criterion…                    ▾ ]      ← Select isSearchable, over the library
+  ▌English  [ at least ▾ ][ B1 ▾ ]  ×             ← Chip: label, trailing, onRemove
+```
+
+- The criterion is chosen **once**, in the autocomplete above the chips, and choosing it is what
+  creates the chip. There is no criterion control on the chip itself, which is what removes the
+  three-`Select` row that read as a query builder.
+- The chip is blue's `Chip`, and deliberately **the same object the candidate card draws for an
+  assessment** (`card-criterion-*`): the criterion's name as the label, the controls in the
+  `trailing` slot ([§37](../design-system/ledger.md)), a cross to drop it. It is the same thing
+  said in the other direction — the card records *this candidate's English is B1*, the filter asks
+  *whose English is at least B1* — and the operator sits between the name and the value, where it
+  reads as part of that sentence.
+- The chip's `cursor: pointer` is turned off. Only the cross and the two controls are clickable,
+  and the name between them promises nothing — the card's own call, for the card's own reason.
+- The chip wraps: 340px minus 60px of padding does not always hold a name and two 44px controls on
+  one line, so the operator and the value fall to a second row *inside* the chip rather than
+  overflowing it.
+- The **operator** is set from the chosen criterion's type and is never blank — a chip reading
+  *English · … · B1* would be asking for a control whose only sensible default is sitting right
+  there. Changing it resets the value.
 - The **value** control's component is chosen by type: `Select` for `scale` (the criterion's
-  ordered values) and `boolean`, `TextInput type="number"` for `number`, `TextInput` for `text`.
-- Rows stack; `+ Add criteria filter` sits below the last one, `Button variant="ghost" size="sm"`.
-- An **archived** criterion appears in the criterion select below the active ones, with its marker
-  in the option's own label rather than as a trailing node — the control filters on its options'
-  text, and a node there would make an archived criterion unfindable by typing its name.
+  ordered values), `TextInput type="number"` for `number`, `TextInput` for `text`. A `boolean` has
+  **no value control**: its answer travels in its operator (`is yes` / `is no`).
+- An **archived** criterion is offered below the active ones, with the marker as the option's
+  `hint` ([§21](../design-system/ledger.md)) rather than welded into its label: `hint` is drawn
+  inside the row and is part of the option's accessible name, while the control filters on the
+  label alone — so the badge is visible *and* the criterion is still findable by typing its name.
+  A chip built from one carries the same `Badge status="inactive" outlined` beside it.
 
 ## Component map
 
 | Screen element | DS component | Props | `data-testid` |
 |---|---|---|---|
 | Page header | `PageHeader` → `PageTitle` | `title`, `subtitle` | `page-title` |
-| Scope tabs | `PageTabs` | `tabs` (object form), `active`, `label` | `candidates-scope-tabs` · `candidates-scope-all` · `candidates-scope-mine` |
-| Search | `SearchInput` | `outlined`, `onClear` | `candidates-search-input` |
-| Filter surface | `Card` | **`clip={false}`**, `--surface-sunken` | — |
-| Filter labels | `FieldLabel` | `htmlFor` | — |
-| Position / category | `Select` | `isMulti`, `isSearchable` | `candidates-filter-position` · `candidates-filter-category` |
+| Toolbar | `TableToolbar` | `tabs`, `activeTab`, `tabsLabel`, `tabsTestId`, `search*` (§52) | — |
+| Scope tabs | `PageTabs` (inside `TableToolbar`) | `tabs` (object form), `active`, `label` | `candidates-scope-tabs` · `candidates-scope-all` · `candidates-scope-mine` |
+| Search | `SearchInput` (inside `TableToolbar`) | `outlined`, `onClear` | `candidates-search-input` |
+| Filters button | `Button` | `variant="primary"`, `aria-expanded`, `aria-haspopup="dialog"` | `candidates-filters-open` |
+| Filter surface | `MenuDrawer` | `open`, `onClose`, `closeLabel`, `role="dialog"` (§51) | `candidates-filters` · `candidates-filters-close` |
+| Status / position / category / interviewer | `Select` | `isMulti`, `label`, `isSearchable` (not on status) | `candidates-filter-status` · `candidates-filter-position` · `candidates-filter-category` · `candidates-filter-interviewer` |
 | Filter chip | `Chip` (inside `Select isMulti`) | — | `candidates-filter-chip-{id}` |
-| Criterion | `Select` | `isSearchable` | `criteria-filter-criterion-{index}` |
-| Operator | `Select` | `options` | `criteria-filter-op-{index}` |
+| Criterion picker | `Select` | `isSearchable`, `label`, per-option `hint` (§21) | `candidates-criteria-filter-add` · `candidates-criteria-option-{id}` |
+| Criterion chip | `Chip` | `trailing` (§37), `onRemove`, `removeTestId` | `criteria-filter-row-{index}` · `criteria-filter-criterion-{index}` · `criteria-filter-remove-{index}` |
+| Operator | `Select` (inside the chip's `trailing`) | `options` | `criteria-filter-op-{index}` |
 | Value | `Select` \| `TextInput` | by type | `criteria-filter-value-{index}` |
-| Add / remove filter row | `Button` / `IconButton` | `variant="ghost"` | `candidates-criteria-filter-add` · `criteria-filter-remove-{index}` |
+| Archived marker | `Badge` | `status="inactive"`, `outlined` | `criteria-filter-archived-{index}` |
+| Show results / Clear filters | `Button` | `variant="primary"` / default | `candidates-filters-apply` · `candidates-clear-filters` |
 | Count | native `<p>` + `Preloader size={8}` | `aria-live="polite"` | `candidates-count` |
-| Clear all | `Button` | `variant="ghost"`, `size="sm"` | `candidates-clear-filters` |
 | List | `Card padded={false}` > `Table` | `columns`, `rows`, **`busy`** | `candidates-list` |
 | Category chips on a row | `Chip` | — | — |
 | Status | `Badge` | `status`, `outlined` | `candidate-status-{id}` |
@@ -165,15 +221,20 @@ Status is carried by the badge's **text** on every screen that draws one. The hu
 | Page title | Candidates |
 | Page subtitle | Times in {zone} |
 | Search placeholder | Search name or email… |
-| Filter labels | Position · Category · Criteria |
-| Add criteria filter | + Add criteria filter |
+| Filters button | Filters · Filters ({n}) |
+| Drawer title | Filters |
+| Filter labels | Status · Position · Category · Interviewer · Criteria |
+| Filter placeholders | Any status · Any position · Any category · Any interviewer |
+| Criterion picker placeholder | Type a criterion… |
+| Interviewer picker, the viewer | {name} (me) |
+| Drawer actions | Show results · Clear filters |
 | Operators · scale | is · is not · at least · at most |
 | Operators · number | is · is not · at least · at most |
 | Operators · boolean | is yes · is no |
 | Operators · text | contains · is |
 | Count, unfiltered | {n} candidates |
 | Count, filtered | {matched} of {total} candidates |
-| Clear all | Clear all |
+| Clear filters | Clear filters |
 | Column headers | Name · Email · Latest application · Status |
 | Application count | {n} applications |
 | Archived marker | Archived |
@@ -223,11 +284,17 @@ row means the list is complete.
 - **Every filter change refetches immediately** — filters are discrete choices, unlike typing.
 - **The count is the feedback.** No spinner replaces the table on a refilter; the rows stay,
   `Table busy` dims them and sets `aria-busy`, and the count shows a `Preloader` in place of the
-  number, so the list does not collapse and reflow under the reader.
+  number, so the list does not collapse and reflow under the reader. This is also what makes the
+  drawer work: the panel covers a strip of the list, not the count, so a filter's effect is
+  legible without closing it.
+- **The drawer opens on the button and closes four ways** — the button's own `Escape`, the scrim,
+  the close cross and `Show results`. None of them is *Apply*; there is nothing to apply.
 - **Removing a chip** widens the result set in place.
-- **Changing a criterion** in a filter row resets its operator and value.
-- **An incomplete criteria row** — criterion chosen, value empty — is ignored rather than treated
-  as a filter, so the list never empties while the row is half-built.
+- **Choosing a criterion** adds its chip with the type's first operator already set; **changing
+  the operator** resets the value.
+- **An incomplete criteria chip** — criterion chosen, value empty — is ignored rather than treated
+  as a filter, so the list never empties while the chip is half-built, and it is not counted in
+  `Filters (n)`. A `boolean` chip is complete the moment it appears: `is yes` is a whole question.
 - **Row click** opens the candidate card. Rows are real anchors, so middle-click and copy-address
   work.
 
@@ -237,13 +304,13 @@ My interviews is not a screen any more — it is a `PageTabs` strip above this l
 the old screen drew has an answer here.
 
 ```
-  Candidates                                                          ← PageHeader
-  Times in Europe/Minsk
-  ────────────────────────────────────────────────────────────────────
-  ALL (128)   ASSIGNED TO ME (4)                                      ← PageTabs
-  ══════════
+  ALL (128)  ASSIGNED TO ME (4)   [🔍 Search name or email…] [Filters (3)]
+  ═════════
 ```
 
+- The strip is `TableToolbar`'s left slot, which is where every other list screen in the kit puts
+  one. It is drawn only once the response has said the caller may see both scopes; until then the
+  toolbar's left side is empty and the search stays where it is.
 - Blue's `PageTabs`, in the object form ([§45](../design-system/ledger.md)): each tab carries a
   `value` distinct from its label, a `testId`, and a label that is **the scope's name and its
   count**. The component deliberately has no `count` prop — a count composes into the label, and a
@@ -264,7 +331,9 @@ the old screen drew has an answer here.
   browser. A tab press is `history.replaceState`, never a push — Back leaves the screen rather than
   walking the tab strip.
 - Switching keeps the search and every filter, and returns to page 1. The strip survives
-  `Clear all`: it is navigation, not a filter chip.
+  `Clear filters` and is not counted in `Filters (n)`: it is navigation, not a filter chip. The
+  one filter it *does* change is Interviewer, which is not offered in `Assigned to me` at all —
+  and its value is kept rather than dropped, so switching back restores it.
 - The `Assigned to me` empty state is the old screen's own line, *No upcoming interviews.*, with no
   clear-filters action beside it — nothing was filtered out, and offering to undo a filter that was
   never applied is worse than saying nothing.
@@ -312,18 +381,30 @@ Cancel is exactly that shape.
 
 | Width | Layout |
 |---|---|
-| ≥ 1024px | As drawn |
-| 768–1023px | Filter labels move above their controls; the `Email` column folds under `Name` |
-| < 768px | Criteria filter rows stack their three controls vertically, each full width |
+| ≥ 1200px | As drawn |
+| < 1200px | The drawer hangs from the 60px navbar instead of the 80px one (§51); the toolbar wraps, search and `Filters` below the tabs |
+| 768–1023px | The `Email` column folds under `Name` |
 
-The filter `Card` never scrolls horizontally; its rows wrap.
+The drawer is 340px at every width and `max-width: 100%` below it; its fields are full width and
+the criterion chip wraps its controls onto a second line rather than overflowing. Nothing in it
+scrolls horizontally.
 
 ## Accessibility
 
-- The filter `Card` is a labelled `<section>` named "Filters", so three kinds of filter can be
-  skipped whole on the way to the table.
-- Each criteria row is a labelled group naming its index ("Criteria filter 1"), and its three
-  controls carry labels that make sense read in sequence.
+- The `Filters` button carries `aria-expanded` and `aria-haspopup="dialog"`, and its label carries
+  the applied count — so how many filters are on is part of the control's name, not a paint.
+- The drawer is a `role="dialog"` labelled by its own `Filters` heading. Focus moves into it when
+  it opens and returns to the button when it closes, and `Escape` leaves — but focus is **not
+  trapped**, which is the same call `AppShell` made for the rail it turns into below 1200px
+  ([§14](../design-system/ledger.md)): the list behind it is still live, and the panel is a place
+  to work rather than a modal question. Everything inside it is one Tab walk, in the order it is
+  drawn.
+- Each criterion chip is a labelled group naming its index ("Criteria filter 1"); its operator and
+  value name the criterion they belong to ("Operator for English"), so they make sense read out of
+  order, and its cross is named `Remove English`.
+- Five kinds of filter no longer sit between the top of the page and the table at all — which is
+  the accessibility argument for the drawer as much as the visual one. The labelled `<section>`
+  that existed to let them be skipped is gone with them.
 - The count is `aria-live="polite"` — it is the primary feedback for a filter change and the one
   thing that must be announced.
 - `Table busy` dims the body and sets `aria-busy` together, so the dimming is never the only signal.
@@ -345,5 +426,7 @@ the index.
 | `Badge` has two status hues; the funnel has five states | [§32](../design-system/ledger.md) — *designed* |
 | `TextArea` has no `trailing` slot in the label row | [§33](../design-system/ledger.md) |
 | `Table` has no busy, header-less or footer form | [§34](../design-system/ledger.md) |
+| `MenuDrawer` hangs from a hard-coded 60px and cannot be named, tagged or left by keyboard | [§51](../design-system/ledger.md) |
+| `TableToolbar` draws two controls and gives no way to address either | [§52](../design-system/ledger.md) |
 | ~~`Pagination`~~ | Deleted, not built — see [Loading more](#loading-more) |
 | ~~`Combobox` multi-select with chips~~ | `Select isMulti isSearchable`, [§20](../design-system/ledger.md) / [§21](../design-system/ledger.md) |

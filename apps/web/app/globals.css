@@ -319,64 +319,84 @@
 }
 
 /*
- * The candidate database's filter bar (spec 03). Three kinds of filter on a screen that
- * must still read as a list rather than a query builder, so each kind is one row with
- * its label in a fixed leading column — the three labels align and the controls all
- * start at the same x.
- *
- * The Card never scrolls horizontally; its rows wrap (03 design §Responsive).
+ * The candidate database's filter drawer (spec 03 §09). Five kinds of filter behind one
+ * button, in a 340px panel — so the fields stack full width and nothing here is a grid.
  */
-.candidates-filter-row {
+.candidates-filters {
   display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  padding: var(--space-2) 0;
-}
-
-/* Sizing only. The label inside is blue's `FieldLabel`, which brings its own type and its
-   own measured `padding: 10px 0 0 10px`; this box is what the three labels align in, and
-   what the breakpoint below collapses. */
-.candidates-filter-label {
-  flex: 0 0 96px;
-}
-
-.candidates-criteria-rows {
-  display: flex;
-  flex: 1;
   flex-direction: column;
+  /* The gap the fields need, not the one they look like they need: every `Select` hangs
+     its error/hint slot below itself, and a tighter stack would sit a message on the
+     label under it. */
+  gap: var(--space-6);
+}
+
+.candidates-filters-title {
+  margin: 0;
+  font-size: var(--font-size-l);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+/* `Show results` leads, `Clear filters` follows under it — the destructive-ish one is
+   never adjacent to the one that just dismisses. */
+.candidates-filters-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.candidates-criteria {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.candidates-criteria-chips {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The chip and its Archived badge read as one line; the badge sits outside the chip's
+   label, which ellipsises. */
+.candidates-criteria-chip {
+  display: flex;
+  align-items: center;
   gap: var(--space-2);
   min-width: 0;
 }
 
-.candidates-criteria-row {
+/* Operator and value, side by side while they fit and stacked when they do not — the
+   panel is 340px wide and two 44px controls plus a name do not always make one line. */
+.candidates-criteria-controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1);
-  flex-wrap: wrap;
+  min-width: 0;
 }
 
-@media (max-width: 1023px) {
-  /* The label moves above its controls, and the email folds under the name. */
-  .candidates-filter-row {
-    flex-direction: column;
-    gap: var(--space-1);
-  }
-
-  .candidates-filter-label {
-    flex: none;
-  }
-
-  .candidates-criteria-rows {
-    width: 100%;
-  }
+/*
+ * The hinge between "what I asked for" and "what I got": the count, alone, between the
+ * toolbar and the table. `min-height` is reserved so the number turning into a loader
+ * never moves the table under the reader.
+ */
+.candidates-count-row {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  margin-bottom: var(--space-4);
 }
 
-@media (max-width: 767px) {
-  /* Below this the three controls of a criteria row stack, each full width. */
-  .candidates-criteria-row > * {
-    flex: 1 1 100% !important;
-    width: 100%;
-  }
+.candidates-count-row > p {
+  margin: 0;
+  font-size: var(--font-size-s);
+  color: var(--text-tertiary);
 }
 
 /*

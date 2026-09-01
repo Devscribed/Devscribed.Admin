@@ -3,38 +3,51 @@
 import { notFound, useRouter } from 'next/navigation';
 import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  APPLICATION_STATUSES,
+  APPLICATION_STATUS_LABELS,
   CANDIDATE_MESSAGES,
   INTERVIEW_MESSAGES,
+  candidateFiltersLabel,
   candidateResultLabel,
   candidateScopeTabLabel,
   criterionFilterParam,
+  interviewerPickerLabel,
+  type ApplicationStatus,
   type CandidateScope,
 } from '@devscribed/validation';
 import {
+  Badge,
   Button,
   Card,
   Chip,
   EmptyState,
-  FieldLabel,
   InfoBanner,
-  PageTabs,
+  MenuDrawer,
   Preloader,
-  SearchInput,
   Select,
   Table,
+  TableToolbar,
   type SelectOption,
 } from '@/ds';
 import { PageHeader } from '@/layout/PageHeader';
+import { useSession } from '@/layout/session-context';
 import { StatusBadge } from '@/hiring/StatusBadge';
 import { initialCandidateScope, rememberCandidateScope } from '@/hiring/candidate-scope';
 import { formatListWhen } from '@/hiring/format';
 import { valuesOf } from '@/hiring/select';
 import { useMediaQuery } from '@/hiring/useMediaQuery';
-import type { CandidateDatabase, CandidateRow, Category, Criterion, Vacancy } from '@/hiring/types';
+import type {
+  CandidateDatabase,
+  CandidateRow,
+  Category,
+  Criterion,
+  InterviewerOption,
+  Vacancy,
+} from '@/hiring/types';
 import {
   CriteriaFilterRow,
-  EMPTY_ROW,
   completeRows,
+  newCriteriaRow,
   type CriteriaFilterRowState,
 } from './CriteriaFilterRow';
 
@@ -49,15 +62,17 @@ const PREFETCH_MARGIN = '200px';
 
 type Phase = 'loading' | 'ready' | 'failed' | 'gone';
 
-/** The three lists the filter controls are built from, fetched once. */
+/** The three org-wide lists the filter controls are built from, fetched once. */
 interface FilterLibrary {
   vacancies: Vacancy[];
   categories: Category[];
   criteria: Criterion[];
 }
 
+const EMPTY_LIBRARY: FilterLibrary = { vacancies: [], categories: [], criteria: [] };
+
 /**
- * The candidate database (spec 03) — one row per **person**, and the filter bar the two
+ * The candidate database (spec 03) — one row per **person**, and the filters the two
  * libraries exist to feed.
  *
  * Its headline query is the one the whole category and criteria machinery was built for:
@@ -70,19 +85,18 @@ interface FilterLibrary {
  * table that collapsed and re-expanded on every keystroke would reflow the page under the
  * reader for no information at all.
  *
- * **The page controls are gone** (reversal 1). Pagination was Meridian's answer and blue's
- * list screens scroll, so the list grows as it is scrolled. The reason the database was
- * paginated in the first place — infinite scroll cannot say how many match — is answered by
- * the count line, which never moved: it is its own `aria-live` node above the table and it
- * still reads `12 of 128 candidates`. What pagination actually carried was *position*, and
- * the in-table load-more row carries that instead.
+ * **The filters live in a drawer** (03 §09). Five kinds of filter, one of them a
+ * repeatable three-part object, is a query builder sitting on top of a list — and the
+ * screen is a list. So the toolbar carries the scope, the search and one `Filters (n)`
+ * button, and everything else is behind it. The count in that label is what buys the
+ * hiding: a filter nobody can see is a filter nobody can undo.
  *
  * **It has absorbed My interviews** (03 §08). The former screen is the `Assigned to me`
  * scope, and an interviewer arrives here rather than at a list of their own. Which means
- * this screen now has two kinds of caller, and the difference shows in exactly one place:
- * somebody who may not see the whole database gets **no tab strip at all**. Not a disabled
- * one, not a single-tab one — a control offering one choice is not a choice, and a
- * disabled tab advertises a list they will never be shown.
+ * this screen now has two kinds of caller, and the difference shows in exactly two places:
+ * somebody who may not see the whole database gets **no tab strip at all** — a control
+ * offering one choice is not a choice — and no Interviewer filter, because in that scope
+ * the interviewer is them.
  *
  * The scope is never enforced here. `canSeeAll` and the applied `scope` are read off the
  * response and reflected; a hand-crafted `?scope=all` is narrowed by the server, and this
@@ -91,6 +105,7 @@ interface FilterLibrary {
 export default function CandidatesPage({ params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = use(params);
   const router = useRouter();
+  const viewer = useSession().account;
 
   const [phase, setPhase] = useState<Phase>('loading');
   /** The latest response's head — the counts and the zone, never the rows. */
@@ -107,11 +122,16 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
   const [exhausted, setExhausted] = useState(false);
   const [pending, setPending] = useState(false);
   const [library, setLibrary] = useState<FilterLibrary | null>(null);
+  /** Manage-only, so it is fetched separately and only for the caller who gets the field. */
+  const [interviewers, setInterviewers] = useState<InterviewerOption[]>([]);
 
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
+  const [statuses, setStatuses] = useState<ApplicationStatus[]>([]);
   const [vacancyIds, setVacancyIds] = useState<string[]>([]);
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
+  const [interviewerIds, setInterviewerIds] = useState<string[]>([]);
   const [criteriaRows, setCriteriaRows] = useState<CriteriaFilterRowState[]>([]);
   const [page, setPage] = useState(1);
   /**
@@ -152,21 +172,45 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
     setPage(1);
   }
 
-  /** Only complete rows travel; a half-built one is not yet a filter. */
+  /** Only complete chips travel; one without a value is not yet a filter. */
   const criteria = useMemo(
     () => completeRows(criteriaRows).map((row) => criterionFilterParam(row)),
     [criteriaRows],
   );
-  // Keyed by content rather than by identity: the array is rebuilt whenever a row is
-  // touched, and choosing a criterion — a row that is not yet a filter — must not fire a
+  // Keyed by content rather than by identity: the array is rebuilt whenever a chip is
+  // touched, and choosing a criterion — a chip that is not yet a filter — must not fire a
   // request that asks exactly what the last one did.
   const criteriaKey = JSON.stringify(criteria);
 
-  const filterCount = vacancyIds.length + categoryIds.length + criteria.length;
   /**
-   * Whether a **filter** narrows the list. The scope is not one of them — it is not
-   * counted, it is not cleared by `Clear all`, and it is not what decides between the two
-   * filter-shaped empty states.
+   * The interviewer filter is **not applied in `mine`** (03 §09.48), where the interviewer
+   * is the viewer by definition. The field is not drawn there either, so this is the
+   * client agreeing with a rule the server already enforces rather than enforcing it: a
+   * value left over from the other tab neither travels nor counts.
+   */
+  const appliedInterviewerIds = useMemo(
+    () => (scope === 'mine' ? [] : interviewerIds),
+    [scope, interviewerIds],
+  );
+
+  /**
+   * What the `Filters (n)` badge counts, and what `Clear filters` empties.
+   *
+   * **Search is not in it.** It has its own always-visible field in the toolbar, so it is
+   * never a filter somebody has lost track of — which is the only thing this number is
+   * for. **Nor is the scope**: the tab strip is navigation, it survives `Clear filters`,
+   * and counting it would make `Assigned to me` read as a filter with no control here.
+   */
+  const filterCount =
+    statuses.length +
+    vacancyIds.length +
+    categoryIds.length +
+    appliedInterviewerIds.length +
+    criteria.length;
+  /**
+   * Whether a **filter** narrows the list — what decides between the two filter-shaped
+   * empty states. Search counts here even though it is not in the badge: an empty result
+   * from a typo is still something to undo.
    */
   const filtered = filterCount > 0 || query.trim().length > 0;
   /**
@@ -186,8 +230,10 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
   const load = useCallback(async (): Promise<void> => {
     const params = new URLSearchParams();
     if (query.trim()) params.set('search', query.trim());
+    for (const status of statuses) params.append('status', status);
     for (const id of vacancyIds) params.append('vacancyId', id);
     for (const id of categoryIds) params.append('categoryId', id);
+    for (const id of appliedInterviewerIds) params.append('interviewerId', id);
     for (const filter of criteria) params.append('criterion', filter);
     if (scope === 'mine') params.set('scope', scope);
     if (page > 1) params.set('page', String(page));
@@ -232,15 +278,27 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
     // `criteriaKey` stands in for `criteria` — see above; the array itself is what
     // travels, and its content is what decides when to refetch.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orgId, query, vacancyIds, categoryIds, criteriaKey, scope, page]);
+  }, [
+    orgId,
+    query,
+    statuses,
+    vacancyIds,
+    categoryIds,
+    appliedInterviewerIds,
+    criteriaKey,
+    scope,
+    page,
+  ]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  // The filter controls' own options. Fetched once: the libraries do not change while
-  // somebody is filtering, and refetching them on every keystroke would be three
-  // requests for a list nobody edited.
+  /**
+   * The filter controls' own options. Fetched once: the libraries do not change while
+   * somebody is filtering, and refetching them on every keystroke would be three requests
+   * for lists nobody edited.
+   */
   useEffect(() => {
     let cancelled = false;
 
@@ -271,6 +329,33 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
     };
   }, [orgId]);
 
+  /**
+   * The interviewer list, and only for the caller the Interviewer field is drawn for.
+   *
+   * `GET …/hiring/interviewers` is `HiringManageGuard`-only, and deliberately: it names
+   * every member who may be assigned anything. So it is asked for **only once the
+   * response has said the caller may see the whole database**, which is the same caller
+   * — an interviewer's own drawer has no such field, never asks, and never 404s.
+   */
+  const canSeeAll = data?.canSeeAll ?? false;
+  useEffect(() => {
+    if (!canSeeAll) return undefined;
+    let cancelled = false;
+
+    void (async () => {
+      const response = await fetch(`/api/organizations/${orgId}/hiring/interviewers`, {
+        credentials: 'same-origin',
+      });
+      if (cancelled || !response.ok) return;
+      const body = await response.json();
+      setInterviewers(body.interviewers);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, canSeeAll]);
+
   const hasMore = data ? !exhausted && rows.length < data.matched : false;
   /** The refilter dims the rows; loading page 2 must not — nothing on screen changed. */
   const refiltering = pending && page === 1 && rows.length > 0;
@@ -296,17 +381,32 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
 
   if (phase === 'gone') notFound();
 
+  /** Every filter, and nothing else: the search field and the scope tab both survive. */
+  function clearFilters(): void {
+    applyFilter(() => {
+      setStatuses([]);
+      setVacancyIds([]);
+      setCategoryIds([]);
+      setInterviewerIds([]);
+      setCriteriaRows([]);
+    });
+  }
+
+  /** What the no-results state offers, where the search is the likelier culprit. */
   function clearAll(): void {
     setSearch('');
     applyFilter(() => {
       setQuery('');
+      setStatuses([]);
       setVacancyIds([]);
       setCategoryIds([]);
+      setInterviewerIds([]);
       setCriteriaRows([]);
     });
   }
 
   const zone = data?.viewerTimeZone ?? 'UTC';
+  const shelf = library ?? EMPTY_LIBRARY;
 
   const options = (entries: Array<{ id: string; label: string }>, testId: string): SelectOption[] =>
     entries.map((entry) => ({
@@ -315,16 +415,58 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
       testId: `${testId}-option-${entry.id}`,
     }));
 
+  const statusOptions = options(
+    APPLICATION_STATUSES.map((status) => ({ id: status, label: APPLICATION_STATUS_LABELS[status] })),
+    'candidates-filter-status',
+  );
   const positionOptions = options(
-    (library?.vacancies ?? []).map((vacancy) => ({ id: vacancy.id, label: vacancy.title })),
+    shelf.vacancies.map((vacancy) => ({ id: vacancy.id, label: vacancy.title })),
     'candidates-filter-position',
   );
   const categoryOptions = options(
-    (library?.categories ?? []).map((category) => ({ id: category.id, label: category.name })),
+    shelf.categories.map((category) => ({ id: category.id, label: category.name })),
     'candidates-filter-category',
   );
-  const chosen = (all: SelectOption[], ids: string[]): SelectOption[] =>
+  const interviewerOptions = options(
+    interviewers.map((interviewer) => ({
+      id: interviewer.accountId,
+      // `(me)` rather than a `Me` entry of its own, so the filter and the `Assigned to me`
+      // tab are visibly the same person (03 §09.48).
+      label: interviewerPickerLabel(interviewer.fullName, interviewer.accountId === viewer.id),
+    })),
+    'candidates-filter-interviewer',
+  );
+  const chosen = (all: SelectOption[], ids: readonly string[]): SelectOption[] =>
     all.filter((option) => ids.includes(option.value));
+
+  const criterionById = new Map(shelf.criteria.map((criterion) => [criterion.id, criterion]));
+  /**
+   * The picker offers what is not already a chip, archived below active and marked
+   * (03 §04.19). The marker is the option's `hint` (ledger §21), drawn inside the row and
+   * part of its accessible name — and *not* in the label, which is what the control
+   * filters on: a badge welded into the text would make an archived criterion unfindable
+   * by typing its name.
+   */
+  const criterionOptions: SelectOption[] = shelf.criteria
+    .filter((criterion) => !criteriaRows.some((row) => row.criterionId === criterion.id))
+    .slice()
+    .sort((left, right) =>
+      left.isArchived === right.isArchived
+        ? left.name.localeCompare(right.name)
+        : left.isArchived
+          ? 1
+          : -1,
+    )
+    .map((criterion) => ({
+      value: criterion.id,
+      label: criterion.name,
+      hint: criterion.isArchived ? (
+        <Badge status="inactive" outlined>
+          {CANDIDATE_MESSAGES.archived}
+        </Badge>
+      ) : undefined,
+      testId: `candidates-criteria-option-${criterion.id}`,
+    }));
 
   return (
     <>
@@ -334,162 +476,237 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
       />
 
       {/*
-        Drawn only once the response has said the caller may see both, which is also why
-        it is not rendered while the first request is in flight: a strip that appeared and
-        then vanished would be the flash the shell's `/api/me` gate exists to prevent.
+        Blue's own list-screen row (§52): the strip on the left, the 250px search and the
+        actions on the right, 20px gaps. The scope tabs are drawn only once the response
+        has said the caller may see both — which is also why they are not rendered while
+        the first request is in flight: a strip that appeared and then vanished would be
+        the flash the shell's `/api/me` gate exists to prevent.
 
         Each label carries its own count, computed under the filters already applied — so
         the tab answers "and how many would the other one show?" before it is pressed.
       */}
-      {data?.canSeeAll && (
-        <PageTabs
-          label={CANDIDATE_MESSAGES.scope.tablist}
-          data-testid="candidates-scope-tabs"
-          active={scope}
-          onChange={(next) => applyFilter(() => setScope(next as CandidateScope))}
-          style={{ marginBottom: 'var(--space-5)' }}
-          tabs={[
-            {
-              value: 'all',
-              label: candidateScopeTabLabel('all', data.scopeCounts.all ?? 0),
-              testId: 'candidates-scope-all',
-            },
-            {
-              value: 'mine',
-              label: candidateScopeTabLabel('mine', data.scopeCounts.mine),
-              testId: 'candidates-scope-mine',
-            },
-          ]}
-        />
-      )}
-
-      <SearchInput
-        outlined
-        placeholder={CANDIDATE_MESSAGES.searchPlaceholder}
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-        onClear={() => setSearch('')}
-        aria-label="Search name or email"
-        data-testid="candidates-search-input"
-        wrapperStyle={{ width: '100%', marginBottom: 'var(--space-5)' }}
-      />
+      <TableToolbar
+        tabs={
+          data?.canSeeAll
+            ? [
+                {
+                  value: 'all',
+                  label: candidateScopeTabLabel('all', data.scopeCounts.all ?? 0),
+                  testId: 'candidates-scope-all',
+                },
+                {
+                  value: 'mine',
+                  label: candidateScopeTabLabel('mine', data.scopeCounts.mine),
+                  testId: 'candidates-scope-mine',
+                },
+              ]
+            : undefined
+        }
+        activeTab={scope}
+        onTab={(next) => applyFilter(() => setScope(next as CandidateScope))}
+        tabsLabel={CANDIDATE_MESSAGES.scope.tablist}
+        tabsTestId="candidates-scope-tabs"
+        search={search}
+        onSearch={(event) => setSearch(event.target.value)}
+        onClearSearch={() => setSearch('')}
+        searchPlaceholder={CANDIDATE_MESSAGES.searchPlaceholder}
+        searchLabel="Search name or email"
+        searchTestId="candidates-search-input"
+      >
+        <Button
+          variant="primary"
+          onClick={() => setFiltersOpen(true)}
+          aria-expanded={filtersOpen}
+          aria-haspopup="dialog"
+          data-testid="candidates-filters-open"
+        >
+          {candidateFiltersLabel(filterCount)}
+        </Button>
+      </TableToolbar>
 
       {/*
-        A control surface rather than data, which is why it sits on `--surface-sunken` — the
-        tone blue already puts behind a `Table`'s own header row — and why it is a labelled
-        landmark: three kinds of filter is a lot to walk through with a screen reader on the
-        way to the table, and this is what lets it be skipped whole (03 design §Accessibility).
+        Five kinds of filter behind one button (03 §09). The panel is the shell's own
+        drawer, hung from the navbar rather than over it (ledger §51), and it is a dialog:
+        focus moves in, `Escape` and the scrim leave, and focus comes back to the button
+        that opened it.
       */}
-      <section aria-label="Filters" style={{ marginBottom: 'var(--space-6)' }}>
-        {/*
-          `clip={false}` because every control in here opens a list into the card, and a
-          `Card` clips to its radius by default. This is the surface reversal 6 was written
-          for and the first one to exercise it — Phase 3's two popovers opened from a `Modal`
-          and from `PageHeader`, neither of which is a `Card`.
-        */}
-        <Card clip={false} style={{ background: 'var(--surface-sunken)' }}>
-          <div className="candidates-filter-row">
-            <div className="candidates-filter-label">
-              <FieldLabel htmlFor="candidates-filter-position">Position</FieldLabel>
-            </div>
+      <MenuDrawer
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        closeLabel={CANDIDATE_MESSAGES.filters.close}
+        closeTestId="candidates-filters-close"
+        role="dialog"
+        aria-labelledby="candidates-filters-title"
+        data-testid="candidates-filters"
+      >
+        <div className="candidates-filters">
+          <h2 id="candidates-filters-title" className="candidates-filters-title">
+            {CANDIDATE_MESSAGES.filters.title}
+          </h2>
+
+          {/*
+            Every field is the same multi-select — same chips, same list, same keyboard —
+            and **a filter with nothing to choose in it is not drawn** (03 §09.52). Status
+            is the only one whose options are constant; the other four are read from a
+            library, and all four of those libraries are `admin`/`manager` only, GET
+            included (06 §Actors). So an interviewer — who this screen opened to in Phase 1
+            — would otherwise be handed four empty pickers on a screen that is theirs. The
+            same rule covers an organization that has simply not made a category yet.
+          */}
+          <Select
+            isMulti
+            label={CANDIDATE_MESSAGES.filters.status}
+            placeholder={CANDIDATE_MESSAGES.filters.anyStatus}
+            value={chosen(statusOptions, statuses)}
+            options={statusOptions}
+            onChange={(option) =>
+              applyFilter(() => setStatuses(valuesOf(option) as ApplicationStatus[]))
+            }
+            data-testid="candidates-filter-status"
+            chipTestId={(option) =>
+              `candidates-filter-chip-${typeof option === 'string' ? option : option.value}`
+            }
+          />
+
+          {positionOptions.length > 0 && (
             <Select
               isMulti
               isSearchable
-              id="candidates-filter-position"
+              label={CANDIDATE_MESSAGES.filters.position}
+              placeholder={CANDIDATE_MESSAGES.filters.anyPosition}
               value={chosen(positionOptions, vacancyIds)}
               options={positionOptions}
               onChange={(option) => applyFilter(() => setVacancyIds(valuesOf(option)))}
-              placeholder="Any position"
               data-testid="candidates-filter-position"
               chipTestId={(option) =>
                 `candidates-filter-chip-${typeof option === 'string' ? option : option.value}`
               }
-              wrapperStyle={{ flex: 1, minWidth: 0 }}
             />
-          </div>
+          )}
 
-          <div className="candidates-filter-row">
-            <div className="candidates-filter-label">
-              <FieldLabel htmlFor="candidates-filter-category">Category</FieldLabel>
-            </div>
+          {categoryOptions.length > 0 && (
             <Select
               isMulti
               isSearchable
-              id="candidates-filter-category"
+              label={CANDIDATE_MESSAGES.filters.category}
+              placeholder={CANDIDATE_MESSAGES.filters.anyCategory}
               value={chosen(categoryOptions, categoryIds)}
               options={categoryOptions}
               onChange={(option) => applyFilter(() => setCategoryIds(valuesOf(option)))}
-              placeholder="Any category"
               data-testid="candidates-filter-category"
               chipTestId={(option) =>
                 `candidates-filter-chip-${typeof option === 'string' ? option : option.value}`
               }
-              wrapperStyle={{ flex: 1, minWidth: 0 }}
             />
-          </div>
+          )}
 
-          <div className="candidates-filter-row">
-            {/* No `htmlFor`: this one names a stack of rows rather than a single
-                control, and each row labels its own three (03 design §Accessibility). */}
-            <div className="candidates-filter-label">
-              <FieldLabel>Criteria</FieldLabel>
-            </div>
-            <div className="candidates-criteria-rows">
-              {criteriaRows.map((row, index) => (
-                <CriteriaFilterRow
-                  key={index}
-                  index={index}
-                  row={row}
-                  criteria={library?.criteria ?? []}
-                  onChange={(next) =>
-                    setCriteriaRows(
-                      criteriaRows.map((existing, at) => (at === index ? next : existing)),
-                    )
-                  }
-                  onRemove={() =>
-                    setCriteriaRows(criteriaRows.filter((_, at) => at !== index))
-                  }
-                />
-              ))}
-              <div>
-                <Button
-                  onClick={() => setCriteriaRows([...criteriaRows, EMPTY_ROW])}
-                  data-testid="candidates-criteria-filter-add"
-                >
-                  {CANDIDATE_MESSAGES.addCriteriaFilter}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </Card>
-      </section>
+          {/*
+            Absent in `mine`, where the interviewer is the viewer — a field whose only
+            answer is already given is not a filter (03 §09.48). Absent, not disabled:
+            there is nothing here to enable.
+          */}
+          {scope !== 'mine' && interviewerOptions.length > 0 && (
+            <Select
+              isMulti
+              isSearchable
+              label={CANDIDATE_MESSAGES.filters.interviewer}
+              placeholder={CANDIDATE_MESSAGES.filters.anyInterviewer}
+              value={chosen(interviewerOptions, interviewerIds)}
+              options={interviewerOptions}
+              onChange={(option) => applyFilter(() => setInterviewerIds(valuesOf(option)))}
+              data-testid="candidates-filter-interviewer"
+              chipTestId={(option) =>
+                `candidates-filter-chip-${typeof option === 'string' ? option : option.value}`
+              }
+            />
+          )}
 
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 'var(--space-5)',
-          marginBottom: 'var(--space-4)',
-          // Reserved, so the count turning into a loader never moves the table.
-          minHeight: 44,
-        }}
-      >
+          {(shelf.criteria.length > 0 || criteriaRows.length > 0) && (
+            <div className="candidates-criteria">
+              {/*
+                The same autocomplete the candidate card adds an assessment with, minus the
+                create row: a filter can only name what the library already holds, and
+                nothing is created from here.
+              */}
+              <Select
+                isSearchable
+                label={CANDIDATE_MESSAGES.filters.criteria}
+                placeholder={CANDIDATE_MESSAGES.addCriterion.placeholder}
+                value={undefined}
+                options={criterionOptions}
+                onChange={(option) => {
+                  const criterion = criterionById.get(
+                    typeof option === 'string' ? option : (option as SelectOption).value,
+                  );
+                  if (!criterion) return;
+                  applyFilter(() =>
+                    setCriteriaRows((current) => [...current, newCriteriaRow(criterion)]),
+                  );
+                }}
+                data-testid="candidates-criteria-filter-add"
+              />
+
+              {criteriaRows.length > 0 && (
+                <ul className="candidates-criteria-chips">
+                  {criteriaRows.map((row, index) => {
+                    const criterion = criterionById.get(row.criterionId);
+                    if (!criterion) return null;
+                    return (
+                      <CriteriaFilterRow
+                        key={row.criterionId}
+                        index={index}
+                        row={row}
+                        criterion={criterion}
+                        onChange={(next) =>
+                          applyFilter(() =>
+                            setCriteriaRows(
+                              criteriaRows.map((existing, at) => (at === index ? next : existing)),
+                            ),
+                          )
+                        }
+                        onRemove={() =>
+                          applyFilter(() =>
+                            setCriteriaRows(criteriaRows.filter((_, at) => at !== index)),
+                          )
+                        }
+                      />
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {/*
+            Nothing here applies anything — every control above already did. `Show results`
+            dismisses the panel covering the list it has been changing, which is the only
+            thing left to want.
+          */}
+          <div className="candidates-filters-actions">
+            <Button
+              variant="primary"
+              onClick={() => setFiltersOpen(false)}
+              data-testid="candidates-filters-apply"
+            >
+              {CANDIDATE_MESSAGES.filters.showResults}
+            </Button>
+            {filterCount > 0 && (
+              <Button onClick={clearFilters} data-testid="candidates-clear-filters">
+                {CANDIDATE_MESSAGES.clearFilters}
+              </Button>
+            )}
+          </div>
+        </div>
+      </MenuDrawer>
+
+      <div className="candidates-count-row">
         {/*
           The count is the feedback for every filter change, and the only thing on this
           screen that announces itself. It is also the whole answer to what pagination used
           to be here for. During a refetch it holds a loader rather than a stale number — a
           number that was true one request ago is worse than no number.
         */}
-        <p
-          aria-live="polite"
-          data-testid="candidates-count"
-          style={{
-            margin: 0,
-            fontSize: 'var(--font-size-s)',
-            color: 'var(--text-tertiary)',
-          }}
-        >
+        <p aria-live="polite" data-testid="candidates-count">
           {pending && page === 1 ? (
             // Named, but not a live region of its own: the `<p>` around it already is one,
             // and a nested pair announces the same change twice.
@@ -499,11 +716,6 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
           ) : null}
         </p>
 
-        {filterCount > 1 && (
-          <Button onClick={clearAll} data-testid="candidates-clear-filters">
-            {CANDIDATE_MESSAGES.clearFilters}
-          </Button>
-        )}
       </div>
 
       {phase === 'failed' ? (

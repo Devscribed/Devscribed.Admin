@@ -140,7 +140,12 @@ export function Select({
       if (activeIndex >= 0) { e.preventDefault(); commit(rows[activeIndex]); }
       return;
     }
-    if (e.key === 'Escape' && open) { e.stopPropagation(); setOpen(false); setQuery(''); setActive(-1); return; }
+    /* Both, and both are needed. `stopPropagation` is for a host listening on an ancestor
+       node; `preventDefault` is how a dialog listening on `document` is told the key was
+       already answered — see the note on §21 in the ledger. Under Next's App Router React
+       dispatches from `document` itself, so stopping propagation there does not reach a
+       second `document` listener at all, and a `Select` inside a drawer would close both. */
+    if (e.key === 'Escape' && open) { e.preventDefault(); e.stopPropagation(); setOpen(false); setQuery(''); setActive(-1); return; }
     if (e.key === 'Tab') { setOpen(false); return; }
     /* react-select drops the last value on Backspace in an empty input, which is the only way
        a chip comes off without a pointer. */

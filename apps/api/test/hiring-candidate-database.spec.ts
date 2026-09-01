@@ -106,6 +106,14 @@ describe('Hiring — candidate database', () => {
   }
 
   /**
+   * Moves an application into a board column. The endpoint that does this is the board's
+   * own and is tested there; here the column is a precondition, not the thing under test.
+   */
+  async function moveToStatus(applicationId: string, status: string): Promise<void> {
+    await prisma.application.update({ where: { id: applicationId }, data: { status } });
+  }
+
+  /**
    * Fixes when a candidate was added, because `all`'s order reads it.
    *
    * Two bookings in a seeding loop are milliseconds apart and could land inside the same
@@ -349,6 +357,44 @@ describe('Hiring — candidate database', () => {
    * Comparison is by position, never by label (06 §03.15), and this is the case that
    * would notice if a query were ever written against the label instead.
    */
+  /**
+   * TC-H03-INT-12 — status is a filter, and it reads like every other one: across **all**
+   * of a candidate's applications, ORed within itself, ANDed with the rest (03 §09.47).
+   *
+   * The candidate with two applications is the case that matters. Their React interview
+   * was passed and their .NET one is still scheduled, so they satisfy `Passed` and
+   * `Scheduled` separately — and `Passed AND DotNet` only because the two clauses are
+   * asked of two different applications of the same person.
+   */
+  it('filters on the status of any one of a candidate’s applications', async () => {
+    const { admin, react, dotnet, reactVacancy, dotnetVacancy, slots } = await seedDatabase();
+
+    const janeReact = await book(reactVacancy, { email: 'jane@example.com', startUtc: slots[0] });
+    await book(dotnetVacancy, { email: 'jane@example.com', startUtc: slots[1] });
+    await book(reactVacancy, { email: 'ivan@example.com', startUtc: slots[2] });
+
+    await moveToStatus(janeReact.applicationId, 'passed');
+
+    // Jane alone holds a passed application; Ivan's only interview is still scheduled.
+    expect(emails(await list(admin, { status: ['passed'] }))).toEqual(['jane@example.com']);
+
+    // OR within the kind.
+    expect(emails(await list(admin, { status: ['passed', 'scheduled'] }))).toEqual([
+      'ivan@example.com',
+      'jane@example.com',
+    ]);
+
+    // AND across kinds, each satisfied by a different application of the same person:
+    // the passed one is on React, the DotNet one is still scheduled.
+    expect(emails(await list(admin, { status: ['passed'], categoryId: [dotnet.id] }))).toEqual([
+      'jane@example.com',
+    ]);
+    // And nobody at all when the pair cannot be satisfied by any of Ivan's applications.
+    expect(
+      emails(await list(admin, { status: ['passed'], categoryId: [react.id], search: 'ivan' })),
+    ).toEqual([]);
+  });
+
   it('returns the same candidates after a scale value is renamed', async () => {
     const { admin, reactVacancy, english, slots } = await seedDatabase();
 
@@ -410,11 +456,37 @@ describe('Hiring — candidate database', () => {
       { vacancyId: [theirVacancy.id] },
       { categoryId: [theirCategory.id] },
       { criterion: [`${theirCriterion.id}:is:${theirCriterion.values[0].id}`] },
+      // A real account, and a real interviewer — of an organization this caller has
+      // nothing to do with.
+      { interviewerId: [other.accountId] },
+      // Refused in the scope that would have **dropped** it, too: an id is turned away
+      // for being unknown before it is dropped for being inapplicable (03 §Validation.9).
+      { interviewerId: [other.accountId], scope: 'mine' },
     ]) {
       const response = await list(admin, query);
       expect(response.status).toBe(422);
       expect(response.body.error).toBe('invalid_filter');
     }
+  });
+
+  /**
+   * The five statuses are a **closed set**, so a sixth is a filter this product cannot
+   * evaluate rather than one that matches nobody — and it is refused like any unknown id
+   * (03 §Validation.7). Dropping it would answer with more people than the drawer's chips
+   * claim to allow.
+   */
+  it('refuses a status outside the five the board holds', async () => {
+    const { admin } = await seedDatabase();
+
+    for (const status of ['archived', 'Scheduled']) {
+      const response = await list(admin, { status: [status] });
+      expect(response.status).toBe(422);
+      expect(response.body.error).toBe('invalid_filter');
+    }
+
+    // An empty repeat is not an unknown status: `?status=` is what a form sends for a
+    // field nobody filled in, and it names nothing to refuse.
+    expect((await list(admin, { status: [''] })).status).toBe(200);
   });
 
   it('refuses a malformed triple and a scale value from another scale', async () => {
@@ -501,7 +573,7 @@ describe('Hiring — candidate database', () => {
       organizationId: admin.organizationId,
     });
 
-    return { admin, interviewer, theirs, ours };
+    return { admin, member, interviewer, theirs, ours };
   }
 
   it('gives an assigned interviewer the screen, narrowed to their own candidates', async () => {
@@ -570,6 +642,35 @@ describe('Hiring — candidate database', () => {
     expect(mine.body.scope).toBe('mine');
     expect(emails(mine)).toEqual(['both@example.com', 'jane@example.com']);
     // `matched` is the applied scope's own count, so the number and the lit tab agree.
+    expect(mine.body.matched).toBe(2);
+  });
+
+  /**
+   * TC-H03-INT-13 — the interviewer filter narrows `all`, and is **dropped** in `mine`.
+   *
+   * Dropped, not intersected and not refused: in that scope the interviewer is the viewer
+   * by definition, the drawer draws no such field, and a value carried over from the other
+   * tab must not quietly narrow a list whose control for it is off screen (03 §09.48).
+   *
+   * The `scopeCounts` assertion is the one that would catch the tempting implementation.
+   * Both scopes' counts are built from **one** plan, so a plan that kept the clause would
+   * label the `Assigned to me` tab with a number that tab would never show.
+   */
+  it('narrows all by the interviewer, and drops the clause in mine', async () => {
+    const { admin, member } = await seedScopes();
+
+    const theirs = await list(admin, { interviewerId: [member.accountId] });
+    expect(theirs.status).toBe(200);
+    expect(emails(theirs)).toEqual(['ann@example.com', 'both@example.com']);
+
+    // The same query in the other scope: the admin's own candidates, unfiltered by an
+    // interviewer they are not.
+    const mine = await list(admin, { interviewerId: [member.accountId], scope: 'mine' });
+    expect(mine.status).toBe(200);
+    expect(emails(mine)).toEqual(['both@example.com', 'jane@example.com']);
+
+    // And the tab label agrees with what pressing the tab shows.
+    expect(theirs.body.scopeCounts.mine).toBe(2);
     expect(mine.body.matched).toBe(2);
   });
 

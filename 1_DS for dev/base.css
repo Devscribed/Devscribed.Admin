@@ -127,6 +127,54 @@ input, textarea, select { font: inherit; }
 
 .ds-app-shell-scrim { position: fixed; inset: 0; z-index: 2001; }
 
+/* §51 — `MenuDrawer`'s geometry, with the one number that was never a drawer measurement
+   taken out of it. Blue writes `top: 60px` inline; 60px is `--layout-navbar-height-mobile`,
+   and above the shell's breakpoint the navbar is 80. The panel hangs from whatever the
+   navbar currently is, which is the same switch `.ds-navbar` and `.ds-app-shell-nav` make
+   four lines up — and it is here, rather than inline, for `.ds-navbar`'s own reason: a
+   media query cannot be an inline style. Everything else is blue's, values unchanged — the
+   slide and the `data-open` that drives it are `.ds-app-shell-nav`'s own, and the trailing
+   `visibility` step is what keeps a closed panel out of the page rather than merely off the
+   side of it. A caller `top` stays inline, where it can override this. */
+.ds-menu-drawer {
+  position: fixed;
+  top: var(--layout-navbar-height-desktop);
+  right: 0;
+  bottom: 0;
+  z-index: 2002;
+  display: flex;
+  flex-direction: column;
+  width: 340px;
+  max-width: 100%;
+  background-color: #fff;
+  box-shadow: var(--shadow-drawer);
+  transform: translateX(105%);
+  /* Hidden only once it has finished leaving: the panel has to stay painted for the slide
+     and must not stay in the page after it. */
+  visibility: hidden;
+  transition: transform 0.3s, visibility 0s 0.3s;
+}
+
+.ds-menu-drawer[data-open] {
+  transform: translateX(0);
+  visibility: visible;
+  transition: transform 0.3s;
+}
+
+.ds-menu-drawer-scrim {
+  position: fixed;
+  top: var(--layout-navbar-height-desktop);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2001;
+}
+
+@media (max-width: 1199px) {
+  .ds-menu-drawer,
+  .ds-menu-drawer-scrim { top: var(--layout-navbar-height-mobile); }
+}
+
 /* §30 — `Calendar`'s day cell. react-datepicker sizes a day 1.7rem tall with a .166rem margin
    above and below, giving a 2.032rem vertical pitch; that is reproduced here so the two grids
    share a rhythm. It lives in a class for the reason `.page-title` and `.ds-navbar` do: the

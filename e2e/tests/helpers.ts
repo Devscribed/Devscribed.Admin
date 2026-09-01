@@ -260,6 +260,24 @@ export async function createCriterion(
 }
 
 /**
+ * Archives a criterion through the API — a precondition for hiring 03 §04.19, where an
+ * archived criterion is still filterable and has to say so in the picker.
+ */
+export async function archiveCriterion(
+  request: APIRequestContext,
+  org: Registered,
+  criterionId: string,
+): Promise<void> {
+  const response = await request.patch(
+    `${API}/api/organizations/${org.organizationId}/hiring/criteria/${criterionId}`,
+    { data: { isArchived: true } },
+  );
+  if (!response.ok()) {
+    throw new Error(`Precondition failed: archiving answered ${response.status()}`);
+  }
+}
+
+/**
  * Assesses a criterion on an application through the API — a precondition for the
  * settings screen's archive-versus-delete rules, which only differ once something has
  * been assessed.
