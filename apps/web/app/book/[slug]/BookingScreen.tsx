@@ -23,12 +23,12 @@ import {
   Card,
   FileInput,
   InfoBanner,
-  Input,
-  SectionLabel,
-  Spinner,
-  Textarea,
+  PageTitle,
+  Preloader,
+  TextArea,
+  TextInput,
 } from '@/ds';
-import { errorNode, focusByTestId, hintNode } from '@/field-error';
+import { focusByTestId } from '@/field-error';
 import { detectTimeZone, formatDuration } from '@/hiring/format';
 import { SlotPicker, readTimeFormat, writeTimeFormat } from '@/hiring/SlotPicker';
 import { useAvailability } from '@/hiring/useAvailability';
@@ -249,8 +249,12 @@ export function BookingScreen({ slug }: { slug: string }) {
   if (page.state === 'loading') {
     return (
       <BookingLayout data-testid="booking-page">
-        <div style={{ display: 'flex', justifyContent: 'center', color: 'var(--accent)' }}>
-          <Spinner size={28} />
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          {/* The dots carry no text, so the announcement is made beside them. */}
+          <Preloader data-testid="booking-loading" aria-hidden />
+          <span aria-live="polite" style={SR_ONLY}>
+            Loading this position
+          </span>
         </div>
       </BookingLayout>
     );
@@ -271,28 +275,23 @@ export function BookingScreen({ slug }: { slug: string }) {
   const { organizationName, vacancy } = page.vacancy;
 
   return (
-    <BookingLayout data-testid="booking-page" wordmark={<Wordmark name={organizationName} />}>
-      <header style={{ textAlign: 'center', marginBottom: 'var(--sp-12)' }}>
-        <h1
-          data-testid="booking-vacancy-title"
-          style={{
-            margin: 0,
-            fontFamily: 'var(--font-display)',
-            fontWeight: 600,
-            fontSize: 'var(--fs-34)',
-            letterSpacing: '-.6px',
-            color: 'var(--text)',
-          }}
-        >
-          {vacancy.title}
-        </h1>
+    <BookingLayout
+      data-testid="booking-page"
+      wordmark={organizationName}
+      wordmarkTestId="booking-org-wordmark"
+    >
+      <header style={{ textAlign: 'center', marginBottom: 'var(--space-8)' }}>
+        {/* Meridian set this at 34px, which blue's scale has no counterpart for. It is the
+            page's title, so it is `PageTitle` — whose type steps 16 → 20 → 24 with the
+            viewport rather than holding one size, and which is already the `<h1>` on every
+            signed-in screen. */}
+        <PageTitle data-testid="booking-vacancy-title">{vacancy.title}</PageTitle>
         <div
           data-testid="booking-duration"
           style={{
-            marginTop: 'var(--sp-2)',
-            fontFamily: 'var(--font-display)',
-            fontSize: 'var(--fs-15)',
-            color: 'var(--text-muted)',
+            marginTop: 'var(--space-1)',
+            fontSize: 'var(--font-size-base)',
+            color: 'var(--text-secondary)',
           }}
         >
           {formatDuration(vacancy.durationMinutes)}
@@ -301,12 +300,12 @@ export function BookingScreen({ slug }: { slug: string }) {
           <p
             data-testid="booking-description"
             style={{
-              margin: 'var(--sp-6) auto 0',
+              margin: 'var(--space-5) auto 0',
               maxWidth: '66ch',
               whiteSpace: 'pre-wrap',
-              fontSize: 'var(--fs-15)',
-              lineHeight: 'var(--lh-normal)',
-              color: 'var(--text-sub)',
+              fontSize: 'var(--font-size-base)',
+              lineHeight: 'var(--line-height-base)',
+              color: 'var(--text-tertiary)',
             }}
           >
             {vacancy.description}
@@ -327,7 +326,7 @@ export function BookingScreen({ slug }: { slug: string }) {
           </p>
         </Card>
       ) : (
-        <div style={{ display: 'grid', gap: 'var(--sp-12)' }}>
+        <div style={{ display: 'grid', gap: 'var(--space-8)' }}>
           <SlotPicker
             availability={availability}
             selected={selectedSlot}
@@ -346,11 +345,13 @@ export function BookingScreen({ slug }: { slug: string }) {
             }}
           />
 
-          <Card>
-            <SectionLabel>Your details</SectionLabel>
+          {/* The caption that led this panel was a `SectionLabel`; it is the Card's own
+              title now (D4), which makes it a real `<h2>` in the outline under the vacancy
+              title's `<h1>` rather than an uppercase decoration above a box. */}
+          <Card title="Your details">
             {banner && (
-              <div style={{ marginTop: 'var(--sp-6)' }}>
-                <InfoBanner tone="error" role="alert" data-testid="booking-error-banner">
+              <div style={{ marginBottom: 'var(--space-7)' }}>
+                <InfoBanner variant="error" role="alert" data-testid="booking-error-banner">
                   {banner}
                 </InfoBanner>
               </div>
@@ -362,79 +363,94 @@ export function BookingScreen({ slug }: { slug: string }) {
                 event.preventDefault();
                 void submit();
               }}
-              style={{ display: 'grid', gap: 'var(--sp-10)', marginTop: 'var(--sp-10)' }}
+              // 20px is blue's form rhythm, and the room the fields' message slot needs:
+              // it is pinned below the field rather than pushing it (token map, `--sp-7`).
+              style={{ display: 'grid', gap: 'var(--space-7)' }}
             >
               <div className="booking-names">
-                <Input
+                <TextInput
                   label="First name"
+                  id={TEST_IDS.firstName}
                   placeholder="Jane"
                   value={values.firstName}
                   onChange={(event) => change('firstName')(event.target.value)}
                   onBlur={blur('firstName')}
-                  error={errors.firstName ? errorNode('firstName', errors.firstName) : undefined}
+                  error={errors.firstName}
+                  errorId="field-error-firstName"
                   aria-invalid={errors.firstName ? true : undefined}
                   aria-describedby={errors.firstName ? 'field-error-firstName' : undefined}
-                  data-testid="booking-first-name-input"
+                  data-testid={TEST_IDS.firstName}
                 />
-                <Input
+                <TextInput
                   label="Last name"
+                  id={TEST_IDS.lastName}
                   placeholder="Doe"
                   value={values.lastName}
                   onChange={(event) => change('lastName')(event.target.value)}
                   onBlur={blur('lastName')}
-                  error={errors.lastName ? errorNode('lastName', errors.lastName) : undefined}
+                  error={errors.lastName}
+                  errorId="field-error-lastName"
                   aria-invalid={errors.lastName ? true : undefined}
                   aria-describedby={errors.lastName ? 'field-error-lastName' : undefined}
-                  data-testid="booking-last-name-input"
+                  data-testid={TEST_IDS.lastName}
                 />
               </div>
 
-              <Input
+              <TextInput
                 label="Email"
+                id={TEST_IDS.email}
                 type="email"
                 placeholder="you@example.com"
                 value={values.email}
                 onChange={(event) => change('email')(event.target.value)}
                 onBlur={blur('email')}
-                error={errors.email ? errorNode('email', errors.email) : undefined}
+                error={errors.email}
+                errorId="field-error-email"
                 aria-invalid={errors.email ? true : undefined}
                 aria-describedby={errors.email ? 'field-error-email' : undefined}
-                data-testid="booking-email-input"
+                data-testid={TEST_IDS.email}
               />
 
               <FileInput
                 label="CV"
+                id={TEST_IDS.cv}
                 accept={CV_ACCEPT}
                 fileName={cv?.name ?? null}
                 fileNameTestId="booking-cv-filename"
                 onSelect={selectCv}
-                error={errors.cv ? errorNode('cv', errors.cv) : undefined}
-                // Announced before a file is chosen, not after one is rejected.
-                hint={hintNode('booking-cv-hint', 'PDF, DOC, DOCX, RTF or TXT. Up to 10 MB.')}
+                error={errors.cv}
+                errorId="field-error-cv"
+                // Announced before a file is chosen, not after one is rejected. It shares
+                // the error's slot, so only one of the two ever exists to be described by.
+                hint={HIRING_MESSAGES.booking.cv.hint}
+                hintId="booking-cv-hint"
+                aria-invalid={errors.cv ? true : undefined}
                 aria-describedby={errors.cv ? 'field-error-cv' : 'booking-cv-hint'}
-                data-testid="booking-cv-input"
+                data-testid={TEST_IDS.cv}
               />
 
-              <Textarea
+              <TextArea
                 label="Anything we should know?"
+                id={TEST_IDS.note}
                 placeholder="Optional"
                 rows={4}
                 value={values.note}
                 onChange={(event) => change('note')(event.target.value)}
                 onBlur={blur('note')}
-                error={errors.note ? errorNode('note', errors.note) : undefined}
-                data-testid="booking-note-input"
+                error={errors.note}
+                errorId="field-error-note"
+                aria-invalid={errors.note ? true : undefined}
+                aria-describedby={errors.note ? 'field-error-note' : undefined}
+                data-testid={TEST_IDS.note}
               />
 
               <div style={{ display: 'flex', justifyContent: 'center' }}>
                 <Button
                   type="submit"
                   variant="primary"
-                  size="lg"
                   className="booking-submit"
-                  loading={submitting}
+                  preloader={submitting}
                   disabled={!ready}
-                  aria-busy={submitting || undefined}
                   data-testid="booking-submit-button"
                 >
                   {submitting ? 'Booking' : 'Book'}
@@ -456,33 +472,3 @@ const SR_ONLY: CSSProperties = {
   clip: 'rect(0 0 0 0)',
   whiteSpace: 'nowrap',
 };
-
-/** A text wordmark, never an image: this release uploads and renders no logo. */
-function Wordmark({ name }: { name: string }) {
-  return (
-    <div
-      data-testid="booking-org-wordmark"
-      style={{
-        fontFamily: 'var(--font-display)',
-        fontWeight: 600,
-        fontSize: 'var(--fs-24)',
-        letterSpacing: '-.5px',
-        color: 'var(--text)',
-      }}
-    >
-      {name}
-      <span
-        aria-hidden
-        style={{
-          display: 'inline-block',
-          width: 7,
-          height: 7,
-          borderRadius: 2,
-          background: 'var(--amber-500)',
-          marginLeft: 3,
-          verticalAlign: 'middle',
-        }}
-      />
-    </div>
-  );
-}

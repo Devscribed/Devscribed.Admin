@@ -76,17 +76,17 @@ value-identical; typography is the only place the scales genuinely collide.
 | `--fs-12` | 12 | `--font-size-xs` | 12 | 17 | identical |
 | `--fs-14` | 14 | `--font-size-s` | 14 | 35 | identical |
 | `--fs-16` | 16 | `--font-size-base` | 16 | 1 | ✅ **settled in Phase 5** — and not onto that row. The one use was the application panel's heading, which is now a real `<h2>` at blue's headline-6: also 16px, but with the weight, line and tracking that make it a heading. The third row to leave the map by becoming a component's own type rather than by being remapped |
-| `--fs-24` | 24 | `--headline-4-size` | 24 | 2 | identical |
+| ~~`--fs-24`~~ | 24 | `--headline-4-size` | 24 | 2 | ✅ **settled in Phase 8** — and, like `--fs-27` and `--fs-16` before it, not by the row. Both uses were the organization's wordmark on the two public pages, hand-drawn twice; `BookingLayout` ([§46](ledger.md)) draws it once now, at the headline-4 *step* rather than at 24px. Same size, arriving as a component's own type. **No use left** |
 | ~~`--fs-11`~~ | 11 | `--font-size-xs` | 12 | 3 | ✅ **settled in Phase 6, and never once remapped.** 1 closed in Phase 3 into `FieldLabel`; Phase 5 closed one by deletion (the archived marker is part of the chip label's line and takes its 14px). Phase 6's last one went the way Phase 3's did — the criterion dialog's uppercase micro-caps became `FieldLabel`, in sentence case, with blue's own type. **No use left** |
 | ~~`--fs-13`~~ | 13 | `--font-size-s` | 14 | 14 | ✅ **settled in Phase 6.** 1 closed in Phase 3 into `InfoBanner` (12px, so **−1px**); Phase 4 closed 3, none a remap; Phase 5 closed 2, both remapped as written. Phase 6's last three: the category usage count remapped up to 14px as the table says, and the dialog's two hand-built error lines became `InfoBanner` and `TextInput error`, arriving with their own type. **No use left** |
-| `--fs-15` | 15 | `--font-size-base` | 16 | 11 | +1px — 1 closed in Phase 3, snapped; Phase 4 closed 1 more into `Calendar`'s own header type. Phase 5 closed 2, both snapped; Phase 6 closed 2, both snapped (a category's name and a criterion's). Phase 7 closed 2 — the empty-board sentence snapped, and the board card's name became `BoardCard`'s own type. **4 left, all Phase 8** |
-| `--fs-22` | 22 | `--headline-5-size` | 20 | 1 | −2px |
+| ~~`--fs-15`~~ | 15 | `--font-size-base` | 16 | 11 | ✅ **settled in Phase 8, and it is the one ±1px row that ended up mostly a remap.** +1px — 1 closed in Phase 3, snapped; Phase 4 closed 1 more into `Calendar`'s own header type. Phase 5 closed 2, both snapped; Phase 6 closed 2, both snapped. Phase 7 closed 2 — the empty-board sentence snapped, and the board card's name became `BoardCard`'s own type. Phase 8's last 4 all snapped as written: both pages' duration line and description, and the manage page's "Currently…". **No use left** |
+| ~~`--fs-22`~~ | 22 | `--headline-5-size` | 20 | 1 | ✅ **settled in Phase 8**, −2px, as the table says. The one use is the manage page's interview time, which is the largest thing in its Card and reads as its value — so it takes the headline-5 *step* (weight, line and tracking included) while staying a `<p>`. It is not a heading; the Card's title above it is. **No use left** |
 | `--fs-27` | 27 | `--headline-4-size` | 24 | 1 | ✅ **settled in Phase 2** — the page header is blue's `PageTitle`, whose type steps 16 → 20 → 24px with the viewport rather than holding one size. The single use is gone. |
-| `--fs-34` | 34 | *none* | — | 2 | ⚠ no counterpart — decide per site |
+| ~~`--fs-34`~~ | 34 | *none* | — | 2 | ⚠ ✅ **settled in Phase 8 — one of the two rows that needed a human call, and it needed no new size.** Both uses were the vacancy title on a public page, which is *the page's title* — so both became `PageTitle`, whose type steps 16 → 20 → 24px with the viewport. Exactly how `--fs-27` closed in Phase 2, on the signed-in header. A fourth row to leave the map by the element becoming a component. **No use left** |
 | `--fs-21` | — | *none* | — | 1 | ✅ **settled in Phase 2** — never defined in yellow either. Deleted rather than remapped, see below |
-| `--font-display` | — | `--font-family-base` | — | 17 | Poppins; blue has one family |
-| `--font-text` | — | `--font-family-base` | — | 3 | collapses with the above |
-| `--lh-normal` | 1.4 | `--line-height-base` | 1.5 | 5 | looser — Phase 5 closed 1, on the candidate's own note |
+| ~~`--font-display`~~ | — | `--font-family-base` | — | 17 | ✅ **settled in Phase 8, and never once written.** Blue has one family, and the shells set it — `AppShell` on the signed-in tree, `AuthLayout` and `BookingLayout` (§46) on the other two. Every use closed by the declaration being deleted rather than remapped: a font-family on an element inside a tree that already has the only family there is. **No use left** |
+| ~~`--font-text`~~ | — | `--font-family-base` | — | 3 | ✅ **settled in Phase 8**, with the above and for its reason. **No use left** |
+| ~~`--lh-normal`~~ | 1.4 | `--line-height-base` | 1.5 | 5 | ✅ **settled in Phase 8** — looser. Phase 5 closed 1 on the candidate's own note; the last is the booking page's vacancy description, snapped as written. **No use left** |
 
 ### Color, surface, radius, effect
 
@@ -101,7 +101,7 @@ value-identical; typography is the only place the scales genuinely collide.
 | ~~`--accent-border`~~ | `--action-primary` | 1 | ✅ **settled in Phase 7, and not onto the row it was written for.** The one use was Meridian's board — the held card's edge and the drop placeholder's dashed outline — and `#E8F2FE` on a `--surface-sunken` well is invisible. Both are the *current* thing on a board that shows one mark at a time, which is what blue spends `--action-primary` on. **No use left** |
 | ~~`--hover-bg-tint`~~ | `--color-row-hover` | 2 | ✅ **settled across Phases 2 and 6.** Yellow tinted hover violet; blue's row hover is neutral grey. The top bar's logout row went in Phase 2 onto blue's own popover hover; `.library-row:hover` went in Phase 6, straight onto `--color-row-hover`. A list of settings is not where the product should acquire an accent it has nowhere else. **No use left** |
 | `--error-500` | `--status-error` `#D80027` | 5 | |
-| `--amber-500` | `--status-warning` `#FFD02B` | 2 | ⚠ confirm each site is a warning. Both remaining uses are Phase 8's public surfaces. The third caller — `/login`'s deactivation banner, which reached amber through `InfoBanner tone="warning"` — was settled in Phase 1: see reversal 9. |
+| ~~`--amber-500`~~ | `--status-warning` `#FFD02B` | 2 | ⚠ ✅ **settled in Phase 8 — the second row that needed a human call, and the answer was neither hue.** Both remaining uses were one element: a 7px amber square after the organization's name on each public page. It is not a warning, so `--status-warning` would repeat the `--tracker` mistake below. It was there because *yellow had no logo file* and its own wordmark was typography plus a pin, which the org name imitated; blue ships a real mark, so the imitation has nothing to imitate and borrowing Teammerly's actual one for a customer would be worse. **Deleted, not remapped** — as `--fs-21` was, and for the same reason. Full argument in the [ledger](ledger.md#a-note-on-46-and-the-wordmark-that-is-not-the-products). The third caller — `/login`'s deactivation banner, which reached amber through `InfoBanner tone="warning"` — was settled in Phase 1: see reversal 9. **No use left** |
 | ~~`--tracker`~~ | `--status-warning` `#FFD02B` | 1 | ⚠ ✅ **settled in Phase 7 — and this is the one row in the table that must not be taken as written.** Both systems reserve a tracker hue, but Meridian's is *amber* and its single use is the board's missing-conclusion mark, drawn amber because amber was Meridian's warning colour. Blue's is `#2AA7FF` and belongs to the floating tracker widget alone — *"intentionally different from the primary blue, not a mistake to normalize away"*. Mapping by name would paint a warning in the one hue blue has spoken for, on a product with no tracker. Full argument in the [ledger](ledger.md). **No use left** |
 | `--bg` | `--surface-page` | 3 | the well is `#f8fafc`, set in `AppShell` |
 | `--bg-panel` | `--surface-card` | 1 | |
@@ -118,26 +118,33 @@ value-identical; typography is the only place the scales genuinely collide.
 
 ### The seven rows that need a human call
 
-**Five of the seven are closed.** `--fs-34` (2 uses, no counterpart — both Phase 8) ·
-~~`--fs-13`~~ / ~~`--fs-11`~~ (**both settled in Phase 6**, and between them only one use was ever
-a remap) · `--fs-15` (5 uses left, ±1px, all Phases 7–8) · ~~`--sp-7`~~ (**settled in Phase 1** →
-`--space-7`, 20px) · ~~`--text-faint`~~ (**settled in Phase 6**, on the blocked control the pattern
-was named for) · ~~`--bg-panel-2`~~ (**settled across Phases 2, 4 and 5**) ·
-`--amber-500` (2 uses left, both Phase 8) · ~~`--hover-bg-tint`~~ (**settled across Phases 2
-and 6**).
+**All seven are closed.** ~~`--fs-34`~~ (**Phase 8** — no counterpart needed; it became
+`PageTitle`) · ~~`--fs-13`~~ / ~~`--fs-11`~~ (**both settled in Phase 6**, and between them only one
+use was ever a remap) · ~~`--fs-15`~~ (**Phase 8** — the one row that ended up mostly a remap, +1px
+as D5 says) · ~~`--sp-7`~~ (**settled in Phase 1** → `--space-7`, 20px) · ~~`--text-faint`~~
+(**settled in Phase 6**, on the blocked control the pattern was named for) · ~~`--bg-panel-2`~~
+(**settled across Phases 2, 4 and 5**) · ~~`--amber-500`~~ (**Phase 8** — deleted, not remapped) ·
+~~`--hover-bg-tint`~~ (**settled across Phases 2 and 6**).
 
-Only `--fs-34` and `--amber-500` still need a human call, and both wait on Phase 8's public
-surfaces. `--fs-15` is the one remaining ±1px row and D5 already decides it — snap up.
+**The two that waited longest for a human call needed the least.** `--fs-34` and `--amber-500` were
+held back through seven phases as the rows nobody could decide from the table, and both closed the
+same way: not by choosing a value, but by the element that carried them turning out to be something
+blue already had an answer for. A 34px page title is `PageTitle`. An amber pin beside a customer's
+name is an imitation of a logo that now exists. Neither took a new token, and neither took a call
+about hue or size in the end.
 
-**Phase 7 closed five more rows and only one of them was a remap**, which is the pattern Phase 3
-named and every phase since has repeated: `--shadow-pop` went straight across, and `--accent-border`,
-`--tracker` and `--duration-base` all left the map by meaning something the mapping did not.
-`--tracker` is the only row in the whole table that is actively **wrong** if taken as written, and
-it is flagged in place.
+**That is the map's whole pattern, stated once.** Of the rows that carried a note, the majority left
+by the element becoming a component with its own type rather than by being remapped — `--fs-27` and
+`--fs-21` in Phase 2, `--fs-11` and `--fs-13` in Phases 3 and 6, `--fs-16` in Phase 5,
+`--accent-border`, `--tracker` and `--duration-base` in Phase 7, and `--fs-24`, `--fs-34`,
+`--font-display` and `--amber-500` in Phase 8. The ±1px rows shrank fastest by being deleted, which
+is why the instruction was to walk them last. `--tracker` is the only row in the whole table that is
+actively **wrong** if taken as written, and it is flagged in place.
 
-**No Phase 3–7 file carries a yellow token**, and neither do the candidate card's, the libraries'
-or the board's rules in `globals.css`. The two files that still do are Phase 8's — `BookingScreen`
-and `ManageScreen` — plus that phase's own rules in `globals.css`.
+**No file in `apps/web` carries a yellow token.** Phase 8 closed the last of them — `BookingScreen`,
+`ManageScreen`, and that phase's own rules in `globals.css`. The map is now history rather than a
+checklist, and it is kept in full so the reasoning behind each closure is auditable when the
+upstream push has to defend it.
 
 Two rows left the map entirely in Phase 2 rather than being remapped: `--fs-27` and `--fs-21`,
 both because the element that carried them is now a design-system component with its own type.
@@ -490,7 +497,7 @@ Full detail in [`plans/yellow-to-blue-migration.md`](../../plans/yellow-to-blue-
 | 5 | candidate card | `Tooltip` deleted, not replaced · `TextArea` trailing slot consumed (§33) · `Chip trailing` §37 · `Button as="a"` §38 |
 | 6 | hiring settings, `CriterionDialog` | Last of `Tooltip`, `Menu`, `Toast`, `Skeleton`, `Input` · `ConfirmDialog` §40/§41 · `Chip leading` §39 · reversal 2 settled · §8 and §29 corrected |
 | 7 | vacancy board | `BoardCard` + `BoardColumn` §42/§43, *designed not measured* · `FlagIcon` §44 · `PageTabs` made a real `tablist` §45 · last of `Toast` and `Tabs` · reversals 3 and 4 settled |
-| 8 | `/book/{slug}`, `/manage/{slug}/{token}` | `BookingLayout` · `FileInput` · `globals.css` breakpoints |
+| 8 | `/book/{slug}`, `/manage/{slug}/{token}` | `BookingLayout` §46 + `FileInput` §47, *designed not measured* · last of `SectionLabel`, `Skeleton`, `Input`/`Textarea`, `Spinner` · vacancy titles → `PageTitle` · `--fs-34` and `--amber-500` settled · last yellow token in `apps/web` gone |
 
 Phase 1 goes first because `app-shell`, `org-scope`, `signup` and `hiring-my-interviews` all
 authenticate through `/login` — most of the suite is blocked until those four screens work.
@@ -535,11 +542,12 @@ On the day it was written it reported 23 declared upstream against 33 exported h
 `FileInput`, `Menu`, `Skeleton`, `Textarea`, `Toast`, `Tooltip` — every one of them yellow's. That
 is the state D3 exists to make loud, and it is expected to fail for the length of the migration.
 
-**As of Phase 7 it reports 65 against 76, and names 11 — a different 11.** `AuthLayout`,
-`BoardCard`, `BoardColumn`, `Calendar`, `Card`, `Chip`, `CrossIcon`, `Eye`, `EyeOff`, `FlagIcon`,
-`IconButton`: not one is a leftover, and each carries a number in the [ledger](ledger.md). That is
-the bar — not that the check passes, but that **every disagreement it reports is a deliberate
-addition somebody wrote down**.
+**As of Phase 8 it reports 65 against 78, and names 13 — a different 13.** `AuthLayout`,
+`BoardCard`, `BoardColumn`, `BookingLayout`, `Calendar`, `Card`, `Chip`, `CrossIcon`, `Eye`,
+`EyeOff`, `FileInput`, `FlagIcon`, `IconButton`: not one is a leftover, every yellow name is gone
+from the list, and each carries a number in the [ledger](ledger.md). That is the bar — not that the
+check passes, but that **every disagreement it reports is a deliberate addition somebody wrote
+down** — and with the migration complete, it is met.
 
 ### Upstream
 

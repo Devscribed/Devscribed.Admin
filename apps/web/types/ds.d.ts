@@ -11,6 +11,7 @@ declare module '@ds' {
   export * from '@ds/components/appLayout/AccountMenu';
   export * from '@ds/components/appLayout/AppShell';
   export * from '@ds/components/appLayout/AuthLayout';
+  export * from '@ds/components/appLayout/BookingLayout';
   export * from '@ds/components/appLayout/MiniTracker';
   export * from '@ds/components/appLayout/Navbar';
   export * from '@ds/components/appLayout/Tracker';
@@ -40,6 +41,7 @@ declare module '@ds' {
   export * from '@ds/components/forms/CheckboxRow';
   export * from '@ds/components/forms/DateField';
   export * from '@ds/components/forms/DateRangePicker';
+  export * from '@ds/components/forms/FileInput';
   export * from '@ds/components/forms/FormActions';
   export * from '@ds/components/forms/FormField';
   export * from '@ds/components/forms/MembersMultiField';

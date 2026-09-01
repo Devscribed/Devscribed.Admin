@@ -127,10 +127,10 @@ user-management 01 Organization Creation
 
 Same split as user-management: business specs own behaviour, API contracts, and validation
 messages; a paired `NN-name.design.md` owns visuals and references Teammerly Original DS
-(`1_DS for dev/`) by component and token, never by hex value or pixel size. The design system is
-being reskinned off the earlier Meridian prototype — see
-[`specs/design-system/README.md`](../design-system/README.md) for the decision record, and each
-design spec's own header for whether it has been reconciled yet.
+(`1_DS for dev/`) by component and token, never by hex value or pixel size. The reskin off the
+earlier Meridian prototype is **complete** — every design spec in this set describes blue, and
+[`specs/design-system/README.md`](../design-system/README.md) is the decision record behind them,
+kept for the reasoning rather than as a checklist.
 
 - **Light theme only** this release, matching user-management. The public booking page follows the
   same rule.

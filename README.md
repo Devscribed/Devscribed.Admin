@@ -854,17 +854,19 @@ record the exposure that leaves open rather than implying the endpoints are prot
 
 ## Design-system notes
 
-> **The reskin is in flight.** The app is moving off yellow (Teammerly Meridian, the prototype
-> skin) and onto blue (Teammerly Original DS, the system measured from the live Teamplay/Teammerly
-> product). The notes below describe blue and the rules the migration carries across.
+> **The reskin is complete.** The app has moved off yellow (Teammerly Meridian, the prototype skin)
+> and onto blue (Teammerly Original DS, the system measured from the live Teamplay/Teammerly
+> product). The notes below describe blue.
 > [`specs/design-system/README.md`](specs/design-system/README.md) is the decision record — the
 > token map, the component inventory, and the eight numbered decisions everything else cites — and
 > [`specs/design-system/ledger.md`](specs/design-system/ledger.md) records what the vendored copy
-> adds beyond upstream. `1_DS for dev/` holds blue. Every signed-in screen is on it as of Phase 7 —
-> the shell, vacancies, candidates, my interviews, the candidate card, the libraries and the board;
-> the two public surfaces, `/book/{slug}` and `/manage/{slug}/{token}`, are the last and are Phase
-> 8's. `npm run ds:drift` reports the gap and is expected to, until every disagreement it names
-> carries a ledger number — which, as of Phase 7, every one of them does.
+> adds beyond upstream. `1_DS for dev/` holds blue. Every screen is on it: the shell, vacancies,
+> candidates, my interviews, the candidate card, the libraries, the board, and — as of Phase 8 —
+> the two public surfaces, `/book/{slug}` and `/manage/{slug}/{token}`. No yellow token remains in
+> `apps/web`. `npm run ds:drift` still reports a gap and always will, because the vendored copy has
+> thirteen components upstream does not; the bar it holds is that **every disagreement it names
+> carries a ledger number**, and every one of them does. That ledger is the push list for the one
+> batched `DesignSync` upstream, which is the last thing outstanding.
 
 - Components come from `1_DS for dev/index.js` via the `@ds` alias
   (`experimental.externalDir`), re-exported through `apps/web/src/ds.ts` — a single
@@ -1047,11 +1049,23 @@ record the exposure that leaves open rather than implying the endpoints are prot
   actually renders.
 - The public booking page and the candidate card are the two screens with real breakpoints, and
   inline styles cannot express a media query, so their layout classes live in
-  `apps/web/app/globals.css`. Every value there is still a token.
+  `apps/web/app/globals.css`. Every value there is still a token. The booking page's breakpoints
+  are its own (880px and 600px) and are unrelated to `AppShell`'s 1200px, because neither public
+  screen renders in `AppShell`.
+- **`BookingLayout` is the third shell**, after `AppShell` and `AuthLayout`, and both public
+  screens share it — the well, an 880px column, and a wordmark that is the *organization's* name
+  rather than Teammerly's. `AuthLayout` draws the product's own mark precisely because a login page
+  belongs to the product; a booking page belongs to the customer advertising the vacancy. Meridian
+  put an amber pin after that name, which is gone: it imitated yellow's own wordmark, and yellow
+  had one only because it had no logo file.
+- **`FileInput` is `TextInput`'s sibling**, not a new species of field: the same 44px box, label,
+  focus, error and message slot, plus a leading `Choose file` affordance. The
+  `<input type="file">` is the whole hit area rather than a hidden input behind a button — that is
+  what keeps it one tab stop, with the focus ring where the focus actually is and the picker
+  opening on `Enter` and `Space` with nothing scripted.
 - **Still outstanding.** Promoting the template's `P` glyph dictionary to real icon exports —
   raised for the fourth time now, since My interviews borrows the `timesheets` clock. Blue's icon
   rules say how (geometric, filled, `currentColor`, 12–24px, no icon font), but hiring keeps its
-  own glyphs: production's nav items and glyphs are content, not design language. The booking
-  page's time-zone selector is still a plain `Select` and therefore a long unsearchable list;
-  moving it onto `Select isSearchable` is the obvious next use of the control the libraries
-  introduced.
+  own glyphs: production's nav items and glyphs are content, not design language. And the one
+  batched `DesignSync` push upstream, for which the [ledger](specs/design-system/ledger.md) is the
+  list and the *measured / designed* split is the claim it has to make.

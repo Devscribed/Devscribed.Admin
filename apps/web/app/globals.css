@@ -24,7 +24,9 @@
 
 .booking-names {
   display: grid;
-  gap: var(--sp-8);
+  /* 20px, not 16: the two fields sit in a form whose rows are 20px apart, and a name row
+     that closed up tighter than the gap above it would read as one field split in two. */
+  gap: var(--space-7);
   grid-template-columns: 1fr 1fr;
 }
 
@@ -388,15 +390,15 @@
   /* Opposite ends: a destructive control adjacent to a benign one is a misclick
      waiting to happen. Reschedule leads, Cancel trails. */
   justify-content: space-between;
-  gap: var(--sp-8);
-  margin-top: var(--sp-10);
+  gap: var(--space-6);
+  margin-top: var(--space-7);
 }
 
 @media (max-width: 599px) {
   .manage-actions {
     flex-direction: column;
     align-items: stretch;
-    gap: var(--sp-6);
+    gap: var(--space-5);
   }
 }
 
@@ -444,39 +446,41 @@
   }
 }
 
-/* The reschedule pickers, which replace the booking Card in place. */
 /*
  * The CV line and its Replace control (07 design, Screens). The chooser expands beneath
- * the row rather than beside it, so the row's geometry does not move when it opens.
+ * the row rather than beside it, so the row's geometry does not move when it opens. The gap
+ * is 20px rather than 12: `FileInput` pins its hint below the field the way `TextInput` does,
+ * and 20px is the first step that clears it (token map, `--sp-7`).
  */
 .manage-cv {
   display: grid;
-  gap: var(--sp-6);
+  gap: var(--space-7);
 }
 
 .manage-cv-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--sp-6);
+  gap: var(--space-5);
 }
 
+/* The reschedule pickers, which replace the booking Card in place. */
 .manage-reschedule {
   display: grid;
-  gap: var(--sp-10);
+  gap: var(--space-7);
 }
 
 .manage-reschedule-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--sp-8);
+  gap: var(--space-6);
 }
 
 @media (max-width: 599px) {
   .manage-reschedule-actions {
     flex-direction: column-reverse;
     align-items: stretch;
-    gap: var(--sp-6);
+    gap: var(--space-5);
   }
 }

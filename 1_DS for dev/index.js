@@ -7,6 +7,7 @@
 export { AccountMenu } from './components/appLayout/AccountMenu.jsx';
 export { AuthLayout } from './components/appLayout/AuthLayout.jsx';
 export { AppShell } from './components/appLayout/AppShell.jsx';
+export { BookingLayout } from './components/appLayout/BookingLayout.jsx';
 export { MiniTracker } from './components/appLayout/MiniTracker.jsx';
 export { Navbar } from './components/appLayout/Navbar.jsx';
 export { Tracker } from './components/appLayout/Tracker.jsx';
@@ -36,6 +37,7 @@ export { Checkbox } from './components/forms/Checkbox.jsx';
 export { CheckboxRow } from './components/forms/CheckboxRow.jsx';
 export { DateField } from './components/forms/DateField.jsx';
 export { DateRangePicker } from './components/forms/DateRangePicker.jsx';
+export { FileInput } from './components/forms/FileInput.jsx';
 export { FormActions } from './components/forms/FormActions.jsx';
 export { FieldLabel, FormField } from './components/forms/FormField.jsx';
 export { MembersMultiField } from './components/forms/MembersMultiField.jsx';

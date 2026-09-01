@@ -35,7 +35,7 @@ Functional specifications for the user-management surface of Devscribed.Admin. E
 
 ## Design Layer
 
-Business specs own behaviour, API contracts, and validation messages. Visual and interaction detail lives in a paired `NN-name.design.md`, with a static `NN-name.mock.html` next to it as the visual acceptance target. Design specs reference the Teammerly Original DS in [`1_DS for dev/`](../../1_DS%20for%20dev/README.md) by component and token — they never restate a hex value or a pixel size. The design system is being reskinned off the earlier Meridian prototype; [`specs/design-system/README.md`](../design-system/README.md) is the decision record, and each design spec's own header says whether it has been reconciled yet.
+Business specs own behaviour, API contracts, and validation messages. Visual and interaction detail lives in a paired `NN-name.design.md`, with a static `NN-name.mock.html` next to it as the visual acceptance target. Design specs reference the Teammerly Original DS in [`1_DS for dev/`](../../1_DS%20for%20dev/README.md) by component and token — they never restate a hex value or a pixel size. The reskin off the earlier Meridian prototype is complete — every design spec describes blue — and [`specs/design-system/README.md`](../design-system/README.md) is the decision record behind them, kept for the reasoning rather than as a checklist.
 
 Rules that hold across every design spec:
 

@@ -20,10 +20,11 @@ import {
   Button,
   Card,
   FileInput,
+  FormActions,
   InfoBanner,
   Modal,
-  SectionLabel,
-  Skeleton,
+  PageTitle,
+  Preloader,
 } from '@/ds';
 import { formatDuration, formatWhen } from '@/hiring/format';
 import { SlotPicker, readTimeFormat, writeTimeFormat } from '@/hiring/SlotPicker';
@@ -352,9 +353,16 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
     return (
       <BookingLayout data-testid="manage-page">
         <div style={COLUMN}>
-          <Card>
-            <Skeleton rows={3} data-testid="manage-loading-skeleton" />
-          </Card>
+          {/* The skeleton is gone (D4). It stood in for a card whose shape it could not
+              actually predict — one line or four, a CV row or none — and blue answers a wait
+              with a loader rather than a guess at what is coming. */}
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            {/* The dots carry no text, so the announcement is made beside them. */}
+            <Preloader data-testid="manage-loading" aria-hidden />
+            <span aria-live="polite" style={SR_ONLY}>
+              Loading your interview
+            </span>
+          </div>
         </div>
       </BookingLayout>
     );
@@ -395,15 +403,15 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
       <div className="manage-cv-row">
         <p
           data-testid="manage-cv-present"
-          style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}
+          style={{ margin: 0, fontSize: 'var(--font-size-s)', color: 'var(--text-tertiary)' }}
         >
           {HIRING_MESSAGES.manage.cvAttached}
         </p>
-        {/* Hidden while the chooser is open — the chooser is the control now. */}
+        {/* Hidden while the chooser is open — the chooser is the control now. Blue's neutral
+            outlined button is the only quiet one it has; `ghost` and `secondary` were two
+            names for the same intent in Meridian and arrive here as one. */}
         {!replacingCv && (
           <Button
-            variant="ghost"
-            size="sm"
             onClick={() => {
               setCvError(null);
               setReplacingCv(true);
@@ -421,7 +429,11 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
           aria-label={`${HIRING_MESSAGES.manage.cvReplaceAction} CV`}
           accept={CV_ACCEPT}
           hint={HIRING_MESSAGES.booking.cv.hint}
+          hintId="manage-cv-hint"
           error={cvError ?? undefined}
+          errorId="manage-cv-error"
+          aria-invalid={cvError ? true : undefined}
+          aria-describedby={cvError ? 'manage-cv-error' : 'manage-cv-hint'}
           disabled={uploadingCv}
           // No second Save: a chosen file with an unpressed button is a change the
           // candidate believes they have already made (07 design, Interactions).
@@ -433,28 +445,21 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
   ) : null;
 
   return (
-    <BookingLayout data-testid="manage-page" wordmark={<Wordmark name={organizationName} />}>
-      <header style={{ textAlign: 'center', marginBottom: 'var(--sp-12)' }}>
-        <h1
-          data-testid="manage-vacancy-title"
-          style={{
-            margin: 0,
-            fontFamily: 'var(--font-display)',
-            fontWeight: 600,
-            fontSize: 'var(--fs-34)',
-            letterSpacing: '-.6px',
-            color: 'var(--text)',
-          }}
-        >
-          {vacancy.title}
-        </h1>
+    <BookingLayout
+      data-testid="manage-page"
+      wordmark={organizationName}
+      wordmarkTestId="manage-org-wordmark"
+    >
+      <header style={{ textAlign: 'center', marginBottom: 'var(--space-8)' }}>
+        {/* The same `PageTitle` the booking page uses, for the same reason: this is the page
+            they booked on, and a candidate arriving from their invite must recognise it. */}
+        <PageTitle data-testid="manage-vacancy-title">{vacancy.title}</PageTitle>
         <div
           data-testid="manage-duration"
           style={{
-            marginTop: 'var(--sp-2)',
-            fontFamily: 'var(--font-display)',
-            fontSize: 'var(--fs-15)',
-            color: 'var(--text-muted)',
+            marginTop: 'var(--space-1)',
+            fontSize: 'var(--font-size-base)',
+            color: 'var(--text-secondary)',
           }}
         >
           {/* The booking's own length when there is one, which a later edit to the
@@ -466,9 +471,9 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
           <p
             data-testid="manage-current-time"
             style={{
-              margin: 'var(--sp-6) 0 0',
-              fontSize: 'var(--fs-15)',
-              color: 'var(--text-muted)',
+              margin: 'var(--space-5) 0 0',
+              fontSize: 'var(--font-size-base)',
+              color: 'var(--text-secondary)',
             }}
           >
             {currentTimeMessage(new Date(booking!.startUtc), timeZone)}
@@ -484,7 +489,7 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
           the narrow one, because it has four lines to state. */}
       <div style={picking ? WIDE_COLUMN : COLUMN}>
         {banner && (
-          <InfoBanner tone="error" role="alert" data-testid="manage-error-banner">
+          <InfoBanner variant="error" role="alert" data-testid="manage-error-banner">
             {banner}
           </InfoBanner>
         )}
@@ -534,20 +539,15 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
             {cvRow}
 
             <div className="manage-reschedule-actions">
-              <Button
-                variant="ghost"
-                onClick={keepCurrentTime}
-                data-testid="manage-reschedule-cancel"
-              >
+              <Button onClick={keepCurrentTime} data-testid="manage-reschedule-cancel">
                 {HIRING_MESSAGES.manage.rescheduleDismiss}
               </Button>
               {/* The one primary action in this spec, and disabled until a slot is
                   chosen: choosing the time *is* the confirmation. */}
               <Button
                 variant="primary"
-                loading={moving}
+                preloader={moving}
                 disabled={!selectedSlot}
-                aria-busy={moving || undefined}
                 onClick={() => void moveInterview()}
                 data-testid="manage-reschedule-submit"
               >
@@ -572,34 +572,36 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
               the cancellation receipt too (07 §04.19).
             */}
             {justBooked && (
-              <InfoBanner tone="info" data-testid="manage-booked">
+              <InfoBanner data-testid="manage-booked">
                 {HIRING_MESSAGES.manage.justBooked}
               </InfoBanner>
             )}
             {justMoved && (
-              <InfoBanner tone="info" data-testid="manage-moved">
+              <InfoBanner data-testid="manage-moved">
                 {HIRING_MESSAGES.manage.justMoved}
               </InfoBanner>
             )}
 
-            <Card>
-              <SectionLabel>{HIRING_MESSAGES.manage.panelLabel}</SectionLabel>
-
+            {/* The panel's caption is the Card's own title (D4), so "Your interview" is the
+                `<h2>` under the vacancy title rather than an uppercase caption above a box. */}
+            <Card title={HIRING_MESSAGES.manage.panelLabel}>
               <p
                 data-testid="manage-booking-when"
                 style={{
-                  margin: 'var(--sp-8) 0 0',
-                  fontFamily: 'var(--font-display)',
-                  fontSize: 'var(--fs-22)',
+                  margin: 0,
+                  fontWeight: 'var(--headline-5-weight)',
+                  fontSize: 'var(--headline-5-size)',
+                  lineHeight: 'var(--headline-5-line)',
+                  letterSpacing: 'var(--headline-5-tracking)',
                   fontVariantNumeric: 'tabular-nums',
-                  color: 'var(--text)',
+                  color: 'var(--text-primary)',
                 }}
               >
                 {formatWhen(booking.startUtc, booking.timeZone)}
               </p>
               <span
                 data-testid="manage-booking-zone"
-                style={{ fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}
+                style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}
               >
                 {zoneLabel(booking.timeZone, new Date(booking.startUtc))}
               </span>
@@ -617,9 +619,9 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
                 <>
                   <hr
                     style={{
-                      margin: 'var(--sp-8) 0',
+                      margin: 'var(--space-6) 0',
                       border: 0,
-                      borderTop: '1px solid var(--divider)',
+                      borderTop: '1px solid var(--border-subtle)',
                     }}
                   />
                   {cvRow}
@@ -632,15 +634,11 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
                 is pushed to the trailing end, away from anything benign.
               */}
               <div className="manage-actions">
-                <Button
-                  variant="secondary"
-                  onClick={startRescheduling}
-                  data-testid="manage-reschedule-button"
-                >
+                <Button onClick={startRescheduling} data-testid="manage-reschedule-button">
                   {HIRING_MESSAGES.manage.rescheduleAction}
                 </Button>
                 <Button
-                  variant="danger"
+                  variant="delete"
                   onClick={() => setConfirming(true)}
                   data-testid="manage-cancel-button"
                 >
@@ -652,6 +650,14 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
         )}
       </div>
 
+      {/*
+        Blue's `Modal` has no `actions` slot: prod's dialogs put their button row in the body,
+        and `FormActions` is the row. The team's cancel dialog already composes it this way,
+        which is the point — one confirmation pattern, not a second one for the public page.
+        `ConfirmDialog` is deliberately not used here: its accept button is blue's primary blue
+        even on a destructive confirmation (§40), and this is the one dialog in the product
+        where the irreversible action must not look like the safe one.
+      */}
       <Modal
         open={confirming}
         title={HIRING_MESSAGES.manage.cancelDialogTitle}
@@ -660,32 +666,33 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
         // the one dialog in the product where getting it wrong cannot be undone.
         initialFocusRef={dismiss}
         data-testid="manage-cancel-dialog"
-        actions={
-          <>
+        style={{ width: 420 }}
+      >
+        <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
+          {/* The interview is named rather than gestured at, so a screen-reader user is
+              never asked to confirm a pronoun. */}
+          <p style={{ margin: 0, fontSize: 'var(--font-size-s)', color: 'var(--text-tertiary)' }}>
+            {booking && cancelConfirmMessage(new Date(booking.startUtc), booking.timeZone)}
+          </p>
+
+          <FormActions align="full">
             <Button
               ref={dismiss}
-              variant="ghost"
               onClick={() => setConfirming(false)}
               data-testid="manage-cancel-dismiss"
             >
               {HIRING_MESSAGES.manage.cancelDialogDismiss}
             </Button>
             <Button
-              variant="danger"
-              loading={cancelling}
+              variant="delete"
+              preloader={cancelling}
               onClick={() => void cancelInterview()}
               data-testid="manage-cancel-confirm"
             >
               {HIRING_MESSAGES.manage.cancelAction}
             </Button>
-          </>
-        }
-      >
-        {/* The interview is named rather than gestured at, so a screen-reader user is
-            never asked to confirm a pronoun. */}
-        <p style={{ margin: 0, fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}>
-          {booking && cancelConfirmMessage(new Date(booking.startUtc), booking.timeZone)}
-        </p>
+          </FormActions>
+        </div>
       </Modal>
     </BookingLayout>
   );
@@ -712,16 +719,15 @@ function DeadEnd({
 }) {
   return (
     <>
-      <InfoBanner tone={tone} data-testid={testId}>
+      <InfoBanner variant={tone} data-testid={testId}>
         {message}
       </InfoBanner>
       <Card style={{ textAlign: 'center' }}>
-        {/* A real link, not a button with an onClick: it is a navigation, and this keeps
-            middle-click and copy-address working. */}
+        {/* A real link, not a button with an onClick (§38): it is a navigation, and this
+            keeps middle-click and copy-address working. */}
         <Button
           as="a"
           variant="primary"
-          size="lg"
           href={`/book/${slug}`}
           data-testid="manage-new-booking-button"
         >
@@ -740,13 +746,13 @@ const COLUMN: CSSProperties = {
   maxWidth: 560,
   margin: '0 auto',
   display: 'grid',
-  gap: 'var(--sp-8)',
+  gap: 'var(--space-6)',
 };
 
 /** The pickers are the booking page's, at the booking page's width. */
 const WIDE_COLUMN: CSSProperties = {
   display: 'grid',
-  gap: 'var(--sp-8)',
+  gap: 'var(--space-6)',
 };
 
 const SR_ONLY: CSSProperties = {
@@ -757,33 +763,3 @@ const SR_ONLY: CSSProperties = {
   clip: 'rect(0 0 0 0)',
   whiteSpace: 'nowrap',
 };
-
-/** A text wordmark, never an image: this release uploads and renders no logo. */
-function Wordmark({ name }: { name: string }) {
-  return (
-    <div
-      data-testid="manage-org-wordmark"
-      style={{
-        fontFamily: 'var(--font-display)',
-        fontWeight: 600,
-        fontSize: 'var(--fs-24)',
-        letterSpacing: '-.5px',
-        color: 'var(--text)',
-      }}
-    >
-      {name}
-      <span
-        aria-hidden
-        style={{
-          display: 'inline-block',
-          width: 7,
-          height: 7,
-          borderRadius: 2,
-          background: 'var(--amber-500)',
-          marginLeft: 3,
-          verticalAlign: 'middle',
-        }}
-      />
-    </div>
-  );
-}

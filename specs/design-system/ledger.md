@@ -5,22 +5,29 @@ One numbered entry per component or prop added, under
 [§D3](README.md) — *edit the vendored copy in place, but never silently*.
 
 Phase 0 created this file; Phase 1 wrote §1–§11, Phase 2 wrote §12–§18, Phase 3 wrote
-§19–§29, Phase 4 wrote §30–§36, Phase 5 wrote §37–§38, Phase 6 wrote §39–§41 and Phase 7 wrote
-§42–§45. `npm run ds:drift` currently reports eleven local-only components — `AuthLayout`,
-`BoardCard`, `BoardColumn`, `Calendar`, `Card`, `Chip`, `CrossIcon`, `IconButton`, `Eye`,
-`EyeOff`, `FlagIcon` — and each of them is numbered below, which is the bar this file exists to
-hold. Phase 7 added the last three of those; Phases 5 and 6 added none, because every one of
-their entries is props on a component already numbered.
+§19–§29, Phase 4 wrote §30–§36, Phase 5 wrote §37–§38, Phase 6 wrote §39–§41, Phase 7 wrote
+§42–§45 and Phase 8 wrote §46–§47. `npm run ds:drift` currently reports thirteen local-only
+components — `AuthLayout`, `BoardCard`, `BoardColumn`, `BookingLayout`, `Calendar`, `Card`,
+`Chip`, `CrossIcon`, `FileInput`, `FlagIcon`, `IconButton`, `Eye`, `EyeOff` — and each of them is
+numbered below, which is the bar this file exists to hold. Phase 8 added the last two; Phases 5
+and 6 added none, because every one of their entries is props on a component already numbered.
+
+**This file is now the push list.** Phase 8 is the last phase, so nothing further will be added
+to it before the batched `DesignSync` goes upstream, and the split that push has to defend is
+[the one below](#a-note-on-42-and-what-designed-is-allowed-to-mean): ten `designed` entries, three
+`packaging`, and everything else an `omission` — a gap in the measurement rather than a change to
+the design.
 
 Phase 6 also left two things that are **not** new numbers, because neither adds anything — both
 make an existing entry do what it already said it did. They are written up as notes at the end:
 [§8 and nested `Escape`](#a-note-on-8-and-nested-escape), and
 [§29 and *matches nothing*](#a-note-on-29-and-matches-nothing).
 
-**Three of the four remaining `designed` entries are Phase 7's**, and they are the only ones in
-this file with no production counterpart of any kind — not a treatment stated in a readme, not a
-library blue already recreates, nothing. See
-[§42 and what "designed" is allowed to mean](#a-note-on-42-and-what-designed-is-allowed-to-mean).
+**Five of the ten `designed` entries belong to the board and the public pages**, the two surfaces
+with no production counterpart of any kind — not a treatment stated in a readme, not a library blue
+already recreates, nothing. See
+[§42 and what "designed" is allowed to mean](#a-note-on-42-and-what-designed-is-allowed-to-mean),
+which carries the full list and what each entry was drawn from.
 
 ## Numbering convention
 
@@ -101,30 +108,65 @@ Each entry is one of three, because the distinction decides what the upstream pu
 | 44 | `Icon` | `FlagIcon`, registered in the dispatcher. This is §9's position exactly, on a different glyph: prod is a time tracker and flags nothing, so there is no mark to measure, and blue's icon rules are explicit enough to draw one to (geometric, filled, `currentColor`, 12–24px, viewBox matching the intrinsic size, no icon font). What forces it is that the rules admit no exception — *"every icon is a hand-authored inline SVG React component"*, *"no PNG/raster icons and no emoji are used as icons anywhere in the app"* — and Meridian's missing-conclusion mark was the dingbat character `⚑`. The glyph picks no hue; the caller paints it, and the board paints it `--status-warning` rather than the tracker blue the token map would have mapped Meridian's amber onto. That is the one row in that table which must not be taken mechanically — see the note below. | `packaging` | [§D2](README.md) | 7 | [05](../hiring/05-board.design.md) |
 | 45 | `PageTabs` | The tab row made a tab row, plus an object form. Blue's tabs are `<a href="#">` whose click handler calls `preventDefault` and swaps a panel: a screen reader announces them as links that go nowhere, none of them can be reached or moved between by keyboard, and there is no `aria-selected` to say which is chosen — the paint was the only signal, which is §31's finding on `ToggleButton` and §21's on `Select`, a third time. Prod gets away with it because prod's tab rows are three words on a members screen that nothing arrives at by keyboard, and the narrow board makes this **the control that chooses which column is shown**. They are `role="tab"` buttons inside a `role="tablist"` now, with `aria-selected`, `aria-controls`, a single tab stop, arrow keys plus `Home`/`End`, and `--shadow-focus-input` — the source declares no `:focus` state at all, which is §31's other half. Selection follows focus, because the panel is already rendered and making a keyboard user press twice for what a pointer does once is the thing the pattern exists to avoid. The object form (`value` / `label` / `testId` / `controls`) sits beside prod's `string[]`, which is §18's shape on `Table` and for §18's reason: the pair blue measured is what a hand-written kit screen passes. Both forms still work and every painted value is untouched. There is deliberately **no `count` prop** — a count composes into the `label` node, and a strip that grew one would then need a badge for it, and an icon. | `omission` | [§D2](README.md) | 7 | [05](../hiring/05-board.design.md) |
 
+| 46 | `BookingLayout` | New component: the public shell, for the two screens a candidate reaches with no session. Prod has no public-facing surface of any kind, so there is nothing to measure — but this is `AuthLayout` (§11) with two things changed, and both are the same fact about whose page it is. **No card**: `AuthLayout` is one 480px panel because a login form is one panel, and these screens compose their own `Card`s, so the shell supplies the well, the column and the rhythm and nothing else. The column is **880px**, which is what two `1fr 1fr` picker cards need to sit side by side. **The wordmark is the caller's**: `AuthLayout` draws Teammerly's own mark because the person reading it is signing in to Teammerly, and a candidate booking with Acme is looking at Acme's page — so the name is content, and the shell takes it at blue's headline-4 step in `--text-primary`. `wordmarkTestId` is §16's `nameTestId` and §21's `chipTestId` a third time: the shell draws the node, so only the shell can tag it. Everything else is `AuthLayout`'s deliberately — the `#f8fafc` well, the 40px/16px page padding, the 30px gap under the wordmark — because a candidate who books and then returns through the link in their invite must land on the page they recognise. One value departs: it is top-aligned where `AuthLayout` centres, because a booking page is taller than the viewport and centring would push the vacancy title off the top. **Must be pushed upstream as designed, not measured.** | `designed` | [§D1](README.md), [§D6](README.md) | 8 | [02](../hiring/02-booking-page.design.md), [07](../hiring/07-manage-booking.design.md) |
+| 47 | `FileInput` | New component. Nothing in blue accepts a file: prod uploads only an avatar, through a cropper of its own, and offers every document as a row in a table. So the *control* is designed — but it is designed as `TextInput`'s sibling, and every value in it is `TextInput`'s: the same 44px field box, the same label geometry, the same focus and error treatments, and the same absolutely-pinned 8px message slot that `hint` shares with `error` (§4). A CV field in a column of text fields therefore sits at the same height on the same baseline with the same ring. What a file field has to add is one thing: a leading affordance where the value would start, in blue's neutral `Button` treatment at 32px — the height `IconButton` (§10) already takes inside a 44px field. Two decisions rather than repairs, both about what a file control *is*. **The `<input type="file">` is the whole hit area**, laid transparently over the row rather than hidden beside it: a hidden input with a `<button>` trigger gives one field two tab stops and paints the focus ring on the half that is not focused, and forwarding the click from a `<div onClick>` is the pattern §21, §22 and §26 all had to undo. Here the browser opens the picker on click, on `Enter` and on `Space` with nothing scripted, and the focus state is read off the input and painted on the row. **There is no clear control** — yellow drew a trailing cross, and it has no outcome worth an affordance: on the booking form a CV is required, so clearing it only produces an invalid form that re-choosing would fix anyway, and on the manage page the chooser exists to *replace* a CV the API has no way to remove. It would also have to sit above the input, which is the hit area the control is built out of. **Must be pushed upstream as designed, not measured.** | `designed` | [§D1](README.md), [§D6](README.md) | 8 | [02](../hiring/02-booking-page.design.md), [07](../hiring/07-manage-booking.design.md) |
+
+### A note on §46 and the wordmark that is not the product's
+
+`--amber-500` was one of the two token-map rows still needing a human call, and it closes here the
+way `--tracker` closed in Phase 7 — by the thing that carried it turning out to mean something the
+mapping did not.
+
+Both remaining uses were one element: a 7px amber square after the organization's name, on each of
+the two public pages. The map says to confirm each site is a warning before sending it to
+`--status-warning`, and this one plainly is not — it is decoration on a customer's brand name, and
+painting it in the hue blue scopes to *"real state"* would be the `--tracker` mistake again.
+
+But the interesting half is *why the square was there*, because that decides whether anything
+replaces it. Yellow had **no logo file and said so** — *"There is no logo file; never draw one"* —
+so its own wordmark was typography plus an amber pin, and the organization's name on these two
+pages was drawn to match it. The pin was an imitation of a product mark that did not exist.
+
+Blue ships the real one. `Sidebar` inlines it and `AuthLayout` has drawn it since Phase 1. So the
+imitation has nothing left to imitate, and the alternative — lending Teammerly's actual mark to a
+customer's name — is worse than dropping it. **The square is deleted, not remapped**, and the name
+takes blue's headline-4 step in `--text-primary`, which is the ink blue's own wordmark sets
+"merly" in. This is exactly how Phase 2 closed `--fs-21` on the sidebar wordmark: once blue
+supplied a real mark, there was no size left to get wrong.
+
 ### A note on §42 and what "designed" is allowed to mean
 
-Four entries in this file are `designed` rather than `omission` or `packaging`, and three of them
-are Phase 7's. That concentration is not an accident — the board is the one surface in the app with
-no production counterpart of any kind — but it makes the kind worth pinning down before the upstream
-push has to defend it.
+Ten entries in this file are `designed` rather than `omission` or `packaging`. Five of them belong
+to the two surfaces with no production counterpart of any kind — the board, and the public pages —
+which is not an accident, but it makes the kind worth pinning down before the upstream push has to
+defend it. This is the whole list; everything not on it is a gap in the measurement.
 
-`designed` has meant three different strengths so far, and they are not equally hard to justify:
+`designed` has meant three different strengths, and they are not equally hard to justify:
 
 | Entry | What was missing | What it was drawn from |
 |---|---|---|
 | §7 `InfoBanner success` | prod has no green banner | its own palette, at the 10%-of-status tint its other two already use |
 | §11 `AuthLayout` | prod has no signed-out screen | the well, the card, the headline scale — all blue's, recomposed |
+| §24 `InfoBanner onDismiss` | prod's banners report a state, so none needs putting away | blue's own Modal-close treatment (§10), at the banner's own line colour |
 | §29 `Select allowCreate` | prod uses react-select, not creatable | the library's own documented pattern, drawn as one more option row |
 | §30 `Calendar` | prod books nothing | **blue's own `DateRangePicker`**, which is its recreation of the react-datepicker the product ships |
 | §32 `Badge info`/`warning` | prod's badge has two states, a funnel has five | the palette's other half, in `ActivityBadge`'s treatment |
 | §42 / §43 `BoardCard` / `BoardColumn` | prod has no kanban | `Card` (§12), `NavigationCard`'s hover, `AppShell`'s well-and-panel arrangement |
+| §46 `BookingLayout` | prod has no public screen | `AuthLayout` (§11), minus its card and its claim on the wordmark |
+| §47 `FileInput` | prod accepts no file but an avatar | `TextInput`'s field, label, focus, error and message slot, plus `Button`'s neutral paint at `IconButton`'s in-field height |
 
 Every row's right-hand column is the same claim: *the values are blue's, the arrangement is ours.*
 That is the strongest form the label can take, and it is the form the push should make in each case
-— **"composed from measured parts"**, not "invented". The genuinely unprecedented part of §42 and
-§43 is smaller than the components are, and it is worth naming precisely so the push does not have
-to over-claim: the **held** card state, the **travelling placeholder**, and the **slot index** that
-counts cards and not gaps. Nothing in blue does any of those, because nothing in blue drags.
+— **"composed from measured parts"**, not "invented". The genuinely unprecedented parts are smaller
+than the components are, and naming them precisely is what keeps the push from over-claiming:
+
+- **§42 / §43** — the **held** card state, the **travelling placeholder**, and the **slot index**
+  that counts cards and not gaps. Nothing in blue does any of those, because nothing in blue drags.
+- **§47** — the **input as its own hit area**. Every painted value is `TextInput`'s; what has no
+  precedent is the arrangement that makes a file field one control instead of three, and that is a
+  keyboard and focus argument rather than a visual one.
+- **§46** — the **880px column**, and nothing else. Its well, padding, rhythm and type are
+  `AuthLayout`'s, which were blue's already.
 
 ### A note on §44 and the one row the token map must not be taken on
 
