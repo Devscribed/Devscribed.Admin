@@ -28,7 +28,7 @@ of blue's `ConfirmDialog`.
 ## Layout
 
 ```
-  Hiring settings                                                     ← PageTitle
+  Libraries                                                           ← PageTitle
   ────────────────────────────────────────────────────────────────────
   ( announcement, when there is one )                                 ← InfoBanner
   ┌──────────────────────────────────────────────────────────────────┐
@@ -186,7 +186,7 @@ already takes.
 
 | Slot | Text |
 |---|---|
-| Page title | Hiring settings |
+| Page title | Libraries |
 | Card titles | Categories · Criteria |
 | Card actions | New category · New criteria |
 | Usage · category | {n} vacancies |

@@ -5,6 +5,7 @@ import {
   bookInterview,
   createCategory,
   createCriterion,
+  clickHiringNav,
   createVacancy,
   latestInviteLink,
   registerOrganization,
@@ -71,9 +72,12 @@ test.describe('Category library', () => {
     await createVacancy(request, org, { title: 'Two', categoryIds: [react.id] });
     await signIn(page, org.email);
 
-    await page.getByTestId('nav-hiring-settings').click();
+    // The row reads `Libraries` and the route is still `/hiring/settings`: nothing on
+    // the screen is a setting, and no bookmark had to be broken to say so.
+    await clickHiringNav(page, 'nav-hiring-settings');
     await page.waitForURL('**/hiring/settings');
     await expect(page.getByTestId('hiring-settings')).toBeVisible();
+    await expect(page.getByTestId('page-title')).toHaveText('Libraries');
 
     // The usage count sits beside the actions, because it is what makes deleting a
     // decision rather than a guess.

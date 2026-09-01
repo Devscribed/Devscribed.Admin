@@ -15,49 +15,18 @@ export function PeopleIcon() {
   );
 }
 
-/**
- * The template's `projects` glyph — a document with a folded corner. Vacancies are
- * postings, and the wider Teamplay product has no hiring icon of its own; promoting
- * the `P` dictionary to real icon exports is the design-system chore this raises for
- * the second time.
- */
-export function VacanciesIcon() {
-  return (
-    <svg viewBox="0 0 16 20" width={17} height={17} fill="currentColor" aria-hidden>
-      <path d="M4.725 15.75H11.275C11.4917 15.75 11.6708 15.6792 11.8125 15.5375C11.9542 15.3958 12.025 15.2167 12.025 15C12.025 14.7833 11.9542 14.6042 11.8125 14.4625C11.6708 14.3208 11.4917 14.25 11.275 14.25H4.725C4.50833 14.25 4.32917 14.3208 4.1875 14.4625C4.04583 14.6042 3.975 14.7833 3.975 15C3.975 15.2167 4.04583 15.3958 4.1875 15.5375C4.32917 15.6792 4.50833 15.75 4.725 15.75ZM4.725 11.5H11.275C11.4917 11.5 11.6708 11.4292 11.8125 11.2875C11.9542 11.1458 12.025 10.9667 12.025 10.75C12.025 10.5333 11.9542 10.3542 11.8125 10.2125C11.6708 10.0708 11.4917 10 11.275 10H4.725C4.50833 10 4.32917 10.0708 4.1875 10.2125C4.04583 10.3542 3.975 10.5333 3.975 10.75C3.975 10.9667 4.04583 11.1458 4.1875 11.2875C4.32917 11.4292 4.50833 11.5 4.725 11.5ZM1.5 20C1.1 20 0.75 19.85 0.45 19.55C0.15 19.25 0 18.9 0 18.5V1.5C0 1.1 0.15 0.75 0.45 0.45C0.75 0.15 1.1 0 1.5 0H9.9C10.1 0 10.2958 0.0416667 10.4875 0.125C10.6792 0.208333 10.8417 0.316667 10.975 0.45L15.55 5.025C15.6833 5.15833 15.7917 5.32083 15.875 5.5125C15.9583 5.70417 16 5.9 16 6.1V18.5C16 18.9 15.85 19.25 15.55 19.55C15.25 19.85 14.9 20 14.5 20H1.5ZM9.775 5.4C9.775 5.61667 9.84583 5.79583 9.9875 5.9375C10.1292 6.07917 10.3083 6.15 10.525 6.15H14.5L9.775 1.5V5.4Z" />
-    </svg>
-  );
-}
-
-/**
- * The template's `reports` glyph — a ruled sheet. The candidate database has no glyph of
- * its own in the `P` dictionary, and `people` is already the Members row: two identical
- * icons in one sidebar is worse than a generic one, and what this screen actually is, is
- * a list you narrow.
- */
-export function CandidatesIcon() {
-  return (
-    <svg viewBox="0 0 18 18" width={17} height={17} fill="currentColor" aria-hidden>
-      <path d="M4.675 14.025H10.05C10.2667 14.025 10.4458 13.9542 10.5875 13.8125C10.7292 13.6708 10.8 13.4917 10.8 13.275C10.8 13.0583 10.7292 12.8792 10.5875 12.7375C10.4458 12.5958 10.2667 12.525 10.05 12.525H4.675C4.45833 12.525 4.27917 12.5958 4.1375 12.7375C3.99583 12.8792 3.925 13.0583 3.925 13.275C3.925 13.4917 3.99583 13.6708 4.1375 13.8125C4.27917 13.9542 4.45833 14.025 4.675 14.025ZM4.675 9.75H13.325C13.5417 9.75 13.7208 9.67917 13.8625 9.5375C14.0042 9.39583 14.075 9.21667 14.075 9C14.075 8.78333 14.0042 8.60417 13.8625 8.4625C13.7208 8.32083 13.5417 8.25 13.325 8.25H4.675C4.45833 8.25 4.27917 8.32083 4.1375 8.4625C3.99583 8.60417 3.925 8.78333 3.925 9C3.925 9.21667 3.99583 9.39583 4.1375 9.5375C4.27917 9.67917 4.45833 9.75 4.675 9.75ZM4.675 5.475H13.325C13.5417 5.475 13.7208 5.40417 13.8625 5.2625C14.0042 5.12083 14.075 4.94167 14.075 4.725C14.075 4.50833 14.0042 4.32917 13.8625 4.1875C13.7208 4.04583 13.5417 3.975 13.325 3.975H4.675C4.45833 3.975 4.27917 4.04583 4.1375 4.1875C3.99583 4.32917 3.925 4.50833 3.925 4.725C3.925 4.94167 3.99583 5.12083 4.1375 5.2625C4.27917 5.40417 4.45833 5.475 4.675 5.475ZM1.5 18C1.1 18 0.75 17.85 0.45 17.55C0.15 17.25 0 16.9 0 16.5V1.5C0 1.1 0.15 0.75 0.45 0.45C0.75 0.15 1.1 0 1.5 0H16.5C16.9 0 17.25 0.15 17.55 0.45C17.85 0.75 18 1.1 18 1.5V16.5C18 16.9 17.85 17.25 17.55 17.55C17.25 17.85 16.9 18 16.5 18H1.5Z" />
-    </svg>
-  );
-}
-
-/**
- * The template's `settings` glyph — a cog. Hiring settings is the library maintenance
- * screen, which is settings in the ordinary sense rather than a hiring concept of its
- * own, so the generic glyph is the honest one.
- */
-export function SettingsIcon() {
-  return (
-    <svg viewBox="0 0 20 20" width={18} height={18} fill="currentColor" aria-hidden>
-      <path d="M8.3 20a.75.75 0 0 1-.74-.63l-.3-2.02a5.9 5.9 0 0 1-1-.48 7.2 7.2 0 0 1-.87-.6l-1.9.8a.75.75 0 0 1-.93-.32L.63 13.2a.75.75 0 0 1 .18-.97l1.62-1.22a4.3 4.3 0 0 1-.03-.5v-1a4.3 4.3 0 0 1 .03-.5L.81 7.77a.75.75 0 0 1-.18-.97l1.93-3.55a.75.75 0 0 1 .93-.32l1.9.8c.28-.22.57-.42.88-.6.3-.18.63-.34.98-.48l.3-2.02A.75.75 0 0 1 8.3 0h3.4c.37 0 .68.26.74.63l.3 2.02c.35.14.68.3.99.48.3.18.6.38.87.6l1.9-.8c.35-.14.7 0 .93.32l1.93 3.55a.75.75 0 0 1-.18.97l-1.62 1.22c.02.16.03.33.03.5v1c0 .17-.01.34-.04.5l1.63 1.22c.3.23.37.6.18.97l-1.93 3.55a.75.75 0 0 1-.93.32l-1.9-.8c-.28.22-.57.42-.88.6-.3.18-.63.34-.98.48l-.3 2.02a.75.75 0 0 1-.74.63H8.3ZM10 13.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
-    </svg>
-  );
-}
-
 /*
  * `MyInterviewsIcon` — the template's clock — was here, and went with its row: My
  * interviews is the `Assigned to me` scope of the candidate list now, and a scope tab
  * takes no glyph. It is in the history rather than kept unused.
+ *
+ * `VacanciesIcon` (a folded document), `CandidatesIcon` (a ruled sheet) and `SettingsIcon`
+ * (a cog) followed them for the same reason, and it is worth saying which reason: their
+ * rows still exist, but they are sub-items now, and blue's submenu draws a glyph on the
+ * parent title alone. Three icons nothing renders would have read as three the rail had
+ * simply forgotten to hang.
+ *
+ * That leaves `PeopleIcon` doing double duty — `People` and `Hiring` draw the same mark,
+ * because the set has no hiring glyph and the design would rather show the omission than
+ * paper over it (`ds-additions.md #10`).
  */

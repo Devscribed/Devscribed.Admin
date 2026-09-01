@@ -608,11 +608,11 @@ candidates sit in a list they cannot see.
   3. Navigate to `…/hiring/candidates?scope=all` by hand.
   4. Navigate directly to the vacancies and board URLs.
 - **Expected Result:**
-  1. Candidates is present; Vacancies, Libraries and any My interviews row are not, and none flashes during load.
+  1. Opening the Hiring group shows Candidates alone; Vacancies, Libraries and any My interviews row are not there, and none flashes during load.
   2. No tab strip is drawn; only their own candidates are listed; the row opens the card, showing only their own vacancy's application.
   3. The list is unchanged — the other interviewer's candidate is absent from the page.
   4. Each renders the not-found state.
-- **Selectors:** `nav-candidates`, `nav-my-interviews` (asserted absent), `candidates-scope-tabs` (asserted absent), `candidates-list`, `candidate-card`.
+- **Selectors:** the `Hiring` group title by accessible name, `nav-candidates`, `nav-vacancies` · `nav-hiring-settings` · `nav-my-interviews` (all asserted absent), `candidates-scope-tabs` (asserted absent), `candidates-list`, `candidate-card`.
 
 ### TC-H03-E2E-04: Candidates is absent for a member with no assignment
 - **Level:** E2E
@@ -621,9 +621,9 @@ candidates sit in a list they cannot see.
   1. Inspect the sidebar.
   2. Navigate directly to `/org/{orgId}/hiring/candidates`, with and without `?scope=mine`.
 - **Expected Result:**
-  1. No Candidates row exists.
+  1. No Hiring group exists, so there is no Candidates row and nothing to open in search of one.
   2. Both navigations render the not-found state, not an empty list.
-- **Selectors:** `nav-candidates` (asserted absent), `candidates-list` (asserted absent).
+- **Selectors:** the `Hiring` group title by accessible name (asserted absent), `nav-candidates` (asserted absent), `candidates-list` (asserted absent).
 
 ### TC-H03-E2E-05: The scope is navigation, and it survives
 - **Level:** E2E

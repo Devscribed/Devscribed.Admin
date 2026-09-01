@@ -542,6 +542,6 @@ Errors:
   1. Inspect the sidebar.
   2. Navigate directly to `/org/{orgId}/hiring/vacancies`.
 - **Expected Result:**
-  1. No Vacancies row is present, and it never flashes into view during load.
+  1. There is no Hiring group at all — no title to open and no Vacancies row inside it — and neither flashes into view during load. A titled section that opens onto nothing reads as a permission error; an absent one reads as a product they are not part of.
   2. The direct navigation renders the not-found state, not a permission error and not any vacancy data.
-- **Selectors:** `nav-vacancies` (asserted absent), `vacancies-list` (asserted absent).
+- **Selectors:** the `Hiring` group title by accessible name (asserted absent), `nav-vacancies` (asserted absent), `vacancies-list` (asserted absent).

@@ -114,7 +114,7 @@ Requirement 4 is the main defence.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│  Hiring settings                                                     │
+│  Libraries                                                           │
 │                                                                      │
 │  CATEGORIES                                        [ + New category ]│
 │  ┌────────────────────────────────────────────────────────────────┐  │
@@ -165,7 +165,7 @@ Requirement 4 is the main defence.
 
 ### Flow: rename a category
 
-1. `admin` opens Hiring settings and renames `Reactjs`.
+1. `admin` opens Libraries and renames `Reactjs`.
 2. The new name is checked case-insensitively against the library.
 3. On success, every vacancy carrying it shows the new name immediately.
 
@@ -471,7 +471,7 @@ Errors:
 - **Level:** E2E
 - **Preconditions:** logged in as `admin`; one criterion with assessments and one without.
 - **Steps:**
-  1. Open Hiring settings and inspect both rows.
+  1. Open Libraries and inspect both rows.
   2. Archive the used one, then restore it.
 - **Expected Result:**
   1. The used criterion offers Archive and a disabled delete with its assessment count; the unused one can be deleted.

@@ -93,6 +93,29 @@ export async function signIn(page: Page, email: string): Promise<void> {
   await page.waitForURL('**/members');
 }
 
+/**
+ * Expands the `Hiring` group in the rail.
+ *
+ * The rail is two submenus, and only the group holding the current route arrives open — so
+ * from Members, which is where signing in lands, every hiring destination is one toggle
+ * away. The toggle is reached by its accessible name rather than a test id, for the same
+ * reason the hamburger is: the name is what a reader has to navigate by, and a test id
+ * would not prove it exists.
+ *
+ * Idempotent, so a test that is already inside the section does not close it.
+ */
+export async function openHiringSection(page: Page): Promise<void> {
+  const toggle = page.getByRole('button', { name: 'Hiring', exact: true });
+  await toggle.waitFor({ state: 'visible' });
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+}
+
+/** Opens the `Hiring` group and clicks one of its rows. */
+export async function clickHiringNav(page: Page, testId: string): Promise<void> {
+  await openHiringSection(page);
+  await page.getByTestId(testId).click();
+}
+
 export interface Registered {
   email: string;
   accountId: string;

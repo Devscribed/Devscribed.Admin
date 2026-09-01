@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import {
   addMember,
   bookInterview,
+  clickHiringNav,
   createVacancy,
   registerOrganization,
   signIn,
@@ -16,7 +17,7 @@ test.describe('Vacancies', () => {
     const org = await registerOrganization(request, uniqueEmail('hiring'));
     await signIn(page, org.email);
 
-    await page.getByTestId('nav-vacancies').click();
+    await clickHiringNav(page, 'nav-vacancies');
     await page.waitForURL('**/hiring/vacancies');
     await expect(page.getByTestId('vacancies-empty-state')).toBeVisible();
 
@@ -51,6 +52,39 @@ test.describe('Vacancies', () => {
 
     const clipboard = await page.evaluate(() => navigator.clipboard.readText());
     expect(clipboard).toBe(await link.textContent());
+  });
+
+  /**
+   * The rail is answered by the route, not by the click that got there. Arriving at a
+   * nested hiring screen cold — a bookmark, a calendar invite, a reload — has to open the
+   * section that owns it, or the reader lands on a screen whose own navigation is shut.
+   */
+  test('a deep link opens the group that owns it, and lights the right row', async ({
+    page,
+    request,
+  }) => {
+    const org = await registerOrganization(request, uniqueEmail('hiring-deep'));
+    const vacancy = await createVacancy(request, org, { title: 'Senior React Engineer' });
+    await signIn(page, org.email);
+
+    // Not the list route — one nested beneath it, so the match is prefix and not equality.
+    await page.goto(`/org/${org.organizationId}/hiring/vacancies/${vacancy.id}`);
+    await expect(page.getByTestId('vacancy-detail')).toBeVisible();
+
+    await expect(page.getByRole('button', { name: 'Hiring', exact: true })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    await expect(page.getByTestId('nav-vacancies')).toHaveAttribute('aria-current', 'page');
+    // People is not the current group, so it is shut and Members is not in the document.
+    await expect(page.getByRole('button', { name: 'People', exact: true })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    await expect(page.getByTestId('nav-members')).toHaveCount(0);
+
+    // And the sibling row is a row, not the current one — one `aria-current` in the rail.
+    await expect(page.getByTestId('nav-candidates')).not.toHaveAttribute('aria-current', 'page');
   });
 
   test('lists the new vacancy with its interviewer, length and count', async ({ page, request }) => {
@@ -258,6 +292,10 @@ test.describe('Vacancies', () => {
         // a gated row appearing and being taken away again.
         await expect(page.getByTestId('app-sidebar')).toBeVisible();
         await expect(page.getByTestId('nav-members')).toBeVisible();
+        // Not a Hiring group with nothing in it — no Hiring group. A titled section that
+        // opens onto nothing reads as a permission error; an absent one reads as a part
+        // of the product they are not in.
+        await expect(page.getByRole('button', { name: 'Hiring', exact: true })).toHaveCount(0);
         for (const row of ['nav-vacancies', 'nav-candidates', 'nav-hiring-settings']) {
           await expect(page.getByTestId(row)).toHaveCount(0);
         }

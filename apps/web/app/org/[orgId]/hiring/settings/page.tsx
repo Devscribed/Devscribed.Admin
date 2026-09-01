@@ -56,7 +56,7 @@ const failure = (message: string): Notice => ({
 });
 
 /**
- * Hiring settings — the maintenance inline creation cannot do.
+ * Libraries — the maintenance inline creation cannot do.
  *
  * Both libraries are created where they are needed: a category from the vacancy dialog,
  * a criterion from a candidate card mid-interview. Which is why both empty states point
@@ -246,7 +246,12 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
 
   return (
     <div data-testid="hiring-settings">
-      <PageHeader title="Hiring settings" />
+      {/*
+        `Libraries`, on the route `/hiring/settings`. Nothing on this screen is a setting —
+        it is two lists and their maintenance — so the title says what it is and the path
+        stays where readers have already bookmarked it.
+      */}
+      <PageHeader title="Libraries" />
 
       {/*
         Where a toast used to float. An announcement that outlives the moment it was raised

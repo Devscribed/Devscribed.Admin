@@ -3,8 +3,10 @@ import {
   VALID,
   addMember,
   bookInterview,
+  clickHiringNav,
   createVacancy,
   createVacancyFor,
+  openHiringSection,
   registerOrganization,
   uniqueEmail,
 } from './helpers';
@@ -78,6 +80,10 @@ test.describe('Hiring — candidates, assigned to me', () => {
     // One hiring row, and it is the one everybody else has. The shell blocks on
     // `/api/me` before rendering, so nothing gated flashes in on the way — the
     // assertions below run against a sidebar that has already settled.
+    //
+    // The group is drawn, because they do have a hiring destination; opening it shows
+    // exactly one row inside.
+    await openHiringSection(page);
     await expect(page.getByTestId('nav-candidates')).toBeVisible();
     await expect(page.getByTestId('nav-my-interviews')).toHaveCount(0);
     await expect(page.getByTestId('nav-vacancies')).toHaveCount(0);
@@ -170,6 +176,9 @@ test.describe('Hiring — candidates, assigned to me', () => {
 
     await signIn(page, idle.email);
 
+    // No hiring destination at all, so no group to open in search of one — and with it
+    // no Candidates row anywhere in the document.
+    await expect(page.getByRole('button', { name: 'Hiring', exact: true })).toHaveCount(0);
     await expect(page.getByTestId('nav-candidates')).toHaveCount(0);
 
     // The not-found state, not an empty list: the screen's existence is not advertised
@@ -211,7 +220,7 @@ test.describe('Hiring — candidates, assigned to me', () => {
     });
 
     await signIn(page, bystander.email);
-    await page.getByTestId('nav-candidates').click();
+    await clickHiringNav(page, 'nav-candidates');
     await page.waitForURL('**/hiring/candidates');
 
     // The count lives in the label, so a tab answers what the other one holds before it

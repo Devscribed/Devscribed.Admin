@@ -327,15 +327,22 @@ export function bookInterview(
  * arbitrarily — which silently swaps the ids a suite goes on to assert about, and fails
  * a test somewhere else entirely. Every caller already knows the slot it asked for, so
  * there is no reason to guess.
+ *
+ * The slot is not always enough on its own. Two vacancies offer the same grid of times,
+ * so one person booking both of them lands two applications at the same instant — and
+ * this lookup then answers with whichever was written first, silently handing back the
+ * wrong id. A caller booking one person onto more than one vacancy names the vacancy
+ * too; `findFirstOrThrow` cannot complain about an ambiguity it was not told about.
  */
 export async function bookedApplication(
   prisma: PrismaService,
-  where: { startUtc: string; email?: string },
+  where: { startUtc: string; email?: string; vacancyId?: string },
 ): Promise<{ id: string; candidateId: string }> {
   return prisma.application.findFirstOrThrow({
     where: {
       start: new Date(where.startUtc),
       ...(where.email ? { candidate: { email: where.email.toLowerCase() } } : {}),
+      ...(where.vacancyId ? { vacancyId: where.vacancyId } : {}),
     },
     select: { id: true, candidateId: true },
   });

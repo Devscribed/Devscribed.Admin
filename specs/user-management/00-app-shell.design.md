@@ -26,10 +26,10 @@ This is the signed-in counterpart to the "signed-out set" in [02-authentication-
 ┌──────────────────┬──────────────────────────────────────┐
 │ Teammerly✓       │                     Pat Owner (◕) ▾  │  ← 80px navbar
 ├──────────────────┼──────────────────────────────────────┤
-│  ▣ Members       │  Members                             │  ← page header
-│  ▤ Vacancies     │  ┌────────────────────────────────┐  │
-│  ▥ Candidates    │  │                                │  │
-│  ⚙ Settings      │  └────────────────────────────────┘  │
+│  ▣ People     ▾  │  Members                             │  ← page header
+│  │ Members       │  ┌────────────────────────────────┐  │
+│  ▣ Hiring     ▴  │  │                                │  │
+│                  │  └────────────────────────────────┘  │
 └──────────────────┴──────────────────────────────────────┘
        290px            content scrolls; the other two do not
 ```
@@ -51,25 +51,30 @@ Sidebar and navbar are fixed. Only the content column scrolls, and the well is t
 ## Sidebar
 
 - **Wordmark** in the head: blue's own SVG, the mark the shipping app draws, linking to the members list the way prod's links to its start page. There is no typographic wordmark any more and no `--fs-21` — that token was never defined in the old system either, so the wordmark silently inherited its size for as long as it existed.
-- **Rows** — blue's `TopLink`: 16px medium type, a 12px gap to the glyph, `--text-secondary` going `--color-blue` on hover and while active, 36px between rows. There is no uppercase caption above them; blue captions nothing, and the section labels the old shell drew are gone with it.
-- **One level, not two.** Blue's `Sidebar` has a second form — a collapsible title with sub-items indented under a rule — and hiring does not use it. Every hiring destination is one level deep, and the link form is the one that keeps its own glyph, because a submenu draws an icon on the parent only. A section deep enough to need one is what the `submenu` form is there for.
-- **Active rule** — a row is active when the current path equals its `href` or is nested beneath it, so a candidate card keeps `Candidates` lit. The row carries `aria-current="page"`.
+- **Groups** — blue's `SubMenu` title: 16px medium type, a 12px gap to the glyph, a chevron pushed to the right edge, `--text-secondary` going `--color-blue` on hover and while the group is current, 36px between groups. There is no uppercase caption above them; blue captions nothing, and the section labels the old shell drew are gone with it.
+- **Rows** — blue's `SubItem`, indented 8px behind a 1px rule in `--text-secondary`: 14px medium, 4px/12px padding, 16px apart, `--color-blue-tint` behind the current one. A sub-item draws **no glyph** — blue puts the icon on the parent title alone.
+- **Two levels, not one.** Every destination sits inside a titled group, which reverses what the rail shipped with: four unparented links, on the argument that one level deep needs no second one. That held while hiring was three rows out of four, and it is not what blue does with the same content — `People → Members` is a submenu in prod's own nav, and hiring is a section of the same size beside it. Four flat rows read as four unrelated screens; two titled groups say which of them belong together, which is the fact a reader needs before they need a route.
+- **A title is a toggle, not a destination.** `People` and `Hiring` are real `<button aria-expanded>` controls that open and close their group and go nowhere. `Hiring` has no screen behind it — there is no hiring landing page and no reason to invent one — so making the title a link would have promised a route that does not exist.
+- **Active rule** — a row is active when the current path equals its `href` or is nested beneath it, so a candidate card keeps `Candidates` lit. The row carries `aria-current="page"`. A **group** is current when one of its rows is, and a group that becomes current opens itself — otherwise arriving at a candidate card by deep link would leave its own section shut. Only that group is open: from Members, hiring is one toggle away.
 - **Rows are real links.** Each renders an `<a href>` so middle-click, copy-address and open-in-new-tab all work; an unmodified click is handed to the client router.
-- **Only real destinations appear.** Blue carries seven groups from the wider Teamplay product (Timesheets, Projects, Reports, Time off, Organization). Those are production *content*, not design language ([§D6](../design-system/README.md)); shipping them as dead or disabled rows would promise screens no spec defines. Rows arrive with their specs.
-- **Glyphs are hiring's own**, drawn in blue's icon language — geometric, filled, `currentColor`, no icon font. Same split as the nav items.
+- **Only real destinations appear.** Blue carries seven groups from the wider Teamplay product (Timesheets, Projects, Reports, Time off, Organization). Those are production *content*, not design language ([§D6](../design-system/README.md)); shipping them as dead or disabled rows would promise screens no spec defines. Two of the seven are drawn — `People`, which is blue's own, and `Hiring`, which is this product's. Rows arrive with their specs.
+- **An empty group is not drawn.** A member with no hiring row at all — a `viewer`, or a `user` assigned nothing — gets no `Hiring` title. A titled group announces that it has contents; one that opens onto nothing is worse than an absent section, because it reads as a permission error rather than as a product they are not part of.
+- **Glyphs are hiring's own**, drawn in blue's icon language — geometric, filled, `currentColor`, no icon font. Same split as the nav items. `Hiring` reuses `PeopleIcon`, the mark `People` already draws: the icon set has no hiring glyph, the design asks for one, and reusing an existing mark leaves that gap visible where inventing one would hide it in the one place nobody would look.
 - **Role gating** — spec 10 requires the future `Requests` row to be invisible to `user` and `viewer`. The shell resolves the session before it renders, precisely so a gated row never flashes into view and back out.
 
 ### Rows
 
-| Row | Route | Ships with | Visible to |
-|---|---|---|---|
-| Members | `/org/{orgId}/members` | now | all roles |
-| Vacancies | `/org/{orgId}/hiring/vacancies` | hiring 01 | admin, manager |
-| Candidates | `/org/{orgId}/hiring/candidates` | hiring 03 | admin, manager, **anyone assigned an interview** |
-| Settings | `/org/{orgId}/hiring/settings` | hiring 06 | admin, manager |
-| Requests | `/org/{orgId}/requests` | spec 10 | admin, manager |
+| Group | Row | Route | Ships with | Visible to |
+|---|---|---|---|---|
+| People | Members | `/org/{orgId}/members` | now | all roles |
+| Hiring | Vacancies | `/org/{orgId}/hiring/vacancies` | hiring 01 | admin, manager |
+| Hiring | Candidates | `/org/{orgId}/hiring/candidates` | hiring 03 | admin, manager, **anyone assigned an interview** |
+| Hiring | Libraries | `/org/{orgId}/hiring/settings` | hiring 06 | admin, manager |
+| People | Requests | `/org/{orgId}/requests` | spec 10 | admin, manager |
 
-Candidates is the only row gated on assignment as well as role (hiring 03 §06.31) — which is what lets an engineer interview without becoming an org admin. They open the same screen a manager does, resolved to its `Assigned to me` scope; a second row for the same list would have been the rail claiming a difference the screen does not have. A member with neither role nor assignment sees Members alone.
+Candidates is the only row gated on assignment as well as role (hiring 03 §06.31) — which is what lets an engineer interview without becoming an org admin. They open the same screen a manager does, resolved to its `Assigned to me` scope; a second row for the same list would have been the rail claiming a difference the screen does not have. A member with neither role nor assignment sees Members alone, under People, with no Hiring group beside it.
+
+**Libraries, on the route `/hiring/settings`.** The row was `Settings` and the path is unchanged. Nothing on that screen is a setting — it is two lists and the maintenance of them (hiring 06) — so the name says what it is, and the URL stays where readers have already bookmarked it. A route rename would have bought nothing and broken every link anybody kept.
 
 There is no **My interviews** row. Its screen is that scope now, and `/org/{orgId}/hiring/my-interviews` redirects to `…/hiring/candidates?scope=mine`.
 
@@ -120,7 +125,7 @@ Below **1200px** the rail leaves the flow and becomes a drawer: a 340px panel ag
 | `app-loading` | the pre-resolution preloader |
 | `app-sidebar` | sidebar `<aside>` |
 | `nav-members` | Members row (carries `aria-current="page"` when active) |
-| `nav-vacancies` · `nav-candidates` · `nav-hiring-settings` | the hiring rows |
+| `nav-vacancies` · `nav-candidates` · `nav-hiring-settings` | the hiring rows — the last of them is Libraries, keeping the id its route kept |
 | `topbar-account-button` | account/avatar trigger |
 | `topbar-account-name` | account full name |
 | `topbar-account-menu` | the open menu |
@@ -129,7 +134,7 @@ Below **1200px** the rail leaves the flow and becomes a drawer: a 340px panel ag
 | `members-list` | the members table |
 | `member-row-{id}` · `member-name` · `member-role` | a member row and its cells |
 
-The hamburger and the drawer's close button are reached by their accessible names — `Open navigation` and `Close sidebar` — rather than by a test id, because those names are what a reader has to navigate by and a test id would not prove they exist.
+The hamburger, the drawer's close button and the two group titles are reached by their accessible names — `Open navigation`, `Close sidebar`, `People`, `Hiring` — rather than by a test id, because those names are what a reader has to navigate by and a test id would not prove they exist. A group title is the one navigation control with no `data-testid` for exactly that reason: it is a `<button>` whose whole job is its label and its `aria-expanded`.
 
 ## DS gaps
 
@@ -146,4 +151,6 @@ Every row here is a numbered entry in the [ledger](../design-system/ledger.md), 
 | `Table` takes `string[]` columns and `ReactNode[][]` rows | No per-row test id, no records, and a pointer cursor on rows that go nowhere | [§18](../design-system/ledger.md) |
 | No `Card` in the library — `NavigationCard` is a 250px clickable tile with no `children` | 34 call sites across 12 files, and nothing to round an edge-to-edge table's corners | [§12](../design-system/ledger.md) |
 
-The one gap that is **not** filled in the design system is the frame's binding to Next.js: `apps/web/src/layout/` holds `AppShell`, `Sidebar`, `Topbar` and `PageHeader` as thin adapters that supply the session, hiring's nav items and the router, and nothing else. That is the same deliberate exception the shell has always carried — routing and role rules are not the design system's business — but it is now four adapters over blue's components rather than a frame built from scratch beside them.
+One gap here carries **no ledger number**, and the reason is the rule the ledger states: a number is assigned when code lands, and nothing lands for a glyph that is not drawn. The icon set has no `Hiring` mark, the section reuses `PeopleIcon`, and the vendored copy is untouched — so there is no divergence to number, only a want. It is recorded where the want is: in the rail's own comment, and in the design's list of what it had to hand-build.
+
+The other gap that is **not** filled in the design system is the frame's binding to Next.js: `apps/web/src/layout/` holds `AppShell`, `Sidebar`, `Topbar` and `PageHeader` as thin adapters that supply the session, hiring's nav items and the router, and nothing else. That is the same deliberate exception the shell has always carried — routing and role rules are not the design system's business — but it is now four adapters over blue's components rather than a frame built from scratch beside them.

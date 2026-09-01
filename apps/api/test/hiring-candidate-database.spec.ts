@@ -65,9 +65,12 @@ describe('Hiring — candidate database', () => {
     if (response.status !== 201) {
       throw new Error(`Precondition failed: booking answered ${response.status}`);
     }
+    // Named by vacancy as well as by slot: this suite books one person onto two
+    // vacancies, whose free slots line up, so the pair alone does not identify a row.
     const application = await bookedApplication(prisma, {
       startUtc: values.startUtc,
       email: values.email,
+      vacancyId: vacancy.id,
     });
     return { candidateId: application.candidateId, applicationId: application.id };
   }
