@@ -112,30 +112,44 @@ Requirement 4 is the main defence.
 
 ### Settings — libraries
 
+One screen, two tabs — the standard list layout every other hiring screen uses: the toolbar
+carries the tab strip, a search over the open tab, and the tab's primary action; the body is a
+table whose rows act through a kebab.
+
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │  Libraries                                                           │
 │                                                                      │
-│  CATEGORIES                                        [ + New category ]│
+│  CATEGORIES (3) · CRITERIA (4)      [ Search…      ] [ New category ]│
 │  ┌────────────────────────────────────────────────────────────────┐  │
-│  │ React            4 vacancies                    [Rename] [Del] │  │
-│  │ Senior           2 vacancies                    [Rename] [Del] │  │
-│  │ Asp.Net          1 vacancy                      [Rename] [Del] │  │
+│  │ Name        Vacancies                                  Actions │  │
+│  │ Asp.Net     No vacancies                                   ⋮   │  │
+│  │ React       One, Two  (+2)                                 ⋮   │  │
+│  │ Senior      Senior React Engineer                          ⋮   │  │
 │  └────────────────────────────────────────────────────────────────┘  │
-│                                                                      │
-│  CRITERIA                                          [ + New criteria ]│
-│  ┌────────────────────────────────────────────────────────────────┐  │
-│  │ English          scale · A1 A2 B1 B2 C1 C2                     │  │
-│  │                  18 assessments        [Edit] [Archive]        │  │
-│  │ AI Skills        scale · None Basic Good Strong                │  │
-│  │                  11 assessments        [Edit] [Archive]        │  │
-│  │ Late hours       boolean                                       │  │
-│  │                  6 assessments         [Edit] [Archive]        │  │
-│  │ Legacy skill     text · archived                               │  │
-│  │                  2 assessments         [Edit] [Restore]        │  │
-│  └────────────────────────────────────────────────────────────────┘  │
+│  Merging isn't available yet…                                        │
 └──────────────────────────────────────────────────────────────────────┘
+
+│  CATEGORIES (3) · CRITERIA (4)      [ Search…      ] [ New criteria ]│
+│  ┌────────────────────────────────────────────────────────────────┐  │
+│  │ Name                       Type     Assessments        Actions │  │
+│  │ English                    Scale    18 assessments         ⋮   │  │
+│  │   A1 › A2 › B1 › B2 › C1 › C2                                  │  │
+│  │ Late hours                 Yes/No   6 assessments          ⋮   │  │
+│  │ Legacy skill  ⟨Archived⟩   Text     2 assessments          ⋮   │  │
+│  └────────────────────────────────────────────────────────────────┘  │
 ```
+
+- Each tab's label carries its whole library's size. The counts ignore the search, because
+  the search is not shared across the strip — it resets on a switch, since a term typed
+  over one library means nothing over the other — so each label states exactly what
+  pressing its tab shows.
+- The category row's `Vacancies` cell prints up to two whole titles and folds the rest
+  into a `+N`; the count lives in the cell's accessible name with every title spelled out.
+  A truncated title names nothing.
+- The kebab holds `Rename` / `Delete` on a category and `Edit` / `Archive`|`Restore` /
+  `Delete` on a criterion. A blocked `Delete` is disabled in place with its reason drawn
+  in the row, never hidden.
 
 ### New criteria dialog
 
@@ -192,8 +206,12 @@ Requirement 4 is the main defence.
 
 Response `200`:
 ```json
-{ "categories": [ { "id": "uuid", "name": "React", "vacancyCount": 4 } ] }
+{ "categories": [ { "id": "uuid", "name": "React", "vacancyCount": 4,
+                    "vacancies": ["One", "Two", "Three", "Four"] } ] }
 ```
+
+`vacancies` is the titles behind the count, alphabetical — derived on read, like every
+usage number in this spec. Every category endpoint answers this same shape.
 
 ### POST /api/organizations/{orgId}/hiring/categories
 
@@ -288,34 +306,59 @@ Errors:
 | Criterion delete blocked | "Archive this instead — it has {n} assessments" |
 | Type change attempted | "A criterion's type can't be changed. Archive it and create a new one." |
 | Category delete confirmation | "Delete \"{name}\"? It's used by {n} vacancies." |
+| Criterion delete confirmation | "Delete \"{name}\"? No assessments are recorded against it, so nothing else is affected." |
 | Reorder confirmation | "Reordering changes what existing filters match." |
 | Toast — created | "Added to the library" |
 | Toast — archived | "Criteria archived" |
 | Toast — restored | "Criteria restored" |
 | Empty categories | "No categories yet. Add one when you create a vacancy." |
 | Empty criteria | "No criteria yet. Add one during an interview." |
+| No categories match | "No categories match this search." |
+| No criteria match | "No criteria match this search." |
+| Libraries failed to load | "We couldn't load the libraries. Try again." |
+
+The toast table stops at created, archived and restored on purpose: those are the changes
+this screen cannot show — a new entry lands somewhere in an alphabetical order, possibly
+off-screen, and an archived criterion is still on the page looking almost as it did —
+while a rename, an edit or a delete announces itself by the row changing in front of the
+reader.
 
 ## UI Notes
 
-- Both libraries live on one settings screen, categories above criteria.
-- Usage counts are shown on every row — they are what makes a delete or archive decision
-  answerable.
-- Archived criteria sort below active ones and carry an "Archived" badge.
-- Scale values render as an ordered, draggable row of chips, worst to best, with the direction
-  stated in the label.
+- Both libraries live on one settings screen, titled **Libraries**, as the two tabs of the
+  product's standard list layout — toolbar with the strip, a search over the open tab and
+  the tab's primary action, over a table. Categories is the first tab because it is the
+  simpler library and the more frequently touched.
+- Usage counts are part of every row — they are what makes a delete or archive decision
+  answerable. A category's count lives in its `Vacancies` cell's accessible name, since
+  the cell paints the titles themselves.
+- Row actions live in a kebab, as on every other list: the blocked criterion `Delete`
+  stays in the menu, disabled, with its reason drawn under the label in the row.
+- Both deletes confirm; both confirmations stay up while the request runs.
+- Archived criteria sort below active ones, recede to 70% and carry an "Archived" badge;
+  the row's menu — the way back — never fades with it.
+- Scale values render inline under the criterion's name as an ordered list joined by `›`,
+  and in the dialog as an ordered, draggable row of chips, worst to best, with the
+  direction stated in the label.
 - Required `data-testid` attributes:
-  - `hiring-settings`
+  - `hiring-settings`, `libraries-tabs`,
+    `libraries-tab-categories`, `libraries-tab-criteria`, `libraries-loading`,
+    `categories-search-input`, `criteria-search-input`, `categories-merge-note`
   - `categories-list`, `category-row-{id}`, `category-name-{id}`, `category-usage-{id}`,
-    `category-rename-{id}`, `category-delete-{id}`, `category-new-button`,
-    `category-delete-confirm`, `categories-empty`
+    `category-actions-{id}`, `category-rename-{id}`, `category-delete-{id}`,
+    `category-new-button`, `category-delete-confirm`, `category-delete-confirm-button`,
+    `categories-empty`, `categories-no-results`
   - `criteria-list`, `criterion-row-{id}`, `criterion-name-{id}`, `criterion-type-{id}`,
-    `criterion-values-{id}`, `criterion-usage-{id}`, `criterion-edit-{id}`,
-    `criterion-archive-{id}`, `criterion-restore-{id}`, `criterion-archived-badge-{id}`,
-    `criteria-empty`
+    `criterion-values-{id}`, `criterion-usage-{id}`, `criterion-actions-{id}`,
+    `criterion-edit-{id}`, `criterion-archive-{id}`, `criterion-restore-{id}`,
+    `criterion-delete-{id}`, `criterion-delete-guard-{id}`, `criterion-delete-confirm`,
+    `criterion-delete-confirm-button`, `criterion-archived-badge-{id}`, `criteria-empty`,
+    `criteria-no-results`
   - `criterion-dialog`, `criterion-name-input`, `criterion-type-{type}`,
     `criterion-value-input-{index}`, `criterion-value-add`, `criterion-value-remove-{index}`,
     `criterion-reorder-confirm`, `criterion-submit-button`
-  - `library-error-banner`, `toast-library-created`, `toast-criteria-archived`
+  - `library-error-banner`, `libraries-retry`, `toast-library-created`,
+    `toast-criteria-archived`, `toast-criteria-restored`, `toast-library-error`
 
 ## Out of Scope
 
@@ -471,20 +514,23 @@ Errors:
 - **Level:** E2E
 - **Preconditions:** logged in as `admin`; one criterion with assessments and one without.
 - **Steps:**
-  1. Open Libraries and inspect both rows.
+  1. Open Libraries, switch to the Criteria tab, and open both rows' menus.
   2. Archive the used one, then restore it.
+  3. Delete the unused one.
 - **Expected Result:**
-  1. The used criterion offers Archive and a disabled delete with its assessment count; the unused one can be deleted.
+  1. The used criterion's menu offers Archive and a disabled Delete with its reason —
+     naming the assessment count — drawn in the row; the unused one's Delete is live.
   2. Archiving shows the badge; restoring removes it and returns the criterion to the autocomplete.
-- **Selectors:** `criterion-row-{id}`, `criterion-usage-{id}`, `criterion-archive-{id}`, `criterion-archived-badge-{id}`, `criterion-restore-{id}`.
+  3. The delete confirms — stating that no assessments go with it — and the row vanishes.
+- **Selectors:** `libraries-tab-criteria`, `criterion-row-{id}`, `criterion-usage-{id}`, `criterion-actions-{id}`, `criterion-delete-{id}`, `criterion-delete-guard-{id}`, `criterion-archive-{id}`, `criterion-archived-badge-{id}`, `criterion-restore-{id}`, `criterion-delete-confirm-button`.
 
 ### TC-H06-E2E-04: Reordering a scale warns before it changes filter results
 - **Level:** E2E
 - **Preconditions:** logged in as `admin`; a scale criterion with assessments.
 - **Steps:**
-  1. Open the criterion for editing and drag a value to a new position.
+  1. Open the criterion for editing from its row's menu and drag a value to a new position.
   2. Save.
 - **Expected Result:**
   1. A confirmation states that existing filters will match differently.
   2. Cancelling leaves the order untouched; confirming saves the new order.
-- **Selectors:** `criterion-edit-{id}`, `criterion-values-{id}`, `criterion-reorder-confirm`.
+- **Selectors:** `criterion-actions-{id}`, `criterion-edit-{id}`, `criterion-values-{id}`, `criterion-reorder-confirm`.

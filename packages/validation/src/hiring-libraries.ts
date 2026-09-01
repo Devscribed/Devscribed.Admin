@@ -31,8 +31,12 @@ export const LIBRARY_MESSAGES = {
     required: 'Name is required',
     tooLong: `Name must be at most ${LIBRARY_LIMITS.nameMax} characters`,
   },
+  /** The settings screen's one whole-page failure, with the retry beside it. */
+  loadFailed: "We couldn't load the libraries. Try again.",
   category: {
     empty: 'No categories yet. Add one when you create a vacancy.',
+    /** A search that matched nothing, on a library that holds something. */
+    noResults: 'No categories match this search.',
     /**
      * 06 §01.5 asks for the consequence of shipping uniqueness without merge to be
      * stated on the screen rather than discovered: with rename refusing a name that
@@ -50,10 +54,15 @@ export const LIBRARY_MESSAGES = {
      */
     unknown: 'One of those categories no longer exists',
   },
+  /**
+   * The only toast either library raises for a category. 06's table stops here on
+   * purpose, and the desktop design kept it there: a renamed or deleted row announces
+   * itself by changing in front of the reader, and a toast on top of that is the same
+   * fact said twice. Created is different — a new entry lands somewhere in an
+   * alphabetical list, and may land off-screen.
+   */
   toast: {
     created: 'Added to the library',
-    renamed: 'Category renamed',
-    deleted: 'Category deleted',
   },
 } as const;
 
@@ -77,6 +86,42 @@ export const categoryUsageLabel = (count: number): string =>
 /** `Delete "React"? It's used by 4 vacancies.` — there is no undo, and it does not pretend. */
 export const categoryDeleteConfirmation = (name: string, count: number): string =>
   `Delete "${name}"? It's used by ${categoryUsageLabel(count)}.`;
+
+/**
+ * The Vacancies cell's accessible name — `Used by 2 vacancies: One, Two`.
+ *
+ * The cell prints whole titles and folds the rest into a `+N`, so the count that makes
+ * the delete decision answerable is not painted at all; this is where it lives instead,
+ * with every title behind the fold spelled out (06 §UI Notes).
+ */
+export const categoryUsageDescription = (count: number, titles: readonly string[]): string =>
+  count === 0
+    ? 'Not used by any vacancy'
+    : `Used by ${categoryUsageLabel(count)}: ${titles.join(', ')}`;
+
+/**
+ * The kebab's accessible name — `Actions for React`, `Actions for English`.
+ *
+ * The same rule as every other list's kebab: each row draws the same glyph, so without
+ * the entry's name a reader walking the column hears "Actions, menu" once per row.
+ */
+export const libraryActionsLabel = (name: string): string => `Actions for ${name}`;
+
+/** The settings screen's two tabs — the two libraries, not two slices of one list. */
+export const LIBRARY_TABS = ['categories', 'criteria'] as const;
+export type LibraryTab = (typeof LIBRARY_TABS)[number];
+
+/**
+ * `Categories (4)` · `Criteria (7)` — each label carries its whole library's size.
+ *
+ * Unlike the vacancy strip these counts ignore the search, because the search is not
+ * shared across the strip: it resets when the tab changes, so each label describes
+ * exactly what pressing its tab shows. The vacancy rule — vary only the dimension the
+ * strip selects — reads the same way here; the strip selects a library, and a search
+ * over one library says nothing about the other.
+ */
+export const libraryTabLabel = (tab: LibraryTab, count: number): string =>
+  `${tab === 'categories' ? 'Categories' : 'Criteria'} (${count})`;
 
 /* ------------------------------------------------------------------ *
  * Names
@@ -189,6 +234,7 @@ export const CRITERION_LIMITS = {
 
 export const CRITERION_MESSAGES = {
   empty: 'No criteria yet. Add one during an interview.',
+  noResults: 'No criteria match this search.',
   type: {
     required: 'Choose a type',
     /**
@@ -226,14 +272,16 @@ export const CRITERION_MESSAGES = {
     reorderConfirmation: 'Reordering changes what existing filters match.',
   },
   archivedBadge: 'Archived',
+  /**
+   * 06's toast table stops at archived and restored (plus the shared "Added to the
+   * library"), and the desktop design kept it there: these two are the changes the row
+   * cannot show — an archived criterion is still on the screen, looking almost exactly
+   * as it did — while an edit or a delete announces itself by the row changing in front
+   * of the reader.
+   */
   toast: {
     archived: 'Criteria archived',
     restored: 'Criteria restored',
-    /** Not in 06's table, which names only the three above — nor is the categories
-     *  screen's "Category renamed", and for the same reason: an edit that reported
-     *  nothing would leave a member unsure whether it took. */
-    updated: 'Criteria updated',
-    deleted: 'Criteria deleted',
   },
 } as const;
 
@@ -247,6 +295,14 @@ export const criterionUsageLabel = (count: number): string =>
 /** `Archive this instead — it has 18 assessments` — why Delete is disabled. */
 export const criterionDeleteBlockedMessage = (count: number): string =>
   `Archive this instead — it has ${criterionUsageLabel(count)}`;
+
+/**
+ * Only ever asked about a criterion with zero assessments — the menu item is disabled
+ * otherwise — so the sentence can say why this delete, unlike a category's, has no
+ * count to weigh: there is nothing recorded against it to lose.
+ */
+export const criterionDeleteConfirmation = (name: string): string =>
+  `Delete "${name}"? No assessments are recorded against it, so nothing else is affected.`;
 
 /** `"A2" is used by 2 assessments` — why one chip's remove control is disabled. */
 export const valueInUseMessage = (label: string, count: number): string =>

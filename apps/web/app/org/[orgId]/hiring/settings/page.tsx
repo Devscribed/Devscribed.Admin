@@ -8,52 +8,44 @@ import {
   LIBRARY_MESSAGES,
   SCALE_SEPARATOR,
   categoryDeleteConfirmation,
-  categoryUsageLabel,
+  categoryUsageDescription,
   criterionDeleteBlockedMessage,
+  criterionDeleteConfirmation,
   criterionUsageLabel,
+  libraryActionsLabel,
+  libraryTabLabel,
   MESSAGES,
+  type LibraryTab,
 } from '@devscribed/validation';
 import {
   Badge,
   Button,
   Card,
-  Chip,
   ConfirmDialog,
+  EmptyState,
   FormActions,
   InfoBanner,
   Modal,
   Popover,
   Preloader,
+  Table,
+  TableToolbar,
   TextInput,
+  Toast,
+  ToastHost,
 } from '@/ds';
 import { PageHeader } from '@/layout/PageHeader';
 import { CriterionDialog } from '@/hiring/CriterionDialog';
+import { useToasts } from '@/hiring/useToasts';
 import type { Category, Criterion } from '@/hiring/types';
-import { useMediaQuery } from '@/hiring/useMediaQuery';
 
-type State =
-  | { status: 'loading' }
-  | { status: 'ready'; categories: Category[]; criteria: Criterion[] }
-  | { status: 'gone' };
+type Phase = 'loading' | 'ready' | 'failed' | 'gone';
 
-/** Below this the row's two buttons become one menu (06 design §Responsive). */
-const NARROW = '(max-width: 767px)';
+/** The same 300 ms every other search in the product debounces by. */
+const SEARCH_DEBOUNCE_MS = 300;
 
 /** Absent id creates; present id renames. One dialog, because it is one field. */
 type Editing = { id: string | null; name: string };
-
-/**
- * One announcement, in the slot reversal 4 gave every screen: directly under the header the
- * action was taken from. The ids are the ones the suite already knows these by — they named
- * a `Toast` when there was one to name; what they identify now is this banner.
- */
-type Notice = { message: string; variant: 'success' | 'error'; testId: string };
-
-const failure = (message: string): Notice => ({
-  message,
-  variant: 'error',
-  testId: 'library-error-banner',
-});
 
 /**
  * Libraries — the maintenance inline creation cannot do.
@@ -63,58 +55,92 @@ const failure = (message: string): Notice => ({
  * there rather than at the buttons on this page. What lives here is renaming, archiving
  * and deleting, and the usage counts that make those decisions rather than guesses.
  *
- * Categories come first because they are the simpler of the two and the more frequently
- * touched. Criteria are the ones with structure, and the ones where the decision is
- * archive-versus-delete rather than delete-or-not — which is why their count is the more
- * load-bearing of the two.
+ * The body is the product's own list-screen row — the toolbar with its strip, search and
+ * primary action over a table whose rows act through a kebab — because that is what every
+ * other list in the module became, and two lists stacked as cards had this screen reading
+ * as the one place the layout was from somewhere else. The two libraries are the two
+ * tabs: they were never two halves of one page so much as two pages sharing mechanics.
+ *
+ * Unlike the vacancy strip, the tab counts ignore the search. The search is not shared
+ * across the strip — it resets on a switch, since a term typed over categories means
+ * nothing over criteria — so each label carries its whole library's size, which is
+ * exactly what pressing its tab shows.
  */
 export default function HiringSettingsPage({ params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = use(params);
-  const [state, setState] = useState<State>({ status: 'loading' });
+  const [phase, setPhase] = useState<Phase>('loading');
+  /** A request is in flight over rows that are already on screen (ledger §34). */
+  const [refreshing, setRefreshing] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [criteria, setCriteria] = useState<Criterion[]>([]);
+
+  const [tab, setTab] = useState<LibraryTab>('categories');
+  const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
+
   const [editing, setEditing] = useState<Editing | null>(null);
   const [fieldError, setFieldError] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState<Category | null>(null);
+  const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
+  const [deletingCriterion, setDeletingCriterion] = useState<Criterion | null>(null);
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<Notice | null>(null);
   /** Absent is closed; a present `criterion` edits, an absent one creates. */
   const [criterionDialog, setCriterionDialog] = useState<{ criterion?: Criterion } | null>(null);
-  const narrow = useMediaQuery(NARROW);
+  const { toasts, push, dismiss } = useToasts();
+
+  // Typing debounces; the tabs do not, because a click is already a deliberate act.
+  useEffect(() => {
+    const timer = setTimeout(() => setQuery(search), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const load = useCallback(async (): Promise<void> => {
-    const [categories, criteria] = await Promise.all([
-      fetch(`/api/organizations/${orgId}/hiring/categories`, { credentials: 'same-origin' }),
-      // Archived criteria included: this is the screen that restores them, and one that
-      // could not show an archived criterion could not offer the way back (06 §03.19).
-      fetch(`/api/organizations/${orgId}/hiring/criteria?includeArchived=true`, {
-        credentials: 'same-origin',
-      }),
-    ]);
+    setRefreshing(true);
+    try {
+      const [categoriesRes, criteriaRes] = await Promise.all([
+        fetch(`/api/organizations/${orgId}/hiring/categories`, { credentials: 'same-origin' }),
+        // Archived criteria included: this is the screen that restores them, and one that
+        // could not show an archived criterion could not offer the way back (06 §03.19).
+        fetch(`/api/organizations/${orgId}/hiring/criteria?includeArchived=true`, {
+          credentials: 'same-origin',
+        }),
+      ]);
 
-    // `user` and `viewer` never saw the sidebar row, so a direct navigation is the only
-    // way to arrive here — and the honest answer to it is the not-found state.
-    if ([categories.status, criteria.status].some((status) => status === 403 || status === 404)) {
-      setState({ status: 'gone' });
-      return;
+      // `user` and `viewer` never saw the sidebar row, so a direct navigation is the only
+      // way to arrive here — and the honest answer to it is the not-found state.
+      if (
+        [categoriesRes.status, criteriaRes.status].some(
+          (status) => status === 403 || status === 404,
+        )
+      ) {
+        setPhase('gone');
+        return;
+      }
+      if (!categoriesRes.ok || !criteriaRes.ok) {
+        setPhase('failed');
+        return;
+      }
+      setCategories((await categoriesRes.json()).categories);
+      setCriteria((await criteriaRes.json()).criteria);
+      setPhase('ready');
+    } catch {
+      setPhase('failed');
+    } finally {
+      setRefreshing(false);
     }
-    if (!categories.ok || !criteria.ok) {
-      setNotice(failure(MESSAGES.generic));
-      return;
-    }
-    setState({
-      status: 'ready',
-      categories: (await categories.json()).categories,
-      criteria: (await criteria.json()).criteria,
-    });
   }, [orgId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  async function save(): Promise<void> {
+  if (phase === 'gone') notFound();
+
+  const failed = (message?: string): void =>
+    push({ message: message ?? MESSAGES.generic, tone: 'error', testId: 'toast-library-error' });
+
+  async function saveCategory(): Promise<void> {
     if (!editing || busy) return;
     setBusy(true);
-    setNotice(null);
     try {
       const renaming = editing.id !== null;
       const response = await fetch(
@@ -131,11 +157,16 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
         setEditing(null);
         setFieldError(null);
         await load();
-        setNotice(
-          renaming
-            ? { message: LIBRARY_MESSAGES.toast.renamed, variant: 'success', testId: 'toast-library-renamed' }
-            : { message: LIBRARY_MESSAGES.toast.created, variant: 'success', testId: 'toast-library-created' },
-        );
+        // Created is the one change this list cannot show — a new entry lands somewhere
+        // in an alphabetical order, possibly off-screen. A rename changes its row in
+        // front of the reader and gets no announcement (06 §Error Messages).
+        if (!renaming) {
+          push({
+            message: LIBRARY_MESSAGES.toast.created,
+            tone: 'success',
+            testId: 'toast-library-created',
+          });
+        }
         return;
       }
 
@@ -144,49 +175,44 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
       // the message the server sends is the one shown, never a guess at it.
       if (body.error === 'duplicate_name') setFieldError(body.message);
       else if (body.error === 'validation') setFieldError(body.fields?.name ?? MESSAGES.generic);
-      else setNotice(failure(body.message ?? MESSAGES.generic));
+      else failed(body.message);
     } catch {
-      setNotice(failure(MESSAGES.generic));
+      failed();
     } finally {
       setBusy(false);
     }
   }
 
-  async function remove(category: Category): Promise<void> {
+  async function removeCategory(category: Category): Promise<void> {
     if (busy) return;
     setBusy(true);
-    setNotice(null);
     try {
       const response = await fetch(
         `/api/organizations/${orgId}/hiring/categories/${category.id}`,
         { method: 'DELETE', credentials: 'same-origin' },
       );
+      setDeletingCategory(null);
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        setNotice(failure(body.message ?? MESSAGES.generic));
-      } else {
-        setNotice({
-          message: LIBRARY_MESSAGES.toast.deleted,
-          variant: 'success',
-          testId: 'toast-library-deleted',
-        });
+        failed(body.message);
       }
       await load();
     } catch {
-      setNotice(failure(MESSAGES.generic));
+      failed();
     } finally {
       setBusy(false);
     }
   }
 
   /**
-   * Archive and restore apply immediately with an announcement and no confirmation — both
-   * are reversible, and a confirmation on a reversible action is a dialog nobody reads.
+   * Archive and restore apply immediately with a toast and no confirmation — both are
+   * reversible, and a confirmation on a reversible action is a dialog nobody reads. The
+   * toast is earned here as it is nowhere else on this screen: an archived criterion is
+   * still on the page, looking almost exactly as it did, so the change needs saying.
    */
   async function setArchived(criterion: Criterion, isArchived: boolean): Promise<void> {
     if (busy) return;
     setBusy(true);
-    setNotice(null);
     try {
       const response = await fetch(`/api/organizations/${orgId}/hiring/criteria/${criterion.id}`, {
         method: 'PATCH',
@@ -195,54 +221,118 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
         body: JSON.stringify({ isArchived }),
       });
       if (!response.ok) {
-        setNotice(failure((await response.json().catch(() => ({}))).message ?? MESSAGES.generic));
+        failed((await response.json().catch(() => ({}))).message);
       } else {
-        setNotice({
-          message: isArchived ? CRITERION_MESSAGES.toast.archived : CRITERION_MESSAGES.toast.restored,
-          variant: 'success',
+        push({
+          message: isArchived
+            ? CRITERION_MESSAGES.toast.archived
+            : CRITERION_MESSAGES.toast.restored,
+          tone: 'success',
           testId: isArchived ? 'toast-criteria-archived' : 'toast-criteria-restored',
         });
       }
       await load();
     } catch {
-      setNotice(failure(MESSAGES.generic));
+      failed();
     } finally {
       setBusy(false);
     }
   }
 
   /**
-   * Only ever reached for a criterion nobody has assessed, since the control is disabled
-   * otherwise. The 409 is still handled: the count can change between the render and the
-   * click, and answering it with the server's own message is better than a stale button.
+   * Only ever reached for a criterion nobody has assessed, since the menu item is
+   * disabled otherwise. The 409 is still handled: the count can change between the render
+   * and the click, and answering it with the server's own message is better than a stale
+   * menu row.
    */
-  async function deleteCriterion(criterion: Criterion): Promise<void> {
+  async function removeCriterion(criterion: Criterion): Promise<void> {
     if (busy) return;
     setBusy(true);
-    setNotice(null);
     try {
       const response = await fetch(`/api/organizations/${orgId}/hiring/criteria/${criterion.id}`, {
         method: 'DELETE',
         credentials: 'same-origin',
       });
+      setDeletingCriterion(null);
       if (!response.ok) {
-        setNotice(failure((await response.json().catch(() => ({}))).message ?? MESSAGES.generic));
-      } else {
-        setNotice({
-          message: CRITERION_MESSAGES.toast.deleted,
-          variant: 'success',
-          testId: 'toast-criteria-deleted',
-        });
+        failed((await response.json().catch(() => ({}))).message);
       }
       await load();
     } catch {
-      setNotice(failure(MESSAGES.generic));
+      failed();
     } finally {
       setBusy(false);
     }
   }
 
-  if (state.status === 'gone') notFound();
+  const onCategories = tab === 'categories';
+  const needle = query.trim().toLowerCase();
+  const hit = (name: string): boolean => name.toLowerCase().includes(needle);
+  const categoryRows = categories.filter((category) => hit(category.name));
+  const criterionRows = criteria.filter((criterion) => hit(criterion.name));
+  const rows = onCategories ? categoryRows.length : criterionRows.length;
+  const total = onCategories ? categories.length : criteria.length;
+
+  function categoryActions(category: Category) {
+    return [
+      {
+        key: 'rename',
+        label: 'Rename',
+        testId: `category-rename-${category.id}`,
+        onSelect: () => {
+          setEditing({ id: category.id, name: category.name });
+          setFieldError(null);
+        },
+      },
+      {
+        key: 'delete',
+        label: 'Delete',
+        danger: true,
+        testId: `category-delete-${category.id}`,
+        onSelect: () => setDeletingCategory(category),
+      },
+    ];
+  }
+
+  function criterionActions(criterion: Criterion) {
+    // Deleting an assessed criterion would destroy every judgement recorded against it,
+    // so it is disabled rather than hidden and archive is named as what to do instead —
+    // in the row, under the label, where a keyboard can reach it (ledger §22).
+    const blocked = criterion.assessmentCount > 0;
+    return [
+      {
+        key: 'edit',
+        label: 'Edit',
+        testId: `criterion-edit-${criterion.id}`,
+        onSelect: () => setCriterionDialog({ criterion }),
+      },
+      criterion.isArchived
+        ? {
+            key: 'restore',
+            label: 'Restore',
+            testId: `criterion-restore-${criterion.id}`,
+            onSelect: () => void setArchived(criterion, false),
+          }
+        : {
+            key: 'archive',
+            label: 'Archive',
+            testId: `criterion-archive-${criterion.id}`,
+            onSelect: () => void setArchived(criterion, true),
+          },
+      {
+        key: 'delete',
+        label: 'Delete',
+        danger: !blocked,
+        disabled: blocked,
+        description: blocked
+          ? criterionDeleteBlockedMessage(criterion.assessmentCount)
+          : undefined,
+        descriptionTestId: `criterion-delete-guard-${criterion.id}`,
+        testId: `criterion-delete-${criterion.id}`,
+        onSelect: () => setDeletingCriterion(criterion),
+      },
+    ];
+  }
 
   return (
     <div data-testid="hiring-settings">
@@ -254,32 +344,50 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
       <PageHeader title="Libraries" />
 
       {/*
-        Where a toast used to float. An announcement that outlives the moment it was raised
-        has to have a place on the page, and the place is directly under the header the
-        action was taken from — it pushes the page down rather than covering it, and it goes
-        away when it is dismissed or when the next one replaces it. Nothing stacks and
-        nothing auto-dismisses (reversal 4).
+        The tabs are drawn only once a response has arrived: a strip whose labels read
+        `Categories (0)` and then jumped would be the flash the shell's `/api/me` gate
+        exists to prevent, one screen further in.
       */}
-      {notice && (
-        <div style={{ marginBottom: 'var(--space-7)' }}>
-          <InfoBanner
-            variant={notice.variant}
-            role="status"
-            aria-live="polite"
-            onDismiss={() => setNotice(null)}
-            data-testid={notice.testId}
-          >
-            {notice.message}
-          </InfoBanner>
-        </div>
-      )}
-
-      {/* `clip={false}`: the narrow layout's row menus drop their list into the card. */}
-      <Card
-        clip={false}
-        title="Categories"
-        action={
+      <TableToolbar
+        tabs={
+          phase === 'ready'
+            ? [
+                {
+                  value: 'categories',
+                  label: libraryTabLabel('categories', categories.length),
+                  testId: 'libraries-tab-categories',
+                },
+                {
+                  value: 'criteria',
+                  label: libraryTabLabel('criteria', criteria.length),
+                  testId: 'libraries-tab-criteria',
+                },
+              ]
+            : undefined
+        }
+        activeTab={tab}
+        onTab={(next) => {
+          setTab(next as LibraryTab);
+          // The term belonged to the library it was typed over; carrying it across
+          // would open the other tab pre-narrowed by a search nobody made there.
+          setSearch('');
+          setQuery('');
+        }}
+        tabsLabel="Libraries"
+        tabsTestId="libraries-tabs"
+        search={search}
+        onSearch={(event) => setSearch(event.target.value)}
+        onClearSearch={() => {
+          setSearch('');
+          setQuery('');
+        }}
+        searchPlaceholder={onCategories ? 'Search categories…' : 'Search criteria…'}
+        searchLabel={onCategories ? 'Search categories' : 'Search criteria'}
+        searchTestId={onCategories ? 'categories-search-input' : 'criteria-search-input'}
+      >
+        {onCategories ? (
           <Button
+            variant="primary"
             onClick={() => {
               setEditing({ id: null, name: '' });
               setFieldError(null);
@@ -288,145 +396,164 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
           >
             New category
           </Button>
-        }
-      >
-        {state.status === 'loading' ? (
-          <LibraryLoading label="Loading categories" />
-        ) : state.categories.length === 0 ? (
-          <p
-            data-testid="categories-empty"
-            style={{ margin: 0, fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}
-          >
-            {LIBRARY_MESSAGES.category.empty}
-          </p>
         ) : (
-          <ul
-            data-testid="categories-list"
-            style={{ listStyle: 'none', margin: 0, padding: 0 }}
+          <Button
+            variant="primary"
+            onClick={() => setCriterionDialog({})}
+            data-testid="criterion-new-button"
           >
-            {state.categories.map((category) => (
-              <li
-                key={category.id}
-                data-testid={`category-row-${category.id}`}
-                className="library-row"
-              >
-                <span
-                  data-testid={`category-name-${category.id}`}
-                  style={{ flex: 1, minWidth: 0, fontSize: 'var(--font-size-base)' }}
-                >
-                  {category.name}
-                </span>
-                {/* Immediately left of the actions, so the number and the decision it
-                    governs are read together (06 design §Layout). */}
-                <span
-                  data-testid={`category-usage-${category.id}`}
-                  style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}
-                >
-                  {categoryUsageLabel(category.vacancyCount)}
-                </span>
-
-                {narrow ? (
-                  <Popover
-                    label={`Actions for ${category.name}`}
-                    items={[
-                      {
-                        key: 'rename',
-                        label: 'Rename',
-                        testId: `category-rename-${category.id}`,
-                        onSelect: () => {
-                          setEditing({ id: category.id, name: category.name });
-                          setFieldError(null);
-                        },
-                      },
-                      {
-                        key: 'delete',
-                        label: 'Delete',
-                        danger: true,
-                        testId: `category-delete-${category.id}`,
-                        onSelect: () => setDeleting(category),
-                      },
-                    ]}
-                  />
-                ) : (
-                  <span style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                    {/* Named with the entry and its usage, never a bare verb repeated
-                        down the page — the archive-versus-delete decision has to be
-                        available without sighted scanning (06 design §Accessibility). */}
-                    <Button
-                      aria-label={`Rename ${category.name}`}
-                      onClick={() => {
-                        setEditing({ id: category.id, name: category.name });
-                        setFieldError(null);
-                      }}
-                      data-testid={`category-rename-${category.id}`}
-                    >
-                      Rename
-                    </Button>
-                    <Button
-                      aria-label={`Delete ${category.name}, used by ${categoryUsageLabel(
-                        category.vacancyCount,
-                      )}`}
-                      onClick={() => setDeleting(category)}
-                      data-testid={`category-delete-${category.id}`}
-                    >
-                      Delete
-                    </Button>
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
+            New criteria
+          </Button>
         )}
+      </TableToolbar>
 
-        {/* Stated rather than discovered: with uniqueness enforced and no merge in this
-            release, a duplicate already in the library cannot be renamed away (06 §01.5). */}
+      {phase === 'failed' ? (
+        <InfoBanner variant="error" data-testid="library-error-banner">
+          {LIBRARY_MESSAGES.loadFailed}{' '}
+          <Button onClick={() => void load()} data-testid="libraries-retry">
+            Try again
+          </Button>
+        </InfoBanner>
+      ) : (
+        /*
+          One surface at every state, which is what blue's table screens do: the card gives
+          the edge-to-edge table its border and rounds its first and last rows, and the
+          loader and both empty messages sit inside it rather than replacing it. The row
+          kebab opens inside it too, but the DS `Popover` portals its menu (ledger §55),
+          so nothing it raises is clipped by the surface it was opened from.
+        */
+        <Card padded={false} data-testid={onCategories ? 'categories-list' : 'criteria-list'}>
+          {phase === 'loading' && (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-7)' }}>
+              {/* The dots carry no text, so the announcement is made beside them. */}
+              <Preloader data-testid="libraries-loading" aria-hidden />
+              <span aria-live="polite" style={VISUALLY_HIDDEN}>
+                Loading libraries
+              </span>
+            </div>
+          )}
+
+          {phase === 'ready' && rows > 0 && onCategories && (
+            <Table<Category>
+              rows={categoryRows}
+              /* A refetch after an action dims the rows in place rather than replacing
+                 them with a loader (ledger §34). */
+              busy={refreshing}
+              rowKey="id"
+              rowTestId={(row) => `category-row-${row.id}`}
+              columns={[
+                {
+                  label: 'Name',
+                  render: (row) => (
+                    <span data-testid={`category-name-${row.id}`} style={ELLIPSIS}>
+                      {row.name}
+                    </span>
+                  ),
+                },
+                {
+                  label: 'Vacancies',
+                  flex: 3,
+                  align: 'flex-start',
+                  render: (row) => <VacanciesCell category={row} />,
+                },
+                {
+                  label: 'Actions',
+                  render: (row) => (
+                    <Popover
+                      label={libraryActionsLabel(row.name)}
+                      data-testid={`category-actions-${row.id}`}
+                      items={categoryActions(row)}
+                    />
+                  ),
+                },
+              ]}
+            />
+          )}
+
+          {phase === 'ready' && rows > 0 && !onCategories && (
+            <Table<Criterion>
+              rows={criterionRows}
+              busy={refreshing}
+              rowKey="id"
+              rowTestId={(row) => `criterion-row-${row.id}`}
+              columns={[
+                {
+                  label: 'Name',
+                  flex: 2.6,
+                  render: (row) => <CriterionNameCell criterion={row} />,
+                },
+                {
+                  // Plain text, like Role or Status in blue's own tables — a chip here
+                  // would read as a label on the criterion rather than this column's
+                  // value, and the words are the radio group's, so the row and the
+                  // dialog call a type by one name.
+                  label: 'Type',
+                  align: 'flex-start',
+                  render: (row) => (
+                    <span data-testid={`criterion-type-${row.id}`} style={receded(row)}>
+                      {CRITERION_TYPE_LABELS[row.type]}
+                    </span>
+                  ),
+                },
+                {
+                  label: 'Assessments',
+                  align: 'flex-start',
+                  render: (row) => (
+                    <span data-testid={`criterion-usage-${row.id}`} style={receded(row)}>
+                      {criterionUsageLabel(row.assessmentCount)}
+                    </span>
+                  ),
+                },
+                {
+                  label: 'Actions',
+                  render: (row) => (
+                    <Popover
+                      label={libraryActionsLabel(row.name)}
+                      data-testid={`criterion-actions-${row.id}`}
+                      items={criterionActions(row)}
+                    />
+                  ),
+                },
+              ]}
+            />
+          )}
+
+          {/*
+            Two different sentences for two different facts: an empty library points at
+            where its entries are actually created — inline creation is the primary path —
+            while a search that matched nothing must not be allowed to claim the library
+            is empty beside a button that would prove it wrong.
+          */}
+          {phase === 'ready' && rows === 0 && (
+            total === 0 ? (
+              <EmptyState data-testid={onCategories ? 'categories-empty' : 'criteria-empty'}>
+                {onCategories ? LIBRARY_MESSAGES.category.empty : CRITERION_MESSAGES.empty}
+              </EmptyState>
+            ) : (
+              <EmptyState
+                data-testid={onCategories ? 'categories-no-results' : 'criteria-no-results'}
+              >
+                {onCategories ? LIBRARY_MESSAGES.category.noResults : CRITERION_MESSAGES.noResults}
+              </EmptyState>
+            )
+          )}
+        </Card>
+      )}
+
+      {/* Stated rather than discovered: with uniqueness enforced and no merge in this
+          release, a duplicate already in the library cannot be renamed away (06 §01.5). */}
+      {onCategories && phase === 'ready' && (
         <p
           data-testid="categories-merge-note"
           style={{
-            margin: 'var(--space-6) 0 0',
+            margin: 'var(--space-4) 0 0',
             fontSize: 'var(--font-size-xs)',
             color: 'var(--text-secondary)',
           }}
         >
           {LIBRARY_MESSAGES.category.mergeUnavailable}
         </p>
-      </Card>
-
-      <div style={{ marginTop: 'var(--space-7)' }}>
-        <Card
-          clip={false}
-          title="Criteria"
-          action={
-            <Button onClick={() => setCriterionDialog({})} data-testid="criterion-new-button">
-              New criteria
-            </Button>
-          }
-        >
-          {state.status === 'loading' ? (
-            <LibraryLoading label="Loading criteria" />
-          ) : state.criteria.length === 0 ? (
-            <p
-              data-testid="criteria-empty"
-              style={{ margin: 0, fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}
-            >
-              {CRITERION_MESSAGES.empty}
-            </p>
-          ) : (
-            <ul data-testid="criteria-list" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-              {state.criteria.map((criterion) => (
-                <CriterionRow
-                  key={criterion.id}
-                  criterion={criterion}
-                  narrow={narrow}
-                  onEdit={() => setCriterionDialog({ criterion })}
-                  onArchive={(isArchived) => void setArchived(criterion, isArchived)}
-                  onDelete={() => void deleteCriterion(criterion)}
-                />
-              ))}
-            </ul>
-          )}
-        </Card>
-      </div>
+      )}
 
       <CriterionDialog
         orgId={orgId}
@@ -436,14 +563,17 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
         onSaved={() => {
           // The list is reloaded rather than patched: an edit can change the usage counts
           // on a scale's values, and this screen is the one that decides on them.
-          const wasEditing = criterionDialog?.criterion !== undefined;
+          const created = criterionDialog?.criterion === undefined;
           setCriterionDialog(null);
           void load();
-          setNotice({
-            message: wasEditing ? CRITERION_MESSAGES.toast.updated : LIBRARY_MESSAGES.toast.created,
-            variant: 'success',
-            testId: wasEditing ? 'toast-criteria-updated' : 'toast-library-created',
-          });
+          // An edit's row changes in front of the reader; a new entry may land off-screen.
+          if (created) {
+            push({
+              message: LIBRARY_MESSAGES.toast.created,
+              tone: 'success',
+              testId: 'toast-library-created',
+            });
+          }
         }}
       />
 
@@ -467,7 +597,7 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
             onKeyDown={(event) => {
               if (event.key !== 'Enter') return;
               event.preventDefault();
-              void save();
+              void saveCategory();
             }}
             error={fieldError ?? undefined}
             errorId="category-name-error"
@@ -480,7 +610,7 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
             <Button onClick={() => setEditing(null)}>Cancel</Button>
             <Button
               variant="primary"
-              onClick={() => void save()}
+              onClick={() => void saveCategory()}
               preloader={busy}
               data-testid="category-submit-button"
             >
@@ -491,114 +621,136 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
       </Modal>
 
       {/*
-        A yes/no whose accept is the whole action, which is what blue's `ConfirmDialog` is
-        for — the category dialog above it is a form, and stays a `Modal`. Blue paints the
-        accept primary even here; a destructive confirmation says what it is in the title
-        and the sentence, not in the button's fill.
+        Both deletes are `ConfirmDialog`s that stay up while the request runs (§41), the
+        shape every row confirmation in the module settled on in Phase 7: the last point
+        at which somebody can change their mind is not also the point the outcome stops
+        being visible. The category dialog above them is a form, and stays a `Modal`.
       */}
       <ConfirmDialog
-        open={deleting !== null}
+        open={deletingCategory !== null}
         title="Delete category?"
         description={
           <>
             {/* The count is interpolated because it is the whole reason to confirm. There
                 is no undo, and the copy does not pretend otherwise. */}
-            {deleting ? categoryDeleteConfirmation(deleting.name, deleting.vacancyCount) : null}{' '}
+            {deletingCategory
+              ? categoryDeleteConfirmation(deletingCategory.name, deletingCategory.vacancyCount)
+              : null}{' '}
             The vacancies themselves are untouched. This cannot be undone.
           </>
         }
         acceptBtnText="Delete"
         declineBtnText="Cancel"
+        busy={busy}
+        closeOnAccept={false}
         onAccept={() => {
-          if (deleting) void remove(deleting);
+          if (deletingCategory) void removeCategory(deletingCategory);
         }}
-        onClose={() => setDeleting(null)}
+        onClose={() => setDeletingCategory(null)}
         acceptTestId="category-delete-confirm-button"
         data-testid="category-delete-confirm"
       />
-    </div>
-  );
-}
 
-/** The loader's dots say nothing; this is what says it beside them. */
-function LibraryLoading({ label }: { label: string }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-7)' }}>
-      <Preloader aria-hidden />
-      <span aria-live="polite" style={VISUALLY_HIDDEN}>
-        {label}
-      </span>
+      <ConfirmDialog
+        open={deletingCriterion !== null}
+        title="Delete criteria?"
+        description={deletingCriterion ? criterionDeleteConfirmation(deletingCriterion.name) : ''}
+        acceptBtnText="Delete"
+        declineBtnText="Cancel"
+        busy={busy}
+        closeOnAccept={false}
+        onAccept={() => {
+          if (deletingCriterion) void removeCriterion(deletingCriterion);
+        }}
+        onClose={() => setDeletingCriterion(null)}
+        acceptTestId="criterion-delete-confirm-button"
+        data-testid="criterion-delete-confirm"
+      />
+
+      <ToastHost>
+        {toasts.map((toast) => (
+          <Toast
+            key={toast.id}
+            tone={toast.tone}
+            data-testid={toast.testId}
+            onDismiss={() => dismiss(toast.id)}
+          >
+            {toast.message}
+          </Toast>
+        ))}
+      </ToastHost>
     </div>
   );
 }
 
 /**
- * One criterion: name, type and actions on the first line; the scale and the usage count
- * on the second.
- *
- * Two lines rather than one because a six-value scale and a count do not fit beside a
- * name without one of them being truncated — and the count is the thing this row exists
- * to make answerable, so it is never the one that goes.
+ * Whole titles, then a `+N` for the rest — the Members table's projects cell, one name
+ * wider, because vacancy titles are long and a truncated one ("Full Stack Develop…")
+ * names nothing. The count that makes the delete decision answerable is not painted at
+ * all, so it lives in the cell's accessible name with every folded title spelled out.
  */
-function CriterionRow({
-  criterion,
-  narrow,
-  onEdit,
-  onArchive,
-  onDelete,
-}: {
-  criterion: Criterion;
-  narrow: boolean;
-  onEdit: () => void;
-  onArchive: (isArchived: boolean) => void;
-  onDelete: () => void;
-}) {
-  const usage = criterionUsageLabel(criterion.assessmentCount);
-  // Deleting an assessed criterion would destroy every judgement recorded against it, so
-  // it is disabled rather than hidden and archive is named as what to do instead.
-  const deleteBlocked = criterion.assessmentCount > 0;
-  const blockedReason = criterionDeleteBlockedMessage(criterion.assessmentCount);
-  const archiveLabel = criterion.isArchived ? 'Restore' : 'Archive';
-  const archiveTestId = criterion.isArchived
-    ? `criterion-restore-${criterion.id}`
-    : `criterion-archive-${criterion.id}`;
-
-  /*
-   * Archived rows recede rather than disappear: their assessments are still real, and this
-   * is the only screen that can bring one back.
-   *
-   * It is applied to the row's *content* rather than to the row, and that is load-bearing
-   * rather than tidy. `opacity` below 1 creates a stacking context, so an `opacity: .7` on
-   * the `<li>` traps everything inside it — including the actions `Popover`'s menu, whose
-   * `z-index: 1000` is then resolved against its own row instead of the page. The menu was
-   * painted under every row that follows it, which on the narrow layout is the only way
-   * these actions are reachable at all.
-   *
-   * Dimming the content also says the right thing: the badge naming the state and the
-   * controls that undo it are the two things on an archived row that must stay legible.
-   */
-  const receded = criterion.isArchived ? { opacity: 0.7 } : undefined;
-
+function VacanciesCell({ category }: { category: Category }) {
   return (
-    <li data-testid={`criterion-row-${criterion.id}`} className="library-row criterion-row">
-      <div className="criterion-row-head">
-        <span
-          data-testid={`criterion-name-${criterion.id}`}
-          style={{ fontSize: 'var(--font-size-base)', minWidth: 0, ...receded }}
-        >
+    <span
+      data-testid={`category-usage-${category.id}`}
+      aria-label={categoryUsageDescription(category.vacancyCount, category.vacancies)}
+      style={{ display: 'flex', alignItems: 'center', minWidth: 0, width: '100%' }}
+    >
+      {category.vacancies.length === 0 ? (
+        <span style={{ color: 'var(--text-secondary)' }}>No vacancies</span>
+      ) : (
+        <>
+          <span style={ELLIPSIS}>{category.vacancies.slice(0, 2).join(', ')}</span>
+          {category.vacancies.length > 2 && (
+            // The bubble is `MembersCell`'s, verbatim — same 32px circle, same wash.
+            <span
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                width: 32,
+                height: 32,
+                marginLeft: 10,
+                borderRadius: '50%',
+                fontSize: 12,
+                backgroundColor: 'rgba(0,0,0,0.08)',
+              }}
+            >
+              +{category.vacancies.length - 2}
+            </span>
+          )}
+        </>
+      )}
+    </span>
+  );
+}
+
+/**
+ * The name over its scale: a second line inside the title cell, the same shape the
+ * vacancies list gives a title over its category chips.
+ *
+ * Joined by ›, never commas — the separator is what says the order carries meaning, and
+ * the list around it is a real `<ol>` so the order is conveyed structurally too.
+ */
+function CriterionNameCell({ criterion }: { criterion: Criterion }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 'var(--space-1)',
+        minWidth: 0,
+        ...receded(criterion),
+      }}
+    >
+      <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 0 }}>
+        <span data-testid={`criterion-name-${criterion.id}`} style={ELLIPSIS}>
           {criterion.name}
         </span>
-        {/* `Chip`, not `Badge` — blue's `Badge` is `ActivityBadge`, and a type is a
-            classification rather than a state. The same split §20 made for a vacancy's
-            categories, one screen along. */}
-        <Chip
-          label={CRITERION_TYPE_LABELS[criterion.type]}
-          style={{ margin: 0, ...receded }}
-          data-testid={`criterion-type-${criterion.id}`}
-        />
         {criterion.isArchived && (
-          // And this one *is* a state — the two-valued kind blue's badge was measured for,
-          // in the outlined form that belongs on a row already receded to .7.
+          // A state, not a classification — the two-valued kind blue's badge was measured
+          // for, in the outlined form that belongs on a row already receded to .7.
           <Badge
             status="inactive"
             outlined
@@ -607,100 +759,48 @@ function CriterionRow({
             {CRITERION_MESSAGES.archivedBadge}
           </Badge>
         )}
-
-        <span className="criterion-row-actions">
-          {narrow ? (
-            <Popover
-              label={`Actions for ${criterion.name}`}
-              items={[
-                { key: 'edit', label: 'Edit', testId: `criterion-edit-${criterion.id}`, onSelect: onEdit },
-                {
-                  key: 'archive',
-                  label: archiveLabel,
-                  testId: archiveTestId,
-                  onSelect: () => onArchive(!criterion.isArchived),
-                },
-                {
-                  key: 'delete',
-                  label: 'Delete',
-                  danger: true,
-                  disabled: deleteBlocked,
-                  // Drawn in the row rather than left to a bubble, which no browser reaches
-                  // from a keyboard — §22, and the answer Phase 3 gave reversal 2 on the
-                  // vacancy's blocked delete. The wide layout answers it the other way, and
-                  // the design spec says why.
-                  description: deleteBlocked ? blockedReason : undefined,
-                  descriptionTestId: `criterion-delete-guard-${criterion.id}`,
-                  testId: `criterion-delete-${criterion.id}`,
-                  onSelect: onDelete,
-                },
-              ]}
-            />
-          ) : (
-            <>
-              {/* Named with the entry and its count, never a bare verb repeated down the
-                  page — the archive-versus-delete decision has to be available without
-                  sighted scanning (06 design §Accessibility). */}
-              <Button
-                aria-label={`Edit ${criterion.name}`}
-                onClick={onEdit}
-                data-testid={`criterion-edit-${criterion.id}`}
-              >
-                Edit
-              </Button>
-              <Button
-                aria-label={`${archiveLabel} ${criterion.name}, ${usage}`}
-                onClick={() => onArchive(!criterion.isArchived)}
-                data-testid={archiveTestId}
-              >
-                {archiveLabel}
-              </Button>
-              {/*
-                Blocked, and saying so as its own name. `aria-disabled` rather than the
-                `disabled` attribute, which would take the control out of the tab order and
-                the reason with it — and no bubble, because the reason already *is* what a
-                reader hears here, and the count it interpolates is drawn one line below on
-                this same row. Reversal 2's third answer, with nothing lost to it.
-              */}
-              <Button
-                aria-label={deleteBlocked ? blockedReason : `Delete ${criterion.name}, ${usage}`}
-                aria-disabled={deleteBlocked || undefined}
-                onClick={() => {
-                  if (deleteBlocked) return;
-                  onDelete();
-                }}
-                data-testid={`criterion-delete-${criterion.id}`}
-                style={deleteBlocked ? { color: 'var(--text-secondary)', opacity: 0.6 } : undefined}
-              >
-                Delete
-              </Button>
-            </>
-          )}
-        </span>
-      </div>
-
-      <div className="criterion-row-meta" style={receded}>
-        {criterion.type === 'scale' && (
-          // An ordered list, so the order is structural and not only the › glyphs.
-          <ol
-            data-testid={`criterion-values-${criterion.id}`}
-            style={{ display: 'flex', flexWrap: 'wrap', listStyle: 'none', margin: 0, padding: 0 }}
-          >
-            {criterion.values.map((value, index) => (
-              <li key={value.id}>
-                {index > 0 && <span aria-hidden="true">{SCALE_SEPARATOR}</span>}
-                {value.label}
-              </li>
-            ))}
-          </ol>
-        )}
-        <span data-testid={`criterion-usage-${criterion.id}`} style={{ marginLeft: 'auto' }}>
-          {usage}
-        </span>
-      </div>
-    </li>
+      </span>
+      {criterion.type === 'scale' && criterion.values.length > 0 && (
+        <ol
+          data-testid={`criterion-values-${criterion.id}`}
+          aria-label={`${criterion.name} values, worst to best`}
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            listStyle: 'none',
+            margin: 0,
+            padding: 0,
+            fontSize: 'var(--font-size-xs)',
+            color: 'var(--text-secondary)',
+          }}
+        >
+          {criterion.values.map((value, index) => (
+            <li key={value.id}>
+              {index > 0 && <span aria-hidden="true">{SCALE_SEPARATOR}</span>}
+              {value.label}
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
   );
 }
+
+/**
+ * Archived rows recede rather than disappear: their assessments are still real, and this
+ * is the only screen that can bring one back. The dimming sits on each cell's content and
+ * never touches the Actions cell — the badge naming the state is allowed to fade with its
+ * row, but the menu holding the way back is not.
+ */
+const receded = (criterion: Criterion): { opacity: number } | undefined =>
+  criterion.isArchived ? { opacity: 0.7 } : undefined;
+
+const ELLIPSIS = {
+  minWidth: 0,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+} as const;
 
 /** Present to a screen reader, absent to everything else. */
 const VISUALLY_HIDDEN = {

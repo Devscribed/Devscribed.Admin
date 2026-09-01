@@ -79,11 +79,16 @@ test.describe('Category library', () => {
     await expect(page.getByTestId('hiring-settings')).toBeVisible();
     await expect(page.getByTestId('page-title')).toHaveText('Libraries');
 
-    // The usage count sits beside the actions, because it is what makes deleting a
-    // decision rather than a guess.
+    // The Vacancies cell prints whole titles — a truncated one names nothing — and the
+    // count that makes deleting a decision rather than a guess lives in its accessible
+    // name, with every folded title spelled out.
     await expect(page.getByTestId(`category-name-${react.id}`)).toHaveText('Reactjs');
-    await expect(page.getByTestId(`category-usage-${react.id}`)).toHaveText('2 vacancies');
+    const usage = page.getByTestId(`category-usage-${react.id}`);
+    await expect(usage).toHaveText('One, Two');
+    await expect(usage).toHaveAttribute('aria-label', 'Used by 2 vacancies: One, Two');
 
+    // The row acts through its kebab, as on every other list in the module.
+    await page.getByTestId(`category-actions-${react.id}`).click();
     await page.getByTestId(`category-rename-${react.id}`).click();
     await page.getByTestId('category-name-input').fill('React.js');
     await page.getByTestId('category-submit-button').click();
@@ -106,6 +111,7 @@ test.describe('Category library', () => {
     await signIn(page, org.email);
 
     await page.goto(`/org/${org.organizationId}/hiring/settings`);
+    await page.getByTestId(`category-actions-${reactjs.id}`).click();
     await page.getByTestId(`category-rename-${reactjs.id}`).click();
     await page.getByTestId('category-name-input').fill('react');
     await page.getByTestId('category-submit-button').click();
@@ -131,6 +137,7 @@ test.describe('Category library', () => {
     await signIn(page, org.email);
 
     await page.goto(`/org/${org.organizationId}/hiring/settings`);
+    await page.getByTestId(`category-actions-${senior.id}`).click();
     await page.getByTestId(`category-delete-${senior.id}`).click();
 
     // The count is interpolated, and the singular is spelled out.
@@ -148,6 +155,43 @@ test.describe('Category library', () => {
     await expect(page.getByTestId('vacancy-detail')).toBeVisible();
     await expect(page.getByTestId('vacancy-detail-categories')).toHaveCount(0);
     await expect(page.getByTestId('vacancy-detail')).toContainText('Pat Owner');
+  });
+
+  test('splits the libraries into tabs, and searches only the one that is open', async ({
+    page,
+    request,
+  }) => {
+    const org = await registerOrganization(request, uniqueEmail('lib-tabs'));
+    const react = await createCategory(request, org, 'React');
+    const senior = await createCategory(request, org, 'Senior');
+    const english = await createCriterion(request, org, { name: 'English' });
+    await signIn(page, org.email);
+
+    await page.goto(`/org/${org.organizationId}/hiring/settings`);
+
+    // Each label carries its whole library's size — these are two libraries, not two
+    // slices of one list, so a search over one says nothing about the other.
+    await expect(page.getByTestId('libraries-tab-categories')).toHaveText('Categories (2)');
+    await expect(page.getByTestId('libraries-tab-criteria')).toHaveText('Criteria (1)');
+
+    await page.getByTestId('categories-search-input').fill('sen');
+    await expect(page.getByTestId(`category-row-${senior.id}`)).toBeVisible();
+    await expect(page.getByTestId(`category-row-${react.id}`)).toBeHidden();
+    // The label keeps the library's size: the search does not survive a tab switch, so
+    // the number states exactly what pressing the tab shows.
+    await expect(page.getByTestId('libraries-tab-categories')).toHaveText('Categories (2)');
+
+    // A search that matched nothing must not claim the library is empty.
+    await page.getByTestId('categories-search-input').fill('nothing matches this');
+    await expect(page.getByTestId('categories-no-results')).toHaveText(
+      'No categories match this search.',
+    );
+
+    // The term belonged to the library it was typed over; the other tab opens unfiltered.
+    await page.getByTestId('libraries-tab-criteria').click();
+    await expect(page.getByTestId(`criterion-row-${english.id}`)).toBeVisible();
+    await page.getByTestId('libraries-tab-categories').click();
+    await expect(page.getByTestId(`category-row-${react.id}`)).toBeVisible();
   });
 
   test('points an empty library at where categories are actually created', async ({
@@ -264,15 +308,21 @@ test.describe('Criteria library', () => {
 
     await signIn(page, org.email);
     await page.goto(`/org/${org.organizationId}/hiring/settings`);
+    // The two libraries are the toolbar's two tabs; criteria is the second.
+    await page.getByTestId('libraries-tab-criteria').click();
 
     // The count is what makes the decision answerable, so it is on the row.
     await expect(page.getByTestId(`criterion-usage-${english.id}`)).toHaveText('1 assessment');
     await expect(page.getByTestId(`criterion-values-${english.id}`)).toHaveText('A1 › A2 › B1');
 
-    // Disabled rather than hidden, and the reason names archive as the alternative.
+    // Disabled rather than hidden, and the reason names archive as the alternative —
+    // drawn in the menu row itself, where a keyboard can reach it.
+    await page.getByTestId(`criterion-actions-${english.id}`).click();
     const blocked = page.getByTestId(`criterion-delete-${english.id}`);
     await expect(blocked).toHaveAttribute('aria-disabled', 'true');
-    await expect(blocked).toHaveAccessibleName('Archive this instead — it has 1 assessment');
+    await expect(page.getByTestId(`criterion-delete-guard-${english.id}`)).toHaveText(
+      'Archive this instead — it has 1 assessment',
+    );
 
     await page.getByTestId(`criterion-archive-${english.id}`).click();
     await expect(page.getByTestId('toast-criteria-archived')).toBeVisible();
@@ -288,12 +338,20 @@ test.describe('Criteria library', () => {
     // Restoring returns it to the autocomplete — archiving is reversible, which is the
     // whole reason it exists instead of a delete.
     await page.goto(`/org/${org.organizationId}/hiring/settings`);
+    await page.getByTestId('libraries-tab-criteria').click();
+    await page.getByTestId(`criterion-actions-${english.id}`).click();
     await page.getByTestId(`criterion-restore-${english.id}`).click();
     await expect(page.getByTestId('toast-criteria-restored')).toBeVisible();
     await expect(page.getByTestId(`criterion-archived-badge-${english.id}`)).toBeHidden();
 
-    // One with no assessments is deleted outright.
+    // One with no assessments is deleted outright — behind a confirmation, because there
+    // is no undo, and the sentence says why this delete has no count to weigh.
+    await page.getByTestId(`criterion-actions-${unused.id}`).click();
     await page.getByTestId(`criterion-delete-${unused.id}`).click();
+    await expect(page.getByTestId('criterion-delete-confirm')).toContainText(
+      'Delete "Unused"? No assessments are recorded against it, so nothing else is affected.',
+    );
+    await page.getByTestId('criterion-delete-confirm-button').click();
     await expect(page.getByTestId(`criterion-row-${unused.id}`)).toBeHidden();
   });
 
@@ -309,7 +367,9 @@ test.describe('Criteria library', () => {
     });
     await signIn(page, org.email);
     await page.goto(`/org/${org.organizationId}/hiring/settings`);
+    await page.getByTestId('libraries-tab-criteria').click();
 
+    await page.getByTestId(`criterion-actions-${english.id}`).click();
     await page.getByTestId(`criterion-edit-${english.id}`).click();
     await expect(page.getByTestId('criterion-dialog')).toBeVisible();
     // Type is absent from the edit dialog entirely, not disabled — it is immutable.
@@ -336,6 +396,7 @@ test.describe('Criteria library', () => {
     await expect(page.getByTestId(`criterion-values-${english.id}`)).toHaveText('A1 › A2 › B1');
 
     // Confirming saves it.
+    await page.getByTestId(`criterion-actions-${english.id}`).click();
     await page.getByTestId(`criterion-edit-${english.id}`).click();
     await page.getByTestId('criterion-value-handle-2').focus();
     await page.keyboard.press(' ');
@@ -356,7 +417,9 @@ test.describe('Criteria library', () => {
     const english = await createCriterion(request, org, { name: 'English', values: ['A1', 'B1'] });
     await signIn(page, org.email);
     await page.goto(`/org/${org.organizationId}/hiring/settings`);
+    await page.getByTestId('libraries-tab-criteria').click();
 
+    await page.getByTestId(`criterion-actions-${english.id}`).click();
     await page.getByTestId(`criterion-edit-${english.id}`).click();
     await page.getByTestId(`criterion-value-remove-1`).click();
     await page.getByTestId('criterion-value-add').fill('B1 (intermediate)');
@@ -378,6 +441,7 @@ test.describe('Criteria library', () => {
     await signIn(page, org.email);
 
     await page.goto(`/org/${org.organizationId}/hiring/settings`);
+    await page.getByTestId('libraries-tab-criteria').click();
 
     // Inline creation is the primary path, so the copy points at an interview rather than
     // at the button on this screen.

@@ -24,6 +24,12 @@ export interface PresentedCategory {
   id: string;
   name: string;
   vacancyCount: number;
+  /**
+   * The titles behind the count, alphabetical. The settings screen prints the first two
+   * and folds the rest into a `+N` — a truncated title names nothing, so the row shows
+   * whole ones and the count stays in the accessible name (06 §UI Notes).
+   */
+  vacancies: string[];
 }
 
 /**
@@ -45,18 +51,14 @@ export class CategoriesService {
   async list(organizationId: string): Promise<PresentedCategory[]> {
     const categories = await this.prisma.category.findMany({
       where: { organizationId },
-      include: { _count: { select: { vacancies: true } } },
+      include: { vacancies: { select: { vacancy: { select: { title: true } } } } },
     });
 
     // Sorted here rather than in the query: Postgres orders by the collation's rules,
     // which puts every capitalized name before every lowercase one — so `asp.net` would
     // sort below `Senior` in a list somebody is scanning alphabetically for a name.
     return categories
-      .map((category) => ({
-        id: category.id,
-        name: category.name,
-        vacancyCount: category._count.vacancies,
-      }))
+      .map((category) => this.present(category))
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
   }
 
@@ -68,7 +70,7 @@ export class CategoriesService {
       this.scoped(organizationId).recoverFromRace(error, name, duplicateNameMessage),
     );
 
-    return { id: category.id, name: category.name, vacancyCount: 0 };
+    return { id: category.id, name: category.name, vacancyCount: 0, vacancies: [] };
   }
 
   /**
@@ -82,7 +84,7 @@ export class CategoriesService {
   ): Promise<PresentedCategory> {
     const existing = await this.prisma.category.findFirst({
       where: { id: categoryId, organizationId },
-      include: { _count: { select: { vacancies: true } } },
+      include: { vacancies: { select: { vacancy: { select: { title: true } } } } },
     });
     // 404 before validation, so a caller guessing ids learns nothing from the shape of
     // the error it gets back.
@@ -98,7 +100,7 @@ export class CategoriesService {
       .update({ where: { id: categoryId }, data: { name } })
       .catch((error) => names.recoverFromRace(error, name, renameCollisionMessage));
 
-    return { id: category.id, name: category.name, vacancyCount: existing._count.vacancies };
+    return this.present({ id: category.id, name: category.name, vacancies: existing.vacancies });
   }
 
   /**
@@ -200,6 +202,18 @@ export class CategoriesService {
       // thing this could collide with.
       skipDuplicates: true,
     });
+  }
+
+  /** One shape for every endpoint, with the titles in the order the screen prints them. */
+  private present(category: {
+    id: string;
+    name: string;
+    vacancies: Array<{ vacancy: { title: string } }>;
+  }): PresentedCategory {
+    const titles = category.vacancies
+      .map((assignment) => assignment.vacancy.title)
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    return { id: category.id, name: category.name, vacancyCount: titles.length, vacancies: titles };
   }
 
   /**

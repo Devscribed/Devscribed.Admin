@@ -415,6 +415,16 @@ for anyone who has the description too. So the reversal's three answers are now 
 thing that decided every one of them was not the component but **whether the screen had somewhere
 to say it**.
 
+**The desktop pass then removed the site that had nowhere.** The accepted regression above was
+accepted because the wide layout drew the criterion's actions as three buttons, and a button has
+no second line. The libraries screen now acts through a §22 menu at every width — the same
+standard row as every other list — so the blocked `Delete` carries its reason as visible text in
+its own row, wired as its `aria-describedby`, and that regression is no longer accepted because
+nothing regresses. The scale editor's middle answer stands untouched. The design source draws a
+`Tooltip` at both of this screen's blocked controls and names the component as its gap #4; it
+ends the whole effort unconsumed, every site having had — or having been given — a place on the
+screen to say the same thing better.
+
 ### A note on §8 and nested `Escape`
 
 §8 handled `Escape` in the same `document` capture listener as the `Tab` trap. Capture was right

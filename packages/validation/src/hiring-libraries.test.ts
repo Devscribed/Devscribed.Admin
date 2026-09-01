@@ -5,12 +5,15 @@ import {
   LIBRARY_MESSAGES,
   SCALE_SEPARATOR,
   categoryDeleteConfirmation,
+  categoryUsageDescription,
   categoryUsageLabel,
   criterionDeleteBlockedMessage,
+  criterionDeleteConfirmation,
   criterionUsageLabel,
   duplicateNameMessage,
   findLibraryDuplicate,
   libraryNameKey,
+  libraryTabLabel,
   moveValue,
   newLibraryNames,
   normalizeLibraryName,
@@ -145,6 +148,19 @@ describe('messages', () => {
     expect(categoryDeleteConfirmation('Asp.Net', 1)).toBe(
       'Delete "Asp.Net"? It\'s used by 1 vacancy.',
     );
+  });
+
+  it('keeps the count in the cell’s accessible name, since the cell paints titles instead', () => {
+    expect(categoryUsageDescription(2, ['One', 'Two'])).toBe('Used by 2 vacancies: One, Two');
+    expect(categoryUsageDescription(1, ['Senior React Engineer'])).toBe(
+      'Used by 1 vacancy: Senior React Engineer',
+    );
+    expect(categoryUsageDescription(0, [])).toBe('Not used by any vacancy');
+  });
+
+  it('names each tab with its whole library’s size', () => {
+    expect(libraryTabLabel('categories', 4)).toBe('Categories (4)');
+    expect(libraryTabLabel('criteria', 0)).toBe('Criteria (0)');
   });
 });
 
@@ -299,6 +315,12 @@ describe('criteria messages', () => {
     expect(criterionUsageLabel(18)).toBe('18 assessments');
     expect(criterionDeleteBlockedMessage(18)).toBe('Archive this instead — it has 18 assessments');
     expect(valueInUseMessage('A2', 2)).toBe('"A2" is used by 2 assessments');
+  });
+
+  it('says why a criterion delete, unlike a category’s, has no count to weigh', () => {
+    expect(criterionDeleteConfirmation('Unused')).toBe(
+      'Delete "Unused"? No assessments are recorded against it, so nothing else is affected.',
+    );
   });
 
   it('separates a scale with ›, which says the order means something', () => {

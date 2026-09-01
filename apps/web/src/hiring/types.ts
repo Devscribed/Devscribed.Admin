@@ -19,6 +19,8 @@ export interface Category {
   id: string;
   name: string;
   vacancyCount: number;
+  /** The titles behind the count, alphabetical — two are printed, the rest fold into `+N`. */
+  vacancies: string[];
 }
 
 export interface CriterionValue {

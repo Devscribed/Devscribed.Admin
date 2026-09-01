@@ -168,7 +168,12 @@ describe('Hiring — categories', () => {
 
     const renamed = await patch(admin, category.id, { name: 'React.js' });
     expect(renamed.status).toBe(200);
-    expect(renamed.body).toEqual({ id: category.id, name: 'React.js', vacancyCount: 3 });
+    expect(renamed.body).toEqual({
+      id: category.id,
+      name: 'React.js',
+      vacancyCount: 3,
+      vacancies: ['One', 'Three', 'Two'],
+    });
 
     for (const seeded of vacancies) {
       const body = (await vacancy(admin, seeded.id)).body;
@@ -266,7 +271,7 @@ describe('Hiring — categories', () => {
     expect(await prisma.candidate.count()).toBe(1);
     expect(await prisma.vacancy.count()).toBe(4);
     expect((await list(admin)).body.categories).toEqual([
-      { id: senior.id, name: 'Senior', vacancyCount: 1 },
+      { id: senior.id, name: 'Senior', vacancyCount: 1, vacancies: ['Senior React Engineer'] },
     ]);
   });
 
@@ -295,9 +300,9 @@ describe('Hiring — categories', () => {
     // Alphabetical regardless of case — Postgres's own collation would put every
     // capitalized name ahead of `asp.net`, which is not how anyone scans a list.
     expect((await list(admin)).body.categories).toEqual([
-      { id: asp.id, name: 'asp.net', vacancyCount: 0 },
-      { id: react.id, name: 'React', vacancyCount: 2 },
-      { id: senior.id, name: 'Senior', vacancyCount: 1 },
+      { id: asp.id, name: 'asp.net', vacancyCount: 0, vacancies: [] },
+      { id: react.id, name: 'React', vacancyCount: 2, vacancies: ['One', 'Two'] },
+      { id: senior.id, name: 'Senior', vacancyCount: 1, vacancies: ['One'] },
     ]);
   });
 
@@ -491,7 +496,7 @@ describe('Hiring — categories', () => {
 
     // The library is exactly as it was.
     expect((await list(admin)).body.categories).toEqual([
-      { id: category.id, name: 'React', vacancyCount: 0 },
+      { id: category.id, name: 'React', vacancyCount: 0, vacancies: [] },
     ]);
   });
 
