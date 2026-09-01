@@ -7,6 +7,7 @@ import {
   CRITERION_TYPES,
   CRITERION_TYPE_LABELS,
   MESSAGES,
+  libraryNameKey,
   moveValue,
   scaleWasReordered,
   valueInUseMessage,
@@ -112,6 +113,21 @@ export function CriterionDialog({
     if (trimmed.length === 0) return;
     if (values.length >= CRITERION_LIMITS.valuesMax) {
       setValuesError(CRITERION_MESSAGES.values.tooMany);
+      return;
+    }
+    /*
+     * Refused here rather than on save. `validateCriterionValues` has always rejected a
+     * repeated label — case-insensitively, on `libraryNameKey`, which is why that key is
+     * reused rather than a local `toLowerCase` — but only the server ever ran it, so the
+     * duplicate joined the chip list and the scale came back rejected a click later with
+     * the error pointing at a field the offending value was no longer in. Its sibling
+     * `tooMany` was already checked at this point; only this one was missed.
+     *
+     * The draft survives the refusal, because the fix is to edit what was typed.
+     */
+    const key = libraryNameKey(trimmed);
+    if (values.some((row) => libraryNameKey(row.label) === key)) {
+      setValuesError(CRITERION_MESSAGES.values.duplicate);
       return;
     }
     fresh.current += 1;
@@ -523,9 +539,20 @@ function ScaleEditor({
         data-testid="criterion-value-add"
       />
 
+      {/*
+        20px, not 5. `TextInput` pins its message *below* the field rather than pushing it, so
+        anything following a field needs the 16px of clearance that slot occupies — 20px is the
+        first step of blue's scale that gives it, which is the call the token map recorded for
+        `--sp-7` and every other form in the app already makes with its `--space-7` row gap.
+        At 5px the duplicate-value error landed on top of this sentence.
+      */}
       <p
         id="criterion-values-hint"
-        style={{ margin: '5px 0 0', fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}
+        style={{
+          margin: 'var(--space-7) 0 0',
+          fontSize: 'var(--font-size-xs)',
+          color: 'var(--text-secondary)',
+        }}
       >
         Press Space on a handle to pick a value up, arrows to move it, Space to drop,
         Escape to cancel.

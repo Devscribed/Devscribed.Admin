@@ -158,7 +158,10 @@ export function Popover({
                   /* ActionsPopover sets no font-size on its rows, so they inherit the context:
                      14px inside a table cell (.fBodyCell), 16px in the navbar's AccountMenu. */
                   padding: '8px 14px', fontFamily: 'var(--font-family-base)', fontSize: 'inherit',
-                  whiteSpace: item.description ? 'normal' : 'nowrap',
+                  /* §50 — the *label* never wraps. Letting the row go `normal` so its
+                     description could wrap took the label with it, and "Delete vacancy" broke
+                     across two lines in a 160px menu. Only the description wraps now. */
+                  whiteSpace: 'nowrap',
                 }}
                 onFocus={() => setActive(i)}
                 onMouseEnter={(e) => {
@@ -180,7 +183,7 @@ export function Popover({
                   <div
                     id={describedBy}
                     data-testid={item.descriptionTestId}
-                    style={{ marginTop: 2, maxWidth: 220, fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}
+                    style={{ marginTop: 2, maxWidth: 220, fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', whiteSpace: 'normal' }}
                   >
                     {item.description}
                   </div>

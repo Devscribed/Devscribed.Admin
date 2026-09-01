@@ -558,18 +558,28 @@ function CriterionRow({
     ? `criterion-restore-${criterion.id}`
     : `criterion-archive-${criterion.id}`;
 
+  /*
+   * Archived rows recede rather than disappear: their assessments are still real, and this
+   * is the only screen that can bring one back.
+   *
+   * It is applied to the row's *content* rather than to the row, and that is load-bearing
+   * rather than tidy. `opacity` below 1 creates a stacking context, so an `opacity: .7` on
+   * the `<li>` traps everything inside it — including the actions `Popover`'s menu, whose
+   * `z-index: 1000` is then resolved against its own row instead of the page. The menu was
+   * painted under every row that follows it, which on the narrow layout is the only way
+   * these actions are reachable at all.
+   *
+   * Dimming the content also says the right thing: the badge naming the state and the
+   * controls that undo it are the two things on an archived row that must stay legible.
+   */
+  const receded = criterion.isArchived ? { opacity: 0.7 } : undefined;
+
   return (
-    <li
-      data-testid={`criterion-row-${criterion.id}`}
-      className="library-row criterion-row"
-      // Archived rows recede rather than disappear: their assessments are still real, and
-      // this is the only screen that can bring one back.
-      style={criterion.isArchived ? { opacity: 0.7 } : undefined}
-    >
+    <li data-testid={`criterion-row-${criterion.id}`} className="library-row criterion-row">
       <div className="criterion-row-head">
         <span
           data-testid={`criterion-name-${criterion.id}`}
-          style={{ fontSize: 'var(--font-size-base)', minWidth: 0 }}
+          style={{ fontSize: 'var(--font-size-base)', minWidth: 0, ...receded }}
         >
           {criterion.name}
         </span>
@@ -578,7 +588,7 @@ function CriterionRow({
             categories, one screen along. */}
         <Chip
           label={CRITERION_TYPE_LABELS[criterion.type]}
-          style={{ margin: 0 }}
+          style={{ margin: 0, ...receded }}
           data-testid={`criterion-type-${criterion.id}`}
         />
         {criterion.isArchived && (
@@ -664,7 +674,7 @@ function CriterionRow({
         </span>
       </div>
 
-      <div className="criterion-row-meta">
+      <div className="criterion-row-meta" style={receded}>
         {criterion.type === 'scale' && (
           // An ordered list, so the order is structural and not only the › glyphs.
           <ol

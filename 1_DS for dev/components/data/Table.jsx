@@ -61,7 +61,14 @@ export function Table({
         <div style={{ display: 'flex', width: '100%', height: 70, padding: '0 16px', backgroundColor: 'var(--surface-sunken)', borderBottom: '1px solid var(--color-gray-lighter)', position: 'sticky', top: 0, zIndex: 1 }}>
           {cols.map((col, i) => (
             <div key={i} style={{ ...geometry(col, i, cols.length), fontWeight: 'var(--font-weight-semibold)', fontSize: 16, lineHeight: '24px' }}>
-              {col.label}
+              {/* §48 — the label truncates, as every body cell already did. The cell is a flex
+                  box, so `text-overflow` has to sit on the child rather than on the cell: an
+                  anonymous flex item is not a line box and never ellipsises. Without this a
+                  header narrower than its own word paints straight over its neighbour, which
+                  is the one place blue's table had no clipping at all. */}
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                {col.label}
+              </span>
             </div>
           ))}
         </div>
@@ -79,7 +86,15 @@ export function Table({
             data-testid={value(rowTestId, row)}
             onClick={onRowClick && !disabled ? (e) => onRowClick(row, e) : undefined}
             style={{
-              display: 'flex', width: '100%', height: 70, padding: '0 16px', alignItems: 'center',
+              /* §48 — `minHeight`, where prod measured a flat `height: 70`. Every row prod has
+                 holds one line per cell, so the two are identical there and blue's 70px is
+                 untouched. A cell of ours can hold two — a title over its category chips, a
+                 name over an email — and a fixed height does not contain that content, it lets
+                 it paint over the row beneath. The row grows instead. */
+              /* The 8px is only ever visible on a row that has grown: `box-sizing: border-box`
+                 means a one-line row is still exactly 70px, padding included. Without it a
+                 wrapped cell sits flush against both borders. */
+              display: 'flex', width: '100%', minHeight: 70, padding: '8px 16px', alignItems: 'center',
               borderBottom: '1px solid var(--color-gray-lighter)', backgroundColor: disabled ? 'var(--surface-disabled)' : '#fff',
               filter: disabled ? 'grayscale(1)' : 'none',
               /* §34 — a busy row is still a row: dimmed, still readable, still clickable. Only

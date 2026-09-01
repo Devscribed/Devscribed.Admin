@@ -80,7 +80,13 @@ export function ToggleButton({
   };
 
   return (
-    <div {...rest} style={{ position: 'relative', marginBottom: 20, maxWidth: 160, ...style }}>
+    /* §49 — `width: '100%'` beside prod's `max-width: 160px`. In prod this root is a block in a
+       stacked form, so it fills its parent and the cap is what limits it; measured as a bare
+       `max-width`, it collapses the moment a caller puts it in a flex row, because a flex item
+       sizes to content and both segments are `flex-basis: 0`. The control then shrinks to the
+       width of "24h12h" with the active segment painting over its neighbour. Restoring the
+       block behaviour costs nothing anywhere else — the cap still decides the width. */
+    <div {...rest} style={{ position: 'relative', marginBottom: 20, width: '100%', maxWidth: 160, ...style }}>
       {label && (
         /* global .input-label */
         <label id={labelId} style={{ display: 'inline-block', padding: '10px 0 0 10px', fontWeight: 'var(--font-weight-regular)', fontSize: 'var(--font-size-xs)', lineHeight: '21px', color: 'var(--text-secondary)', marginBottom: 'var(--space-1)', whiteSpace: 'nowrap', fontFamily: 'var(--font-family-base)' }}>{label}</label>
