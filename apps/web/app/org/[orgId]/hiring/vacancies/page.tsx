@@ -2,40 +2,62 @@
 
 import { notFound, useRouter } from 'next/navigation';
 import { use, useCallback, useEffect, useState } from 'react';
-import { HIRING_MESSAGES, type VacancyStatusFilter } from '@devscribed/validation';
+import {
+  HIRING_MESSAGES,
+  MESSAGES,
+  VACANCY_STATUS_FILTERS,
+  vacancyActionsLabel,
+  vacancyCloseConfirmation,
+  vacancyDeleteConfirmation,
+  vacancyStatusTabLabel,
+  type VacancyStatusFilter,
+} from '@devscribed/validation';
 import {
   Badge,
   Button,
   Card,
   Chip,
+  ConfirmDialog,
   EmptyState,
+  Popover,
   Preloader,
-  SearchInput,
-  Select,
   Table,
-  type SelectOption,
+  TableToolbar,
+  Toast,
+  ToastHost,
 } from '@/ds';
 import { PageHeader } from '@/layout/PageHeader';
-import { valueOf } from '@/hiring/select';
-import type { Vacancy } from '@/hiring/types';
+import { useToasts } from '@/hiring/useToasts';
+import type { Vacancy, VacancyList } from '@/hiring/types';
 import { VacancyDialog } from './VacancyDialog';
 
-type State = { status: 'loading' } | { status: 'ready'; vacancies: Vacancy[] } | { status: 'gone' };
+type Phase = 'loading' | 'ready' | 'gone';
 
-/** 01 §05.16 — the same 300 ms the member search already uses. */
+/** 01 §05.16 — the same 300 ms the member and candidate searches already use. */
 const SEARCH_DEBOUNCE_MS = 300;
 
-const STATUS_OPTIONS: SelectOption[] = [
-  { value: 'all', label: 'All', testId: 'vacancies-status-option-all' },
-  { value: 'open', label: 'Open', testId: 'vacancies-status-option-open' },
-  { value: 'closed', label: 'Closed', testId: 'vacancies-status-option-closed' },
-];
+/** Which of the two row confirmations is up, and about which vacancy. */
+type Pending = { action: 'close' | 'delete'; vacancy: Vacancy };
 
 /**
- * The vacancies list: search, the status filter, and the route into a vacancy.
+ * The vacancies list: the status tabs, search, and the route into a vacancy.
  *
  * Both filters run server-side. The list has no page size, so narrowing it in the
  * browser would mean fetching every vacancy in the organization to show one.
+ *
+ * **The status filter became navigation** (01 §07.18). It was a `Select` beside the
+ * search — three choices behind two clicks, none of which said how the library divides
+ * until one was made. As a tab strip it is one click, and each tab carries its own count,
+ * so the split is readable before it is pressed. The counts are computed under the
+ * search and not under the tab, which is what stops `Open (9)` standing over nine rows
+ * that a search has already ruled out.
+ *
+ * **A row acts without being opened** (01 §07.22). Five items: the two destinations a
+ * vacancy has (its board, its booking link), the edit that used to need the detail page,
+ * and the two lifecycle actions. Both blocked items — copy on a closed vacancy, delete on
+ * one with candidates — are drawn **disabled with their reason** rather than hidden: a
+ * missing action is indistinguishable from a bug, and a reason nobody can reach is the
+ * same failure one step later (ledger §22).
  *
  * `user` and `viewer` are refused by the API, and the screen renders the not-found
  * state rather than a permission error — the sidebar never offered them the row, so a
@@ -44,15 +66,22 @@ const STATUS_OPTIONS: SelectOption[] = [
 export default function VacanciesPage({ params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = use(params);
   const router = useRouter();
-  const [state, setState] = useState<State>({ status: 'loading' });
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [phase, setPhase] = useState<Phase>('loading');
+  /** A request is in flight over rows that are already on screen (ledger §34). */
+  const [refreshing, setRefreshing] = useState(false);
+  const [data, setData] = useState<VacancyList | null>(null);
+  /** Absent is closed; `{ vacancy: undefined }` creates, a vacancy edits. */
+  const [dialog, setDialog] = useState<{ vacancy?: Vacancy } | null>(null);
+  const [pending, setPending] = useState<Pending | null>(null);
+  const [busy, setBusy] = useState(false);
+  const { toasts, push, dismiss } = useToasts();
 
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<VacancyStatusFilter>('all');
 
-  // Typing debounces; the status filter does not, because a click is already a
-  // deliberate act and waiting on it would read as lag.
+  // Typing debounces; the tabs do not, because a click is already a deliberate act and
+  // waiting on it would read as lag.
   useEffect(() => {
     const timer = setTimeout(() => setQuery(search), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
@@ -64,81 +93,256 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
     if (status !== 'all') params.set('status', status);
     const suffix = params.toString() ? `?${params}` : '';
 
-    const response = await fetch(`/api/organizations/${orgId}/hiring/vacancies${suffix}`, {
-      credentials: 'same-origin',
-    });
-    if (response.status === 403 || response.status === 404) {
-      setState({ status: 'gone' });
-      return;
+    setRefreshing(true);
+    try {
+      const response = await fetch(`/api/organizations/${orgId}/hiring/vacancies${suffix}`, {
+        credentials: 'same-origin',
+      });
+      if (response.status === 403 || response.status === 404) {
+        setPhase('gone');
+        return;
+      }
+      if (!response.ok) return;
+      setData(await response.json());
+      setPhase('ready');
+    } finally {
+      setRefreshing(false);
     }
-    if (!response.ok) return;
-    const body = await response.json();
-    setState({ status: 'ready', vacancies: body.vacancies });
   }, [orgId, query, status]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  if (state.status === 'gone') notFound();
+  if (phase === 'gone') notFound();
 
-  const filtered = query.trim().length > 0 || status !== 'all';
-  const vacancies = state.status === 'ready' ? state.vacancies : [];
+  const vacancies = data?.vacancies ?? [];
+  const counts = data?.statusCounts;
+
+  /** Close and reopen are the same write with a different value (01 §03.8). */
+  async function setVacancyStatus(vacancy: Vacancy, next: 'open' | 'closed'): Promise<void> {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/organizations/${orgId}/hiring/vacancies/${vacancy.id}`, {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: next }),
+      });
+      if (!response.ok) {
+        push({ message: MESSAGES.generic, tone: 'error', testId: 'toast-vacancy-error' });
+        return;
+      }
+      setPending(null);
+      // Refetched rather than patched in place — no optimistic updates on this screen,
+      // and the tab counts move with the row.
+      await load();
+      push({
+        message:
+          next === 'closed'
+            ? HIRING_MESSAGES.toast.vacancyClosed
+            : HIRING_MESSAGES.toast.vacancyReopened,
+        tone: 'success',
+        testId: next === 'closed' ? 'toast-vacancy-closed' : 'toast-vacancy-reopened',
+      });
+    } catch {
+      push({ message: MESSAGES.generic, tone: 'error', testId: 'toast-vacancy-error' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(vacancy: Vacancy): Promise<void> {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/organizations/${orgId}/hiring/vacancies/${vacancy.id}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      });
+      setPending(null);
+      if (!response.ok) {
+        // Reachable only by a race — the item is disabled once there are applications —
+        // so the server's reason is what gets shown, not a guess at it.
+        const body = await response.json().catch(() => ({}));
+        push({
+          message: body.message ?? MESSAGES.generic,
+          tone: 'error',
+          testId: 'toast-vacancy-error',
+        });
+      } else {
+        push({
+          message: HIRING_MESSAGES.toast.vacancyDeleted,
+          tone: 'success',
+          testId: 'toast-vacancy-deleted',
+        });
+      }
+      await load();
+    } catch {
+      push({ message: MESSAGES.generic, tone: 'error', testId: 'toast-vacancy-error' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * The link is built here rather than read off the page, because the row does not draw
+   * it. A clipboard that refuses says so (01 §07.25): the detail page can select its own
+   * link text as a fallback, and a row has nothing to select.
+   */
+  async function copyLink(vacancy: Vacancy): Promise<void> {
+    const url = `${window.location.origin}/book/${vacancy.publicSlug}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      push({
+        message: HIRING_MESSAGES.toast.linkCopied,
+        tone: 'success',
+        testId: 'toast-link-copied',
+      });
+    } catch {
+      push({
+        message: HIRING_MESSAGES.vacancy.clipboardUnavailable,
+        tone: 'error',
+        testId: 'toast-link-copy-failed',
+      });
+    }
+  }
+
+  function rowActions(vacancy: Vacancy) {
+    const open = vacancy.status === 'open';
+    const { actions } = HIRING_MESSAGES.vacancy;
+    return [
+      {
+        key: 'board',
+        label: actions.board,
+        testId: `vacancy-action-board-${vacancy.id}`,
+        // Phase 8 folds the board into the vacancy detail and redirects this route, at
+        // which point this item and `vacancy-board-link` both point at the detail page —
+        // the design already draws them as one destination.
+        onSelect: () =>
+          router.push(`/org/${orgId}/hiring/vacancies/${vacancy.id}/board`),
+      },
+      {
+        key: 'copy',
+        label: actions.copyLink,
+        testId: `vacancy-action-copy-link-${vacancy.id}`,
+        // Shown and disabled, never hidden: a closed vacancy still has a link, and the
+        // reason it cannot be handed out is the thing worth saying.
+        disabled: !open,
+        description: open ? undefined : HIRING_MESSAGES.vacancy.closedLinkNote,
+        descriptionTestId: `vacancy-copy-guard-message-${vacancy.id}`,
+        onSelect: () => void copyLink(vacancy),
+      },
+      {
+        key: 'edit',
+        label: actions.edit,
+        testId: `vacancy-action-edit-${vacancy.id}`,
+        onSelect: () => setDialog({ vacancy }),
+      },
+      open
+        ? {
+            key: 'close',
+            label: actions.close,
+            testId: `vacancy-action-close-${vacancy.id}`,
+            onSelect: () => setPending({ action: 'close', vacancy }),
+          }
+        : {
+            key: 'reopen',
+            label: actions.reopen,
+            testId: `vacancy-action-reopen-${vacancy.id}`,
+            // Reopening confirms nothing: it takes nothing away, and the action that
+            // undoes it is one row up in the same menu.
+            onSelect: () => void setVacancyStatus(vacancy, 'open'),
+          },
+      {
+        key: 'delete',
+        label: actions.delete,
+        testId: `vacancy-action-delete-${vacancy.id}`,
+        danger: vacancy.deletable,
+        disabled: !vacancy.deletable,
+        // Drawn in the row rather than hidden in a `title`, which no browser reaches
+        // from a keyboard (ledger §22).
+        description: vacancy.deletable ? undefined : HIRING_MESSAGES.vacancy.deleteBlocked,
+        descriptionTestId: `vacancy-delete-guard-message-${vacancy.id}`,
+        onSelect: () => setPending({ action: 'delete', vacancy }),
+      },
+    ];
+  }
 
   return (
     <>
-      <PageHeader
-        title="Vacancies"
-        action={
-          <Button variant="primary" onClick={() => setDialogOpen(true)} data-testid="vacancy-new-button">
-            New vacancy
-          </Button>
-        }
-      />
-
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--space-5)',
-          marginBottom: 'var(--space-7)',
-          flexWrap: 'wrap',
-        }}
-      >
-        <SearchInput
-          outlined
-          placeholder="Search vacancies…"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          onClear={() => setSearch('')}
-          aria-label="Search vacancies"
-          data-testid="vacancies-search-input"
-          wrapperStyle={{ flex: 1, minWidth: 220 }}
-        />
-        <Select
-          value={STATUS_OPTIONS.find((option) => option.value === status)}
-          options={STATUS_OPTIONS}
-          onChange={(option) => setStatus(valueOf(option) as VacancyStatusFilter)}
-          aria-label="Filter by status"
-          data-testid="vacancies-status-filter"
-          wrapperStyle={{ width: 160 }}
-        />
-      </div>
+      <PageHeader title="Vacancies" />
 
       {/*
-        One surface at every state, which is what blue's table screens do and what the members
-        list already does: the card gives the edge-to-edge table its border and rounds its first
-        and last rows, and the loader and the empty message sit inside it rather than replacing
-        it. `clip` is left at its default — nothing here opens a popover inside the card.
+        Blue's own list-screen row (ledger §52), the same one the candidate database took
+        in Phase 4: the strip on the left, a 250px search and the actions on the right.
+        `New vacancy` moved off the page header and into it, because the toolbar is now
+        where everything that acts on the whole list lives.
+
+        The tabs are drawn only once a response has arrived. A strip whose labels read
+        `All (0)` and then jumped would be the flash the shell's `/api/me` gate exists to
+        prevent, one screen further in.
+      */}
+      <TableToolbar
+        tabs={
+          counts
+            ? VACANCY_STATUS_FILTERS.map((filter) => ({
+                value: filter,
+                label: vacancyStatusTabLabel(filter, counts[filter]),
+                testId: `vacancies-status-${filter}`,
+              }))
+            : undefined
+        }
+        activeTab={status}
+        onTab={(next) => setStatus(next as VacancyStatusFilter)}
+        tabsLabel={HIRING_MESSAGES.vacancy.statusTablist}
+        tabsTestId="vacancies-status-tabs"
+        search={search}
+        onSearch={(event) => setSearch(event.target.value)}
+        onClearSearch={() => setSearch('')}
+        searchPlaceholder="Search vacancies…"
+        searchLabel="Search vacancies"
+        searchTestId="vacancies-search-input"
+      >
+        <Button
+          variant="primary"
+          onClick={() => setDialog({})}
+          data-testid="vacancy-new-button"
+        >
+          New vacancy
+        </Button>
+      </TableToolbar>
+
+      {/*
+        One surface at every state, which is what blue's table screens do and what the
+        members and candidates lists already do: the card gives the edge-to-edge table its
+        border and rounds its first and last rows, and the loader and the empty message
+        sit inside it rather than replacing it.
+
+        `clip` stays at its default. The row kebab opens *inside* this card, but the DS
+        `Popover` portals its menu (ledger §55), so nothing it raises is clipped by the
+        surface it was opened from.
       */}
       <Card padded={false} data-testid="vacancies-list">
         <Table<Vacancy>
           rows={vacancies}
+          /* A refilter dims the rows in place rather than replacing them with a loader:
+             a table that collapsed and re-expanded on every keystroke would reflow the
+             page under the reader for no information at all (ledger §34). */
+          busy={refreshing && vacancies.length > 0}
           rowKey="id"
           rowHref={(row) => `/org/${orgId}/hiring/vacancies/${row.id}`}
           rowTestId={(row) => `vacancy-row-${row.id}`}
           onRowClick={(row, event) => {
             if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+            // The kebab lives inside the row, and pressing it is not opening the row.
+            // `closest` rather than a stopPropagation in the menu, because the menu is a
+            // portal (ledger §55) and its rows are not inside this anchor at all.
+            if ((event.target as HTMLElement).closest('[data-row-actions]')) {
+              event.preventDefault();
+              return;
+            }
             event.preventDefault();
             router.push(`/org/${orgId}/hiring/vacancies/${row.id}`);
           }}
@@ -202,10 +406,25 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
                 </Badge>
               ),
             },
+            {
+              label: 'Actions',
+              render: (row) => (
+                <Popover
+                  label={vacancyActionsLabel(row.title)}
+                  /* The trigger is inside the row's anchor by construction, so the row has
+                     to be told which press was not for it. `Popover` forwards rest props
+                     onto the trigger, so this marks the button itself and the handler
+                     above finds it with `closest`. */
+                  data-row-actions=""
+                  data-testid={`vacancy-actions-menu-${row.id}`}
+                  items={rowActions(row)}
+                />
+              ),
+            },
           ]}
         />
 
-        {state.status === 'loading' && (
+        {refreshing && vacancies.length === 0 && (
           <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-7)' }}>
             {/* The dots carry no text, so the announcement is made beside them. */}
             <Preloader data-testid="vacancies-loading" aria-hidden />
@@ -218,24 +437,90 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
           </div>
         )}
 
-        {state.status === 'ready' && vacancies.length === 0 && (
+        {/*
+          Driven by `total` — the whole library, narrowed by nothing — and never by a tab's
+          own count. Somebody who has twelve vacancies and searched for the thirteenth must
+          not be told they have none (01 §07.21).
+        */}
+        {phase === 'ready' && vacancies.length === 0 && (
           <EmptyState data-testid="vacancies-empty-state">
-            {filtered ? HIRING_MESSAGES.vacancy.emptyFiltered : HIRING_MESSAGES.vacancy.empty}
+            {data?.total === 0
+              ? HIRING_MESSAGES.vacancy.empty
+              : HIRING_MESSAGES.vacancy.emptyFiltered}
           </EmptyState>
         )}
       </Card>
 
       <VacancyDialog
         orgId={orgId}
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
+        open={dialog !== null}
+        vacancy={dialog?.vacancy}
+        onClose={() => setDialog(null)}
         onSaved={(vacancy) => {
-          setDialogOpen(false);
-          // The banner belongs to the destination, so it survives the navigation the
-          // spec asks for rather than being raised on a screen about to be replaced.
+          const editing = dialog?.vacancy !== undefined;
+          setDialog(null);
+          if (editing) {
+            void load();
+            push({
+              message: HIRING_MESSAGES.toast.vacancyUpdated,
+              tone: 'success',
+              testId: 'toast-vacancy-updated',
+            });
+            return;
+          }
+          // A new vacancy's banner belongs to the destination, so it survives the
+          // navigation the spec asks for rather than being raised on a screen about to
+          // be replaced.
           router.push(`/org/${orgId}/hiring/vacancies/${vacancy.id}?created=1`);
         }}
       />
+
+      {/*
+        Blue's own `ConfirmDialog`, which 01 design left open for Phase 6 and §41 answered:
+        `closeOnAccept={false}` keeps the dialog up until the server has replied, so the
+        last point at which somebody can change their mind is not also the point the
+        outcome stops being visible.
+      */}
+      <ConfirmDialog
+        open={pending?.action === 'close'}
+        title={HIRING_MESSAGES.vacancy.closeTitle}
+        description={vacancyCloseConfirmation(pending?.vacancy.scheduledCount ?? 0)}
+        acceptBtnText={HIRING_MESSAGES.vacancy.actions.close}
+        declineBtnText="Cancel"
+        busy={busy}
+        closeOnAccept={false}
+        onClose={() => setPending(null)}
+        onAccept={() => pending && void setVacancyStatus(pending.vacancy, 'closed')}
+        data-testid="vacancy-close-confirm"
+        acceptTestId="vacancy-close-confirm-button"
+      />
+
+      <ConfirmDialog
+        open={pending?.action === 'delete'}
+        title={HIRING_MESSAGES.vacancy.deleteTitle}
+        description={vacancyDeleteConfirmation(pending?.vacancy.title ?? '')}
+        acceptBtnText={HIRING_MESSAGES.vacancy.actions.delete}
+        declineBtnText="Cancel"
+        busy={busy}
+        closeOnAccept={false}
+        onClose={() => setPending(null)}
+        onAccept={() => pending && void remove(pending.vacancy)}
+        data-testid="vacancy-delete-confirm"
+        acceptTestId="vacancy-delete-confirm-button"
+      />
+
+      <ToastHost>
+        {toasts.map((toast) => (
+          <Toast
+            key={toast.id}
+            tone={toast.tone}
+            data-testid={toast.testId}
+            onDismiss={() => dismiss(toast.id)}
+          >
+            {toast.message}
+          </Toast>
+        ))}
+      </ToastHost>
     </>
   );
 }

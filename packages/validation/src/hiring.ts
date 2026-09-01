@@ -74,6 +74,33 @@ export const HIRING_MESSAGES = {
     deleteBlocked: 'Close this vacancy instead — it has candidates',
     /** Shown against a closed vacancy's booking link, which stays visible (01 §Screens). */
     closedLinkNote: 'This link is no longer accepting bookings.',
+    /**
+     * The row actions the list and the detail page share (01 §07.22).
+     *
+     * One set of words for one set of actions: a menu row that read `Board` in a list and
+     * `Open board` in a header would be two names for the same destination.
+     */
+    actions: {
+      board: 'Open board',
+      copyLink: 'Copy booking link',
+      edit: 'Edit vacancy',
+      close: 'Close vacancy',
+      reopen: 'Reopen vacancy',
+      delete: 'Delete vacancy',
+    },
+    /** The tablist's accessible name — the strip is a control, and a control is named. */
+    statusTablist: 'Vacancy status',
+    /** Titles for the two confirmations a row can raise (01 §07.24). */
+    closeTitle: 'Close this vacancy?',
+    deleteTitle: 'Delete this vacancy?',
+    /**
+     * Copying from a row has nothing to fall back on (01 §07.25).
+     *
+     * The detail page selects its own link text when the clipboard refuses, so the
+     * member can copy it by hand. A list row draws no link, so there is nothing to
+     * select — it says where the link is instead of failing silently.
+     */
+    clipboardUnavailable: 'The clipboard is unavailable. Open the vacancy to copy its link.',
     forbidden: 'You do not have permission to manage vacancies',
     empty: 'No vacancies yet.',
     /**
@@ -286,6 +313,7 @@ export const HIRING_MESSAGES = {
     vacancyClosed: 'Vacancy closed',
     vacancyReopened: 'Vacancy reopened',
     linkCopied: 'Booking link copied',
+    vacancyDeleted: 'Vacancy deleted',
     /** Completed by `interviewMovedToast` — the new time is the whole point of it. */
     interviewRescheduled: 'Interview moved to {when}',
     interviewCancelled: 'Interview cancelled',
@@ -319,6 +347,58 @@ export type VacancyStatusFilter = (typeof VACANCY_STATUS_FILTERS)[number];
 
 export const isVacancyStatus = (input: unknown): input is VacancyStatus =>
   VACANCY_STATUSES.includes(input as VacancyStatus);
+
+/** What each of the list's three tabs is called (01 §07.18). */
+export const VACANCY_STATUS_FILTER_LABELS: Record<VacancyStatusFilter, string> = {
+  all: 'All',
+  open: 'Open',
+  closed: 'Closed',
+};
+
+/**
+ * `Open (9)` — the count the design puts inside the tab rather than beside it (01 §07.19).
+ *
+ * The number is what makes the split readable before it is pressed: how a library of
+ * vacancies divides into live and finished is the first thing somebody arriving here
+ * wants, and it used to take three presses of a `Select` to find out.
+ */
+export const vacancyStatusTabLabel = (filter: VacancyStatusFilter, count: number): string =>
+  `${VACANCY_STATUS_FILTER_LABELS[filter]} (${count})`;
+
+/**
+ * The kebab's accessible name — `Actions for Senior React Engineer`.
+ *
+ * Every row draws the same glyph, so without the name a reader walking a page of them is
+ * told "Actions, menu" once per vacancy. The same rule as the candidate list's kebab.
+ */
+export const vacancyActionsLabel = (title: string): string => `Actions for ${title}`;
+
+/**
+ * What closing does, and — more to the point — what it does not (01 §03.9).
+ *
+ * The fear this sentence answers is that closing cancels what is already booked. It does
+ * not, so the count is named when there is one: a vacancy with three interviews ahead of
+ * it is a different decision from one with none, and the number is what tells them apart.
+ */
+export const vacancyCloseConfirmation = (scheduled: number): string => {
+  const link = 'The booking link stops accepting new candidates.';
+  if (scheduled === 0) return `${link} The board keeps working.`;
+  // Spelled out rather than interpolated into a plural frame, for the same reason
+  // `scheduledKeepMessage` is: "1 scheduled interviews stand" is not a sentence.
+  const stand =
+    scheduled === 1 ? '1 scheduled interview stands' : `${scheduled} scheduled interviews stand`;
+  return `${link} ${stand}, and the board keeps working.`;
+};
+
+/**
+ * What deleting takes with it — which, by the time this is reachable, is nothing (01 §03.11).
+ *
+ * The action is refused outright once a single application exists, so the only vacancy
+ * that can reach this dialog is one nobody has ever applied to. Saying so is what makes
+ * the decision quick: there is no record to weigh, only a title to lose.
+ */
+export const vacancyDeleteConfirmation = (title: string): string =>
+  `${title} has no candidates, so nothing is lost. This cannot be undone.`;
 
 
 const ok = (value: string): FieldResult => ({ valid: true, value });

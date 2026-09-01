@@ -13,6 +13,7 @@ import {
   validateVacancyPatch,
   type VacancyField,
   type VacancyPatchField,
+  type VacancyStatus,
   type VacancyStatusFilter,
 } from '@devscribed/validation';
 import { Prisma } from '@prisma/client';
@@ -97,27 +98,57 @@ export class VacanciesService {
    * Search and the status filter run in the query, not in the browser: the list has no
    * page size, so filtering client-side would mean shipping every vacancy in the
    * organization to narrow it down to one (01 §05.16).
+   *
+   * Three numbers come back beside the rows, and they answer three different questions
+   * (01 §07.19–21):
+   *
+   * - the rows are what the tab **and** the search select;
+   * - `statusCounts` is what each tab would select **under the same search**, so a label
+   *   never promises rows its own tab would not show;
+   * - `total` is the organization's whole library, narrowed by nothing, because it is
+   *   the only honest way to tell "you have no vacancies" apart from "this search found
+   *   none". The candidate database keeps `total` for exactly the same reason
+   *   (03 §05.20).
    */
   async list(organizationId: string, filters: VacancyFilters = {}) {
     const search = (filters.search ?? '').trim();
     // Anything but `open` or `closed` — including the list's own `all` — is no filter.
     const status = isVacancyStatus(filters.status) ? filters.status : null;
 
-    const vacancies = await this.prisma.vacancy.findMany({
-      where: {
-        organizationId,
-        ...(status ? { status } : {}),
-        // `React` must find `Senior React Engineer` — a title search that respected case
-        // would be a search nobody can use.
-        ...(search ? { title: { contains: search, mode: 'insensitive' as const } } : {}),
-      },
-      include: {
-        interviewer: { select: { id: true, firstName: true, lastName: true } },
-        categories: { include: { category: { select: { id: true, name: true } } } },
-        _count: { select: { applications: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    // `React` must find `Senior React Engineer` — a title search that respected case
+    // would be a search nobody can use.
+    const matching = search
+      ? { title: { contains: search, mode: 'insensitive' as const } }
+      : {};
+
+    const [vacancies, byStatus, total] = await Promise.all([
+      this.prisma.vacancy.findMany({
+        where: { organizationId, ...(status ? { status } : {}), ...matching },
+        include: {
+          interviewer: { select: { id: true, firstName: true, lastName: true } },
+          categories: { include: { category: { select: { id: true, name: true } } } },
+          _count: { select: { applications: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      // Grouped rather than counted twice: one round trip answers both tabs, and a
+      // status this product does not have cannot appear in it.
+      this.prisma.vacancy.groupBy({
+        by: ['status'],
+        where: { organizationId, ...matching },
+        _count: { _all: true },
+      }),
+      this.prisma.vacancy.count({ where: { organizationId } }),
+    ]);
+
+    const counted = (value: VacancyStatus) =>
+      byStatus.find((row) => row.status === value)?._count._all ?? 0;
+    const statusCounts = {
+      open: counted('open'),
+      closed: counted('closed'),
+      // Summed rather than counted a third time — the two statuses are the whole set.
+      all: byStatus.reduce((sum, row) => sum + row._count._all, 0),
+    };
 
     // Open first, then newest (01 §05.16). Done here rather than in the query because
     // `status` is a string column, and "closed" sorts before "open" alphabetically —
@@ -154,12 +185,16 @@ export class VacanciesService {
     const candidatesByVacancy = countBy(candidates);
     const scheduledByVacancy = countBy(scheduled);
 
-    return ordered.map((vacancy) =>
-      this.present(vacancy, {
-        candidates: candidatesByVacancy.get(vacancy.id) ?? 0,
-        scheduled: scheduledByVacancy.get(vacancy.id) ?? 0,
-      }),
-    );
+    return {
+      vacancies: ordered.map((vacancy) =>
+        this.present(vacancy, {
+          candidates: candidatesByVacancy.get(vacancy.id) ?? 0,
+          scheduled: scheduledByVacancy.get(vacancy.id) ?? 0,
+        }),
+      ),
+      statusCounts,
+      total,
+    };
   }
 
   async get(organizationId: string, vacancyId: string) {

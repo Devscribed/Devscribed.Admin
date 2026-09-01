@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   HIRING_MESSAGES,
   scheduledKeepMessage,
+  vacancyActionsLabel,
+  vacancyCloseConfirmation,
+  vacancyDeleteConfirmation,
+  vacancyStatusTabLabel,
   validateVacancyPatch,
   SLUG_MAX_LENGTH,
   SLUG_SUFFIX_LENGTH,
@@ -219,6 +223,56 @@ describe('scheduledKeepMessage', () => {
   it('spells the singular out rather than interpolating into a plural frame', () => {
     expect(scheduledKeepMessage(1)).toBe(
       '1 scheduled interview keeps its current time and interviewer.',
+    );
+  });
+});
+
+/** 01 §07.19 — the count lives inside the tab, not beside it. */
+describe('vacancyStatusTabLabel', () => {
+  it('names each of the three tabs with its own count', () => {
+    expect(vacancyStatusTabLabel('all', 12)).toBe('All (12)');
+    expect(vacancyStatusTabLabel('open', 9)).toBe('Open (9)');
+    expect(vacancyStatusTabLabel('closed', 3)).toBe('Closed (3)');
+  });
+
+  it('draws a zero rather than hiding it — an empty tab is still an answer', () => {
+    expect(vacancyStatusTabLabel('closed', 0)).toBe('Closed (0)');
+  });
+});
+
+/** 01 §07.22 — every row draws the same glyph, so every one is named for its vacancy. */
+describe('vacancyActionsLabel', () => {
+  it('names the vacancy the menu acts on', () => {
+    expect(vacancyActionsLabel('Senior React Engineer')).toBe('Actions for Senior React Engineer');
+  });
+});
+
+/** 01 §07.24 — closing says what it leaves alone, and the count is the whole point. */
+describe('vacancyCloseConfirmation', () => {
+  it('names the interviews that stand', () => {
+    expect(vacancyCloseConfirmation(3)).toBe(
+      'The booking link stops accepting new candidates. 3 scheduled interviews stand, and the board keeps working.',
+    );
+  });
+
+  it('spells the singular out rather than interpolating into a plural frame', () => {
+    expect(vacancyCloseConfirmation(1)).toBe(
+      'The booking link stops accepting new candidates. 1 scheduled interview stands, and the board keeps working.',
+    );
+  });
+
+  it('says nothing about interviews when there are none to reassure anybody about', () => {
+    expect(vacancyCloseConfirmation(0)).toBe(
+      'The booking link stops accepting new candidates. The board keeps working.',
+    );
+  });
+});
+
+/** 01 §03.11 — the only vacancy that can reach this dialog is one nobody applied to. */
+describe('vacancyDeleteConfirmation', () => {
+  it('names the vacancy and says what is at stake, which is nothing but the title', () => {
+    expect(vacancyDeleteConfirmation('Empty QA Engineer')).toBe(
+      'Empty QA Engineer has no candidates, so nothing is lost. This cannot be undone.',
     );
   });
 });

@@ -63,6 +63,20 @@ export interface Vacancy {
   createdAt: string;
 }
 
+/**
+ * The vacancies list, and the three numbers that come back beside it (01 §07.19).
+ *
+ * `statusCounts` is computed under the **search** and not under the tab, so each label
+ * says what its own tab would show. `total` is narrowed by nothing at all, which is what
+ * separates "no vacancies yet" from "this search found none" — the same division the
+ * candidate database draws with `total` and `matched`.
+ */
+export interface VacancyList {
+  vacancies: Vacancy[];
+  statusCounts: { all: number; open: number; closed: number };
+  total: number;
+}
+
 export interface InterviewerOption {
   accountId: string;
   fullName: string;

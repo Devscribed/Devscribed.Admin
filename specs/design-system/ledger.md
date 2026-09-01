@@ -22,6 +22,15 @@ in silence, because a phase that touches two screens and adds nothing to this fi
 wonder which one went missing. It does widen §41, whose entry said the scale reorder was its
 only call site.
 
+`desktop 7` adds none either, and it is the stronger version of the same result: the vacancies list
+was rebuilt around **six** existing entries — §52's toolbar and §45's tab objects for the status
+strip, §22's `Popover` for the row kebab and §55 for the menu it portals out of the card, §34's
+`busy` for a refilter, §54's `Toast` for what a row announces, and §41's `busy` +
+`closeOnAccept` for the two confirmations it raises. Nothing was missing. That is what the first
+six desktop phases were paying for, and it widens §41 again: the list is now its second and third
+call site, so the note under §41 that names the scale reorder is out of date in the same
+direction twice.
+
 **This file is now the push list.** The migration's Phase 8 was its last, and the desktop-design
 work that followed adds to it rather than reopening it — §51, §52 and §55 are `omission`s on
 components already numbered, and §53 and §54 are the first two genuinely new components since

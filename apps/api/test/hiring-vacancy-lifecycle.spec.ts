@@ -296,6 +296,69 @@ describe('Hiring — vacancy lifecycle', () => {
     expect(react.id).not.toBe(closedReact.id);
   });
 
+  /**
+   * TC-H01-INT-09 — the three numbers beside the rows (01 §07.19–21).
+   *
+   * The tab labels are the reason the status filter could stop being a `Select`, so they
+   * have to be true of the tab they sit on: `statusCounts` follows the search and ignores
+   * the status, because a count narrowed by the tab it labels would read `Closed (0)`
+   * while standing on `Open`. `total` follows neither, because it is the only thing that
+   * can tell "no vacancies yet" apart from "this search found none".
+   */
+  it('counts each status under the search, and totals the library under nothing', async () => {
+    const admin = await signup(app, 'pat@acme.com');
+    await createVacancy(app, admin, { title: 'Senior React Engineer' });
+    await createVacancy(app, admin, { title: 'DotNet Engineer' });
+    const closedReact = await createVacancy(app, admin, { title: 'React Native Engineer' });
+    expect((await patch(admin, closedReact.id, { status: 'closed' })).status).toBe(200);
+
+    const unfiltered = await list(admin);
+    expect(unfiltered.body.statusCounts).toEqual({ all: 3, open: 2, closed: 1 });
+    expect(unfiltered.body.total).toBe(3);
+
+    // The tab currently applied narrows the rows and nothing else — every label still
+    // says what its own tab would show.
+    const onOpen = await list(admin, { status: 'open' });
+    expect(onOpen.body.vacancies).toHaveLength(2);
+    expect(onOpen.body.statusCounts).toEqual({ all: 3, open: 2, closed: 1 });
+
+    // The search narrows all three counts, because it applies to every tab.
+    const searched = await list(admin, { search: 'react' });
+    expect(searched.body.statusCounts).toEqual({ all: 2, open: 1, closed: 1 });
+    // …and `total` is still the whole library, which is what the empty state reads.
+    expect(searched.body.total).toBe(3);
+
+    const missing = await list(admin, { search: 'nothing here' });
+    expect(missing.body.vacancies).toEqual([]);
+    expect(missing.body.statusCounts).toEqual({ all: 0, open: 0, closed: 0 });
+    expect(missing.body.total).toBe(3);
+  });
+
+  /** An organization with nothing in it reads zero everywhere, and says so once. */
+  it('reports an empty library as empty rather than as an unmatched search', async () => {
+    const admin = await signup(app, 'pat@acme.com');
+
+    const response = await list(admin);
+
+    expect(response.body.vacancies).toEqual([]);
+    expect(response.body.statusCounts).toEqual({ all: 0, open: 0, closed: 0 });
+    expect(response.body.total).toBe(0);
+  });
+
+  /** Counts are this organization's, like every other number these endpoints return. */
+  it("counts only this organization's vacancies", async () => {
+    const mine = await signup(app, 'pat@acme.com', 'Acme Inc');
+    const theirs = await signup(app, 'sam@globex.com', 'Globex');
+    await createVacancy(app, mine, { title: 'Mine' });
+    await createVacancy(app, theirs, { title: 'Theirs' });
+    await createVacancy(app, theirs, { title: 'Theirs too' });
+
+    const response = await list(mine);
+
+    expect(response.body.statusCounts).toEqual({ all: 1, open: 1, closed: 0 });
+    expect(response.body.total).toBe(1);
+  });
+
   it('answers 404 when the vacancy belongs to another organization', async () => {
     const mine = await signup(app, 'pat@acme.com', 'Acme Inc');
     const theirs = await signup(app, 'sam@globex.com', 'Globex');

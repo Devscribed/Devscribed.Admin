@@ -38,9 +38,9 @@ export class VacanciesController {
   @Get('vacancies')
   list(@Req() req: AuthenticatedRequest, @Query() query: VacancyFilters) {
     // Always the session's organization — the path parameter has only been compared.
-    return this.vacancies
-      .list(req.session!.organizationId, query)
-      .then((vacancies) => ({ vacancies }));
+    // The rows and the three numbers beside them are one answer (01 §07.19), so the
+    // service's own shape is the body.
+    return this.vacancies.list(req.session!.organizationId, query);
   }
 
   @Post('vacancies')

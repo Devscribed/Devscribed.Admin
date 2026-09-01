@@ -200,8 +200,18 @@ test.describe('Vacancies', () => {
     await expect(page.getByTestId('vacancies-list')).toContainText('Busy React Engineer');
   });
 
-  /** 01 §05.16 — both filters narrow the list on the server. */
-  test('searches and filters the list', async ({ page, request }) => {
+  /**
+   * 01 §05.16, §07.18–20 — both filters narrow the list on the server, and the status
+   * filter is now a tab strip whose labels carry their own counts.
+   *
+   * The counts follow the **search** and ignore the **tab**, which is the whole reason
+   * they can be trusted: a label narrowed by the tab it sits on would read `Closed (0)`
+   * while standing on `Open`, and pressing it would then show a row.
+   */
+  test('searches, and switches status by a tab that says how many it holds', async ({
+    page,
+    request,
+  }) => {
     const org = await registerOrganization(request, uniqueEmail('hiring-filter'));
     await createVacancy(request, org, { title: 'Senior React Engineer' });
     await createVacancy(request, org, { title: 'DotNet Engineer' });
@@ -217,21 +227,133 @@ test.describe('Vacancies', () => {
     const rows = page.getByTestId('vacancies-list');
     await expect(rows).toContainText('DotNet Engineer');
 
+    // The split is readable before anything is pressed.
+    await expect(page.getByTestId('vacancies-status-all')).toHaveText('All (3)');
+    await expect(page.getByTestId('vacancies-status-open')).toHaveText('Open (2)');
+    await expect(page.getByTestId('vacancies-status-closed')).toHaveText('Closed (1)');
+
     // Case-insensitive, and debounced rather than one request per keystroke.
     await page.getByTestId('vacancies-search-input').fill('react');
     await expect(rows).toContainText('Senior React Engineer');
     await expect(rows).toContainText('React Native Engineer');
     await expect(rows).not.toContainText('DotNet Engineer');
+    // Every count moved with the search, because the search applies to every tab.
+    await expect(page.getByTestId('vacancies-status-all')).toHaveText('All (2)');
+    await expect(page.getByTestId('vacancies-status-open')).toHaveText('Open (1)');
+    await expect(page.getByTestId('vacancies-status-closed')).toHaveText('Closed (1)');
 
-    await page.getByTestId('vacancies-status-filter').click();
-    await page.getByTestId('vacancies-status-option-open').click();
+    await page.getByTestId('vacancies-status-open').click();
     await expect(rows).toContainText('Senior React Engineer');
     await expect(rows).not.toContainText('React Native Engineer');
+    // Standing on a tab does not narrow its siblings' labels.
+    await expect(page.getByTestId('vacancies-status-closed')).toHaveText('Closed (1)');
 
     await page.getByTestId('vacancies-search-input').fill('nothing matches this');
+    // Not "No vacancies yet." — this organization has three, and the empty state reads
+    // the unfiltered total rather than a count the search already emptied.
     await expect(page.getByTestId('vacancies-empty-state')).toHaveText(
       'No vacancies match these filters.',
     );
+  });
+
+  /**
+   * 01 §07.22 — the row acts without being opened.
+   *
+   * Two blocked items are the point of this one: `Copy booking link` on a closed vacancy
+   * and `Delete` on one with candidates are both **disabled and drawn**, with the reason
+   * in the row. A missing action is indistinguishable from a bug.
+   */
+  test('acts on a vacancy from its row without opening it', async ({ page, request }) => {
+    const org = await registerOrganization(request, uniqueEmail('hiring-row'));
+    const open = await createVacancy(request, org, { title: 'Row React Engineer' });
+    const busy = await createVacancy(request, org, { title: 'Busy DotNet Engineer' });
+    await bookInterview(request, busy.publicSlug);
+
+    await signIn(page, org.email);
+    await page.goto(`/org/${org.organizationId}/hiring/vacancies`);
+    await expect(page.getByTestId(`vacancy-row-${open.id}`)).toBeVisible();
+
+    // Opening the menu is not opening the row.
+    await page.getByTestId(`vacancy-actions-menu-${open.id}`).click();
+    await expect(page).toHaveURL(/\/hiring\/vacancies$/);
+
+    // The link is copied from the row, and the confirmation is a toast rather than a
+    // banner on a page nobody navigated to.
+    await page.getByTestId(`vacancy-action-copy-link-${open.id}`).click();
+    await expect(page.getByTestId('toast-link-copied')).toHaveText('Booking link copied');
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toContain(
+      `/book/${open.publicSlug}`,
+    );
+
+    // Delete on a vacancy with candidates: present, disabled, and saying why.
+    await page.getByTestId(`vacancy-actions-menu-${busy.id}`).click();
+    const blocked = page.getByTestId(`vacancy-action-delete-${busy.id}`);
+    await expect(blocked).toBeVisible();
+    await expect(blocked).toHaveAttribute('aria-disabled', 'true');
+    const reason = page.getByTestId(`vacancy-delete-guard-message-${busy.id}`);
+    await expect(reason).toHaveText('Close this vacancy instead — it has candidates');
+    expect(await blocked.getAttribute('aria-describedby')).toBe(await reason.getAttribute('id'));
+    await page.keyboard.press('Escape');
+
+    // Closing from the row confirms with what it leaves alone, and the counts follow.
+    await page.getByTestId(`vacancy-actions-menu-${busy.id}`).click();
+    await page.getByTestId(`vacancy-action-close-${busy.id}`).click();
+    const confirm = page.getByTestId('vacancy-close-confirm');
+    await expect(confirm).toContainText(
+      'The booking link stops accepting new candidates. 1 scheduled interview stands, and the board keeps working.',
+    );
+    await page.getByTestId('vacancy-close-confirm-button').click();
+    await expect(page.getByTestId('toast-vacancy-closed')).toHaveText('Vacancy closed');
+    await expect(page.getByTestId(`vacancy-status-${busy.id}`)).toHaveText('Closed');
+    await expect(page.getByTestId('vacancies-status-closed')).toHaveText('Closed (1)');
+
+    // A closed vacancy still has a link; the row says why it cannot be handed out.
+    await page.getByTestId(`vacancy-actions-menu-${busy.id}`).click();
+    const copy = page.getByTestId(`vacancy-action-copy-link-${busy.id}`);
+    await expect(copy).toBeVisible();
+    await expect(copy).toHaveAttribute('aria-disabled', 'true');
+    await expect(page.getByTestId(`vacancy-copy-guard-message-${busy.id}`)).toHaveText(
+      'This link is no longer accepting bookings.',
+    );
+    await page.keyboard.press('Escape');
+
+    // Editing opens the same dialog the detail page mounts, over the row it was opened on.
+    await page.getByTestId(`vacancy-actions-menu-${open.id}`).click();
+    await page.getByTestId(`vacancy-action-edit-${open.id}`).click();
+    await expect(page.getByTestId('vacancy-dialog')).toBeVisible();
+    await page.getByTestId('vacancy-title-input').fill('Renamed From The Row');
+    await page.getByTestId('vacancy-submit-button').click();
+    await expect(page.getByTestId('toast-vacancy-updated')).toHaveText('Vacancy updated');
+    // The list refetched rather than being left behind — and stayed the list.
+    await expect(page.getByTestId('vacancies-list')).toContainText('Renamed From The Row');
+    await expect(page).toHaveURL(/\/hiring\/vacancies$/);
+
+    // And the row itself still opens the vacancy.
+    await page.getByTestId(`vacancy-title-${open.id}`).click();
+    await expect(page.getByTestId('vacancy-detail')).toBeVisible();
+  });
+
+  /** 01 §07.22 — deleting from a row leaves the list, and says so. */
+  test('deletes an unapplied vacancy from its row', async ({ page, request }) => {
+    const org = await registerOrganization(request, uniqueEmail('hiring-row-delete'));
+    const doomed = await createVacancy(request, org, { title: 'Empty QA Engineer' });
+    await createVacancy(request, org, { title: 'Kept React Engineer' });
+
+    await signIn(page, org.email);
+    await page.goto(`/org/${org.organizationId}/hiring/vacancies`);
+
+    await page.getByTestId(`vacancy-actions-menu-${doomed.id}`).click();
+    await page.getByTestId(`vacancy-action-delete-${doomed.id}`).click();
+    await expect(page.getByTestId('vacancy-delete-confirm')).toContainText(
+      'Empty QA Engineer has no candidates, so nothing is lost. This cannot be undone.',
+    );
+    await page.getByTestId('vacancy-delete-confirm-button').click();
+
+    await expect(page.getByTestId('toast-vacancy-deleted')).toHaveText('Vacancy deleted');
+    await expect(page.getByTestId('vacancies-list')).not.toContainText('Empty QA Engineer');
+    await expect(page.getByTestId('vacancies-list')).toContainText('Kept React Engineer');
+    // The count went with the row.
+    await expect(page.getByTestId('vacancies-status-all')).toHaveText('All (1)');
   });
 
   /**

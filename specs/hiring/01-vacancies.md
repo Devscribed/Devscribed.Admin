@@ -128,32 +128,82 @@ whose link has not been shared is already private.
     spec's zero-admin guard; without it, soft-deleting a member silently breaks every public
     booking link pointing at their calendar. Closed vacancies do not block removal.
 
+### 07. List Controls & Row Actions
+
+18. **The status filter is a tab strip**, not a `Select`: `All` · `Open` · `Closed`, the same
+    three choices in one press instead of two. It sits on the left of the list toolbar, with the
+    search and `New vacancy` on the right.
+19. **Each tab carries its own count** — `All (12)`, `Open (9)`, `Closed (3)`. The number is what
+    the tab strip buys: how a library divides into live and finished is the first thing somebody
+    arriving here wants, and a `Select` could not say it without being opened three times.
+20. **The counts follow the search and ignore the tab.** A count narrowed by the tab it labels
+    would read `Closed (0)` while standing on `Open`, and pressing it would then produce rows. A
+    count that ignored the search would promise nine open vacancies over a search that matched
+    one. So every label is true of its own tab, under whatever search is applied.
+21. **The empty state is driven by the organization's whole library, never by a count.** "No
+    vacancies yet." is a fact about the organization; "No vacancies match these filters." is a
+    fact about the search. Telling somebody who has twelve vacancies that they have none would
+    read as data loss — the same rule the candidate database follows with `total`
+    ([03 §05.20](03-candidate-database.md)).
+22. **Every row carries an actions menu**, so the common jobs do not require opening the vacancy
+    first. Five items, in this order:
+
+    | Item | Goes to | Blocked when |
+    |---|---|---|
+    | Open board | the vacancy's board | — |
+    | Copy booking link | the clipboard | the vacancy is `closed` |
+    | Edit vacancy | the create/edit dialog, over the list | — |
+    | Close vacancy / Reopen vacancy | `PATCH status` | — |
+    | Delete vacancy | `DELETE`, after a confirmation | the vacancy has applications (§03.11) |
+
+23. **A blocked item is disabled and drawn, never hidden**, and carries its reason in the row —
+    `This link is no longer accepting bookings.` for a closed vacancy's link, and
+    `Close this vacancy instead — it has candidates` for a delete. A missing action is
+    indistinguishable from a bug, and the row stays focusable so the reason is reachable without
+    a pointer.
+24. **Closing confirms; reopening does not.** Closing is the action people fear cancels what is
+    already booked, so the confirmation says what it leaves alone and names the count:
+    *"The booking link stops accepting new candidates. 3 scheduled interviews stand, and the board
+    keeps working."* Reopening takes nothing away and its undo is one row up in the same menu.
+    Deleting confirms because it is the one irreversible action on this screen.
+25. **Copying from a row confirms with a toast.** The detail page can select its own link text
+    when the clipboard refuses; a row draws no link, so it says where the link is instead:
+    *"The clipboard is unavailable. Open the vacancy to copy its link."* The action never fails
+    silently.
+26. **Clicking a row opens the vacancy; clicking inside the menu never does.** The menu is
+    rendered inside the row's link, so a press on it is a press on the link unless the row is
+    told otherwise.
+
 ## Screens
 
 ### Vacancies list — admin/manager
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│  Vacancies                                          [ New vacancy ]  │
+│  Vacancies                                                           │
 │                                                                      │
-│  [🔍 Search vacancies...]                     Status: [ Open   ▾ ]   │
-│                                                                      │
+│  ALL (12)  OPEN (9)  CLOSED (3)   [🔍 Search…]    [ New vacancy ]    │
+│  ══════════                                                          │
 │  ┌────────────────────────────────────────────────────────────────┐  │
-│  │ Title              │ Interviewer │ Length │ Candidates │ Status │  │
-│  ├────────────────────┼─────────────┼────────┼────────────┼────────┤  │
-│  │ Senior React Eng.  │ Pat Owner   │ 60 min │     12     │  Open  │  │
-│  │ React · Senior     │             │        │            │        │  │
-│  ├────────────────────┼─────────────┼────────┼────────────┼────────┤  │
-│  │ .NET Engineer      │ Sam Manager │ 45 min │      3     │ Closed │  │
-│  │ Asp.Net · Middle   │             │        │            │        │  │
+│  │ Title              │ Interviewer │ Length │ Candidates │Status│⋮│  │
+│  ├────────────────────┼─────────────┼────────┼────────────┼──────┼─┤  │
+│  │ Senior React Eng.  │ Pat Owner   │ 60 min │     12     │ Open │⋮│  │
+│  │ ▌React ▌Senior     │             │        │            │      │ │  │
+│  ├────────────────────┼─────────────┼────────┼────────────┼──────┼─┤  │
+│  │ .NET Engineer      │ Sam Manager │ 45 min │      3     │Closed│⋮│  │
+│  │ ▌Asp.Net ▌Middle   │             │        │            │      │ │  │
 │  └────────────────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-- Page title "Vacancies", trailing action "New vacancy".
+- Page title "Vacancies". Everything that acts on the whole list — the status tabs, the search
+  and "New vacancy" — sits in the toolbar beneath it (§07.18).
+- Each tab carries its own count, computed under the search and not under the tab (§07.20).
 - Category chips sit under the title, in the same cell.
-- Rows link to the vacancy detail page.
-- Empty state: "No vacancies yet."
+- Rows link to the vacancy detail page; the trailing "⋮" holds the row's five actions (§07.22)
+  and never navigates.
+- Empty state: "No vacancies yet." when the organization has none, "No vacancies match these
+  filters." when a search emptied the list (§07.21).
 
 ### Vacancy detail
 
@@ -176,8 +226,8 @@ whose link has not been shared is already private.
 
 - The booking link is selectable text with a Copy action; it is shown for closed vacancies too,
   marked as no longer accepting bookings.
-- "⋮" holds "Close vacancy" / "Reopen vacancy", and "Delete vacancy" (disabled with a tooltip when
-  the vacancy has applications).
+- "⋮" holds "Close vacancy" / "Reopen vacancy", and "Delete vacancy" (disabled when the vacancy
+  has applications, with the reason drawn in the row itself — §07.23).
 
 ### New / Edit vacancy dialog
 
@@ -273,7 +323,9 @@ Response `200`:
       "categories": [ { "id": "uuid", "name": "React" } ],
       "applicationCount": 12, "scheduledCount": 4, "deletable": false,
       "createdAt": "2026-08-01T09:12:00.000Z" }
-  ]
+  ],
+  "statusCounts": { "all": 12, "open": 9, "closed": 3 },
+  "total": 12
 }
 ```
 
@@ -282,6 +334,13 @@ Response `200`:
 - `deletable` is whether `DELETE` will accept this vacancy (§03.11) — the server's own rule rather
   than a number to re-derive it from. It is `false` whenever *any* application exists, deleted
   candidates included, so a vacancy can read `0 candidates` and still not be deletable.
+- **Three numbers, three questions** (§07.19–21). `vacancies` is what the tab *and* the search
+  select. `statusCounts` is what each tab would select **under the same search**, so a label never
+  promises rows its own tab would not show — it is narrowed by `search` and never by `status`.
+  `total` is the organization's whole library, narrowed by nothing, because it is the only thing
+  that separates "no vacancies yet" from "this search found none".
+- `statusCounts.all` is `open + closed`; there is no third status, and no vacancy is excluded
+  from it.
 
 ### POST /api/organizations/{orgId}/hiring/vacancies
 
@@ -358,16 +417,25 @@ Errors:
 
 ## UI Notes
 
-- Page header title "Vacancies" with a trailing "New vacancy" button; the detail page's header
-  carries the vacancy title with "Board" and "Edit" actions.
+- Page header title "Vacancies", with no action of its own — the status tabs, the search and
+  "New vacancy" all live in the toolbar beneath it (§07.18). The detail page's header carries the
+  vacancy title with "Board" and "Edit" actions.
 - Category chips are read-only on the list, editable only in the dialog.
 - The booking link is always visible on the detail page, including for closed vacancies, where it
   carries a "not accepting bookings" note.
-- Data refresh: refetch after every mutation. No optimistic updates.
+- Data refresh: refetch after every mutation. No optimistic updates. A refetch over rows already
+  on screen dims them rather than replacing them with a loader.
+- The list announces its own actions with **toasts**; the detail page keeps the persistent banner
+  slot, because its announcements are about a page the member is standing on.
 - Required `data-testid` attributes:
-  - `vacancies-list`, `vacancies-search-input`, `vacancies-status-filter`, `vacancy-new-button`
+  - `vacancies-list`, `vacancies-search-input`, `vacancies-status-tabs`,
+    `vacancies-status-{all|open|closed}`, `vacancy-new-button`
   - `vacancy-row-{id}`, `vacancy-title-{id}`, `vacancy-interviewer-{id}`, `vacancy-duration-{id}`,
     `vacancy-count-{id}`, `vacancy-status-{id}`, `vacancy-category-chip-{id}`
+  - `vacancy-actions-menu-{id}` and its rows `vacancy-action-{board|copy-link|edit|close|reopen|delete}-{id}`,
+    with `vacancy-copy-guard-message-{id}` and `vacancy-delete-guard-message-{id}` for the two
+    blocked reasons
+  - `vacancy-close-confirm`, `vacancy-close-confirm-button`
   - `vacancy-dialog`, `vacancy-title-input`, `vacancy-interviewer-select`,
     `vacancy-interviewer-option-{accountId}`, `vacancy-duration-{minutes}`,
     `vacancy-categories-input`, `vacancy-description-input`, `vacancy-submit-button`,
@@ -375,9 +443,12 @@ Errors:
   - `vacancy-detail`, `vacancy-booking-link`, `vacancy-copy-link-button`, `vacancy-board-link`,
     `vacancy-edit-button`, `vacancy-actions-menu`, `vacancy-action-close`, `vacancy-action-reopen`,
     `vacancy-action-delete`
-  - `vacancy-reassign-confirm`, `vacancy-delete-guard-message`
-  - `toast-vacancy-created`, `toast-vacancy-updated`, `toast-link-copied`
-  - `vacancies-empty-state`, `vacancies-loading-skeleton`
+  - `vacancy-reassign-confirm`, `vacancy-delete-confirm`, `vacancy-delete-confirm-button`,
+    `vacancy-delete-guard-message`
+  - `toast-vacancy-created`, `toast-vacancy-updated`, `toast-vacancy-closed`,
+    `toast-vacancy-reopened`, `toast-vacancy-deleted`, `toast-link-copied`,
+    `toast-link-copy-failed`
+  - `vacancies-empty-state`, `vacancies-loading`
 
 ## Out of Scope
 
@@ -548,7 +619,7 @@ Errors:
 - **Steps:**
   1. Open the vacancy and open the actions menu.
 - **Expected Result:**
-  1. "Delete vacancy" is present but disabled, with the tooltip "Close this vacancy instead — it has candidates".
+  1. "Delete vacancy" is present but disabled and still focusable, describing itself with "Close this vacancy instead — it has candidates" drawn in the row.
 - **Selectors:** `vacancy-actions-menu`, `vacancy-action-delete`, `vacancy-delete-guard-message`.
 
 ### TC-H01-E2E-05: user and viewer never see the Hiring section
@@ -561,3 +632,69 @@ Errors:
   1. There is no Hiring group at all — no title to open and no Vacancies row inside it — and neither flashes into view during load. A titled section that opens onto nothing reads as a permission error; an absent one reads as a product they are not part of.
   2. The direct navigation renders the not-found state, not a permission error and not any vacancy data.
 - **Selectors:** the `Hiring` group title by accessible name (asserted absent), `nav-vacancies` (asserted absent), `vacancies-list` (asserted absent).
+
+### TC-H01-INT-09: The tab counts follow the search and ignore the tab
+- **Level:** Integration
+- **Preconditions:** an organization with two open vacancies and one closed one; two of the three
+  titles contain "React".
+- **Steps:**
+  1. `GET …/hiring/vacancies` with no query.
+  2. `GET …/hiring/vacancies?status=open`.
+  3. `GET …/hiring/vacancies?search=react`.
+  4. `GET …/hiring/vacancies?search=nothing here`.
+- **Expected Result:**
+  1. `statusCounts` is `{ all: 3, open: 2, closed: 1 }` and `total` is `3`.
+  2. The rows narrow to two; `statusCounts` is unchanged — the applied tab never narrows its own
+     label or its siblings'.
+  3. `statusCounts` is `{ all: 2, open: 1, closed: 1 }` — the search applies to every tab — while
+     `total` stays `3`.
+  4. The rows are empty and every count is `0`, and `total` is still `3`, so the screen says "no
+     match" rather than "no vacancies".
+  5. An organization with nothing in it reads `0` in all four numbers, and one organization's
+     counts never include another's.
+
+### TC-H01-E2E-06: Status is a tab strip that says how many each tab holds
+- **Level:** E2E
+- **Preconditions:** logged in as `admin`; two open vacancies and one closed one, two titles
+  containing "React".
+- **Steps:**
+  1. Open the vacancies list and read the three tabs.
+  2. Search "react".
+  3. Press `Open`.
+  4. Search something that matches nothing.
+- **Expected Result:**
+  1. `All (3)`, `Open (2)`, `Closed (1)`.
+  2. The list shows both React vacancies and the labels become `All (2)`, `Open (1)`, `Closed (1)`.
+  3. Only the open React vacancy is listed, and `Closed (1)` is unchanged.
+  4. The empty state reads "No vacancies match these filters." — not "No vacancies yet."
+- **Selectors:** `vacancies-status-{all|open|closed}`, `vacancies-search-input`, `vacancies-list`,
+  `vacancies-empty-state`.
+
+### TC-H01-E2E-07: A row acts without being opened
+- **Level:** E2E
+- **Preconditions:** logged in as `admin`; one open vacancy with no applications and one with a
+  scheduled interview.
+- **Steps:**
+  1. Open the first row's actions menu.
+  2. Copy the booking link.
+  3. Open the second row's menu and inspect "Delete vacancy".
+  4. Close the second vacancy from its row.
+  5. Reopen its menu and inspect "Copy booking link".
+  6. Edit the first vacancy from its row and save.
+  7. Delete the first vacancy from its row.
+- **Expected Result:**
+  1. The menu opens and the browser stays on the list — pressing the menu is not pressing the row.
+  2. "Booking link copied" is raised as a toast and the absolute URL is on the clipboard.
+  3. "Delete vacancy" is present, `aria-disabled`, focusable, and describes itself with "Close
+     this vacancy instead — it has candidates".
+  4. The confirmation names what closing leaves alone — "1 scheduled interview stands, and the
+     board keeps working." — the status badge becomes Closed, and `Closed (1)` follows it.
+  5. "Copy booking link" is present and disabled, describing itself with "This link is no longer
+     accepting bookings."
+  6. The create/edit dialog opens over the list, "Vacancy updated" is raised, and the list
+     refetches without navigating.
+  7. The confirmation names the vacancy, "Vacancy deleted" is raised, the row leaves the list and
+     `All (n)` drops by one.
+- **Selectors:** `vacancy-actions-menu-{id}`, `vacancy-action-{board|copy-link|edit|close|delete}-{id}`,
+  `vacancy-copy-guard-message-{id}`, `vacancy-delete-guard-message-{id}`, `vacancy-close-confirm`,
+  `vacancy-delete-confirm`, `toast-link-copied`, `toast-vacancy-closed`, `toast-vacancy-deleted`.
