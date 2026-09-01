@@ -40,10 +40,21 @@ export const HOLIDAY_MESSAGES = {
   deleteConfirmCancel: 'Cancel',
   deleteConfirmConfirm: 'Delete holiday',
 
-  /* §Error Messages — the two empty states. */
+  /* §Error Messages — the two empty states.
+   *
+   * The year row is tabulated as one string but drawn as two things: §Screens asks the
+   * card for "a title \"No holidays for {year} yet.\", a subtitle explaining the effect
+   * on Amounts Owed and the calendar". So the two parts are exported separately and the
+   * tabulated whole is their composition — the screen renders the parts and never the
+   * whole, which is what stops the card printing the first sentence twice, while
+   * `emptyState` keeps the table's row exported verbatim and unable to drift from what
+   * is on screen. */
+  emptyStateTitle: (year: number | string): string => `No holidays for ${year} yet.`,
+  emptyStateBody:
+    'Add holidays so paid public days appear on Amounts Owed reports and the ' +
+    'Time Tracking calendar.',
   emptyState: (year: number | string): string =>
-    `No holidays for ${year} yet. Add holidays so paid public days appear on ` +
-    `Amounts Owed reports and the Time Tracking calendar.`,
+    `${HOLIDAY_MESSAGES.emptyStateTitle(year)} ${HOLIDAY_MESSAGES.emptyStateBody}`,
   emptyStateCountry: (country: string, year: number | string): string =>
     `No holidays for ${country} in ${year}.`,
 

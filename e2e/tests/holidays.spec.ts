@@ -129,7 +129,18 @@ test.describe('organization/03 — Holidays', () => {
 
     const year = new Date().getFullYear();
     await expect(page.getByTestId(`holidays-year-tab-${year}`)).toBeVisible();
-    await expect(page.getByTestId('holidays-empty-state')).toBeVisible();
+
+    // The empty card is a title plus a subtitle that explains the effect (§Screens).
+    // The title sentence must appear ONCE: rendering the tabulated whole underneath the
+    // title printed it twice, and a `toContainText` check cannot see that.
+    const emptyCard = page.getByTestId('holidays-empty-state');
+    await expect(emptyCard).toBeVisible();
+    const cardText = (await emptyCard.innerText()).replace(/\s+/g, ' ');
+    const title = `No holidays for ${year} yet.`;
+    expect(cardText.split(title).length - 1, `"${title}" appears exactly once`).toBe(1);
+    expect(cardText).toContain(
+      'Add holidays so paid public days appear on Amounts Owed reports and the Time Tracking calendar.',
+    );
 
     await page.getByTestId('holidays-empty-primary-cta').click();
     await expect(page.getByTestId('holiday-modal')).toBeVisible();

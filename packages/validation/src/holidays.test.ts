@@ -279,6 +279,14 @@ describe('§Error Messages / §Validation Rules — the tabulated text, verbatim
     expect(HOLIDAY_MESSAGES.emptyStateCountry('BY', 2026)).toBe(
       'No holidays for BY in 2026.',
     );
+    // §Screens draws that row as a title plus a subtitle. Both halves are pinned here
+    // too, because the card renders the halves and never the whole — an assertion on
+    // `emptyState` alone would not notice a reworded title reaching the screen.
+    expect(HOLIDAY_MESSAGES.emptyStateTitle(2026)).toBe('No holidays for 2026 yet.');
+    expect(HOLIDAY_MESSAGES.emptyStateBody).toBe(
+      'Add holidays so paid public days appear on Amounts Owed reports and the ' +
+        'Time Tracking calendar.',
+    );
     expect(HOLIDAY_MESSAGES.vacationHint(2)).toBe(
       'Note: 2 paid holiday(s) fall in this range. Vacation is deducted for the ' +
         'working days; holidays are paid separately in Amounts Owed.',
@@ -286,6 +294,19 @@ describe('§Error Messages / §Validation Rules — the tabulated text, verbatim
     expect(HOLIDAY_MESSAGES.calendarTooltip('Victory Day')).toBe(
       '★ Holiday · Victory Day',
     );
+  });
+
+  it('composes the empty-state row from exactly the two halves the card renders', () => {
+    // The card prints the title and the subtitle; the table names the whole. If these
+    // ever stop composing, one of the two is wrong and the screen silently disagrees
+    // with the spec's table — which is how the first sentence came to be printed twice.
+    for (const year of [2025, 2026, 2027]) {
+      expect(HOLIDAY_MESSAGES.emptyState(year)).toBe(
+        `${HOLIDAY_MESSAGES.emptyStateTitle(year)} ${HOLIDAY_MESSAGES.emptyStateBody}`,
+      );
+    }
+    // …and the title is not itself the whole, which is the defect this pins shut.
+    expect(HOLIDAY_MESSAGES.emptyStateTitle(2026)).not.toBe(HOLIDAY_MESSAGES.emptyState(2026));
   });
 
   it('matches the §Accessibility live-region announcement', () => {

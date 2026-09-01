@@ -462,6 +462,9 @@ function EmptyState({
       <span style={{ color: 'var(--text-muted)' }}>
         <CalendarIcon size={36} />
       </span>
+      {/* Title and subtitle are the two halves of the tabulated empty-state string
+          (§Screens). Rendering the whole here as well as the title would print the
+          first sentence twice — both come from HOLIDAY_MESSAGES, neither inline. */}
       <div
         style={{
           fontFamily: 'var(--font-display)',
@@ -470,10 +473,10 @@ function EmptyState({
           color: 'var(--text)',
         }}
       >
-        No holidays for {year} yet.
+        {HOLIDAY_MESSAGES.emptyStateTitle(year)}
       </div>
       <div style={{ fontSize: 'var(--fs-15)', color: 'var(--text-sub)', maxWidth: 460 }}>
-        {HOLIDAY_MESSAGES.emptyState(year)}
+        {HOLIDAY_MESSAGES.emptyStateBody}
       </div>
       {canManage && (
         <Button variant="primary" onClick={onCreate} data-testid="holidays-empty-primary-cta">
