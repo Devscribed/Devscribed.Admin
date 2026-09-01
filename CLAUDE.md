@@ -126,10 +126,12 @@ suite unrunnable because a port was taken. `npm run reap:dry` says what the reap
   file content; when a script must build a newline, `String.fromCharCode(10)`.
 - **Probe a busy port by connecting, not by binding.** On Windows a server on `0.0.0.0` does not
   prevent a second bind to `127.0.0.1`, so a bind test reports every port free.
-- Migrations should be **additive**. `make deploy-<env>` rolls the services out and *then* runs
-  `prisma migrate deploy`, so the new code is serving before the schema changes — which is only
-  safe because migrations are additive. This is a rule, not an observation about the current
-  migrations.
+- Migrations should be **additive**. `infra/deploy.sh` runs `prisma migrate deploy` (through
+  `infra/migrate.sh`, as a one-off task on the *new* image) and *then* `tf apply`s the services,
+  so the schema changes while the **previous** code is still serving. Additive is what makes that
+  window safe: the old code must keep working against the new schema. This is a rule, not an
+  observation about the current migrations. The migration step is skipped entirely on a web-only
+  deploy.
 - If Prisma types look wrong in the editor, re-run `npm install` (or `prisma generate`) — the
   client is generated into `node_modules/.prisma`.
 
