@@ -1,6 +1,9 @@
 # 0005 — The E2E suite runs beside a dev environment, not instead of it
 
-**2026-08-31.** Accepted.
+**2026-08-31.** Accepted. Amended by
+[0007](0007-a-busy-port-moves-the-run-and-stale-servers-are-reaped.md), which keeps everything
+below and replaces one part of it: a busy port no longer refuses the run with an instruction to
+move it, because an agent cannot take that instruction — the run moves itself.
 
 ## The rule
 

@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -18,11 +18,22 @@ import { join } from 'node:path';
  * this to run `npm run test:e2e`.
  */
 
+const NEWLINE = String.fromCharCode(10);
+
+/** How many times the run steps aside, and by how much, before it gives up. */
+const PORT_STEP = 100;
+const PORT_ATTEMPTS = 10;
+
+const REQUESTED_WEB = Number(process.env.E2E_WEB_PORT) || 3000;
+const REQUESTED_API = Number(process.env.E2E_API_PORT) || 4000;
+
+const CLAIMED = claimPorts();
+
 /** The web app's port. `E2E_WEB_PORT=3100` moves it, and everything below follows. */
-export const WEB_PORT = Number(process.env.E2E_WEB_PORT) || 3000;
+export const WEB_PORT = CLAIMED.web;
 
 /** The API's port. Read by the API through `PORT`, and by the tests through `API_ORIGIN`. */
-export const API_PORT = Number(process.env.E2E_API_PORT) || 4000;
+export const API_PORT = CLAIMED.api;
 
 /**
  * The address the suite points at.
@@ -87,28 +98,83 @@ function databaseFromDotEnv(): string | null {
 }
 
 /**
- * Turns "port is already in use" into the instruction that answers it.
+ * Where this run's servers go, decided before anything reads a port.
  *
- * Playwright checks `webServer.port` before it calls `globalSetup`, and says only that the
+ * Playwright checks `webServer.port` before it calls `globalSetup` and says only that the
  * port is taken. Read literally that means "stop working or skip the suite", and skipping
- * is what happens. It is not what the message means: the run can move.
+ * is what happens. It is not what the message means: **the run can move**, so it moves
+ * itself — the requested pair first, then the same pair a hundred higher, and so on.
  *
- * So the check lives at config load, which is the first code of ours to run. Only under
- * `CI` — without it `reuseExistingServer` is on and a busy port is somebody reusing their
- * own servers on purpose.
+ * Everything follows the choice, as it always did: the servers, `baseURL`, the rewrite
+ * target and the signing links in the mail sink. Two things carry it to the processes that
+ * did not make it — `E2E_WEB_PORT` and `E2E_API_PORT` are exported into the environment, so
+ * workers and both web servers inherit them, and the pair is written to
+ * `e2e/.last-ports.json` so a person can find the run that is going.
  *
- * A child process because there is no synchronous way to ask, and this module is imported
- * synchronously by a config that cannot await.
+ * The decision runs at config load, which is the first code of ours to execute, and only
+ * under `CI` — without it `reuseExistingServer` is on and a busy port is somebody reusing
+ * their own servers on purpose.
+ *
+ * Child processes because there is no synchronous way to ask either question, and this
+ * module is imported synchronously by a config that cannot await.
  */
-const NEWLINE = String.fromCharCode(10);
+function claimPorts(): { web: number; api: number } {
+  const requested = { web: REQUESTED_WEB, api: REQUESTED_API };
 
-function refuseBusyPorts(): void {
-  if (REMOTE || !process.env.CI) return;
-  // Workers load the config too, and by then the servers this run started are listening —
-  // so the check would fire against its own success, in every worker, and fail the run it
-  // exists to make possible. Only the runner asks.
-  if (process.env.TEST_WORKER_INDEX !== undefined) return;
+  // A run against a deployment starts nothing, so it holds no port.
+  if (process.env.E2E_BASE_URL || !process.env.CI) return requested;
+  // Workers load the config too, and by then the servers this run started are listening.
+  // The runner has already exported its choice, which is what a worker inherits; deciding
+  // again here would move every worker off the servers the run is using.
+  if (process.env.TEST_WORKER_INDEX !== undefined) return requested;
 
+  // Servers nobody is waiting for are killed before the ports are read, so a stale watcher
+  // costs this run nothing rather than pushing it a hundred ports along.
+  spawnSync(
+    process.execPath,
+    [join(__dirname, '..', 'scripts', 'reap-stale-servers.mjs')],
+    { encoding: 'utf8', timeout: 60_000, stdio: ['ignore', 'ignore', 'inherit'] },
+  );
+
+  const candidates: number[] = [];
+  for (let i = 0; i < PORT_ATTEMPTS; i += 1) {
+    candidates.push(requested.web + i * PORT_STEP, requested.api + i * PORT_STEP);
+  }
+
+  const busy = probeBusy(candidates);
+  for (let i = 0; i < PORT_ATTEMPTS; i += 1) {
+    const web = requested.web + i * PORT_STEP;
+    const api = requested.api + i * PORT_STEP;
+    if (busy.has(web) || busy.has(api)) continue;
+
+    if (i > 0) {
+      process.stderr.write(
+        `e2e: ${requested.web}/${requested.api} busy — this run takes ${web}/${api}${NEWLINE}`,
+      );
+    }
+    // Exported, not merely returned: the two web servers and every worker are separate
+    // processes that never call this function.
+    process.env.E2E_WEB_PORT = String(web);
+    process.env.E2E_API_PORT = String(api);
+    remember(web, api);
+    return { web, api };
+  }
+
+  throw new Error(
+    [
+      `No free pair from ${requested.web}/${requested.api} through`,
+      `${requested.web + (PORT_ATTEMPTS - 1) * PORT_STEP}/`
+        + `${requested.api + (PORT_ATTEMPTS - 1) * PORT_STEP}.`,
+      '',
+      'Something is holding every candidate. `node scripts/reap-stale-servers.mjs --dry-run`',
+      'lists the servers of this repository that nobody is waiting for; anything else on',
+      'those ports belongs to someone and is not ours to move.',
+    ].join(NEWLINE),
+  );
+}
+
+/** The candidates something is already listening on. */
+function probeBusy(ports: number[]): Set<number> {
   const probe = spawnSync(
     process.execPath,
     [
@@ -128,29 +194,27 @@ function refuseBusyPorts(): void {
         '})))',
         ".then(x=>process.stdout.write(x.filter(Boolean).join(',')));",
       ].join(''),
-      String(WEB_PORT),
-      String(API_PORT),
+      ...ports.map(String),
     ],
-    { encoding: 'utf8', timeout: 5_000 },
+    { encoding: 'utf8', timeout: 15_000 },
   );
 
-  const busy = (probe.stdout ?? '').trim().split(',').filter(Boolean);
-  if (busy.length === 0) return;
-
-  throw new Error(
-    [
-      `Port ${busy.join(' and ')} ${busy.length > 1 ? 'are' : 'is'} already in use, so this`,
-      'run cannot start its own servers.',
-      '',
-      'Move the run rather than skipping it. The ports, the database and the signing links',
-      'in the mail sink all follow:',
-      '',
-      '  E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/<file>.spec.ts',
-      '',
-      'Reusing whatever is already listening is not the answer: a dev server is configured',
-      'for development, and its signing provider is the real one.',
-    ].join(NEWLINE),
+  return new Set(
+    (probe.stdout ?? '').trim().split(',').filter(Boolean).map(Number),
   );
 }
 
-refuseBusyPorts();
+/**
+ * Leaves the choice where a person can read it. Never a source of truth — the run that
+ * wrote it may be long over — which is why nothing reads it back.
+ */
+function remember(web: number, api: number): void {
+  try {
+    writeFileSync(
+      join(__dirname, '.last-ports.json'),
+      `${JSON.stringify({ web, api, at: new Date().toISOString() }, null, 2)}${NEWLINE}`,
+    );
+  } catch {
+    // Remembering is a convenience. A read-only checkout still runs.
+  }
+}

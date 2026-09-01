@@ -25,6 +25,8 @@
     "wf:status": "node scripts/wf.mjs status",
     "wf:log": "node scripts/wf.mjs log",
     "gate": "node scripts/static-gate.mjs",
+    "reap": "node scripts/reap-stale-servers.mjs",
+    "reap:dry": "node scripts/reap-stale-servers.mjs --dry-run",
     "coverage": "node scripts/handoff-coverage.mjs"
   },
   "devDependencies": {

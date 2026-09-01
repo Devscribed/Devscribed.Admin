@@ -60,3 +60,7 @@ docker-compose.override.yml
 # carries every prior verdict and grows with the run — but `report.html` embeds the prompts it
 # needs, so the committed record still answers "what did the reviewer actually see?".
 .workflow/runs/*/stages/*.prompt.md
+
+# Where the last local E2E run put its servers. A note for a person, not a source of
+# truth: see e2e/environment.ts.
+e2e/.last-ports.json

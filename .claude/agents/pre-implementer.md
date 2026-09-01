@@ -61,6 +61,9 @@ the same defect found after the code is written costs the code.
 - **Messages.** For every Error Messages row, name the export in `packages/validation` and the
   route that emits it. A row whose text exists nowhere is a task. A row whose route already
   answers with another spec's message is a task, not a reuse.
+- **Verification.** Every row of the spec's Verification Plan marked as not existing today is a
+  task — a helper, a fixture route, an environment value. The cases that depend on it depend on
+  that task.
 - **Sections.** Every `##` heading of the spec gets an entry in `sections` — the task that
   covers it, or the reason it needs none.
 

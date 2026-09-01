@@ -17,7 +17,9 @@ likely to be re-litigated.
 | [0002](0002-review-worklist-with-provenance.md) | Review coverage is a worklist with provenance, not the reviewer's judgement | superseded by 0003 |
 | [0003](0003-commit-slice-not-journal-ledger.md) | A review's scope is a commit range, not a journal-derived ledger | current |
 | [0004](0004-review-is-a-set-of-sweeps.md) | A review is a set of sweeps, and clearing an item costs what raising one costs | current |
-| [0005](0005-e2e-runs-beside-a-dev-environment.md) | The E2E suite runs beside a dev environment, not instead of it | current |
+| [0005](0005-e2e-runs-beside-a-dev-environment.md) | The E2E suite runs beside a dev environment, not instead of it | current, amended by 0007 |
+| [0006](0006-the-spec-stage-proves-the-verification-route.md) | The spec stage proves the verification route, and may repair what QA may not | current |
+| [0007](0007-a-busy-port-moves-the-run-and-stale-servers-are-reaped.md) | A busy port moves the run, and stale servers are reaped | current |
 
 Measurements that led to these, including the hypotheses that did not survive, are in
 [docs/research/](../research/).

@@ -11,7 +11,7 @@ implementation and its tests are checked against.
 
 ## The coverage contract
 
-Every spec covers all five. None is optional, and none is satisfied by a sentence.
+Every spec covers all six. None is optional, and none is satisfied by a sentence.
 
 | | What it means |
 |---|---|
@@ -20,6 +20,7 @@ Every spec covers all five. None is optional, and none is satisfied by a sentenc
 | **Backward compatibility** | What guarantees existing data, routes, and deployments keep working, and what mechanism enforces each guarantee. |
 | **Acceptance criteria** | Observable, checkable statements. Not a restatement of the functional requirements. |
 | **Automated tests to E2E** | Numbered `TC-NN-UNIT-NN`, `TC-NN-INT-NN`, `TC-NN-E2E-NN` with preconditions, steps, expected results, and — for E2E — the `data-testid` selectors. |
+| **A proven verification route** | The rig an agent verifies this on, walked by you: how it comes up, what reaches each state a case needs, what observes each criterion, and what access that took. Recorded as what ran and what came back. |
 
 ## Workflow
 
@@ -55,7 +56,60 @@ legal standing than an in-house engine for contracts in Belarus, because a quali
 there requires a ГосСУОК certificate that no SaaS vendor issues. Worth one sentence; not worth
 blocking on.)
 
-### 3. Choose the shape
+### 3. Prove the verification route
+
+A spec leaves the task ready to be executed **and verified** by an agent. Everything below is done
+with your own hands, before the test cases are written, because this is the only stage where a
+verification route that does not exist costs nothing to discover.
+
+**Every acceptance criterion names its observer, and the observer is proven before the criterion is
+written.** A criterion nothing can observe is a defect, and QA is the agent least able to fix it.
+
+**The spec run holds its own ports** — `E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1`, and the E2E
+database. Never 3000/4000, never `devscribed_dev`. `e2e/playwright.config.ts` starts the pair
+itself with a hermetic environment; hand-start a pair only to click through a screen.
+
+**Reach the surface the feature hangs off.** Call the nearest existing endpoints and open the
+nearest existing screen. Record the call and what came back, not that you intended to.
+
+**Reach every state a case will need.** For each precondition — a role, an expired token, delivered
+mail, a provider's answer — name the route to it: a helper in `e2e/tests/helpers.ts`, the product
+endpoint that gets there, or a fixture under `apps/api/src/test-support/` that this spec must add
+behind `assertFixturesOpen`. A state no route reaches is not a test case yet; it is a task this
+spec owes.
+
+**Rehearse with a throwaway probe.** One scratch Playwright spec that signs in, arrives at the
+parent screen, and touches the ids the cases will name. Run it on the spec run's own ports, then
+delete it. The spec keeps the command and the result, never the file.
+
+**Obtain the access here; never leave QA to ask for it.** When checking the result needs a
+third-party key, an analytics token, a bot or an MCP server, ask the user for it with
+`AskUserQuestion`, use it once against the live system, and leave it where the next agent finds
+it — the value in untracked `apps/api/.env` or in the agent's MCP configuration, the name and its
+explanation in `apps/api/.env.example` or `.mcp.json`, the pointer in the spec.
+
+**A spec never carries a secret's value.** Names and locations, never values, and nothing of the
+sort in a tracked file.
+
+**When the product is not what is observed** — an event in an analytics service, a message a bot
+sends, a row in a third-party console — the observer is the query that reads it and the account
+that may. Run it once. A criterion whose only observer is a person says so, and says what the
+person does.
+
+**Fix the ground rather than describing it.** This stage may bring the environment up and change
+the harness: a helper, a fixture route, the Playwright environment, `.env.example`, MCP
+configuration, setup docs. It writes no product code. `qa` may repair nothing, which is why the
+repairing happens here.
+
+**Whatever the rehearsal had to do to work is written into the spec**, not left in a shell history.
+
+**What could not be proven is written as unproven**, and carries a Known Gaps row naming what would
+close it.
+
+Everything this step establishes goes into the spec's `## Verification Plan` section — see
+`references/spec-template.md`.
+
+### 4. Choose the shape
 
 One spec per coherent surface. Past roughly 900 lines, split into numbered specs with an area
 `README.md` index — see `specs/user-management/` (eleven files) and `specs/documents/` (three plus
@@ -64,12 +118,12 @@ an index). A single 2000-line file is not more thorough, it is less readable.
 New area → create `specs/<area>/README.md` too, and add a "Related Areas" pointer from any area it
 depends on.
 
-### 4. Write
+### 5. Write
 
 Follow `references/spec-template.md` for section order and content. Specs are written in English,
 including in Russian-language conversations.
 
-### 5. Self-check
+### 6. Self-check
 
 Run every item in `references/checklist.md` before presenting the spec.
 
@@ -217,6 +271,13 @@ second as something not to reproduce.
 ## Anti-patterns
 
 - Writing the spec before reading the code.
+- E2E cases written for a screen nobody reached.
+- A precondition no route reaches — "an expired envelope exists", with nothing that makes one.
+- Leaving QA to obtain access this stage could have obtained.
+- A secret's value in a spec, in a test, or in any tracked file.
+- Leaving the probe file behind, or keeping it as a test it was never designed to be.
+- Recording the rehearsal as intent — "QA can start the pair" — instead of what ran and what came
+  back.
 - "TBD", "we'll figure this out later", or a requirement whose behaviour is not stated.
 - Edge cases as prose instead of a numbered table with exact behaviour.
 - A blast-radius section that lists only additions.

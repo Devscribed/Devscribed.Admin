@@ -15,6 +15,19 @@ Run this before showing a spec to anyone. A "no" is a defect, not a style prefer
 - [ ] Known Gaps exists, and each row says why it is acceptable now and what closes it.
 - [ ] Out of Scope lists what a reader would reasonably expect and will not get.
 
+## Verification
+
+- [ ] The pair was brought up on the run's own ports, and the surface this feature hangs off
+      answered.
+- [ ] Every state a test case names has a route, and the route either exists today or is a task
+      this spec owes.
+- [ ] Every acceptance criterion names its observer.
+- [ ] Every credential, account or tool the checking needs was obtained, used once against the live
+      system, and left where the next agent finds it.
+- [ ] No secret value appears in the spec or in any tracked file.
+- [ ] The rehearsal probe was run and deleted; the spec keeps the command and the result.
+- [ ] Anything that could not be proven says so, and has a Known Gaps row.
+
 ## Correctness patterns
 
 - [ ] Every path reachable twice is idempotent, with the mechanism named and a concurrency test.
@@ -63,7 +76,8 @@ Run this before showing a spec to anyone. A "no" is a defect, not a style prefer
 - [ ] Every "asserted absent" has a presence twin — the same selector or field asserted present
       where the rule says it should be.
 - [ ] Every `##` section has at least one test case, or an explicit note saying it has none and
-      why.
+      why. Verification Plan is the standing exception — it is the rig those cases run on, not a
+      behaviour to test.
 - [ ] E2E cases that mutate process-wide state are marked serial.
 - [ ] Every premise about the pipeline or infrastructure is cited by file path, not restated from
       CLAUDE.md.

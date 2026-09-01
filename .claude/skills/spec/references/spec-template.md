@@ -138,6 +138,55 @@ Grouped by screen area. Every id here appears in an E2E case below, and vice ver
 A bullet list of what a reader would reasonably expect and will not get. Where the omission is
 interesting, say why in the same line.
 
+### `## Verification Plan`
+
+The rig the cases below run on, walked before they were written. Every cell is what happened, not
+what should happen — a row nobody ran says `not run` and gets a Known Gaps entry.
+
+**Bringing it up** — the commands, in order, that put the surface in front of a verifier:
+
+```
+| Step | Command | Observed |
+```
+
+The ports are the run's own (`E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1`) and the database is the
+E2E one, never `devscribed_dev`.
+
+**Reaching the states the cases need** — one row per precondition any `TC-*` below names:
+
+```
+| State a case needs | Route to it | Exists today | Proven |
+```
+
+The route is a helper in `e2e/tests/helpers.ts`, the product endpoint that gets there, or a fixture
+under `apps/api/src/test-support/`. `Exists today: no` makes the route a task this spec owes, and
+it appears in the requirements like any other.
+
+**Access this needs** — every credential, account or tool a verifier must hold:
+
+```
+| What | Name | Where the value lives | How the next agent gets it | Proven against |
+```
+
+Names and locations only. **No value of any secret appears here**, or anywhere else in a tracked
+file: the value goes in untracked `apps/api/.env` or in the agent's MCP configuration, and the name
+and its explanation go in `apps/api/.env.example` or `.mcp.json`.
+
+**Observing each criterion** — one row per acceptance criterion:
+
+```
+| Acceptance criterion | Observer | Level | Proven at spec time |
+```
+
+The observer is a `TC-*`, an API call, a query against an external system, or a named human step
+when nothing automated can see it.
+
+**Rehearsal** — the throwaway probe: the command that ran, what came back, and the note that the
+file was deleted.
+
+A spec with no runtime surface keeps this section and says in one line what a person does instead,
+and why nothing automated can.
+
 ### `## Test Cases`
 
 `### TC-NN-UNIT-NN`, `### TC-NN-INT-NN`, `### TC-NN-E2E-NN`, in that order. Each carries:

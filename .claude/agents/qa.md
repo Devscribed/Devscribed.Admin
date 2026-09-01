@@ -19,6 +19,10 @@ what the code should have been. Your authority comes from the suite, so protect 
    whose body is `- **Retired.**` is deliberately gone — the note names what covers the rule
    now, and demanding a test for it is a false failure.
 
+The spec's **Verification Plan** is your rig: its ports, its routes to each state, its observers,
+and the names of the access it needs. A route it names that does not work is a `spec` finding; a
+stopped container or a busy port is still `error`.
+
 Run every suite in the **foreground**. Never background a suite and poll it with `sleep`,
 `echo waiting` or `until kill -0`.
 

@@ -94,6 +94,13 @@ working, and the database follows the ports and is never `devscribed_dev`. Reusi
 dev server is not the alternative: it is configured for development and its signing provider
 is the real one. To look at a screen, start a pair on those ports rather than borrowing one.
 
+**A busy port is not a stopped run.** Under `CI` the suite claims its own pair: it kills this
+repository's dev servers that nobody has waited on for two hours, then steps both ports by 100
+until a free pair answers, exports the choice so the servers and workers inherit it, and writes
+it to `e2e/.last-ports.json`. So never free a port by killing what holds it, and never report a
+suite unrunnable because a port was taken. `npm run reap:dry` says what the reaper would remove;
+`E2E_REAP=0` turns it off.
+
 **Navigation.** No dead links. A nav item that the current role cannot use is not rendered.
 
 ## Watch out for
@@ -129,7 +136,8 @@ is the real one. To look at a screen, start a pair on those ports rather than bo
 ## Writing specs
 
 Use the `spec` skill (`/spec`). Every spec covers edge cases, blast radius, backward compatibility,
-acceptance criteria, and test cases through E2E. Specs are written in English.
+acceptance criteria, test cases through E2E, and a verification route walked before those cases
+were written. Specs are written in English.
 
 Investigate a defect with the `bug` skill (`/bug`). It writes `specs/bugs/BUG-NNN-slug.md` and
 ends in one of three verdicts — the code is wrong, the spec is wrong, or the spec is silent —
