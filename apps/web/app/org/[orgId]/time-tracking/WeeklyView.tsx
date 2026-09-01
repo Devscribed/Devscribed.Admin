@@ -17,7 +17,6 @@ import {
   type BlockColor,
   type BlockPlacement,
 } from './TimeGrid';
-import { HolidayMarker } from './HolidayMarker';
 import type { CalendarHoliday, TimeEntry } from './types';
 
 const WEEKDAY_ABBR = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -73,8 +72,7 @@ export function WeeklyView({
         date={date}
         isToday={date === today}
         minutes={dayTotals.get(date) ?? 0}
-        holiday={holidaysByDate?.get(date)}
-        onHolidayAnnounce={onHolidayAnnounce}
+        isHoliday={holidaysByDate?.has(date) ?? false}
       />
     ),
   }));
@@ -125,6 +123,8 @@ export function WeeklyView({
         tz={tz}
         gridTestId="tt-weekly-grid"
         durationStrip={strip}
+        holidaysByDate={holidaysByDate}
+        onHolidayAnnounce={onHolidayAnnounce}
         renderBlock={(entry, placement) => (
           <WeeklyBlock entry={entry} placement={placement} tz={tz} onSelectDay={onSelectDay} />
         )}
@@ -149,28 +149,27 @@ export function WeeklyView({
   );
 }
 
-/** A day column header: weekday + date, tinted for today, with the per-day total. */
+/** A day column header: weekday + date, tinted for today, with the per-day total. On
+ * a holiday day the header keeps the amber tint as a running-header cue, and the
+ * full-column overlay in the grid body carries the marker, the name and the
+ * `time-cell-{date}-holiday-marker` test id. */
 function DayHeader({
   date,
   isToday,
   minutes,
-  holiday,
-  onHolidayAnnounce,
+  isHoliday,
 }: {
   date: string;
   isToday: boolean;
   minutes: number;
-  holiday?: CalendarHoliday;
-  onHolidayAnnounce?: (message: string) => void;
+  isHoliday: boolean;
 }) {
   const name = WEEKDAY_ABBR[weekdayMon0(date)];
   return (
     <div
       style={{
-        // A holiday column tints its header rather than the grid body, so the
-        // entry blocks underneath keep their own project colours.
-        background: holiday ? 'var(--holiday-bg)' : undefined,
-        height: holiday ? 84 : 64,
+        background: isHoliday ? 'var(--holiday-bg)' : undefined,
+        height: 64,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -214,11 +213,6 @@ function DayHeader({
       >
         {minutes > 0 ? formatDurationHuman(minutes) : '—'}
       </span>
-      {/* The header is inert, so the marker itself takes focus — that is what the
-          §Accessibility live-region announcement fires from on this view. */}
-      {holiday && (
-        <HolidayMarker holiday={holiday} focusable onFocusAnnounce={onHolidayAnnounce} />
-      )}
     </div>
   );
 }

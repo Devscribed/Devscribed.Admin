@@ -430,6 +430,8 @@ export default function TimeTrackingPage({ params }: { params: Promise<{ orgId: 
               canManage={canManage}
               onEdit={openEdit}
               onDelete={setDeleteTarget}
+              holidaysByDate={holidaysByDate}
+              onHolidayAnnounce={setHolidayAnnouncement}
             />
           )}
 
