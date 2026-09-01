@@ -404,15 +404,21 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
         </div>
       )}
 
-      <HolidayModal
-        open={modalMode !== null}
-        mode={modalMode ?? { kind: 'create' }}
-        orgId={orgId}
-        canDelete={canDelete}
-        onClose={() => setModalMode(null)}
-        onSaved={() => void load()}
-        onRequestDelete={(holiday) => setDeleteTarget(holiday)}
-      />
+      {/* Mounted only while open, and keyed by its target. The form seeds from `mode`
+          at mount, so React's own mount/unmount is what resets it between an Add and an
+          Edit — no effect has to detect the change, and nothing can clobber typing. */}
+      {modalMode && (
+        <HolidayModal
+          key={modalMode.kind === 'edit' ? `edit-${modalMode.holiday.id}` : 'create'}
+          open
+          mode={modalMode}
+          orgId={orgId}
+          canDelete={canDelete}
+          onClose={() => setModalMode(null)}
+          onSaved={() => void load()}
+          onRequestDelete={(holiday) => setDeleteTarget(holiday)}
+        />
+      )}
 
       <DeleteHolidayDialog
         open={deleteTarget !== null}

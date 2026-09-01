@@ -269,10 +269,13 @@ test.describe('organization/03 — Holidays', () => {
       HOLIDAY_MESSAGES.calendarTooltip('Victory Day'),
     );
 
-    // §Accessibility — the polite live region announces on focus.
+    // §Accessibility — the polite live region announces on focus. Located by role,
+    // not a test id: the spec's roster names no id for the region, and `role="status"`
+    // is what a screen reader finds. The page's only other status node is a toast, and
+    // none is on screen here — if one ever were, this resolves to two and fails loudly.
     await marker.focus();
-    await expect(page.getByTestId('tt-holiday-live-region')).toHaveText(
-      HOLIDAY_MESSAGES.calendarAnnouncement('Victory Day', 8),
+    await expect(page.getByRole('status')).toHaveText(
+      'Holiday: Victory Day. Paid hours: 8.',
     );
   });
 

@@ -69,8 +69,10 @@ export function DeleteHolidayDialog({
         </>
       }
     >
+      {/* No test id of its own: the spec's roster names `holiday-delete-confirm` for
+          the dialog and nothing for its prose, and a selector the spec does not name is
+          one no test may depend on. The text is reachable through the dialog. */}
       <p
-        data-testid="holiday-delete-confirm-message"
         style={{
           fontFamily: 'var(--font-text)',
           fontSize: 'var(--fs-15)',

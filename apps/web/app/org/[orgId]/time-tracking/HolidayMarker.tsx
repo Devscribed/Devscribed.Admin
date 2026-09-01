@@ -69,13 +69,16 @@ export function HolidayMarker({
 /**
  * The polite live region the markers announce into (§Accessibility). One node for the
  * whole page rather than one per cell, so a screen reader hears a single stream.
+ *
+ * It carries no test id: the spec's roster names only the marker for this screen, and
+ * the region is what a screen reader finds, so `role="status"` is the honest handle for
+ * a test too (TC-03-E2E-04 locates it by role).
  */
 export function HolidayLiveRegion({ message }: { message: string }) {
   return (
     <span
       role="status"
       aria-live="polite"
-      data-testid="tt-holiday-live-region"
       style={{
         position: 'absolute',
         width: 1,

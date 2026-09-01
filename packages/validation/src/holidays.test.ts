@@ -227,3 +227,70 @@ describe('§New Capabilities — holidays in both capability unions', () => {
     expect(hasCapability('member', 'ViewHolidays')).toBe(false);
   });
 });
+
+/**
+ * The spec's Error Messages table and Validation Rules list, verbatim.
+ *
+ * Everything downstream — the 422 field map, the 409 body, the toasts, the calendar
+ * tooltip, the vacation hint — asserts `HOLIDAY_MESSAGES.*`, which on its own only
+ * certifies whatever the constant happens to say. This is the one place the strings
+ * are compared to the spec's literal text, so a reworded constant fails here rather
+ * than silently redefining what every other test is checking.
+ */
+describe('§Error Messages / §Validation Rules — the tabulated text, verbatim', () => {
+  it('matches the Validation Rules list', () => {
+    expect(HOLIDAY_MESSAGES.dateRequired).toBe('Date is required.');
+    expect(HOLIDAY_MESSAGES.dateInvalid).toBe('Invalid date.');
+    expect(HOLIDAY_MESSAGES.nameRequired).toBe('Holiday name is required.');
+    expect(HOLIDAY_MESSAGES.nameTooLong).toBe('Holiday name cannot exceed 120 characters.');
+    expect(HOLIDAY_MESSAGES.nameInvalidChars).toBe(
+      'Holiday name contains disallowed characters.',
+    );
+    expect(HOLIDAY_MESSAGES.paidHoursRequired).toBe('Paid hours is required.');
+    expect(HOLIDAY_MESSAGES.paidHoursOutOfRange).toBe('Paid hours must be between 0 and 24.');
+    expect(HOLIDAY_MESSAGES.countryCodeInvalid).toBe(
+      'Country code must be 2 uppercase letters.',
+    );
+    expect(HOLIDAY_MESSAGES.duplicate).toBe('A holiday already exists on this date.');
+  });
+
+  it('matches the Error Messages table', () => {
+    expect(HOLIDAY_MESSAGES.toastCreated).toBe('Holiday added.');
+    expect(HOLIDAY_MESSAGES.toastUpdated).toBe('Holiday updated.');
+    expect(HOLIDAY_MESSAGES.toastDeleted).toBe('Holiday deleted.');
+    expect(HOLIDAY_MESSAGES.deleteForbidden).toBe(
+      "You don't have permission to delete holidays.",
+    );
+    expect(HOLIDAY_MESSAGES.deleteConfirmPast('Labour Day', '2026-05-01')).toBe(
+      'Delete Labour Day on 2026-05-01? Amounts Owed reports run after now will no ' +
+        'longer include it. Reports already exported as PDF are unchanged.',
+    );
+    expect(HOLIDAY_MESSAGES.deleteConfirmFuture('Labour Day', '2026-05-01')).toBe(
+      'Delete Labour Day on 2026-05-01?',
+    );
+    // The "Confirm buttons" row is two labels and a tone: "Cancel" / "Delete holiday"
+    // (danger). The tone is the DS `Button` variant, not a string.
+    expect(HOLIDAY_MESSAGES.deleteConfirmCancel).toBe('Cancel');
+    expect(HOLIDAY_MESSAGES.deleteConfirmConfirm).toBe('Delete holiday');
+    expect(HOLIDAY_MESSAGES.emptyState(2026)).toBe(
+      'No holidays for 2026 yet. Add holidays so paid public days appear on Amounts ' +
+        'Owed reports and the Time Tracking calendar.',
+    );
+    expect(HOLIDAY_MESSAGES.emptyStateCountry('BY', 2026)).toBe(
+      'No holidays for BY in 2026.',
+    );
+    expect(HOLIDAY_MESSAGES.vacationHint(2)).toBe(
+      'Note: 2 paid holiday(s) fall in this range. Vacation is deducted for the ' +
+        'working days; holidays are paid separately in Amounts Owed.',
+    );
+    expect(HOLIDAY_MESSAGES.calendarTooltip('Victory Day')).toBe(
+      '★ Holiday · Victory Day',
+    );
+  });
+
+  it('matches the §Accessibility live-region announcement', () => {
+    expect(HOLIDAY_MESSAGES.calendarAnnouncement('Victory Day', 8)).toBe(
+      'Holiday: Victory Day. Paid hours: 8.',
+    );
+  });
+});

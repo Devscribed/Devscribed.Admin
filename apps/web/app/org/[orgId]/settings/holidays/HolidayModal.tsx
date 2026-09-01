@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState, type CSSProperties, type FormEvent } from 'react';
+import { useState, type CSSProperties, type FormEvent } from 'react';
 import { Button, Input, Modal, Select } from '@/ds';
+import { focusByTestId } from '@/field-error';
 import { useToast } from '@/toast';
 import {
   HOLIDAY_MESSAGES,
@@ -21,6 +22,22 @@ import type { HolidayRow } from './types';
 export type HolidayModalMode = { kind: 'create' } | { kind: 'edit'; holiday: HolidayRow };
 
 type Field = 'date' | 'name' | 'paidHours' | 'countryCode';
+
+/** Reading order of the form — "the first invalid field" means the first of these. */
+const FOCUS_ORDER: readonly Field[] = ['date', 'name', 'paidHours', 'countryCode'];
+
+/**
+ * The focusable input behind each field. `countryCode` is deliberately absent: the
+ * rule is "focus the field the caller must fix", and the question the picker can
+ * answer is "which of the offered options is selected" — every one of which is valid,
+ * so a client-side `countryCode` error cannot arise here. The only source of one is a
+ * server 422, which sets the errors without running this focus path.
+ */
+const FIELD_INPUT_TESTID: Partial<Record<Field, string>> = {
+  date: 'holiday-date-input',
+  name: 'holiday-name-input',
+  paidHours: 'holiday-hours-input',
+};
 
 const microLabel: CSSProperties = {
   display: 'block',
@@ -154,30 +171,26 @@ export function HolidayModal({
   const { showToast } = useToast();
   const isEdit = mode.kind === 'edit';
 
-  const [date, setDate] = useState('');
-  const [name, setName] = useState('');
-  const [paidHours, setPaidHours] = useState('');
-  const [countryCode, setCountryCode] = useState('');
+  /**
+   * Seeded once, at mount. The page mounts this component when the modal opens and
+   * unmounts it when it closes, so "reset the form for a new target" is React's own
+   * mount, not an effect that has to guess when to re-seed. That is what removes the
+   * dependency the exhaustive-deps rule was being silenced about: `mode` is rebuilt on
+   * every parent render, so an effect keyed on it would clobber what the admin is
+   * typing, and an effect keyed on `open` alone is lying about what it reads.
+   */
+  const [date, setDate] = useState(() =>
+    mode.kind === 'edit' ? mode.holiday.date : localTodayYmd(),
+  );
+  const [name, setName] = useState(() => (mode.kind === 'edit' ? mode.holiday.name : ''));
+  const [paidHours, setPaidHours] = useState(() =>
+    String(mode.kind === 'edit' ? mode.holiday.paidHours : HOLIDAY_PAID_HOURS_DEFAULT),
+  );
+  const [countryCode, setCountryCode] = useState(() =>
+    mode.kind === 'edit' ? (mode.holiday.countryCode ?? '') : '',
+  );
   const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    if (mode.kind === 'edit') {
-      setDate(mode.holiday.date);
-      setName(mode.holiday.name);
-      setPaidHours(String(mode.holiday.paidHours));
-      setCountryCode(mode.holiday.countryCode ?? '');
-    } else {
-      setDate(localTodayYmd());
-      setName('');
-      setPaidHours(String(HOLIDAY_PAID_HOURS_DEFAULT));
-      setCountryCode('');
-    }
-    setErrors({});
-    setSubmitting(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
 
   function handleClose() {
     if (submitting) return;
@@ -220,19 +233,13 @@ export function HolidayModal({
 
     const { fields, payload } = validateAll();
     if (Object.keys(fields).length > 0) {
+      // Show every error and focus the first invalid field — the submit button is
+      // never disabled for validation. `focusByTestId` is the app's one focus helper
+      // (`apps/web/src/field-error.tsx`); the ids it is handed are the spec's.
       setErrors(fields);
-      const first = (['date', 'name', 'paidHours', 'countryCode'] as Field[]).find(
-        (f) => fields[f],
-      );
-      const testId =
-        first === 'date'
-          ? 'holiday-date-input'
-          : first === 'name'
-            ? 'holiday-name-input'
-            : first === 'paidHours'
-              ? 'holiday-hours-input'
-              : 'holiday-country-select';
-      document.querySelector<HTMLInputElement>(`[data-testid="${testId}"]`)?.focus();
+      const first = FOCUS_ORDER.find((f) => fields[f]);
+      const target = first ? FIELD_INPUT_TESTID[first] : undefined;
+      if (target) focusByTestId(target);
       return;
     }
 
