@@ -65,8 +65,12 @@ export class TimeTrackingController {
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('membershipId') membershipId?: string,
+    // Spec 16 §API: `billable=all|billable|non-billable`, mirrors the UI chips.
+    // Any unknown value is treated as `all` (drop the filter) so the JSON layer
+    // stays forgiving with drifting client versions.
+    @Query('billable') billable?: string,
   ) {
-    return this.timeTracking.listEntries(req.session!, { from, to, membershipId });
+    return this.timeTracking.listEntries(req.session!, { from, to, membershipId, billable });
   }
 
   @Post('time-entries')

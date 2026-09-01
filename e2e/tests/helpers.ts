@@ -1172,6 +1172,8 @@ export interface TimeEntryInput {
   startTime?: string;
   endTime?: string;
   durationMinutes?: number;
+  /** Spec 16 — optional; server defaults to `true` when absent. */
+  billable?: boolean;
 }
 
 export interface CreatedTimeEntry {
@@ -1213,7 +1215,7 @@ export async function createTimeEntryViaApi(
 export async function startTimerViaApi(
   request: APIRequestContext,
   organizationId: string,
-  body: { projectId?: string | null; task?: string; description?: string } = {},
+  body: { projectId?: string | null; task?: string; description?: string; billable?: boolean } = {},
 ): Promise<void> {
   const response = await request.post(
     `${API}/api/organizations/${organizationId}/timer/start`,

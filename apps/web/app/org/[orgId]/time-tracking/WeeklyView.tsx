@@ -1,7 +1,7 @@
 'use client';
 
 import type { CSSProperties } from 'react';
-import { formatDurationHuman, formatWallClockInTz } from '@devscribed/validation';
+import { formatDurationHuman, formatWallClockInTz, splitByBillable } from '@devscribed/validation';
 import {
   dayNumber,
   isWeekend,
@@ -56,26 +56,34 @@ export function WeeklyView({
 }) {
   const days = weekDates(anchorDate, weekStartsOn);
 
-  const dayTotals = new Map<string, number>();
-  let weekTotal = 0;
+  // Spec 16 §Weekly view — the day header shows billable time as the primary total
+  // and, when non-billable time also exists in the day, a smaller `+{n}h nb` sub-line.
+  // Group entries by date, then split each bucket into billable + non-billable minutes.
+  const entriesByDate = new Map<string, TimeEntry[]>();
   for (const entry of entries) {
-    dayTotals.set(entry.date, (dayTotals.get(entry.date) ?? 0) + entry.durationMinutes);
-    weekTotal += entry.durationMinutes;
+    const bucket = entriesByDate.get(entry.date);
+    if (bucket) bucket.push(entry);
+    else entriesByDate.set(entry.date, [entry]);
   }
+  const weekTotal = entries.reduce((sum, e) => sum + e.durationMinutes, 0);
 
-  const columns = days.map((date) => ({
-    date,
-    isToday: date === today,
-    isWeekend: isWeekend(date),
-    header: (
-      <DayHeader
-        date={date}
-        isToday={date === today}
-        minutes={dayTotals.get(date) ?? 0}
-        isHoliday={holidaysByDate?.has(date) ?? false}
-      />
-    ),
-  }));
+  const columns = days.map((date) => {
+    const { billableMinutes, nonBillableMinutes } = splitByBillable(entriesByDate.get(date) ?? []);
+    return {
+      date,
+      isToday: date === today,
+      isWeekend: isWeekend(date),
+      header: (
+        <DayHeader
+          date={date}
+          isToday={date === today}
+          billableMinutes={billableMinutes}
+          nonBillableMinutes={nonBillableMinutes}
+          isHoliday={holidaysByDate?.has(date) ?? false}
+        />
+      ),
+    };
+  });
 
   // Duration-only entries for the whole week, kept in day order for the strip.
   const durationOnly = entries
@@ -156,26 +164,32 @@ export function WeeklyView({
 function DayHeader({
   date,
   isToday,
-  minutes,
+  billableMinutes,
+  nonBillableMinutes,
   isHoliday,
 }: {
   date: string;
   isToday: boolean;
-  minutes: number;
+  billableMinutes: number;
+  nonBillableMinutes: number;
   isHoliday: boolean;
 }) {
   const name = WEEKDAY_ABBR[weekdayMon0(date)];
+  const totalMinutes = billableMinutes + nonBillableMinutes;
   return (
     <div
       style={{
         background: isHoliday ? 'var(--holiday-bg)' : undefined,
-        height: 64,
+        // `minHeight` (not fixed height) so the split billable / non-billable
+        // sub-line has room to render — spec 16 requires two lines when both
+        // totals are non-zero, and 64px only fits one.
+        minHeight: 64,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 2,
-        padding: '8px 4px',
+        gap: 1,
+        padding: '6px 4px',
       }}
     >
       <span
@@ -202,16 +216,38 @@ function DayHeader({
       >
         {dayNumber(date)}
       </span>
+      {/* Spec 16 — the day total splits into a primary billable line and, when the
+          day also has non-billable time, a smaller `+{n}h nb` sub-line. Both totals
+          are exposed as `data-*` attributes so an E2E can assert the split without
+          parsing the display text. */}
       <span
         data-testid={`tt-weekly-day-total-${date}`}
+        data-billable-minutes={billableMinutes}
+        data-nonbillable-minutes={nonBillableMinutes}
         style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          lineHeight: 1.05,
           fontFamily: 'var(--font-display)',
           fontWeight: 500,
           fontSize: 'var(--fs-12)',
-          color: minutes > 0 ? 'var(--text-sub)' : 'var(--text-faint)',
+          color: totalMinutes > 0 ? 'var(--text-sub)' : 'var(--text-faint)',
         }}
       >
-        {minutes > 0 ? formatDurationHuman(minutes) : '—'}
+        <span>{totalMinutes > 0 ? formatDurationHuman(billableMinutes) : '—'}</span>
+        {nonBillableMinutes > 0 ? (
+          <span
+            style={{
+              marginTop: 1,
+              fontSize: 'var(--fs-11)',
+              color: 'var(--text-muted)',
+              lineHeight: 1.05,
+            }}
+          >
+            +{formatDurationHuman(nonBillableMinutes)} nb
+          </span>
+        ) : null}
       </span>
     </div>
   );
@@ -230,12 +266,17 @@ function WeeklyBlock({
   onSelectDay: (date: string) => void;
 }) {
   const { color } = placement;
+  const nonBillable = entry.billable === false;
   const timeRange = `${formatWallClockInTz(entry.startTime as string, tz)} – ${formatWallClockInTz(
     entry.endTime as string,
     tz,
   )}`;
   const project = entry.projectId ? entry.projectName ?? '—' : '(no project)';
+  // Spec 16 §Accessibility — the "NB" visual tag has an audio equivalent as a leading
+  // `Non-billable` in the aria-label, so the dashed-vs-solid distinction never depends
+  // on sight alone.
   const ariaLabel = [
+    nonBillable ? 'Non-billable' : null,
     `${formatWallClockInTz(entry.startTime as string, tz)} to ${formatWallClockInTz(
       entry.endTime as string,
       tz,
@@ -251,10 +292,12 @@ function WeeklyBlock({
     <button
       type="button"
       data-testid={`tt-weekly-entry-${entry.id}`}
+      data-billable={nonBillable ? 'false' : 'true'}
       aria-label={ariaLabel}
       onClick={() => onSelectDay(entry.date)}
-      style={blockButtonStyle(color)}
+      style={blockButtonStyle(color, nonBillable)}
     >
+      {nonBillable ? <NBTag /> : null}
       <span style={{ fontWeight: 500, fontSize: 'var(--fs-11)', opacity: 0.85 }}>{timeRange}</span>
       <span
         style={{
@@ -295,12 +338,14 @@ function DurationChip({
   onSelectDay: (date: string) => void;
 }) {
   const color = projectColor(entry.projectId);
+  const nonBillable = entry.billable === false;
   const project = entry.projectId ? entry.projectName ?? '—' : '(no project)';
   const day = WEEKDAY_ABBR[weekdayMon0(entry.date)];
   return (
     <button
       type="button"
       data-testid={`tt-weekly-entry-${entry.id}`}
+      data-billable={nonBillable ? 'false' : 'true'}
       onClick={() => onSelectDay(entry.date)}
       style={{
         display: 'inline-flex',
@@ -308,36 +353,66 @@ function DurationChip({
         gap: 8,
         padding: '6px 12px',
         borderRadius: 'var(--radius-sm)',
-        border: 'none',
-        borderLeft: `3px solid ${color.rail}`,
-        background: color.bg,
-        color: color.text,
+        // Spec 16 §Weekly view — dashed border + sunken background + muted text for
+        // non-billable chips; billable keeps the project palette treatment.
+        border: nonBillable ? '1px dashed var(--border-strong)' : 'none',
+        borderLeft: nonBillable ? '3px dashed var(--border-strong)' : `3px solid ${color.rail}`,
+        background: nonBillable ? 'var(--bg-sunken)' : color.bg,
+        color: nonBillable ? 'var(--text-muted)' : color.text,
         fontFamily: 'var(--font-display)',
         fontWeight: 500,
         fontSize: 'var(--fs-13)',
         cursor: 'pointer',
       }}
     >
+      {nonBillable ? <span style={{ fontSize: 'var(--fs-11)', color: 'var(--text-muted)' }}>NB</span> : null}
       {day} · {project}
       {entry.task ? ` · ${entry.task}` : ''} · {formatDurationHuman(entry.durationMinutes)}
     </button>
   );
 }
 
-/** Shared style for a grid block's clickable face. */
-function blockButtonStyle(color: BlockColor): CSSProperties {
+/** Spec 16 — the small "NB" corner tag pinned to a non-billable grid block. */
+function NBTag() {
+  return (
+    <span
+      aria-hidden
+      style={{
+        position: 'absolute',
+        top: 4,
+        right: 6,
+        fontFamily: 'var(--font-display)',
+        fontWeight: 600,
+        fontSize: 'var(--fs-11)',
+        color: 'var(--text-muted)',
+        background: 'var(--bg-panel)',
+        borderRadius: 'var(--radius-sm)',
+        padding: '0 4px',
+        lineHeight: 1.3,
+      }}
+    >
+      NB
+    </span>
+  );
+}
+
+/** Shared style for a grid block's clickable face. Spec 16 — non-billable adds a
+ * dashed border in `--border-strong`, swaps the background for `--bg-sunken`, and
+ * mutes the text ink; `position: relative` lets the "NB" tag pin to a corner. */
+function blockButtonStyle(color: BlockColor, nonBillable: boolean): CSSProperties {
   return {
+    position: 'relative',
     display: 'flex',
     flexDirection: 'column',
     width: '100%',
     height: '100%',
     textAlign: 'left',
     padding: '6px 8px',
-    border: 'none',
-    borderLeft: `3px solid ${color.rail}`,
+    border: nonBillable ? '1px dashed var(--border-strong)' : 'none',
+    borderLeft: nonBillable ? '3px dashed var(--border-strong)' : `3px solid ${color.rail}`,
     borderRadius: 'var(--radius-sm)',
-    background: color.bg,
-    color: color.text,
+    background: nonBillable ? 'var(--bg-sunken)' : color.bg,
+    color: nonBillable ? 'var(--text-muted)' : color.text,
     fontFamily: 'var(--font-display)',
     cursor: 'pointer',
     overflow: 'hidden',

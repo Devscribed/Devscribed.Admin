@@ -946,6 +946,11 @@ model TimeEntry {
   /// Account that created the entry (may differ from the membership for admin-created
   /// entries — a clean audit trail of who acted for whom, spec 12 Security 24).
   createdByAccountId String
+  /// Spec user-management/16 — whether this entry counts toward the client's Billed
+  /// Amount on reports. `true` = billable (default; matches every pre-migration row);
+  /// `false` = non-billable (internal work, training, PTO). Amounts Owed excludes
+  /// `false` rows entirely; Time & Activity splits them into Non-Billable Time.
+  billable           Boolean  @default(true)
 
   membership   Membership   @relation(fields: [membershipId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -979,6 +984,10 @@ model RunningTimer {
   task           String?
   description    String?
   startedAt      DateTime
+  /// Spec user-management/16 — lives on the running timer and is copied to the
+  /// resulting `TimeEntry` when `stopTimer` runs. Toggling mid-run is honored by
+  /// the same PATCH that updates task/description.
+  billable       Boolean  @default(true)
 
   membership   Membership   @relation(fields: [membershipId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

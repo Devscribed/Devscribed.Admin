@@ -581,7 +581,14 @@ export type MemberCapability =
    */
   | 'view-holidays'
   | 'manage-holidays'
-  | 'delete-holidays';
+  | 'delete-holidays'
+  /**
+   * Spec user-management/16 addition — toggle the `billable` flag on ANOTHER
+   * member's time entry (admin, manager). Own-entry writes reuse the existing
+   * `manage-own-time-entries`; this capability lets a future role hold
+   * `manage-all-time-entries` while still being locked out of billable changes.
+   */
+  | 'edit-others-billable';
 
 /**
  * Pure lookup against spec 04's Roles & Permission Matrix (TC-04-UNIT-05), widened by
@@ -620,6 +627,7 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'view-holidays': true,
     'manage-holidays': true,
     'delete-holidays': true,
+    'edit-others-billable': true,
   },
   manager: {
     'view-list': true,
@@ -650,6 +658,7 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'view-holidays': true,
     'manage-holidays': true,
     'delete-holidays': false,
+    'edit-others-billable': true,
   },
   user: {
     'view-list': true,
@@ -680,6 +689,7 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'view-holidays': false,
     'manage-holidays': false,
     'delete-holidays': false,
+    'edit-others-billable': false,
   },
   viewer: {
     'view-list': true,
@@ -710,6 +720,7 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'view-holidays': false,
     'manage-holidays': false,
     'delete-holidays': false,
+    'edit-others-billable': false,
   },
 };
 
@@ -2218,6 +2229,8 @@ export const TIME_TRACKING_MESSAGES = {
   // Timer errors (API contract error bodies).
   timerAlreadyRunning: 'A timer is already running. Stop it before starting a new one.',
   timerNotRunning: 'No timer is currently running',
+  /** Spec 16 — sole billable-flag error (single message, no distinct code per Rule 1). */
+  invalidBillable: 'Invalid billable value.',
   // List-query validation (Validation Rule 11 + range/order rules).
   queryFromRequired: 'From date is required',
   queryToRequired: 'To date is required',
@@ -2227,6 +2240,14 @@ export const TIME_TRACKING_MESSAGES = {
   viewForbidden: 'You do not have access to time tracking',
   // Toasts.
   toastEntrySaved: 'Time entry saved',
+  /** Spec 16 §Error Messages — differentiated create toast for billable time. */
+  toastEntryBillableLogged: 'Time logged.',
+  /** Spec 16 §Error Messages — differentiated create toast for non-billable time. */
+  toastEntryNonBillableLogged: 'Non-billable time logged.',
+  /** Spec 16 §Error Messages — a single "updated" toast covers billable + text edits. */
+  toastEntryUpdated: 'Entry updated.',
+  /** Spec 16 §Error Messages — cross-member edit denied. */
+  toastEntryForbidden: "You don't have permission to edit this member's entry.",
   toastEntryDeleted: 'Time entry deleted',
   toastTimerStarted: 'Timer started',
   /** Documented raw template; build the real string with `timerStoppedToast(...)`. */
@@ -2363,6 +2384,8 @@ export interface TimeEntryInput {
   durationMinutes?: number | string | null;
   task?: string | null;
   description?: string | null;
+  /** Spec 16 — optional, defaults to `true` when absent (Rule 1 / FR-1). */
+  billable?: boolean | string | null;
 }
 
 /** The normalized entry the API persists once validation passes. */
@@ -2373,11 +2396,56 @@ export interface NormalizedTimeEntry {
   durationMinutes: number;
   task: string | null;
   description: string | null;
+  /** Spec 16 — always present in the normalized shape; defaults to `true`. */
+  billable: boolean;
 }
 
 export type TimeEntryValidation =
   | { valid: true; value: NormalizedTimeEntry }
   | { valid: false; errors: Record<string, string> };
+
+export type BillableValidation =
+  | { valid: true; billable: boolean }
+  | { valid: false; error: string };
+
+/**
+ * Spec 16 Rule 1 — parse the `billable` request field. Missing / `undefined` / `null`
+ * defaults to `true` (FR-1: existing entries and unspecified inputs are billable).
+ * Booleans pass through; the strings `'true'` / `'false'` are accepted (a form or
+ * query-string submits arrives as string). Anything else — a number, `'maybe'`, an
+ * object — is rejected with the single spec message.
+ */
+export function validateBillable(
+  input: boolean | string | null | undefined,
+): BillableValidation {
+  if (input === undefined || input === null) return { valid: true, billable: true };
+  if (typeof input === 'boolean') return { valid: true, billable: input };
+  if (typeof input === 'string') {
+    const trimmed = input.trim().toLowerCase();
+    if (trimmed === 'true') return { valid: true, billable: true };
+    if (trimmed === 'false') return { valid: true, billable: false };
+  }
+  return { valid: false, error: TIME_TRACKING_MESSAGES.invalidBillable };
+}
+
+/**
+ * Spec 16 §Effect on Reports (FR-5..7) / TC-16-UNIT-05 — sum a list of entries into
+ * `{ billableMinutes, nonBillableMinutes }`. Pure and totals-only; used by the calendar
+ * daily totals split, and by the future reports service. Missing `billable` on legacy
+ * data counts as billable.
+ */
+export function splitByBillable(
+  entries: readonly { durationMinutes: number; billable?: boolean | null }[],
+): { billableMinutes: number; nonBillableMinutes: number } {
+  let billableMinutes = 0;
+  let nonBillableMinutes = 0;
+  for (const entry of entries) {
+    const minutes = Number(entry.durationMinutes) || 0;
+    if (entry.billable === false) nonBillableMinutes += minutes;
+    else billableMinutes += minutes;
+  }
+  return { billableMinutes, nonBillableMinutes };
+}
 
 /**
  * Core time-entry validator (spec 12 Validation Rules 1–9, TC-12-INT-09/28). Enforces
@@ -2473,6 +2541,15 @@ export function validateTimeEntry(
     errors.description = TIME_TRACKING_MESSAGES.descriptionTooLong;
   }
 
+  // --- billable (spec 16 Rule 1): optional, defaults to `true`. ---
+  const billableResult = validateBillable(input.billable);
+  let billable = true;
+  if (billableResult.valid) {
+    billable = billableResult.billable;
+  } else {
+    errors.billable = billableResult.error;
+  }
+
   if (Object.keys(errors).length > 0) {
     return { valid: false, errors };
   }
@@ -2486,6 +2563,7 @@ export function validateTimeEntry(
       durationMinutes,
       task: task.length > 0 ? task : null,
       description: description.length > 0 ? description : null,
+      billable,
     },
   };
 }
@@ -2538,17 +2616,24 @@ export function validateTimeEntryRange(from?: string, to?: string): TimeEntryRan
 export interface TimerMetaInput {
   task?: string | null;
   description?: string | null;
+  /** Spec 16 — optional; defaults to `true` on start, honored on update mid-run. */
+  billable?: boolean | string | null;
 }
 
 export type TimerMetaValidation =
-  | { valid: true; value: { task: string | null; description: string | null } }
+  | {
+      valid: true;
+      value: { task: string | null; description: string | null; billable: boolean };
+    }
   | { valid: false; errors: Record<string, string> };
 
 /**
- * Timer start/update metadata validator (spec 12 Validation Rules 12–13). `task` (≤200)
- * and `description` (≤500) are both optional and trimmed; length is measured in Unicode
- * codepoints. `projectId` validity (exists / active / same-org) is a DB concern enforced
- * by the API, NOT here. Collects all errors, keyed by `task`/`description`.
+ * Timer start/update metadata validator (spec 12 Validation Rules 12–13; spec 16 Rule 1).
+ * `task` (≤200) and `description` (≤500) are both optional and trimmed; length is measured
+ * in Unicode codepoints. `billable` is optional and defaults to `true` — matches the
+ * running-timer default (spec 16 FR-4). `projectId` validity (exists / active / same-org)
+ * is a DB concern enforced by the API, NOT here. Collects all errors, keyed by
+ * `task`/`description`/`billable`.
  */
 export function validateTimerMeta(input: TimerMetaInput): TimerMetaValidation {
   const errors: Record<string, string> = {};
@@ -2562,6 +2647,14 @@ export function validateTimerMeta(input: TimerMetaInput): TimerMetaValidation {
     errors.description = TIME_TRACKING_MESSAGES.descriptionTooLong;
   }
 
+  const billableResult = validateBillable(input.billable);
+  let billable = true;
+  if (billableResult.valid) {
+    billable = billableResult.billable;
+  } else {
+    errors.billable = billableResult.error;
+  }
+
   if (Object.keys(errors).length > 0) return { valid: false, errors };
 
   return {
@@ -2569,6 +2662,7 @@ export function validateTimerMeta(input: TimerMetaInput): TimerMetaValidation {
     value: {
       task: task.length > 0 ? task : null,
       description: description.length > 0 ? description : null,
+      billable,
     },
   };
 }

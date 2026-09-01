@@ -10,8 +10,10 @@ import {
   gmtLabel,
   localDateInTz,
   minutesOfDayInTz,
+  splitByBillable,
   timerStoppedToast,
   tzOffsetMinutes,
+  validateBillable,
   validateTimeEntry,
   validateTimeEntryRange,
   validateTimerMeta,
@@ -140,6 +142,107 @@ describe('spec 12 time-tracking capabilities', () => {
     expect(can('user', 'use-timer')).toBe(true);
     expect(can('viewer', 'use-timer')).toBe(false);
   });
+
+  // --- Spec 16 §Roles & Permission Matrix: cross-member billable edits ---
+  it('edit-others-billable: admin/manager only', () => {
+    expect(can('admin', 'edit-others-billable')).toBe(true);
+    expect(can('manager', 'edit-others-billable')).toBe(true);
+    expect(can('user', 'edit-others-billable')).toBe(false);
+    expect(can('viewer', 'edit-others-billable')).toBe(false);
+  });
+});
+
+// --- TC-16-UNIT-01..04: billable field parsing ------------------------------
+describe('validateBillable', () => {
+  it('TC-16-UNIT-01: default is billable when missing', () => {
+    expect(validateBillable(undefined)).toEqual({ valid: true, billable: true });
+    expect(validateBillable(null)).toEqual({ valid: true, billable: true });
+  });
+
+  it('TC-16-UNIT-02: explicit `false` honored', () => {
+    expect(validateBillable(false)).toEqual({ valid: true, billable: false });
+    expect(validateBillable(true)).toEqual({ valid: true, billable: true });
+  });
+
+  it('TC-16-UNIT-03: string "true" / "false" coerced', () => {
+    expect(validateBillable('true')).toEqual({ valid: true, billable: true });
+    expect(validateBillable('false')).toEqual({ valid: true, billable: false });
+    expect(validateBillable('  FALSE ')).toEqual({ valid: true, billable: false });
+  });
+
+  it('TC-16-UNIT-04: any other value rejected with the spec message', () => {
+    expect(validateBillable('maybe')).toEqual({
+      valid: false,
+      error: TIME_TRACKING_MESSAGES.invalidBillable,
+    });
+    // Numbers and objects arrive from hand-crafted requests — must not squeak through.
+    expect(validateBillable(1 as unknown as boolean)).toEqual({
+      valid: false,
+      error: TIME_TRACKING_MESSAGES.invalidBillable,
+    });
+  });
+});
+
+// --- TC-16-UNIT-05: aggregator -----------------------------------------------
+describe('splitByBillable', () => {
+  it('TC-16-UNIT-05: sums billable and non-billable minutes separately', () => {
+    const entries = [
+      { durationMinutes: 60, billable: true },
+      { durationMinutes: 30, billable: false },
+      { durationMinutes: 90, billable: true },
+      { durationMinutes: 15, billable: false },
+    ];
+    expect(splitByBillable(entries)).toEqual({
+      billableMinutes: 150,
+      nonBillableMinutes: 45,
+    });
+  });
+
+  it('legacy rows without a `billable` field count as billable', () => {
+    const entries = [
+      { durationMinutes: 60 },
+      { durationMinutes: 40, billable: null },
+      { durationMinutes: 20, billable: false },
+    ];
+    expect(splitByBillable(entries)).toEqual({
+      billableMinutes: 100,
+      nonBillableMinutes: 20,
+    });
+  });
+
+  it('returns zeros for an empty list', () => {
+    expect(splitByBillable([])).toEqual({ billableMinutes: 0, nonBillableMinutes: 0 });
+  });
+});
+
+// --- validateTimeEntry + billable integration --------------------------------
+describe('validateTimeEntry with billable', () => {
+  it('defaults to billable=true when the field is absent', () => {
+    const result = validateTimeEntry(
+      { date: TODAY, durationMinutes: 60 },
+      { today: TODAY },
+    );
+    if (!result.valid) throw new Error('expected valid');
+    expect(result.value.billable).toBe(true);
+  });
+
+  it('honours billable=false in the payload', () => {
+    const result = validateTimeEntry(
+      { date: TODAY, durationMinutes: 60, billable: false },
+      { today: TODAY },
+    );
+    if (!result.valid) throw new Error('expected valid');
+    expect(result.value.billable).toBe(false);
+  });
+
+  it('surfaces the invalid-billable error keyed under `billable`', () => {
+    const result = validateTimeEntry(
+      { date: TODAY, durationMinutes: 60, billable: 'maybe' },
+      { today: TODAY },
+    );
+    if (result.valid) throw new Error('expected invalid');
+    expect(result.errors.billable).toBe(TIME_TRACKING_MESSAGES.invalidBillable);
+  });
 });
 
 // --- validateTimeEntry -----------------------------------------------------
@@ -164,6 +267,7 @@ describe('validateTimeEntry', () => {
         durationMinutes: 150,
         task: 'API development',
         description: 'Working on endpoints',
+        billable: true,
       },
     });
   });
@@ -182,6 +286,7 @@ describe('validateTimeEntry', () => {
         durationMinutes: 60,
         task: 'Meeting',
         description: null,
+        billable: true,
       },
     });
   });
@@ -200,6 +305,7 @@ describe('validateTimeEntry', () => {
         durationMinutes: 30,
         task: 'Coding',
         description: null,
+        billable: true,
       },
     });
   });
@@ -512,14 +618,14 @@ describe('validateTimerMeta', () => {
   it('accepts empty metadata (both optional)', () => {
     expect(validateTimerMeta({})).toEqual({
       valid: true,
-      value: { task: null, description: null },
+      value: { task: null, description: null, billable: true },
     });
   });
 
   it('trims and normalizes present metadata', () => {
     expect(validateTimerMeta({ task: '  Coding  ', description: '  notes  ' })).toEqual({
       valid: true,
-      value: { task: 'Coding', description: 'notes' },
+      value: { task: 'Coding', description: 'notes', billable: true },
     });
   });
 

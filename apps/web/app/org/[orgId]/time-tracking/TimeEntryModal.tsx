@@ -72,6 +72,9 @@ export function TimeEntryModal({
   const [endTime, setEndTime] = useState('');
   const [hours, setHours] = useState('');
   const [minutes, setMinutes] = useState('');
+  // Spec 16 FR-1/FR-4 — the modal opens billable by default; the toggle carries
+  // through to the POST/PATCH body and to the toast text on save.
+  const [billable, setBillable] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   // Spec 15 — active task-link selection. Hydrated on edit from the entry's
@@ -113,6 +116,9 @@ export function TimeEntryModal({
         setStartTime('');
         setEndTime('');
       }
+      // Spec 16 — hydrate the toggle from the edited entry. Legacy rows loaded
+      // by an older client may lack the field; treat missing as billable.
+      setBillable(entry.billable !== false);
     } else {
       setProjectId(NO_PROJECT);
       setTask('');
@@ -124,6 +130,7 @@ export function TimeEntryModal({
       setHours('');
       setMinutes('');
       setTaskSelection(null);
+      setBillable(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, entry?.id]);
@@ -206,6 +213,7 @@ export function TimeEntryModal({
       body.endTime = null;
       body.durationMinutes = result.value.durationMinutes;
     }
+    body.billable = billable;
     if (!isEdit && createMembershipId) body.membershipId = createMembershipId;
 
     const url = isEdit
@@ -222,7 +230,13 @@ export function TimeEntryModal({
       if (response.ok) {
         setSubmitting(false);
         onClose();
-        showToast('toast-entry-saved', TIME_TRACKING_MESSAGES.toastEntrySaved);
+        // Spec 16 §Error Messages — differentiated toast text.
+        const toastText = isEdit
+          ? TIME_TRACKING_MESSAGES.toastEntryUpdated
+          : billable
+          ? TIME_TRACKING_MESSAGES.toastEntryBillableLogged
+          : TIME_TRACKING_MESSAGES.toastEntryNonBillableLogged;
+        showToast('toast-entry-saved', toastText);
         onSaved();
         return;
       }
@@ -238,6 +252,10 @@ export function TimeEntryModal({
         errBody?.error === 'task_project_not_assigned'
       ) {
         setErrors({ taskId: mapTaskLinkError(errBody.error) });
+      } else if (response.status === 403) {
+        // Spec 16 §Error Messages — a cross-member edit blocked by the server surfaces
+        // its own toast, keyed on `toast-time-forbidden` so E2E can assert it distinctly.
+        showToast('toast-time-forbidden', TIME_TRACKING_MESSAGES.toastEntryForbidden, 'error');
       } else {
         showToast('toast-entry-saved', errBody?.message ?? TIME_TRACKING_MESSAGES.genericError, 'error');
       }
@@ -516,8 +534,114 @@ export function TimeEntryModal({
           error={errors.description ? errorNode('description', errors.description) : undefined}
           wrapperStyle={{ gap: 0 }}
         />
+
+        {/* Spec 16 §UI — Billable toggle row. Bordered so it does not vanish in the
+            flex column of inputs, two-column layout (label + description on the left,
+            switch on the right), description text flips with the state. */}
+        <div
+          role="group"
+          aria-labelledby="tt-billable-label"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr auto',
+            gap: 12,
+            alignItems: 'center',
+            padding: '12px 14px',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-lg)',
+            background: 'var(--bg-panel-2)',
+          }}
+        >
+          <div>
+            <div
+              id="tt-billable-label"
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: 'var(--fs-13)',
+                color: 'var(--text)',
+              }}
+            >
+              Billable
+            </div>
+            <div
+              id="tt-billable-desc"
+              data-testid="time-entry-billable-toggle-label"
+              style={{ marginTop: 4, fontSize: 'var(--fs-12)', color: 'var(--text-muted)' }}
+            >
+              {billable
+                ? "Counts toward the client's Billed Amount on reports. Turn off for internal work, training, or PTO."
+                : "This entry will not appear in the client's Billed Amount total."}
+            </div>
+          </div>
+          <BillableSwitch
+            checked={billable}
+            disabled={submitting}
+            onChange={setBillable}
+            testId="time-entry-billable-toggle"
+            describedBy="tt-billable-desc"
+          />
+        </div>
       </form>
     </Modal>
+  );
+}
+
+/**
+ * Spec 16 §Accessibility — a boolean pill switch. DS ships a segmented `Toggle` (three
+ * values, no true/false semantics), not a switch, so we roll a local one that uses
+ * `role="switch"` + `aria-checked` and paints accent-filled ↔ muted-grey from tokens.
+ * Kept local to this modal because the RunningTimer bar uses a smaller variant of the
+ * same idea — inline duplication is cheaper than lifting a shared component just for two
+ * call sites (spec 16 is the only spec that needs a boolean pill today).
+ */
+function BillableSwitch({
+  checked,
+  disabled,
+  onChange,
+  testId,
+  describedBy,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (next: boolean) => void;
+  testId: string;
+  describedBy?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-describedby={describedBy}
+      data-testid={testId}
+      onClick={() => !disabled && onChange(!checked)}
+      disabled={disabled}
+      style={{
+        width: 42,
+        height: 24,
+        padding: 2,
+        borderRadius: 999,
+        border: '1px solid var(--border)',
+        background: checked ? 'var(--accent)' : 'var(--bg-sunken)',
+        cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.6 : 1,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: checked ? 'flex-end' : 'flex-start',
+        transition: 'background 120ms ease',
+      }}
+    >
+      <span
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: 999,
+          background: 'var(--bg-panel)',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+          display: 'block',
+        }}
+      />
+    </button>
   );
 }
 

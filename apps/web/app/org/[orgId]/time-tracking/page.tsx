@@ -1,6 +1,6 @@
 'use client';
 
-import { notFound } from 'next/navigation';
+import { notFound, useRouter, useSearchParams } from 'next/navigation';
 import { use, useCallback, useEffect, useMemo, useState } from 'react';
 import { Select } from '@/ds';
 import { ChevronLeftIcon, ChevronRightIcon } from '@/layout/icons';
@@ -73,6 +73,44 @@ export default function TimeTrackingPage({ params }: { params: Promise<{ orgId: 
   const [view, setView] = useState<TimeView>('monthly');
   const [anchor, setAnchor] = useState<string>(today);
   const [memberFilter, setMemberFilter] = useState<string>(MY_TIME);
+
+  // Spec 16 §Filter chips — the billable / non-billable chips are URL-persisted so a
+  // shared link opens the same filtered view. The URL uses the same values the calendar
+  // API accepts: `billable` | `non-billable` | absent (both chips on / everything). A
+  // fourth state (both OFF) is UI-only and encoded as `billable=none`; it shows an
+  // empty grid without asking the server for zero rows.
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const billableUrl = searchParams?.get('billable') ?? '';
+  const showBillable = billableUrl !== 'non-billable' && billableUrl !== 'none';
+  const showNonBillable = billableUrl !== 'billable' && billableUrl !== 'none';
+  const serverBillableParam =
+    showBillable && showNonBillable
+      ? 'all'
+      : showBillable
+      ? 'billable'
+      : showNonBillable
+      ? 'non-billable'
+      : 'none';
+
+  const updateBillable = useCallback(
+    (nextShowBillable: boolean, nextShowNonBillable: boolean): void => {
+      const params = new URLSearchParams(searchParams?.toString() ?? '');
+      const next =
+        nextShowBillable && nextShowNonBillable
+          ? null
+          : nextShowBillable
+          ? 'billable'
+          : nextShowNonBillable
+          ? 'non-billable'
+          : 'none';
+      if (next === null) params.delete('billable');
+      else params.set('billable', next);
+      const qs = params.toString();
+      router.replace(qs.length > 0 ? `?${qs}` : '?', { scroll: false });
+    },
+    [router, searchParams],
+  );
 
   const [entries, setEntries] = useState<TimeEntry[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -152,10 +190,18 @@ export default function TimeTrackingPage({ params }: { params: Promise<{ orgId: 
   }, [orgId, isReviewer]);
 
   const load = useCallback(async (): Promise<void> => {
+    // Spec 16 — the "both chips OFF" state is encoded client-side as `none`; do not
+    // ask the server for zero rows, just render an empty grid.
+    if (serverBillableParam === 'none') {
+      setEntries([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const query = new URLSearchParams({ from: range.from, to: range.to });
       if (memberFilter !== MY_TIME) query.set('membershipId', memberFilter);
+      if (serverBillableParam !== 'all') query.set('billable', serverBillableParam);
       const response = await fetch(
         `/api/organizations/${orgId}/time-entries?${query.toString()}`,
         { credentials: 'same-origin' },
@@ -170,7 +216,7 @@ export default function TimeTrackingPage({ params }: { params: Promise<{ orgId: 
       setEntries([]);
     }
     setLoading(false);
-  }, [orgId, range.from, range.to, memberFilter]);
+  }, [orgId, range.from, range.to, memberFilter, serverBillableParam]);
 
   useEffect(() => {
     void load();
@@ -328,6 +374,23 @@ export default function TimeTrackingPage({ params }: { params: Promise<{ orgId: 
             { value: 'monthly', label: 'Monthly', testId: 'tt-view-monthly' },
           ]}
         />
+
+        {/* Spec 16 §Filter chips — Billable / Non-Billable, both on by default;
+            state persists in the URL. */}
+        <div role="group" aria-label="Billable filter" style={{ display: 'inline-flex', gap: 6 }}>
+          <FilterChip
+            testId="time-grid-filter-billable"
+            label="Billable"
+            active={showBillable}
+            onToggle={() => updateBillable(!showBillable, showNonBillable)}
+          />
+          <FilterChip
+            testId="time-grid-filter-nonbillable"
+            label="Non-billable"
+            active={showNonBillable}
+            onToggle={() => updateBillable(showBillable, !showNonBillable)}
+          />
+        </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
           <button
@@ -513,6 +576,48 @@ function PeriodArrow({
       }}
     >
       {children}
+    </button>
+  );
+}
+
+/**
+ * Spec 16 §Filter chips — a toggle chip in the toolbar. No DS `Chip` primitive today
+ * (carried gap noted in the DS map); the styling mirrors the SegmentedControl idiom
+ * used above so the two controls read as siblings. `aria-pressed` carries the state
+ * for a screen reader; visual state is background + border weight.
+ */
+function FilterChip({
+  testId,
+  label,
+  active,
+  onToggle,
+}: {
+  testId: string;
+  label: string;
+  active: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      data-testid={testId}
+      data-active={active ? 'true' : 'false'}
+      aria-pressed={active}
+      onClick={onToggle}
+      style={{
+        height: 34,
+        padding: '0 14px',
+        border: `1.5px solid ${active ? 'var(--accent)' : 'var(--border-strong)'}`,
+        borderRadius: 'var(--radius-lg)',
+        background: active ? 'var(--accent-soft)' : 'var(--bg-panel)',
+        color: active ? 'var(--accent)' : 'var(--text-sub)',
+        fontFamily: 'var(--font-display)',
+        fontWeight: 500,
+        fontSize: 'var(--fs-13)',
+        cursor: 'pointer',
+      }}
+    >
+      {label}
     </button>
   );
 }
