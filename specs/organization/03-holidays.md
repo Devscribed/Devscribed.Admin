@@ -9,26 +9,30 @@ api:
   - "DELETE /api/organizations/{orgId}/holidays/{holidayId}"
 entities: [Holiday]
 tags: [holiday, calendar, paid-hours, country-code, admin-settings, reports]
-depends-on: ["02", "06", "09"]
+depends-on:
+  - "documents/04"       # Signing Settings — established the Settings sidebar group this spec extends
+  - "user-management/06" # Account Settings — owns `Account.phoneCountryCode` used for country resolution
+  - "user-management/09" # Vacation Requests — this spec surfaces a hint on that form
 ---
 
 # 03 — Holidays
 
 ## Summary
 
-Organizations maintain a **holiday calendar** — paid public holidays like New Year's Day, Independence Day, Christmas — that Reports (`specs/reports/`) render as "Holiday" activity rows in Amounts Owed at each member's current rate, and that the Time Tracking calendar (spec `user-management/12`) shows as read-only markers so members know a day is a paid holiday before they log time. A holiday has a date, a name, paid hours, and an optional country code so a single organization can serve teams in multiple jurisdictions. **This spec deliberately does not alter vacation math** — `calculateWorkingDays` (spec 09) still counts Mon–Fri only. Excluding holidays from working-day counts is a separate future amendment to spec 09.
+Organizations maintain a **holiday calendar** — paid public holidays like New Year's Day, Independence Day, Christmas — that Reports (`specs/reports/`) render as "Holiday" activity rows in Amounts Owed (that spec owns the aggregation, the rate lookup, and the tests; see §Effect on Reports), and that the Time Tracking calendar (spec `user-management/12`) shows as read-only markers so members know a day is a paid holiday before they log time. A holiday has a date, a name, paid hours, and an optional country code so a single organization can serve teams in multiple jurisdictions. **This spec deliberately does not alter vacation math** — `calculateWorkingDays` (spec 09) still counts Mon–Fri only. Excluding holidays from working-day counts is a separate future amendment to spec 09.
 
 ## Actors & Preconditions
 
 - **Actors:** `admin` creates, edits, and deletes holidays. `manager` can create and edit but cannot delete. `user` and `viewer` see holidays as read-only markers on their own Time Tracking calendar; they do not open the Settings › Holidays page.
-- **Preconditions:** the caller is an `active` member of the organization; the Settings shell (spec 02) is present.
+- **Preconditions:** the caller is an `active` member of the organization. This spec ships its own row in the sidebar's Settings group (spec 04 established the group; `apps/web/src/layout/Sidebar.tsx:150`) gated on `ViewHolidays`, so admins and managers see the row and nobody else does — no dead links, no reliance on a shell that has not shipped.
 
 ## Roles & Permission Matrix
 
 | Capability | admin | manager | user | viewer |
 |---|---|---|---|---|
 | View Settings › Holidays page | ✅ | ✅ | ❌ | ❌ |
-| List holidays via API | ✅ | ✅ | ✅ | ✅ |
+| List holidays via API — `scope=all` (all rows, `country?` filter) | ✅ | ✅ | ❌ | ❌ |
+| List holidays via API — `scope=mine` (own country + globals) | ✅ | ✅ | ✅ | ✅ |
 | Create holiday | ✅ | ✅ | ❌ | ❌ |
 | Edit holiday | ✅ | ✅ | ❌ | ❌ |
 | Delete holiday | ✅ | ❌ | ❌ | ❌ |
@@ -45,21 +49,23 @@ Organizations maintain a **holiday calendar** — paid public holidays like New 
 5. Two holidays cannot share the same `(organizationId, date, countryCode)`. `countryCode = null` counts as its own value — so a global holiday on `2026-05-01` does not conflict with a `BY`-scoped holiday on the same date.
 6. Holidays are stored in UTC dates (they are calendar-day facts, not instants); the display uses the caller's `Account.timezone` for the day-of-week label but never shifts the date.
 
-### Effect on Reports (Amounts Owed)
+### Effect on Reports (Amounts Owed) — contract, not aggregation
 
-7. A holiday whose `countryCode` matches the member's country (see §Member country resolution) contributes to that member's Amounts Owed for the range covering `date`: as an "Activity" row labelled **"Holiday · {name}"**, hours = `paidHours`, rate = the member's live/snapshotted bill rate on that date, amount = `paidHours * rate`. A `countryCode = null` holiday contributes to every member.
-8. A holiday added, edited, or deleted **after** a report has been rendered as PDF does not retroactively alter the PDF. The next JSON fetch reflects the new state.
-9. If a member has `billable = false` logged hours on a holiday date, the holiday row is added on top of them — it is a separate synthetic row, not a modification of any time entry.
+**Reports/01 owns the aggregation.** `specs/reports/01-reports.md` (§18–21, `TC-01-INT-12/13/14`) is where the "Holiday · {name}" row is defined, rate-looked-up, and tested; that spec `depends-on: organization/03`, so this one ships first with the entity and the country-resolution rule it needs, and reports/01 ships next with the rollup. This section states the invariants reports/01 is entitled to assume from the entity, not the aggregation itself — the aggregation is not restated here, and this spec's test suite does not re-verify it.
+
+7. **The storable contract is complete.** A `Holiday` row carries `date`, `name`, `paidHours` and an optional `countryCode`, and country resolution (§14–15) is the only filter reports/01 applies. Nothing further about the Amounts Owed row shape lives in this spec.
+8. **Deleting or editing a holiday never mutates a rendered PDF.** The PDF is a stored artefact (spec 05); a subsequent JSON fetch reflects the new state. Reports/01 depends on this invariant and this spec upholds it by never rewriting through the PDF path.
+9. **Holidays are orthogonal to `TimeEntry.billable`.** Non-billable hours logged on a holiday date do not shadow, modify, or replace the synthetic Holiday row reports/01 adds; the two coexist on the report. No trigger or cascade in this spec touches `TimeEntry` when a `Holiday` is written.
 
 ### Effect on the Time Tracking calendar
 
-10. Members see holidays as read-only markers on their Weekly/Monthly views: a small star icon and the holiday name in a tooltip. The day cell has an amber-tinted background token to distinguish it from regular days without being confused for a selected/current day.
+10. The Weekly and Monthly views in `apps/web/app/org/[orgId]/time-tracking/` call `GET /api/organizations/{orgId}/holidays?scope=mine` (see §API Contracts) on mount alongside their existing time-entries fetch, and render each returned row as a read-only marker on the matching day cell: a small star icon, the holiday name in a tooltip, and an amber-tinted background token distinct from the selected/current-day token. **This spec adds no route to `apps/api/src/time-tracking/`**; the calendar reads the holidays endpoint directly, so `time-tracking.controller.ts` is not touched.
 11. A member can still log time on a holiday (they may have been called in). Logging time on a holiday does not remove the marker; the two coexist visually.
 
 ### Effect on Vacation
 
 12. **Vacation math is unchanged.** `VacationRequest.workingDays` continues to be calculated by `calculateWorkingDays` (Mon–Fri only, per spec 09). A vacation that overlaps a holiday still deducts the full working-day count.
-13. The vacation Request form (spec 09) may surface a non-blocking hint when the range overlaps a holiday: **"Note: {n} paid holiday(s) fall in this range. Vacation is deducted for the working days; holidays are paid separately in Amounts Owed."** This is UI-only, informational — no math changes.
+13. The vacation Request form (spec 09) **surfaces** a non-blocking hint when the range overlaps a holiday: **"Note: {n} paid holiday(s) fall in this range. Vacation is deducted for the working days; holidays are paid separately in Amounts Owed."** This is UI-only, informational — no math changes. The element carries `data-testid="vacation-request-holiday-hint"` (§Required data-testid Attributes) and is asserted by `TC-03-E2E-05`.
 
 ### Member country resolution
 
@@ -83,7 +89,8 @@ Organizations maintain a **holiday calendar** — paid public holidays like New 
 | `createdByAccountId` | String (FK) | Account that created the holiday. |
 
 **Indexes:**
-- Unique `(organizationId, date, countryCode)` — Postgres treats each `NULL` as distinct by default, so an additional expression index `(organizationId, date, (countryCode IS NULL))` guards the "no two global holidays on same date" rule.
+- `@@unique([organizationId, date, countryCode])` — the primary uniqueness constraint. Postgres treats each `NULL` as distinct by default, so this alone permits two global (`countryCode IS NULL`) holidays on the same date.
+- A **partial** unique index that closes the `NULL` case: `CREATE UNIQUE INDEX "Holiday_org_date_globalUniq" ON "Holiday" ("organizationId", "date") WHERE "countryCode" IS NULL;`. Together the two indexes match every row of the Duplicate table in §Test Cases: same date + same non-null country → 409; same date + both null → 409; same date + one null one country → both succeed. A single expression index on `(organizationId, date, (countryCode IS NULL))` cannot satisfy both — unique it rejects the mixed-country case, non-unique it enforces nothing — so it is not used.
 - `(organizationId, date)` for range queries.
 
 ### New Capabilities
@@ -96,7 +103,10 @@ Organizations maintain a **holiday calendar** — paid public holidays like New 
 
 ### `GET /api/organizations/{orgId}/holidays`
 
-**Query:** `year?` (integer, defaults to the current year in the caller's tz), `country?` (2-letter code or `all`, default `all`).
+**Query:**
+- `year?` — integer, defaults to the current year in the caller's tz.
+- `country?` — 2-letter code, or the literal `all`. Default `all`.
+- `scope?` — one of `all` (default) or `mine`. `all` returns rows the caller's role is authorized to see and applies the `country` filter. `mine` overrides `country` and returns exactly the rows a member should see on their own Time Tracking calendar: server resolves the caller's country per §14 (`Account.phoneCountryCode` if present, else `null`) and returns holidays whose `countryCode` equals the resolved value **or** is `null` (global). `mine` and `country=all` together return `mine`'s result — the calendar page is not a settings tool.
 
 **200 Response:**
 ```json
@@ -116,7 +126,7 @@ Organizations maintain a **holiday calendar** — paid public holidays like New 
 
 Ordered by `date` ascending.
 
-Available to all members (`view-holidays` for the settings page; users read the same endpoint for calendar markers via the existing time-tracking route).
+Available to all members. `scope=all` requires `view-holidays` (admin, manager); a caller without that capability who passes `scope=all` or omits `scope` receives 404 (per the `OrgScopeGuard` pattern — unknown and unauthorized look identical). `scope=mine` is available to every authenticated org member — this is what the Time Tracking calendar calls, so `user` and `viewer` can read the endpoint without `view-holidays`.
 
 ### `POST /api/organizations/{orgId}/holidays`
 
@@ -144,9 +154,9 @@ Same body shape; all fields optional. Same error codes as POST.
 
 **204 Response** on success. Requires `delete-holidays` (admin only).
 
-### Extension to `GET /api/organizations/{orgId}/time-tracking/calendar` (spec 12)
+### No changes to `apps/api/src/time-tracking/`
 
-The existing calendar endpoint gains a `holidays` array with `{ id, date, name, paidHours, countryCode }` limited to holidays visible to the caller by country resolution (§14).
+No new route is added to `apps/api/src/time-tracking/time-tracking.controller.ts` and no existing route grows a `holidays` array. The Weekly and Monthly views call `GET /api/organizations/{orgId}/holidays?scope=mine` directly; the time-tracking module is not modified by this spec. (An earlier draft extended a `GET .../time-tracking/calendar` endpoint that does not exist and never has — the controller declares only `timer/*` and `time-entries/*` — and that section has been retired in favour of the direct read above.)
 
 ## Validation Rules
 
@@ -167,6 +177,7 @@ The existing calendar endpoint gains a `holidays` array with `{ id, date, name, 
 | Toast — created | "Holiday added." |
 | Toast — updated | "Holiday updated." |
 | Toast — deleted | "Holiday deleted." |
+| Toast — delete forbidden (403) | "You don't have permission to delete holidays." |
 | Confirm — delete holiday for a past date | "Delete **{name}** on {date}? Amounts Owed reports run after now will no longer include it. Reports already exported as PDF are unchanged." |
 | Confirm — delete holiday for a future date | "Delete **{name}** on {date}?" |
 | Confirm buttons | "Cancel" / "Delete holiday" (danger) |
@@ -175,9 +186,11 @@ The existing calendar endpoint gains a `holidays` array with `{ id, date, name, 
 | Vacation hint — overlaps holiday(s) | "Note: {n} paid holiday(s) fall in this range. Vacation is deducted for the working days; holidays are paid separately in Amounts Owed." |
 | Calendar tooltip | "★ Holiday · {name}" |
 
+Every string in the table above is exported from `packages/validation/src/holiday-messages.ts` as `HOLIDAY_MESSAGES` and re-exported through the package barrel. The API returns the delete-forbidden string in the 403 body's `message` field (overriding the `capability.guard.ts` generic-forbidden default for this resource) so the web layer's toast reads the tabulated wording, not the generic one. Rule per [CLAUDE.md](../../CLAUDE.md): never write a user-facing validation message inline.
+
 ## Screens
 
-Rendered inside the existing Settings shell (spec 02). See [`03-holidays.mock.html`](03-holidays.mock.html) for the visual target. Three states are canonical:
+Rendered as a standalone page under `/org/{orgId}/settings/holidays`. The sidebar's Settings group (spec 04) gains a **Holidays** row gated on `ViewHolidays` — no other settings shell exists yet, and none is required for this spec. See [`03-holidays.mock.html`](03-holidays.mock.html) for the visual target (the mock draws a five-item settings nav for illustration; only the Holidays row and the pre-existing Signing row from spec 04 are rendered — the other three are deferred to spec 02 and not drawn until it ships). Three states are canonical:
 
 ### Holidays list — populated
 
@@ -287,9 +300,13 @@ Actions: Cancel + primary Add/Save. Edit modal additionally shows a danger-tone 
 - `holiday-delete-confirm`, `holiday-delete-confirm-btn`, `holiday-delete-cancel-btn`
 - `field-error-date`, `field-error-name`, `field-error-paidHours`, `field-error-countryCode`
 
-### Time Tracking calendar (extension)
+### Time Tracking calendar
 
-- `time-cell-{yyyy}-{mm}-{dd}-holiday-marker`
+- `time-cell-{yyyy}-{mm}-{dd}-holiday-marker` — asserted by `TC-03-E2E-04`.
+
+### Vacation Request form (spec 09)
+
+- `vacation-request-holiday-hint` — asserted by `TC-03-E2E-05`, per requirement 13.
 
 ### Toasts
 
@@ -303,9 +320,9 @@ Actions: Cancel + primary Add/Save. Edit modal additionally shows a danger-tone 
 ### Authentication & Authorization
 
 - Every endpoint sits behind `SessionGuard` + `OrgScopeGuard`.
-- `GET /holidays` is available to all authenticated org members.
+- `GET /holidays?scope=mine` is available to every authenticated org member; `scope=all` (and the omitted-scope default) requires `view-holidays` and returns **404** — not 403 — to a caller without it, matching the `OrgScopeGuard` pattern for unknown-vs-unauthorized parity.
 - `POST` and `PATCH` require `manage-holidays`.
-- `DELETE` requires `delete-holidays`.
+- `DELETE` requires `delete-holidays`. The 403 body's `message` is `HOLIDAY_MESSAGES.deleteForbidden` (§Error Messages) so the toast shows the tabulated wording rather than the generic one.
 
 ### Cross-organization protection (IDOR)
 
@@ -370,11 +387,11 @@ Actions: Cancel + primary Add/Save. Edit modal additionally shows a danger-tone 
 - **TC-03-INT-11: Delete as manager — forbidden.** DELETE returns 403.
 - **TC-03-INT-12: Year filter.** Seed holidays in 2025 and 2026. GET with `?year=2026` returns only 2026 rows.
 - **TC-03-INT-13: Country filter.** GET with `?country=BY` returns only `BY`-scoped and `null` (global) holidays.
-- **TC-03-INT-14: Calendar extension.** GET the Time Tracking calendar as a member in BY — response includes the two matching holiday rows.
+- **TC-03-INT-14: `scope=mine` server-side country resolution.** Seed three holidays: `2026-05-01` global (`countryCode = null`), `2026-05-09` `BY`, `2026-07-04` `US`. As a `user` whose `Account.phoneCountryCode = 'BY'`, GET `/api/organizations/{orgId}/holidays?year=2026&scope=mine` — response contains exactly the global row and the `BY` row; the `US` row is absent. GET the same URL as a `user` with `phoneCountryCode = null` — response contains only the global row. This is the endpoint the Time Tracking calendar reads (§10).
 - **TC-03-INT-15: Vacation math unaffected.** Create a `VacationRequest` overlapping a holiday; `workingDays` and `deductionAmount` remain identical to the same range without the holiday.
-- **TC-03-INT-16: Amounts Owed picks up new holiday.** Add a holiday for a member's country in the report range, regenerate the report — the response includes the Holiday activity row with `hours = paidHours` at the member's current bill rate.
-- **TC-03-INT-17: Amounts Owed does not pick up cross-country holiday.** Add a `BY` holiday. A member with `phoneCountryCode = 'US'` gets no Holiday row on that date.
-- **TC-03-INT-18: Deleting a past holiday updates future JSON, not past PDFs.** Render a report PDF; delete a holiday in the range; re-fetch the JSON — the Holiday row is gone. The previously rendered PDF file is unchanged (spec 05 rule; this test exercises the invariant here).
+- **TC-03-INT-16: Retired.** Amounts Owed aggregation for a matching-country holiday is owned by `specs/reports/01-reports.md` §18 and covered by `TC-01-INT-12` (matching-country) and `TC-01-INT-14` (global). This spec's contract with reports/01 (§7) is that the entity carries `date`, `name`, `paidHours` and `countryCode`; the aggregation itself is not retested here.
+- **TC-03-INT-17: Retired.** Cross-country exclusion is owned by `specs/reports/01-reports.md` §18 and covered by `TC-01-INT-13`. Same rationale as TC-03-INT-16.
+- **TC-03-INT-18: Retired.** PDF immutability across a subsequent delete is owned by spec 05 (the rendered PDF is a stored artefact) and its consequence on Amounts Owed is asserted by reports/01. This spec upholds the invariant by never rewriting through the PDF path (§8); the case need not run twice.
 - **TC-03-INT-19: Cross-org IDOR blocked.** Admin in org A calls DELETE for a holiday in org B — 404.
 - **TC-03-INT-20: Session revocation.** Rotate `Account.securityStamp` mid-request cycle — the next mutating call returns 401.
 
@@ -382,11 +399,11 @@ Actions: Cancel + primary Add/Save. Edit modal additionally shows a danger-tone 
 
 - **TC-03-E2E-01: Admin adds a global holiday — happy path.** Admin picks the year 2026, clicks **+ Add holiday**, fills the modal with a date, name, hours, and leaves country as **All**, saves, and sees the row in the correct month band.
   - **Selectors:** `settings-tab-holidays`, `holidays-add-btn`, `holiday-date-input`, `holiday-name-input`, `holiday-hours-input`, `holiday-country-select`, `holiday-save-btn`, `toast-holiday-added`, `holidays-row-{id}`.
-- **TC-03-E2E-02: Manager cannot delete — unsuccessful flow.** Manager opens the Edit modal for a holiday and sees **no** Delete button. A direct DELETE via `page.evaluate` returns 403; toast reads **"You don't have permission to delete holidays."**
+- **TC-03-E2E-02: Manager cannot delete — unsuccessful flow.** Manager opens the Edit modal for a holiday and sees **no** Delete button. A direct DELETE via `page.evaluate` returns 403 with `message = HOLIDAY_MESSAGES.deleteForbidden`; the toast renders that exact string (`§Error Messages`, "delete forbidden").
   - **Selectors:** `holiday-delete-btn` (asserted absent), `toast-server-error`.
 - **TC-03-E2E-03: Duplicate — unsuccessful flow.** Admin tries to create a holiday on a date/country combination that already exists; sees the inline error under the date field; the Save button is not disabled.
   - **Selectors:** `field-error-date`, `holiday-save-btn`.
-- **TC-03-E2E-04: Member sees the holiday marker on the calendar.** User in `BY` opens the Weekly view. The corresponding cell has the holiday marker and, on focus, announces the holiday name.
+- **TC-03-E2E-04: Member sees the holiday marker on the calendar.** User in `BY` opens the Weekly view. The page issues `GET /api/organizations/{orgId}/holidays?scope=mine` (asserted with Playwright's `page.waitForRequest`), and the corresponding cell renders the holiday marker; on focus, the live-region announces the holiday name and paid hours (§Accessibility).
   - **Selectors:** `time-cell-{yyyy}-{mm}-{dd}-holiday-marker`.
 - **TC-03-E2E-05: Vacation form hint.** Member submits a vacation request spanning a holiday; sees the non-blocking note explaining vacation is deducted per working day.
   - **Selectors:** `vacation-request-holiday-hint`.
