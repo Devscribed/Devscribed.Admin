@@ -265,7 +265,9 @@ test.describe('15 — Time Tracking ↔ Tasks Integration', () => {
     // 6–7. Save → toast + modal closes.
     await page.getByTestId('tt-entry-save-btn').click();
     await expect(page.getByTestId('toast-entry-saved')).toBeVisible();
-    await expect(page.getByTestId('toast-entry-saved')).toHaveText(TIME_TRACKING_MESSAGES.toastEntrySaved);
+    // Spec 16 changed the create toast to a differentiated string; a billable
+    // create surfaces `toastEntryBillableLogged` ("Time logged.").
+    await expect(page.getByTestId('toast-entry-saved')).toHaveText(TIME_TRACKING_MESSAGES.toastEntryBillableLogged);
     await expect(page.getByTestId('tt-entry-modal')).toHaveCount(0);
 
     // 8. The entry (duration-only → strip row) shows the computed task label.
@@ -568,7 +570,9 @@ test.describe('15 — Time Tracking ↔ Tasks Integration', () => {
     await page.getByTestId('tt-entry-duration-minutes').fill('30');
     await page.getByTestId('tt-entry-save-btn').click();
     await expect(page.getByTestId('toast-entry-saved')).toBeVisible();
-    await expect(page.getByTestId('toast-entry-saved')).toHaveText(TIME_TRACKING_MESSAGES.toastEntrySaved);
+    // Spec 16 changed the create toast to a differentiated string; a billable
+    // create surfaces `toastEntryBillableLogged` ("Time logged.").
+    await expect(page.getByTestId('toast-entry-saved')).toHaveText(TIME_TRACKING_MESSAGES.toastEntryBillableLogged);
     await expect(page.getByTestId('tt-entry-modal')).toHaveCount(0);
 
     // The entry is present in the daily view with the free-text task.
