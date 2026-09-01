@@ -72,16 +72,37 @@ export const HIRING_MESSAGES = {
       invalid: 'Status must be open or closed',
     },
     deleteBlocked: 'Close this vacancy instead — it has candidates',
-    /** Shown against a closed vacancy's booking link, which stays visible (01 §Screens). */
+    /**
+     * The reason a menu row's `Copy booking link` is disabled — a row's description, so
+     * it says the one thing that stops the action and no more (01 §07.23).
+     */
     closedLinkNote: 'This link is no longer accepting bookings.',
+    /**
+     * The same fact stated by the screen rather than by a menu row (01 §03.9).
+     *
+     * The detail page draws the board directly beneath this line (01 §08.31), so the
+     * sentence has to answer the question the board immediately raises: closing stopped
+     * the link, and it stopped nothing else. A member reading it is looking at the
+     * interviews it did not cancel.
+     */
+    closedBoardNote:
+      'This link is no longer accepting bookings. Scheduled interviews stand and the board keeps working.',
+    /** Offered in the description's place when a vacancy has none (01 §08.30). */
+    addDescription: 'Add a description',
+    /** The clamp's two states, which are one control (01 §08.29). */
+    viewMore: 'View more',
+    viewLess: 'View less',
     /**
      * The row actions the list and the detail page share (01 §07.22).
      *
-     * One set of words for one set of actions: a menu row that read `Board` in a list and
-     * `Open board` in a header would be two names for the same destination.
+     * One set of words for one set of actions: a menu row that read `Copy link` in a list
+     * and `Copy booking link` in a header would be two names for one act.
+     *
+     * `Open board` was here until the board became the vacancy (01 §08.27). It is not a
+     * missing item: opening the row *is* opening the board, so a menu row offering it
+     * would have pointed at the page it was already on.
      */
     actions: {
-      board: 'Open board',
       copyLink: 'Copy booking link',
       edit: 'Edit vacancy',
       close: 'Close vacancy',
@@ -399,6 +420,17 @@ export const vacancyCloseConfirmation = (scheduled: number): string => {
  */
 export const vacancyDeleteConfirmation = (title: string): string =>
   `${title} has no candidates, so nothing is lost. This cannot be undone.`;
+
+/**
+ * What a refused clipboard says on the detail page (01 §07.25, §08.28).
+ *
+ * The list has somewhere to send a member — *open the vacancy* — and the detail page is
+ * that somewhere, so it has nowhere further to point. It draws no link text either, now
+ * that the booking link is a button rather than a field, so there is nothing to select
+ * by hand. What is left is the link itself, said out loud.
+ */
+export const clipboardUnavailableLink = (url: string): string =>
+  `The clipboard is unavailable. The link is ${url}`;
 
 
 const ok = (value: string): FieldResult => ({ valid: true, value });

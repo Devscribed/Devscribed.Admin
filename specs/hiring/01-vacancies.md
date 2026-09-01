@@ -146,15 +146,18 @@ whose link has not been shared is already private.
     read as data loss — the same rule the candidate database follows with `total`
     ([03 §05.20](03-candidate-database.md)).
 22. **Every row carries an actions menu**, so the common jobs do not require opening the vacancy
-    first. Five items, in this order:
+    first. Four items, in this order:
 
     | Item | Goes to | Blocked when |
     |---|---|---|
-    | Open board | the vacancy's board | — |
     | Copy booking link | the clipboard | the vacancy is `closed` |
     | Edit vacancy | the create/edit dialog, over the list | — |
     | Close vacancy / Reopen vacancy | `PATCH status` | — |
     | Delete vacancy | `DELETE`, after a confirmation | the vacancy has applications (§03.11) |
+
+    `Open board` was a fifth until §08.27 made the board *be* the vacancy. It is not a missing
+    item: the row already opens the board, because opening the row is what opening the board now
+    means.
 
 23. **A blocked item is disabled and drawn, never hidden**, and carries its reason in the row —
     `This link is no longer accepting bookings.` for a closed vacancy's link, and
@@ -173,6 +176,47 @@ whose link has not been shared is already private.
 26. **Clicking a row opens the vacancy; clicking inside the menu never does.** The menu is
     rendered inside the row's link, so a press on it is a press on the link unless the row is
     told otherwise.
+
+### 08. The Vacancy Screen
+
+27. **The vacancy and its board are one screen, at `/hiring/vacancies/{vacancyId}`.** They were
+    two routes with a button pointing each way, and the split cost a navigation to answer *who
+    has applied?* — which is the first question anybody opening a vacancy has, and the only
+    question the four cards on the old detail page could not answer. `…/{vacancyId}/board`
+    **redirects** here rather than 404-ing: it travelled, in bookmarks and in whatever anybody
+    pasted into a chat while the two were separate.
+
+    Nothing about the board itself changes. Every rule in [05](05-board.md) — the five columns,
+    the ordering, the drag model, the concurrency answer, the permissions — is about the board
+    and not about the page it was on.
+
+28. **The four cards become a header.** The booking link stops being selectable text with a
+    `Copy` beside it and becomes the button alone; the categories, the interviewer and the length
+    become one meta line under the title; the status becomes a badge beside the title; and the
+    candidate counts are dropped, because the board's own columns carry them one line further
+    down and two numbers for one fact will disagree. `Edit vacancy` leaves the header for the
+    kebab, which leaves exactly one button: the link, because copying it is the reason to visit.
+
+    Dropping the link *text* costs the one fallback a refused clipboard had — there is nothing
+    left on the page to select — so the message carries the link itself instead of pointing at a
+    page the reader is already on (§07.25).
+
+29. **The description is clamped to three lines, and expands to no more than a fifth of the
+    screen.** `View more` is drawn **only when the clamp actually cuts something**, which is a
+    fact about the width the header ended up with and not about the text, so it is measured from
+    the laid-out element rather than guessed at from a length. Expanded, the block scrolls inside
+    its share; it never grows. The board keeps the rest of the height, and a description that
+    could push it out of view would undo the reason the two are on one route.
+30. **A vacancy with no description offers `Add a description`** in its place, opening the same
+    edit dialog. An empty prose slot on the screen that owns the prose is a dead end.
+31. **A closed vacancy states what closing did**, directly above the board it did not touch:
+    *"This link is no longer accepting bookings. Scheduled interviews stand and the board keeps
+    working."* The `Copy booking link` button is **disabled**, the same rule the row menu follows
+    (§07.23) — and this note is the reason it can be, because the reason is on the page rather
+    than inside a menu nobody has opened.
+32. **The screen owns the viewport height.** The header does not scroll; the board's columns
+    scroll inside what is left of it. This is what makes §08.29's clamp load-bearing rather than
+    cosmetic.
 
 ## Screens
 
@@ -205,29 +249,33 @@ whose link has not been shared is already private.
 - Empty state: "No vacancies yet." when the organization has none, "No vacancies match these
   filters." when a search emptied the list (§07.21).
 
-### Vacancy detail
+### Vacancy — the header and its board
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│  Senior React Engineer                     [ Board ]  [ Edit ]  [⋮]  │
-│  Open · 60 minutes · Pat Owner                                       │
-│                                                                      │
-│  BOOKING LINK                                                        │
-│  https://…/book/senior-react-engineer-Kj8mQ2nP4xTw        [ Copy ]   │
-│                                                                      │
-│  CATEGORIES     React · Senior · Full Stack                          │
-│                                                                      │
-│  DESCRIPTION                                                         │
-│  We're looking for…                                                  │
-│                                                                      │
-│  12 candidates · 4 scheduled                                         │
-└──────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  ‹ Vacancies                                                                 │
+│  Senior React Engineer  [Open]            [ Copy booking link ]        [⋮]   │
+│  ▌React ▌Senior · Pat Owner · 60 min · times in Europe/Minsk                  │
+│  We're looking for an engineer who…                                          │
+│  View more                                                                   │
+│ ┌─Scheduled 4─┐ ┌─Didn't pass 7┐ ┌─Maybe 2─────┐ ┌─Passed 3────┐ ┌─Offer 1──┐│
+│ │┌───────────┐│ │┌────────────┐│ │┌───────────┐│ │┌───────────┐│ │┌────────┐││
+│ ││Jane Doe   ││ ││Ann Lee   ⚑ ││ ││Ivan Petrov││ ││Mia Chen   ││ ││Lev Orlov││
+│ │└───────────┘│ │└────────────┘│ │└───────────┘│ │└───────────┘│ │└────────┘││
+│ └─────────────┘ └──────────────┘ └─────────────┘ └─────────────┘ └──────────┘│
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- The booking link is selectable text with a Copy action; it is shown for closed vacancies too,
-  marked as no longer accepting bookings.
-- "⋮" holds "Close vacancy" / "Reopen vacancy", and "Delete vacancy" (disabled when the vacancy
-  has applications, with the reason drawn in the row itself — §07.23).
+- One route, one screen (§08.27). The header is fixed; the columns scroll inside what is left.
+- `‹ Vacancies` is a real link to the list, not a button that navigates.
+- The booking link is the **button**, not text on the page (§08.28). It is disabled on a closed
+  vacancy, with the note that says why directly beneath the meta line (§08.31).
+- The meta line is `categories · interviewer · length · times in {zone}`. The zone is the board's
+  ([05 §05](05-board.md)) and is named here, once, rather than on every card.
+- The description is clamped to three lines; `View more` appears only when the clamp cuts
+  (§08.29). A vacancy without one offers `Add a description` in its place (§08.30).
+- "⋮" holds "Edit vacancy", "Close vacancy" / "Reopen vacancy", and "Delete vacancy" (disabled
+  when the vacancy has applications, with the reason drawn in the row itself — §07.23).
 
 ### New / Edit vacancy dialog
 
@@ -418,21 +466,28 @@ Errors:
 ## UI Notes
 
 - Page header title "Vacancies", with no action of its own — the status tabs, the search and
-  "New vacancy" all live in the toolbar beneath it (§07.18). The detail page's header carries the
-  vacancy title with "Board" and "Edit" actions.
-- Category chips are read-only on the list, editable only in the dialog.
-- The booking link is always visible on the detail page, including for closed vacancies, where it
-  carries a "not accepting bookings" note.
+  "New vacancy" all live in the toolbar beneath it (§07.18). The vacancy screen has no page header
+  at all: a back link, the title with its status badge, the booking-link button and the kebab
+  (§08.28).
+- Category chips are read-only on the list and in the vacancy's meta line, editable only in the
+  dialog.
+- The booking link is a **button** on the vacancy screen, disabled for a closed vacancy and
+  explained by the note beneath the meta line (§08.31).
 - Data refresh: refetch after every mutation. No optimistic updates. A refetch over rows already
-  on screen dims them rather than replacing them with a loader.
-- The list announces its own actions with **toasts**; the detail page keeps the persistent banner
-  slot, because its announcements are about a page the member is standing on.
+  on screen dims them rather than replacing them with a loader. The board is the one exception,
+  and it is [05](05-board.md)'s: a drag is applied optimistically and reverted on failure.
+- Both screens announce with **toasts**. The vacancy screen's banner slot went with the fold-in:
+  the header is fixed and the board owns the height beneath it, so an announcement in the flow
+  would take a row of cards to say "Vacancy closed". The one message that keeps its place inline
+  is the board's own load failure, which is a state rather than an event and must not time out.
+- `?created=1` is consumed on arrival — the toast is raised once and the query is stripped, so a
+  reload of a kept address does not re-announce a create that happened yesterday.
 - Required `data-testid` attributes:
   - `vacancies-list`, `vacancies-search-input`, `vacancies-status-tabs`,
     `vacancies-status-{all|open|closed}`, `vacancy-new-button`
   - `vacancy-row-{id}`, `vacancy-title-{id}`, `vacancy-interviewer-{id}`, `vacancy-duration-{id}`,
     `vacancy-count-{id}`, `vacancy-status-{id}`, `vacancy-category-chip-{id}`
-  - `vacancy-actions-menu-{id}` and its rows `vacancy-action-{board|copy-link|edit|close|reopen|delete}-{id}`,
+  - `vacancy-actions-menu-{id}` and its rows `vacancy-action-{copy-link|edit|close|reopen|delete}-{id}`,
     with `vacancy-copy-guard-message-{id}` and `vacancy-delete-guard-message-{id}` for the two
     blocked reasons
   - `vacancy-close-confirm`, `vacancy-close-confirm-button`
@@ -440,8 +495,10 @@ Errors:
     `vacancy-interviewer-option-{accountId}`, `vacancy-duration-{minutes}`,
     `vacancy-categories-input`, `vacancy-description-input`, `vacancy-submit-button`,
     `vacancy-cancel-button`
-  - `vacancy-detail`, `vacancy-booking-link`, `vacancy-copy-link-button`, `vacancy-board-link`,
-    `vacancy-edit-button`, `vacancy-actions-menu`, `vacancy-action-close`, `vacancy-action-reopen`,
+  - `vacancy-detail`, `vacancy-back-link`, `vacancy-copy-link-button`, `vacancy-detail-categories`,
+    `vacancy-description`, `vacancy-description-toggle`, `vacancy-add-description`,
+    `vacancy-closed-link-note`,
+    `vacancy-actions-menu`, `vacancy-action-edit`, `vacancy-action-close`, `vacancy-action-reopen`,
     `vacancy-action-delete`
   - `vacancy-reassign-confirm`, `vacancy-delete-confirm`, `vacancy-delete-confirm-button`,
     `vacancy-delete-guard-message`
@@ -583,12 +640,14 @@ Errors:
   2. Enter a title, choose an interviewer, choose 60 minutes.
   3. Type "React" into categories and create it.
   4. Submit.
-  5. On the detail page, click Copy.
+  5. On the vacancy screen, click "Copy booking link".
 - **Expected Result:**
-  1. After step 4 the dialog closes, "Vacancy created" appears, and the detail page opens.
-  2. The booking link is visible and contains the title's slug plus a random suffix.
-  3. After step 5, "Booking link copied" appears.
-- **Selectors:** `vacancy-new-button`, `vacancy-dialog`, `vacancy-title-input`, `vacancy-interviewer-select`, `vacancy-duration-60`, `vacancy-categories-input`, `vacancy-submit-button`, `toast-vacancy-created`, `vacancy-booking-link`, `vacancy-copy-link-button`, `toast-link-copied`.
+  1. After step 4 the dialog closes, "Vacancy created" appears **once**, and the vacancy opens —
+     header, meta line and its (empty) board on one route.
+  2. After step 5, "Booking link copied" appears and the clipboard holds the title's slug plus a
+     random suffix. Nothing on the page prints the link (§08.28), so the clipboard is where it is
+     read from.
+- **Selectors:** `vacancy-new-button`, `vacancy-dialog`, `vacancy-title-input`, `vacancy-interviewer-select`, `vacancy-duration-60`, `vacancy-categories-input`, `vacancy-submit-button`, `toast-vacancy-created`, `vacancy-copy-link-button`, `toast-link-copied`.
 
 ### TC-H01-E2E-02: Ineligible members are visible but disabled, with a reason
 - **Level:** E2E
@@ -604,14 +663,16 @@ Errors:
 - **Level:** E2E
 - **Preconditions:** logged in as `admin`; an open vacancy with one scheduled candidate.
 - **Steps:**
-  1. Open the vacancy, open the actions menu, choose "Close vacancy".
+  1. Open the vacancy, open the actions menu, choose "Close vacancy", confirm.
   2. Open the booking link in a new context.
-  3. Return and open the board.
+  3. Return and reload.
 - **Expected Result:**
-  1. Status reads Closed; "Vacancy closed" appears.
+  1. Status reads Closed; "Vacancy closed" appears; `Copy booking link` is disabled and the note
+     beneath the meta line says what closing did and did not do (§08.31).
   2. The public page shows the wordmark, the title, and the not-accepting message — no calendar, no form.
-  3. The scheduled candidate is still on the board, in Scheduled.
-- **Selectors:** `vacancy-actions-menu`, `vacancy-action-close`, `vacancy-status-{id}`, `booking-closed-message`, `board-column-scheduled`.
+  3. The scheduled candidate is still in Scheduled — on the same screen, which is what the third
+     step used to have to navigate to (§08.27).
+- **Selectors:** `vacancy-actions-menu`, `vacancy-action-close`, `vacancy-close-confirm-button`, `vacancy-status-{id}`, `vacancy-copy-link-button`, `vacancy-closed-link-note`, `booking-closed-message`, `board-column-count-scheduled`.
 
 ### TC-H01-E2E-04: Delete is disabled once a vacancy has candidates
 - **Level:** E2E
@@ -632,6 +693,37 @@ Errors:
   1. There is no Hiring group at all — no title to open and no Vacancies row inside it — and neither flashes into view during load. A titled section that opens onto nothing reads as a permission error; an absent one reads as a product they are not part of.
   2. The direct navigation renders the not-found state, not a permission error and not any vacancy data.
 - **Selectors:** the `Hiring` group title by accessible name (asserted absent), `nav-vacancies` (asserted absent), `vacancies-list` (asserted absent).
+
+### TC-H01-E2E-08: The vacancy is one screen — a header, a clamped description, and the board
+- **Level:** E2E
+- **Preconditions:** logged in as `admin`; one vacancy with a long description and a scheduled
+  candidate, and one with no description at all.
+- **Steps:**
+  1. Open the wordy vacancy.
+  2. Activate "View more", then measure the description.
+  3. Open the vacancy with no description and activate "Add a description".
+  4. Save a one-line description.
+  5. Activate the back link.
+- **Expected Result:**
+  1. The board is on this route, under the header, holding the candidate.
+  2. The description is cut at three lines and says so; expanded, it is no taller than a fifth of
+     the viewport and the board is still visible (§08.29).
+  3. Step 3 opens the edit dialog (§08.30).
+  4. After step 4 the description is drawn and **no** toggle is: one line is not three, so nothing
+     was cut and there is nothing to expand.
+  5. The back link carries a real `href` to the list and lands on it (ledger §56).
+- **Selectors:** `vacancy-description`, `vacancy-description-toggle`, `vacancy-add-description`, `vacancy-back-link`, `board`, `board-column-count-scheduled`.
+
+### TC-H01-E2E-09: The old board address forwards to the vacancy
+- **Level:** E2E
+- **Preconditions:** logged in as `admin`; a vacancy with one card on its board.
+- **Steps:**
+  1. Navigate directly to `/org/{orgId}/hiring/vacancies/{vacancyId}/board`.
+- **Expected Result:**
+  1. The address bar reads the vacancy route — the redirect is the server's, so the route it left
+     is never rendered.
+  2. The header and the card are both on screen.
+- **Selectors:** `vacancy-detail`, `board-card-{applicationId}`.
 
 ### TC-H01-INT-09: The tab counts follow the search and ignore the tab
 - **Level:** Integration

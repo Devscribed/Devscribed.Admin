@@ -1,7 +1,7 @@
 ---
 id: "05"
 title: Board
-routes: ["/org/{orgId}/hiring/vacancies/{vacancyId}/board"]
+routes: ["/org/{orgId}/hiring/vacancies/{vacancyId}"]
 api: ["GET /api/organizations/{orgId}/hiring/vacancies/{vacancyId}/board", "PATCH /api/organizations/{orgId}/hiring/applications/{applicationId}/placement"]
 entities: [Application]
 tags: [board, kanban, drag-drop, status, position, columns, last-write-wins]
@@ -19,11 +19,18 @@ within one.
 The board column **is** the application's status. There is one field, not a column and a mirrored
 status that can drift apart.
 
+**The board is not a screen of its own.** It is drawn under the vacancy's header, on the vacancy's
+own route ([01 §08.27](01-vacancies.md)) — `…/hiring/vacancies/{vacancyId}` — and
+`…/{vacancyId}/board` redirects there. Nothing below changed with the move: the columns, the
+ordering, the drag model, the concurrency answer and the permissions are all about the board and
+not about the page it was on. What the move settled is the **height**: the screen owns the
+viewport, the header stays put, and the columns scroll inside what is left of it — §08.28.
+
 ## Actors & Preconditions
 
 - **Actors:** `admin` and `manager`. Interviewers who are only `user` do **not** reach the board —
-  they reach their own candidates through My interviews
-  ([03 §06](03-candidate-database.md)) and the card ([04](04-candidate-card.md)).
+  they reach their own candidates through the `Assigned to me` scope of the candidate database
+  ([03 §08](03-candidate-database.md)) and the card ([04](04-candidate-card.md)).
 - **Preconditions:** a vacancy in the caller's organization.
 
 ## Functional Requirements
@@ -113,7 +120,8 @@ status that can drift apart.
 23. `Application.isCancelled` is a **flag**, not a sixth column. A cancelled card keeps its column
     and its recorded assessment and is visibly marked.
 24. **The flag is set by [07-manage-booking.md](07-manage-booking.md)**, from either side: the
-    candidate cancels from their manage page, the team from the candidate card or My interviews.
+    candidate cancels from their manage page, the team from the candidate card or the candidate
+    database's row menu.
     Earlier revisions of this spec said nothing set it — that was true only while both flows were
     deferred, and the field was specified in advance precisely so their arrival could not invent a
     sixth column and strand the assessment already recorded.
@@ -131,14 +139,26 @@ status that can drift apart.
     independently. After several hiring rounds `Didn't pass` will hold dozens of cards; the fix is
     in the README's Future Improvements, deliberately, rather than a "hide old cards" checkbox
     bolted on here.
+28. **The columns' height is the screen's, not a subtraction.** The board fills the region the
+    vacancy's header leaves it, and every column fills the board — so a long column scrolls
+    against the bottom of the window rather than against a number.
+
+    While the board was a page of its own it had no such region to fill, and the columns were
+    capped by `100vh` minus the navbar, minus the shell's padding, minus a hand-counted allowance
+    for the page header. That arithmetic was correct and had to be re-counted every time anything
+    above it changed. The fold-in ([01 §08.27](01-vacancies.md)) replaced it with a fact the
+    layout already knows.
 
 ## Screens
 
 ### Board
 
+Drawn under the vacancy's header, on the vacancy's own route — see
+[01 §Screens](01-vacancies.md) for the header above it.
+
 ```
 ┌───────────────────────────────────────────────────────────────────────────────┐
-│  Senior React Engineer · Board                          Times in Europe/Minsk │
+│  Senior React Engineer  [Open]   ▌React · Pat Owner · 60 min · Europe/Minsk   │
 │                                                                               │
 │ ┌─Scheduled 4─┐ ┌─Didn't pass 7┐ ┌─Maybe 2─────┐ ┌─Passed 3────┐ ┌─Offer 1───┐│
 │ │┌───────────┐│ │┌────────────┐│ │┌───────────┐│ │┌───────────┐│ │┌─────────┐││
@@ -154,9 +174,11 @@ status that can drift apart.
 ```
 
 - `⚑` marks a card in Didn't pass or Offer with no conclusion recorded.
-- The time zone is named once, in the header.
+- The time zone is named once, in the vacancy's meta line above the columns — never per card.
 - Empty column: "Nothing here yet."
-- Empty board: "No candidates yet. Share the booking link to start."
+- Empty board: "No candidates yet. Share the booking link to start." The action it names is the
+  `Copy booking link` button already in the header, so the empty state says what is missing and
+  does not draw a second copy of the button two lines under the first.
 
 ## Flows
 
@@ -257,7 +279,9 @@ Errors:
 ## UI Notes
 
 - Columns are horizontally scrollable as a group on narrow viewports; each column scrolls
-  vertically on its own. The page body never scrolls horizontally.
+  vertically on its own. The page body never scrolls horizontally, and the group's own container
+  scrolls only sideways — the columns already scroll down, and two nested vertical scrollbars for
+  one list of cards is one too many.
 - Drag is pointer and keyboard operable: a card can be picked up with `Space`, moved with arrow
   keys, and dropped with `Space`, with the current target announced.
 - Required `data-testid` attributes:
@@ -266,7 +290,11 @@ Errors:
   - `board-card-{applicationId}`, `board-card-name-{applicationId}`,
     `board-card-when-{applicationId}`, `board-card-cv-{applicationId}`,
     `board-card-cancelled-{applicationId}`, `board-card-no-conclusion-{applicationId}`
-  - `board-empty-state`, `board-loading`, `toast-move-failed`
+  - `board-empty-state`, `board-loading`, `board-load-error`, `board-load-retry`,
+    `board-live-region`, `toast-move-failed`, `toast-board-stale`
+- A failed **move** is a toast; a board that could not be **read** keeps its place in the flow with
+  a retry. The first is an event that is over, the second is a state that is still true, and a
+  message that timed out over an empty region would leave nothing saying why it is empty.
 
 ## Out of Scope
 

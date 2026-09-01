@@ -141,10 +141,13 @@ test.describe('Category library', () => {
 
     await expect(page.getByTestId('categories-empty')).toBeVisible();
 
-    // The vacancy survives without it — a label was removed, not a record.
+    // The vacancy survives without it — a label was removed, not a record. The header's
+    // meta line simply loses its chips: there is no "No categories." to draw when the
+    // rest of the line is still there (01 §08.28).
     await page.goto(`/org/${org.organizationId}/hiring/vacancies/${vacancy.id}`);
     await expect(page.getByTestId('vacancy-detail')).toBeVisible();
-    await expect(page.getByTestId('vacancy-detail-categories')).toHaveText('No categories.');
+    await expect(page.getByTestId('vacancy-detail-categories')).toHaveCount(0);
+    await expect(page.getByTestId('vacancy-detail')).toContainText('Pat Owner');
   });
 
   test('points an empty library at where categories are actually created', async ({

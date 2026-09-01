@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import {
   addMember,
   bookInterview,
@@ -8,6 +8,16 @@ import {
   signIn,
   uniqueEmail,
 } from './helpers';
+
+/**
+ * Whether an element is cutting its own content off — the only way to tell a clamp that
+ * fired from one that had nothing to cut, since both look identical in the markup.
+ */
+const clipped = (page: Page, testId: string): Promise<boolean> =>
+  page.evaluate((id) => {
+    const node = document.querySelector<HTMLElement>(`[data-testid="${id}"]`);
+    return node !== null && node.scrollHeight - node.clientHeight > 2;
+  }, testId);
 
 /** TC-H01-E2E-01 — create a vacancy and copy its booking link. */
 test.describe('Vacancies', () => {
@@ -40,18 +50,21 @@ test.describe('Vacancies', () => {
     await expect(page.getByTestId('toast-vacancy-created')).toHaveText('Vacancy created');
     await expect(page.getByTestId('vacancy-detail')).toBeVisible();
 
+    // The four cards this screen used to be are one meta line now, and the board has the
+    // rest of the height (01 §08.28).
     await expect(page.getByTestId('vacancy-detail-categories')).toHaveText('React');
+    await expect(page.getByTestId('vacancy-detail')).toContainText('60 min');
+    await expect(page.getByTestId('vacancy-detail')).toContainText('Pat Owner');
+    await expect(page.getByTestId('board-empty-state')).toBeVisible();
 
-    const link = page.getByTestId('vacancy-booking-link');
-    await expect(link).toBeVisible();
-    // The title's slug plus a random suffix — the same title never collides.
-    await expect(link).toHaveText(/\/book\/senior-react-engineer-[A-Za-z0-9_-]{12}$/);
-
+    // The link is a button rather than a field: nothing on the page to read, so the
+    // clipboard is where the assertion has to look.
     await page.getByTestId('vacancy-copy-link-button').click();
     await expect(page.getByTestId('toast-link-copied')).toHaveText('Booking link copied');
 
     const clipboard = await page.evaluate(() => navigator.clipboard.readText());
-    expect(clipboard).toBe(await link.textContent());
+    // The title's slug plus a random suffix — the same title never collides.
+    expect(clipboard).toMatch(/\/book\/senior-react-engineer-[A-Za-z0-9_-]{12}$/);
   });
 
   /**
@@ -123,17 +136,20 @@ test.describe('Vacancies', () => {
 
     await signIn(page, org.email);
     await page.goto(`/org/${org.organizationId}/hiring/vacancies/${vacancy.id}`);
-    await expect(page.getByTestId('vacancy-detail-counts')).toHaveText('1 candidates · 1 scheduled');
+    // The count the detail page used to print is the board's own, one screen down.
+    await expect(page.getByTestId('board-column-count-scheduled')).toHaveText('1');
 
     await page.getByTestId('vacancy-actions-menu').click();
     await page.getByTestId('vacancy-action-close').click();
+    await page.getByTestId('vacancy-close-confirm-button').click();
 
     await expect(page.getByTestId('toast-vacancy-closed')).toHaveText('Vacancy closed');
     await expect(page.getByTestId(`vacancy-status-${vacancy.id}`)).toHaveText('Closed');
-    // The link stays on the page, marked — the manager still has to be able to copy it.
-    await expect(page.getByTestId('vacancy-booking-link')).toBeVisible();
+    // The button stays and is refused, and the note says what closing did and did not do
+    // — with the board it did not touch directly underneath it (01 §08.31).
+    await expect(page.getByTestId('vacancy-copy-link-button')).toBeDisabled();
     await expect(page.getByTestId('vacancy-closed-link-note')).toHaveText(
-      'This link is no longer accepting bookings.',
+      'This link is no longer accepting bookings. Scheduled interviews stand and the board keeps working.',
     );
 
     // The link itself, opened by someone with no session at all.
@@ -151,9 +167,9 @@ test.describe('Vacancies', () => {
     await expect(visitor.getByTestId('booking-first-name-input')).toHaveCount(0);
     await anonymous.close();
 
-    // The interview that was already booked is untouched.
+    // The interview that was already booked is untouched, and the board still holds it.
     await page.reload();
-    await expect(page.getByTestId('vacancy-detail-counts')).toHaveText('1 candidates · 1 scheduled');
+    await expect(page.getByTestId('board-column-count-scheduled')).toHaveText('1');
 
     // And it goes back, freely.
     await page.getByTestId('vacancy-actions-menu').click();
@@ -177,7 +193,9 @@ test.describe('Vacancies', () => {
     await expect(blocked).toBeVisible();
     await expect(blocked).toHaveAttribute('aria-disabled', 'true');
 
-    // Reachable by keyboard, and the reason is its accessible description.
+    // Reachable by keyboard, and the reason is its accessible description. The menu opens
+    // on Edit and the three rows are Edit · Close · Delete, so Delete is two down.
+    await page.keyboard.press('ArrowDown');
     await page.keyboard.press('ArrowDown');
     await expect(blocked).toBeFocused();
     const tooltip = page.getByTestId('vacancy-delete-guard-message');
@@ -186,13 +204,16 @@ test.describe('Vacancies', () => {
     expect(await blocked.getAttribute('aria-describedby')).toBe(await tooltip.getAttribute('id'));
 
     await page.keyboard.press('Enter');
-    await expect(page.getByTestId('vacancy-delete-confirm')).toHaveCount(0);
+    await expect(page.getByTestId('vacancy-delete-confirm')).toBeHidden();
     await page.keyboard.press('Escape');
 
     // A vacancy nobody has applied to deletes outright.
     await page.goto(`/org/${org.organizationId}/hiring/vacancies/${empty.id}`);
     await page.getByTestId('vacancy-actions-menu').click();
     await page.getByTestId('vacancy-action-delete').click();
+    await expect(page.getByTestId('vacancy-delete-confirm')).toContainText(
+      'Empty DotNet Engineer has no candidates, so nothing is lost. This cannot be undone.',
+    );
     await page.getByTestId('vacancy-delete-confirm-button').click();
 
     await page.waitForURL('**/hiring/vacancies');
@@ -221,6 +242,7 @@ test.describe('Vacancies', () => {
     await page.goto(`/org/${org.organizationId}/hiring/vacancies/${closed.id}`);
     await page.getByTestId('vacancy-actions-menu').click();
     await page.getByTestId('vacancy-action-close').click();
+    await page.getByTestId('vacancy-close-confirm-button').click();
     await expect(page.getByTestId('toast-vacancy-closed')).toBeVisible();
 
     await page.goto(`/org/${org.organizationId}/hiring/vacancies`);
@@ -372,7 +394,10 @@ test.describe('Vacancies', () => {
     await signIn(page, org.email);
     await page.goto(`/org/${org.organizationId}/hiring/vacancies/${vacancy.id}`);
 
-    await page.getByTestId('vacancy-edit-button').click();
+    // Edit lives in the menu now — the header's one button is the booking link, because
+    // copying it is the reason to open a vacancy (01 §08.28).
+    await page.getByTestId('vacancy-actions-menu').click();
+    await page.getByTestId('vacancy-action-edit').click();
     await expect(page.getByTestId('vacancy-dialog')).toBeVisible();
     await page.getByTestId('vacancy-title-input').fill('Renamed Engineer');
     await page.getByTestId('vacancy-duration-45').click();
@@ -387,11 +412,76 @@ test.describe('Vacancies', () => {
 
     await expect(page.getByTestId('toast-vacancy-updated')).toHaveText('Vacancy updated');
     await expect(page.getByTestId('page-title')).toHaveText('Renamed Engineer');
-    await expect(page.getByTestId('vacancy-detail')).toContainText('45 minutes');
-    // The slug is frozen, so the link already sent keeps working.
-    await expect(page.getByTestId('vacancy-booking-link')).toHaveText(
-      new RegExp(`/book/${vacancy.publicSlug}$`),
+    await expect(page.getByTestId('vacancy-detail')).toContainText('45 min');
+    // The slug is frozen, so the link already sent keeps working. It is copied rather
+    // than read: the header draws a button, not the URL.
+    await page.getByTestId('vacancy-copy-link-button').click();
+    await expect(page.getByTestId('toast-link-copied')).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toContain(
+      `/book/${vacancy.publicSlug}`,
     );
+  });
+
+  /**
+   * 01 §08.27–32 — the header the four cards became, and the board underneath it.
+   *
+   * The description is the part with a rule that cannot be read off the markup: `View
+   * more` is drawn only when the three-line clamp actually cuts the text, which depends
+   * on the width the header ended up with and not on the string.
+   */
+  test('draws one screen: a header, a clamped description, and the board', async ({
+    page,
+    request,
+  }) => {
+    const org = await registerOrganization(request, uniqueEmail('hiring-detail'));
+    const short = await createVacancy(request, org, { title: 'Short Engineer' });
+    const long = await createVacancy(request, org, {
+      title: 'Wordy Engineer',
+      description: 'We are looking for somebody. '.repeat(40),
+    });
+    await bookInterview(request, long.publicSlug);
+
+    await signIn(page, org.email);
+    await page.goto(`/org/${org.organizationId}/hiring/vacancies/${long.id}`);
+
+    // The board is on this route, under the header, with the candidate on it.
+    await expect(page.getByTestId('board')).toBeVisible();
+    await expect(page.getByTestId('board-column-count-scheduled')).toHaveText('1');
+
+    // Clamped: the element is shorter than the text inside it, and the control says so.
+    const description = page.getByTestId('vacancy-description');
+    const toggle = page.getByTestId('vacancy-description-toggle');
+    await expect(toggle).toHaveText('View more');
+    expect(await clipped(page, 'vacancy-description')).toBe(true);
+
+    await toggle.click();
+    await expect(toggle).toHaveText('View less');
+    // Expanded, it scrolls inside its own share of the screen rather than pushing the
+    // board off the bottom of a page that does not scroll to reach it (01 §08.29).
+    const box = (await description.boundingBox())!;
+    expect(box.height).toBeLessThanOrEqual(page.viewportSize()!.height / 5 + 1);
+    await expect(page.getByTestId('board')).toBeVisible();
+
+    // A vacancy with no description offers to write one, and opens the same dialog.
+    await page.goto(`/org/${org.organizationId}/hiring/vacancies/${short.id}`);
+    await expect(page.getByTestId('vacancy-description')).toHaveCount(0);
+    await expect(page.getByTestId('vacancy-description-toggle')).toHaveCount(0);
+    await page.getByTestId('vacancy-add-description').click();
+    await expect(page.getByTestId('vacancy-dialog')).toBeVisible();
+    await page.getByTestId('vacancy-description-input').fill('Now it has one.');
+    await page.getByTestId('vacancy-submit-button').click();
+    await expect(page.getByTestId('vacancy-description')).toHaveText('Now it has one.');
+    // One line is not three, so nothing was cut and there is nothing to expand.
+    await expect(page.getByTestId('vacancy-description-toggle')).toHaveCount(0);
+
+    // Back goes to the list, and it is a real link rather than a button that navigates.
+    await expect(page.getByTestId('vacancy-back-link')).toHaveAttribute(
+      'href',
+      `/org/${org.organizationId}/hiring/vacancies`,
+    );
+    await page.getByTestId('vacancy-back-link').click();
+    await expect(page).toHaveURL(/\/hiring\/vacancies$/);
+    await expect(page.getByTestId('vacancies-list')).toBeVisible();
   });
 
   /**

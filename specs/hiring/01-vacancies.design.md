@@ -108,27 +108,47 @@ the session before rendering anything, so a gated row never flashes into view an
   treatment to align.
 - Category chips sit on a second line inside the title cell.
 
-## Layout — detail
+## Layout — the vacancy
 
 ```
-  Senior React Engineer                    [ Board ]  [ Edit ]  [⋮]  ← PageHeader
-  Open · 60 minutes · Pat Owner                                      ← subtitle
-  ┌───────────────────────────────────────────────────────────────┐
-  │ ⓘ Vacancy created                                          ✕  │  ← banner slot
-  └───────────────────────────────────────────────────────────────┘
-  ┌───────────────────────────────────────────────────────────────┐
-  │ Booking link                                                  │  ← Card title = h2
-  │ https://…/book/senior-react-engineer-Kj8mQ2nP4xTw   [ Copy ]  │
-  └───────────────────────────────────────────────────────────────┘
-  ┌──────────────────────────┐  ┌──────────────────────────────────┐
-  │ Categories               │  │ Description                      │
-  │ ▌React ▌Senior ▌Full…    │  │ We're looking for…               │
-  └──────────────────────────┘  └──────────────────────────────────┘
+  ‹ Vacancies                                                        ← BackTo (§56)
+  Senior React Engineer  [Open]      [ Copy booking link ]     [⋮]   ← PageTitle + Badge
+  ▌React ▌Senior · Pat Owner · 60 min · times in Europe/Berlin       ← meta line, --font-size-s
+  This link is no longer accepting bookings. Scheduled interviews…   ← only when closed, xs
+  We're looking for an engineer who has shipped something they are
+  proud of and can talk about the parts of it that went badly. You
+  will be the third engineer on a team that is about to be six, …    ← clamped to 3 lines
+  View more
+  ┌ Scheduled  4 ┐┌ Didn't pass 7┐┌ Maybe     2 ┐┌ Passed 3 ┐┌ Offer 1 ┐
+  │┌────────────┐││┌────────────┐││             ││          ││         │
+  ││ Jane Doe   ││││ Ann Lee  ⚑ ││                                     
+  │└────────────┘││└────────────┘│
+  └──────────────┘└──────────────┘└─────────────┘└──────────┘└─────────┘
 ```
 
-The booking link is the first thing on the page because copying it is the reason to visit. It is
-selectable text at `--font-size-s`, truncated with an ellipsis on narrow viewports but never
-wrapped.
+**Four cards became a header** ([01 §08.28](01-vacancies.md)). What is above the columns is
+everything the old detail page was, in about a fifth of the height: `BackTo`, the title with its
+status `Badge`, the one button worth a button, the kebab, one meta line, and the description.
+
+- **The booking link is the button.** It was selectable text with a `Copy` beside it, on the
+  argument that copying it is the reason to visit — which is still true, and is now the argument
+  for the button rather than for the field. A 60-character opaque slug is not read by anybody, and
+  the room it took is room the board wanted. Disabled on a closed vacancy, with the note that says
+  why on the line above.
+- **The meta line is a list of facts, not a set of captions.** `Card` titles bought nothing here:
+  `Categories` over two chips and `Description` over a paragraph are labels for things that say
+  what they are. The chips are elements and the rest is text, so the screen interleaves them
+  around a `·` separator that is `aria-hidden` — a reader hears the facts, not the punctuation.
+- **The description is the only thing on the page with a size rule**, because it is the only thing
+  that can be arbitrarily long. Three lines, `-webkit-line-clamp`; `View more` only when the clamp
+  cuts; expanded, `max-height` of a fifth of the viewport with `overflow-y: auto`.
+
+**The screen owns the viewport height.** `AppShell`'s content box is `height: 100%` of a flex child
+of a `100vh` column, so it is a **definite** height — which is what lets this screen take it and
+hand what is left to the board as `flex: 1`. That single fact replaced the columns' old `100vh`
+subtraction ([05 design §Responsive](05-board.design.md)). Nothing is clipped: a header taller than
+the viewport overflows into the shell's own scroller instead, which is the degradation to want in
+the one case that produces it.
 
 ## The three calls this phase sets
 
@@ -167,6 +187,26 @@ The dialog's own error banner is the same component in the same role, at the top
 > slot. One rule, said properly: **an announcement about the page goes in the page; an
 > announcement about a row goes over the corner of it.**
 
+> **Amended again by Phase 8, and the slot is gone.** The rule above was right and its premise
+> stopped being true: "in flow it pushes the content down rather than covering it" was a virtue
+> while the content below was four cards on a page that scrolled. The content below is the board
+> now, on a screen that does **not** scroll ([01 §08.32](01-vacancies.md)) — so a banner in the
+> flow does not push anything down, it takes a row of cards away to say "Vacancy closed", and
+> gives it back when it is dismissed. The vacancy screen raises `Toast`s.
+>
+> One message stays inline, and it sharpens the rule rather than bending it: the **board's load
+> failure**. Everything the slot ever held was an *event* — created, updated, closed, copied — and
+> an event is over by the time it is announced. A board that would not load is a **state**, it is
+> standing in for the whole region, and the retry lives inside it. A toast that timed out there
+> would leave an empty half-screen with nothing saying why. So: **events announce and leave;
+> states are drawn and stay.** That is the distinction the slot was approximating with "does not
+> time out", said in terms of the message rather than of the component.
+>
+> The consequence that had to be handled in code: a slot is idempotent and a queue is not. Setting
+> the same banner twice showed it once; pushing the same toast twice is two lines. `?created=1` is
+> now consumed on arrival — raised once, then stripped from the address — which also stops a
+> reload of a kept URL re-announcing a create from last week.
+
 ### Headings
 
 `SectionLabel` is gone (D4; blue captions nothing, and `PageTabs` is its only uppercase). Each of
@@ -182,6 +222,13 @@ headline-6 step:
 Sentence case, not caps — blue's card titles are sentence case, and the uppercase micro-caps were
 Meridian's. `<h2>` because `PageTitle` is the page's `<h1>` and these are the sections under it;
 blue renders its titles as `<div>`s, which is [§27](../design-system/ledger.md).
+
+> **Amended by Phase 8: all three are gone, and so is the question.** Each was a caption over
+> something that says what it is — a URL, two chips, a paragraph — and the fold-in dissolved the
+> cards they titled into one meta line. The `<h2>` level under `PageTitle` did not go with them:
+> `BoardColumn` renders each column name as one ([§43](../design-system/ledger.md)), so the outline
+> beneath the `<h1>` is now the five columns, which is a truer table of contents for this screen
+> than `Booking link · Categories · Description` ever was.
 
 The dialog's micro-labels are field labels rather than captions, so they are the labels the
 fields draw themselves (`TextInput`, `Select`, `TextArea`) plus one `FieldLabel` for the radio
@@ -213,9 +260,10 @@ answer: a menu row has somewhere to put a sentence, an inline icon may not.
 
 | Screen element | DS component | Props | `data-testid` |
 |---|---|---|---|
-| Page header | `PageHeader` (app adapter over `PageTitle`) | `title`, `subtitle`, `action` | `page-title` |
-| Announcement · detail | `InfoBanner` | `variant`, `onDismiss` | `toast-vacancy-*`, `toast-link-copied` |
-| Announcement · list | `Toast` inside `ToastHost` | `tone`, `onDismiss` | `toast-vacancy-*`, `toast-link-copied`, `toast-link-copy-failed` |
+| Page header · list | `PageHeader` (app adapter over `PageTitle`) | `title` | `page-title` |
+| Back to the list | `BackTo` ([§56](../design-system/ledger.md)) | `label`, `href`, `onClick`, `data-testid` | `vacancy-back-link` |
+| Vacancy title | `PageTitle` | node children | `page-title` |
+| Announcement · both screens | `Toast` inside `ToastHost` ([§54](../design-system/ledger.md)) | `tone`, `onDismiss` | `toast-vacancy-*`, `toast-link-copied`, `toast-link-copy-failed` |
 | List toolbar | `TableToolbar` | `tabs`, `activeTab`, `onTab`, `tabsLabel`, `tabsTestId`, `search*` | — |
 | Status tabs | `PageTabs` (through `TableToolbar`) | `TabItem` objects — `value`, `label`, `testId` | `vacancies-status-tabs`, `vacancies-status-{all\|open\|closed}` |
 | Search | `SearchInput` (through `TableToolbar`) | `searchPlaceholder`, `searchLabel`, `searchTestId` | `vacancies-search-input` |
@@ -227,7 +275,12 @@ answer: a menu row has somewhere to put a sentence, an inline icon may not.
 | Status pill | `Badge` | `status="active"` open, `"inactive"` closed | `vacancy-status-{id}` |
 | Loading | `Preloader` | default 12/7, centred in the card | `vacancies-loading` |
 | Empty state | `EmptyState` | — | `vacancies-empty-state` |
-| Detail sections | `Card` | `title` | — |
+| Meta line | `Chip` + text, `·` separators `aria-hidden` | — | `vacancy-detail-categories` |
+| Description | plain `<div>`, `-webkit-line-clamp: 3` | — | `vacancy-description` |
+| Expand / collapse | text button, `--color-blue`, `aria-expanded` | — | `vacancy-description-toggle` |
+| Add a description | text button, opens the edit dialog | — | `vacancy-add-description` |
+| Closed note | plain `<p>`, `--font-size-xs` | — | `vacancy-closed-link-note` |
+| The board | see [05 design](05-board.design.md) | — | `board` |
 | New / Edit | `Modal` | `title`, `style={{ width: 520 }}` | `vacancy-dialog` |
 | Dialog footer | `FormActions` | `align="full"` | — |
 | Title field | `TextInput` | `label`, `id`, `error`, `errorId` | `vacancy-title-input` |
@@ -235,9 +288,10 @@ answer: a menu row has somewhere to put a sentence, an inline icon may not.
 | Length | native radios + `FieldLabel` | `role="radiogroup"` | `vacancy-duration-{minutes}` |
 | Categories | `Select` `isMulti isSearchable allowCreate` | `variant="formik"`, `chipTestId` | `vacancy-categories-input` |
 | Description | `TextArea` | `label`, `id`, `error`, `errorId` | `vacancy-description-input` |
-| Row actions · detail | `Popover` | `label`, `items` | `vacancy-actions-menu` |
-| Copy link | `Button` | default variant | `vacancy-copy-link-button` |
-| Confirmations · detail | `Modal` + `FormActions` | — | `vacancy-reassign-confirm`, `vacancy-delete-confirm` |
+| Actions · vacancy screen | `Popover` | `label`, `items` with `disabled` + `description` | `vacancy-actions-menu` |
+| Copy link | `Button` | `variant="primary"`, `disabled` when closed | `vacancy-copy-link-button` |
+| Confirmations · vacancy screen | `ConfirmDialog` | `busy`, `closeOnAccept={false}`, `acceptTestId` | `vacancy-close-confirm`, `vacancy-delete-confirm` |
+| Reassign confirm | `Modal` + `FormActions` | — | `vacancy-reassign-confirm` |
 
 The `toast-*` ids are the ones the suite already knows these announcements by. They named a
 `Toast` when there was one to name; what they identify now is the banner slot.
@@ -262,7 +316,7 @@ has no three-way inline choice to measure — so the row stays three native radi
 | Status tablist name | Vacancy status |
 | Column headers | Title · Interviewer · Length · Candidates · Status · Actions |
 | Row menu name | Actions for {title} |
-| Row menu items | Open board · Copy booking link · Edit vacancy · Close vacancy \| Reopen vacancy · Delete vacancy |
+| Row menu items | Copy booking link · Edit vacancy · Close vacancy \| Reopen vacancy · Delete vacancy |
 | Blocked copy reason | This link is no longer accepting bookings. |
 | Close confirm title | Close this vacancy? |
 | Close confirm body | The booking link stops accepting new candidates. {n} scheduled interviews stand, and the board keeps working. |
@@ -270,9 +324,13 @@ has no three-way inline choice to measure — so the row stays three native radi
 | Delete confirm title | Delete this vacancy? |
 | Delete confirm body | {title} has no candidates, so nothing is lost. This cannot be undone. |
 | Clipboard unavailable, list | The clipboard is unavailable. Open the vacancy to copy its link. |
+| Clipboard unavailable, vacancy screen | The clipboard is unavailable. The link is {url} |
 | Toast · deleted | Vacancy deleted |
-| Detail card titles | Booking link · Categories · Description |
-| Copy button | Copy |
+| Back link | Vacancies |
+| Copy button | Copy booking link |
+| Meta line | {chips} · {interviewer} · {n} min · times in {zone} |
+| Description toggle | View more \| View less |
+| No description | Add a description |
 | Dialog title, create | New vacancy |
 | Dialog title, edit | Edit vacancy |
 | Field label · title | Title |
@@ -288,8 +346,8 @@ has no three-way inline choice to measure — so the row stays three native radi
 | Create row | Create "…" |
 | Submit, create | Create vacancy |
 | Submit, edit | Save changes |
-| Closed link note | This link is no longer accepting bookings. |
-| Menu items | Close vacancy · Reopen vacancy · Delete vacancy |
+| Closed link note, vacancy screen | This link is no longer accepting bookings. Scheduled interviews stand and the board keeps working. |
+| Menu items, vacancy screen | Edit vacancy · Close vacancy \| Reopen vacancy · Delete vacancy |
 | Delete blocked reason | Close this vacancy instead — it has candidates |
 | Reassign confirmation body | {n} scheduled interviews keep their current time and interviewer. |
 | Empty list | No vacancies yet. |
@@ -298,6 +356,11 @@ has no three-way inline choice to measure — so the row stays three native radi
 Which of the two empty lines is drawn is decided by the organization's **unfiltered** total, never
 by a tab's count: somebody with twelve vacancies who searched for a thirteenth must not be told
 they have none ([01 §07.21](01-vacancies.md)).
+
+The closed note exists twice, at two lengths, and that is deliberate: a menu row's `description`
+is the one thing that stops the action (`This link is no longer accepting bookings.`), while the
+vacancy screen's is a statement about the vacancy, made directly above the board that closing did
+not touch. Same fact, two jobs.
 
 Column headers and card titles move from Meridian's uppercase micro-caps to blue's sentence case;
 the words are unchanged. The interviewer hint states *why* a mailbox is required, up front, rather
@@ -314,7 +377,10 @@ than waiting for the visitor to discover it from a disabled row.
 | **Select option · ineligible** | `--text-secondary` ink, reason trailing at `--font-size-xs`, `aria-disabled`, no hover, not selectable — but still reachable by arrow key |
 | **Select option · selected** | `--color-blue` fill, white text (single-value only; a chosen chip leaves the list) |
 | **Menu row · blocked** | `--text-secondary`, `aria-disabled`, focusable, reason drawn beneath |
-| **Link · copied** | `InfoBanner variant="success"`; the button itself does not change label |
+| **Link · copied** | `Toast tone="success"`; the button itself does not change label |
+| **Link · closed vacancy** | `Button disabled` — blue's own disabled paint — with the reason drawn as a sentence above it rather than in a `title` |
+| **Description · clamped** | Three lines, then an ellipsis, with `View more` beneath. Drawn only when `scrollHeight` exceeds `clientHeight`: whether the clamp cut anything is a fact about the width the header ended up with, not about the string |
+| **Description · expanded** | `max-height` of a fifth of the viewport, floored at 66px and capped at 132px, `overflow-y: auto`. It never grows past its share — the board keeps the rest |
 | **Row · hover** | `--color-row-hover`, blue's neutral grey. Meridian tinted it violet |
 | **Loading** | `Preloader` centred in the card, under the table header. Content pops in rather than resolving in place — the honest cost of losing `Skeleton` (D4) |
 | **Refetching** | The rows stay, dimmed and `aria-busy` (`Table busy`, [§34](../design-system/ledger.md)). Only the first load draws the `Preloader`; a search that replaced the table on every keystroke would reflow the page under the reader |
@@ -332,9 +398,16 @@ adjacent, so nothing flattened.
   is a real button (`--space-6` inset), so emptying the field does not need a pointer.
 - **Row click** navigates to the detail page. Rows are real anchors, so middle-click and
   copy-address work; the modifier keys are left to the browser.
-- **Copy** writes the absolute URL to the clipboard and raises the banner. On a clipboard failure
-  the link text is selected instead, so the visitor can copy manually — the action never silently
-  fails.
+- **Copy** writes the absolute URL to the clipboard and raises a toast. A clipboard failure is
+  answered differently on each screen, and the difference is *where else the link is*: a list row
+  points at the vacancy, and the vacancy has nowhere further to point, so it says the link out
+  loud. The action never silently fails on either.
+- **Back** is a real anchor with a real `href` ([§56](../design-system/ledger.md)): middle-click,
+  open-in-new-tab and copy-address all work, and only an unmodified click is taken by the router.
+  The same rule `Table`'s `rowHref`/`onRowClick` pair follows on the list.
+- **View more** toggles the clamp and nothing else — no scroll, no focus move. The control keeps
+  its place under the text in both states, so the thing that expanded is the thing beneath the
+  cursor.
 - **Category picker** — typing filters existing categories case-insensitively; when nothing
   matches, a `Create "…"` row appears last. Chips come off by clicking their cross or by
   `Backspace` in the empty input, which is react-select's own behaviour.
@@ -355,9 +428,15 @@ adjacent, so nothing flattened.
 
 | Width | Layout |
 |---|---|
-| ≥ 1200px | Full shell; detail's Categories and Description side by side |
-| 1024–1199px | Shell switches to hamburger + drawer (spec 00); the two detail columns still sit side by side |
-| < 1024px | Detail's Categories and Description stack; the list toolbar wraps — `TableToolbar` is a `flex-wrap` row, so the tabs keep the first line and the search and `New vacancy` drop below them |
+| ≥ 1200px | Full shell; the vacancy's header over its board, the header fixed and the columns scrolling inside what is left |
+| 1024–1199px | Shell switches to hamburger + drawer (spec 00); the vacancy's header is unchanged and the column group scrolls sideways inside its own container |
+| < 1024px | The header's title and its actions wrap onto separate lines — the title group has a `260px` flex basis, so the button and the kebab drop beneath it rather than squeezing the name. The list toolbar wraps the same way: `TableToolbar` is a `flex-wrap` row, so the tabs keep the first line and the search and `New vacancy` drop below them |
+
+The vacancy screen's `height: 100%` holds at every width, and the one case it degrades in is a
+header taller than the viewport. Nothing is clipped there: the root sets no `overflow`, so it
+overflows into the shell's own scroller and the board follows it down. The design's own version
+wraps the screen in `overflow: hidden`; that is right for a prototype with a fixed frame and wrong
+here, where a clipped header would hide the only control that leaves the page.
 
 The booking link truncates with `text-overflow: ellipsis`; the page body never scrolls
 horizontally.
@@ -368,8 +447,8 @@ was ever built, and blue's `Table` is a fixed 70px flex row with no responsive f
 (D1) — its columns flex, and that is the whole behaviour. The claim is removed rather than
 carried forward unimplemented.
 
-The two-column rule lives in `globals.css` because a media query cannot be an inline style, which
-is the same reason `.page-title` and the shell's breakpoint live there.
+The screen's own geometry lives in `globals.css` rather than in inline styles, because a media
+query cannot be one — the same reason `.page-title` and the shell's breakpoint live there.
 
 ## Accessibility
 
@@ -388,8 +467,16 @@ is the same reason `.page-title` and the shell's breakpoint live there.
 - The status strip is a real tablist with an accessible name (`Vacancy status`), and the count is
   inside each tab's label rather than beside it — so it is part of what is announced, not a number
   a reader has to go and find.
-- The list's toasts arrive in a polite live region and dismiss themselves; they never take focus,
-  and a second action taken before the first has faded adds a line rather than replacing one.
+- Toasts arrive in a polite live region and dismiss themselves; they never take focus, and a
+  second action taken before the first has faded adds a line rather than replacing one.
+- The back link is an anchor with an `href`, so it is announced as a link to somewhere and behaves
+  like one ([§56](../design-system/ledger.md)).
+- The meta line's `·` separators are `aria-hidden`: a reader hears `React, Senior, Pat Owner,
+  60 min`, not four middle dots.
+- `View more` is a real `<button aria-expanded>` whose label says which way it will go, and the
+  expanded block is scrollable, so everything the clamp hid stays reachable from the keyboard.
+- The board's own accessibility model is unchanged by the move — see
+  [05 design](05-board.design.md). Its columns are the `<h2>`s under this screen's `<h1>`.
 - Both dialogs trap focus, close on `Escape` and return focus to the opener
   ([§8](../design-system/ledger.md)).
 - Announcements are `role="status"`, polite, and never steal focus.
@@ -419,6 +506,7 @@ to answer these ([§D2](../design-system/README.md)).
 | `SearchInput` forwards nothing and its clear cross is a `<span onClick>` | The field could not be named or sized, and clearing it needed a pointer | [§26](../design-system/ledger.md) |
 | `Card`'s title is a `<div>` | Captions became card titles, so those titles are now the page's outline | [§27](../design-system/ledger.md) |
 | `InfoBanner` cannot be dismissed | Prod's banners report a state; one standing in for a toast reports an event. **Designed, not measured** | [§24](../design-system/ledger.md) |
+| `BackTo` is an `<a href="#">` with an `onClick` | The one back link on this surface could not be middle-clicked, opened in a new tab or copied, and was announced as a link to nowhere | [§56](../design-system/ledger.md) |
 
 ### Left open for Phase 6 — answered
 
@@ -436,3 +524,12 @@ simply not this phase's, and Phase 8 rewrites that header around the board. The 
 confirmation inside the dialog is the more interesting of the two anyway: it interrupts a submit
 rather than starting one, so what it accepts into is a form's own busy state and not a request of
 its own.
+
+> **Phase 8 moved them.** `Close this vacancy?` and `Delete this vacancy?` on the vacancy screen
+> are `ConfirmDialog` with `busy` + `closeOnAccept={false}`, the same pair the list raises and
+> with the same words behind them — which also means the detail page's delete confirmation stopped
+> saying something different from the list's about the same act. §41 now has four call sites.
+>
+> The **reassign** confirmation stays `Modal` + `FormActions`, for the reason given above: it is
+> not a confirmation that starts a request. It interrupts a submit and hands the decision back to
+> a form that owns its own busy state, and `ConfirmDialog` has no shape for that.

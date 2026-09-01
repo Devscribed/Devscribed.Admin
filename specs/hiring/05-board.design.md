@@ -25,8 +25,10 @@ already draws, and the sections that follow say which.
 ## Layout
 
 ```
-  Senior React Engineer                                    [ Details ]   ← PageHeader
-  Board · times in Europe/Berlin
+  ‹ Vacancies                                             ← the vacancy's header (01 design)
+  Senior React Engineer  [Open]        [ Copy booking link ]  [⋮]
+  ▌React ▌Senior · Pat Owner · 60 min · times in Europe/Berlin
+  We're looking for…   View more
   ────────────────────────────────────────────────────────────────────
   ┌ Scheduled  4 ┐┌ Didn't pass 7┐┌ Maybe     2 ┐┌ Passed   3 ┐┌ Offer 1 ┐
   │┌────────────┐││┌────────────┐││             ││            ││         │
@@ -37,9 +39,14 @@ already draws, and the sections that follow say which.
 ```
 
 - Five equal columns in a `grid-template-columns: repeat(5, minmax(220px, 1fr))`, gap `--space-5`.
-- Columns are top-aligned rather than stretched to a common height: a board with one long column
-  would otherwise paint four screen-tall wells of nothing.
-- The time zone is stated once in the page-header subtitle, never per card.
+- **Columns stretch to a common height**, which is the region the vacancy's header leaves them.
+  They were top-aligned while the board was a page of its own, on the argument that a board with
+  one long column would otherwise paint four screen-tall wells of nothing — and that argument only
+  held because the columns had no honest height to take. They do now: the screen owns the viewport
+  ([05 §08.28](05-board.md)), and a kanban whose columns stop at different heights reads as four
+  lists that happen to be side by side rather than as one board. The empty wells are the point —
+  they are where a card can be dropped, and a 40px `Maybe` is a target nobody can hit.
+- The time zone is stated once in the vacancy's meta line, never per card.
 
 ## The column
 
@@ -148,21 +155,28 @@ is not — the card navigates, it does not fetch a file.
 
 | Screen element | DS component | Props | `data-testid` |
 |---|---|---|---|
-| Page header | `PageHeader` | `title`, `subtitle`, `action` | `page-title` |
+| Header | *the vacancy's* — see [01 design](01-vacancies.design.md) | — | `page-title` |
 | Column | **`BoardColumn`** ([§43](../design-system/ledger.md)) | `status`, `name`, `count`, `nameAs`, `placeholderIndex`, `placeholderHeight`, `onDragOverIndex`, `onDrop` | `board-column-{status}` · `board-column-count-{status}` · `board-column-empty-{status}` |
 | Drop placeholder | **`BoardColumn`** | — | `board-placeholder-{status}` |
 | Card | **`BoardCard`** ([§42](../design-system/ledger.md)) | `draggable`, `lifted`, `past`, `flag`, `onDragStart`, `onDragEnd`, `onKeyDown`, `onOpen` | `board-card-{id}` · `board-card-name-{id}` · `board-card-when-{id}` · `board-card-cv-{id}` |
 | Cancelled mark | `Badge` | `status="inactive"`, `aria-label` | `board-card-cancelled-{id}` |
 | Missing conclusion | `FlagIcon` ([§44](../design-system/ledger.md)) | `title`, `aria-hidden` | `board-card-no-conclusion-{id}` |
 | Narrow column picker | `PageTabs` ([§45](../design-system/ledger.md)) | `tabs` (object form), `active`, `onChange`, `label` | `board-tab-{status}` |
-| Move failure · stale board | `InfoBanner` | `variant="error"`, `onDismiss`, `role="alert"` | `toast-move-failed` · `toast-board-stale` |
-| Loading | `Preloader` | default 12/7, centred in the card | `board-loading` |
-| Load failure | `InfoBanner` + `Button` | `variant="error"` | `board-load-error` · `board-load-retry` |
+| Move failure · stale board | `Toast` in `ToastHost` ([§54](../design-system/ledger.md)) | `tone="error"`, `onDismiss` | `toast-move-failed` · `toast-board-stale` |
+| Loading | `Preloader` | default 12/7, centred in the region | `board-loading` |
+| Load failure | `InfoBanner` + `Button` | `variant="error"`, `role="alert"` | `board-load-error` · `board-load-retry` |
 
-The `toast-*` ids stay. They name the **announcement**, not the component that draws it, which is
-the call Phase 3 made when the first five of these moved off `Toast`, and a rename would churn the
-suite for nothing. `board-loading-skeleton` does not stay: it named the component, there is no
-skeleton, and Phase 3's `vacancies-loading` is the shape to follow.
+The `toast-*` ids stay, and they are toasts again. They named the **announcement** rather than the
+component drawing it — the call Phase 3 made when the first five of these moved off `Toast` onto
+`InfoBanner` for want of one — and now that §54 exists, the two ids that were promises are
+descriptions. `board-loading-skeleton` does not stay: it named the component, there is no skeleton,
+and Phase 3's `vacancies-loading` is the shape to follow.
+
+**A move that failed is a toast; a board that could not be read is not.** The distinction is
+whether the message is still true: a failed drag is over — it happened, it is announced, it goes
+away — while a board that would not load is a state, and it is standing in for the whole region.
+A toast that timed out over an empty board would leave nothing at all saying why it is empty, and
+the retry inside the message would go with it.
 
 `BoardColumn` owns the placeholder, because the placeholder is a slot in the column rather than a
 state of the card — the card being dragged is not rendered at all while it is in flight. The column
@@ -173,7 +187,7 @@ slot means, and what a drop writes are all the screen's.
 
 | Slot | Text |
 |---|---|
-| Page subtitle | Board · times in {zone} |
+| Zone, in the vacancy's meta line | times in {zone} |
 | Column names | Scheduled · Didn't pass · Maybe · Passed · Offer |
 | Narrow tab labels | The same, uppercased by `PageTabs`' own CSS, with the count beside them |
 | Empty column | Nothing here yet. |
@@ -252,11 +266,19 @@ is deliberate rather than a breakpoint to add — the invariant that matters is 
 states, and it holds at every width: the group scrolls inside its own container and the page body
 never does.
 
-The columns' `max-height` names every term it subtracts rather than rolling them into one constant,
-because the relayout moved one of them: the navbar is 80px in blue against Meridian's 68, and 60px
-again below `--layout-breakpoint-desktop`. So it reads
+**The columns have no `max-height` any more.** They used to carry
 `100vh - var(--layout-navbar-height-desktop) - 2 * var(--space-9) - 120px`, with the mobile navbar
-token swapped in below the breakpoint.
+token swapped in below the breakpoint — every term named rather than rolled into a constant,
+because the relayout had moved one of them and the arithmetic had to be re-readable. It was correct
+and it was a re-derivation: the navbar's height, the shell's padding and a hand-counted 120px for
+a page header, restated in CSS because nothing in the layout knew the answer.
+
+The fold-in gave the layout the answer. The screen is a flex column of a definite height, the board
+is `flex: 1` of it, and each column is `height: 100%` of the board with `min-height: 0` so it may
+shrink. Three of the four terms are gone and the fourth — the header — is a real box that measures
+itself. The one thing to keep in mind is that the group's horizontal scroller must set
+`overflow-y: hidden` explicitly: `overflow-x: auto` alone computes the other axis to `auto` too,
+and the columns already scroll themselves.
 
 Below 768px, drag-and-drop is deliberately not attempted: a touch drag across a horizontally
 scrolling container is unreliable, and the card's own status control does the same job.

@@ -1,48 +1,66 @@
 'use client';
 
 import { notFound, useRouter, useSearchParams } from 'next/navigation';
-import { use, useCallback, useEffect, useState } from 'react';
-import { HIRING_MESSAGES, MESSAGES } from '@devscribed/validation';
+import { use, useCallback, useEffect, useRef, useState } from 'react';
 import {
+  HIRING_MESSAGES,
+  MESSAGES,
+  clipboardUnavailableLink,
+  vacancyCloseConfirmation,
+  vacancyDeleteConfirmation,
+} from '@devscribed/validation';
+import {
+  BackTo,
   Badge,
   Button,
   Card,
   Chip,
-  FormActions,
-  InfoBanner,
-  Modal,
+  ConfirmDialog,
+  PageTitle,
   Popover,
   Preloader,
+  Toast,
+  ToastHost,
 } from '@/ds';
-import { PageHeader } from '@/layout/PageHeader';
-import { formatDuration } from '@/hiring/format';
-import type { Vacancy } from '@/hiring/types';
+import { useToasts } from '@/hiring/useToasts';
+import type { Board, Vacancy } from '@/hiring/types';
 import { VacancyDialog } from '../VacancyDialog';
+import { VacancyBoard, type BoardState } from './VacancyBoard';
 
 type State = { status: 'loading' } | { status: 'ready'; vacancy: Vacancy } | { status: 'gone' };
 
-/**
- * The ids are the ones the suite already knows these announcements by. They named a `Toast`
- * when there was one to name; what they identify now is the banner slot under the header.
- */
-const NOTICE_TEST_IDS: Record<string, string> = {
-  [HIRING_MESSAGES.toast.vacancyCreated]: 'toast-vacancy-created',
-  [HIRING_MESSAGES.toast.vacancyUpdated]: 'toast-vacancy-updated',
-  [HIRING_MESSAGES.toast.vacancyClosed]: 'toast-vacancy-closed',
-  [HIRING_MESSAGES.toast.vacancyReopened]: 'toast-vacancy-reopened',
-  [HIRING_MESSAGES.toast.linkCopied]: 'toast-link-copied',
-};
+/** Which of the two confirmations is up. */
+type Pending = 'close' | 'delete';
 
-type Notice = { message: string; tone: 'success' | 'error' };
+/** The clamp, in lines, and the share of the screen an expanded description may take. */
+const DESCRIPTION_LINES = 3;
+const DESCRIPTION_SHARE = 0.2;
+/** Floor and ceiling on that share, so it is a fifth of a *reasonable* page (01 §08.29). */
+const DESCRIPTION_MIN = 66;
+const DESCRIPTION_MAX = 132;
 
 /**
- * The vacancy detail page. The booking link is first because copying it is the reason
- * to visit.
+ * The vacancy: a header over its own board.
  *
- * Closing changes nothing but whether the link accepts bookings (01 §03.9), so the link
- * stays on the page for a closed vacancy — carrying a note rather than disappearing.
- * Delete is disabled rather than hidden once there are candidates: a missing action is
- * indistinguishable from a bug, and the row carries the reason as its description.
+ * **Two routes became one screen** (01 §08.27). The board was never a sibling of this page
+ * — it is what this page is *for*, and the split cost a navigation to answer "who has
+ * applied?", which is the first question anybody opening a vacancy has. So the four cards
+ * that used to fill this screen are dissolved into the header above it: the booking link
+ * became the button that copies it, the categories and the interviewer and the length
+ * became one meta line, the status became a badge beside the title, and the counts became
+ * the numbers the board's own columns already carry. What is left is a header worth about
+ * a fifth of the page, and the board with the rest.
+ *
+ * **The screen owns the viewport height.** `AppShell`'s content box has a definite height,
+ * so this one takes it: the header does not scroll, and the columns scroll inside what is
+ * left. That is what makes the description's clamp load-bearing rather than cosmetic — an
+ * unbounded description would push the board off the bottom of a screen that cannot scroll
+ * to reach it.
+ *
+ * **Two requests, drawn as they arrive.** The vacancy and the board are separate endpoints
+ * with separate guards, and the header does not wait on the board: the title, the link and
+ * the menu are usable while the columns are still loading, which is the whole point of not
+ * having made this a second page.
  */
 export default function VacancyDetailPage({
   params,
@@ -53,36 +71,77 @@ export default function VacancyDetailPage({
   const router = useRouter();
   const search = useSearchParams();
   const [state, setState] = useState<State>({ status: 'loading' });
-  const [notice, setNotice] = useState<Notice | null>(null);
+  const [boardState, setBoardState] = useState<BoardState>({ status: 'loading' });
   const [editing, setEditing] = useState(false);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [pending, setPending] = useState<Pending | null>(null);
   const [busy, setBusy] = useState(false);
+  const { toasts, push, dismiss } = useToasts();
 
-  // Raised here rather than on the list, so it survives the navigation that follows a
-  // successful create.
+  /**
+   * Raised here rather than on the list, so it survives the navigation that follows a
+   * successful create — and raised **once**, which a toast has to be explicit about in a
+   * way the banner it replaced did not.
+   *
+   * A banner was a single slot: setting it twice showed it once. A queue appends, so the
+   * same effect running twice — a re-render, a remount, React's development double-invoke
+   * — is two lines saying the same thing. So the flag is consumed: the ref makes it once
+   * per mount, and stripping the query makes it once per arrival, rather than again on
+   * every reload of an address somebody kept.
+   */
+  const announcedCreate = useRef(false);
   useEffect(() => {
-    if (search.get('created') === '1') {
-      setNotice({ message: HIRING_MESSAGES.toast.vacancyCreated, tone: 'success' });
-    }
-  }, [search]);
+    if (search.get('created') !== '1' || announcedCreate.current) return;
+    announcedCreate.current = true;
+    push({
+      message: HIRING_MESSAGES.toast.vacancyCreated,
+      tone: 'success',
+      testId: 'toast-vacancy-created',
+    });
+    router.replace(`/org/${orgId}/hiring/vacancies/${vacancyId}`);
+  }, [search, push, router, orgId, vacancyId]);
 
-  const load = useCallback(async (): Promise<Vacancy | null> => {
+  const load = useCallback(async (): Promise<void> => {
     const response = await fetch(`/api/organizations/${orgId}/hiring/vacancies/${vacancyId}`, {
       credentials: 'same-origin',
     });
     if (response.status === 403 || response.status === 404) {
       setState({ status: 'gone' });
-      return null;
+      return;
     }
-    if (!response.ok) return null;
-    const vacancy: Vacancy = await response.json();
-    setState({ status: 'ready', vacancy });
-    return vacancy;
+    if (!response.ok) return;
+    setState({ status: 'ready', vacancy: await response.json() });
+  }, [orgId, vacancyId]);
+
+  const loadBoard = useCallback(async (): Promise<void> => {
+    try {
+      const response = await fetch(
+        `/api/organizations/${orgId}/hiring/vacancies/${vacancyId}/board`,
+        { credentials: 'same-origin' },
+      );
+      // 403 for a role with no board access, 404 for a vacancy this caller may not see.
+      // Both are the same dead end from here, and which of the two it is, is precisely
+      // what the API declines to say (05 §API). The vacancy request answers the same
+      // question one line above, so this only has to agree with it.
+      if (response.status === 403 || response.status === 404) {
+        setBoardState({ status: 'gone' });
+        setState({ status: 'gone' });
+        return;
+      }
+      if (!response.ok) {
+        setBoardState({ status: 'error' });
+        return;
+      }
+      const board: Board = await response.json();
+      setBoardState({ status: 'ready', board });
+    } catch {
+      setBoardState({ status: 'error' });
+    }
   }, [orgId, vacancyId]);
 
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadBoard();
+  }, [load, loadBoard]);
 
   /** Close and reopen are the same write with a different value (01 §03.8). */
   async function setStatus(next: 'open' | 'closed'): Promise<void> {
@@ -96,20 +155,22 @@ export default function VacancyDetailPage({
         body: JSON.stringify({ status: next }),
       });
       if (!response.ok) {
-        setNotice({ message: MESSAGES.generic, tone: 'error' });
+        push({ message: MESSAGES.generic, tone: 'error', testId: 'toast-vacancy-error' });
         return;
       }
+      setPending(null);
       // Refetched rather than patched in place — no optimistic updates on this screen.
       await load();
-      setNotice({
+      push({
         message:
           next === 'closed'
             ? HIRING_MESSAGES.toast.vacancyClosed
             : HIRING_MESSAGES.toast.vacancyReopened,
         tone: 'success',
+        testId: next === 'closed' ? 'toast-vacancy-closed' : 'toast-vacancy-reopened',
       });
     } catch {
-      setNotice({ message: MESSAGES.generic, tone: 'error' });
+      push({ message: MESSAGES.generic, tone: 'error', testId: 'toast-vacancy-error' });
     } finally {
       setBusy(false);
     }
@@ -130,11 +191,15 @@ export default function VacancyDetailPage({
       // Reachable only by a race — the action is disabled once there are candidates —
       // so the server's reason is what gets shown, not a guess at it.
       const body = await response.json().catch(() => ({}));
-      setConfirmingDelete(false);
-      setNotice({ message: body.message ?? MESSAGES.generic, tone: 'error' });
+      setPending(null);
+      push({
+        message: body.message ?? MESSAGES.generic,
+        tone: 'error',
+        testId: 'toast-vacancy-error',
+      });
       await load();
     } catch {
-      setNotice({ message: MESSAGES.generic, tone: 'error' });
+      push({ message: MESSAGES.generic, tone: 'error', testId: 'toast-vacancy-error' });
     } finally {
       setBusy(false);
     }
@@ -164,188 +229,144 @@ export default function VacancyDetailPage({
   // been deleted shows no candidates and is still not deletable, because their
   // applications and every assessment on them are still there (01 §03.11).
   const blocked = !vacancy.deletable;
-  const bookingUrl =
-    typeof window === 'undefined' ? '' : `${window.location.origin}/book/${vacancy.publicSlug}`;
+  const listHref = `/org/${orgId}/hiring/vacancies`;
 
+  /**
+   * The link is built here rather than drawn on the page. It was a field with a Copy
+   * button beside it and is now a button alone (01 §08.28) — a 60-character opaque slug
+   * is not something anybody reads, and the board needs the room. That costs the one
+   * fallback the field gave a refused clipboard, so the message carries the link instead.
+   */
   async function copyLink(): Promise<void> {
+    const url = `${window.location.origin}/book/${vacancy.publicSlug}`;
     try {
-      await navigator.clipboard.writeText(bookingUrl);
-      setNotice({ message: HIRING_MESSAGES.toast.linkCopied, tone: 'success' });
+      await navigator.clipboard.writeText(url);
+      push({
+        message: HIRING_MESSAGES.toast.linkCopied,
+        tone: 'success',
+        testId: 'toast-link-copied',
+      });
     } catch {
-      // The action never silently fails: if the clipboard is unavailable, the link
-      // text is selected so it can be copied by hand.
-      const node = document.querySelector('[data-testid="vacancy-booking-link"]');
-      if (node) {
-        const range = document.createRange();
-        range.selectNodeContents(node);
-        const selection = window.getSelection();
-        selection?.removeAllRanges();
-        selection?.addRange(range);
-      }
+      push({
+        message: clipboardUnavailableLink(url),
+        tone: 'error',
+        testId: 'toast-link-copy-failed',
+      });
     }
   }
 
   return (
-    <div data-testid="vacancy-detail">
-      <PageHeader
-        title={vacancy.title}
-        subtitle={`${open ? 'Open' : 'Closed'} · ${formatDuration(
-          vacancy.durationMinutes,
-        )} · ${vacancy.interviewer.fullName}`}
-        action={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-            <Button
-              onClick={() => router.push(`/org/${orgId}/hiring/vacancies/${vacancyId}/board`)}
-              data-testid="vacancy-board-link"
+    <div data-testid="vacancy-detail" className="vacancy-screen">
+      <div className="vacancy-screen-header">
+        {/*
+          A real anchor, so middle-click and copy-address work; an unmodified click is
+          handed to the client router (§56, and §18's rule on `Table`'s rows).
+        */}
+        <BackTo
+          label="Vacancies"
+          href={listHref}
+          data-testid="vacancy-back-link"
+          onClick={(event) => {
+            if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+            event.preventDefault();
+            router.push(listHref);
+          }}
+        />
+
+        <div className="vacancy-screen-title">
+          <div className="vacancy-screen-heading">
+            <span>
+              <PageTitle data-testid="page-title">{vacancy.title}</PageTitle>
+            </span>
+            <Badge
+              status={open ? 'active' : 'inactive'}
+              data-testid={`vacancy-status-${vacancy.id}`}
             >
-              Board
-            </Button>
-            <Button onClick={() => setEditing(true)} data-testid="vacancy-edit-button">
-              Edit
+              {open ? 'Open' : 'Closed'}
+            </Badge>
+          </div>
+
+          <div className="vacancy-screen-actions">
+            {/*
+              Disabled on a closed vacancy, exactly as the list's menu row is (01 §07.23):
+              the link accepts nothing, and the note below says so in a sentence rather
+              than leaving the button to be pressed and to appear to work.
+            */}
+            <Button
+              variant="primary"
+              disabled={!open}
+              onClick={copyLink}
+              data-testid="vacancy-copy-link-button"
+            >
+              {HIRING_MESSAGES.vacancy.actions.copyLink}
             </Button>
             <Popover
               label="Vacancy actions"
               data-testid="vacancy-actions-menu"
               items={[
+                {
+                  key: 'edit',
+                  label: HIRING_MESSAGES.vacancy.actions.edit,
+                  testId: 'vacancy-action-edit',
+                  onSelect: () => setEditing(true),
+                },
                 open
                   ? {
                       key: 'close',
-                      label: 'Close vacancy',
+                      label: HIRING_MESSAGES.vacancy.actions.close,
                       testId: 'vacancy-action-close',
-                      onSelect: () => void setStatus('closed'),
+                      onSelect: () => setPending('close'),
                     }
                   : {
                       key: 'reopen',
-                      label: 'Reopen vacancy',
+                      label: HIRING_MESSAGES.vacancy.actions.reopen,
                       testId: 'vacancy-action-reopen',
+                      // Reopening confirms nothing: it takes nothing away, and the action
+                      // that undoes it is one row up in the same menu.
                       onSelect: () => void setStatus('open'),
                     },
                 {
                   key: 'delete',
-                  label: 'Delete vacancy',
+                  label: HIRING_MESSAGES.vacancy.actions.delete,
                   testId: 'vacancy-action-delete',
-                  danger: true,
+                  danger: !blocked,
                   disabled: blocked,
                   // Drawn in the row rather than hidden in a `title`, which no browser
-                  // reaches from a keyboard — see the design spec's Reversals note.
+                  // reaches from a keyboard (ledger §22).
                   description: blocked ? HIRING_MESSAGES.vacancy.deleteBlocked : undefined,
                   descriptionTestId: 'vacancy-delete-guard-message',
-                  onSelect: () => setConfirmingDelete(true),
+                  onSelect: () => setPending('delete'),
                 },
               ]}
             />
           </div>
-        }
-      />
-
-      {/*
-        Where a toast used to float. An announcement that outlives the moment it was raised has
-        to have a place on the page, and the place is directly under the header the action was
-        taken from — it pushes the page down rather than covering it, and it goes away when it
-        is dismissed or when the next one replaces it.
-      */}
-      {notice && (
-        <div style={{ marginBottom: 'var(--space-7)' }}>
-          <InfoBanner
-            variant={notice.tone === 'success' ? 'success' : 'error'}
-            role="status"
-            aria-live="polite"
-            onDismiss={() => setNotice(null)}
-            data-testid={NOTICE_TEST_IDS[notice.message] ?? 'toast-vacancy-error'}
-          >
-            {notice.message}
-          </InfoBanner>
-        </div>
-      )}
-
-      <div style={{ display: 'grid', gap: 'var(--space-7)' }}>
-        <Card title="Booking link">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-6)' }}>
-            <span
-              data-testid="vacancy-booking-link"
-              style={{
-                flex: 1,
-                minWidth: 0,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                fontFamily: 'var(--font-family-base)',
-                fontSize: 'var(--font-size-s)',
-                color: 'var(--text-primary)',
-              }}
-            >
-              {bookingUrl}
-            </span>
-            <Button onClick={copyLink} data-testid="vacancy-copy-link-button">
-              Copy
-            </Button>
-          </div>
-          {!open && (
-            <p
-              data-testid="vacancy-closed-link-note"
-              style={{
-                margin: 'var(--space-3) 0 0',
-                fontSize: 'var(--font-size-xs)',
-                color: 'var(--text-secondary)',
-              }}
-            >
-              {HIRING_MESSAGES.vacancy.closedLinkNote}
-            </p>
-          )}
-        </Card>
-
-        {/* Categories and Description side by side, the categories column narrower —
-            it holds chips, not prose (01 design §Layout — detail). */}
-        <div className="vacancy-detail-columns">
-          <Card title="Categories">
-            <div
-              data-testid="vacancy-detail-categories"
-              style={{ display: 'flex', flexWrap: 'wrap' }}
-            >
-              {vacancy.categories.length === 0 ? (
-                <span style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}>
-                  No categories.
-                </span>
-              ) : (
-                vacancy.categories.map((category) => (
-                  <Chip
-                    key={category.id}
-                    label={category.name}
-                    data-testid={`vacancy-category-chip-${category.id}`}
-                  />
-                ))
-              )}
-            </div>
-          </Card>
-
-          <Card title="Description">
-            <p
-              style={{
-                margin: 0,
-                whiteSpace: 'pre-wrap',
-                fontSize: 'var(--font-size-base)',
-                lineHeight: 'var(--line-height-base)',
-                color: vacancy.description ? 'var(--text-tertiary)' : 'var(--text-secondary)',
-              }}
-            >
-              {vacancy.description || 'No description.'}
-            </p>
-          </Card>
         </div>
 
-        <Card>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-6)' }}>
-            <Badge status={open ? 'active' : 'inactive'} data-testid={`vacancy-status-${vacancy.id}`}>
-              {open ? 'Open' : 'Closed'}
-            </Badge>
-            <span
-              data-testid="vacancy-detail-counts"
-              style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-tertiary)' }}
-            >
-              {vacancy.applicationCount} candidates · {vacancy.scheduledCount} scheduled
-            </span>
-          </div>
-        </Card>
+        <VacancyMeta
+          vacancy={vacancy}
+          viewerTimeZone={boardState.status === 'ready' ? boardState.board.viewerTimeZone : null}
+        />
+
+        {!open && (
+          <p data-testid="vacancy-closed-link-note" className="vacancy-screen-note">
+            {HIRING_MESSAGES.vacancy.closedBoardNote}
+          </p>
+        )}
+
+        <VacancyDescription
+          description={vacancy.description}
+          onAdd={() => setEditing(true)}
+        />
+      </div>
+
+      <div className="vacancy-screen-board">
+        <VacancyBoard
+          orgId={orgId}
+          state={boardState}
+          setState={setBoardState}
+          reload={loadBoard}
+          push={push}
+        />
       </div>
 
       <VacancyDialog
@@ -356,39 +377,202 @@ export default function VacancyDetailPage({
         onSaved={() => {
           setEditing(false);
           void load();
-          setNotice({ message: HIRING_MESSAGES.toast.vacancyUpdated, tone: 'success' });
+          push({
+            message: HIRING_MESSAGES.toast.vacancyUpdated,
+            tone: 'success',
+            testId: 'toast-vacancy-updated',
+          });
         }}
       />
 
       {/*
-        Still `Modal` rather than blue's `ConfirmDialog`: `ConfirmDialog` fires `onClose` in the
-        same breath as `onAccept`, so a confirmation whose action is a request with a busy state
-        cannot use it. Flagged for Phase 6, which owns that component.
+        Blue's own `ConfirmDialog` with `closeOnAccept={false}` (ledger §41), the same pair
+        the list raises. This screen had been holding a hand-built `Modal` because that
+        prop did not exist when it was written; it does, and one confirmation is one
+        component.
       */}
-      <Modal
-        open={confirmingDelete}
-        title="Delete vacancy?"
-        onClose={() => setConfirmingDelete(false)}
+      <ConfirmDialog
+        open={pending === 'close'}
+        title={HIRING_MESSAGES.vacancy.closeTitle}
+        description={vacancyCloseConfirmation(vacancy.scheduledCount)}
+        acceptBtnText={HIRING_MESSAGES.vacancy.actions.close}
+        declineBtnText="Cancel"
+        busy={busy}
+        closeOnAccept={false}
+        onClose={() => setPending(null)}
+        onAccept={() => void setStatus('closed')}
+        data-testid="vacancy-close-confirm"
+        acceptTestId="vacancy-close-confirm-button"
+      />
+
+      <ConfirmDialog
+        open={pending === 'delete'}
+        title={HIRING_MESSAGES.vacancy.deleteTitle}
+        description={vacancyDeleteConfirmation(vacancy.title)}
+        acceptBtnText={HIRING_MESSAGES.vacancy.actions.delete}
+        declineBtnText="Cancel"
+        busy={busy}
+        closeOnAccept={false}
+        onClose={() => setPending(null)}
+        onAccept={() => void remove()}
         data-testid="vacancy-delete-confirm"
-        style={{ width: 520 }}
+        acceptTestId="vacancy-delete-confirm-button"
+      />
+
+      <ToastHost>
+        {toasts.map((toast) => (
+          <Toast
+            key={toast.id}
+            tone={toast.tone}
+            data-testid={toast.testId}
+            onDismiss={() => dismiss(toast.id)}
+          >
+            {toast.message}
+          </Toast>
+        ))}
+      </ToastHost>
+    </div>
+  );
+}
+
+/**
+ * `React · Senior · Pat Owner · 60 min · times in Europe/Berlin` — the four cards this
+ * header replaced, in one line (01 §08.28).
+ *
+ * The zone is last and arrives with the board, because the board is what needs it: 05 §05
+ * says it is named once in the header and never on a card, and the header is here now.
+ */
+function VacancyMeta({
+  vacancy,
+  viewerTimeZone,
+}: {
+  vacancy: Vacancy;
+  viewerTimeZone: string | null;
+}) {
+  return (
+    <div className="vacancy-screen-meta">
+      {vacancy.categories.length > 0 && (
+        <>
+          <span data-testid="vacancy-detail-categories" style={{ display: 'flex', flexWrap: 'wrap' }}>
+            {vacancy.categories.map((category) => (
+              <Chip
+                key={category.id}
+                label={category.name}
+                data-testid={`vacancy-category-chip-${category.id}`}
+              />
+            ))}
+          </span>
+          <Separator />
+        </>
+      )}
+      <span style={{ whiteSpace: 'nowrap' }}>{vacancy.interviewer.fullName}</span>
+      <Separator />
+      <span style={{ whiteSpace: 'nowrap' }}>{vacancy.durationMinutes} min</span>
+      {viewerTimeZone && (
+        <>
+          <Separator />
+          <span style={{ whiteSpace: 'nowrap' }}>
+            times in <span data-testid="board-timezone">{viewerTimeZone}</span>
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
+const Separator = () => (
+  <span aria-hidden="true" style={{ color: 'var(--text-secondary)' }}>
+    ·
+  </span>
+);
+
+/**
+ * The description, clamped to three lines (01 §08.29).
+ *
+ * `View more` appears only when the clamp actually cuts something, which cannot be known
+ * from the text — it depends on the width the header ended up with — so it is measured
+ * from the laid-out element and re-measured on resize. Expanded, the block scrolls inside
+ * a fifth of the screen rather than growing: the board keeps the rest, and a description
+ * that could push it out of view would undo the reason the two are on one route.
+ */
+function VacancyDescription({
+  description,
+  onAdd,
+}: {
+  description: string | null;
+  onAdd: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [clamped, setClamped] = useState(false);
+  const [max, setMax] = useState(DESCRIPTION_MAX);
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function measure(): void {
+      setMax(
+        Math.max(
+          DESCRIPTION_MIN,
+          Math.min(DESCRIPTION_MAX, Math.round(window.innerHeight * DESCRIPTION_SHARE)),
+        ),
+      );
+      const node = ref.current;
+      if (!node) {
+        setClamped(false);
+        return;
+      }
+      // Only meaningful while the clamp is on; expanded, the two heights are equal by
+      // construction and the control has to stay to put it back.
+      if (!expanded) setClamped(node.scrollHeight - node.clientHeight > 2);
+    }
+    measure();
+    // Web fonts land after the first layout and change where the third line ends.
+    const settle = setTimeout(measure, 120);
+    window.addEventListener('resize', measure);
+    return () => {
+      clearTimeout(settle);
+      window.removeEventListener('resize', measure);
+    };
+  }, [expanded, description]);
+
+  if (!description) {
+    return (
+      <button
+        type="button"
+        onClick={onAdd}
+        data-testid="vacancy-add-description"
+        className="vacancy-screen-link-button"
+        style={{ marginTop: 'var(--space-5)' }}
       >
-        <div style={{ display: 'grid', gap: 'var(--space-7)' }}>
-          <p style={{ margin: 0, fontSize: 'var(--font-size-s)', color: 'var(--text-tertiary)' }}>
-            {vacancy.title} will be removed. This cannot be undone.
-          </p>
-          <FormActions align="full">
-            <Button onClick={() => setConfirmingDelete(false)}>Cancel</Button>
-            <Button
-              variant="delete"
-              onClick={remove}
-              preloader={busy}
-              data-testid="vacancy-delete-confirm-button"
-            >
-              Delete vacancy
-            </Button>
-          </FormActions>
-        </div>
-      </Modal>
+        {HIRING_MESSAGES.vacancy.addDescription}
+      </button>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 'var(--space-5)' }}>
+      <div
+        ref={ref}
+        data-testid="vacancy-description"
+        className="vacancy-screen-description"
+        style={
+          expanded
+            ? { maxHeight: max, overflowY: 'auto' }
+            : { WebkitLineClamp: DESCRIPTION_LINES, display: '-webkit-box', WebkitBoxOrient: 'vertical', overflow: 'hidden' }
+        }
+      >
+        {description}
+      </div>
+      {(clamped || expanded) && (
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          data-testid="vacancy-description-toggle"
+          aria-expanded={expanded}
+          className="vacancy-screen-link-button"
+        >
+          {expanded ? HIRING_MESSAGES.vacancy.viewLess : HIRING_MESSAGES.vacancy.viewMore}
+        </button>
+      )}
     </div>
   );
 }

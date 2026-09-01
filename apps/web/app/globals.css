@@ -251,21 +251,109 @@
 }
 
 /*
- * The vacancy detail's lower half: Categories beside Description at desktop width, and
- * stacked below it (01 design §Responsive). The categories column is narrower because
- * it holds chips rather than prose.
+ * The vacancy screen (spec 01 §08, spec 05). One route: a header that stays put, and the
+ * board scrolling inside whatever is left of the viewport.
+ *
+ * `AppShell`'s content box has a **definite** height — it is `height: 100%` of a flex
+ * child of a `100vh` column — so `height: 100%` here resolves to a real number, and that
+ * is what lets the board be `flex: 1` of something rather than of nothing. Nothing is
+ * clipped: a header taller than the viewport (a narrow window, a wrapped title) overflows
+ * into the shell's own scroller instead, which is the degradation to want.
  */
-.vacancy-detail-columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-  gap: var(--space-7);
-  align-items: start;
+.vacancy-screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  height: 100%;
+  min-height: 0;
 }
 
-@media (max-width: 1023px) {
-  .vacancy-detail-columns {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.vacancy-screen-header {
+  flex-shrink: 0;
+}
+
+.vacancy-screen-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+/* The title takes the room and gives it back: below its basis the actions wrap under it
+   rather than squeezing the name they belong to. */
+.vacancy-screen-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.vacancy-screen-heading > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vacancy-screen-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex-shrink: 0;
+}
+
+/* `React · Senior · Pat Owner · 60 min · times in Europe/Berlin` (01 §08.28). */
+.vacancy-screen-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin-top: var(--space-3);
+  min-width: 0;
+  font-size: var(--font-size-s);
+  color: var(--text-primary);
+}
+
+.vacancy-screen-note {
+  margin: var(--space-3) 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.vacancy-screen-description {
+  font-size: var(--font-size-s);
+  line-height: 22px;
+  color: var(--text-primary);
+  text-wrap: pretty;
+}
+
+/*
+ * `View more` and `Add a description`: text that acts, not a `Button`. Blue's three button
+ * variants are all filled or outlined boxes, and a box here would read as a second action
+ * competing with `Copy booking link` two lines above it.
+ */
+.vacancy-screen-link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-family: var(--font-family-base);
+  font-size: var(--font-size-xs);
+  color: var(--color-blue);
+}
+
+.vacancy-screen-link-button:hover {
+  text-decoration: underline;
+}
+
+.vacancy-screen-board,
+.vacancy-board {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /*
@@ -275,7 +363,12 @@
  * can express on its own.
  */
 .board-scroll {
+  flex: 1;
+  min-height: 0;
   overflow-x: auto;
+  /* `overflow-x: auto` alone would compute `overflow-y` to `auto` as well, and the columns
+     already scroll themselves — two nested scrollbars for one list of cards. */
+  overflow-y: hidden;
   padding-bottom: var(--space-3);
 }
 
@@ -283,20 +376,18 @@
   display: grid;
   grid-template-columns: repeat(5, minmax(220px, 1fr));
   gap: var(--space-5);
-  align-items: start;
+  /* Stretched, not top-aligned. The columns used to size to their own contents and cap
+     themselves with a `100vh` subtraction that named the navbar, the shell's padding and
+     a hand-counted 120px of page header. The header is a real box on this screen now, so
+     the height is one the layout knows: the group fills the region it was given, and each
+     column fills the group. */
+  align-items: stretch;
+  height: 100%;
 }
 
-/*
- * Each column scrolls on its own; the page keeps its header in view while it does. Every
- * term is named rather than rolled into one constant, because the navbar is the one that
- * moved: blue's is 80px against Meridian's 68, and 60px again below the breakpoint. The
- * rest is `AppShell`'s own 25px padding, top and bottom, plus the page header.
- */
 .board-columns > *,
 .board-single > * {
-  max-height: calc(
-    100vh - var(--layout-navbar-height-desktop) - 2 * var(--space-9) - 120px
-  );
+  min-height: 0;
 }
 
 @media (max-width: 1199px) {
@@ -304,17 +395,12 @@
     width: max-content;
     min-width: 100%;
   }
-
-  .board-columns > *,
-  .board-single > * {
-    max-height: calc(
-      100vh - var(--layout-navbar-height-mobile) - 2 * var(--space-9) - 120px
-    );
-  }
 }
 
 .board-single {
   display: grid;
+  flex: 1;
+  min-height: 0;
   margin-top: var(--space-5);
 }
 

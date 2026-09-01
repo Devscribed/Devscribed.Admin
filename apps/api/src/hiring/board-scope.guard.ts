@@ -13,16 +13,22 @@ import { PrismaService } from '../prisma.service';
  * The board is `admin`/`manager` only (05 §Actors), with one wrinkle that is the whole
  * reason this guard exists rather than `HiringManageGuard`.
  *
- * An interviewer who is only a `user` reaches their own candidates through My interviews
- * and the card, never through a board — and their refusal is a **404, not a 403**
- * (TC-H05-INT-06). They are the one caller who could otherwise read a permission error
- * as "the board is there, you are not senior enough", and start asking to be. Everyone
- * else — a `viewer`, a `user` with no assignment — gets the honest 403 the rest of the
- * hiring surface gives: they already know the vacancy exists.
+ * An interviewer who is only a `user` reaches their own candidates through the
+ * `Assigned to me` scope of the candidate database (03 §08) and the card, never through a
+ * board — and their refusal is a **404, not a 403** (TC-H05-INT-06). They are the one
+ * caller who could otherwise read a permission error as "the board is there, you are not
+ * senior enough", and start asking to be. Everyone else — a `viewer`, a `user` with no
+ * assignment — gets the honest 403 the rest of the hiring surface gives: they already know
+ * the vacancy exists.
+ *
+ * That refusal now covers the vacancy screen as a whole, because the board is drawn on it
+ * (01 §08.27). It changes nothing: `GET vacancies/:id` is `HiringManageGuard`'s and
+ * refuses the same caller one request earlier, so the screen reaches its not-found state
+ * whichever of the two answers first.
  *
  * The interviewer test is scoped to *this* board's vacancy. The general rule — an
- * interviewer's whole narrowed view of hiring — is `InterviewerScopeGuard` in phase 9,
- * where the full permission matrix is reconciled in one place.
+ * interviewer's whole narrowed view of hiring — is `InterviewerScopeGuard`, which owns the
+ * card and its writes.
  *
  * Runs after `SessionGuard` and `OrgScopeGuard`, which is what puts `session` on the
  * request and establishes that the URL's organization is the caller's own.

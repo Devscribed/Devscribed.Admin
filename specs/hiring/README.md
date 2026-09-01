@@ -35,6 +35,7 @@ disagree, this set wins; the six deliberate departures are recorded below.
 | Duration belongs to the vacancy; one booking link per vacancy | 01 | 02 |
 | Availability = working hours − blocking events, duration-anchored | 02 | controls/* |
 | `Application.status` **is** the board column — one field, not two | 05 | 03, 04 |
+| The board is drawn on the vacancy's own route, not a route of its own | 01 | 05 |
 | Criteria values live on the Application; filters use latest-per-criterion | 04 | 03, 06 |
 | Candidate name is overwritten by the latest booking; `submittedName` is frozen | 02 | 03, 04 |
 | Hiring section visible to `admin`/`manager`; interviewers reach only their own vacancies | 01 | 03, 04, 05 |

@@ -52,12 +52,14 @@ type Pending = { action: 'close' | 'delete'; vacancy: Vacancy };
  * search and not under the tab, which is what stops `Open (9)` standing over nine rows
  * that a search has already ruled out.
  *
- * **A row acts without being opened** (01 §07.22). Five items: the two destinations a
- * vacancy has (its board, its booking link), the edit that used to need the detail page,
- * and the two lifecycle actions. Both blocked items — copy on a closed vacancy, delete on
- * one with candidates — are drawn **disabled with their reason** rather than hidden: a
- * missing action is indistinguishable from a bug, and a reason nobody can reach is the
- * same failure one step later (ledger §22).
+ * **A row acts without being opened** (01 §07.22). Four items: the booking link, the edit
+ * that used to need the detail page, and the two lifecycle actions. Both blocked items —
+ * copy on a closed vacancy, delete on one with candidates — are drawn **disabled with
+ * their reason** rather than hidden: a missing action is indistinguishable from a bug, and
+ * a reason nobody can reach is the same failure one step later (ledger §22).
+ *
+ * `Open board` was the fifth, and it went with the fold-in (01 §08.27): the board is the
+ * vacancy now, so the row already had that item — it is the row itself.
  *
  * `user` and `viewer` are refused by the API, and the screen renders the not-found
  * state rather than a permission error — the sidebar never offered them the row, so a
@@ -188,8 +190,9 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
 
   /**
    * The link is built here rather than read off the page, because the row does not draw
-   * it. A clipboard that refuses says so (01 §07.25): the detail page can select its own
-   * link text as a fallback, and a row has nothing to select.
+   * it. A clipboard that refuses says so (01 §07.25), and where it sends somebody is the
+   * only difference between this message and the detail page's: a row can point at the
+   * vacancy, and the vacancy has nowhere further to point, so it says the link out loud.
    */
   async function copyLink(vacancy: Vacancy): Promise<void> {
     const url = `${window.location.origin}/book/${vacancy.publicSlug}`;
@@ -213,16 +216,6 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
     const open = vacancy.status === 'open';
     const { actions } = HIRING_MESSAGES.vacancy;
     return [
-      {
-        key: 'board',
-        label: actions.board,
-        testId: `vacancy-action-board-${vacancy.id}`,
-        // Phase 8 folds the board into the vacancy detail and redirects this route, at
-        // which point this item and `vacancy-board-link` both point at the detail page —
-        // the design already draws them as one destination.
-        onSelect: () =>
-          router.push(`/org/${orgId}/hiring/vacancies/${vacancy.id}/board`),
-      },
       {
         key: 'copy',
         label: actions.copyLink,

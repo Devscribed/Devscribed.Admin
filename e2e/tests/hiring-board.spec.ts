@@ -16,6 +16,10 @@ import {
  * Card ids are generated server-side, so every test reads them off the API before it
  * touches the browser. That is a precondition rather than the thing under test; what is
  * under test is what a drag does to them.
+ *
+ * The board stopped being a route of its own (01 §08.27): it is drawn under the vacancy's
+ * header, on the vacancy's own address. Every rule below is unchanged — that is the point
+ * of the fold-in — and the only thing this file had to learn is where to find it.
  */
 test.describe('Board', () => {
   /**
@@ -53,11 +57,11 @@ test.describe('Board', () => {
     return {
       org,
       vacancy,
-      path: `/org/${org.organizationId}/hiring/vacancies/${vacancy.id}/board`,
+      path: `/org/${org.organizationId}/hiring/vacancies/${vacancy.id}`,
     };
   }
 
-  /** Opens the board and waits for the columns to arrive. */
+  /** Opens the vacancy and waits for its board to arrive. */
   async function openBoard(page: Page, seeded: Seed): Promise<void> {
     await page.goto(seeded.path);
     await expect(page.getByTestId('board')).toBeVisible();
@@ -369,27 +373,48 @@ test.describe('Board', () => {
    * The states either side of a board with cards on it
    * ---------------------------------------------------------------- */
 
-  test('reaches the board from the vacancy, and says so when there is nothing on it', async ({
-    page,
-    request,
-  }) => {
+  test('is the vacancy, and says so when there is nothing on it', async ({ page, request }) => {
     const org = await registerOrganization(request, uniqueEmail('board-empty'));
     const vacancy = await createVacancy(request, org, { title: 'Senior React Engineer' });
 
     await signIn(page, org.email);
     await page.goto(`/org/${org.organizationId}/hiring/vacancies/${vacancy.id}`);
-    await page.getByTestId('vacancy-board-link').click();
 
-    await expect(page).toHaveURL(/\/board$/);
+    // One screen: the vacancy's header and its board, with no navigation between them.
+    await expect(page.getByTestId('vacancy-detail')).toBeVisible();
     await expect(page.getByTestId('page-title')).toHaveText('Senior React Engineer');
     await expect(page.getByTestId('board-empty-state')).toHaveText(
       'No candidates yet. Share the booking link to start.',
     );
-    // The zone is named once, on the board, rather than on every card.
+    // The zone is still named once, in the header, rather than on every card (05 §05).
     await expect(page.getByTestId('board-timezone')).toHaveText('Europe/Berlin');
 
-    await page.getByTestId('board-details-link').click();
+    // Neither of the two links between the halves exists any more, because there are no
+    // halves.
+    await expect(page.getByTestId('vacancy-board-link')).toHaveCount(0);
+    await expect(page.getByTestId('board-details-link')).toHaveCount(0);
+  });
+
+  /**
+   * 01 §08.27 — the old address travelled, so it lands on the screen it became.
+   *
+   * The redirect is the server's, so the browser never renders the route it left: the
+   * assertion is on the address bar as much as on what is drawn.
+   */
+  test('forwards the old board address to the vacancy', async ({ page, request }) => {
+    const seeded = await seed(request, 'board-redirect');
+    const [only] = await columnCards(request, seeded.org, seeded.vacancy.id, 'scheduled');
+
+    await signIn(page, seeded.org.email);
+    await page.goto(
+      `/org/${seeded.org.organizationId}/hiring/vacancies/${seeded.vacancy.id}/board`,
+    );
+
+    await expect(page).toHaveURL(
+      `/org/${seeded.org.organizationId}/hiring/vacancies/${seeded.vacancy.id}`,
+    );
     await expect(page.getByTestId('vacancy-detail')).toBeVisible();
+    await expect(card(page, only.applicationId)).toBeVisible();
   });
 
   test('offers one column at a time, and no drag, on a narrow viewport', async ({

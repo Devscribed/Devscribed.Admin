@@ -16,6 +16,7 @@ export {
   AccountMenu,
   AppShell,
   AuthLayout,
+  BackTo,
   Badge,
   BoardCard,
   BoardColumn,
