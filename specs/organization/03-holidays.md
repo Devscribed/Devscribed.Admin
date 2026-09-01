@@ -1,0 +1,392 @@
+---
+id: "03"
+title: Holidays
+routes: ["/org/{orgId}/settings/holidays"]
+api:
+  - "GET    /api/organizations/{orgId}/holidays"
+  - "POST   /api/organizations/{orgId}/holidays"
+  - "PATCH  /api/organizations/{orgId}/holidays/{holidayId}"
+  - "DELETE /api/organizations/{orgId}/holidays/{holidayId}"
+entities: [Holiday]
+tags: [holiday, calendar, paid-hours, country-code, admin-settings, reports]
+depends-on: ["02", "06", "09"]
+---
+
+# 03 — Holidays
+
+## Summary
+
+Organizations maintain a **holiday calendar** — paid public holidays like New Year's Day, Independence Day, Christmas — that Reports (`specs/reports/`) render as "Holiday" activity rows in Amounts Owed at each member's current rate, and that the Time Tracking calendar (spec `user-management/12`) shows as read-only markers so members know a day is a paid holiday before they log time. A holiday has a date, a name, paid hours, and an optional country code so a single organization can serve teams in multiple jurisdictions. **This spec deliberately does not alter vacation math** — `calculateWorkingDays` (spec 09) still counts Mon–Fri only. Excluding holidays from working-day counts is a separate future amendment to spec 09.
+
+## Actors & Preconditions
+
+- **Actors:** `admin` creates, edits, and deletes holidays. `manager` can create and edit but cannot delete. `user` and `viewer` see holidays as read-only markers on their own Time Tracking calendar; they do not open the Settings › Holidays page.
+- **Preconditions:** the caller is an `active` member of the organization; the Settings shell (spec 02) is present.
+
+## Roles & Permission Matrix
+
+| Capability | admin | manager | user | viewer |
+|---|---|---|---|---|
+| View Settings › Holidays page | ✅ | ✅ | ❌ | ❌ |
+| List holidays via API | ✅ | ✅ | ✅ | ✅ |
+| Create holiday | ✅ | ✅ | ❌ | ❌ |
+| Edit holiday | ✅ | ✅ | ❌ | ❌ |
+| Delete holiday | ✅ | ❌ | ❌ | ❌ |
+| See holidays on the Time Tracking calendar | ✅ | ✅ | ✅ | ❌ |
+
+## Functional Requirements
+
+### Holiday entity
+
+1. A holiday belongs to exactly one organization and has: `date` (a specific calendar date, date-only, no time), `name`, `paidHours`, an optional `countryCode`.
+2. `name` is required, 1–120 characters after trimming. Allowed characters: any Unicode letter, digit, space, `- & . , ' ( ) /`. Leading and trailing whitespace is trimmed.
+3. `paidHours` is required, a `Decimal(4,2)` between `0.00` and `24.00` inclusive. Default `8.00`. Non-integer values are allowed for half-day holidays.
+4. `countryCode` is optional, exactly 2 uppercase letters (ISO 3166-1 alpha-2). If null, the holiday applies to **all countries** (i.e. every member sees it and it applies to every member for Amounts Owed).
+5. Two holidays cannot share the same `(organizationId, date, countryCode)`. `countryCode = null` counts as its own value — so a global holiday on `2026-05-01` does not conflict with a `BY`-scoped holiday on the same date.
+6. Holidays are stored in UTC dates (they are calendar-day facts, not instants); the display uses the caller's `Account.timezone` for the day-of-week label but never shifts the date.
+
+### Effect on Reports (Amounts Owed)
+
+7. A holiday whose `countryCode` matches the member's country (see §Member country resolution) contributes to that member's Amounts Owed for the range covering `date`: as an "Activity" row labelled **"Holiday · {name}"**, hours = `paidHours`, rate = the member's live/snapshotted bill rate on that date, amount = `paidHours * rate`. A `countryCode = null` holiday contributes to every member.
+8. A holiday added, edited, or deleted **after** a report has been rendered as PDF does not retroactively alter the PDF. The next JSON fetch reflects the new state.
+9. If a member has `billable = false` logged hours on a holiday date, the holiday row is added on top of them — it is a separate synthetic row, not a modification of any time entry.
+
+### Effect on the Time Tracking calendar
+
+10. Members see holidays as read-only markers on their Weekly/Monthly views: a small star icon and the holiday name in a tooltip. The day cell has an amber-tinted background token to distinguish it from regular days without being confused for a selected/current day.
+11. A member can still log time on a holiday (they may have been called in). Logging time on a holiday does not remove the marker; the two coexist visually.
+
+### Effect on Vacation
+
+12. **Vacation math is unchanged.** `VacationRequest.workingDays` continues to be calculated by `calculateWorkingDays` (Mon–Fri only, per spec 09). A vacation that overlaps a holiday still deducts the full working-day count.
+13. The vacation Request form (spec 09) may surface a non-blocking hint when the range overlaps a holiday: **"Note: {n} paid holiday(s) fall in this range. Vacation is deducted for the working days; holidays are paid separately in Amounts Owed."** This is UI-only, informational — no math changes.
+
+### Member country resolution
+
+14. A member's country for holiday filtering is resolved as: `Account.phoneCountryCode` (existing field from spec 06 with a normalized alpha-2 value) if present; otherwise `null` (matches only `countryCode = null` holidays).
+15. **This spec does not add a "member country" field**; if the user needs a richer country model it belongs in a follow-up. `phoneCountryCode` is a pragmatic reuse.
+
+## Data Model
+
+### Holiday
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | String (cuid) | Primary key |
+| `organizationId` | String (FK) | References `Organization.id`. Cascade delete. |
+| `name` | String(120) | Trimmed. |
+| `date` | `DateTime @db.Date` | Calendar date only. |
+| `paidHours` | `Decimal @db.Decimal(4, 2)` | Default `8.00`. Range 0–24. |
+| `countryCode` | String? `@db.Char(2)` | ISO 3166-1 alpha-2, uppercase. Nullable = applies to all countries. |
+| `createdAt` | DateTime | UTC. |
+| `updatedAt` | DateTime | UTC. |
+| `createdByAccountId` | String (FK) | Account that created the holiday. |
+
+**Indexes:**
+- Unique `(organizationId, date, countryCode)` — Postgres treats each `NULL` as distinct by default, so an additional expression index `(organizationId, date, (countryCode IS NULL))` guards the "no two global holidays on same date" rule.
+- `(organizationId, date)` for range queries.
+
+### New Capabilities
+
+- `ManageHolidays` / `manage-holidays` — create and edit holidays (admin, manager).
+- `DeleteHolidays` / `delete-holidays` — delete holidays (admin only).
+- `ViewHolidays` / `view-holidays` — see the Holidays page (admin, manager). Members always see the calendar markers via the Time Tracking capability chain from spec 12; no new capability is needed for that.
+
+## API Contracts
+
+### `GET /api/organizations/{orgId}/holidays`
+
+**Query:** `year?` (integer, defaults to the current year in the caller's tz), `country?` (2-letter code or `all`, default `all`).
+
+**200 Response:**
+```json
+{
+  "holidays": [
+    {
+      "id": "cly…",
+      "date": "2026-01-01",
+      "name": "New Year's Day",
+      "paidHours": 8.00,
+      "countryCode": null,
+      "createdAt": "2025-12-10T09:00:00Z"
+    }
+  ]
+}
+```
+
+Ordered by `date` ascending.
+
+Available to all members (`view-holidays` for the settings page; users read the same endpoint for calendar markers via the existing time-tracking route).
+
+### `POST /api/organizations/{orgId}/holidays`
+
+**Body:**
+```json
+{
+  "date": "2026-05-01",
+  "name": "Labour Day",
+  "paidHours": 8.00,
+  "countryCode": null
+}
+```
+
+**201 Response:** `{ "holiday": { …Holiday } }`
+**409 Response:** `{ "error": "holiday_duplicate", "message": "A holiday already exists on this date." }`
+**422 Response:** `{ "error": "validation_error", "fields": { … } }`
+
+Requires `manage-holidays`.
+
+### `PATCH /api/organizations/{orgId}/holidays/{holidayId}`
+
+Same body shape; all fields optional. Same error codes as POST.
+
+### `DELETE /api/organizations/{orgId}/holidays/{holidayId}`
+
+**204 Response** on success. Requires `delete-holidays` (admin only).
+
+### Extension to `GET /api/organizations/{orgId}/time-tracking/calendar` (spec 12)
+
+The existing calendar endpoint gains a `holidays` array with `{ id, date, name, paidHours, countryCode }` limited to holidays visible to the caller by country resolution (§14).
+
+## Validation Rules
+
+1. `date` required — "Date is required."
+2. `date` must be a valid calendar date — "Invalid date."
+3. `name` required — "Holiday name is required." (empty after trim).
+4. `name` too long — "Holiday name cannot exceed 120 characters."
+5. `name` disallowed characters — "Holiday name contains disallowed characters."
+6. `paidHours` required — "Paid hours is required."
+7. `paidHours` out of range — "Paid hours must be between 0 and 24."
+8. `countryCode` malformed — "Country code must be 2 uppercase letters."
+9. Duplicate — "A holiday already exists on this date." (409)
+
+## Error Messages
+
+| Context | Message |
+|---|---|
+| Toast — created | "Holiday added." |
+| Toast — updated | "Holiday updated." |
+| Toast — deleted | "Holiday deleted." |
+| Confirm — delete holiday for a past date | "Delete **{name}** on {date}? Amounts Owed reports run after now will no longer include it. Reports already exported as PDF are unchanged." |
+| Confirm — delete holiday for a future date | "Delete **{name}** on {date}?" |
+| Confirm buttons | "Cancel" / "Delete holiday" (danger) |
+| Empty state — no holidays for the selected year | "No holidays for {year} yet. Add holidays so paid public days appear on Amounts Owed reports and the Time Tracking calendar." |
+| Empty state — no results for country filter | "No holidays for {country} in {year}." |
+| Vacation hint — overlaps holiday(s) | "Note: {n} paid holiday(s) fall in this range. Vacation is deducted for the working days; holidays are paid separately in Amounts Owed." |
+| Calendar tooltip | "★ Holiday · {name}" |
+
+## Screens
+
+Rendered inside the existing Settings shell (spec 02). See [`03-holidays.mock.html`](03-holidays.mock.html) for the visual target. Three states are canonical:
+
+### Holidays list — populated
+
+Grouped by month with sticky month bands. Each row: date (with day-of-week), name, paid hours (mono), country cell (2-letter chip + full name, or "All"), rename/edit icon-button. Year tabs above the toolbar.
+
+### Empty state
+
+Centered card with a 🗓️ glyph, a title **"No holidays for {year} yet."**, a subtitle explaining the effect on Amounts Owed and the calendar, and a primary CTA **"+ Add holiday"**.
+
+### Add / Edit modal
+
+Row 1: Date (native `<input type="date">`) + Paid hours (numeric with `step="0.25"`, min 0, max 24).
+Row 2: Name (text).
+Row 3: Country picker with **All countries** as the first option and ISO 3166 alpha-2 codes below.
+Actions: Cancel + primary Add/Save. Edit modal additionally shows a danger-tone **"Delete holiday"** button in the bottom-left (admin only).
+
+## Flows
+
+### Main Flow: Admin adds a holiday
+
+1. Admin opens **Settings** › **Holidays**.
+2. System shows the list for the current year (or empty state).
+3. Admin clicks **+ Add holiday**.
+4. System opens the Add Holiday modal with today's date pre-filled and `paidHours = 8.00`.
+5. Admin picks the date, types the name, adjusts hours if needed, picks a country (defaults to **All countries**).
+6. Admin clicks **Add holiday**.
+7. System sends `POST /api/organizations/{orgId}/holidays`.
+8. On success: modal closes, toast **"Holiday added."**, the row appears in the list under its month band.
+
+### Alt Flow A: Duplicate holiday (branches from step 7)
+
+7a. Server returns 409. Modal stays open with an inline error under the Date field: **"A holiday already exists on this date."** The submit button is not disabled.
+
+### Alt Flow B: Delete a past holiday (branches from Edit modal)
+
+1. Admin opens the Edit modal for a past-date holiday.
+2. Admin clicks **Delete holiday**.
+3. System shows the past-date confirmation (§Error Messages).
+4. Admin confirms.
+5. System sends `DELETE /api/organizations/{orgId}/holidays/{id}`.
+6. On success: both modals close, toast **"Holiday deleted."**, the row disappears from the list.
+
+### Alt Flow C: Manager tries to delete (branches from step 2 of Alt B)
+
+2c. The **Delete holiday** button is not rendered for the manager. If a manager crafts the DELETE request directly, server returns 403.
+
+### Alt Flow D: Member logs time on a holiday date
+
+1. Member opens the Weekly view.
+2. Holiday cells render with an amber-tinted background and a tooltip **"★ Holiday · {name}"**.
+3. Member logs time normally into the cell.
+4. The entry saves. The holiday marker remains visible on the cell.
+
+## UI Description
+
+### Route
+
+`/org/{orgId}/settings/holidays` — the holidays list. Modals overlay this route.
+
+### States
+
+| State | Trigger | Rendered |
+|---|---|---|
+| Loading | Initial fetch or year switch | Table skeleton with 6 shimmering rows |
+| Empty | 0 holidays for the selected year | Centered empty card with primary CTA |
+| Empty (country filter) | 0 holidays match the country | Compact inline "No holidays for {country} in {year}" |
+| Populated | 1+ holidays | Table grouped by month |
+| Error | 5xx / network | Inline banner with **Retry** |
+
+### Responsive Behavior
+
+**Desktop (>1024px):** as above.
+**Tablet (768–1024px):** month band stays sticky. Actions column collapses to `⋯` menu.
+**Mobile (<768px):** table converts to a card list — each holiday is a card with the date badge, name, hours, and country chip; the Edit modal is full-screen with a bottom sheet for the country picker.
+
+### Accessibility
+
+- Month bands are `role="rowheader"` for screen-readers.
+- The Add/Edit modal traps focus, `Esc` closes.
+- Country chips carry an `aria-label` with the full country name; the 2-letter code alone is not read.
+- The Time Tracking calendar's holiday marker is announced to a live region on day-cell focus: **"Holiday: {name}. Paid hours: {n}."**
+
+## Required `data-testid` Attributes
+
+### Sidebar & tab
+
+- `settings-tab-holidays`
+
+### Page
+
+- `holidays-page`, `holidays-page-title`
+- `holidays-year-tab-{yyyy}`
+- `holidays-country-filter`
+- `holidays-add-btn`
+- `holidays-table`
+- `holidays-row-{id}`, `holidays-row-{id}-edit-btn`
+- `holidays-month-band-{yyyy}-{mm}`
+- `holidays-empty-state`, `holidays-empty-primary-cta`
+- `holidays-loading-skeleton`
+- `holidays-error-banner`, `holidays-error-retry-btn`
+
+### Modal
+
+- `holiday-modal`, `holiday-modal-title`
+- `holiday-date-input`, `holiday-name-input`, `holiday-hours-input`, `holiday-country-select`
+- `holiday-save-btn`, `holiday-cancel-btn`, `holiday-delete-btn`
+- `holiday-delete-confirm`, `holiday-delete-confirm-btn`, `holiday-delete-cancel-btn`
+- `field-error-date`, `field-error-name`, `field-error-paidHours`, `field-error-countryCode`
+
+### Time Tracking calendar (extension)
+
+- `time-cell-{yyyy}-{mm}-{dd}-holiday-marker`
+
+### Toasts
+
+- `toast-holiday-added`
+- `toast-holiday-updated`
+- `toast-holiday-deleted`
+- `toast-server-error`
+
+## Security
+
+### Authentication & Authorization
+
+- Every endpoint sits behind `SessionGuard` + `OrgScopeGuard`.
+- `GET /holidays` is available to all authenticated org members.
+- `POST` and `PATCH` require `manage-holidays`.
+- `DELETE` requires `delete-holidays`.
+
+### Cross-organization protection (IDOR)
+
+- Server filters by `session.organizationId`; path `orgId` is compared only.
+- `POST` sets `organizationId = session.organizationId`; the body cannot carry it.
+
+### Input handling
+
+- `date` parsed with strict ISO 8601 date parser; time components are rejected.
+- `countryCode` validated against `^[A-Z]{2}$` — never used as a raw string in SQL.
+- `name` is rendered as text (React auto-escapes) and stored trimmed.
+
+### Concurrency & audit
+
+- Duplicate creates are serialized by the unique index; the loser gets 409.
+- Deletes are atomic — no soft delete, hard remove.
+
+### Rate limiting
+
+- App-wide default.
+
+### Logging
+
+- Every mutation logs `{ event, actorAccountId, organizationId, holidayId, date, name, paidHours, countryCode }` at info.
+
+## Out of Scope
+
+- Recurring holidays (e.g. "every third Monday of March") — each occurrence is a separate row in v1.
+- Regional / state / province scope smaller than country (e.g. Quebec vs Ontario).
+- Import from an external calendar API (iCal, Google Calendar).
+- Holiday-aware `workingDays` computation — a separate future amendment to spec 09.
+- Multiple `paidHours` variants per holiday for different member cohorts.
+- Non-paid observances (e.g. "Awareness Day" with `paidHours = 0` is allowed by validation; the UI just shows it as informational).
+
+## Test Cases
+
+### Unit
+
+- **TC-03-UNIT-01: Name validation — empty.** Returns `{ valid: false, error: "Holiday name is required." }`.
+- **TC-03-UNIT-02: Name validation — too long.** 121-char name returns the length error.
+- **TC-03-UNIT-03: paidHours boundary — 0.** Returns `{ valid: true }`.
+- **TC-03-UNIT-04: paidHours boundary — 24.** Returns `{ valid: true }`.
+- **TC-03-UNIT-05: paidHours boundary — 24.01.** Returns the range error.
+- **TC-03-UNIT-06: paidHours — negative.** Returns the range error.
+- **TC-03-UNIT-07: countryCode — valid.** `validateCountryCode('BY')` returns valid.
+- **TC-03-UNIT-08: countryCode — lowercase.** Returns the format error.
+- **TC-03-UNIT-09: countryCode — null allowed.** `validateCountryCode(null)` returns valid.
+- **TC-03-UNIT-10: `calculateWorkingDays` unchanged with holiday overlap.** Given a Mon–Fri range with a Wednesday holiday in the middle, `calculateWorkingDays` returns 5 (still counts Wednesday) — this test locks the design decision that vacation math is unaffected.
+
+### Integration
+
+- **TC-03-INT-01: Create as admin — happy path.** POST returns 201; a subsequent GET returns the row.
+- **TC-03-INT-02: Create as manager.** Returns 201.
+- **TC-03-INT-03: Create as user.** Returns 404.
+- **TC-03-INT-04: Duplicate — same date, both null country.** Second POST returns 409.
+- **TC-03-INT-05: Duplicate — same date, same country.** Two POSTs on `2026-05-01` with `countryCode = 'BY'` — second is 409.
+- **TC-03-INT-06: Non-duplicate — same date, different countries.** POST `2026-05-01, BY` and `2026-05-01, US` both succeed.
+- **TC-03-INT-07: Non-duplicate — same date, null vs country.** POST `2026-05-01, null` and `2026-05-01, US` both succeed.
+- **TC-03-INT-08: Edit — happy path.** PATCH the name; GET reflects the change; `updatedAt` moves.
+- **TC-03-INT-09: Edit — conflict.** PATCH to a date that already has a holiday for the same country — 409.
+- **TC-03-INT-10: Delete as admin.** DELETE returns 204; a subsequent GET does not return the row.
+- **TC-03-INT-11: Delete as manager — forbidden.** DELETE returns 403.
+- **TC-03-INT-12: Year filter.** Seed holidays in 2025 and 2026. GET with `?year=2026` returns only 2026 rows.
+- **TC-03-INT-13: Country filter.** GET with `?country=BY` returns only `BY`-scoped and `null` (global) holidays.
+- **TC-03-INT-14: Calendar extension.** GET the Time Tracking calendar as a member in BY — response includes the two matching holiday rows.
+- **TC-03-INT-15: Vacation math unaffected.** Create a `VacationRequest` overlapping a holiday; `workingDays` and `deductionAmount` remain identical to the same range without the holiday.
+- **TC-03-INT-16: Amounts Owed picks up new holiday.** Add a holiday for a member's country in the report range, regenerate the report — the response includes the Holiday activity row with `hours = paidHours` at the member's current bill rate.
+- **TC-03-INT-17: Amounts Owed does not pick up cross-country holiday.** Add a `BY` holiday. A member with `phoneCountryCode = 'US'` gets no Holiday row on that date.
+- **TC-03-INT-18: Deleting a past holiday updates future JSON, not past PDFs.** Render a report PDF; delete a holiday in the range; re-fetch the JSON — the Holiday row is gone. The previously rendered PDF file is unchanged (spec 05 rule; this test exercises the invariant here).
+- **TC-03-INT-19: Cross-org IDOR blocked.** Admin in org A calls DELETE for a holiday in org B — 404.
+- **TC-03-INT-20: Session revocation.** Rotate `Account.securityStamp` mid-request cycle — the next mutating call returns 401.
+
+### E2E
+
+- **TC-03-E2E-01: Admin adds a global holiday — happy path.** Admin picks the year 2026, clicks **+ Add holiday**, fills the modal with a date, name, hours, and leaves country as **All**, saves, and sees the row in the correct month band.
+  - **Selectors:** `settings-tab-holidays`, `holidays-add-btn`, `holiday-date-input`, `holiday-name-input`, `holiday-hours-input`, `holiday-country-select`, `holiday-save-btn`, `toast-holiday-added`, `holidays-row-{id}`.
+- **TC-03-E2E-02: Manager cannot delete — unsuccessful flow.** Manager opens the Edit modal for a holiday and sees **no** Delete button. A direct DELETE via `page.evaluate` returns 403; toast reads **"You don't have permission to delete holidays."**
+  - **Selectors:** `holiday-delete-btn` (asserted absent), `toast-server-error`.
+- **TC-03-E2E-03: Duplicate — unsuccessful flow.** Admin tries to create a holiday on a date/country combination that already exists; sees the inline error under the date field; the Save button is not disabled.
+  - **Selectors:** `field-error-date`, `holiday-save-btn`.
+- **TC-03-E2E-04: Member sees the holiday marker on the calendar.** User in `BY` opens the Weekly view. The corresponding cell has the holiday marker and, on focus, announces the holiday name.
+  - **Selectors:** `time-cell-{yyyy}-{mm}-{dd}-holiday-marker`.
+- **TC-03-E2E-05: Vacation form hint.** Member submits a vacation request spanning a holiday; sees the non-blocking note explaining vacation is deducted per working day.
+  - **Selectors:** `vacation-request-holiday-hint`.

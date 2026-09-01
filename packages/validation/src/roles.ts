@@ -67,7 +67,13 @@ export type Capability =
   // future contract of the organization is executed and who holds the evidence, which
   // is a different order of decision from sending one document.
   | 'ViewSigningSettings'
-  | 'ManageSigningSettings';
+  | 'ManageSigningSettings'
+  // Spec organization/01 — clients. Duplicates of `manage-clients` / `view-clients` in
+  // the lowercase-dashed `MemberCapability` union: this Capability set is what
+  // `RequireCapability` decorators consume, the other is what `can(role, ...)` reads,
+  // and spec organization/01 requires both because reviewers grep for either shape.
+  | 'ViewClients'
+  | 'ManageClients';
 
 /**
  * Permission matrix from spec 01 and spec 02, "Roles & Permission Matrix".
@@ -95,6 +101,8 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     'EditMemberProfile',
     'ViewSigningSettings',
     'ManageSigningSettings',
+    'ViewClients',
+    'ManageClients',
   ],
   manager: [
     'ViewDocumentTemplates',
@@ -110,6 +118,10 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     // Spec 04's matrix: a manager sees which provider the organization signs with and
     // cannot change it. The screen renders read-only and the save button is not drawn.
     'ViewSigningSettings',
+    // Spec organization/01: a manager has the same client-management rights as an
+    // admin (identical row in the Roles & Permission Matrix table).
+    'ViewClients',
+    'ManageClients',
   ],
   // `user` looks empty, but a member reading and editing *their own* contract details is
   // authorized below by `canReadProfile` and friends, not from this table. See the note
