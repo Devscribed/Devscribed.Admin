@@ -31,15 +31,20 @@ const asTime = (startUtc: string): string =>
 /**
  * The team's half of manage booking (spec 07 §08–§10), through the browser.
  *
- * Two surfaces carry the same two actions, and this suite covers one path through each:
- * an interviewer moving a row on **My interviews**, which for a `user` who interviews is
- * the whole of hiring; and an `admin` cancelling from the **candidate card**, with the
- * reason that rides into the candidate's cancellation notice and onto no candidate-facing
- * screen.
+ * Two callers reach the same two actions on the same surface, and this suite covers one
+ * path through each: an interviewer moving an interview on a candidate they reached
+ * through **`Candidates → Assigned to me`**, which for a `user` who interviews is the
+ * whole of hiring; and an `admin` cancelling from the same card, with the reason that
+ * rides into the candidate's cancellation notice and onto no candidate-facing screen.
  *
  * What both are really asserting is that neither action navigates. The card is the page
- * somebody is working on during a live call, and My interviews is a list somebody is
- * working down — a reload in the middle of either loses what they were doing.
+ * somebody is working on during a live call — a reload in the middle of either loses what
+ * they were doing.
+ *
+ * The interviewer's path used to start on My interviews, which is now the candidate
+ * list's `Assigned to me` scope, so this walks it from the list to the card. The **row**
+ * gets these two actions back in the phase that gives the table its kebab; until then the
+ * card is where an interview is moved, and it is the surface that must not reload.
  *
  * The browser is pinned to UTC so the assertions can name times.
  */
@@ -47,7 +52,7 @@ test.use({ timezoneId: 'UTC' });
 
 test.describe('Hiring — the team reschedules and cancels', () => {
   /** TC-H07-E2E-03 */
-  test('an interviewer moves a row on My interviews, without reloading it', async ({
+  test('an interviewer moves an interview from their own candidate, without reloading', async ({
     page,
     request,
   }) => {
@@ -69,9 +74,15 @@ test.describe('Hiring — the team reschedules and cancels', () => {
     const invite = await latestInviteLink(request);
 
     await signIn(page, interviewer.email);
-    await page.goto(`/org/${org.organizationId}/hiring/my-interviews`);
 
-    const row = page.getByTestId(`my-interview-row-${invite.applicationId}`);
+    // The interviewer's own list — the scope their old screen became — and the row that
+    // opens the one candidate they may see.
+    await page.goto(`/org/${org.organizationId}/hiring/candidates?scope=mine`);
+    await expect(page.getByTestId('candidates-list')).toBeVisible();
+    await page.getByTestId('candidates-list').getByRole('link').first().click();
+    await page.waitForURL('**/hiring/candidates/**');
+
+    const row = page.getByTestId(`application-section-${invite.applicationId}`);
     await expect(row).toBeVisible();
     const before = (await row.textContent())!;
 
@@ -81,7 +92,7 @@ test.describe('Hiring — the team reschedules and cancels', () => {
       (window as unknown as { __noReload: boolean }).__noReload = true;
     });
 
-    await page.getByTestId(`my-interview-reschedule-${invite.applicationId}`).click();
+    await page.getByTestId(`application-reschedule-${invite.applicationId}`).click();
 
     const dialog = page.getByTestId(`application-reschedule-dialog-${invite.applicationId}`);
     await expect(dialog).toBeVisible();
@@ -112,7 +123,7 @@ test.describe('Hiring — the team reschedules and cancels', () => {
     await expect(submit).toBeEnabled();
     await submit.click();
 
-    // The dialog closes, the row states the new time, and a toast reports it.
+    // The dialog closes, the section states the new time, and a toast reports it.
     await expect(dialog).toBeHidden();
     await expect(row).toContainText(asTime(startUtc));
     expect(await row.textContent()).not.toBe(before);
@@ -120,13 +131,12 @@ test.describe('Hiring — the team reschedules and cancels', () => {
       'Interview moved to',
     );
 
-    // No reload: the row was replaced from what the server answered with, because a
-    // member working down a list must not have it rebuilt under them.
+    // No reload: the section was replaced from what the server answered with, because
+    // this is the page somebody is working on during a live call.
     expect(await page.evaluate(() => (window as unknown as { __noReload?: boolean }).__noReload))
       .toBe(true);
 
-    // And the card attributes the move to that member by name (07 §11.55).
-    await page.goto(invite.path);
+    // And the history attributes the move to that member by name (07 §11.55).
     const toggle = page.getByTestId(`application-history-toggle-${invite.applicationId}`);
     await expect(toggle).toContainText('Rescheduled once');
     await toggle.click();

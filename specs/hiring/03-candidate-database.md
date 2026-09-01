@@ -1,10 +1,10 @@
 ---
 id: "03"
 title: Candidate Database
-routes: ["/org/{orgId}/hiring/candidates", "/org/{orgId}/hiring/my-interviews"]
+routes: ["/org/{orgId}/hiring/candidates", "/org/{orgId}/hiring/my-interviews (redirect)"]
 api: ["GET /api/organizations/{orgId}/hiring/candidates", "GET /api/organizations/{orgId}/hiring/my-interviews"]
 entities: [Candidate, Application, ApplicationCriterion]
-tags: [candidates, search, filters, criteria-filter, pagination, my-interviews, rollup]
+tags: [candidates, search, filters, criteria-filter, pagination, my-interviews, scope, rollup]
 depends-on: ["01", "02", "04", "06"]
 ---
 
@@ -20,13 +20,14 @@ Rows are **candidates**, one per person — not one per application. That is wha
 finding people to contact. A person who applied to three vacancies is one row, and the application
 detail is one click away on their card ([04](04-candidate-card.md)).
 
-This spec also owns **My interviews** (§06), the much smaller list a `user` interviewer sees,
-which is application-grain for exactly the opposite reason.
+This spec also owns **My interviews** (§06), which is no longer a screen: it is this list's
+`Assigned to me` **scope** (§08). One list, two questions — *who do I know?* and *what is next for
+me?* — chosen by a tab rather than by a sidebar row.
 
 ## Actors & Preconditions
 
-- **Actors:** `admin` and `manager` for the candidate database; any member who is an assigned
-  interviewer for My interviews. `viewer` has no access to either.
+- **Actors:** `admin` and `manager` see the whole database; any member who is an assigned
+  interviewer sees it narrowed to their own candidates. `viewer` has no access at all.
 - **Preconditions:** at least one booking has been made, or the list shows its empty state.
 
 ## Functional Requirements
@@ -109,31 +110,55 @@ which is application-grain for exactly the opposite reason.
 
 ### 06. My Interviews
 
-25. A separate, much smaller screen at `/org/{orgId}/hiring/my-interviews`, listing the
-    **applications** for vacancies where the viewer is the assigned interviewer.
-26. It is **application-grain**, unlike the database above, because it answers "what interviews do
-    I have?" rather than "who do I know?".
+The screen is gone; every clause below survives it, restated against the `Assigned to me` scope
+(§08). The route redirects, so nothing that was already sent out stops working.
+
+25. The **`Assigned to me` scope** narrows the list to candidates with an application to a vacancy
+    where the viewer is the assigned interviewer. `/org/{orgId}/hiring/my-interviews` redirects to
+    `/org/{orgId}/hiring/candidates?scope=mine`.
+26. It is **candidate-grain** like the rest of the list. The old screen was application-grain
+    because it was a different screen; a person the interviewer has seen twice is one row here, and
+    the row speaks about the interview that scope is sorted by.
 27. It exists because without it the candidate card would be reachable from nowhere but a calendar
-    invite: a `user` interviewer has no Hiring section, no database, and no board. Losing the email
-    would lose the access.
-28. Rows show the candidate name, the vacancy, the interview date and time in the viewer's zone,
-    and the status. Upcoming interviews first, then past ones most-recent-first.
+    invite: a `user` interviewer has no vacancies, no board and no library. Losing the email would
+    lose the access.
+28. Ordering within the scope answers *what is next for me?* — the nearest upcoming interview on
+    top, then past ones most-recent-first.
 29. Each row opens that candidate's card, scoped as [04 §01](04-candidate-card.md) describes — the
     interviewer sees only their own applications there.
-30. The screen is available to `admin` and `manager` too, showing the same thing: their own
+30. The scope is available to `admin` and `manager` too, showing the same thing: their own
     assigned interviews.
-31. Its sidebar row is gated on **assignment**, not role: it appears only for a member who is the
-    interviewer on at least one vacancy. The shell already resolves the session before rendering so
-    that gated rows never flash into view; this is that mechanism with a different predicate.
-32. It has no search and no filters. It is a short list by construction.
+31. Reaching the list at all is gated on **role or assignment**: a member who is the interviewer on
+    at least one vacancy has it, whatever their role. The shell resolves the session before
+    rendering so that gated rows never flash into view; this is that mechanism with a different
+    predicate, now applied to `Candidates` rather than to a row of its own.
+32. Search, filters and pagination serve both scopes. The old screen had none of them because it
+    was short by construction; nothing is lost by an interviewer gaining them.
 
 ### 07. Access
 
-33. The candidate database is `admin` and `manager` only. A `user` or `viewer` navigating directly
-    receives the not-found state, and the API returns `404`.
-34. My interviews requires at least one assignment. A member with none receives the not-found state
-    rather than an empty list, so the screen's existence is not advertised to people it will never
-    serve.
+33. The candidate database is **`admin`/`manager` or an assigned interviewer**. Everyone else — a
+    `viewer`, and a `user` nobody has assigned anything — receives the not-found state, and the API
+    returns `404`. `403` is never returned here.
+34. A member with no assignment and no managing role receives the not-found state rather than an
+    empty list, so the list's existence is not advertised to people it will never serve.
+
+### 08. Scope
+
+35. Two scopes, `all` and `mine`, chosen by a tab strip above the list. `all` is the default.
+36. The scope is **navigation, not a filter**. It is not counted in the applied-filter badge, it
+    survives "Clear all", and it does not decide between the two filter-shaped empty states.
+37. It is addressable — `?scope=mine` — so a link, a bookmark and a Back from a candidate card all
+    open the tab they left. Absent from the URL, the last choice is remembered per browser;
+    absent that too, it is `all`.
+38. Each tab's label carries **how many candidates that scope holds under the filters already
+    applied**, so a tab answers what the other one would show before it is pressed.
+39. Switching scope preserves the search and every filter, and returns to page 1.
+40. **The scope is resolved on the server.** A caller who may not see the whole database is given
+    `mine` however they ask, and the response states the scope that was applied. The client
+    reflects that answer and never enforces it.
+41. A caller who may not see the whole database gets **no tab strip at all** — not a disabled one,
+    not a single-tab one — and no count for the scope they may not see.
 
 ## Screens
 
@@ -142,6 +167,9 @@ which is application-grain for exactly the opposite reason.
 ```
 ┌───────────────────────────────────────────────────────────────────────────────┐
 │  Candidates                                             Times in Europe/Minsk │
+│                                                                               │
+│  ┌ ALL (128) ┐ ASSIGNED TO ME (4)                                             │
+│  ─────────────────────────────────────────────────────────────────────────────│
 │                                                                               │
 │  [🔍 Search name or email…]                                                   │
 │  Position [ React Eng. ×] [+]   Category [ Senior ×] [+]                      │
@@ -161,19 +189,24 @@ which is application-grain for exactly the opposite reason.
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### My interviews
+### Assigned to me
+
+The same screen, with the second tab lit and no tab strip at all for a caller who may not see the
+first. An interviewer's whole hiring navigation is `Members` and `Candidates`.
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│  My interviews                            Times in Europe/Minsk  │
-│                                                                  │
-│  UPCOMING                                                        │
-│  Jane Doe      Senior React Engineer   Wed 26 Aug, 14:00   →     │
-│  Tom Fisher    Senior React Engineer   Thu 27 Aug, 10:00   →     │
-│                                                                  │
-│  PAST                                                            │
-│  Ann Lee       Senior React Engineer   Mon 18 Aug, 11:00   →     │
-└──────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────────┐
+│  Candidates                                             Times in Europe/Minsk │
+│                                                                               │
+│  ALL (128) ┌ ASSIGNED TO ME (4) ┐                                             │
+│  ─────────────────────────────────────────────────────────────────────────────│
+│                                                                               │
+│  4 of 128 candidates                                                          │
+│  ┌─────────────────────────────────────────────────────────────────────────┐  │
+│  │ Jane Doe      │ jane@example.com │ Senior React Eng.      │ Scheduled   │  │
+│  │               │                  │ 26 Aug 2026, 14:00     │             │  │
+│  └─────────────────────────────────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Flows
@@ -193,8 +226,9 @@ which is application-grain for exactly the opposite reason.
 
 ### Flow: an interviewer reaches their candidate without the invite
 
-1. A `user` interviewer signs in and sees only **My interviews** in the sidebar.
-2. They open it, find today's interview, and open the card.
+1. A `user` interviewer signs in and sees **Candidates** — their one hiring row.
+2. They open it, land on their own candidates with no tab strip, find today's interview, and open
+   the card.
 
 ### Alt flow: a criterion with no assessment
 
@@ -213,6 +247,10 @@ Query params:
   `is`, `not`, `gte`, `lte`, `contains`. `value` is a `CriterionValue` id for scales, a literal for
   the other types.
 - `page` (optional, default 1), `pageSize` (optional, default 25, max 100).
+- `scope` (optional, `all` | `mine`, default `all`) — **resolved server-side**. A caller with
+  `canSeeAll: false` is given `mine` whatever they send. Unlike every other parameter here, an
+  unrecognised value is not an error: the scope names no record this organization could fail to
+  hold, so it falls back to the default rather than answering `422`.
 
 Response `200`:
 ```json
@@ -221,6 +259,9 @@ Response `200`:
   "matched": 12,
   "page": 1,
   "pageSize": 25,
+  "canSeeAll": true,
+  "scope": "all",
+  "scopeCounts": { "all": 12, "mine": 3 },
   "viewerTimeZone": "Europe/Minsk",
   "candidates": [
     { "id": "uuid", "fullName": "Jane Doe", "email": "jane@example.com",
@@ -233,14 +274,21 @@ Response `200`:
 }
 ```
 
-- `total` is the unfiltered count; `matched` the filtered one. Both are shown.
-- `403` is never returned — `user` and `viewer` receive `404`.
+- `total` is the **org-wide, unfiltered** count and keeps that meaning in either scope; `matched`
+  is the filtered one, for the scope that was applied. Both are shown.
+- `scope` is what was **applied**, which may differ from what was asked.
+- `scopeCounts` are computed under the filters already applied, and feed the tab labels.
+  `scopeCounts.all` is **absent** when `canSeeAll` is false — a caller who may not see the whole
+  database may not learn its size under an arbitrary filter either.
+- `403` is never returned — a `viewer` and an unassigned `user` receive `404`.
 - `422` `{ error: "invalid_filter" }` for a malformed `criterion` triple or an operator the
   criterion's type does not support.
 
 ### GET /api/organizations/{orgId}/hiring/my-interviews
 
-No query params.
+No query params. **No screen calls this any more** — the list it served is
+`GET …/hiring/candidates?scope=mine`, at candidate grain. The endpoint is retained, unchanged and
+still gated on assignment; it remains the only place that answers at application grain.
 
 Response `200`:
 ```json
@@ -266,6 +314,8 @@ Response `200`:
    supports — `gte` against a `boolean`, or `contains` against a `scale`, is `422`.
 4. For a `scale`, `value` must be a `CriterionValue` id belonging to that criterion.
 5. Search is parameterised; special characters are data, never syntax.
+6. `scope` is the one parameter that is **clamped rather than refused**, in both directions: an
+   unrecognised value becomes `all`, and `all` becomes `mine` for a caller who may not see it.
 
 ## Error Messages
 
@@ -275,8 +325,13 @@ Response `200`:
 | No results | "No candidates match these filters" |
 | Invalid filter | "That filter isn't valid for this criterion" |
 | Load failed | "We couldn't load candidates. Try again." |
-| My interviews empty of upcoming | "No upcoming interviews." |
+| `Assigned to me`, nothing filtered, nothing to show | "No upcoming interviews." |
 | Criterion picker — archived marker | "Archived" |
+| Scope tabs | "All (n)" · "Assigned to me (n)" |
+
+The empty-database message is driven by `total` — org-wide and unfiltered — and never by a scoped
+count. An interviewer with no interviews must not be told to share a booking link while 35
+candidates sit in a list they cannot see.
 
 ## UI Notes
 
@@ -295,9 +350,8 @@ Response `200`:
   - `candidate-row-{id}`, `candidate-name-{id}`, `candidate-email-{id}`,
     `candidate-latest-{id}`, `candidate-status-{id}`, `candidate-app-count-{id}`
   - `candidates-pagination`, `candidates-page-{n}`
+  - `candidates-scope-tabs`, `candidates-scope-all`, `candidates-scope-mine`
   - `candidates-empty-state`, `candidates-no-results`, `candidates-loading-skeleton`
-  - `my-interviews-list`, `my-interviews-upcoming`, `my-interviews-past`,
-    `my-interview-row-{applicationId}`, `my-interviews-empty`
 
 ## Out of Scope
 
@@ -395,14 +449,14 @@ Response `200`:
   1. `422` `invalid_filter`.
   2. `422` — the id is rejected rather than dropped, so the result can never be broader than the filter implies.
 
-### TC-H03-INT-06: user and viewer receive 404 for the database
+### TC-H03-INT-06: viewer and unassigned user receive 404 for the database
 - **Level:** Integration
-- **Preconditions:** callers as `viewer`, as an unassigned `user`, and as a `user` interviewer.
+- **Preconditions:** callers as `viewer` and as a `user` nobody has assigned anything.
 - **Steps:**
   1. As each, `GET` the candidates endpoint.
 - **Expected Result:**
-  1. All three receive `404` — including the interviewer, whose access is to their own candidates, not to the database.
-  2. No candidate data appears in any response.
+  1. Both receive `404`, never `403`.
+  2. No candidate data appears in either response.
 
 ### TC-H03-INT-07: My interviews is scoped to assignment
 - **Level:** Integration
@@ -412,6 +466,31 @@ Response `200`:
 - **Expected Result:**
   1. P sees only V's applications; S only W's.
   2. Q receives `404`, not an empty list.
+
+### TC-H03-INT-08: the scope is resolved on the server
+- **Level:** Integration
+- **Preconditions:** interviewer I on vacancy V, with a candidate; a second vacancy W with a candidate I never sees; a candidate who booked both.
+- **Steps:**
+  1. `GET` candidates as I, with no `scope`.
+  2. `GET` candidates as I, with `scope=all`.
+  3. `GET` candidates as an `admin`, with and without `scope=mine`.
+  4. `GET` candidates as the `admin` with `scope=nonsense`.
+- **Expected Result:**
+  1. `canSeeAll: false`, `scope: "mine"`, and only V's candidates — W's is absent, not unlisted.
+  2. Identical to 1: hand-crafting the query widens nothing, and the response says `mine`.
+  3. `canSeeAll: true`; `scope` echoes what was asked, and `matched` is that scope's own count.
+  4. `200` with `scope: "all"` — an unrecognised scope is clamped, not refused.
+
+### TC-H03-INT-09: scope counts are filtered, and `all` is withheld from an interviewer
+- **Level:** Integration
+- **Preconditions:** as TC-H03-INT-08.
+- **Steps:**
+  1. `GET` as the `admin`, unfiltered, then with a position filter.
+  2. `GET` as I.
+- **Expected Result:**
+  1. `scopeCounts` carries both scopes, and both numbers narrow under the filter.
+  2. `scopeCounts` carries `mine` only; `all` is absent, so the database's size under an arbitrary filter is never disclosed.
+  3. `total` stays the org-wide unfiltered count in every case, including in `mine`.
 
 ### TC-H03-E2E-01: Filter by category and criterion, and read the count
 - **Level:** E2E
@@ -438,26 +517,45 @@ Response `200`:
   2. One request fires afterwards carrying both the term and the existing filter; the count reflects both.
 - **Selectors:** `candidates-search-input`, `candidates-count`.
 
-### TC-H03-E2E-03: A user interviewer sees only My interviews
+### TC-H03-E2E-03: A user interviewer sees only their own candidates
 - **Level:** E2E
-- **Preconditions:** logged in as a `user` who is the interviewer on one vacancy with candidates.
+- **Preconditions:** logged in as a `user` who is the interviewer on one vacancy with candidates, in an organization holding another interviewer's candidates too.
 - **Steps:**
   1. Inspect the sidebar.
-  2. Open My interviews and open a row.
-  3. Navigate directly to the candidates database URL.
+  2. Open Candidates and open a row.
+  3. Navigate to `…/hiring/candidates?scope=all` by hand.
+  4. Navigate directly to the vacancies and board URLs.
 - **Expected Result:**
-  1. My interviews is present; Vacancies and Candidates are not, and none flashes during load.
-  2. The row opens the candidate card, showing only their own vacancy's application.
-  3. The direct navigation renders the not-found state.
-- **Selectors:** `nav-my-interviews`, `nav-candidates` (asserted absent), `my-interview-row-{applicationId}`, `candidate-card`, `candidates-list` (asserted absent).
+  1. Candidates is present; Vacancies, Libraries and any My interviews row are not, and none flashes during load.
+  2. No tab strip is drawn; only their own candidates are listed; the row opens the card, showing only their own vacancy's application.
+  3. The list is unchanged — the other interviewer's candidate is absent from the page.
+  4. Each renders the not-found state.
+- **Selectors:** `nav-candidates`, `nav-my-interviews` (asserted absent), `candidates-scope-tabs` (asserted absent), `candidates-list`, `candidate-card`.
 
-### TC-H03-E2E-04: The My interviews row is absent for a member with no assignment
+### TC-H03-E2E-04: Candidates is absent for a member with no assignment
 - **Level:** E2E
 - **Preconditions:** logged in as a `user` who interviews for nothing.
 - **Steps:**
   1. Inspect the sidebar.
-  2. Navigate directly to `/org/{orgId}/hiring/my-interviews`.
+  2. Navigate directly to `/org/{orgId}/hiring/candidates`, with and without `?scope=mine`.
 - **Expected Result:**
-  1. No My interviews row exists.
-  2. The direct navigation renders the not-found state, not an empty list.
-- **Selectors:** `nav-my-interviews` (asserted absent), `my-interviews-list` (asserted absent).
+  1. No Candidates row exists.
+  2. Both navigations render the not-found state, not an empty list.
+- **Selectors:** `nav-candidates` (asserted absent), `candidates-list` (asserted absent).
+
+### TC-H03-E2E-05: The scope is navigation, and it survives
+- **Level:** E2E
+- **Preconditions:** logged in as an `admin` who interviews for one of two vacancies, each with a candidate.
+- **Steps:**
+  1. Open Candidates and read both tab labels.
+  2. Switch to `Assigned to me`.
+  3. Reload.
+  4. Open a candidate and go back.
+  5. Open `/org/{orgId}/hiring/my-interviews`.
+- **Expected Result:**
+  1. `All (2)` and `Assigned to me (1)`, with `All` selected.
+  2. Only their own candidate is listed, and the address carries `?scope=mine`.
+  3. The same tab is selected.
+  4. The same tab is selected, with the same rows.
+  5. It redirects to `…/hiring/candidates?scope=mine`.
+- **Selectors:** `candidates-scope-all`, `candidates-scope-mine`, `candidates-list`.

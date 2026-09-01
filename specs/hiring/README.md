@@ -51,16 +51,24 @@ The organization's four roles are defined in user-management spec 01. Hiring add
 |---|---|---|---|---|
 | See the Hiring section | ✅ | ✅ | ❌ | ❌ |
 | Create / edit / close vacancies | ✅ | ✅ | ❌ | ❌ |
-| Candidate database, boards, move cards | ✅ | ✅ | ❌ | ❌ |
+| Boards, move cards | ✅ | ✅ | ❌ | ❌ |
 | Manage category / criteria libraries | ✅ | ✅ | ❌ | ❌ |
 | Be assigned as interviewer | ✅ | ✅ | ✅ | ❌ |
-| My interviews, and cards for own vacancies | ✅ | ✅ | ✅ | ❌ |
+| The candidate database, whole | ✅ | ✅ | ❌ | ❌ |
+| The candidate database, own candidates only | ✅ | ✅ | ✅ | ❌ |
+| Cards for own vacancies | ✅ | ✅ | ✅ | ❌ |
 | Reschedule / cancel an interview | ✅ | ✅ | ✅ | ❌ |
 
-The last two rows are scoped by **assignment**, not role — they are the only non-uniform
+The last three rows are scoped by **assignment**, not role — they are the only non-uniform
 permissions in the set, and they are what lets an engineer interview without becoming an org admin.
-Both are enforced by `InterviewerScopeGuard`, which sits beside `OrgScopeGuard` and answers 404
-(never 403) for a vacancy the caller does not interview for.
+The card and its writes are enforced by `InterviewerScopeGuard`, the database by
+`CandidateDatabaseGuard`; both sit beside `OrgScopeGuard` and answer 404 (never 403) to a caller
+whose access is real but narrow, or absent.
+
+The database's two rows are one screen. An assigned interviewer opens the same list a manager does,
+resolved to the `Assigned to me` scope on the server — which is what the separate *My interviews*
+screen became ([03 §08](03-candidate-database.md)). A `viewer`, and a `user` nobody has assigned
+anything, still reach nothing at all.
 
 Rescheduling and cancelling therefore need **no new guard and no new role**: an interviewer may move
 or call off the interviews they hold, exactly as they may read the cards for them. A third party —

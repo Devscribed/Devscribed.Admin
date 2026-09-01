@@ -49,6 +49,16 @@ export const CANDIDATE_MESSAGES = {
   addCriteriaFilter: '+ Add criteria filter',
   /** The one marker in the criterion picker, shared with the settings screen. */
   archived: CRITERION_MESSAGES.archivedBadge,
+  /**
+   * The two scope tabs. `Assigned to me` is what the separate My interviews screen
+   * became: the same list, narrowed to the vacancies the viewer interviews for.
+   */
+  scope: {
+    all: 'All',
+    mine: 'Assigned to me',
+    /** The tablist's accessible name — the strip is a control, and a control is named. */
+    tablist: 'Candidate scope',
+  },
 } as const;
 
 /** `128 candidates`, `1 candidate`. */
@@ -63,6 +73,50 @@ export const candidateCountLabel = (count: number): string =>
  */
 export const candidateResultLabel = (matched: number, total: number, filtered: boolean): string =>
   filtered ? `${matched} of ${candidateCountLabel(total)}` : candidateCountLabel(total);
+
+/* ------------------------------------------------------------------ *
+ * Scope
+ * ------------------------------------------------------------------ */
+
+/**
+ * Which candidates the list is about (03 §08.35).
+ *
+ * `all` is the database as it always was — everyone who has ever booked. `mine` is the
+ * whole of the former My interviews screen: the candidates on vacancies the viewer is
+ * the assigned interviewer for. Two questions — *who do I know?* and *what is next for
+ * me?* — asked of one list rather than of two screens.
+ */
+export const CANDIDATE_SCOPES = ['all', 'mine'] as const;
+export type CandidateScope = (typeof CANDIDATE_SCOPES)[number];
+
+/**
+ * What the caller asked for, or `all` when they asked for nothing recognisable.
+ *
+ * Lenient where every other query parameter is strict, and deliberately so: the scope is
+ * **navigation, not a filter**. Nothing is looked up to satisfy it, so there is no id
+ * this organization could fail to hold, and a stale bookmark carrying a spelling we no
+ * longer answer should land on the list rather than on a 422.
+ */
+export const parseCandidateScope = (input: unknown): CandidateScope =>
+  CANDIDATE_SCOPES.includes(input as CandidateScope) ? (input as CandidateScope) : 'all';
+
+/**
+ * The scope that is actually applied — which is the server's to decide, never the query
+ * string's (03 §08.40).
+ *
+ * A caller who may only see their own candidates gets `mine` however they ask, so
+ * hand-crafting `?scope=all` widens nothing. The client reflects this answer; it does not
+ * enforce it, and it is never the only thing standing between an interviewer and the
+ * database.
+ */
+export const resolveCandidateScope = (
+  requested: unknown,
+  canSeeAll: boolean,
+): CandidateScope => (canSeeAll ? parseCandidateScope(requested) : 'mine');
+
+/** `All (128)` — the count the design puts inside the tab label rather than beside it. */
+export const candidateScopeTabLabel = (scope: CandidateScope, count: number): string =>
+  `${CANDIDATE_MESSAGES.scope[scope]} (${count})`;
 
 /* ------------------------------------------------------------------ *
  * Operators
@@ -368,6 +422,12 @@ export interface CandidateQueryParams {
   criterion?: unknown;
   page?: unknown;
   pageSize?: unknown;
+  /**
+   * `all` | `mine`, resolved by `resolveCandidateScope` rather than by the plan below:
+   * it narrows the list without being a filter, so it must not count towards `filtered`,
+   * must not appear in the `Filters (n)` badge, and must survive `Clear filters`.
+   */
+  scope?: unknown;
 }
 
 const asList = (input: unknown): string[] =>

@@ -15,8 +15,9 @@ depends-on: ["00", "01", "02", "04", "05"]
 An interview can be moved or called off after it is booked, by either side.
 
 The **candidate** does it from a second public page, reached by a per-booking link carried in their
-calendar invite. The **team** does it from the candidate card and from My interviews. Both sides get
-the same two actions, and the candidate can additionally replace the CV they submitted.
+calendar invite. The **team** does it from the candidate card, and from a row of the candidate list.
+Both sides get the same two actions, and the candidate can additionally replace the CV they
+submitted.
 
 This spec supersedes the deferral recorded in [02 §09.40](02-booking-page.md), which stated that a
 candidate who books by mistake "must contact the organization," and in
@@ -240,9 +241,11 @@ for a move as well as for a booking. See §12.
 39. The team's home for both actions is the **candidate card's application section**
     ([04 §04](04-candidate-card.md)), beside the interview facts they change and above the
     scheduling history they write.
-40. **My interviews** ([03 §06](03-candidate-database.md)) carries the same two actions as a row
-    affordance. For a `user` who interviews, that screen is the whole of hiring, and it is the one
-    they actually live on.
+40. The **candidate list** ([03](03-candidate-database.md)) carries the same two actions as a row
+    affordance, on a scheduled row. For a `user` who interviews, that list — opened on its
+    `Assigned to me` scope — is the whole of hiring, and it is the one they actually live on.
+    *(Not yet built: the row affordances went with the My interviews screen the scope replaced, and
+    return with the list's actions kebab. Until then the card is the team's only surface.)*
 41. **Neither action appears on the board.** The board expresses pipeline stage. Mixing "move this
     candidate to Passed" with "move this interview to Thursday" on one card conflates two unrelated
     kinds of movement.
@@ -367,7 +370,7 @@ for a move as well as for a booking. See §12.
     interviewer time is the permissive one. The cost — a cancellation sixty seconds out that nobody
     reads in time — is smaller than the no-show it replaces.
 68. Once `start` has passed the manage page blurs to §04's third state and the team's actions
-    disappear from the card and from My interviews.
+    disappear from the card and from the candidate list.
 
 ### 15. Abuse exposure
 
@@ -523,7 +526,7 @@ wording, and the next reload clears it (§04.16a, §05.27).
 
 ### Main flow: the team cancels
 
-1. Member opens the candidate card, or My interviews.
+1. Member opens the candidate card.
 2. Member presses Cancel, optionally gives a reason, and confirms.
 3. System cancels the event with the reason in the notice, then writes `isCancelled` and a
    `cancelled` event with `actor: "member"` and the acting `actorAccountId`.
@@ -707,7 +710,6 @@ CV validation messages are [02](02-booking-page.md)'s and must match its table e
   - `application-cancel-reason-{applicationId}`, `application-cancel-confirm-{applicationId}`
   - `application-history-{applicationId}`, `application-history-toggle-{applicationId}`
   - `application-history-entry-{eventId}`
-  - `my-interview-reschedule-{applicationId}`, `my-interview-cancel-{applicationId}`
   - control test ids are owned by the control specs.
 
 ## Out of Scope
@@ -940,13 +942,13 @@ CV validation messages are [02](02-booking-page.md)'s and must match its table e
   2. "We couldn't find your booking." — the confirmation is not a state of the record.
   3. The new booking succeeds; the board shows a cancelled card in its original column and a fresh card at the top of `Scheduled`.
 
-### TC-H07-E2E-03: The team reschedules from My interviews
+### TC-H07-E2E-03: The interviewer reschedules from their own candidate
 - **Level:** E2E
 - **Steps:**
-  1. As the assigned interviewer, open My interviews and reschedule a row.
+  1. As the assigned interviewer, open `Candidates → Assigned to me`, open the candidate, and reschedule the application.
 - **Expected Result:**
-  1. The row shows the new time without a reload of the page.
-  2. The candidate card's history attributes the move to that member by name.
+  1. The application section shows the new time without a reload of the page.
+  2. The scheduling history attributes the move to that member by name.
 
 ### TC-H07-E2E-04: Scheduling history is team-only and collapsed
 - **Level:** E2E

@@ -11,7 +11,7 @@ tags: [public, booking-layout, reschedule, cancel, destructive, modal, teammerly
 # 07 — Manage Booking · Design
 
 Visual and interaction specification for `/manage/{slug}/{token}` and for the reschedule and cancel
-affordances on the candidate card and My interviews. Pairs with
+affordances on the candidate card and on a candidate list row. Pairs with
 [07-manage-booking.md](07-manage-booking.md), which owns the rules, the API contract, and every
 validation message.
 
@@ -197,8 +197,7 @@ pulse loader rather than a guess at what is coming. The test id changes with it:
 | History entry | native `<li>` | — | `application-history-entry-{eventId}` |
 | Cancelled mark (card) | `Badge` | `status="inactive"`, `aria-label` | `application-cancelled-{applicationId}` |
 | Outcome | `InfoBanner` | `onDismiss` | `toast-interview-rescheduled` · `toast-interview-cancelled` |
-| Reschedule (My interviews) | `Button` | *(no variant)* | `my-interview-reschedule-{applicationId}` |
-| Cancel (My interviews) | `Button` | *(no variant)* | `my-interview-cancel-{applicationId}` |
+| Reschedule · Cancel (list row) | *(pending — see below)* | — | — |
 
 The team's reschedule dialog is a **720px `Modal` holding the same `Calendar` and slot list** the
 public page uses. One picker, one behaviour, two hosts — the team does not get a second date control
@@ -217,10 +216,17 @@ banners report a *state* and go away when the state does, while one standing in 
 an *event* that nothing later makes untrue. The two test ids are unchanged — they name the
 announcement, not the component that carries it.
 
-On **My interviews**, the two actions live in a trailing cell of the existing `Table` row, revealed
-on row hover and on keyboard focus, and always present for the row's own focus order. Both are
-blue's neutral button on both counts: a `delete` fill repeated down a table of interviews turns a
-calm list into an alarm.
+On the **candidate list**, the two actions belong to a scheduled row, and they are **not drawn
+yet**. They lived in a trailing cell of My interviews' `Table` — two neutral buttons revealed on row
+hover and on keyboard focus, never a `delete` fill, because a destructive fill repeated down a table
+of interviews turns a calm list into an alarm. That screen is the list's `Assigned to me` scope now
+([03](03-candidate-database.design.md)), and the actions return with the table's own actions kebab,
+where the same argument holds for the same reason: one quiet control per row, and the destructive
+item inside it.
+
+Until then the **candidate card is the team's only surface** for both actions. Nothing is lost that
+the card does not already do — it is one click further from a list somebody is working down, which
+is the whole cost, and it is temporary.
 
 ## Copy
 

@@ -3,22 +3,23 @@ id: "03"
 kind: design
 title: Candidate Database — Design
 pairs-with: 03-candidate-database.md
-routes: ["/org/{orgId}/hiring/candidates", "/org/{orgId}/hiring/my-interviews"]
+routes: ["/org/{orgId}/hiring/candidates", "/org/{orgId}/hiring/my-interviews (redirect)"]
 design-system: "1_DS for dev"
-tags: [candidates, filters, filter-builder, infinite-scroll, my-interviews, teammerly, light-only]
+tags: [candidates, filters, filter-builder, infinite-scroll, scope-tabs, teammerly, light-only]
 ---
 
 # 03 — Candidate Database · Design
 
-Visual and interaction specification for the candidate database and My interviews. Pairs with
-[03-candidate-database.md](03-candidate-database.md), which owns the rules.
+Visual and interaction specification for the candidate database, whose `Assigned to me` scope is
+what My interviews became. Pairs with [03-candidate-database.md](03-candidate-database.md), which
+owns the rules.
 
 **Design system:** Teammerly Original DS, `1_DS for dev/`. The decisions behind it are in
 [`specs/design-system/README.md`](../design-system/README.md); divergences from the vendored copy
 carry numbers in the [ledger](../design-system/ledger.md).
 
-**Theme:** light only. Both screens render inside the `AppShell`
-(`specs/user-management/00-app-shell.design.md`) and draw no chrome of their own.
+**Theme:** light only. The screen renders inside the `AppShell`
+(`specs/user-management/00-app-shell.design.md`) and draws no chrome of its own.
 
 The design problem here is the filter bar: three kinds of filter, one of which is a repeatable
 three-part row, on a screen that must still read as a list rather than a query builder.
@@ -33,6 +34,8 @@ the [status palette](#status-badges) stops being a five-tone scale, and the
   Candidates                                                          ← PageHeader
   Times in Europe/Minsk
   ────────────────────────────────────────────────────────────────────
+  ALL (128)   ASSIGNED TO ME (4)                                      ← PageTabs
+  ══════════
   [🔍 Search name or email…]
   ┌──────────────────────────────────────────────────────────────────┐
   │ Position   ⟨▌Senior React Eng. ×⟩                                │  ← filter Card
@@ -97,6 +100,7 @@ the [status palette](#status-badges) stops being a five-tone scale, and the
 | Screen element | DS component | Props | `data-testid` |
 |---|---|---|---|
 | Page header | `PageHeader` → `PageTitle` | `title`, `subtitle` | `page-title` |
+| Scope tabs | `PageTabs` | `tabs` (object form), `active`, `label` | `candidates-scope-tabs` · `candidates-scope-all` · `candidates-scope-mine` |
 | Search | `SearchInput` | `outlined`, `onClear` | `candidates-search-input` |
 | Filter surface | `Card` | **`clip={false}`**, `--surface-sunken` | — |
 | Filter labels | `FieldLabel` | `htmlFor` | — |
@@ -176,9 +180,9 @@ Status is carried by the badge's **text** on every screen that draws one. The hu
 | Empty database | No candidates yet. Share a booking link to start. |
 | No results | No candidates match these filters |
 | Loading more | Loading more candidates |
-| My interviews title | My interviews |
-| My interviews groups | Upcoming · Past |
-| My interviews empty of upcoming | No upcoming interviews. |
+| Scope tabs | All ({n}) · Assigned to me ({n}) |
+| Scope tablist name | Candidate scope |
+| `Assigned to me`, nothing filtered, nothing to show | No upcoming interviews. |
 
 Operator wording is deliberately plain English rather than `>=`. `at least B1` is what an
 interviewer would say; `English >= B1` is what a database would.
@@ -227,50 +231,59 @@ row means the list is complete.
 - **Row click** opens the candidate card. Rows are real anchors, so middle-click and copy-address
   work.
 
-## My interviews
+## Scope tabs
 
-A deliberately plain screen: no filters, no search, no page controls.
+My interviews is not a screen any more — it is a `PageTabs` strip above this list, and everything
+the old screen drew has an answer here.
 
 ```
-  My interviews                                                       ← PageHeader
+  Candidates                                                          ← PageHeader
   Times in Europe/Minsk
   ────────────────────────────────────────────────────────────────────
-  Upcoming                                                            ← Card title, <h2>
-  ┌──────────────────────────────────────────────────────────────────┐
-  │ Jane Doe    Senior React Engineer    Wed 26 Aug, 14:00  Scheduled │
-  └──────────────────────────────────────────────────────────────────┘
-  Past
+  ALL (128)   ASSIGNED TO ME (4)                                      ← PageTabs
+  ══════════
 ```
 
-- Two groups, each a `Card` whose **`title` is the group name** at `titleAs="h2"`, wrapping a
-  `Table hideHeader`.
+- Blue's `PageTabs`, in the object form ([§45](../design-system/ledger.md)): each tab carries a
+  `value` distinct from its label, a `testId`, and a label that is **the scope's name and its
+  count**. The component deliberately has no `count` prop — a count composes into the label, and a
+  strip that grew one would then need a badge for it, and an icon.
+- Real `role="tab"` buttons in a named `role="tablist"`, one tab stop, arrow keys moving and
+  selecting as they go. The strip chooses what is shown; it is not a set of destinations, and it is
+  not drawn as links.
+- Uppercase, because `PageTabs` is the one place blue uppercases anything — which is also why the
+  column headers below it are sentence case.
+- **The count lives in the label.** The count line above the table still reads
+  `12 of 128 candidates`, and in `Assigned to me` with nothing filtered it reads `4 of 128` — four
+  are mine, a hundred and twenty-eight exist, and neither number says the other.
+- **No strip at all** for a caller who may not see the whole database. Not a disabled tab, not a
+  single-tab strip: a control offering one choice is not a choice, and a second tab would advertise
+  a list they will never be shown. It is drawn only once the response has said so, so it never
+  flashes in and out.
+- The scope is in the address (`?scope=mine`, `all` implied by its absence) and remembered per
+  browser. A tab press is `history.replaceState`, never a push — Back leaves the screen rather than
+  walking the tab strip.
+- Switching keeps the search and every filter, and returns to page 1. The strip survives
+  `Clear all`: it is navigation, not a filter chip.
+- The `Assigned to me` empty state is the old screen's own line, *No upcoming interviews.*, with no
+  clear-filters action beside it — nothing was filtered out, and offering to undo a filter that was
+  never applied is worse than saying nothing.
 
-  This is [reversal 5](../design-system/README.md), and it is the reason `hideHeader` keeps the
-  rationale it was added with. `hideHeader` exists because the groups are "already named by the
-  `SectionLabel` above them"; delete `SectionLabel` and that sentence has to name something else or
-  the prop loses its argument. A `Card` title names the table **inside its own surface** rather
-  than floating above it, so the naming is structural rather than a caption's proximity — and it is
-  the same `<h2>` outline under `PageTitle`'s `<h1>` that Phase 3 established for captions
-  ([§27](../design-system/ledger.md)).
+The old screen's two groups, `Upcoming` and `Past`, do not survive as groups: this list is
+candidate-grain, so a person seen twice is one row. What they carried — *what is next for me* — is
+carried by the scope's ordering instead ([03 §06.28](03-candidate-database.md)).
 
-  The `<section aria-label>` Meridian wrapped each group in is gone with it. The heading is a real
-  heading now, so labelling a region with the same string would announce the name twice.
-- Past rows render their date in `--text-secondary`. Meridian used `--text-faint`, the fourth text
-  level blue does not have; this is [reversal 7](../design-system/README.md) taking the answer
-  Phase 3 settled — a shown-but-receded thing is `--text-secondary`.
-- The next-upcoming accent rule Meridian drew is **gone**. It was a `--accent-soft` left rule on one
-  row, and blue's `Table` paints rows white with a `--color-row-hover` tint and nothing else; a
-  coloured left edge on a single row is a treatment blue has no precedent for. Ordering and the
-  group heading carry "what's next", which is what the accessibility note already said they did.
-- When `Upcoming` is empty the group still renders, with its empty line, so the screen does not look
-  broken on a quiet day. `Past` does not render at all when it is empty.
-- Both rows' actions — Reschedule and Cancel — stay `ghost` `Button`s revealed on hover and on
-  focus-within, and absent rather than disabled once the interview has passed or been called off.
+`Table hideHeader` ([§34](../design-system/ledger.md)) loses its only consumer with those groups.
+The prop stays; the argument for it — a short grouped list already named by the surface it sits in
+— is unchanged, and so is [reversal 5](../design-system/README.md), which was about how such a
+group is named rather than about this screen in particular.
 
 ## The two dialogs
 
-Reschedule and Cancel are mounted by this screen and by the candidate card, over the same
-endpoints, and they are the same two components in both places (07 design). Both are `Modal` +
+Reschedule and Cancel are mounted by the candidate card, over the same endpoints the candidate's
+own manage page uses, and they are the same two components in both places (07 design). This screen
+mounted them too while My interviews had rows of its own; the row gets them back when the table
+grows its actions kebab. Both are `Modal` +
 `FormActions`, not `ConfirmDialog` — the call Phase 3 made and
 [flagged for Phase 6](../design-system/ledger.md): `ConfirmDialog` fires `onClose` in the same
 breath as `onAccept`, so a confirmation whose action is a request with a busy state cannot use it.

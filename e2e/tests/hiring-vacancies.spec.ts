@@ -258,7 +258,7 @@ test.describe('Vacancies', () => {
         // a gated row appearing and being taken away again.
         await expect(page.getByTestId('app-sidebar')).toBeVisible();
         await expect(page.getByTestId('nav-members')).toBeVisible();
-        for (const row of ['nav-vacancies', 'nav-candidates', 'nav-hiring-settings', 'nav-my-interviews']) {
+        for (const row of ['nav-vacancies', 'nav-candidates', 'nav-hiring-settings']) {
           await expect(page.getByTestId(row)).toHaveCount(0);
         }
 

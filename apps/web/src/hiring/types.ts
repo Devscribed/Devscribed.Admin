@@ -8,6 +8,7 @@
 import type {
   ApplicationStatus,
   CancellationFacts,
+  CandidateScope,
   CriterionType,
   CvVersion,
   ScheduleEntry,
@@ -267,11 +268,21 @@ export interface CandidateRow {
 }
 
 export interface CandidateDatabase {
-  /** Unfiltered, so the count line can say "12 of 128" (03 §05.20). */
+  /**
+   * Unfiltered **and org-wide**, so the count line can say "12 of 128" (03 §05.20) — and
+   * so the "no candidates yet, share a booking link" state is never reached by a scope
+   * that merely happens to be empty.
+   */
   total: number;
   matched: number;
   page: number;
   pageSize: number;
+  /** Whether the caller may see the whole database — what decides the tab strip exists. */
+  canSeeAll: boolean;
+  /** What the server **applied**, which may differ from what the URL asked (03 §08.40). */
+  scope: CandidateScope;
+  /** Under the filters already applied; `all` is absent when `canSeeAll` is false. */
+  scopeCounts: { all?: number; mine: number };
   /** Named once above the table rather than on every row. */
   viewerTimeZone: string;
   candidates: CandidateRow[];

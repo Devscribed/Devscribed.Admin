@@ -2,10 +2,10 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import type { MouseEvent } from 'react';
-import { INTERVIEW_MESSAGES, canManageHiring } from '@devscribed/validation';
+import { canManageHiring } from '@devscribed/validation';
 import { Sidebar as Rail } from '@/ds';
 import type { SidebarItem } from '@ds/components/navigation/Sidebar';
-import { CandidatesIcon, MyInterviewsIcon, PeopleIcon, SettingsIcon, VacanciesIcon } from './icons';
+import { CandidatesIcon, PeopleIcon, SettingsIcon, VacanciesIcon } from './icons';
 
 /** Only what the navigation asks of the session: a role, and one assignment fact. */
 interface NavSession {
@@ -24,10 +24,14 @@ interface NavSession {
  * its own glyph — blue's submenu draws an icon on the parent only. A section deep enough to
  * need one is what the `submenu` form is there for.
  *
- * The rows do not share one predicate. Vacancies, Candidates and Settings are `admin`/`manager`;
- * **My interviews is gated on assignment, not role** (hiring 03 §06.31) — which is what lets an
- * engineer interview without becoming an org admin, and is the only non-uniform permission in
- * the product.
+ * The rows do not share one predicate. Vacancies and Settings are `admin`/`manager`. **Candidates
+ * is gated on role *or* assignment** (hiring 03 §06.31, §07.33) — which is what lets an engineer
+ * interview without becoming an org admin, and is the only non-uniform permission in the product.
+ *
+ * There is no `My interviews` row. That screen is the candidate list's `Assigned to me` scope
+ * now, so an interviewer's one hiring destination is the same destination a manager has, opened
+ * on a different tab. Two rows pointing at one list would have been the navigation claiming a
+ * difference the screen does not have.
  *
  * The shell resolves the session before it renders anything, which is what stops a gated row
  * flashing into view and back out — including this one, whose predicate rides on `/api/me` for
@@ -45,33 +49,24 @@ function navigation(orgId: string, session: NavSession): SidebarItem[] {
   ];
 
   if (canManageHiring(session.role)) {
-    items.push(
-      {
-        type: 'link',
-        title: 'Vacancies',
-        Icon: VacanciesIcon,
-        href: `/org/${orgId}/hiring/vacancies`,
-        testId: 'nav-vacancies',
-      },
-      {
-        type: 'link',
-        title: 'Candidates',
-        Icon: CandidatesIcon,
-        href: `/org/${orgId}/hiring/candidates`,
-        testId: 'nav-candidates',
-      },
-    );
-  }
-
-  // Below the two lists and above Settings — an interviewer's whole navigation is Members and
-  // this one row, and a manager reads it as "and mine", which is where it belongs.
-  if (session.isInterviewer) {
     items.push({
       type: 'link',
-      title: INTERVIEW_MESSAGES.title,
-      Icon: MyInterviewsIcon,
-      href: `/org/${orgId}/hiring/my-interviews`,
-      testId: 'nav-my-interviews',
+      title: 'Vacancies',
+      Icon: VacanciesIcon,
+      href: `/org/${orgId}/hiring/vacancies`,
+      testId: 'nav-vacancies',
+    });
+  }
+
+  // The one row an interviewer has, and the same one a manager has. What differs is what the
+  // API will answer them with, which is not the rail's business to pre-empt.
+  if (canManageHiring(session.role) || session.isInterviewer) {
+    items.push({
+      type: 'link',
+      title: 'Candidates',
+      Icon: CandidatesIcon,
+      href: `/org/${orgId}/hiring/candidates`,
+      testId: 'nav-candidates',
     });
   }
 

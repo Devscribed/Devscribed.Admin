@@ -4,10 +4,12 @@ import {
   latestAssessment,
   matchesEveryCriterion,
   referencedFilterIds,
+  resolveCandidateScope,
   type CandidateAssessment,
   type CandidateFilterLibrary,
   type CandidateFilterPlan,
   type CandidateQueryParams,
+  type CandidateScope,
   type FilterCriterion,
 } from '@devscribed/validation';
 import type { Prisma } from '@prisma/client';
@@ -30,12 +32,31 @@ export interface PresentedCandidate {
   } | null;
 }
 
+/**
+ * How many candidates each scope holds **under the filters already applied** — the
+ * numbers the design puts inside the tab labels (03 §08.38, §08.41).
+ *
+ * `all` is absent for a caller who may not see it. Not merely hidden by the screen: an
+ * interviewer who could read the org-wide count under an arbitrary filter would have the
+ * database's contents one binary search at a time, which is the thing the 404 exists to
+ * prevent.
+ */
+export interface CandidateScopeCounts {
+  all?: number;
+  mine: number;
+}
+
 export interface CandidateDatabasePage {
-  /** Unfiltered, so the count line can say "12 of 128" (03 §05.20). */
+  /** Unfiltered **and org-wide**, so the count line can say "12 of 128" (03 §05.20). */
   total: number;
   matched: number;
   page: number;
   pageSize: number;
+  /** Whether the caller may see the whole database, which is what draws the tab strip. */
+  canSeeAll: boolean;
+  /** What was **applied**, which may differ from what was asked (03 §08.40). */
+  scope: CandidateScope;
+  scopeCounts: CandidateScopeCounts;
   viewerTimeZone: string;
   candidates: PresentedCandidate[];
 }
@@ -56,6 +77,10 @@ export interface CandidateDatabasePage {
  * criterion dialog and the filter row already share. So the assessments for the criteria
  * a query names are read, rolled up per candidate, and the surviving ids restrict the
  * query — one extra round trip, bounded by one row per application per criterion named.
+ *
+ * It also answers what used to be a screen of its own. **My interviews is the `mine`
+ * scope** (03 §08.35): one more `some` clause, over the vacancies the viewer interviews
+ * for, applied on the server and never negotiable from the query string.
  */
 @Injectable()
 export class CandidateDatabaseService {
@@ -67,7 +92,7 @@ export class CandidateDatabaseService {
   async list(
     organizationId: string,
     params: CandidateQueryParams,
-    viewerAccountId: string,
+    viewer: { accountId: string; canSeeAll: boolean },
   ): Promise<CandidateDatabasePage> {
     const library = await this.library(organizationId, params);
 
@@ -83,12 +108,17 @@ export class CandidateDatabaseService {
     }
     const plan = planned.plan;
 
-    const assessed = await this.candidateIdsMatchingCriteria(organizationId, plan, library);
-    const where = this.where(organizationId, plan, assessed);
+    // Asked is a preference; applied is the guard's finding. They differ exactly when
+    // somebody hand-crafts `?scope=all` without the right to it, and the response then
+    // reports what was applied rather than what was requested.
+    const scope = resolveCandidateScope(params.scope, viewer.canSeeAll);
 
-    const [total, matched, rows] = await Promise.all([
+    const assessed = await this.candidateIdsMatchingCriteria(organizationId, plan, library);
+    const where = this.where(organizationId, plan, assessed, scope, viewer.accountId);
+
+    const [total, scopeCounts, rows] = await Promise.all([
       this.prisma.candidate.count({ where: { organizationId } }),
-      this.prisma.candidate.count({ where }),
+      this.scopeCounts(organizationId, plan, assessed, viewer),
       this.prisma.candidate.findMany({
         where,
         // Most recently added first (03 §01.3); `id` keeps two candidates created in the
@@ -118,15 +148,52 @@ export class CandidateDatabaseService {
 
     return {
       total,
-      matched,
+      // The applied scope's own count, so `matched` and the lit tab never disagree.
+      matched: scope === 'mine' ? scopeCounts.mine : (scopeCounts.all ?? 0),
       page: plan.page,
       pageSize: plan.pageSize,
+      canSeeAll: viewer.canSeeAll,
+      scope,
+      scopeCounts,
       viewerTimeZone: await this.viewerTimeZone.forViewer(
-        viewerAccountId,
-        await this.firstInterviewerEmail(organizationId),
+        viewer.accountId,
+        // In `mine` the viewer is an interviewer by definition, so their own mailbox is
+        // the right fallback — which is what My interviews used, and what an interviewer
+        // with no `Account.timezone` would otherwise have lost in the move.
+        scope === 'mine'
+          ? await this.ownEmail(viewer.accountId)
+          : await this.firstInterviewerEmail(organizationId),
       ),
       candidates: rows.map((candidate) => this.present(candidate)),
     };
+  }
+
+  /**
+   * How many candidates each scope the caller may see holds, under the filters already
+   * applied — the numbers the tab labels carry, and the reason switching tabs never
+   * needs a second request to find out what it would show.
+   *
+   * One count for an interviewer, two for a manager. `all` is not computed for a caller
+   * who may not see it, so the leak is closed by never asking the question rather than
+   * by dropping the answer.
+   */
+  private async scopeCounts(
+    organizationId: string,
+    plan: CandidateFilterPlan,
+    assessed: string[] | null,
+    viewer: { accountId: string; canSeeAll: boolean },
+  ): Promise<CandidateScopeCounts> {
+    const count = (scope: CandidateScope) =>
+      this.prisma.candidate.count({
+        where: this.where(organizationId, plan, assessed, scope, viewer.accountId),
+      });
+
+    const [mine, all] = await Promise.all([
+      count('mine'),
+      viewer.canSeeAll ? count('all') : Promise.resolve(undefined),
+    ]);
+
+    return all === undefined ? { mine } : { all, mine };
   }
 
   /**
@@ -260,6 +327,8 @@ export class CandidateDatabaseService {
     organizationId: string,
     plan: CandidateFilterPlan,
     assessed: string[] | null,
+    scope: CandidateScope,
+    viewerAccountId: string,
   ): Prisma.CandidateWhereInput {
     const and: Prisma.CandidateWhereInput[] = plan.applicationClauses.map((clause) => ({
       applications: {
@@ -271,6 +340,17 @@ export class CandidateDatabaseService {
         },
       },
     }));
+
+    // The scope is one more clause of the same shape, and that is the whole of it: a
+    // candidate is mine when **any** of their applications is to a vacancy I interview
+    // for, exactly as they are React when any of their applications is to a React one.
+    // Their other interviewers' applications still count towards every other filter —
+    // this narrows which people are listed, not which of their history is read.
+    if (scope === 'mine') {
+      and.push({
+        applications: { some: { vacancy: { interviewerAccountId: viewerAccountId } } },
+      });
+    }
 
     /**
      * Name and email only (03 §02.7). Every whitespace-separated term must match one of
@@ -307,6 +387,15 @@ export class CandidateDatabaseService {
       select: { interviewer: { select: { email: true } } },
     });
     return first?.interviewer.email;
+  }
+
+  /** The viewer's own mailbox — the fallback that fits the `mine` scope (03 §01.4). */
+  private async ownEmail(accountId: string): Promise<string | undefined> {
+    const account = await this.prisma.account.findUnique({
+      where: { id: accountId },
+      select: { email: true },
+    });
+    return account?.email;
   }
 
   private present(candidate: {

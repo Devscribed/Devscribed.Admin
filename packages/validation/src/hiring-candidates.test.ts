@@ -5,6 +5,7 @@ import {
   CANDIDATE_PAGE_SIZE_MAX,
   candidateFilterPlan,
   candidateResultLabel,
+  candidateScopeTabLabel,
   clampPageSize,
   criterionFilterParam,
   latestAssessment,
@@ -12,7 +13,9 @@ import {
   matchesEveryCriterion,
   operatorsFor,
   pageCount,
+  parseCandidateScope,
   parseCriterionFilterParam,
+  resolveCandidateScope,
   supportsOperator,
   valueControlFor,
   type CandidateAssessment,
@@ -347,5 +350,50 @@ describe('candidateResultLabel', () => {
     expect(pageCount(0, 25)).toBe(1);
     expect(pageCount(25, 25)).toBe(1);
     expect(pageCount(26, 25)).toBe(2);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Scope — navigation, and the one thing the query string cannot widen
+ * ------------------------------------------------------------------ */
+
+describe('parseCandidateScope', () => {
+  it('takes either scope as written', () => {
+    expect(parseCandidateScope('all')).toBe('all');
+    expect(parseCandidateScope('mine')).toBe('mine');
+  });
+
+  it('falls back to the whole list rather than refusing an unrecognised one', () => {
+    // Lenient where a filter would be refused: nothing is looked up to satisfy a scope,
+    // so there is no id this organization could fail to hold — and a stale bookmark
+    // should land on the list rather than on a 422.
+    for (const asked of ['theirs', '', 'MINE', undefined, null, 1, ['mine']]) {
+      expect(parseCandidateScope(asked)).toBe('all');
+    }
+  });
+});
+
+describe('resolveCandidateScope', () => {
+  it('honours what a caller who may see everything asked for', () => {
+    expect(resolveCandidateScope('all', true)).toBe('all');
+    expect(resolveCandidateScope('mine', true)).toBe('mine');
+    // Nothing asked is the default, which is the whole pipeline rather than one desk.
+    expect(resolveCandidateScope(undefined, true)).toBe('all');
+  });
+
+  it('narrows a caller who may not, however they ask', () => {
+    // The one rule the client never enforces: an interviewer hand-crafting `?scope=all`
+    // widens nothing, and the response says `mine` so the screen agrees with the answer.
+    expect(resolveCandidateScope('all', false)).toBe('mine');
+    expect(resolveCandidateScope('mine', false)).toBe('mine');
+    expect(resolveCandidateScope(undefined, false)).toBe('mine');
+    expect(resolveCandidateScope('nonsense', false)).toBe('mine');
+  });
+});
+
+describe('candidateScopeTabLabel', () => {
+  it('carries the count inside the label, where the design puts it', () => {
+    expect(candidateScopeTabLabel('all', 128)).toBe('All (128)');
+    expect(candidateScopeTabLabel('mine', 0)).toBe('Assigned to me (0)');
   });
 });

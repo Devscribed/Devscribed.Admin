@@ -422,29 +422,10 @@
 }
 
 /*
- * My interviews: the row's two actions, revealed on hover and on keyboard focus but
- * always present for the row's own focus order. A `danger` fill repeated down a table of
- * interviews turns a calm list into an alarm, so both are `ghost` (07 design).
+ * `.my-interview-actions` — the reveal-on-hover row actions — was here, and went with the
+ * My interviews screen (03 §06). The candidate list's rows get the same two actions back
+ * inside their actions kebab, which needs no reveal of its own.
  */
-.my-interview-actions {
-  display: flex;
-  gap: var(--space-2);
-  justify-content: flex-end;
-  opacity: 0;
-  transition: opacity var(--duration-fast) var(--ease-standard);
-}
-
-[data-testid^='my-interview-row-']:hover .my-interview-actions,
-.my-interview-actions:focus-within {
-  opacity: 1;
-}
-
-/* Pointer-coarse devices have no hover to reveal them with. */
-@media (hover: none) {
-  .my-interview-actions {
-    opacity: 1;
-  }
-}
 
 /*
  * The CV line and its Replace control (07 design, Screens). The chooser expands beneath

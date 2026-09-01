@@ -4,8 +4,11 @@ import { notFound, useRouter } from 'next/navigation';
 import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CANDIDATE_MESSAGES,
+  INTERVIEW_MESSAGES,
   candidateResultLabel,
+  candidateScopeTabLabel,
   criterionFilterParam,
+  type CandidateScope,
 } from '@devscribed/validation';
 import {
   Button,
@@ -14,6 +17,7 @@ import {
   EmptyState,
   FieldLabel,
   InfoBanner,
+  PageTabs,
   Preloader,
   SearchInput,
   Select,
@@ -22,6 +26,7 @@ import {
 } from '@/ds';
 import { PageHeader } from '@/layout/PageHeader';
 import { StatusBadge } from '@/hiring/StatusBadge';
+import { initialCandidateScope, rememberCandidateScope } from '@/hiring/candidate-scope';
 import { formatListWhen } from '@/hiring/format';
 import { valuesOf } from '@/hiring/select';
 import { useMediaQuery } from '@/hiring/useMediaQuery';
@@ -71,6 +76,17 @@ interface FilterLibrary {
  * the count line, which never moved: it is its own `aria-live` node above the table and it
  * still reads `12 of 128 candidates`. What pagination actually carried was *position*, and
  * the in-table load-more row carries that instead.
+ *
+ * **It has absorbed My interviews** (03 §08). The former screen is the `Assigned to me`
+ * scope, and an interviewer arrives here rather than at a list of their own. Which means
+ * this screen now has two kinds of caller, and the difference shows in exactly one place:
+ * somebody who may not see the whole database gets **no tab strip at all**. Not a disabled
+ * one, not a single-tab one — a control offering one choice is not a choice, and a
+ * disabled tab advertises a list they will never be shown.
+ *
+ * The scope is never enforced here. `canSeeAll` and the applied `scope` are read off the
+ * response and reflected; a hand-crafted `?scope=all` is narrowed by the server, and this
+ * screen simply agrees with what came back.
  */
 export default function CandidatesPage({ params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = use(params);
@@ -98,7 +114,19 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [criteriaRows, setCriteriaRows] = useState<CriteriaFilterRowState[]>([]);
   const [page, setPage] = useState(1);
+  /**
+   * Read once, from the URL and then from the last choice — never recomputed, or a
+   * `replaceState` of our own would reopen the question we just answered.
+   */
+  const [scope, setScope] = useState<CandidateScope>(initialCandidateScope);
   const narrow = useMediaQuery(NARROW);
+
+  // The address and the memory follow the applied scope, including the server's own
+  // correction of one it refused: an interviewer who typed `?scope=all` ends up with a
+  // URL that says what they are actually looking at.
+  useEffect(() => {
+    rememberCandidateScope(scope);
+  }, [scope]);
 
   // Typing debounces; every other filter is a discrete choice and refetches at once —
   // waiting 300 ms on a click reads as lag rather than as care (03 design §Interactions).
@@ -135,7 +163,19 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
   const criteriaKey = JSON.stringify(criteria);
 
   const filterCount = vacancyIds.length + categoryIds.length + criteria.length;
+  /**
+   * Whether a **filter** narrows the list. The scope is not one of them — it is not
+   * counted, it is not cleared by `Clear all`, and it is not what decides between the two
+   * filter-shaped empty states.
+   */
   const filtered = filterCount > 0 || query.trim().length > 0;
+  /**
+   * Whether anything at all narrows it, which is a different question and the one the
+   * count line asks. `Assigned to me` with no filters shows `3 of 128 candidates`: three
+   * are mine, and a hundred and twenty-eight exist — both of which are true and neither
+   * of which the other says.
+   */
+  const narrowed = filtered || scope === 'mine';
 
   /**
    * Which request is the current one. A page-2 fetch that lands after a filter change
@@ -149,6 +189,7 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
     for (const id of vacancyIds) params.append('vacancyId', id);
     for (const id of categoryIds) params.append('categoryId', id);
     for (const filter of criteria) params.append('criterion', filter);
+    if (scope === 'mine') params.set('scope', scope);
     if (page > 1) params.set('page', String(page));
 
     const request = ++currentRequest.current;
@@ -175,6 +216,10 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
       if (currentRequest.current !== request) return;
 
       setData(body);
+      // The server decides the scope, so the screen follows its answer rather than its
+      // own request — which is what makes a hand-crafted `?scope=all` settle on `mine`
+      // in the address bar too, instead of the tab and the URL disagreeing forever.
+      setScope(body.scope);
       // Page 1 answers a new question and replaces the list; anything later extends it.
       setRows((current) => (page === 1 ? body.candidates : [...current, ...body.candidates]));
       setExhausted(page > 1 && body.candidates.length === 0);
@@ -187,7 +232,7 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
     // `criteriaKey` stands in for `criteria` — see above; the array itself is what
     // travels, and its content is what decides when to refetch.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orgId, query, vacancyIds, categoryIds, criteriaKey, page]);
+  }, [orgId, query, vacancyIds, categoryIds, criteriaKey, scope, page]);
 
   useEffect(() => {
     void load();
@@ -287,6 +332,36 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
         title="Candidates"
         subtitle={<span data-testid="candidates-timezone">Times in {zone}</span>}
       />
+
+      {/*
+        Drawn only once the response has said the caller may see both, which is also why
+        it is not rendered while the first request is in flight: a strip that appeared and
+        then vanished would be the flash the shell's `/api/me` gate exists to prevent.
+
+        Each label carries its own count, computed under the filters already applied — so
+        the tab answers "and how many would the other one show?" before it is pressed.
+      */}
+      {data?.canSeeAll && (
+        <PageTabs
+          label={CANDIDATE_MESSAGES.scope.tablist}
+          data-testid="candidates-scope-tabs"
+          active={scope}
+          onChange={(next) => applyFilter(() => setScope(next as CandidateScope))}
+          style={{ marginBottom: 'var(--space-5)' }}
+          tabs={[
+            {
+              value: 'all',
+              label: candidateScopeTabLabel('all', data.scopeCounts.all ?? 0),
+              testId: 'candidates-scope-all',
+            },
+            {
+              value: 'mine',
+              label: candidateScopeTabLabel('mine', data.scopeCounts.mine),
+              testId: 'candidates-scope-mine',
+            },
+          ]}
+        />
+      )}
 
       <SearchInput
         outlined
@@ -420,7 +495,7 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
             // and a nested pair announces the same change twice.
             <Preloader size={8} margin={5} aria-label="Counting candidates" />
           ) : data ? (
-            candidateResultLabel(data.matched, data.total, filtered)
+            candidateResultLabel(data.matched, data.total, narrowed)
           ) : null}
         </p>
 
@@ -588,6 +663,11 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
             </div>
           )}
 
+          {/*
+            Driven by `total` — org-wide and unfiltered — and never by a scoped count.
+            An interviewer whose own list is empty must not be told the database is, or
+            they are sent off to share a booking link while 35 candidates sit in it.
+          */}
           {phase === 'ready' && rows.length === 0 && data?.total === 0 && (
             <EmptyState data-testid="candidates-empty-state">
               {CANDIDATE_MESSAGES.empty}
@@ -596,20 +676,28 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
 
           {phase === 'ready' && rows.length === 0 && (data?.total ?? 0) > 0 && (
             <>
+              {/*
+                Two facts, one slot. Filters that match nobody is a thing to undo, and
+                gets the action. `Assigned to me` with nothing filtered is not a failed
+                query at all — it is the empty state My interviews had, and it inherits
+                its wording rather than accusing the member of over-filtering.
+              */}
               <EmptyState data-testid="candidates-no-results">
-                {CANDIDATE_MESSAGES.noResults}
+                {filtered ? CANDIDATE_MESSAGES.noResults : INTERVIEW_MESSAGES.noUpcoming}
               </EmptyState>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  padding: 'var(--space-6)',
-                }}
-              >
-                <Button onClick={clearAll} data-testid="candidates-clear-all">
-                  {CANDIDATE_MESSAGES.clearFilters}
-                </Button>
-              </div>
+              {filtered && (
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    padding: 'var(--space-6)',
+                  }}
+                >
+                  <Button onClick={clearAll} data-testid="candidates-clear-all">
+                    {CANDIDATE_MESSAGES.clearFilters}
+                  </Button>
+                </div>
+              )}
             </>
           )}
         </Card>

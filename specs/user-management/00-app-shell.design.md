@@ -65,12 +65,13 @@ Sidebar and navbar are fixed. Only the content column scrolls, and the well is t
 |---|---|---|---|
 | Members | `/org/{orgId}/members` | now | all roles |
 | Vacancies | `/org/{orgId}/hiring/vacancies` | hiring 01 | admin, manager |
-| Candidates | `/org/{orgId}/hiring/candidates` | hiring 03 | admin, manager |
-| My interviews | `/org/{orgId}/hiring/my-interviews` | hiring 03 | anyone assigned an interview |
+| Candidates | `/org/{orgId}/hiring/candidates` | hiring 03 | admin, manager, **anyone assigned an interview** |
 | Settings | `/org/{orgId}/hiring/settings` | hiring 06 | admin, manager |
 | Requests | `/org/{orgId}/requests` | spec 10 | admin, manager |
 
-My interviews is the only row gated on assignment rather than role (hiring 03 §06.31) — which is what lets an engineer interview without becoming an org admin. A member with neither role nor assignment sees Members alone.
+Candidates is the only row gated on assignment as well as role (hiring 03 §06.31) — which is what lets an engineer interview without becoming an org admin. They open the same screen a manager does, resolved to its `Assigned to me` scope; a second row for the same list would have been the rail claiming a difference the screen does not have. A member with neither role nor assignment sees Members alone.
+
+There is no **My interviews** row. Its screen is that scope now, and `/org/{orgId}/hiring/my-interviews` redirects to `…/hiring/candidates?scope=mine`.
 
 ## Navbar
 
@@ -119,7 +120,7 @@ Below **1200px** the rail leaves the flow and becomes a drawer: a 340px panel ag
 | `app-loading` | the pre-resolution preloader |
 | `app-sidebar` | sidebar `<aside>` |
 | `nav-members` | Members row (carries `aria-current="page"` when active) |
-| `nav-vacancies` · `nav-candidates` · `nav-my-interviews` · `nav-hiring-settings` | the hiring rows |
+| `nav-vacancies` · `nav-candidates` · `nav-hiring-settings` | the hiring rows |
 | `topbar-account-button` | account/avatar trigger |
 | `topbar-account-name` | account full name |
 | `topbar-account-menu` | the open menu |

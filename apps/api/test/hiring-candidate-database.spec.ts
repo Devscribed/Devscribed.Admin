@@ -393,49 +393,181 @@ describe('Hiring — candidate database', () => {
   });
 
   /**
-   * TC-H03-INT-06 — `user` and `viewer` receive 404, the assigned interviewer included.
+   * TC-H03-INT-06 — a `viewer` and an unassigned `user` receive 404.
    *
-   * 403 is never returned here (03 §API): an interviewer's access is to their own
-   * candidates, not to the database, and a permission error would read as "it is there,
-   * ask to be promoted".
+   * 403 is never returned here (03 §API). The assigned interviewer is **no longer**
+   * among the refused: their own candidates are what the `mine` scope is, and the case
+   * below this one is where that access is pinned down. What survives unchanged is the
+   * refusal for everyone with no route to the screen at all.
    */
-  it('answers 404 to a viewer, an unassigned user, and an assigned interviewer', async () => {
+  it('answers 404 to a viewer and to a user nobody has assigned anything', async () => {
     const admin = await signup(app, 'pat@acme.com');
-    const interviewer = await addMember(prisma, admin.organizationId, {
-      email: 'ines@acme.com',
-      role: 'user',
-    });
     const unassigned = await addMember(prisma, admin.organizationId, {
       email: 'quinn@acme.com',
       role: 'user',
     });
-    const vacancy = await createVacancy(app, admin, {
-      interviewerAccountId: interviewer.accountId,
-    });
+    const vacancy = await createVacancy(app, admin);
     const [startUtc] = await firstSlots(app, vacancy.slug, 1);
     await book(vacancy, { email: 'jane@example.com', startUtc });
 
-    const callers = [
-      await signInAs(app, {
-        email: 'ines@acme.com',
-        accountId: interviewer.accountId,
-        organizationId: admin.organizationId,
-      }),
-      await signInAs(app, {
-        email: 'quinn@acme.com',
-        accountId: unassigned.accountId,
-        organizationId: admin.organizationId,
-      }),
-    ];
+    const quinn = await signInAs(app, {
+      email: 'quinn@acme.com',
+      accountId: unassigned.accountId,
+      organizationId: admin.organizationId,
+    });
+    const refused = await list(quinn);
+    expect(refused.status).toBe(404);
+    expect(JSON.stringify(refused.body)).not.toContain('jane@example.com');
 
-    for (const caller of callers) {
-      const response = await list(caller);
-      expect(response.status).toBe(404);
-      expect(JSON.stringify(response.body)).not.toContain('jane@example.com');
-    }
-
+    // A `viewer` may not even hold an assignment, so no arrangement of rows earns it.
     await setRole(prisma, admin.accountId, 'viewer');
     expect((await list(admin)).status).toBe(404);
+  });
+
+  /* ---------------------------------------------------------------- *
+   * Scope — the former My interviews, as a tab
+   * ---------------------------------------------------------------- */
+
+  /**
+   * One admin, one interviewer, and a candidate each — plus a candidate who has sat with
+   * both, who is the only row that can tell a scope clause from a candidate filter.
+   */
+  async function seedScopes() {
+    const admin = await signup(app, 'pat@acme.com');
+    const member = await addMember(prisma, admin.organizationId, {
+      email: 'ines@acme.com',
+      role: 'user',
+      firstName: 'Ines',
+      lastName: 'Interviewer',
+    });
+
+    const theirs = await createVacancy(app, admin, {
+      title: 'Node Engineer',
+      interviewerAccountId: member.accountId,
+    });
+    const ours = await createVacancy(app, admin, { title: 'React Engineer' });
+
+    const [theirFirst, theirSecond] = await firstSlots(app, theirs.slug, 2);
+    const [ourFirst, ourSecond] = await firstSlots(app, ours.slug, 2);
+
+    await book(theirs, { email: 'ann@example.com', lastName: 'Lee', startUtc: theirFirst });
+    await book(ours, { email: 'jane@example.com', lastName: 'Doe', startUtc: ourFirst });
+    // Seen by both, which is what makes `mine` a filter on people rather than on rows.
+    await book(theirs, { email: 'both@example.com', lastName: 'Both', startUtc: theirSecond });
+    await book(ours, { email: 'both@example.com', lastName: 'Both', startUtc: ourSecond });
+
+    const interviewer = await signInAs(app, {
+      email: 'ines@acme.com',
+      accountId: member.accountId,
+      organizationId: admin.organizationId,
+    });
+
+    return { admin, interviewer, theirs, ours };
+  }
+
+  it('gives an assigned interviewer the screen, narrowed to their own candidates', async () => {
+    const { interviewer } = await seedScopes();
+
+    const response = await list(interviewer);
+
+    expect(response.status).toBe(200);
+    expect(emails(response)).toEqual(['ann@example.com', 'both@example.com']);
+    // The vacancy they do not interview for is absent, not merely unlisted.
+    expect(JSON.stringify(response.body)).not.toContain('jane@example.com');
+    expect(response.body.canSeeAll).toBe(false);
+    expect(response.body.scope).toBe('mine');
+  });
+
+  it('narrows a caller who may not see everything, however they ask', async () => {
+    const { interviewer } = await seedScopes();
+
+    // The one rule the client never enforces: hand-crafting the query widens nothing,
+    // and the response reports what was **applied** rather than what was requested.
+    const response = await list(interviewer, { scope: 'all' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.scope).toBe('mine');
+    expect(emails(response)).toEqual(['ann@example.com', 'both@example.com']);
+  });
+
+  it('never tells an interviewer how large the database is under their filters', async () => {
+    const { interviewer } = await seedScopes();
+
+    const response = await list(interviewer);
+
+    // `all` is not computed for them at all — the leak is closed by not asking the
+    // question, rather than by dropping the answer on the way out.
+    expect(response.body.scopeCounts).toEqual({ mine: 2 });
+    expect(response.body.scopeCounts.all).toBeUndefined();
+  });
+
+  it('keeps the empty-database state a fact about the organization, not about a scope', async () => {
+    const { admin, interviewer } = await seedScopes();
+
+    // An interviewer with two candidates and a database of three still reads "3" for
+    // total: a scoped total would tell somebody with no interviews to go and share a
+    // booking link while the list they cannot see is full.
+    expect((await list(interviewer)).body.total).toBe(3);
+    expect((await list(admin, { scope: 'mine' })).body.total).toBe(3);
+  });
+
+  it('answers a manager with both scopes, each counted under the filters applied', async () => {
+    const { admin, ours } = await seedScopes();
+
+    const all = await list(admin);
+    expect(all.body.canSeeAll).toBe(true);
+    expect(all.body.scope).toBe('all');
+    expect(emails(all)).toEqual(['ann@example.com', 'both@example.com', 'jane@example.com']);
+    // The admin interviews for `ours`, which two of the three candidates booked.
+    expect(all.body.scopeCounts).toEqual({ all: 3, mine: 2 });
+    expect(all.body.matched).toBe(3);
+
+    // A filter narrows both counts, so the tab labels answer "and how many would the
+    // other tab show under this filter?" before it is pressed.
+    const filtered = await list(admin, { vacancyId: [ours.id] });
+    expect(filtered.body.scopeCounts).toEqual({ all: 2, mine: 2 });
+
+    const mine = await list(admin, { scope: 'mine' });
+    expect(mine.body.scope).toBe('mine');
+    expect(emails(mine)).toEqual(['both@example.com', 'jane@example.com']);
+    // `matched` is the applied scope's own count, so the number and the lit tab agree.
+    expect(mine.body.matched).toBe(2);
+  });
+
+  it('composes the scope with the filters rather than replacing them', async () => {
+    const { interviewer, ours } = await seedScopes();
+
+    // `both@example.com` applied to `ours` too, so the position filter finds them — and
+    // the scope still keeps `jane`, who never sat with this interviewer, out.
+    const response = await list(interviewer, { vacancyId: [ours.id] });
+
+    expect(emails(response)).toEqual(['both@example.com']);
+    expect(response.body.matched).toBe(1);
+  });
+
+  it('treats an unrecognised scope as the whole list rather than refusing it', async () => {
+    const { admin } = await seedScopes();
+
+    // Navigation, not a filter: nothing is looked up to satisfy it, so a stale bookmark
+    // lands on the list rather than on the 422 an unknown id would earn.
+    const response = await list(admin, { scope: 'theirs' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.scope).toBe('all');
+  });
+
+  it('reads the mine scope in the viewer’s own mailbox zone', async () => {
+    const { interviewer } = await seedScopes();
+
+    // What My interviews did, kept: an interviewer with no `Account.timezone` must not
+    // be handed some other interviewer's zone by the move onto this screen.
+    expect((await list(interviewer)).body.viewerTimeZone).toBe('UTC');
+
+    await prisma.account.update({
+      where: { id: interviewer.accountId },
+      data: { timezone: 'Europe/Minsk' },
+    });
+    expect((await list(interviewer)).body.viewerTimeZone).toBe('Europe/Minsk');
   });
 
   /* ---------------------------------------------------------------- *

@@ -246,21 +246,41 @@ describe('Hiring — the permission matrix', () => {
     expect(await prisma.criterion.count({ where: { name: 'Improvised' } })).toBe(0);
   });
 
-  /** "Candidate database" — 404 to everyone refused, never 403 (03 §API). */
-  it('answers the candidate database 404 to every caller it refuses', async () => {
+  /**
+   * "Candidate database" — 404 to everyone refused, never 403 (03 §API), and the row the
+   * assignment rule moved into.
+   *
+   * The database opens to an assigned interviewer, narrowed to their own candidates. It
+   * is the same access they always had — My interviews was this list with one scope
+   * fixed — reached through one screen instead of two. What did not move is the refusal:
+   * a `viewer` and a `user` nobody has assigned anything still get nothing, and still
+   * get it as a 404.
+   */
+  it('opens the candidate database to the assigned interviewer, and 404s the rest', async () => {
     const { admin, manager, plain, viewer, interviewer } = fixture;
 
-    expect(
-      await statuses([admin, manager], (session) =>
-        request(app.getHttpServer()).get(url(session, 'candidates')).set('Cookie', session.cookies),
-      ),
-    ).toEqual([200, 200]);
+    const database = (session: Signed) =>
+      request(app.getHttpServer()).get(url(session, 'candidates')).set('Cookie', session.cookies);
 
-    const refusals = await Promise.all(
-      [plain, viewer, interviewer].map((session) =>
-        request(app.getHttpServer()).get(url(session, 'candidates')).set('Cookie', session.cookies),
-      ),
-    );
+    expect(await statuses([admin, manager], database)).toEqual([200, 200]);
+
+    // Theirs, and only theirs — the scope is the server's, not the query string's.
+    const theirs = await database(interviewer);
+    expect(theirs.status).toBe(200);
+    expect(theirs.body.canSeeAll).toBe(false);
+    expect(theirs.body.scope).toBe('mine');
+    expect(JSON.stringify(theirs.body)).not.toContain('jane@example.com');
+    expect(JSON.stringify(theirs.body)).toContain('ann@example.com');
+
+    // Asking for the whole database does not produce it.
+    const widened = await request(app.getHttpServer())
+      .get(url(interviewer, 'candidates'))
+      .query({ scope: 'all' })
+      .set('Cookie', interviewer.cookies);
+    expect(widened.body.scope).toBe('mine');
+    expect(JSON.stringify(widened.body)).not.toContain('jane@example.com');
+
+    const refusals = await Promise.all([plain, viewer].map(database));
     for (const refusal of refusals) {
       expect(refusal.status).toBe(404);
       expect(JSON.stringify(refusal.body)).not.toContain('jane@example.com');
