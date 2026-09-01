@@ -4,8 +4,10 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import {
+  CLIENT_MESSAGES,
   KANBAN_MESSAGES,
   PROJECT_MESSAGES,
   can,
@@ -29,6 +31,10 @@ export interface ProjectListItem {
   createdAt: string;
   /** Spec 13 — the project's task-key prefix, or null when not set. */
   key: string | null;
+  /** Spec organization/01 — the linked client's id, or null when unlinked. */
+  clientId: string | null;
+  /** Spec organization/01 — the linked client's current display name. */
+  clientName: string | null;
 }
 
 /** The `POST`/`PUT` project response shape (spec 11 API contracts, extended by spec 13). */
@@ -41,6 +47,10 @@ export interface ProjectSummary {
   key: string | null;
   /** Spec 13 — atomically-allocated task counter. */
   nextTaskNumber: number;
+  /** Spec organization/01 — the linked client's id, or null when unlinked. */
+  clientId: string | null;
+  /** Spec organization/01 — the linked client's current display name. */
+  clientName: string | null;
 }
 
 /** A single assigned-member row (spec 11 GET .../members contract). */
@@ -57,6 +67,11 @@ export interface CreateProjectInput {
   name?: unknown;
   /** Spec 13 — optional at creation, optional-and-immutable-once-set on PUT. */
   key?: unknown;
+  /**
+   * Spec organization/01 — optional client link. `undefined` means "not present in the
+   * payload, don't touch"; `null` clears; a string is a client id to look up + verify.
+   */
+  clientId?: unknown;
 }
 
 export interface AddMembersInput {
@@ -126,9 +141,12 @@ export class ProjectsService {
     const projects = await this.prisma.project.findMany({
       where,
       // memberCount mirrors the roster (`listMembers`): a soft-removed member does not
-      // count, so the count filters on the membership's active status too.
+      // count, so the count filters on the membership's active status too. The client
+      // include is spec organization/01 — the list surfaces a client column server-side
+      // so no per-row lookup is needed on the web page.
       include: {
         _count: { select: { members: { where: { membership: { status: 'active' } } } } },
+        client: { select: { id: true, name: true } },
       },
       orderBy: { name: 'asc' },
     });
@@ -159,6 +177,8 @@ export class ProjectsService {
         totalHours: Math.round(((minutesByProject.get(p.id) ?? 0) / 60) * 10) / 10,
         createdAt: p.createdAt.toISOString(),
         key: p.key,
+        clientId: p.clientId,
+        clientName: p.client ? p.client.name : null,
       })),
     };
   }
@@ -186,6 +206,11 @@ export class ProjectsService {
 
     const key = await this.parseAndAssertKeyAvailable(input.key, caller.organizationId, null);
 
+    // Spec organization/01 — optional client link. `undefined` means "not present",
+    // so the default (unlinked) is preserved. `null` explicitly creates unlinked.
+    // A valid active client id in the same org is set; anything else 422s.
+    const clientId = await this.resolveClientId(caller.organizationId, input.clientId);
+
     try {
       const project = await this.prisma.project.create({
         data: {
@@ -193,7 +218,9 @@ export class ProjectsService {
           name,
           key,
           createdByAccountId: caller.accountId,
+          ...(clientId !== undefined ? { clientId } : {}),
         },
+        include: { client: { select: { id: true, name: true } } },
       });
       return this.toSummary(project);
     } catch (e) {
@@ -267,10 +294,19 @@ export class ProjectsService {
       }
     }
 
+    // Spec organization/01 — same client-resolve on rename. `undefined` means "not
+    // present in payload, don't touch"; `null` clears; a string is validated.
+    const clientId = await this.resolveClientId(caller.organizationId, input.clientId);
+
     try {
       const updated = await this.prisma.project.update({
         where: { id: project.id },
-        data: { name, ...(keyToSet !== undefined ? { key: keyToSet } : {}) },
+        data: {
+          name,
+          ...(keyToSet !== undefined ? { key: keyToSet } : {}),
+          ...(clientId !== undefined ? { clientId } : {}),
+        },
+        include: { client: { select: { id: true, name: true } } },
       });
       return this.toSummary(updated);
     } catch (e) {
@@ -533,6 +569,8 @@ export class ProjectsService {
     createdAt: Date;
     key: string | null;
     nextTaskNumber: number;
+    clientId: string | null;
+    client?: { id: string; name: string } | null;
   }): ProjectSummary {
     return {
       id: project.id,
@@ -541,7 +579,50 @@ export class ProjectsService {
       createdAt: project.createdAt.toISOString(),
       key: project.key,
       nextTaskNumber: project.nextTaskNumber,
+      clientId: project.clientId,
+      clientName: project.client ? project.client.name : null,
     };
+  }
+
+  /**
+   * Spec organization/01 §Security — resolve a caller-supplied `clientId` for project
+   * create/edit. Returns `undefined` when the payload key is absent (skip the write),
+   * `null` when explicitly cleared, and the string id when the lookup succeeds. A
+   * non-string / non-null value with the key present is a defensive 422 with the
+   * spec's `client_not_found` shape; a missing id or an id belonging to another
+   * organization is also `client_not_found` (never leaks cross-org existence); an
+   * archived client in the same org is `client_archived`. All shared strings come
+   * from `CLIENT_MESSAGES` — never inlined here.
+   */
+  private async resolveClientId(
+    organizationId: string,
+    raw: unknown,
+  ): Promise<string | null | undefined> {
+    if (raw === undefined) return undefined;
+    if (raw === null) return null;
+    if (typeof raw !== 'string' || raw.length === 0) {
+      throw new UnprocessableEntityException({
+        error: 'client_not_found',
+        message: CLIENT_MESSAGES.clientNotFound,
+      });
+    }
+    const client = await this.prisma.client.findFirst({
+      where: { id: raw, organizationId },
+      select: { id: true, status: true },
+    });
+    if (!client) {
+      throw new UnprocessableEntityException({
+        error: 'client_not_found',
+        message: CLIENT_MESSAGES.clientNotFound,
+      });
+    }
+    if (client.status === 'archived') {
+      throw new UnprocessableEntityException({
+        error: 'client_archived',
+        message: CLIENT_MESSAGES.clientArchived,
+      });
+    }
+    return client.id;
   }
 
   /**

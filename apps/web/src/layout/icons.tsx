@@ -42,6 +42,19 @@ export function FolderIcon() {
 }
 
 /**
+ * Briefcase glyph for the sidebar "Clients" row (spec organization/01). Sits below
+ * "Projects" in the same nav group. `currentColor`-filled, geometric — matches the
+ * other shell glyphs.
+ */
+export function BriefcaseIcon({ size = 19 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 20 20" width={size} height={size} fill="currentColor" aria-hidden>
+      <path d="M7.5 3A1.75 1.75 0 0 0 5.75 4.75V5.5H3.75A1.75 1.75 0 0 0 2 7.25v7.5A1.75 1.75 0 0 0 3.75 16.5h12.5A1.75 1.75 0 0 0 18 14.75v-7.5A1.75 1.75 0 0 0 16.25 5.5H14.25V4.75A1.75 1.75 0 0 0 12.5 3H7.5Zm0 1.5h5a.25.25 0 0 1 .25.25V5.5h-5.5V4.75A.25.25 0 0 1 7.5 4.5Zm-3.75 2.5h12.5a.25.25 0 0 1 .25.25v2.5H3.5v-2.5A.25.25 0 0 1 3.75 7Zm-.25 4.25h5.75v1a.75.75 0 0 0 1.5 0v-1H16.5v3.5a.25.25 0 0 1-.25.25H3.75a.25.25 0 0 1-.25-.25v-3.5Z" />
+    </svg>
+  );
+}
+
+/**
  * Pencil glyph for the "rename project" action (spec 11 — list-row edit + detail rename).
  * A simple filled pencil drawn with `currentColor` to match the other shell glyphs.
  */

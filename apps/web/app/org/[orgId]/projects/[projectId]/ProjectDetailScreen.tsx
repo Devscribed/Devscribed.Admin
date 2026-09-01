@@ -367,6 +367,18 @@ export function ProjectDetailScreen({ orgId, projectId }: { orgId: string; proje
               </IconButton>
             </div>
 
+            {/* Client label (spec organization/01 §UI, TC-01-E2E-01). Rendered
+                only when a client is linked; omitted when null so the header
+                stays compact. */}
+            {state.project.clientName ? (
+              <div
+                data-testid="project-detail-client-label"
+                style={{ fontSize: 'var(--fs-14)', color: 'var(--text-muted)' }}
+              >
+                Client: <span style={{ color: 'var(--text)', fontWeight: 500 }}>{state.project.clientName}</span>
+              </div>
+            ) : null}
+
             {/* Board / List tabs — appear once the project has a key. */}
             {state.project.key && (
               <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
@@ -557,7 +569,12 @@ export function ProjectDetailScreen({ orgId, projectId }: { orgId: string; proje
         <>
           <ProjectModal
             open={editOpen}
-            mode={{ kind: 'edit', projectId, currentName: state.project.name }}
+            mode={{
+              kind: 'edit',
+              projectId,
+              currentName: state.project.name,
+              currentClientId: state.project.clientId,
+            }}
             orgId={orgId}
             onClose={() => setEditOpen(false)}
             onSaved={() => void load()}

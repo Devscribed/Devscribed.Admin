@@ -183,11 +183,18 @@ test.describe('12 — Time Tracking', () => {
     const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
     const userEmail = await addMember(request, adminEmail, 'user', 'Uma', 'User');
     const user = await findMember(request, org.organizationId, userEmail);
-    // Seed entries in the current month so the grid (not the empty state) renders.
-    const firstOfMonth = addMonthsFirst(today, 0);
-    await createTimeEntryViaApi(request, org.organizationId, {
-      membershipId: user.id, date: firstOfMonth, durationMinutes: 240, task: 'Kickoff',
-    });
+    // Seed the `today` entry the assertions below hinge on. A second entry on
+    // the 1st of the month was originally seeded so the grid always renders
+    // some non-`today` history; we now skip it when today already IS the 1st
+    // (double-seed on the same day would poison the `2h 0m` cell — caught on
+    // 2026-09-01 with a 6h total). The `today` entry alone still fills the
+    // grid so the empty-state branch does not fire.
+    const isFirstOfMonth = today.endsWith('-01');
+    if (!isFirstOfMonth) {
+      await createTimeEntryViaApi(request, org.organizationId, {
+        membershipId: user.id, date: addMonthsFirst(today, 0), durationMinutes: 240, task: 'Kickoff',
+      });
+    }
     await createTimeEntryViaApi(request, org.organizationId, {
       membershipId: user.id, date: today, durationMinutes: 120, task: 'Today work',
     });

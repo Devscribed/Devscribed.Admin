@@ -68,6 +68,9 @@ model Account {
   projectsCreated           Project[]
   projectMembersAssigned    ProjectMember[]
   timeEntriesCreated        TimeEntry[]                  @relation("TimeEntryCreatedBy")
+  /// Spec organization/01 — audit back-relations for the Client entity.
+  clientsCreated            Client[]                     @relation("ClientsCreated")
+  clientsArchived           Client[]                     @relation("ClientsArchived")
 }
 
 /// Pending email-change confirmation grant (spec 06). The account's email is only
@@ -164,6 +167,8 @@ model Organization {
   projects          Project[]
   timeEntries       TimeEntry[]
   runningTimers     RunningTimer[]
+  /// Spec organization/01 — the clients that group projects for billing/reporting.
+  clients           Client[]
 }
 
 /// Links an account to its organization. One per account — single-org-per-user (FR-8).
@@ -731,9 +736,13 @@ model Project {
   updatedAt          DateTime @updatedAt
   /// Account that created the project (audit trail; set from the session).
   createdByAccountId String
+  /// Spec organization/01 — optional client link. `ON DELETE SET NULL` on hard delete
+  /// (never fired through the API — soft archive preserves the FK per requirement 13).
+  clientId           String?
 
   organization  Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy     Account         @relation(fields: [createdByAccountId], references: [id])
+  client        Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
   members       ProjectMember[]
   timeEntries   TimeEntry[]
   runningTimers RunningTimer[]
@@ -742,6 +751,38 @@ model Project {
   labels        TaskLabel[]
 
   @@index([organizationId])
+  @@index([clientId])
+}
+
+/// Spec organization/01 — a client an organization bills projects against. Soft-deleted
+/// via `status = 'archived'` (there is no hard delete). Names are unique per organization
+/// case-insensitively — enforced by a functional UNIQUE index on
+/// `(organizationId, LOWER(name))` added in the migration SQL, NOT a Prisma `@@unique`.
+/// `createdByAccountId` / `archivedByAccountId` are immutable audit fields set from the
+/// session, never the request body.
+model Client {
+  id                  String    @id @default(uuid())
+  organizationId      String
+  /// Client display name. Unique per org (case-insensitive); 1–120 chars, allowed set
+  /// enforced by the validation layer, trimmed + whitespace-collapsed on save.
+  name                String
+  /// 'active' | 'archived'. String column, matching the Project.status convention —
+  /// not a Prisma enum. Archiving is the soft-delete.
+  status              String    @default("active")
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  createdByAccountId  String
+  /// Set when status transitions to `archived`; cleared on restore.
+  archivedAt          DateTime?
+  /// Account that archived the client (audit). Cleared on restore.
+  archivedByAccountId String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    Account      @relation("ClientsCreated", fields: [createdByAccountId], references: [id])
+  archivedBy   Account?     @relation("ClientsArchived", fields: [archivedByAccountId], references: [id])
+  projects     Project[]
+
+  @@index([organizationId, status])
 }
 
 /// Spec 13 — a column on a project's Kanban board. Lazy-created on first `GET /board`
