@@ -17,7 +17,7 @@ import {
   type BlockColor,
   type BlockPlacement,
 } from './TimeGrid';
-import type { TimeEntry } from './types';
+import type { CalendarHoliday, TimeEntry } from './types';
 
 const WEEKDAY_ABBR = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -28,6 +28,10 @@ const WEEKDAY_ABBR = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
  * drop to a strip below the grid (noted per day). Each day header carries its own total;
  * a footer line carries the week grand total. Clicking a block drills into the daily view
  * for that day. Every total is client-aggregated from `entries`.
+ *
+ * Spec organization/03 requirement 10 adds a read-only holiday marker under the day
+ * header. It is not a click target and does not change how time is logged into the
+ * column (requirement 11).
  */
 export function WeeklyView({
   anchorDate,
@@ -35,6 +39,8 @@ export function WeeklyView({
   tz,
   weekStartsOn,
   entries,
+  holidaysByDate,
+  onHolidayAnnounce,
   onSelectDay,
 }: {
   anchorDate: string;
@@ -43,6 +49,9 @@ export function WeeklyView({
   tz: string;
   weekStartsOn: WeekStart;
   entries: TimeEntry[];
+  /** Spec organization/03 — the visible week's holidays, keyed by ISO day. */
+  holidaysByDate?: Map<string, CalendarHoliday>;
+  onHolidayAnnounce?: (message: string) => void;
   onSelectDay: (date: string) => void;
 }) {
   const days = weekDates(anchorDate, weekStartsOn);
@@ -63,6 +72,7 @@ export function WeeklyView({
         date={date}
         isToday={date === today}
         minutes={dayTotals.get(date) ?? 0}
+        isHoliday={holidaysByDate?.has(date) ?? false}
       />
     ),
   }));
@@ -113,6 +123,8 @@ export function WeeklyView({
         tz={tz}
         gridTestId="tt-weekly-grid"
         durationStrip={strip}
+        holidaysByDate={holidaysByDate}
+        onHolidayAnnounce={onHolidayAnnounce}
         renderBlock={(entry, placement) => (
           <WeeklyBlock entry={entry} placement={placement} tz={tz} onSelectDay={onSelectDay} />
         )}
@@ -137,20 +149,26 @@ export function WeeklyView({
   );
 }
 
-/** A day column header: weekday + date, tinted for today, with the per-day total. */
+/** A day column header: weekday + date, tinted for today, with the per-day total. On
+ * a holiday day the header keeps the amber tint as a running-header cue, and the
+ * full-column overlay in the grid body carries the marker, the name and the
+ * `time-cell-{date}-holiday-marker` test id. */
 function DayHeader({
   date,
   isToday,
   minutes,
+  isHoliday,
 }: {
   date: string;
   isToday: boolean;
   minutes: number;
+  isHoliday: boolean;
 }) {
   const name = WEEKDAY_ABBR[weekdayMon0(date)];
   return (
     <div
       style={{
+        background: isHoliday ? 'var(--holiday-bg)' : undefined,
         height: 64,
         display: 'flex',
         flexDirection: 'column',

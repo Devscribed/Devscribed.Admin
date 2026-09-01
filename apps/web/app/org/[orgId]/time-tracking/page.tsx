@@ -12,6 +12,7 @@ import type { MemberListResponse } from '../members/types';
 import type { ProjectsResponse } from '../projects/types';
 import { ConfirmDialog } from './ConfirmDialog';
 import { DailyView } from './DailyView';
+import { HolidayLiveRegion } from './HolidayMarker';
 import { MonthlyView } from './MonthlyView';
 import { SegmentedControl } from './SegmentedControl';
 import { TimeEntryModal } from './TimeEntryModal';
@@ -30,7 +31,14 @@ import {
   todayISO,
   weekStartFromPreference,
 } from './date-utils';
-import type { AssignableProject, TimeEntriesResponse, TimeEntry, TimeView } from './types';
+import type {
+  AssignableProject,
+  CalendarHoliday,
+  CalendarHolidaysResponse,
+  TimeEntriesResponse,
+  TimeEntry,
+  TimeView,
+} from './types';
 
 const MY_TIME = 'me';
 
@@ -68,6 +76,10 @@ export default function TimeTrackingPage({ params }: { params: Promise<{ orgId: 
 
   const [entries, setEntries] = useState<TimeEntry[] | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Spec organization/03 — read-only holiday markers on the Weekly and Monthly views.
+  const [holidays, setHolidays] = useState<CalendarHoliday[]>([]);
+  const [holidayAnnouncement, setHolidayAnnouncement] = useState('');
 
   const [projects, setProjects] = useState<AssignableProject[]>([]);
   const [members, setMembers] = useState<{ id: string; fullName: string }[]>([]);
@@ -163,6 +175,55 @@ export default function TimeTrackingPage({ params }: { params: Promise<{ orgId: 
   useEffect(() => {
     void load();
   }, [load]);
+
+  /**
+   * Holidays for the visible range (spec organization/03 requirement 10). One fetch
+   * here rather than one per view, and `scope=mine` — which needs no capability, so a
+   * `user` and a `viewer` get their own markers and the server resolves their country.
+   * The `year` is sent explicitly for every year the range touches: the endpoint
+   * defaults to the caller's *current* year, so a member paging into next December
+   * would otherwise see an empty calendar.
+   */
+  useEffect(() => {
+    const years = Array.from(
+      new Set([range.from.slice(0, 4), range.to.slice(0, 4)]),
+    );
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const responses = await Promise.all(
+          years.map((year) =>
+            fetch(
+              `/api/organizations/${orgId}/holidays?scope=mine&year=${year}`,
+              { credentials: 'same-origin', signal: controller.signal },
+            ),
+          ),
+        );
+        const rows: CalendarHoliday[] = [];
+        for (const response of responses) {
+          if (!response.ok) continue;
+          const data = (await response.json()) as CalendarHolidaysResponse;
+          rows.push(...data.holidays);
+        }
+        if (!controller.signal.aborted) setHolidays(rows);
+      } catch {
+        // A failed holiday read leaves the calendar unmarked; time tracking is
+        // unaffected, so it never surfaces an error to the member.
+      }
+    })();
+    return () => controller.abort();
+  }, [orgId, range.from, range.to]);
+
+  /** The visible range's holidays, keyed by ISO day — at most one marker per cell. */
+  const holidaysByDate = useMemo(() => {
+    const map = new Map<string, CalendarHoliday>();
+    for (const holiday of holidays) {
+      if (holiday.date >= range.from && holiday.date <= range.to && !map.has(holiday.date)) {
+        map.set(holiday.date, holiday);
+      }
+    }
+    return map;
+  }, [holidays, range.from, range.to]);
 
   function stepPeriod(direction: -1 | 1): void {
     setAnchor((current) => {
@@ -328,6 +389,10 @@ export default function TimeTrackingPage({ params }: { params: Promise<{ orgId: 
         </div>
       )}
 
+      {/* Spec organization/03 §Accessibility — one polite live region for the whole
+          page; a holiday marker announces its name and paid hours into it on focus. */}
+      <HolidayLiveRegion message={holidayAnnouncement} />
+
       {/* Active view / states. The calendar/grid ALWAYS renders once loaded — navigating to
           a period with no entries still shows the empty grid (all days present), with a
           modest "no entries" note beneath it rather than replacing the whole view. */}
@@ -341,6 +406,8 @@ export default function TimeTrackingPage({ params }: { params: Promise<{ orgId: 
               today={today}
               weekStartsOn={weekStartsOn}
               entries={entries}
+              holidaysByDate={holidaysByDate}
+              onHolidayAnnounce={setHolidayAnnouncement}
               onSelectDay={drillToDay}
             />
           ) : view === 'weekly' ? (
@@ -350,6 +417,8 @@ export default function TimeTrackingPage({ params }: { params: Promise<{ orgId: 
               tz={tz}
               weekStartsOn={weekStartsOn}
               entries={entries}
+              holidaysByDate={holidaysByDate}
+              onHolidayAnnounce={setHolidayAnnouncement}
               onSelectDay={drillToDay}
             />
           ) : (
@@ -361,6 +430,8 @@ export default function TimeTrackingPage({ params }: { params: Promise<{ orgId: 
               canManage={canManage}
               onEdit={openEdit}
               onDelete={setDeleteTarget}
+              holidaysByDate={holidaysByDate}
+              onHolidayAnnounce={setHolidayAnnouncement}
             />
           )}
 

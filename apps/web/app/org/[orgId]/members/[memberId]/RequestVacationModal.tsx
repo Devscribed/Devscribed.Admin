@@ -3,7 +3,18 @@
 import { useEffect, useState, type CSSProperties, type FormEvent } from 'react';
 import { Button, Modal } from '@/ds';
 import { useToast } from '@/toast';
-import { calculateWorkingDays, REQUEST_MESSAGES, validateVacationRequestDates } from '@devscribed/validation';
+import {
+  calculateWorkingDays,
+  countHolidaysInRange,
+  HOLIDAY_MESSAGES,
+  REQUEST_MESSAGES,
+  validateVacationRequestDates,
+} from '@devscribed/validation';
+
+/** One row of `GET .../holidays?scope=mine` — only the date is needed for the hint. */
+interface HintHoliday {
+  date: string;
+}
 
 /** Today's local date as 'YYYY-MM-DD' — the `today` boundary the date validator compares against. */
 function localTodayYmd(): string {
@@ -118,6 +129,11 @@ function DateInput({
  * available-balance display, a client-side cross-year gate (disables submit), and a POST to
  * `.../vacation/requests`. Follows `VacationFinancialsModal`'s shell + `useToast()` contract:
  * on 201 it closes, toasts, and asks the panel to refetch — the server owns balance/status.
+ *
+ * Spec organization/03 requirement 13 adds a non-blocking hint when the chosen range
+ * covers a paid holiday. Informational only: requirement 12 keeps the vacation math
+ * exactly as it was — `calculateWorkingDays` still counts every Mon–Fri, the payload is
+ * unchanged, and the hint never disables submit.
  */
 export function RequestVacationModal({
   orgId,
@@ -141,6 +157,7 @@ export function RequestVacationModal({
   const [fieldErrors, setFieldErrors] = useState<{ startDate?: string; endDate?: string }>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [holidays, setHolidays] = useState<HintHoliday[]>([]);
 
   const today = localTodayYmd();
 
@@ -154,6 +171,43 @@ export function RequestVacationModal({
     setSaving(false);
   }, [open]);
 
+  /**
+   * Holidays for the year(s) the chosen range spans (requirement 13). `scope=mine`
+   * resolves the country server-side, and the modal only ever opens on the caller's
+   * own profile, so the rows are the right person's by construction. Read-only: a
+   * failed fetch simply means no hint.
+   */
+  useEffect(() => {
+    if (!open || startDate === '' || endDate === '') {
+      setHolidays([]);
+      return undefined;
+    }
+    const years = Array.from(new Set([startDate.slice(0, 4), endDate.slice(0, 4)]));
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const responses = await Promise.all(
+          years.map((year) =>
+            fetch(`/api/organizations/${orgId}/holidays?scope=mine&year=${year}`, {
+              credentials: 'same-origin',
+              signal: controller.signal,
+            }),
+          ),
+        );
+        const rows: HintHoliday[] = [];
+        for (const response of responses) {
+          if (!response.ok) continue;
+          const data = (await response.json()) as { holidays: HintHoliday[] };
+          rows.push(...data.holidays);
+        }
+        if (!controller.signal.aborted) setHolidays(rows);
+      } catch {
+        // No hint is the correct degradation — the request itself is unaffected.
+      }
+    })();
+    return () => controller.abort();
+  }, [open, orgId, startDate, endDate]);
+
   const bothPresent = startDate !== '' && endDate !== '';
   const dateValidation = bothPresent
     ? validateVacationRequestDates({ startDate, endDate }, today)
@@ -162,6 +216,12 @@ export function RequestVacationModal({
 
   const workingDaysText =
     bothPresent && startDate <= endDate ? String(calculateWorkingDays(startDate, endDate)) : '—';
+
+  // Counted, not subtracted — the working-days preview above is deliberately untouched.
+  const holidayCount =
+    bothPresent && startDate <= endDate
+      ? countHolidaysInRange(holidays, startDate, endDate)
+      : 0;
 
   // The shared inline error node shows the client-side cross-year message first, then any
   // server-side 400 business error (insufficient balance / overlap / past date / no financials).
@@ -293,6 +353,23 @@ export function RequestVacationModal({
             <div data-testid="vacation-available-days-preview" style={previewLine}>
               Available balance: {availableDays} days
             </div>
+            {holidayCount > 0 && (
+              <div
+                data-testid="vacation-request-holiday-hint"
+                style={{
+                  marginTop: 'var(--sp-2)',
+                  padding: 'var(--sp-3) var(--sp-4)',
+                  borderRadius: 'var(--radius-lg)',
+                  background: 'var(--holiday-bg)',
+                  border: '1px solid var(--holiday-border)',
+                  color: 'var(--holiday-ink)',
+                  fontFamily: 'var(--font-text)',
+                  fontSize: 'var(--fs-13)',
+                }}
+              >
+                {HOLIDAY_MESSAGES.vacationHint(holidayCount)}
+              </div>
+            )}
           </div>
 
           {errorText && (

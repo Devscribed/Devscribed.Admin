@@ -568,7 +568,20 @@ export type MemberCapability =
    * project detail via the project endpoint, not through this capability.
    */
   | 'manage-clients'
-  | 'view-clients';
+  | 'view-clients'
+  /**
+   * Spec organization/03 additions — the Holidays capabilities.
+   * `view-holidays`: reach Settings › Holidays and `GET .../holidays?scope=all`
+   * (admin, manager). `scope=mine` needs no capability — every member's calendar
+   * reads it.
+   * `manage-holidays`: create and edit holidays (admin, manager).
+   * `delete-holidays`: delete a holiday (admin only) — a delete changes what every
+   * future Amounts Owed report pays out, which is a different order of decision
+   * from correcting a name.
+   */
+  | 'view-holidays'
+  | 'manage-holidays'
+  | 'delete-holidays';
 
 /**
  * Pure lookup against spec 04's Roles & Permission Matrix (TC-04-UNIT-05), widened by
@@ -604,6 +617,9 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-labels': true,
     'manage-clients': true,
     'view-clients': true,
+    'view-holidays': true,
+    'manage-holidays': true,
+    'delete-holidays': true,
   },
   manager: {
     'view-list': true,
@@ -631,6 +647,9 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-labels': true,
     'manage-clients': true,
     'view-clients': true,
+    'view-holidays': true,
+    'manage-holidays': true,
+    'delete-holidays': false,
   },
   user: {
     'view-list': true,
@@ -658,6 +677,9 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-labels': false,
     'manage-clients': false,
     'view-clients': false,
+    'view-holidays': false,
+    'manage-holidays': false,
+    'delete-holidays': false,
   },
   viewer: {
     'view-list': true,
@@ -685,6 +707,9 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-labels': false,
     'manage-clients': false,
     'view-clients': false,
+    'view-holidays': false,
+    'manage-holidays': false,
+    'delete-holidays': false,
   },
 };
 
@@ -3356,3 +3381,10 @@ export * from './documents';
 export * from './envelopes';
 export * from './autofill';
 export * from './signing-providers';
+
+/* ------------------------------------------------------------------ *
+ * Organization area — specs/organization
+ * ------------------------------------------------------------------ */
+
+export * from './holiday-messages';
+export * from './holidays';

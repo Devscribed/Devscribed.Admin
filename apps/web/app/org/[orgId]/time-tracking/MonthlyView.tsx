@@ -1,6 +1,6 @@
 'use client';
 
-import { formatDurationHuman } from '@devscribed/validation';
+import { formatDurationHuman, HOLIDAY_MESSAGES } from '@devscribed/validation';
 import {
   dayNumber,
   formatDayLabel,
@@ -8,7 +8,8 @@ import {
   weekdayAbbrHeaders,
   type WeekStart,
 } from './date-utils';
-import type { TimeEntry } from './types';
+import { HolidayMarker } from './HolidayMarker';
+import type { CalendarHoliday, TimeEntry } from './types';
 
 /** Heat tiers over a violet tint (DS gap — no `--heat-*` tokens yet; the mock hardcodes
  * oklch). Numeric hours ALWAYS accompany the tint, so colour is never the sole signal.
@@ -28,18 +29,28 @@ function heatBackground(minutes: number): string {
  * (client-aggregated from `entries`, one decimal or "—"), tinted by a few heat tiers.
  * Adjacent-month cells render greyed "—" and are not fetched. Clicking a cell drills into
  * the daily view for that date.
+ *
+ * Spec organization/03 requirement 10 adds a read-only holiday marker to the matching
+ * cells. The tint is layered as an inset ring in `--holiday-border` OVER the heat
+ * background, not instead of it: requirement 11 says a logged entry and a holiday
+ * coexist, so the marker must survive a day that has hours on it.
  */
 export function MonthlyView({
   anchorDate,
   today,
   weekStartsOn,
   entries,
+  holidaysByDate,
+  onHolidayAnnounce,
   onSelectDay,
 }: {
   anchorDate: string;
   today: string;
   weekStartsOn: WeekStart;
   entries: TimeEntry[];
+  /** Spec organization/03 — the visible range's holidays, keyed by ISO day. */
+  holidaysByDate?: Map<string, CalendarHoliday>;
+  onHolidayAnnounce?: (message: string) => void;
   onSelectDay: (date: string) => void;
 }) {
   const minutesByDate = new Map<string, number>();
@@ -112,6 +123,7 @@ export function MonthlyView({
 
             const minutes = minutesByDate.get(cell.date) ?? 0;
             const hoursText = minutes > 0 ? formatDurationHuman(minutes) : '—';
+            const holiday = holidaysByDate?.get(cell.date);
 
             return (
               <button
@@ -119,17 +131,33 @@ export function MonthlyView({
                 type="button"
                 data-testid={`tt-calendar-cell-${cell.date}`}
                 onClick={() => onSelectDay(cell.date)}
+                onFocus={
+                  holiday
+                    ? () =>
+                        onHolidayAnnounce?.(
+                          HOLIDAY_MESSAGES.calendarAnnouncement(
+                            holiday.name,
+                            holiday.paidHours,
+                          ),
+                        )
+                    : undefined
+                }
                 aria-label={`${formatDayLabel(cell.date, today)}, ${
                   minutes > 0 ? formatDurationHuman(minutes) : 'no time logged'
-                }`}
+                }${holiday ? `, ${HOLIDAY_MESSAGES.calendarTooltip(holiday.name)}` : ''}`}
                 style={{
                   aspectRatio: '1.5 / 1',
                   border: 'none',
                   borderTop: '1px solid var(--divider)',
                   borderLeft: index % 7 === 0 ? 'none' : '1px solid var(--divider)',
+                  // Today's ring wins the outline; a holiday takes an inset box-shadow
+                  // so a day can be both without either disappearing.
                   outline: isToday ? '2px solid var(--accent)' : 'none',
                   outlineOffset: '-2px',
-                  background: heatBackground(minutes),
+                  boxShadow: holiday ? 'inset 0 0 0 2px var(--holiday-border)' : undefined,
+                  background: holiday
+                    ? `linear-gradient(var(--holiday-bg), var(--holiday-bg)), ${heatBackground(minutes)}`
+                    : heatBackground(minutes),
                   padding: '8px 10px',
                   cursor: 'pointer',
                   textAlign: 'left',
@@ -147,6 +175,9 @@ export function MonthlyView({
                 >
                   {dayNumber(cell.date)}
                 </span>
+                {holiday && (
+                  <HolidayMarker holiday={holiday} onFocusAnnounce={onHolidayAnnounce} />
+                )}
                 <span
                   data-testid={`tt-calendar-hours-${cell.date}`}
                   style={{

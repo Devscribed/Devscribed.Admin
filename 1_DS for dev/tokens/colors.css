@@ -111,6 +111,14 @@
   --banner-success-bg:var(--success-50);
   --banner-success-border:var(--success-300);
   --banner-success-ink:var(--success-700);
+
+  /* Holiday marker on the Time Tracking calendar. A tint of its own rather than
+     --accent (the current-day colour) or the --tracker group (a timer that is
+     running right now): a paid public holiday is neither, and a day can be all
+     three at once, so the three must stay visually distinguishable. */
+  --holiday-bg:var(--amber-100);
+  --holiday-border:var(--amber-300);
+  --holiday-ink:var(--amber-800);
 }
 
 [data-theme="dark"]{

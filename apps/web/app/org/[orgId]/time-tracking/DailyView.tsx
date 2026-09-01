@@ -13,7 +13,7 @@ import {
   type BlockColor,
   type BlockPlacement,
 } from './TimeGrid';
-import type { TimeEntry } from './types';
+import type { CalendarHoliday, TimeEntry } from './types';
 
 /**
  * Daily Outlook-style grid (spec 12 mock, states 03–04). An hour gutter plus one wide day
@@ -30,6 +30,8 @@ export function DailyView({
   canManage,
   onEdit,
   onDelete,
+  holidaysByDate,
+  onHolidayAnnounce,
 }: {
   date: string;
   today: string;
@@ -39,7 +41,12 @@ export function DailyView({
   canManage: boolean;
   onEdit: (entry: TimeEntry) => void;
   onDelete: (entry: TimeEntry) => void;
+  /** Spec organization/03 §10 — passed through to `TimeGrid`, which renders the
+   * full-column amber overlay for the day when a holiday is present. */
+  holidaysByDate?: Map<string, CalendarHoliday>;
+  onHolidayAnnounce?: (message: string) => void;
 }) {
+  const holiday = holidaysByDate?.get(date);
   const durationOnly = entries.filter((e) => !isTimedEntry(e));
   const totalMinutes = entries.reduce((sum, e) => sum + e.durationMinutes, 0);
 
@@ -52,6 +59,9 @@ export function DailyView({
         justifyContent: 'center',
         gap: 2,
         padding: '0 16px',
+        // The header keeps the amber tint as a running cue when the day is a
+        // holiday; the overlay in the grid body carries the marker + testid.
+        background: holiday ? 'var(--holiday-bg)' : undefined,
       }}
     >
       <span
@@ -135,6 +145,8 @@ export function DailyView({
       tz={tz}
       gridTestId="tt-daily-list"
       durationStrip={strip}
+      holidaysByDate={holidaysByDate}
+      onHolidayAnnounce={onHolidayAnnounce}
       renderBlock={(entry, placement) => (
         <DailyBlock
           entry={entry}

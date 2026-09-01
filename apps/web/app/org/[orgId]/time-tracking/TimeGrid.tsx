@@ -1,8 +1,10 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { formatWallClockInTz, gmtLabel, minutesOfDayInTz } from '@devscribed/validation';
+import { formatWallClockInTz, gmtLabel, minutesOfDayInTz, HOLIDAY_MESSAGES } from '@devscribed/validation';
+import { StarIcon } from '@/layout/icons';
 import type { TimeEntry } from './types';
+import type { CalendarHoliday } from './types';
 
 /**
  * Shared Outlook-style time grid for the Weekly and Daily views (spec 12 mock, states
@@ -165,6 +167,8 @@ export function TimeGrid({
   renderBlock,
   durationStrip,
   cardHeight = 640,
+  holidaysByDate,
+  onHolidayAnnounce,
 }: {
   columns: TimeGridColumn[];
   entries: TimeEntry[];
@@ -177,6 +181,11 @@ export function TimeGrid({
   renderBlock: (entry: TimeEntry, placement: BlockPlacement) => ReactNode;
   durationStrip?: ReactNode;
   cardHeight?: number;
+  /** Spec organization/03 §10 — a full-column amber overlay per holiday day. Logged
+   * entries on the same day still render on top (they carry a higher z-index by
+   * default). Keyed by ISO day, matching the column's `date`. */
+  holidaysByDate?: Map<string, CalendarHoliday>;
+  onHolidayAnnounce?: (message: string) => void;
 }) {
   const n = columns.length;
   const timed = entries.filter(isTimedEntry);
@@ -211,47 +220,59 @@ export function TimeGrid({
         height: cardHeight,
       }}
     >
-      {/* Header row: gutter + per-day headers */}
+      {/* Header + body share one scroll container so the vertical scrollbar's width
+          is subtracted from both — otherwise the body's columns sit ~15px to the
+          left of their headers. The header is `position: sticky` so it stays put
+          while the body scrolls, and its own `background` covers the rows sliding
+          behind it. */}
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: headerTemplate,
-          background: 'var(--bg-header)',
-          borderBottom: '1px solid var(--border)',
-          flexShrink: 0,
+          flex: 1,
+          overflowY: 'auto',
+          position: 'relative',
+          scrollbarGutter: 'stable',
         }}
       >
+        {/* Header row: gutter + per-day headers */}
         <div
           style={{
-            borderRight: '1px solid var(--divider)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontFamily: 'var(--font-display)',
-            fontWeight: 600,
-            fontSize: 'var(--fs-11)',
-            letterSpacing: 1,
-            textTransform: 'uppercase',
-            color: 'var(--text-muted)',
+            display: 'grid',
+            gridTemplateColumns: headerTemplate,
+            background: 'var(--bg-header)',
+            borderBottom: '1px solid var(--border)',
+            position: 'sticky',
+            top: 0,
+            zIndex: 5,
           }}
         >
-          {gutterLabel}
-        </div>
-        {columns.map((col) => (
           <div
-            key={col.date}
             style={{
               borderRight: '1px solid var(--divider)',
-              background: 'transparent',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontFamily: 'var(--font-display)',
+              fontWeight: 600,
+              fontSize: 'var(--fs-11)',
+              letterSpacing: 1,
+              textTransform: 'uppercase',
+              color: 'var(--text-muted)',
             }}
           >
-            {col.header}
+            {gutterLabel}
           </div>
-        ))}
-      </div>
-
-      {/* Scrollable body: hour rows as a background, blocks + now-line overlaid */}
-      <div style={{ flex: 1, overflowY: 'auto', position: 'relative' }}>
+          {columns.map((col) => (
+            <div
+              key={col.date}
+              style={{
+                borderRight: '1px solid var(--divider)',
+                background: 'transparent',
+              }}
+            >
+              {col.header}
+            </div>
+          ))}
+        </div>
         <div
           data-testid={gridTestId}
           style={{
@@ -265,6 +286,27 @@ export function TimeGrid({
           {hours.map((hour) => (
             <HourRow key={hour} hour={hour} columns={columns} />
           ))}
+
+          {/* Spec organization/03 §10 — an amber all-day overlay per holiday column,
+              rendered before the entry blocks so a logged entry on the same day sits
+              on top (its wrapper has `zIndex: 3`). The overlay is the marker the
+              spec's testid roster names, so its `data-testid` moves here from the
+              header chip and satisfies TC-03-E2E-04. */}
+          {holidaysByDate &&
+            columns.map((col, colIndex) => {
+              const holiday = holidaysByDate.get(col.date);
+              if (!holiday) return null;
+              return (
+                <HolidayOverlay
+                  key={`holiday-${col.date}`}
+                  holiday={holiday}
+                  bodyHeight={bodyHeight}
+                  left={columnLeft(colIndex)}
+                  width={`calc(${colWidth})`}
+                  onFocusAnnounce={onHolidayAnnounce}
+                />
+              );
+            })}
 
           {/* Positioned entry blocks, packed into lanes per column */}
           {columns.map((col, colIndex) => {
@@ -282,7 +324,7 @@ export function TimeGrid({
               return (
                 <div
                   key={p.entry.id}
-                  style={{ position: 'absolute', top, height, left, width }}
+                  style={{ position: 'absolute', top, height, left, width, zIndex: 3 }}
                 >
                   {renderBlock(p.entry, {
                     top,
@@ -329,6 +371,86 @@ export function TimeGrid({
       </div>
 
       {durationStrip}
+    </div>
+  );
+}
+
+/**
+ * A full-column amber block for a holiday day (spec organization/03 §10). It fills the
+ * body height so the day reads as an all-day "off" — not the small chip an earlier
+ * draft put under the date header — while sitting at `zIndex: 1` so a logged entry on
+ * the same day (`zIndex: 3`) renders on top. Focus fires the live-region announcement
+ * (§Accessibility); the amber tokens carry the whole visual signal, the star icon and
+ * the name text carry the semantic one, and the tooltip mirrors the aria-label.
+ */
+function HolidayOverlay({
+  holiday,
+  bodyHeight,
+  left,
+  width,
+  onFocusAnnounce,
+}: {
+  holiday: CalendarHoliday;
+  bodyHeight: number;
+  left: string;
+  width: string;
+  onFocusAnnounce?: (message: string) => void;
+}) {
+  const tooltip = HOLIDAY_MESSAGES.calendarTooltip(holiday.name);
+  const announcement = HOLIDAY_MESSAGES.calendarAnnouncement(holiday.name, holiday.paidHours);
+  return (
+    <div
+      data-testid={`time-cell-${holiday.date}-holiday-marker`}
+      role="img"
+      aria-label={tooltip}
+      title={tooltip}
+      tabIndex={0}
+      onFocus={() => onFocusAnnounce?.(announcement)}
+      onMouseEnter={() => onFocusAnnounce?.(announcement)}
+      style={{
+        position: 'absolute',
+        top: 0,
+        height: bodyHeight,
+        left,
+        width,
+        zIndex: 1,
+        background: 'var(--holiday-bg)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        gap: 'var(--sp-1)',
+        padding: '10px 8px',
+        pointerEvents: 'auto',
+        cursor: 'default',
+        color: 'var(--holiday-ink)',
+      }}
+    >
+      <StarIcon size={14} />
+      <span
+        style={{
+          fontFamily: 'var(--font-display)',
+          fontWeight: 600,
+          fontSize: 'var(--fs-12)',
+          lineHeight: 1.3,
+          textAlign: 'center',
+          maxWidth: '100%',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+      >
+        {holiday.name}
+      </span>
+      <span
+        style={{
+          fontFamily: 'var(--font-display)',
+          fontWeight: 500,
+          fontSize: 'var(--fs-11)',
+          opacity: 0.75,
+        }}
+      >
+        {holiday.paidHours}h paid
+      </span>
     </div>
   );
 }

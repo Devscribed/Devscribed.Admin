@@ -44,3 +44,20 @@ export interface AssignableProject {
    * had a key set, in which case the task selector never renders (spec 15 FR-15). */
   key: string | null;
 }
+
+/**
+ * One row of `GET /api/organizations/{orgId}/holidays?scope=mine` (spec
+ * organization/03 §API Contracts) — the read-only markers the Weekly and Monthly
+ * views draw. `date` is a `YYYY-MM-DD` calendar day; `paidHours` is a JSON number.
+ */
+export interface CalendarHoliday {
+  id: string;
+  date: string;
+  name: string;
+  paidHours: number;
+  countryCode: string | null;
+}
+
+export interface CalendarHolidaysResponse {
+  holidays: CalendarHoliday[];
+}
