@@ -4,12 +4,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { Button, Input, Select } from '@/ds';
 import { PlayIcon, StopIcon } from '@/layout/icons';
 import { useRunningTimer, type StoppedTimeEntry } from '@/layout/running-timer-context';
+import { useSession } from '@/layout/session-context';
 import { TaskSelector, type TaskSelectorValue } from '@/task-selector/TaskSelector';
 import { useToast } from '@/toast';
 import {
   TIME_TRACKING_MESSAGES,
   formatDurationHuman,
   formatElapsed,
+  formatWallClockInTz,
   timerStoppedToast,
 } from '@devscribed/validation';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -70,6 +72,11 @@ export function TimerBar({
   onChanged: () => void;
 }) {
   const { showToast } = useToast();
+  const session = useSession();
+  const tz =
+    session.account.timezone && session.account.timezone.trim().length > 0
+      ? session.account.timezone
+      : 'UTC';
   const { timer, elapsedSeconds, start, update, stop, discard } = useRunningTimer();
 
   const options = projectOptions(projects);
@@ -79,6 +86,8 @@ export function TimerBar({
   const [task, setTask] = useState('');
   const [description, setDescription] = useState('');
   const [taskSelection, setTaskSelection] = useState<TaskSelectorValue | null>(null);
+  // Spec 16 FR-4 — the running-timer bar defaults to billable=true on start.
+  const [idleBillable, setIdleBillable] = useState(true);
   const [starting, setStarting] = useState(false);
 
   // Running-state editable copy, seeded from the timer and re-seeded when it changes
@@ -87,6 +96,8 @@ export function TimerBar({
   const [runTask, setRunTask] = useState('');
   const [runDescription, setRunDescription] = useState('');
   const [runTaskSelection, setRunTaskSelection] = useState<TaskSelectorValue | null>(null);
+  // Spec 16 FR-3/FR-13 — the running-state toggle mirrors the server; a click PATCHes.
+  const [runBillable, setRunBillable] = useState(true);
 
   const [discardOpen, setDiscardOpen] = useState(false);
   const [discarding, setDiscarding] = useState(false);
@@ -111,8 +122,11 @@ export function TimerBar({
     } else {
       setRunTaskSelection(null);
     }
+    // Spec 16 — hydrate the running-state toggle from the server response. Missing
+    // (from a legacy server) counts as billable.
+    setRunBillable(timer.billable !== false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timer?.id, timer?.taskId, timer?.taskKey]);
+  }, [timer?.id, timer?.taskId, timer?.taskKey, timer?.billable]);
 
   const idleProject = useMemo(
     () => projects.find((p) => p.id === projectId) ?? null,
@@ -132,6 +146,7 @@ export function TimerBar({
       // Server ignores `task` when taskId is set — omit it there so the intent is clear.
       task: taskSelection ? null : task.trim() || null,
       description: description.trim() || null,
+      billable: idleBillable,
     });
     setStarting(false);
     if (result.ok) {
@@ -140,6 +155,7 @@ export function TimerBar({
       setTask('');
       setDescription('');
       setTaskSelection(null);
+      setIdleBillable(true);
       onChanged();
     } else if (result.conflict) {
       showToast('toast-timer-started', result.message ?? TIME_TRACKING_MESSAGES.timerAlreadyRunning, 'error');
@@ -182,6 +198,21 @@ export function TimerBar({
       taskId: finalSelection?.id ?? null,
       task: finalSelection ? null : (next.task ?? runTask).trim() || null,
       description: (next.description ?? runDescription).trim() || null,
+      billable: runBillable,
+    });
+  }
+
+  /** Spec 16 FR-3/FR-13 — flip the running timer's billable state and PATCH. Optimistic
+   * update: the local switch flips immediately; a failed server write is reconciled by
+   * the next timer refresh (the shared context is the source of truth for the timer). */
+  function toggleRunningBillable(next: boolean): void {
+    setRunBillable(next);
+    void update({
+      projectId: runProjectId || null,
+      taskId: runTaskSelection?.id ?? null,
+      task: runTaskSelection ? null : runTask.trim() || null,
+      description: runDescription.trim() || null,
+      billable: next,
     });
   }
 
@@ -264,6 +295,19 @@ export function TimerBar({
               >
                 {formatElapsed(elapsedSeconds)}
               </span>
+              {/* Spec 16 §Layout — a status line next to the elapsed chip. Reads
+                  "Non-billable · started HH:MM" when off, "started HH:MM" when on. */}
+              <span
+                data-testid="running-timer-status-line"
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: 'var(--fs-12)',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                {runBillable ? '' : 'Non-billable · '}started{' '}
+                {timer ? formatWallClockInTz(timer.startedAt, tz) : ''}
+              </span>
             </div>
 
             <div style={{ minWidth: 180, flex: '1 1 180px' }}>
@@ -327,7 +371,13 @@ export function TimerBar({
               />
             </div>
 
-            <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+            <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', alignItems: 'center' }}>
+              {/* Spec 16 §Layout — inline billable toggle before Stop. */}
+              <BillablePill
+                checked={runBillable}
+                onChange={toggleRunningBillable}
+                testId="running-timer-billable-toggle"
+              />
               <Button
                 variant="ghost"
                 onClick={() => setDiscardOpen(true)}
@@ -406,7 +456,13 @@ export function TimerBar({
               />
             </div>
 
-            <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+            <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', alignItems: 'center' }}>
+              {/* Spec 16 — the idle state's billable toggle seeds the start body. */}
+              <BillablePill
+                checked={idleBillable}
+                onChange={setIdleBillable}
+                testId="tt-timer-idle-billable-toggle"
+              />
               <Button variant="ghost" onClick={onAddEntry} data-testid="tt-add-entry-btn">
                 + Add entry
               </Button>
@@ -434,6 +490,58 @@ export function TimerBar({
         onClose={() => setDiscardOpen(false)}
       />
     </>
+  );
+}
+
+/**
+ * Spec 16 — a compact billable pill for the timer bar. Uses the same `role="switch"`
+ * primitive as the entry modal's BillableSwitch (kept inline in each surface — two call
+ * sites don't yet warrant a shared component; a third would). Painted narrower to fit
+ * the crowded running-timer row.
+ */
+function BillablePill({
+  checked,
+  onChange,
+  testId,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  testId: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      data-testid={testId}
+      onClick={() => onChange(!checked)}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        height: 34,
+        padding: '0 12px',
+        border: `1.5px solid ${checked ? 'var(--accent)' : 'var(--border-strong)'}`,
+        borderRadius: 'var(--radius-lg)',
+        background: checked ? 'var(--accent-soft)' : 'var(--bg-panel)',
+        color: checked ? 'var(--accent)' : 'var(--text-sub)',
+        fontFamily: 'var(--font-display)',
+        fontWeight: 500,
+        fontSize: 'var(--fs-13)',
+        cursor: 'pointer',
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: 999,
+          background: checked ? 'var(--accent)' : 'var(--text-muted)',
+        }}
+      />
+      Billable
+    </button>
   );
 }
 

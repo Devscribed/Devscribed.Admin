@@ -198,19 +198,41 @@ function DailyBlock({
     .filter(Boolean)
     .join(', ');
 
+  const nonBillable = entry.billable === false;
   return (
     <div
       data-testid={`tt-entry-row-${entry.id}`}
+      data-billable={nonBillable ? 'false' : 'true'}
       style={{ position: 'relative', height: '100%' }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
       <button
         type="button"
-        aria-label={ariaLabel}
+        aria-label={nonBillable ? `Non-billable, ${ariaLabel}` : ariaLabel}
         onClick={() => onEdit(entry)}
-        style={blockButtonStyle(color)}
+        style={blockButtonStyle(color, nonBillable)}
       >
+        {nonBillable ? (
+          <span
+            aria-hidden
+            style={{
+              position: 'absolute',
+              top: 4,
+              right: 6,
+              fontFamily: 'var(--font-display)',
+              fontWeight: 600,
+              fontSize: 'var(--fs-11)',
+              color: 'var(--text-muted)',
+              background: 'var(--bg-panel)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '0 4px',
+              lineHeight: 1.3,
+            }}
+          >
+            NB
+          </span>
+        ) : null}
         <span style={{ fontWeight: 500, fontSize: 'var(--fs-11)', opacity: 0.85 }}>
           {timeRange} · {duration}
         </span>
@@ -290,19 +312,22 @@ function DurationChip({
   onDelete: (entry: TimeEntry) => void;
 }) {
   const color = projectColor(entry.projectId);
+  const nonBillable = entry.billable === false;
   const project = entry.projectId ? entry.projectName ?? '—' : '(no project)';
   return (
     <span
       data-testid={`tt-entry-row-${entry.id}`}
+      data-billable={nonBillable ? 'false' : 'true'}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
         gap: 8,
         padding: '6px 8px 6px 12px',
         borderRadius: 'var(--radius-sm)',
-        borderLeft: `3px solid ${color.rail}`,
-        background: color.bg,
-        color: color.text,
+        border: nonBillable ? '1px dashed var(--border-strong)' : undefined,
+        borderLeft: nonBillable ? '3px dashed var(--border-strong)' : `3px solid ${color.rail}`,
+        background: nonBillable ? 'var(--bg-sunken)' : color.bg,
+        color: nonBillable ? 'var(--text-muted)' : color.text,
         fontFamily: 'var(--font-display)',
         fontWeight: 500,
         fontSize: 'var(--fs-13)',
@@ -335,20 +360,23 @@ function DurationChip({
   );
 }
 
-/** Shared style for a grid block's clickable face. */
-function blockButtonStyle(color: BlockColor): CSSProperties {
+/** Shared style for a grid block's clickable face. Spec 16 — non-billable adds a
+ * dashed border and swaps to `--bg-sunken` + muted text; `position: relative` lets
+ * the "NB" corner tag pin. */
+function blockButtonStyle(color: BlockColor, nonBillable: boolean): CSSProperties {
   return {
+    position: 'relative',
     display: 'flex',
     flexDirection: 'column',
     width: '100%',
     height: '100%',
     textAlign: 'left',
     padding: '8px 12px',
-    border: 'none',
-    borderLeft: `3px solid ${color.rail}`,
+    border: nonBillable ? '1px dashed var(--border-strong)' : 'none',
+    borderLeft: nonBillable ? '3px dashed var(--border-strong)' : `3px solid ${color.rail}`,
     borderRadius: 'var(--radius-sm)',
-    background: color.bg,
-    color: color.text,
+    background: nonBillable ? 'var(--bg-sunken)' : color.bg,
+    color: nonBillable ? 'var(--text-muted)' : color.text,
     fontFamily: 'var(--font-display)',
     cursor: 'pointer',
     overflow: 'hidden',

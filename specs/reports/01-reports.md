@@ -19,11 +19,10 @@ api:
   - "GET /api/organizations/{orgId}/reports/time-off/my"
   - "GET /api/organizations/{orgId}/reports/time-off/pdf"
   - "GET /api/organizations/{orgId}/reports/time-off/pdf/my"
-entities: [TimeEntry, VacationRequest, MemberFinancials, MemberFinancialsSnapshot, Project, Client, Holiday, Organization]
+entities: [TimeEntry, VacationRequest, MemberFinancials, MemberFinancialsSnapshot, Project, Client, Holiday]
 tags: [reports, amounts-owed, time-and-activity, time-off, pdf, filters, capabilities, aggregation]
 depends-on:
   - "organization/01"   # Clients
-  - "organization/02"   # Organization currency
   - "organization/03"   # Holidays
   - "user-management/16" # Billable flag
   - "user-management/12" # Time Tracking
@@ -37,7 +36,7 @@ depends-on:
 
 ## Summary
 
-The **Reports** area exposes three finance-facing rollups over the data collected by Time Tracking (spec 12), Vacation (specs 07–09), Projects (spec 11), and their supporting primitives (Clients — org/01, Holidays — org/03, Org currency — org/02, Billable flag — user-management/16). Each report has two owner-scope variants (**All** and **My**) and two output formats (**JSON** for the on-screen table and **PDF** for finance handoff) — twelve endpoints total. All financial numbers render in `Organization.currencyCode`. All date-range math uses the caller's `Account.timezone`. Rate lookup is `MemberFinancialsSnapshot` in effect on `TimeEntry.date`, live `MemberFinancials` as fallback. The aggregation logic mirrors Teammerly's four `(sumDateRanges, detailedReports)` branches so the outputs match parity expectations from finance. Reports never write; they never re-compute frozen vacation fields.
+The **Reports** area exposes three finance-facing rollups over the data collected by Time Tracking (spec 12), Vacation (specs 07–09), Projects (spec 11), and their supporting primitives (Clients — org/01, Holidays — org/03, Billable flag — user-management/16). Each report has two owner-scope variants (**All** and **My**) and two output formats (**JSON** for the on-screen table and **PDF** for finance handoff) — twelve endpoints total. **All amounts render in USD** — the product is single-currency in v1; `MemberFinancials.currency` is on the row but ignored (see §Currency). All date-range math uses the caller's `Account.timezone`. Rate lookup is `MemberFinancialsSnapshot` in effect on `TimeEntry.date`, live `MemberFinancials` as fallback. The aggregation logic mirrors Teammerly's four `(sumDateRanges, detailedReports)` branches so the outputs match parity expectations from finance. Reports never write; they never re-compute frozen vacation fields.
 
 ## Actors & Preconditions
 
@@ -45,7 +44,7 @@ The **Reports** area exposes three finance-facing rollups over the data collecte
   - `admin` and `manager` see **All** variants — the entire organization's payables, hours, and time-off.
   - `user` sees the **My** variant of every report (their own payable, own hours, own time-off).
   - `viewer` sees only **My Time Off** — the calendar of holidays and vacation days that affect their schedule.
-- **Preconditions:** the caller is an `active` member of the organization; `Organization.currencyCode` is set (spec org/02); at least one of `MemberFinancials`, `TimeEntry`, or `VacationRequest` exists for a meaningful report (empty inputs return empty rollups).
+- **Preconditions:** the caller is an `active` member of the organization; at least one of `MemberFinancials`, `TimeEntry`, or `VacationRequest` exists for a meaningful report (empty inputs return empty rollups).
 
 ## Roles & Permission Matrix
 
@@ -90,7 +89,7 @@ The **Reports** sidebar group renders when the caller holds any of the eight `Vi
 12. For each `TimeEntry` in the range, the effective **bill rate** is the `MemberFinancialsSnapshot.clientHourlyRate` whose `effectiveFrom <= TimeEntry.date`, most recent first. If no snapshot precedes the date, use `MemberFinancials.clientHourlyRate` (live).
 13. The **pay rate** is derived from `monthlySalary` on the same lookup key: `payRate = monthlySalary / hoursPerMonth` with `hoursPerMonth = 168` (Teammerly's constant, encoded in `packages/validation/src/index.ts` as `HOURS_PER_MONTH_FOR_PAY_RATE`). If a member's `monthlySalary` is `0` (or missing), `payRate = 0`; that member's `Spent` column reads `€0.00` for their rows.
 14. A rate change **inside the range** produces two rate snapshots for the same member on different days. The report correctly assigns each entry the rate in effect on its `date`. When aggregation collapses a range (`sumDateRanges = true`), the row's "rate" is displayed as the **weighted average** across the entries in the group; the row's `amount` is the sum of per-entry `hours * rate`, not `sumHours * displayRate`.
-15. Rates are always in the currency of `Organization.currencyCode` for the report. Per-member `MemberFinancials.currency` overrides are ignored in reports (spec org/02, §Precedence).
+15. Rates and every emitted amount are in **USD**. `MemberFinancials.currency` is not read by any report. When multi-currency becomes real, a future spec introduces `Organization.currencyCode` and the FX rules; until then, all rate arithmetic is a pure `Decimal` in one currency.
 
 ### Range interpretation & entry overlap
 
@@ -142,7 +141,7 @@ The `(sumDateRanges, detailedReports)` matrix produces four output shapes; each 
 
 ## Data Model
 
-**No new tables or columns.** Reports read exclusively from data introduced by other specs: `TimeEntry` (spec 12 + 16), `VacationRequest` (spec 09), `MemberFinancials` (spec 07), `MemberFinancialsSnapshot` (spec 08), `Project` (spec 11), `Client` (spec org/01), `Holiday` (spec org/03), `Organization` (spec org/02).
+**No new tables or columns.** Reports read exclusively from data introduced by other specs: `TimeEntry` (spec 12 + 16), `VacationRequest` (spec 09), `MemberFinancials` (spec 07), `MemberFinancialsSnapshot` (spec 08), `Project` (spec 11), `Client` (spec org/01), `Holiday` (spec org/03).
 
 ### New Capabilities
 
@@ -204,7 +203,7 @@ Each endpoint accepts:
     { "label": "Total hours",  "value": "896.50" },
     { "label": "Total amount", "value": "44825.00" }
   ],
-  "meta": { "currencyCode": "EUR", "timezone": "Europe/Warsaw", "startDate": "2026-08-01", "endDate": "2026-08-31" }
+  "meta": { "currencyCode": "USD", "timezone": "Europe/Warsaw", "startDate": "2026-08-01", "endDate": "2026-08-31" }
 }
 ```
 
@@ -247,7 +246,7 @@ Same query envelope. Response is `application/pdf`. **Capability:** `ViewAmounts
     { "label": "Non-billable time",  "value": "77.25" },
     { "label": "Billed amount",      "value": "28562.50" }
   ],
-  "meta": { "currencyCode": "EUR", "timezone": "Europe/Warsaw", "startDate": "2026-08-01", "endDate": "2026-08-31" }
+  "meta": { "currencyCode": "USD", "timezone": "Europe/Warsaw", "startDate": "2026-08-01", "endDate": "2026-08-31" }
 }
 ```
 
@@ -289,7 +288,7 @@ Same query envelope. Response is `application/pdf`. **Capability:** `ViewAmounts
     { "label": "Deduction",     "value": "38420.00" },
     { "label": "Public holidays", "value": "12" }
   ],
-  "meta": { "currencyCode": "EUR", "timezone": "Europe/Warsaw", "startDate": "2026-01-01", "endDate": "2026-08-31" }
+  "meta": { "currencyCode": "USD", "timezone": "Europe/Warsaw", "startDate": "2026-01-01", "endDate": "2026-08-31" }
 }
 ```
 
@@ -587,7 +586,7 @@ New **REPORTS** section with parent row **Reports** and three sub-rows: **Amount
 - **TC-01-INT-23: Empty result — no data.** Returns `groups: []`, `summary` reads zeros.
 - **TC-01-INT-24: Zero-row filter — one project all-zero.** After aggregation, the empty project is not in `groups`.
 - **TC-01-INT-25: Cross-org member id in `memberIds[]`.** Silently dropped; response contains only in-org rows.
-- **TC-01-INT-26: currencyCode reflects org change.** After changing the org currency, a fresh JSON fetch shows the new code in `meta.currencyCode`.
+- **TC-01-INT-26: `meta.currencyCode` is always USD.** Every report response — regardless of members' `MemberFinancials.currency` — returns `meta.currencyCode = "USD"`. The field is hardcoded in v1 as a forward-compatibility hook for the future currency spec.
 - **TC-01-INT-27: Vacation math untouched.** Run the Amounts Owed report; separately re-run vacation approval on the same request; the `deductionAmount` remains the frozen value.
 - **TC-01-INT-28: Timezone — end of day.** Caller in Europe/Warsaw asks for `endDate=2026-08-31`. Entries at 2026-08-31 23:00 UTC in Warsaw = 2026-09-01 01:00 are excluded; entries at 2026-08-31 21:00 UTC = 2026-08-31 23:00 Warsaw are included.
 - **TC-01-INT-29: PDF endpoint — happy.** GET returns `application/pdf` with `Content-Disposition` and non-trivial body length.
@@ -612,8 +611,8 @@ New **REPORTS** section with parent row **Reports** and three sub-rows: **Amount
   - **Selectors:** `toast-report-pdf-too-large`, `reports-table`.
 - **TC-01-E2E-06: Column permission — Spent grayed.** Manager without `ViewTimeAndActivitySpent` opens the Columns picker; Spent is disabled with an admin-only tag.
   - **Selectors:** `reports-filter-columns`, `reports-filter-columns-item-spent`.
-- **TC-01-E2E-07: Currency reflects org change.** Admin changes `Organization.currencyCode` to EUR; then opens Amounts Owed; the summary strip and every row's amount is formatted with `€`.
-  - **Selectors:** `reports-summary-tile-total-amount`, `reports-group-{id}-row-{index}` (asserted contains €).
+- **TC-01-E2E-07: Currency always USD.** Any report opened by any role shows amounts formatted with `$`. `meta.currencyCode` in the JSON reads `"USD"`. Members whose `MemberFinancials.currency` is set to a non-USD value on the DB row (a historical possibility) do not change what the report renders.
+  - **Selectors:** `reports-summary-tile-total-amount`, `reports-group-{id}-row-{index}` (asserted contains $).
 - **TC-01-E2E-08: Vacation frozen — approval date change.** Admin approves a vacation, then changes the member's `monthlySalary`; opens Amounts Owed for the range; the vacation row's amount matches the pre-change frozen deduction.
   - **Selectors:** `reports-group-{id}-row-{index}` (asserted amount matches known frozen value).
 - **TC-01-E2E-09: All/My toggle for a dual-capability role.** Admin holds both `ViewTimeAndActivity` and `ViewMyTimeAndActivity`; the toggle appears; switching to My re-fetches JSON and hides other members.

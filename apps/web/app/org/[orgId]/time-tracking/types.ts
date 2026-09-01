@@ -28,6 +28,10 @@ export interface TimeEntry {
   /** Spec 15 — the `{PROJECT_KEY}-{taskNumber}` shorthand carried on responses so
    * the client can render the chip without a second lookup. Snapshot at write time. */
   taskKey?: string | null;
+  /** Spec 16 — whether this entry counts toward the client's Billed Amount on reports.
+   * Optional in the type for legacy rows loaded by an older client; the server always
+   * sends it. Missing / undefined is treated as billable in every UI branch. */
+  billable?: boolean;
 }
 
 export interface TimeEntriesResponse {

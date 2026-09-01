@@ -79,7 +79,12 @@ export type Capability =
   // a delete changes what every future Amounts Owed report pays out.
   | 'ViewHolidays'
   | 'ManageHolidays'
-  | 'DeleteHolidays';
+  | 'DeleteHolidays'
+  // Spec user-management/16 — toggle billable on another member's entry. Duplicates
+  // `edit-others-billable` in the lowercase-dashed `MemberCapability` union, kept in
+  // both shapes so `RequireCapability` decorators and `can(role, ...)` call sites can
+  // both name it, matching the pattern used by clients and holidays above.
+  | 'EditOthersBillable';
 
 /**
  * Permission matrix from spec 01 and spec 02, "Roles & Permission Matrix".
@@ -112,6 +117,7 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     'ViewHolidays',
     'ManageHolidays',
     'DeleteHolidays',
+    'EditOthersBillable',
   ],
   manager: [
     'ViewDocumentTemplates',
@@ -135,6 +141,9 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     // but `DeleteHolidays` stops here — deleting is admin only.
     'ViewHolidays',
     'ManageHolidays',
+    // Spec user-management/16's matrix: a manager may toggle billable on any
+    // member's entry, same as an admin.
+    'EditOthersBillable',
   ],
   // `user` looks empty, but a member reading and editing *their own* contract details is
   // authorized below by `canReadProfile` and friends, not from this table. See the note

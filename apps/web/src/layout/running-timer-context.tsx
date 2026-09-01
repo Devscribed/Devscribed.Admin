@@ -26,6 +26,9 @@ export interface RunningTimer {
   taskId?: string | null;
   /** Spec 15 — `{PROJECT_KEY}-{taskNumber}` shorthand for chip rendering. */
   taskKey?: string | null;
+  /** Spec 16 — copied onto the resulting entry when the timer is stopped; toggleable
+   * mid-run. Missing (from a legacy server) is treated as billable in every UI branch. */
+  billable?: boolean;
 }
 
 /** The time entry the server creates when a timer is stopped (spec 12 POST /timer/stop). */
@@ -73,6 +76,8 @@ interface RunningTimerValue {
     description: string | null;
     /** Spec 15 — link to a task in the project. `null` starts unlinked. */
     taskId?: string | null;
+    /** Spec 16 — optional; server defaults to `true` when absent. */
+    billable?: boolean;
   }) => Promise<StartResult>;
   /** Update the running timer's metadata (`PUT .../timer`) without restarting. */
   update: (body: {
@@ -81,6 +86,8 @@ interface RunningTimerValue {
     description: string | null;
     /** Spec 15 — explicit `null` clears an existing task link (FR-6). */
     taskId?: string | null;
+    /** Spec 16 — toggle the flag mid-run without restarting the timer. */
+    billable?: boolean;
   }) => Promise<void>;
   /** Stop & save (`POST .../timer/stop`). Clears state; returns the created entry. */
   stop: () => Promise<{ ok: boolean; timeEntry?: StoppedTimeEntry }>;

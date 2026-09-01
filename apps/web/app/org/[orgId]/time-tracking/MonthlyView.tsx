@@ -1,6 +1,6 @@
 'use client';
 
-import { formatDurationHuman, HOLIDAY_MESSAGES } from '@devscribed/validation';
+import { formatDurationHuman, HOLIDAY_MESSAGES, splitByBillable } from '@devscribed/validation';
 import {
   dayNumber,
   formatDayLabel,
@@ -53,9 +53,14 @@ export function MonthlyView({
   onHolidayAnnounce?: (message: string) => void;
   onSelectDay: (date: string) => void;
 }) {
-  const minutesByDate = new Map<string, number>();
+  // Spec 16 §Monthly view — each day cell splits its total into `{billable}h / {n}h nb`
+  // when both are present. Group entries per date, then use the shared splitter so the
+  // aggregation logic matches the Weekly view exactly.
+  const entriesByDate = new Map<string, TimeEntry[]>();
   for (const entry of entries) {
-    minutesByDate.set(entry.date, (minutesByDate.get(entry.date) ?? 0) + entry.durationMinutes);
+    const bucket = entriesByDate.get(entry.date);
+    if (bucket) bucket.push(entry);
+    else entriesByDate.set(entry.date, [entry]);
   }
   const totalMinutes = entries.reduce((sum, e) => sum + e.durationMinutes, 0);
   const cells = monthGrid(anchorDate, weekStartsOn);
@@ -121,8 +126,11 @@ export function MonthlyView({
               );
             }
 
-            const minutes = minutesByDate.get(cell.date) ?? 0;
-            const hoursText = minutes > 0 ? formatDurationHuman(minutes) : '—';
+            const { billableMinutes, nonBillableMinutes } = splitByBillable(
+              entriesByDate.get(cell.date) ?? [],
+            );
+            const minutes = billableMinutes + nonBillableMinutes;
+            const hoursText = minutes > 0 ? formatDurationHuman(billableMinutes) : '—';
             const holiday = holidaysByDate?.get(cell.date);
 
             return (
@@ -180,15 +188,32 @@ export function MonthlyView({
                 )}
                 <span
                   data-testid={`tt-calendar-hours-${cell.date}`}
+                  data-billable-minutes={billableMinutes}
+                  data-nonbillable-minutes={nonBillableMinutes}
                   style={{
                     alignSelf: 'flex-end',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-end',
+                    lineHeight: 1.15,
                     fontFamily: 'var(--font-display)',
                     fontWeight: 600,
                     fontSize: 'var(--fs-14)',
                     color: minutes > 0 ? 'var(--text)' : 'var(--text-faint)',
                   }}
                 >
-                  {hoursText}
+                  <span>{hoursText}</span>
+                  {nonBillableMinutes > 0 ? (
+                    <span
+                      style={{
+                        fontSize: 'var(--fs-11)',
+                        fontWeight: 500,
+                        color: 'var(--text-muted)',
+                      }}
+                    >
+                      +{formatDurationHuman(nonBillableMinutes)} nb
+                    </span>
+                  ) : null}
                 </span>
               </button>
             );

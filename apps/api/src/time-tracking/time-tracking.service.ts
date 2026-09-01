@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -46,6 +47,8 @@ export interface TimerShape {
   taskKey: string | null;
   description: string | null;
   startedAt: string;
+  /** Spec 16 — copied onto the resulting entry on stop; toggleable mid-run. */
+  billable: boolean;
 }
 
 /** A single time-entry row (spec 12 time-entries contracts). `memberName` only for manage-all callers. */
@@ -66,6 +69,8 @@ export interface TimeEntryShape {
   endTime: string | null;
   durationMinutes: number;
   createdAt: string;
+  /** Spec 16 — whether this entry counts toward the client's Billed Amount on reports. */
+  billable: boolean;
 }
 
 export interface TimerMetaBody {
@@ -76,6 +81,8 @@ export interface TimerMetaBody {
   description?: unknown;
   /** Present on start bodies — always ignored (spec 12 Security 9 / TC-12-INT-24). */
   startedAt?: unknown;
+  /** Spec 16 — optional; defaults to `true` on start, honored on update mid-run. */
+  billable?: unknown;
 }
 
 export interface TimeEntryBody {
@@ -89,6 +96,8 @@ export interface TimeEntryBody {
   startTime?: unknown;
   endTime?: unknown;
   durationMinutes?: unknown;
+  /** Spec 16 — optional; defaults to `true` on create, honored on update. */
+  billable?: unknown;
 }
 
 interface CallerMembership {
@@ -126,6 +135,13 @@ interface TaskLinkResolution {
  */
 @Injectable()
 export class TimeTrackingService {
+  /**
+   * Spec 16 §Concurrency & Audit — cross-member billable flips are logged at info
+   * with the delta. PII scrubbed: only the actor's account id, the target membership,
+   * and the entry id are recorded (not member names or entry descriptions).
+   */
+  private readonly logger = new Logger(TimeTrackingService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   /* ---------------------------------------------------------------- *
@@ -176,6 +192,8 @@ export class TimeTrackingService {
             description: meta.description,
             // Server clock only — the client cannot forge the start instant.
             startedAt: new Date(),
+            // Spec 16 FR-2/FR-4: default true unless the caller passed billable=false.
+            billable: meta.billable,
           },
           include: {
             project: { select: { name: true, key: true } },
@@ -220,6 +238,11 @@ export class TimeTrackingService {
           ? { connect: { id: projectId } }
           : { disconnect: true },
         description: meta.description,
+        // Spec 16 FR-3/FR-13 — toggling mid-run is honored on the same PATCH used
+        // for description/project changes; when `billable` was absent on the body,
+        // validateTimerMeta re-emitted `true`, so writing it back is a no-op for
+        // callers who never touched it.
+        billable: meta.billable,
       };
       if (link.taskLabel !== undefined) {
         data.task = link.taskLabel;
@@ -299,6 +322,8 @@ export class TimeTrackingService {
           endTime: now,
           durationMinutes,
           createdByAccountId: caller.accountId,
+          // Spec 16 FR-2 — the timer's billable state is copied to the resulting entry.
+          billable: timer.billable,
         },
         include: {
           project: { select: { name: true, key: true } },
@@ -337,7 +362,13 @@ export class TimeTrackingService {
    */
   async listEntries(
     session: SessionPayload,
-    query: { from?: string; to?: string; membershipId?: string },
+    query: {
+      from?: string;
+      to?: string;
+      membershipId?: string;
+      /** Spec 16 §API — 'all' (default) | 'billable' | 'non-billable'. */
+      billable?: string;
+    },
   ): Promise<{ entries: TimeEntryShape[]; totalMinutes: number }> {
     const caller = await this.requireCaller(session);
     if (!can(caller.role, 'view-time-tracking')) {
@@ -376,11 +407,21 @@ export class TimeTrackingService {
       if (target) memberName = `${target.account.firstName} ${target.account.lastName}`;
     }
 
+    // Spec 16 §API — server-side billable filter, mirrors the UI chips. Unknown
+    // values fall through as 'all' so the JSON layer stays forgiving with drifting
+    // client versions (matches how `columns` is treated on the report endpoints).
+    const billableFilter = query.billable === 'billable'
+      ? { billable: true as const }
+      : query.billable === 'non-billable'
+      ? { billable: false as const }
+      : {};
+
     const entries = await this.prisma.timeEntry.findMany({
       where: {
         organizationId: caller.organizationId,
         membershipId: targetMembershipId,
         date: { gte: this.dateOnly(query.from as string), lte: this.dateOnly(query.to as string) },
+        ...billableFilter,
       },
       include: {
         project: { select: { name: true, key: true } },
@@ -438,6 +479,8 @@ export class TimeTrackingService {
           endTime: value.endTime ? this.composeUtc(value.date, value.endTime, tz) : null,
           durationMinutes: value.durationMinutes,
           createdByAccountId: caller.accountId,
+          // Spec 16 FR-1 — the parsed billable flag (defaults to true when absent).
+          billable: value.billable,
         },
         include: {
           project: { select: { name: true, key: true } },
@@ -468,7 +511,17 @@ export class TimeTrackingService {
     });
     if (!existing) throw new NotFoundException();
 
-    if (existing.membershipId !== caller.id && !can(caller.role, 'manage-all-time-entries')) {
+    const isCrossMember = existing.membershipId !== caller.id;
+    if (isCrossMember && !can(caller.role, 'manage-all-time-entries')) {
+      throw this.forbidden(TIME_TRACKING_MESSAGES.forbiddenEdit, 'forbidden');
+    }
+
+    // Spec 16 §Security — even when a caller may `manage-all-time-entries`, changing
+    // the `billable` flag on ANOTHER member's entry is a distinct capability. A future
+    // role could hold `manage-all-time-entries` without `edit-others-billable`; today
+    // admin/manager hold both, so this is a no-op for them.
+    const billableTouched = body.billable !== undefined;
+    if (isCrossMember && billableTouched && !can(caller.role, 'edit-others-billable')) {
       throw this.forbidden(TIME_TRACKING_MESSAGES.forbiddenEdit, 'forbidden');
     }
 
@@ -499,6 +552,11 @@ export class TimeTrackingService {
         endTime: value.endTime ? this.composeUtc(value.date, value.endTime, tz) : null,
         durationMinutes: value.durationMinutes,
       };
+      // Spec 16 — only touch `billable` when the caller mentioned it, so an unmodified
+      // PUT does not silently reset the flag to `true` on an entry someone else edited.
+      if (billableTouched) {
+        data.billable = value.billable;
+      }
       if (link.taskLabel !== undefined) {
         data.task = link.taskLabel;
       } else if (typeof body.task === 'string') {
@@ -516,6 +574,19 @@ export class TimeTrackingService {
         },
       });
     });
+
+    // Spec 16 §Concurrency & Audit — record cross-member billable changes.
+    if (isCrossMember && billableTouched && existing.billable !== value.billable) {
+      this.logger.log({
+        event: 'time_entry_billable_changed',
+        actorAccountId: caller.accountId,
+        membershipId: existing.membershipId,
+        entryId: existing.id,
+        oldValue: existing.billable,
+        newValue: value.billable,
+      });
+    }
+
     return this.toEntryShape(entry, null);
   }
 
@@ -667,11 +738,16 @@ export class TimeTrackingService {
     return { taskId: task.id, taskLabel: label };
   }
 
-  /** Validate timer metadata (task/description); 400 `{errors}` on failure. */
-  private validateMeta(body: TimerMetaBody): { task: string | null; description: string | null } {
+  /** Validate timer metadata (task/description/billable); 400 `{errors}` on failure. */
+  private validateMeta(
+    body: TimerMetaBody,
+  ): { task: string | null; description: string | null; billable: boolean } {
     const result = validateTimerMeta({
       task: typeof body.task === 'string' ? body.task : null,
       description: typeof body.description === 'string' ? body.description : null,
+      // Pass the raw value through — `validateBillable` accepts boolean / 'true' / 'false'
+      // and rejects everything else with the spec's single billable message.
+      billable: body.billable as boolean | string | null | undefined,
     });
     if (!result.valid) {
       throw new BadRequestException({ errors: result.errors });
@@ -742,6 +818,7 @@ export class TimeTrackingService {
     durationMinutes: number | string | null;
     task: string | null;
     description: string | null;
+    billable: boolean | string | null | undefined;
   } {
     return {
       date: typeof body.date === 'string' ? body.date : null,
@@ -753,6 +830,9 @@ export class TimeTrackingService {
           : null,
       task: typeof body.task === 'string' ? body.task : null,
       description: typeof body.description === 'string' ? body.description : null,
+      // Spec 16 — pass the raw value through; `validateBillable` accepts boolean and
+      // 'true'/'false' and rejects everything else with the spec message.
+      billable: body.billable as boolean | string | null | undefined,
     };
   }
 
@@ -787,6 +867,7 @@ export class TimeTrackingService {
     taskId: string | null;
     description: string | null;
     startedAt: Date;
+    billable: boolean;
     project?: { name: string; key: string | null } | null;
     taskRef?: { taskNumber: number } | null;
   }): TimerShape {
@@ -802,6 +883,7 @@ export class TimeTrackingService {
           : null,
       description: timer.description,
       startedAt: timer.startedAt.toISOString(),
+      billable: timer.billable,
     };
   }
 
@@ -818,6 +900,7 @@ export class TimeTrackingService {
       endTime: Date | null;
       durationMinutes: number;
       createdAt: Date;
+      billable: boolean;
       project?: { name: string; key: string | null } | null;
       taskRef?: { taskNumber: number } | null;
     },
@@ -840,6 +923,7 @@ export class TimeTrackingService {
       endTime: entry.endTime ? entry.endTime.toISOString() : null,
       durationMinutes: entry.durationMinutes,
       createdAt: entry.createdAt.toISOString(),
+      billable: entry.billable,
     };
     if (memberName !== null) shape.memberName = memberName;
     return shape;

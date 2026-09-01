@@ -62,6 +62,8 @@ describe('ROLE_CAPABILITIES matrix', () => {
         'ViewHolidays',
         'ManageHolidays',
         'DeleteHolidays',
+        // Spec user-management/16: toggle billable on any member's entry.
+        'EditOthersBillable',
       ],
       manager: [
         'ViewDocumentTemplates',
@@ -80,6 +82,8 @@ describe('ROLE_CAPABILITIES matrix', () => {
         // Spec organization/03: view and edit the calendar, but not delete.
         'ViewHolidays',
         'ManageHolidays',
+        // Spec user-management/16: manager may also cross-edit the billable flag.
+        'EditOthersBillable',
       ],
       // Spec 03's "user (own)" column is not a row here — see `canReadProfile` below.
       user: [],
@@ -133,6 +137,7 @@ describe('capabilitiesFor', () => {
       'ViewHolidays',
       'ManageHolidays',
       'DeleteHolidays',
+      'EditOthersBillable',
     ]);
     expect(capabilitiesFor('manager')).toEqual([
       'ViewDocumentTemplates',
@@ -147,6 +152,7 @@ describe('capabilitiesFor', () => {
       'ManageClients',
       'ViewHolidays',
       'ManageHolidays',
+      'EditOthersBillable',
     ]);
     expect(capabilitiesFor('member')).toEqual([]);
     expect(capabilitiesFor(null)).toEqual([]);
