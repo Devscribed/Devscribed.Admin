@@ -92,6 +92,11 @@ status that can drift apart.
 19. Opening a card navigates to [04](04-candidate-card.md). It is a real page, not a modal over the
     board — it must be linkable from a calendar invite, and an intercepting-route modal is a lot of
     machinery for one screen.
+20. A **deleted candidate** ([03 §11](03-candidate-database.md)) has no card here, and their
+    application is not counted in its column's header. The application itself is untouched and
+    keeps its `status` and its `position`, so it reappears exactly where it was if the same address
+    books again — nothing is renumbered while it is away, and nothing has to be put back. Gap
+    integers make that free: the neighbours' positions never depended on it being there.
 
 ### 06. Conclusion Prompt
 

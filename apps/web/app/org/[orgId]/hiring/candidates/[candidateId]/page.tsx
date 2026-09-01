@@ -1,19 +1,26 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { use, useCallback, useEffect, useRef, useState } from 'react';
 import {
   APPLICATION_STATUS_LABELS,
+  CANDIDATE_MESSAGES,
   CONCLUSION_PROMPTING_STATUSES,
   HIRING_MESSAGES,
   MESSAGES,
+  canManageHiring,
+  candidateActionsLabel,
+  candidateDeleteConfirmation,
+  candidateDeleteTitle,
   formatShortDate,
   interviewMovedToast,
   type ApplicationStatus,
 } from '@devscribed/validation';
-import { Button, Card, InfoBanner, Preloader } from '@/ds';
+import { Button, Card, ConfirmDialog, InfoBanner, Popover, Preloader } from '@/ds';
 import { focusByTestId } from '@/field-error';
 import { PageHeader } from '@/layout/PageHeader';
+import { useSession } from '@/layout/session-context';
+import { rememberDeletedCandidate } from '@/hiring/candidate-deleted';
 import type {
   CandidateCard,
   CardApplication,
@@ -50,7 +57,17 @@ export default function CandidateCardPage({
   params: Promise<{ orgId: string; candidateId: string }>;
 }) {
   const { orgId, candidateId } = use(params);
+  const router = useRouter();
   const search = useSearchParams();
+  /**
+   * Whether this member may delete the person whose card this is (03 §11.60).
+   *
+   * The role, not the card's own response: the card is readable by an assigned
+   * interviewer and the delete is not, so the one thing on this screen that is gated has
+   * to ask a question the card does not answer. It arrives with the shell's `/api/me`,
+   * which the whole frame already blocks on, so the menu never appears and withdraws.
+   */
+  const canManage = canManageHiring(useSession().role);
   const deepLinkedId = search.get('application');
   /**
    * The board's drop into `Didn't pass` or `Offer` arrives here (05 §06.20). It is the
@@ -79,7 +96,12 @@ export default function CandidateCardPage({
    * One at a time: a new outcome replaces the last rather than stacking under it
    * (reversal 4), and nothing here times out.
    */
-  const [notice, setNotice] = useState<{ message: string; testId: string } | null>(null);
+  const [notice, setNotice] = useState<{
+    message: string;
+    testId: string;
+    /** `success` unless stated. A refusal painted green would be a banner lying. */
+    tone?: 'success' | 'error';
+  } | null>(null);
   /**
    * The org-wide criteria library, fetched once for the whole page rather than per
    * application: it is the same list on every section, and a second copy would be a
@@ -100,6 +122,9 @@ export default function CandidateCardPage({
    * predicate — no second endpoint, and nothing on screen that guesses at a role.
    */
   const [libraryReadable, setLibraryReadable] = useState(true);
+  /** Whether the delete confirmation is up, and whether its request is in flight. */
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const loadLibrary = useCallback(async (): Promise<void> => {
     const response = await fetch(
@@ -201,7 +226,7 @@ export default function CandidateCardPage({
       try {
         await patch(applicationId, { status });
       } catch {
-        setNotice({ message: MESSAGES.generic, testId: 'card-status-toast' });
+        setNotice({ message: MESSAGES.generic, testId: 'card-status-toast', tone: 'error' });
         return;
       }
 
@@ -289,6 +314,44 @@ export default function CandidateCardPage({
   // Read-only, always: the internal screens never edit what a candidate told us about
   // themselves (04 §02.9).
   const candidateName = `${candidate.firstName} ${candidate.lastName}`;
+  // What the confirmation states goes with them. Both numbers are already on this page:
+  // the menu is drawn only for a caller whose card is unscoped, so what is on screen is
+  // the whole record and neither number has to be fetched (03 §11.62).
+  const assessmentCount = applications.reduce(
+    (total, application) => total + application.criteria.length,
+    0,
+  );
+
+  /**
+   * Deleting the person this card is about (04 §02.10, 03 §11).
+   *
+   * The card 404s the moment the flag is set, so this screen cannot report its own
+   * outcome: it leaves the name for the candidate database and goes there, and the list
+   * raises the confirmation on arrival (03 §11.65). `push` rather than `back`, because a
+   * card is also reachable from a board and from a calendar invite in a fresh tab, and
+   * only one of the three destinations still has a place for what just happened.
+   */
+  async function remove(): Promise<void> {
+    setDeleting(true);
+    try {
+      const response = await fetch(`/api/organizations/${orgId}/hiring/candidates/${candidateId}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      });
+      if (!response.ok) {
+        setDeleting(false);
+        setConfirmingDelete(false);
+        setNotice({ message: MESSAGES.generic, testId: 'card-delete-failed', tone: 'error' });
+        return;
+      }
+      rememberDeletedCandidate(candidateName);
+      router.push(`/org/${orgId}/hiring/candidates`);
+    } catch {
+      setDeleting(false);
+      setConfirmingDelete(false);
+      setNotice({ message: MESSAGES.generic, testId: 'card-delete-failed', tone: 'error' });
+    }
+  }
 
   /**
    * A move or a cancellation landed. The server answered with the whole application, so
@@ -339,6 +402,28 @@ export default function CandidateCardPage({
             {formatShortDate(new Date(candidate.createdAt), viewerTimeZone)}
           </>
         }
+        /*
+          A person-grain action, so it belongs to the page rather than to any one
+          application section (04 §02.10). One item today, and still in the ⋮ the rest of
+          hiring uses: a destructive action never sits in a header as a bare button.
+        */
+        action={
+          canManage ? (
+            <Popover
+              label={candidateActionsLabel(candidateName)}
+              data-testid="candidate-actions"
+              items={[
+                {
+                  key: 'delete',
+                  label: CANDIDATE_MESSAGES.actions.delete,
+                  testId: 'candidate-action-delete',
+                  danger: true,
+                  onSelect: () => setConfirmingDelete(true),
+                },
+              ]}
+            />
+          ) : undefined
+        }
       />
 
       {/*
@@ -354,8 +439,9 @@ export default function CandidateCardPage({
       */}
       {notice && (
         <InfoBanner
-          variant="success"
-          role="status"
+          variant={notice.tone ?? 'success'}
+          // A failure interrupts; an outcome reports. The same slot, two urgencies.
+          role={notice.tone === 'error' ? 'alert' : 'status'}
           onDismiss={() => setNotice(null)}
           data-testid={notice.testId}
           style={{ marginBottom: 'var(--space-6)' }}
@@ -433,6 +519,27 @@ export default function CandidateCardPage({
         </div>
       )}
 
+      {/*
+        The same confirmation the list mounts, over the same endpoint — one wording, two
+        doors. It stays up while the request is in flight, because the next thing that
+        happens is a navigation and a dialog that dismissed first would leave the screen
+        blank and unexplained for as long as the request takes.
+      */}
+      {confirmingDelete && (
+        <ConfirmDialog
+          open
+          title={candidateDeleteTitle(candidateName)}
+          description={candidateDeleteConfirmation(applications.length, assessmentCount)}
+          acceptBtnText={CANDIDATE_MESSAGES.deleteDialog.accept}
+          declineBtnText={CANDIDATE_MESSAGES.deleteDialog.decline}
+          busy={deleting}
+          closeOnAccept={false}
+          onAccept={() => void remove()}
+          onClose={() => setConfirmingDelete(false)}
+          acceptTestId="candidate-delete-confirm"
+          data-testid="candidate-delete-dialog"
+        />
+      )}
     </div>
   );
 }

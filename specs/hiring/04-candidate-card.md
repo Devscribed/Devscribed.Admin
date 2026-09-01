@@ -2,9 +2,9 @@
 id: "04"
 title: Candidate Card
 routes: ["/org/{orgId}/hiring/candidates/{candidateId}"]
-api: ["GET /api/organizations/{orgId}/hiring/candidates/{candidateId}", "PATCH /api/organizations/{orgId}/hiring/applications/{applicationId}", "PUT /api/organizations/{orgId}/hiring/applications/{applicationId}/criteria/{criterionId}", "DELETE /api/organizations/{orgId}/hiring/applications/{applicationId}/criteria/{criterionId}", "GET /api/organizations/{orgId}/hiring/applications/{applicationId}/cv"]
+api: ["GET /api/organizations/{orgId}/hiring/candidates/{candidateId}", "DELETE /api/organizations/{orgId}/hiring/candidates/{candidateId}", "PATCH /api/organizations/{orgId}/hiring/applications/{applicationId}", "PUT /api/organizations/{orgId}/hiring/applications/{applicationId}/criteria/{criterionId}", "DELETE /api/organizations/{orgId}/hiring/applications/{applicationId}/criteria/{criterionId}", "GET /api/organizations/{orgId}/hiring/applications/{applicationId}/cv"]
 entities: [Candidate, Application, ApplicationCriterion, ApplicationScheduleEvent, ApplicationCv]
-tags: [candidate-detail, notes, conclusion, criteria, cv, autosave, interviewer-scope]
+tags: [candidate-detail, notes, conclusion, criteria, cv, autosave, interviewer-scope, soft-delete]
 depends-on: ["01", "02", "05", "06", "07"]
 ---
 
@@ -58,6 +58,22 @@ a real route and not a modal over the board.
 10. When an application's `submittedName` differs from the candidate's current name, the
     application section shows it as "Applied as {submittedName}" — so a record of what actually went
     into that invite stays visible.
+11. The header carries a **page-level actions menu** holding `Delete candidate`, and it is the
+    second door onto [03 §11](03-candidate-database.md) — one action, one confirmation, one
+    endpoint, drawn here and on the database row. It belongs to the page rather than to any one
+    application section, because it is about the **person**: the sections below are each about one
+    interview, and deleting somebody is not something that happens to an interview.
+
+    The menu is drawn for `admin` and `manager` only, and is **absent** for an assigned
+    interviewer — who works this card all day and still has no authority over the record behind it
+    ([03 §11.60](03-candidate-database.md)). It is drawn from the session's role rather than from
+    this card's own response, because the card is readable by a caller the delete is not for.
+
+    The confirmation states both counts, and both are already on screen: the menu appears only for
+    a caller whose card is unscoped, so the applications listed and the assessments on them are the
+    whole record. On success the page goes to the candidate database, which raises the
+    confirmation — this card `404`s the instant the flag is set and cannot report its own outcome
+    ([03 §11.65](03-candidate-database.md)).
 
 ### 03. Per Application
 
@@ -328,6 +344,14 @@ Streams the file with its stored content type and the original filename in
 | Not found | "We couldn't find that candidate." |
 | CV unavailable | "This CV couldn't be loaded." |
 | No criteria yet | "No criteria recorded yet." |
+| Actions menu | "Delete candidate" |
+| Delete confirmation | as [03 §11.62](03-candidate-database.md) — one wording, two doors |
+| Delete failed | "Something went wrong. Please try again." |
+
+The announcement slot under `PageHeader` carries both outcomes and refusals now. A failure paints
+`error` and takes `role="alert"`; an outcome paints `success` and takes `role="status"` — a refusal
+rendered in the success green would be a banner contradicting its own words, which the status
+change's own failure did until the delete needed the distinction.
 
 ## UI Notes
 
@@ -337,6 +361,8 @@ Streams the file with its stored content type and the original filename in
   next one.
 - Required `data-testid` attributes:
   - `candidate-card`, `candidate-name`, `candidate-email`, `candidate-not-found`
+  - `candidate-actions`, `candidate-action-delete`, `candidate-delete-dialog`,
+    `candidate-delete-confirm`, `card-delete-failed`
   - `application-section-{applicationId}`, `application-vacancy-{applicationId}`,
     `application-when-{applicationId}`, `application-interviewer-{applicationId}`,
     `application-submitted-as-{applicationId}`, `application-status-select-{applicationId}`
@@ -356,7 +382,9 @@ Streams the file with its stored content type and the original filename in
 - Rich text, attachments, or images in notes.
 - Comments, mentions, or notifications between members.
 - Emailing the candidate from this page.
-- Deleting a candidate or an application.
+- Deleting an **application**. The person can be removed (§02.11); one of their interviews cannot,
+  because a booking that happened is a fact, and the flag for one that did not take place is
+  `isCancelled` ([07 §01.1](07-manage-booking.md)).
 
 ## Test Cases
 
@@ -528,3 +556,25 @@ Streams the file with its stored content type and the original filename in
   1. The original filename is shown and the control points at the API endpoint, not a storage URL.
   2. The download returns the file with its stored content type.
 - **Selectors:** `card-cv-name`, `card-cv-download`.
+
+### TC-H04-E2E-06: The header's menu deletes the candidate and confirms it on the list
+- **Level:** E2E
+- **Preconditions:** logged in as `admin`; one candidate reached through the invite's deep link.
+- **Steps:**
+  1. Open the header's actions menu and choose `Delete candidate`.
+  2. Read the confirmation, then accept it.
+  3. Reload the list it lands on.
+- **Expected Result:**
+  1. The menu holds that one item.
+  2. The confirmation names the person and both counts, and makes no claim that the delete is permanent — it states the revival instead ([03 §11.62](03-candidate-database.md)).
+  3. The page lands on the candidate database, which raises `{name} deleted` and shows its empty state. A reload says nothing: the confirmation belongs to the delete, not to the list.
+- **Selectors:** `candidate-actions`, `candidate-action-delete`, `candidate-delete-dialog`, `candidate-delete-confirm`, `toast-candidate-deleted`, `candidates-empty-state`.
+
+### TC-H04-E2E-07: An assigned interviewer gets no actions menu
+- **Level:** E2E
+- **Preconditions:** logged in as a `user` who is the assigned interviewer on the candidate's only application.
+- **Steps:**
+  1. Open the card through the invite's deep link.
+- **Expected Result:**
+  1. The card renders in full — this is their interview — and there is no actions menu on it at all. An assignment is authority over an interview, never over somebody's record ([03 §11.60](03-candidate-database.md)).
+- **Selectors:** `candidate-card`, `candidate-name`, `candidate-actions`.

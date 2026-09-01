@@ -36,7 +36,11 @@ import { CategoriesController } from './hiring/categories.controller';
 import { CategoriesService } from './hiring/categories.service';
 import { CriteriaController } from './hiring/criteria.controller';
 import { CriteriaService } from './hiring/criteria.service';
-import { ApplicationsController, CandidatesController } from './hiring/candidates.controller';
+import {
+  ApplicationsController,
+  CandidateDeletionController,
+  CandidatesController,
+} from './hiring/candidates.controller';
 import { CandidatesService } from './hiring/candidates.service';
 import { CvController } from './hiring/cv.controller';
 import { CvReplacementService } from './hiring/cv-replacement.service';
@@ -141,6 +145,7 @@ const calendarProvider = {
     ManageController,
     CvController,
     CandidatesController,
+    CandidateDeletionController,
     CandidateDatabaseController,
     MyInterviewsController,
     ApplicationsController,

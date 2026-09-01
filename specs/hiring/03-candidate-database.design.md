@@ -109,20 +109,29 @@ who, how to reach them, what for, when, where they got to, and what can be done 
         │ Reschedule interview     │
         │ Cancel interview         │   ← --status-error
         │ View candidate           │
+        │ Delete candidate         │   ← --status-error, admin/manager only
         └──────────────────────────┘
 ```
 
 - Blue's `Popover` with no `trigger`, which draws prod's own 32px kebab: `rgba(0,0,0,0.08)` at rest,
   `--color-blue` with a white glyph while open. Nothing about it is drawn here.
 - It is named for the person — `Actions for Jane Doe` — because twenty-five rows draw one glyph.
-- `Cancel interview` takes `Popover`'s `danger` row, which is `--status-error` ink. It is the one
-  place in this app that opt-in is used; prod has no destructive menu row at all.
+- `Cancel interview` and `Delete candidate` take `Popover`'s `danger` row, which is `--status-error`
+  ink. This is the one place in the app that opt-in is used; prod has no destructive menu row at all.
+- The two destructive rows are **not** adjacent by accident. `View candidate` sits between them
+  because the menu is grouped by what an item is *about* — three interview actions, then the two
+  about the person — and a `Delete candidate` immediately under `Cancel interview` would put the
+  irreversible-looking one exactly where a hand aiming for the reversible one lands.
 - **The menu must portal**, which is [§55](../design-system/ledger.md): blue positions it `absolute`
   inside the trigger, and a row menu near the bottom of a scrolling list is then clipped by the
   scroller. It is `position: fixed` off the trigger's own rectangle now, flipping upward when it
   would run off the viewport.
 - The three interview actions are **absent** on a cancelled row rather than disabled — there is
   nothing there to enable ([03 §10.54](03-candidate-database.md)).
+- `Delete candidate` is **absent** for a caller who may not manage hiring, on the same principle
+  and for a different reason: it is not that there is nothing to delete, it is that this is not
+  their decision ([03 §11.60](03-candidate-database.md)). A disabled row would advertise an
+  authority they can only ask somebody else for.
 
 ## The filter drawer
 
@@ -308,9 +317,14 @@ card and the candidate card already use for the same mark.
 | Assessed-criteria chip | {criterion}: {value} |
 | Application count | {n} applications |
 | Cancelled interview | Cancelled |
-| Row menu | View in calendar · Reschedule interview · Cancel interview · View candidate |
+| Row menu | View in calendar · Reschedule interview · Cancel interview · View candidate · Delete candidate |
 | Row menu name | Actions for {name} |
 | `View in calendar` toast | Opening the interview in the calendar… |
+| Delete title | Delete {name}? |
+| Delete body | {n} applications and {m} assessments go with them. They come back, and all of it with them, if they book again with the same email. |
+| Delete body, nothing recorded | Nothing has been recorded against them yet. They come back if they book again with the same email. |
+| Delete buttons | Delete candidate · Cancel |
+| Deleted toast | {name} deleted |
 | Page strip | Pages · Previous page · Next page |
 | Archived marker | Archived |
 | Empty database | No candidates yet. Share a booking link to start. |
@@ -379,6 +393,12 @@ the table down on every row action would move the list under the hand that is wo
 
 So `Toast` + `ToastHost` are built here ([§54](../design-system/ledger.md)), and Phases 6, 7 and 9
 each add more on top of them.
+
+`{name} deleted` is the first of those, and it is also the only toast in the product raised by a
+screen other than the one the action was taken on: the candidate card cannot report its own delete,
+because it `404`s the instant the flag is set. The name is handed across that one navigation and
+**taken** rather than read, so it announces itself once and a reload of the list says nothing
+([03 §11.65](03-candidate-database.md)).
 
 - Bottom-right, 25px in, 360px wide, stacked in a column with the oldest at the top. **They stack
   rather than replace**: two actions taken inside five seconds are two things that happened.
@@ -479,7 +499,37 @@ The prop stays; the argument for it — a short grouped list already named by th
 — is unchanged, and so is [reversal 5](../design-system/README.md), which was about how such a
 group is named rather than about this screen in particular.
 
-## The two dialogs
+## The dialogs
+
+Three now, and the third is a different shape from the first two. Reschedule and Cancel are about
+an **interview**; Delete is about the **person**, and it is the one the row and the candidate card
+mount identically rather than asymmetrically.
+
+### Delete candidate
+
+Blue's `ConfirmDialog`, which is exactly what it is for: a yes/no whose accept is the whole action,
+with no field in it. Two of its props matter here and both were added for this shape of
+confirmation ([§41](../design-system/ledger.md)):
+
+- **`closeOnAccept={false}`** — it stays up while the request is in flight. This is the last point
+  at which the member can change their mind, and a dialog that dismissed on the press would leave
+  the outcome to a toast that has not happened yet.
+- **`busy`** — the accept button carries its preloader and neither control can be pressed again.
+
+Blue paints the accept primary blue even here, and it stays that way. A destructive confirmation
+says what it is in its title and its sentence, not in a button's fill — the same call the category
+delete made ([06 design](06-libraries.design.md)).
+
+The body carries both counts and, deliberately, **no "this cannot be undone"**. It would be false:
+the record is kept and re-booking with the same address restores all of it
+([03 §11.61](03-candidate-database.md)). Saying so is not an invitation — it is the one fact that
+decides whether a recruiter reaches for this or for something else.
+
+On the candidate card the same dialog is mounted from the header's kebab, with the same wording and
+the same endpoint. It is the only dialog in hiring whose success is reported on a **different
+screen**, because the screen that raised it stops existing.
+
+### Reschedule and Cancel
 
 Reschedule and Cancel are mounted by the candidate card, over the same endpoints the candidate's
 own manage page uses, and they are the same two components in both places (07 design). The row's

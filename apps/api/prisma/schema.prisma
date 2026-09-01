@@ -163,11 +163,22 @@ model Candidate {
   email          String
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+  /// Soft delete (hiring 03 §11). Null is the whole of "present": every hiring read
+  /// adds `deletedAt: null`, and nothing about the person or their history is erased.
+  ///
+  /// Their applications are **not** deleted and keep their board position — they are
+  /// unreachable while their candidate is, and come back with them. Which is what the
+  /// unique pair below is for: `BookingService` upserts on it, so a deleted person who
+  /// books again is revived by clearing this column rather than by inserting a second
+  /// row. No partial index and no email mangling; the pair means the same thing it
+  /// always did.
+  deletedAt      DateTime?
 
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   applications Application[]
 
   @@unique([organizationId, email])
+  @@index([organizationId, deletedAt])
 }
 
 /// One candidate against one vacancy: the interview, its outcome, and its board card.

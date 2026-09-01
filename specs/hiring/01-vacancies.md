@@ -88,6 +88,14 @@ whose link has not been shared is already private.
     applications, interview notes, conclusions, and criteria assessments with it, and
     [04-candidate-card.md](04-candidate-card.md) treats that record as permanent.
 
+    **Every application counts, including one whose candidate has been deleted**
+    ([03 §11](03-candidate-database.md)). Removing a person hides their record; it does not destroy
+    it, and a cascade that took their notes and assessments away because nobody could see them any
+    more would be a hard delete arrived at sideways. So a vacancy can show **no candidates** and
+    still refuse to be deleted, which is the one case where the two numbers on this screen disagree.
+    The list is told which it is by `deletable` rather than inferring it from the count beside it:
+    the rule is the server's, and a screen that re-derived it would offer a button the API refuses.
+
 ### 04. Editing
 
 12. `title`, `description`, and `categories` are editable at any time, with no restriction.
@@ -263,11 +271,17 @@ Response `200`:
       "durationMinutes": 60, "publicSlug": "senior-react-engineer-Kj8mQ2nP4xTw",
       "interviewer": { "accountId": "uuid", "fullName": "Pat Owner" },
       "categories": [ { "id": "uuid", "name": "React" } ],
-      "applicationCount": 12, "scheduledCount": 4,
+      "applicationCount": 12, "scheduledCount": 4, "deletable": false,
       "createdAt": "2026-08-01T09:12:00.000Z" }
   ]
 }
 ```
+
+- `applicationCount` and `scheduledCount` count **people a member can still open**: an application
+  whose candidate has been deleted is in neither ([03 §11.63](03-candidate-database.md)).
+- `deletable` is whether `DELETE` will accept this vacancy (§03.11) — the server's own rule rather
+  than a number to re-derive it from. It is `false` whenever *any* application exists, deleted
+  candidates included, so a vacancy can read `0 candidates` and still not be deletable.
 
 ### POST /api/organizations/{orgId}/hiring/vacancies
 
@@ -303,6 +317,8 @@ Errors:
 - `403` — `user`/`viewer`.
 - `404` — not in this organization.
 - `409` — `{ error: "has_applications", message: "Close this vacancy instead — it has candidates" }`.
+  Raised by any application at all, including one whose candidate has been deleted — which is what
+  `deletable` reports, and why the screen reads that rather than `applicationCount` (§03.11).
 
 ## Validation Rules
 

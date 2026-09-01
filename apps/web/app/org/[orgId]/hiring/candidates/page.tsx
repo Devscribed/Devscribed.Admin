@@ -8,7 +8,11 @@ import {
   CANDIDATE_MESSAGES,
   HIRING_MESSAGES,
   INTERVIEW_MESSAGES,
+  MESSAGES,
   candidateActionsLabel,
+  candidateDeleteConfirmation,
+  candidateDeleteTitle,
+  candidateDeletedToast,
   candidateFiltersLabel,
   candidateResultLabel,
   candidateScopeTabLabel,
@@ -25,6 +29,7 @@ import {
   Button,
   Card,
   Chip,
+  ConfirmDialog,
   EmptyState,
   InfoBanner,
   MenuDrawer,
@@ -42,6 +47,7 @@ import { PageHeader } from '@/layout/PageHeader';
 import { useSession } from '@/layout/session-context';
 import { CancelInterviewDialog } from '@/hiring/CancelInterviewDialog';
 import { StatusBadge } from '@/hiring/StatusBadge';
+import { takeDeletedCandidate } from '@/hiring/candidate-deleted';
 import { initialCandidateScope, rememberCandidateScope } from '@/hiring/candidate-scope';
 import { valuesOf } from '@/hiring/select';
 import { useMediaQuery } from '@/hiring/useMediaQuery';
@@ -151,6 +157,16 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
    */
   const { toasts, push, dismiss } = useToasts();
   const [cancelling, setCancelling] = useState<CandidateRow | null>(null);
+  /**
+   * The row whose person is being deleted, and whether the request is in flight.
+   *
+   * `busy` matters here in a way it does not for the interview actions: this confirmation
+   * is the last point at which the member can change their mind, so it stays up until the
+   * server has actually answered rather than dismissing on the press and leaving the
+   * outcome to a toast that may never come (ledger §41).
+   */
+  const [deleting, setDeleting] = useState<CandidateRow | null>(null);
+  const [deletingBusy, setDeletingBusy] = useState(false);
 
   // The address and the memory follow the applied scope, including the server's own
   // correction of one it refused: an interviewer who typed `?scope=all` ends up with a
@@ -158,6 +174,23 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
   useEffect(() => {
     rememberCandidateScope(scope);
   }, [scope]);
+
+  /**
+   * A delete taken on the candidate card lands here (03 §11.65).
+   *
+   * The card 404s the instant the flag is set, so it cannot report its own outcome — it
+   * leaves the name and navigates, and this is where the confirmation is raised. Read
+   * once and cleared, so a reload of the list a minute later says nothing.
+   */
+  useEffect(() => {
+    const deleted = takeDeletedCandidate();
+    if (deleted === null) return;
+    push({
+      message: candidateDeletedToast(deleted),
+      tone: 'success',
+      testId: 'toast-candidate-deleted',
+    });
+  }, [push]);
 
   // Typing debounces; every other filter is a discrete choice and refetches at once —
   // waiting 300 ms on a click reads as lag rather than as care (03 design §Interactions).
@@ -414,6 +447,45 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
   }
 
   /**
+   * Deleting the person a row is about (03 §11).
+   *
+   * The list is refetched rather than the row spliced out: the person leaves every count
+   * on the screen at once — both scope tabs, the match line and the org-wide total — and
+   * a row removed locally would leave four numbers claiming they are still there.
+   */
+  async function remove(row: CandidateRow): Promise<void> {
+    setDeletingBusy(true);
+    try {
+      const response = await fetch(`/api/organizations/${orgId}/hiring/candidates/${row.id}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      });
+      if (!response.ok) {
+        // Said out loud rather than left to a row that quietly stayed put. A 403 here is
+        // a caller the menu should not have been drawn for, and both readings of that are
+        // the member's to know about.
+        push({
+          message: MESSAGES.generic,
+          tone: 'error',
+          testId: 'toast-candidate-delete-failed',
+        });
+        return;
+      }
+      push({
+        message: candidateDeletedToast(row.fullName),
+        tone: 'success',
+        testId: 'toast-candidate-deleted',
+      });
+      void load();
+    } catch {
+      push({ message: MESSAGES.generic, tone: 'error', testId: 'toast-candidate-delete-failed' });
+    } finally {
+      setDeletingBusy(false);
+      setDeleting(null);
+    }
+  }
+
+  /**
    * The row's kebab (03 §10.53).
    *
    * Split by what the item is *about*. `View candidate` is about the person and is always
@@ -474,6 +546,23 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
       testId: `candidate-action-open-${row.id}`,
       onSelect: open,
     });
+
+    /*
+     * The only item about the person rather than about an interview, and the only one
+     * gated on the caller (03 §11.60). `canSeeAll` is exactly the manage role the
+     * endpoint requires — it is the guard's own finding, arriving on the same response —
+     * so the menu and the server are reading one fact, not two. An interviewer reached
+     * this list through an assignment, and an assignment is not authority over a record.
+     */
+    if (canSeeAll) {
+      items.push({
+        key: 'delete',
+        label: CANDIDATE_MESSAGES.actions.delete,
+        testId: `candidate-action-delete-${row.id}`,
+        danger: true,
+        onSelect: () => setDeleting(row),
+      });
+    }
 
     return items;
   }
@@ -1089,6 +1178,35 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
             // so the answer is refetched rather than patched in place.
             void load();
           }}
+        />
+      )}
+
+      {/*
+        A yes/no whose accept is the whole action, which is what blue's `ConfirmDialog` is
+        for. It stays up while the request is in flight (`closeOnAccept={false}`, ledger
+        §41): this is the last point at which the member can change their mind, and a
+        dialog that dismissed on the press would leave the outcome to a toast that has not
+        happened yet.
+      */}
+      {deleting && (
+        <ConfirmDialog
+          open
+          title={candidateDeleteTitle(deleting.fullName)}
+          // Both counts, because they are what makes the decision answerable — and no
+          // "cannot be undone", because it can: re-booking with the same address brings
+          // the whole record back (03 §11.61).
+          description={candidateDeleteConfirmation(
+            deleting.applicationCount,
+            deleting.assessmentCount,
+          )}
+          acceptBtnText={CANDIDATE_MESSAGES.deleteDialog.accept}
+          declineBtnText={CANDIDATE_MESSAGES.deleteDialog.decline}
+          busy={deletingBusy}
+          closeOnAccept={false}
+          onAccept={() => void remove(deleting)}
+          onClose={() => setDeleting(null)}
+          acceptTestId={`candidate-delete-confirm-${deleting.id}`}
+          data-testid="candidate-delete-dialog"
         />
       )}
 

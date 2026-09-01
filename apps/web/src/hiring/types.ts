@@ -50,8 +50,16 @@ export interface Vacancy {
   publicSlug: string;
   interviewer: { accountId: string; fullName: string };
   categories: Array<{ id: string; name: string }>;
+  /** People with an application here that anybody can still open — the `Candidates` column. */
   applicationCount: number;
   scheduledCount: number;
+  /**
+   * Whether the server will accept a delete (01 §03.11) — its own rule, not re-derived
+   * from the count above. The two disagree for a vacancy whose only applicants have been
+   * deleted: no candidates to show, and still not deletable, because their applications
+   * and every assessment on them are still there.
+   */
+  deletable: boolean;
   createdAt: string;
 }
 
@@ -273,6 +281,11 @@ export interface CandidateRow {
    * and drawing them twice said nothing the drawer did not.
    */
   criteria: RowAssessment[];
+  /**
+   * Every assessment ever recorded against them — what the delete confirmation states
+   * goes with the person (03 §11.62), not the one-per-criterion rollup above.
+   */
+  assessmentCount: number;
   /**
    * The application the row speaks about — **which the scope decides** (03 §08.44).
    *

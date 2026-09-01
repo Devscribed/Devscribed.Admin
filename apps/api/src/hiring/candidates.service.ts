@@ -63,7 +63,10 @@ export class CandidatesService {
     ownVacanciesOnly = false,
   ) {
     const candidate = await this.prisma.candidate.findFirst({
-      where: { id: candidateId, organizationId },
+      // A deleted candidate is the same 404 as one who never existed and one this caller
+      // may not see (03 §11.63). Their applications are still there and still hold every
+      // assessment; this is the door that is shut, and it is the only one there was.
+      where: { id: candidateId, organizationId, deletedAt: null },
       select: { id: true, firstName: true, lastName: true, email: true, createdAt: true },
     });
     if (!candidate) throw new NotFoundException();
@@ -90,6 +93,42 @@ export class CandidatesService {
       // replaced in place after either action is byte-identical to a reloaded one.
       applications: applications.map(presentCardApplication),
     };
+  }
+
+  /**
+   * Deleting a candidate (03 §11) — a **flag**, and the only write in hiring that removes
+   * a person from a screen.
+   *
+   * Nothing is erased. Their applications keep their board position, their assessments,
+   * their notes and every CV version; all of it becomes unreachable while the flag is
+   * set, and all of it comes back with them, because `BookingService` upserts on
+   * `(organizationId, email)` and clears this column when the same address books again
+   * (02 §27, 03 §11.61). That revival is the whole reason this is not a `DELETE`: a hard
+   * delete would make a returning candidate a stranger, and the history a recruiter is
+   * about to need is exactly the history they threw away.
+   *
+   * Deleting an already-deleted candidate is a 404 rather than a second success. The
+   * caller is asking about a record that is not there, which is what the card answers too
+   * — and it keeps `deletedAt` the instant of the *first* deletion rather than the last
+   * time somebody pressed the button.
+   */
+  async remove(
+    organizationId: string,
+    candidateId: string,
+  ): Promise<{ success: true; deletedAt: string }> {
+    const candidate = await this.prisma.candidate.findFirst({
+      where: { id: candidateId, organizationId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!candidate) throw new NotFoundException();
+
+    const deleted = await this.prisma.candidate.update({
+      where: { id: candidateId },
+      data: { deletedAt: new Date() },
+      select: { deletedAt: true },
+    });
+
+    return { success: true, deletedAt: deleted.deletedAt!.toISOString() };
   }
 
   /**

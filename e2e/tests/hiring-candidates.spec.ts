@@ -526,6 +526,97 @@ test.describe('Candidate database', () => {
     await expect(page.locator('[data-testid^="application-reschedule-dialog-"]')).toBeVisible();
   });
 
+  /**
+   * TC-H03-E2E-10 — deleting the person a row is about.
+   *
+   * Three claims. The confirmation states what goes with them and — deliberately — does
+   * not claim the delete cannot be undone. The row leaves every number on the screen at
+   * once, not just the table. And the menu item is drawn for a manager and **absent** for
+   * an assigned interviewer, who reaches this same list through an assignment that is
+   * authority over an interview and not over a record.
+   */
+  test('deletes a candidate from the row, and says what went with them', async ({
+    page,
+    request,
+  }) => {
+    const { org, english, path } = await seed(request, 'cand-delete');
+
+    await signIn(page, org.email);
+    await page.goto(path);
+
+    await page.getByTestId('candidates-search-input').fill('Jane');
+    await expect(page.getByTestId('candidates-count')).toHaveText('1 of 3 candidates');
+    const id = await onlyRowId(page);
+
+    await page.getByTestId(`candidate-actions-${id}`).click();
+    await page.getByTestId(`candidate-action-delete-${id}`).click();
+
+    const dialog = page.getByTestId('candidate-delete-dialog');
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('Delete Jane Doe?');
+    // Both counts — one booking, and the English assessment the fixture recorded on it.
+    await expect(dialog).toContainText('1 application and 1 assessment');
+    // And the one thing that is true about a soft delete, said rather than withheld.
+    await expect(dialog).toContainText('book again with the same email');
+    await expect(dialog).not.toContainText('cannot be undone');
+
+    await page.getByTestId(`candidate-delete-confirm-${id}`).click();
+
+    await expect(page.getByTestId('toast-candidate-deleted')).toHaveText('Jane Doe deleted');
+    // Every number moves with them: the org-wide total, the match count and both tabs.
+    await expect(page.getByTestId('candidates-count')).toHaveText('0 of 2 candidates');
+    await page.getByTestId('candidates-search-input').fill('');
+    await expect(page.getByTestId('candidates-count')).toHaveText('2 candidates');
+    await expect(page.getByTestId('candidates-scope-all')).toHaveText('All (2)');
+    // Their card is gone with them, however it is reached.
+    await page.goto(`/org/${org.organizationId}/hiring/candidates/${id}`);
+    await expect(page.getByTestId('candidate-not-found')).toBeVisible();
+
+    // The criterion the deleted candidate was assessed on is untouched — this deletes a
+    // person, not a library entry.
+    await page.goto(path);
+    await openFilters(page);
+    await page.getByTestId('candidates-criteria-filter-add').click();
+    await expect(page.getByTestId(`candidates-criteria-option-${english.id}`)).toBeVisible();
+  });
+
+  /**
+   * The other half of TC-H03-E2E-10: an assigned interviewer opens this list and finds
+   * every interview action on the row and no way to delete the person.
+   */
+  test('offers an assigned interviewer no way to delete a candidate', async ({
+    page,
+    request,
+  }) => {
+    const org = await registerOrganization(request, uniqueEmail('cand-del-scope'));
+    const ines = await addMember(request, {
+      email: uniqueEmail('ines'),
+      role: 'user',
+      firstName: 'Ines',
+      lastName: 'Interviewer',
+    });
+    const theirs = await createVacancyFor(request, org, ines.accountId, {
+      title: 'Node Engineer',
+    });
+    await bookInterview(request, theirs.publicSlug, {
+      firstName: 'Tom',
+      lastName: 'Fisher',
+      email: uniqueEmail('tom'),
+      slotIndex: 0,
+    });
+
+    await signIn(page, ines.email);
+    await page.goto(`/org/${org.organizationId}/hiring/candidates`);
+
+    const id = await onlyRowId(page);
+    await page.getByTestId(`candidate-actions-${id}`).click();
+    // The interview actions are all there — this is their interview.
+    await expect(page.getByTestId(`candidate-action-reschedule-${id}`)).toBeVisible();
+    await expect(page.getByTestId(`candidate-action-open-${id}`)).toBeVisible();
+    // The one about the person is not.
+    await expect(page.getByTestId(`candidate-action-delete-${id}`)).toHaveCount(0);
+  });
+
   /** The id of the single row on screen — the tests above narrow to one before asking. */
   async function onlyRowId(page: Page): Promise<string> {
     const row = page.getByTestId('candidates-list').locator('[data-testid^="candidate-row-"]');

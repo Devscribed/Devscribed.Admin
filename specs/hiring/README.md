@@ -42,6 +42,7 @@ disagree, this set wins; the six deliberate departures are recorded below.
 | `isCancelled` means the interview did not take place — never a verdict on the candidate | 07 | 04, 05 |
 | A reschedule moves the existing application; a rebooking creates a new one | 07 | 02, 05 |
 | Nothing hiring writes is ever deleted — CVs included | 00 | 04, 07 |
+| Removing a **candidate** is a flag; their record survives and revives on re-booking | 03 | 01, 02, 04, 05 |
 
 ## Roles & Permission Matrix
 
@@ -56,10 +57,17 @@ The organization's four roles are defined in user-management spec 01. Hiring add
 | Be assigned as interviewer | ✅ | ✅ | ✅ | ❌ |
 | The candidate database, whole | ✅ | ✅ | ❌ | ❌ |
 | The candidate database, own candidates only | ✅ | ✅ | ✅ | ❌ |
+| Delete a candidate | ✅ | ✅ | ❌ | ❌ |
 | Cards for own vacancies | ✅ | ✅ | ✅ | ❌ |
 | Reschedule / cancel an interview | ✅ | ✅ | ✅ | ❌ |
 
-The last three rows are scoped by **assignment**, not role — they are the only non-uniform
+`Delete a candidate` is the one row that breaks the pattern below it: an assigned interviewer opens
+the same list and the same cards a manager does, and still may not remove the person behind them.
+An assignment is authority over an *interview*, never over a record — so the menu item is absent for
+them and the endpoint answers **403** rather than the 404 the rest of this surface uses. There is
+nothing to conceal from a member who is already looking at the candidate ([03 §11.60](03-candidate-database.md)).
+
+The three rows above it are scoped by **assignment**, not role — they are the only non-uniform
 permissions in the set, and they are what lets an engineer interview without becoming an org admin.
 The card and its writes are enforced by `InterviewerScopeGuard`, the database by
 `CandidateDatabaseGuard`; both sit beside `OrgScopeGuard` and answer 404 (never 403) to a caller
@@ -112,6 +120,9 @@ link, so a vacancy has exactly one booking link. Multiple links per vacancy woul
 | Interview cancelled | 07 | `isCancelled` set; the card keeps its column and its assessment, marked with who cancelled | 04, 05 |
 | Interview cancelled | 07 | The candidate may book the vacancy again — the duplicate rule already excludes cancelled applications | 02 |
 | CV replaced | 07 | The current CV changes; every prior version is retained; the event's attachment is swapped | 00, 04 |
+| Candidate deleted | 03 | Their rows, card, board cards and every count that included them go; nothing is erased | 01, 04, 05 |
+| Candidate deleted | 03 | The vacancy's `Candidates` count drops, and its deletion stays blocked by the surviving applications | 01 |
+| Deleted candidate books again | 02 | `deletedAt` cleared by the upsert; every application, assessment, note and CV version returns with them | 03, 04, 05 |
 | Interviewer reassigned | 01 | Existing applications keep the interviewer they were booked with, and reschedule against **that** mailbox | 07 |
 
 ## Dependency Graph
@@ -173,6 +184,9 @@ re-litigated from scratch.
 | A cap on CV replacements | Unlimited, unauthenticated, 10 MB each, and nothing is ever deleted, so storage per booking is unbounded. Same posture as the booking endpoint's missing rate limit — recorded, not defended against. |
 | Category merge | Rename cannot fix a duplicate once case-insensitive uniqueness is enforced, so `React` and `ReactJS` will coexist until this lands. Merge is: repoint assignments, delete the source, one confirmation naming the count. |
 | Criteria merge | **Skipped permanently, not deferred.** Mapping `Basic/Good/Strong` onto `A1…C2` is a judgement no dialog makes well. Archive covers the real need. |
+| Candidate merge | Same reasoning as criteria merge, one grain up: two addresses are two people as far as this product can tell, and deciding they are one is not something a dialog does well. Deleting one of them is [03 §11](03-candidate-database.md) and is a different act. |
+| Restoring a deleted candidate from inside the app | The only way back is the one that matters — they book again with the same address, and their whole record comes with them ([03 §11.61](03-candidate-database.md)). A "removed" filter and a Restore button would be a second list, of exactly the people the team has said they do not want to see. |
+| Purging a deleted candidate | Nothing here answers a deletion request that has to be *honoured*, because the record survives. When one is needed it is a hard delete with its own confirmation, its own audit and its own decision about the applications underneath it — not a second meaning for this button. |
 | Board archiving | After several hiring rounds `Didn't pass` holds dozens of cards. Columns scroll independently until then. |
 | Organization logo | `Organization.logoKey` is reserved by 01's migration; the upload needs an org-settings surface that does not exist yet. |
 | Migrating scheduled interviews on reassignment | A Graph event cannot move between mailboxes — moving them means cancel, recreate, re-invite. A real operation, not a dropdown side effect. [07](07-manage-booking.md) **routes around** this rather than resolving it: an application records the interviewer it was booked with, and reschedules stay in that mailbox even after the vacancy is reassigned. |

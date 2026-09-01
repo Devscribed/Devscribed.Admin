@@ -127,18 +127,39 @@ export class VacanciesService {
       ...vacancies.filter((v) => v.status !== 'open'),
     ];
 
-    const scheduled = await this.prisma.application.groupBy({
-      by: ['vacancyId'],
-      where: {
-        organizationId,
-        status: 'scheduled',
-        vacancyId: { in: ordered.map((vacancy) => vacancy.id) },
-      },
-      _count: { _all: true },
-    });
-    const scheduledByVacancy = new Map(scheduled.map((row) => [row.vacancyId, row._count._all]));
+    const ids = ordered.map((vacancy) => vacancy.id);
+    // Two counts of the same rows, both of which exclude a deleted candidate: the
+    // `Candidates` column says how many people this vacancy has that anybody can still
+    // open (03 §11.63). `_count.applications` on the row above is deliberately *not*
+    // filtered — see `present`, where it decides whether the vacancy can be deleted.
+    const [candidates, scheduled] = await Promise.all([
+      this.prisma.application.groupBy({
+        by: ['vacancyId'],
+        where: { organizationId, vacancyId: { in: ids }, candidate: { deletedAt: null } },
+        _count: { _all: true },
+      }),
+      this.prisma.application.groupBy({
+        by: ['vacancyId'],
+        where: {
+          organizationId,
+          status: 'scheduled',
+          vacancyId: { in: ids },
+          candidate: { deletedAt: null },
+        },
+        _count: { _all: true },
+      }),
+    ]);
+    const countBy = (rows: Array<{ vacancyId: string; _count: { _all: number } }>) =>
+      new Map(rows.map((row) => [row.vacancyId, row._count._all]));
+    const candidatesByVacancy = countBy(candidates);
+    const scheduledByVacancy = countBy(scheduled);
 
-    return ordered.map((vacancy) => this.present(vacancy, scheduledByVacancy.get(vacancy.id) ?? 0));
+    return ordered.map((vacancy) =>
+      this.present(vacancy, {
+        candidates: candidatesByVacancy.get(vacancy.id) ?? 0,
+        scheduled: scheduledByVacancy.get(vacancy.id) ?? 0,
+      }),
+    );
   }
 
   async get(organizationId: string, vacancyId: string) {
@@ -153,11 +174,16 @@ export class VacanciesService {
     });
     if (!vacancy) throw new NotFoundException();
 
-    const scheduledCount = await this.prisma.application.count({
-      where: { vacancyId: vacancy.id, status: 'scheduled' },
-    });
+    const [candidateCount, scheduledCount] = await Promise.all([
+      this.prisma.application.count({
+        where: { vacancyId: vacancy.id, candidate: { deletedAt: null } },
+      }),
+      this.prisma.application.count({
+        where: { vacancyId: vacancy.id, status: 'scheduled', candidate: { deletedAt: null } },
+      }),
+    ]);
 
-    return this.present(vacancy, scheduledCount);
+    return this.present(vacancy, { candidates: candidateCount, scheduled: scheduledCount });
   }
 
   async create(organizationId: string, dto: CreateVacancyDto) {
@@ -254,6 +280,12 @@ export class VacanciesService {
    * Deletion is for vacancies nobody has applied to. One with applications is closed
    * instead: deleting it would take its interview notes, conclusions and criteria
    * assessments with it, and 04 treats that record as permanent (01 §03.11).
+   *
+   * **Every** application counts here, including one whose candidate has been deleted.
+   * Removing a person hides their record; it does not destroy it, and a cascade that
+   * took it away because nobody could see it any more would be a hard delete arrived at
+   * sideways. The screen is told so by `deletable` rather than inferring it from the
+   * candidate count, which is the smaller number.
    */
   async remove(organizationId: string, vacancyId: string) {
     const vacancy = await this.prisma.vacancy.findFirst({
@@ -359,7 +391,7 @@ export class VacanciesService {
       categories: Array<{ category: { id: string; name: string } }>;
       _count: { applications: number };
     },
-    scheduledCount: number,
+    counts: { candidates: number; scheduled: number },
   ) {
     return {
       id: vacancy.id,
@@ -377,8 +409,21 @@ export class VacanciesService {
       categories: vacancy.categories
         .map((assignment) => assignment.category)
         .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
-      applicationCount: vacancy._count.applications,
-      scheduledCount,
+      // The `Candidates` column, which counts the people a member can still open: a
+      // deleted candidate is not one of them (03 §11.63).
+      applicationCount: counts.candidates,
+      scheduledCount: counts.scheduled,
+      /**
+       * Whether `remove` will accept this vacancy — the server's own rule, shipped rather
+       * than re-derived from the count beside it (01 §03.11).
+       *
+       * The two can disagree, and the case where they do is the reason this is a field.
+       * A vacancy whose only applicants have been deleted shows **no** candidates and is
+       * still not deletable, because their applications are still there holding notes,
+       * conclusions and assessments — and deleting the vacancy would cascade all of it
+       * away, which is the one thing hiring never does. Closing it is still the answer.
+       */
+      deletable: vacancy._count.applications === 0,
       createdAt: vacancy.createdAt.toISOString(),
     };
   }

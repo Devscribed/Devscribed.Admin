@@ -285,6 +285,13 @@ export class BookingService {
    * real weight: a candidate who cancels remains a live applicant and may book the same
    * vacancy again, which produces a **second application** rather than restoring the
    * first (07 §01.2, §02.9).
+   *
+   * A **deleted** candidate's application still blocks, and this is the one hiring read
+   * that deliberately does not filter them out (03 §11.64). Deleting somebody removes
+   * them from the team's screens; it does not cancel the interview sitting in two
+   * calendars, and the booking they are about to make would become a second live
+   * application on the same vacancy the moment the delete is reversed. What they are
+   * told is true either way — they do already have an interview on that date.
    */
   private async assertNotAlreadyBooked(
     organizationId: string,
@@ -349,7 +356,14 @@ export class BookingService {
           lastName: input.lastName,
           email: input.email,
         },
-        update: { firstName: input.firstName, lastName: input.lastName },
+        /*
+         * The revival (03 §11.61). A candidate the team deleted who books again is the
+         * same person coming back, not a new one: clearing the flag restores them with
+         * every application, assessment and note they had, which is the entire reason
+         * deleting one is a flag rather than a `DELETE`. Their name is overwritten by
+         * this booking exactly as it would have been anyway (02 §27).
+         */
+        update: { firstName: input.firstName, lastName: input.lastName, deletedAt: null },
       });
 
       // Top of Scheduled, so a new applicant is never buried below the fold (05 §03.12).

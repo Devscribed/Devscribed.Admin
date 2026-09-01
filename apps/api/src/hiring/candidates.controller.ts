@@ -2,6 +2,7 @@ import { Body, Controller, Delete, Get, Param, Patch, Put, Req, UseGuards } from
 import type { AssessmentInput } from '@devscribed/validation';
 import { OrgScopeGuard } from '../auth/org-scope.guard';
 import { SessionGuard } from '../auth/session.guard';
+import { HiringManageGuard } from './hiring-manage.guard';
 import type { ScopedRequest } from './interviewer-scope.guard';
 import { InterviewerScopeGuard } from './interviewer-scope.guard';
 import type { ApplicationPatchDto } from './candidates.service';
@@ -30,6 +31,34 @@ export class CandidatesController {
       // Decided by the guard, which already read the membership that decides it.
       req.hiringScope?.ownVacanciesOnly ?? false,
     );
+  }
+}
+
+/**
+ * Deleting a candidate (03 §11) — the third controller on this prefix, and a third guard.
+ *
+ * `CandidatesController` above asks *is this caller entitled to this record*, and
+ * `CandidateDatabaseController` asks *does this screen exist for them*; both admit the
+ * assigned interviewer, and both answer 404. This one asks neither question. Deleting a
+ * person is a management act, so it is `HiringManageGuard` and it answers **403** — the
+ * caller is a member of this organization and reaching a candidate they can already open,
+ * so there is nothing to conceal and every reason to say plainly that they may not.
+ *
+ * It is a separate class because a method-level guard in Nest *adds* to the class's
+ * rather than replacing them. Mounted on `CandidatesController`, an interviewer would be
+ * refused by whichever guard reached them first — 403 for a candidate of theirs, 404 for
+ * anybody else's — so the status code would answer a question about the *record* while
+ * the rule being enforced is about the *caller*. One route, one guard, one refusal.
+ */
+@Controller('api/organizations/:orgId/hiring/candidates')
+@UseGuards(SessionGuard, OrgScopeGuard, HiringManageGuard)
+export class CandidateDeletionController {
+  constructor(private readonly candidates: CandidatesService) {}
+
+  @Delete(':candidateId')
+  remove(@Req() req: ScopedRequest, @Param('candidateId') candidateId: string) {
+    // Always the session's organization — the path parameter has only been compared.
+    return this.candidates.remove(req.session!.organizationId, candidateId);
   }
 }
 

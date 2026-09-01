@@ -31,7 +31,7 @@ stops being a `Badge`, and [reversal 2](#the-cancelled-badge) gets its second of
 ## Layout
 
 ```
-  Jane Doe                                                            ← PageHeader
+  Jane Doe                                                         ⋮  ← PageHeader + Popover
   jane@example.com · first seen 12 Aug 2026
   ┌──────────────────────────────────────────────────────────────────┐
   │ ⓘ Moved to Didn't pass                                        ×  │  ← InfoBanner, in flow
@@ -63,6 +63,14 @@ stops being a `Badge`, and [reversal 2](#the-cancelled-badge) gets its second of
   ┌ .NET Engineer · 45 minutes · 3 Jul 2026 · Didn't pass          ⌄ ┐   ← collapsed
 ```
 
+- The header's **⋮** is `PageHeader`'s `action` slot holding blue's `Popover` — the same kebab the
+  candidate database's rows draw, named the same way (`Actions for {name}`). It holds one item,
+  `Delete candidate`, and it is a menu rather than a button because a destructive action never sits
+  in a header as a bare control: the ⋮ is one deliberate press away from anything.
+  It is a **person-grain** action and therefore belongs to the page, not to an application `Card` —
+  the cards below are each about one interview, and deleting somebody is not something that happens
+  to an interview. Drawn for `admin`/`manager` only, and **absent** for an assigned interviewer
+  ([03 §11.60](03-candidate-database.md)).
 - One `Card` per application, gap `--space-6`. The most recent is expanded; the rest collapse to a
   single summary row with a chevron.
 - **Every application `Card` passes `clip={false}`.** The status `Select` in its header and every
@@ -173,7 +181,9 @@ to draw one; a card with a history log does not.
 
 | Screen element | DS component | Props | `data-testid` |
 |---|---|---|---|
-| Page header | `PageHeader` → `PageTitle` | `title`, `subtitle` | `page-title` |
+| Page header | `PageHeader` → `PageTitle` | `title`, `subtitle`, **`action`** | `page-title` |
+| Page actions | **`Popover`** | `label`, `items` *(one, `danger`)* | `candidate-actions` · `candidate-action-delete` |
+| Delete confirmation | **`ConfirmDialog`** | `busy`, **`closeOnAccept={false}`** ([§41](../design-system/ledger.md)) | `candidate-delete-dialog` · `candidate-delete-confirm` |
 | Announcement | `InfoBanner` | `variant="success"`, `onDismiss`, `role="status"` | `card-status-toast` · `toast-interview-rescheduled` · `toast-interview-cancelled` |
 | Application panel | `Card` | **`clip={false}`** | `application-section-{applicationId}` |
 | Panel heading | native `<h2>` (+ `<button aria-expanded>` when collapsible) | — | `application-toggle-{applicationId}` |
@@ -230,6 +240,9 @@ named a component that no longer exists.
 | Status changed | Moved to {status} |
 | Collapsed summary | {vacancy} · {length} · {date} · {status} |
 | Not found | We couldn't find that candidate. |
+| Actions menu name | Actions for {name} |
+| Actions menu | Delete candidate |
+| Delete confirmation | as [03 design](03-candidate-database.design.md) — one wording, two doors |
 
 "Saved just now" holds for the first minute, then becomes a clock time. A relative time that keeps
 ticking would be motion in the corner of the eye during a call.

@@ -50,6 +50,15 @@ export interface PresentedCandidate {
    */
   criteria: PresentedAssessment[];
   /**
+   * How many assessments the row's **delete confirmation** is about (03 §11.62) — every
+   * one ever recorded against them, not the one-per-criterion rollup above it.
+   *
+   * The two numbers answer different questions and are deliberately both here. `criteria`
+   * says what is known about this person now; this says how much of the record goes with
+   * them. It costs nothing: the fold that builds the chips has already read every row.
+   */
+  assessmentCount: number;
+  /**
    * The one application the row draws a vacancy, a date and a status from — and, in
    * `mine`, the one the row's position was decided by (03 §08.44).
    *
@@ -173,6 +182,19 @@ interface Listed {
 const NONE_CHOSEN: ReadonlyMap<string, string> = new Map();
 
 /**
+ * One candidate's assessments read twice: rolled up to a chip per criterion, and counted
+ * whole. The rollup is what the row draws; the count is what the delete confirmation
+ * states (03 §11.62), and it is always the larger of the two.
+ */
+interface Assessed {
+  chips: PresentedAssessment[];
+  recorded: number;
+}
+
+/** A candidate nobody has assessed — no chips, and nothing to warn about deleting. */
+const NOTHING_ASSESSED: Assessed = { chips: [], recorded: 0 };
+
+/**
  * How many candidates each scope holds **under the filters already applied** — the
  * numbers the design puts inside the tab labels (03 §08.38, §08.41).
  *
@@ -273,7 +295,10 @@ export class CandidateDatabaseService {
     const now = new Date();
 
     const [total, scopeCounts, listed] = await Promise.all([
-      this.prisma.candidate.count({ where: { organizationId } }),
+      // Unfiltered but not unscoped: `total` answers "how many candidates does this
+      // organization have", and a deleted one is not one of them — otherwise the empty
+      // state would stay hidden behind people nobody can open (03 §11.63).
+      this.prisma.candidate.count({ where: { organizationId, deletedAt: null } }),
       this.scopeCounts(organizationId, plan, assessed, viewer),
       scope === 'mine'
         ? this.byOwnNextInterview(organizationId, plan, where, viewer.accountId, now)
@@ -314,12 +339,17 @@ export class CandidateDatabaseService {
   private async presentPage(listed: Listed): Promise<PresentedCandidate[]> {
     const assessed = await this.assessments(listed.rows.map((row) => row.id));
     return listed.rows.map((candidate) =>
-      this.present(candidate, assessed.get(candidate.id) ?? [], listed.speaksFor.get(candidate.id)),
+      this.present(
+        candidate,
+        assessed.get(candidate.id) ?? NOTHING_ASSESSED,
+        listed.speaksFor.get(candidate.id),
+      ),
     );
   }
 
   /**
-   * Every candidate on this page, and what each of them has been assessed as.
+   * Every candidate on this page, what each of them has been assessed as, and how many
+   * times.
    *
    * Same rule as the filter (03 §04.16): across the applications carrying an assessment
    * for a criterion, the one whose *interview* is latest wins, ties broken on the
@@ -328,10 +358,13 @@ export class CandidateDatabaseService {
    *
    * Archived criteria are included. The assessment happened, and archiving a criterion
    * takes it out of the pickers rather than out of the record (03 §04.19).
+   *
+   * The **count** is the rows before that fold, not the chips after it, and it is here
+   * rather than in a query of its own because this one has already read them: the delete
+   * confirmation asks how much record goes with the person, and the rollup is by
+   * definition a smaller number than the answer (03 §11.62).
    */
-  private async assessments(
-    candidateIds: string[],
-  ): Promise<ReadonlyMap<string, PresentedAssessment[]>> {
+  private async assessments(candidateIds: string[]): Promise<ReadonlyMap<string, Assessed>> {
     if (candidateIds.length === 0) return new Map();
 
     const rows = await this.prisma.applicationCriterion.findMany({
@@ -357,10 +390,12 @@ export class CandidateDatabaseService {
       byCandidate.set(row.application.candidateId, candidate);
     }
 
-    const presented = new Map<string, PresentedAssessment[]>();
+    const presented = new Map<string, Assessed>();
     for (const [candidateId, held] of byCandidate) {
       const chips: PresentedAssessment[] = [];
+      let recordedCount = 0;
       for (const [criterionId, recorded] of held) {
+        recordedCount += recorded.length;
         const latest = latestAssessment(
           recorded.map((row) => ({ ...row, interviewStart: row.application.start })),
         );
@@ -376,10 +411,10 @@ export class CandidateDatabaseService {
           }),
         });
       }
-      presented.set(
-        candidateId,
-        chips.sort((left, right) => left.name.localeCompare(right.name)),
-      );
+      presented.set(candidateId, {
+        chips: chips.sort((left, right) => left.name.localeCompare(right.name)),
+        recorded: recordedCount,
+      });
     }
 
     return presented;
@@ -723,6 +758,11 @@ export class CandidateDatabaseService {
 
     return {
       organizationId,
+      // Deleted people are not narrowed out by a filter — they are not in the list at
+      // all (03 §11.63). Stated here rather than at each caller because every count this
+      // screen reports is taken through this predicate, and a scope count that disagreed
+      // with the rows under it would be the one bug a soft delete is prone to.
+      deletedAt: null,
       ...(assessed ? { id: { in: assessed } } : {}),
       ...(and.length > 0 ? { AND: and } : {}),
     };
@@ -761,7 +801,7 @@ export class CandidateDatabaseService {
    */
   private present(
     candidate: CandidateRecord,
-    criteria: PresentedAssessment[],
+    assessed: Assessed,
     speaksFor?: string,
   ): PresentedCandidate {
     // Applications arrive latest interview first, so `all`'s headline is simply the first.
@@ -778,7 +818,8 @@ export class CandidateDatabaseService {
       // Their whole history on either tab: the scope narrows who is listed, not what is
       // read about them.
       applicationCount: candidate.applications.length,
-      criteria,
+      criteria: assessed.chips,
+      assessmentCount: assessed.recorded,
       latestApplication: headline
         ? {
             id: headline.id,

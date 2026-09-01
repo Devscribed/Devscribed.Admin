@@ -160,7 +160,10 @@ export default function VacancyDetailPage({
 
   const { vacancy } = state;
   const open = vacancy.status === 'open';
-  const blocked = vacancy.applicationCount > 0;
+  // The server's own rule, not the count beside it: a vacancy whose only applicants have
+  // been deleted shows no candidates and is still not deletable, because their
+  // applications and every assessment on them are still there (01 §03.11).
+  const blocked = !vacancy.deletable;
   const bookingUrl =
     typeof window === 'undefined' ? '' : `${window.location.origin}/book/${vacancy.publicSlug}`;
 

@@ -61,7 +61,14 @@ export class MyInterviewsService {
     if (assigned === 0) throw new NotFoundException();
 
     const applications = await this.prisma.application.findMany({
-      where: { organizationId, vacancy: { interviewerAccountId: viewerAccountId } },
+      where: {
+        organizationId,
+        vacancy: { interviewerAccountId: viewerAccountId },
+        // A deleted candidate is nobody's interview any more (03 §11.63) — the same rule
+        // the `mine` scope of the candidate database applies, which is what this list
+        // has become on the web.
+        candidate: { deletedAt: null },
+      },
       // Only a tiebreak — the split below is what orders the two groups. Sorting here
       // as well keeps two interviews booked at the same instant in one stable order.
       orderBy: [{ start: 'asc' }, { id: 'asc' }],

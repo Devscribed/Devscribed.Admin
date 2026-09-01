@@ -108,13 +108,33 @@ export const CANDIDATE_MESSAGES = {
     reschedule: 'Reschedule interview',
     cancel: 'Cancel interview',
     viewCandidate: 'View candidate',
+    /**
+     * The one item about the **person** rather than about an interview (03 §11.60). Last
+     * in the menu, `danger`, and drawn only for a caller who may manage hiring — an
+     * interviewer reaches this list through an assignment, and an assignment is not
+     * authority over somebody's record.
+     */
+    delete: 'Delete candidate',
+  },
+  /**
+   * The delete confirmation (03 §11.62). The candidate card mounts the same one, because
+   * it is the same action about the same person, asked at a second door.
+   */
+  deleteDialog: {
+    /** The accept repeats the verb rather than saying `Delete`: two doors, one word. */
+    accept: 'Delete candidate',
+    decline: 'Cancel',
   },
   /**
    * The row's own confirmations. The two interview outcomes are `HIRING_MESSAGES.toast`'s
    * — they are the same events the candidate card reports, and one wording serves both.
-   * This is the one the list raises alone.
+   * These two the list raises alone.
    */
-  toast: { viewInCalendar: 'Opening the interview in the calendar\u2026' },
+  toast: {
+    viewInCalendar: 'Opening the interview in the calendar\u2026',
+    /** Completed by `candidateDeletedToast`: the person is what was deleted. */
+    deleted: '{name} deleted',
+  },
   /**
    * The page strip (03 §05.20). Named because there may be more than one landmark on
    * screen, and because the arrows carry a glyph and no text of their own.
@@ -156,6 +176,42 @@ export const candidateCountLabel = (count: number): string =>
  */
 export const candidateResultLabel = (matched: number, total: number, filtered: boolean): string =>
   filtered ? `${matched} of ${candidateCountLabel(total)}` : candidateCountLabel(total);
+
+/* ------------------------------------------------------------------ *
+ * Deleting a candidate — 03 §11
+ * ------------------------------------------------------------------ */
+
+/** `3 applications`, `1 application`. */
+export const applicationCountLabel = (count: number): string =>
+  count === 1 ? '1 application' : `${count} applications`;
+
+/** `7 assessments`, `1 assessment`. */
+export const assessmentCountLabel = (count: number): string =>
+  count === 1 ? '1 assessment' : `${count} assessments`;
+
+/** `Delete Jane Doe?` — the person, not "this candidate". */
+export const candidateDeleteTitle = (fullName: string): string => `Delete ${fullName}?`;
+
+/**
+ * What goes with them, and what does not (03 §11.62).
+ *
+ * Two counts, because they are what makes the decision answerable: a person with one
+ * booking nobody has assessed and a person with four interviews of notes behind them are
+ * not the same deletion, and the dialog is the last place either can be told apart.
+ *
+ * It does **not** say "this cannot be undone", because that would be false. The record
+ * is kept and re-booking with the same address brings the whole of it back, which is the
+ * reason this is a flag and not a `DELETE`. Saying so is not an invitation — it is the
+ * one fact that decides whether a recruiter reaches for this or for something else.
+ */
+export const candidateDeleteConfirmation = (applications: number, assessments: number): string =>
+  applications === 0
+    ? 'Nothing has been recorded against them yet. They come back if they book again with the same email.'
+    : `${applicationCountLabel(applications)} and ${assessmentCountLabel(assessments)} go with them. They come back, and all of it with them, if they book again with the same email.`;
+
+/** `Jane Doe deleted` — the list and the card raise the same line. */
+export const candidateDeletedToast = (fullName: string): string =>
+  CANDIDATE_MESSAGES.toast.deleted.replace('{name}', fullName);
 
 /* ------------------------------------------------------------------ *
  * Scope

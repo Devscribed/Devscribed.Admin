@@ -1,9 +1,11 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import {
   CV_FILE,
+  addMember,
   bookInterview,
   createCriterion,
   createVacancy,
+  createVacancyFor,
   latestInviteLink,
   registerOrganization,
   signIn,
@@ -290,5 +292,73 @@ test.describe('Candidate card', () => {
     await expect(page.getByTestId('card-criteria-empty')).toBeVisible();
     await page.reload();
     await expect(page.getByTestId('card-criteria-empty')).toBeVisible();
+  });
+
+  /**
+   * TC-H04-E2E-06 — the header's kebab deletes the person the card is about.
+   *
+   * The card cannot report its own outcome: it 404s the instant the flag is set. So the
+   * confirmation is raised by the list it lands on, and the case that matters is the two
+   * halves arriving as one thing — the member presses Delete here and reads
+   * `Jane Doe deleted` there.
+   */
+  test('deletes the candidate from the card and confirms it on the list', async ({
+    page,
+    request,
+  }) => {
+    const { org, invite } = await seed(request, 'card-delete');
+    await signIn(page, org.email);
+    await page.goto(invite.path);
+
+    await expect(page.getByTestId('candidate-card')).toBeVisible();
+    await page.getByTestId('candidate-actions').click();
+    await page.getByTestId('candidate-action-delete').click();
+
+    const dialog = page.getByTestId('candidate-delete-dialog');
+    await expect(dialog).toContainText('Delete Jane Doe?');
+    // One booking, nothing assessed on it — and still no claim that this is permanent.
+    await expect(dialog).toContainText('1 application and 0 assessments');
+    await expect(dialog).not.toContainText('cannot be undone');
+
+    await page.getByTestId('candidate-delete-confirm').click();
+
+    await page.waitForURL('**/hiring/candidates');
+    await expect(page.getByTestId('toast-candidate-deleted')).toHaveText('Jane Doe deleted');
+    await expect(page.getByTestId('candidates-empty-state')).toBeVisible();
+
+    // Read once: the confirmation belongs to the delete, not to the list.
+    await page.reload();
+    await expect(page.getByTestId('toast-candidate-deleted')).toHaveCount(0);
+  });
+
+  /**
+   * The other half of the permission: an assigned interviewer works this card all day and
+   * has no menu on it at all. An assignment is authority over an interview, never over
+   * somebody's record (03 §11.60).
+   */
+  test('draws no actions menu for an assigned interviewer', async ({ page, request }) => {
+    const org = await registerOrganization(request, uniqueEmail('card-del-scope'));
+    const ines = await addMember(request, {
+      email: uniqueEmail('ines'),
+      role: 'user',
+      firstName: 'Ines',
+      lastName: 'Interviewer',
+    });
+    const vacancy = await createVacancyFor(request, org, ines.accountId, {
+      title: 'Node Engineer',
+    });
+    await bookInterview(request, vacancy.publicSlug, {
+      firstName: 'Tom',
+      lastName: 'Fisher',
+      email: uniqueEmail('tom'),
+    });
+    const invite = await latestInviteLink(request);
+
+    await signIn(page, ines.email);
+    await page.goto(invite.path);
+
+    await expect(page.getByTestId('candidate-card')).toBeVisible();
+    await expect(page.getByTestId('candidate-name')).toHaveText('Tom Fisher');
+    await expect(page.getByTestId('candidate-actions')).toHaveCount(0);
   });
 });

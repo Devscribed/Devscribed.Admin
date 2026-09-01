@@ -4,6 +4,8 @@ import {
   CANDIDATE_PAGE_SIZE_DEFAULT,
   CANDIDATE_PAGE_SIZE_MAX,
   candidateActionsLabel,
+  candidateDeleteConfirmation,
+  candidateDeletedToast,
   candidateFilterPlan,
   candidateResultLabel,
   candidateScopeTabLabel,
@@ -458,5 +460,37 @@ describe('pageCount', () => {
     expect(pageCount(25, CANDIDATE_PAGE_SIZE_DEFAULT)).toBe(1);
     // Never zero: page 1 of 0 must not render, so an empty list is still one page.
     expect(pageCount(0, CANDIDATE_PAGE_SIZE_DEFAULT)).toBe(1);
+  });
+});
+
+describe('candidateDeleteConfirmation', () => {
+  it('states both counts, because they are what makes the decision answerable', () => {
+    // A person with one booking nobody assessed and a person with four interviews of
+    // notes behind them are not the same deletion, and this is the last place either
+    // can be told apart.
+    expect(candidateDeleteConfirmation(3, 7)).toContain('3 applications and 7 assessments');
+    expect(candidateDeleteConfirmation(1, 1)).toContain('1 application and 1 assessment');
+  });
+
+  it('does not claim the delete cannot be undone, because it can', () => {
+    // The record is kept and re-booking with the same address brings the whole of it
+    // back — which is the reason this is a flag and not a DELETE (03 §11.61).
+    expect(candidateDeleteConfirmation(3, 7)).toContain('book again with the same email');
+    expect(candidateDeleteConfirmation(3, 7)).not.toContain('cannot be undone');
+  });
+
+  it('says nothing about counts when there is nothing to count', () => {
+    // `0 applications and 0 assessments go with them` is a sentence that reads as an
+    // error rather than as a fact.
+    expect(candidateDeleteConfirmation(0, 0)).toBe(
+      'Nothing has been recorded against them yet. They come back if they book again with the same email.',
+    );
+  });
+});
+
+describe('candidateDeletedToast', () => {
+  it('names the person, on either door', () => {
+    // The list and the card raise the same line — one outcome, one wording.
+    expect(candidateDeletedToast('Jane Doe')).toBe('Jane Doe deleted');
   });
 });

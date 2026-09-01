@@ -56,7 +56,11 @@ export class BoardService {
     if (!vacancy) throw new NotFoundException();
 
     const applications = await this.prisma.application.findMany({
-      where: { vacancyId, organizationId },
+      // A deleted candidate has no card here (03 §11.63). The application itself is not
+      // deleted and keeps the position it holds, so the column it belongs to is exactly
+      // where it reappears if the same address books again — nothing is renumbered while
+      // it is away, and nothing has to be put back.
+      where: { vacancyId, organizationId, candidate: { deletedAt: null } },
       // The same order the board renders in, so a column arrives sorted rather than
       // being re-sorted per render (05 §03.7).
       orderBy: [{ position: 'asc' }, { id: 'asc' }],

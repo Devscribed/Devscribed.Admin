@@ -139,6 +139,11 @@ stranger with a link into a scheduled interview.
       values just submitted**. Candidates never sign in and the internal screens treat their fields
       as read-only, so first-write-wins would make a typo in the first booking permanently
       uncorrectable — by them and by the team.
+    - An existing email whose candidate the team has **deleted** revives them: the upsert clears
+      `deletedAt`, and every application, assessment, note and CV version they had comes back with
+      them ([03 §11.61](03-candidate-database.md)). The pair stays unique over live and deleted rows
+      alike, which is what makes the returning person the same person rather than a stranger wearing
+      a familiar name — and is the whole reason deleting a candidate is a flag.
 28. **Application** is created for `(candidate, vacancy)` with:
     - `status = "scheduled"` — the board column ([05](05-board.md)).
     - `position` at the **top** of the Scheduled column, so a new applicant is never buried.
@@ -180,6 +185,12 @@ stranger with a link into a scheduled interview.
       candidate database is built on filtering one person's applications by position.
     - **Future only.** Someone who interviewed three months ago is not a duplicate; they are a
       re-interview, and their history is visible on their card regardless.
+    - **A deleted candidate's application still counts.** This is the one hiring read that does not
+      exclude them ([03 §11.64](03-candidate-database.md)). Deleting somebody removes them from the
+      team's screens; it does not cancel the interview sitting in two calendars, and letting the
+      booking through would put a second live application on that vacancy the moment the delete was
+      reversed by this very upsert. What the candidate is told is true either way — they do already
+      have an interview on that date.
 38. The check runs **server-side, at submit only** — never live on email blur. A live check would
     hand out the answer for the price of typing an address.
 39. This departs from user-management spec 02's enumeration-safe posture (`TC-02-INT-05`), which

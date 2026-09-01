@@ -2,9 +2,9 @@
 id: "03"
 title: Candidate Database
 routes: ["/org/{orgId}/hiring/candidates", "/org/{orgId}/hiring/my-interviews (redirect)"]
-api: ["GET /api/organizations/{orgId}/hiring/candidates", "GET /api/organizations/{orgId}/hiring/my-interviews", "POST /api/organizations/{orgId}/hiring/applications/{id}/reschedule", "POST /api/organizations/{orgId}/hiring/applications/{id}/cancel"]
+api: ["GET /api/organizations/{orgId}/hiring/candidates", "DELETE /api/organizations/{orgId}/hiring/candidates/{candidateId}", "GET /api/organizations/{orgId}/hiring/my-interviews", "POST /api/organizations/{orgId}/hiring/applications/{id}/reschedule", "POST /api/organizations/{orgId}/hiring/applications/{id}/cancel"]
 entities: [Candidate, Application, ApplicationCriterion]
-tags: [candidates, search, filters, filter-drawer, criteria-filter, pagination, row-actions, my-interviews, scope, ordering, rollup]
+tags: [candidates, search, filters, filter-drawer, criteria-filter, pagination, row-actions, my-interviews, scope, ordering, rollup, soft-delete]
 depends-on: ["01", "02", "04", "06"]
 ---
 
@@ -280,6 +280,7 @@ called for and which returns with the table's actions column.
     | Reschedule interview | the row's interview stands | opens the card with the dialog up (§10.56) |
     | Cancel interview | the row's interview stands | confirms, then calls it off (§10.57) |
     | View candidate | always | opens the candidate card |
+    | Delete candidate | the caller may manage hiring | confirms, then removes the person (§11) |
 
 54. The three interview actions are **absent** on a row whose interview has been cancelled, or that
     has no application at all — there is nothing left to move or call off. Absent rather than
@@ -307,6 +308,52 @@ called for and which returns with the table's actions column.
 59. Both scheduling actions are available to whoever the candidate card's already are — `admin`,
     `manager` and the assigned interviewer ([07 §08.42](07-manage-booking.md)). No new guard: the
     menu is drawn for every caller who reached this list, and the endpoints answer for themselves.
+
+### 11. Deleting a Candidate
+
+The only action in hiring that removes a **person** from a screen, and the only place the spec
+set's "nothing hiring writes is ever deleted" rule had to be stated as a mechanism rather than as a
+habit. It is drawn on two kebabs — this list's row menu, and the candidate card's page menu
+([04 §02.10](04-candidate-card.md)) — and it is one action, one confirmation and one endpoint
+behind both.
+
+60. **`admin` and `manager` only**, and this is the one place the row menu is not drawn whole for
+    every caller who reached the list. An assigned interviewer reaches this screen through an
+    assignment, and an assignment is authority over an *interview*, never over somebody's record.
+    The endpoint enforces it independently of what any menu drew, and answers **403** rather than
+    404: the caller is a member reaching a candidate they can already open, so there is nothing to
+    conceal and every reason to say plainly that they may not.
+61. **It is a soft delete.** `Candidate.deletedAt` is set; nothing is erased. Their applications
+    keep their board position and every assessment, note, conclusion and CV version on them.
+    Re-booking with the same email address **revives** the person — the booking upsert clears the
+    flag — and the whole record comes back with them, their name overwritten by the new booking
+    exactly as it always is ([02 §27](02-booking-page.md)). That revival is the entire reason this
+    is a flag: a hard delete would make a returning candidate a stranger, and the history a
+    recruiter is about to need is precisely the history they threw away.
+62. **The confirmation names the person and both counts** — how many applications and how many
+    assessments go with them — because a candidate with one unassessed booking and a candidate
+    with four interviews of notes behind them are not the same deletion, and the dialog is the last
+    place either can be told apart. The assessment count is every assessment ever recorded, not the
+    one-per-criterion rollup the row's chips draw (§04.16); the rollup is by definition the smaller
+    number. It does **not** say "this cannot be undone", because that would be false — it states
+    the revival instead.
+63. **Every hiring read excludes a deleted candidate**: this list and all three of its counts
+    (`total`, `matched`, both `scopeCounts`), their card, the board's cards and column counts, the
+    vacancy's `Candidates` column, and my interviews. Their card answers the same `404` it answers
+    for a candidate who never existed and for one the caller may not see.
+64. **One read deliberately does not.** The booking page's duplicate check still sees a deleted
+    candidate's future interview and still refuses a second booking on the same vacancy
+    ([02 §09](02-booking-page.md)). Deleting somebody removes them from the team's screens; it does
+    not cancel an interview sitting in two calendars, and the booking would become a second live
+    application on that vacancy the moment the delete was reversed. What the candidate is told is
+    true either way — they do already have an interview on that date.
+65. **Deleting from the candidate card returns to this list**, which then raises the confirmation.
+    The card cannot report its own outcome: it `404`s the instant the flag is set. The message is
+    carried across that one navigation and read exactly once, so a reload of the list a minute
+    later says nothing.
+66. The outcome is announced as a toast on this list, and the list is **refetched** rather than
+    having the row spliced out of it: the person leaves four numbers at once, and a row removed
+    locally would leave all four claiming they are still there.
 
 ## Screens
 
@@ -450,7 +497,7 @@ Response `200`:
   "viewerTimeZone": "Europe/Minsk",
   "candidates": [
     { "id": "uuid", "fullName": "Jane Doe", "email": "jane@example.com",
-      "applicationCount": 1,
+      "applicationCount": 1, "assessmentCount": 2,
       "criteria": [ { "criterionId": "uuid", "name": "English", "value": "B1" } ],
       "latestApplication": {
         "id": "uuid", "vacancyTitle": "Senior React Engineer",
@@ -468,6 +515,10 @@ Response `200`:
   assessed on, alphabetical by name, archived criteria included. `value` is already read — a
   scale's label, `Yes`/`No` for a boolean — because a scale value's id means nothing to a reader
   and comparison by position is a different job (§04.15). It is computed for the page's rows only.
+- `assessmentCount` is every assessment ever recorded against the candidate, which is what the
+  delete confirmation states goes with them (§11.62). It is **not** `criteria.length`: the rollup
+  answers *what is their English*, one entry per criterion, and this answers *how much record is
+  there*. It costs no query — the fold that builds `criteria` has already read every row.
 - `latestApplication.interviewer` is the **vacancy's assigned** interviewer, which is what the
   `interviewerId` filter matches on and what `mine` is defined by (§09.48). It is deliberately not
   the application's own frozen interviewer ([07 §13.63](07-manage-booking.md)) — that is a fact
@@ -491,6 +542,24 @@ Response `200`:
   criterion's type does not support, an unknown `status`, or an `interviewerId` this organization
   does not hold. An `interviewerId` is validated in **both** scopes and applied in only one: it is
   refused when this organization has never heard of it, and ignored when the scope is `mine`.
+
+### DELETE /api/organizations/{orgId}/hiring/candidates/{candidateId}
+
+Soft-deletes the candidate (§11). No body.
+
+Response `200`: `{ "success": true, "deletedAt": "2026-09-01T10:15:00.000Z" }`
+
+- **`admin`/`manager` only** — `403` for everybody else, an assigned interviewer included, and
+  whether or not they could open the candidate's card (§11.60).
+- `404` when the id names no candidate in this organization, **and when it names one that is
+  already deleted**: the record the caller is asking about is not there, which is the same answer
+  the card gives. The original `deletedAt` stands; pressing again does not move it.
+- Nothing is deleted. Applications, assessments, notes, conclusions, CV versions and scheduling
+  events are all untouched, and a later booking on the same `(organizationId, email)` clears the
+  flag and restores every one of them (§11.61).
+- It shares its path with the card's `GET` and the database's own, and deliberately not their
+  guard: those two ask whether the caller is entitled to a *record*, this one asks whether they may
+  manage hiring at all. Three questions, three guards, one prefix.
 
 ### GET /api/organizations/{orgId}/hiring/my-interviews
 
@@ -551,9 +620,14 @@ Response `200`:
 | Drawer actions | "Show results" · "Clear filters" |
 | Interviewer picker — the viewer | "{name} (me)" |
 | Column headers | Name · Email · Vacancy · Interview date · Status · Actions |
-| Row menu | "View in calendar" · "Reschedule interview" · "Cancel interview" · "View candidate" |
+| Row menu | "View in calendar" · "Reschedule interview" · "Cancel interview" · "View candidate" · "Delete candidate" |
 | Row menu — accessible name | "Actions for {name}" |
 | `View in calendar` toast | "Opening the interview in the calendar…" |
+| Delete confirmation — title | "Delete {name}?" |
+| Delete confirmation — body | "{n} applications and {m} assessments go with them. They come back, and all of it with them, if they book again with the same email." |
+| Delete confirmation — nothing recorded | "Nothing has been recorded against them yet. They come back if they book again with the same email." |
+| Delete confirmation — buttons | "Delete candidate" · "Cancel" |
+| Deleted toast | "{name} deleted" |
 | Cancelled interview badge | "Cancelled" |
 | Page strip | "Pages" · "Previous page" · "Next page" |
 
@@ -588,7 +662,8 @@ candidates sit in a list they cannot see.
     `candidate-criterion-{id}-{criterionId}`
   - `candidate-actions-{id}`, `candidate-action-calendar-{id}`,
     `candidate-action-reschedule-{id}`, `candidate-action-cancel-{id}`,
-    `candidate-action-open-{id}`, `toast-calendar-{id}`
+    `candidate-action-open-{id}`, `candidate-action-delete-{id}`, `toast-calendar-{id}`
+  - `candidate-delete-dialog`, `candidate-delete-confirm-{id}`, `toast-candidate-deleted`
   - `candidates-pagination`, `candidates-page-{n}`
   - `candidates-scope-tabs`, `candidates-scope-all`, `candidates-scope-mine`
   - `candidates-empty-state`, `candidates-no-results`, `candidates-loading`
@@ -597,8 +672,14 @@ candidates sit in a list they cannot see.
 
 - Exporting the list, to CSV or anything else.
 - Saved filter sets or shareable filter URLs beyond the query string.
-- Bulk actions on candidates.
-- Deleting or merging candidates.
+- Bulk actions on candidates. Deleting one is §11; deleting twenty-five is not.
+- Merging two candidates. Two addresses are two people as far as this product can tell, and the
+  judgement that they are not is one no dialog makes well — the same reasoning that keeps criteria
+  merge permanently out ([README](README.md)).
+- Restoring a deleted candidate from inside the app. The only way back is the one that matters:
+  they book again with the same address and their record comes with them (§11.61). A "removed"
+  filter and a Restore button would be a second list, of people the team has said they do not want
+  to see.
 - Emailing candidates from this screen.
 - Searching notes, conclusions, or criteria values as free text.
 - Sorting by an arbitrary column, or any sort control at all — each scope's order is fixed by the
@@ -829,6 +910,60 @@ candidates sit in a list they cannot see.
 - **Expected Result:**
   1. `latestApplication.interviewer` is the **vacancy's** assigned interviewer — the one the filter matches on — and `isCancelled` is false.
   2. `isCancelled` is true and `status` is still `scheduled`: the flag says the interview did not take place and nothing about the candidate's standing.
+
+### TC-H03-INT-16: Deleting a candidate is manage-only
+- **Level:** Integration
+- **Preconditions:** one candidate booked onto a vacancy a `user` is the assigned interviewer for.
+- **Steps:**
+  1. As that interviewer, `GET` the candidate's card, then `DELETE` the candidate.
+  2. As a `viewer`, `DELETE` the candidate.
+  3. As a `manager`, `DELETE` the candidate — twice.
+- **Expected Result:**
+  1. The card is `200` and the delete is `403`: an assignment is authority over an interview, not over a record.
+  2. `403`.
+  3. `200`, then `404` — the second names a record that is not there, and the first deletion's `deletedAt` stands.
+
+### TC-H03-INT-17: A deleted candidate leaves every hiring read at once
+- **Level:** Integration
+- **Preconditions:** two candidates on one vacancy, the caller the assigned interviewer.
+- **Steps:**
+  1. `DELETE` one of them.
+  2. `GET` the list, their card, the board, the vacancies list and my interviews.
+- **Expected Result:**
+  1. The list holds one row; `total`, `matched` and both `scopeCounts` are all 1 — `total` moves too, or the empty state would stay hidden behind people nobody can open.
+  2. The card is `404`; the board's `scheduled` column holds one card and counts 1; the vacancy's `applicationCount` and `scheduledCount` are 1; my interviews names neither the candidate nor their application.
+
+### TC-H03-INT-18: Nothing is erased, and re-booking revives the whole record
+- **Level:** Integration
+- **Preconditions:** a candidate with one application carrying one assessment.
+- **Steps:**
+  1. `DELETE` the candidate, then read the application row directly.
+  2. Book the **same email** onto a second vacancy under a different name.
+  3. `GET` the card.
+- **Expected Result:**
+  1. The application still exists, in the same column and at the same position, with its assessment intact.
+  2. The booking upserts onto the existing candidate — the same id, not a second row — and clears `deletedAt`.
+  3. The card is `200`, carries the new booking's name ([02 §27](02-booking-page.md)) and **both** applications, with the pre-deletion assessment still on the first.
+
+### TC-H03-INT-19: The vacancy stops counting them and still refuses to be deleted
+- **Level:** Integration
+- **Preconditions:** a vacancy with exactly one applicant.
+- **Steps:**
+  1. `DELETE` the candidate.
+  2. `GET` the vacancies list.
+  3. `DELETE` the vacancy.
+- **Expected Result:**
+  1. `200`.
+  2. `applicationCount` is 0 and `deletable` is **false** — the screen is told the server's rule rather than inferring it from the count beside it.
+  3. `409 has_applications`. Removing a person hides their record and does not destroy it, so a cascade that took their notes and assessments away because nobody could see them would be a hard delete arrived at sideways ([01 §03.11](01-vacancies.md)).
+
+### TC-H03-INT-20: A row reports every assessment, not the rollup
+- **Level:** Integration
+- **Preconditions:** one candidate assessed on the same criterion in two different interviews.
+- **Steps:**
+  1. `GET` the list.
+- **Expected Result:**
+  1. `criteria` holds one entry — the rollup answers *what is their English* — and `assessmentCount` is 2, which is what the delete confirmation states goes with them (§11.62).
 
 ### TC-H03-E2E-01: Filter by category and criterion, and read the count
 - **Level:** E2E
