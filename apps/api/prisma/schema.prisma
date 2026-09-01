@@ -71,6 +71,8 @@ model Account {
   /// Spec organization/01 — audit back-relations for the Client entity.
   clientsCreated            Client[]                     @relation("ClientsCreated")
   clientsArchived           Client[]                     @relation("ClientsArchived")
+  /// Spec organization/03 — audit back-relation for the Holiday entity.
+  holidaysCreated           Holiday[]                    @relation("HolidaysCreated")
 }
 
 /// Pending email-change confirmation grant (spec 06). The account's email is only
@@ -169,6 +171,8 @@ model Organization {
   runningTimers     RunningTimer[]
   /// Spec organization/01 — the clients that group projects for billing/reporting.
   clients           Client[]
+  /// Spec organization/03 — the organization's paid public-holiday calendar.
+  holidays          Holiday[]
 }
 
 /// Links an account to its organization. One per account — single-org-per-user (FR-8).
@@ -783,6 +787,42 @@ model Client {
   projects     Project[]
 
   @@index([organizationId, status])
+}
+
+/// Spec organization/03 — a paid public holiday in an organization's calendar. A
+/// calendar-day fact, not an instant: `date` is `@db.Date` and is serialized as
+/// 'YYYY-MM-DD', so no timezone can shift the day. `countryCode = null` means the
+/// holiday applies to every member, whatever their country.
+///
+/// Uniqueness needs TWO indexes and neither replaces the other. `@@unique` below
+/// covers same-date/same-country; Postgres treats every NULL as distinct, so the
+/// global case (`countryCode IS NULL` twice on one date) slips through it and is
+/// closed by the hand-written partial unique index `Holiday_org_date_globalUniq`
+/// in the migration SQL, which Prisma cannot express.
+///
+/// Hard delete — there is no archived state. `createdByAccountId` is an immutable
+/// audit field set from the session, never the request body.
+model Holiday {
+  id                 String   @id @default(uuid())
+  organizationId     String
+  /// Trimmed display name, 1–120 chars; the allowed character set is enforced by
+  /// the shared validation layer (`validateHolidayName`).
+  name               String
+  /// Calendar date only — no time component is ever accepted or stored.
+  date               DateTime @db.Date
+  /// 0.00–24.00 inclusive. Non-integers are legitimate (a half-day holiday).
+  paidHours          Decimal  @default(8.00) @db.Decimal(4, 2)
+  /// ISO 3166-1 alpha-2, uppercase. NULL = applies to all countries.
+  countryCode        String?  @db.Char(2)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  createdByAccountId String
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    Account      @relation("HolidaysCreated", fields: [createdByAccountId], references: [id])
+
+  @@unique([organizationId, date, countryCode])
+  @@index([organizationId, date])
 }
 
 /// Spec 13 — a column on a project's Kanban board. Lazy-created on first `GET /board`

@@ -58,6 +58,10 @@ describe('ROLE_CAPABILITIES matrix', () => {
         // Spec organization/01: full client-management rights.
         'ViewClients',
         'ManageClients',
+        // Spec organization/03: the whole holiday calendar, deletion included.
+        'ViewHolidays',
+        'ManageHolidays',
+        'DeleteHolidays',
       ],
       manager: [
         'ViewDocumentTemplates',
@@ -73,6 +77,9 @@ describe('ROLE_CAPABILITIES matrix', () => {
         // Spec organization/01: identical client-management rights to admin.
         'ViewClients',
         'ManageClients',
+        // Spec organization/03: view and edit the calendar, but not delete.
+        'ViewHolidays',
+        'ManageHolidays',
       ],
       // Spec 03's "user (own)" column is not a row here — see `canReadProfile` below.
       user: [],
@@ -123,6 +130,9 @@ describe('capabilitiesFor', () => {
       'ManageSigningSettings',
       'ViewClients',
       'ManageClients',
+      'ViewHolidays',
+      'ManageHolidays',
+      'DeleteHolidays',
     ]);
     expect(capabilitiesFor('manager')).toEqual([
       'ViewDocumentTemplates',
@@ -135,6 +145,8 @@ describe('capabilitiesFor', () => {
       'ViewSigningSettings',
       'ViewClients',
       'ManageClients',
+      'ViewHolidays',
+      'ManageHolidays',
     ]);
     expect(capabilitiesFor('member')).toEqual([]);
     expect(capabilitiesFor(null)).toEqual([]);

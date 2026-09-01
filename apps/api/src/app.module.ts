@@ -31,6 +31,8 @@ import { MembersController } from './members/members.controller';
 import { MembersService } from './members/members.service';
 import { ClientsController } from './clients/clients.controller';
 import { ClientsService } from './clients/clients.service';
+import { HolidaysController } from './holidays/holidays.controller';
+import { HolidaysService } from './holidays/holidays.service';
 import { ProjectsController } from './projects/projects.controller';
 import { ProjectsService } from './projects/projects.service';
 import { RequestsController } from './requests/requests.controller';
@@ -104,6 +106,7 @@ import { VacationService } from './vacation/vacation.service';
     RequestsController,
     ProjectsController,
     ClientsController,
+    HolidaysController,
     TimeTrackingController,
     AccrualController,
     // Spec 03's contract details. Flat here rather than in `DocumentsModule`: the
@@ -142,6 +145,7 @@ import { VacationService } from './vacation/vacation.service';
     RequestsService,
     ProjectsService,
     ClientsService,
+    HolidaysService,
     TimeTrackingService,
     AccrualService,
     SigningSettingsService,

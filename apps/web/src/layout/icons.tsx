@@ -307,3 +307,29 @@ export function EyeIcon({ size = 14 }: { size?: number }) {
     </svg>
   );
 }
+
+/**
+ * Star glyph — the read-only holiday marker on the Time Tracking calendar
+ * (spec organization/03 requirement 10). A filled five-point star in
+ * `currentColor`, so a cell tints it with `--holiday-ink`.
+ */
+export function StarIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 20 20" width={size} height={size} fill="currentColor" aria-hidden>
+      <path d="M10 1.5l2.47 5.01 5.53.8-4 3.9.94 5.5L10 14.11 5.06 16.71l.94-5.5-4-3.9 5.53-.8L10 1.5Z" />
+    </svg>
+  );
+}
+
+/**
+ * Calendar glyph — the Holidays sidebar row and the Holidays empty state
+ * (spec organization/03 §Screens). Line-drawn, not the mock's emoji: the design
+ * system forbids emoji outright and the app ships none.
+ */
+export function CalendarIcon({ size = 19 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 20 20" width={size} height={size} fill="currentColor" aria-hidden>
+      <path d="M6.25 1.5a.75.75 0 0 1 .75.75v1h6v-1a.75.75 0 0 1 1.5 0v1h.75A2.25 2.25 0 0 1 17.5 5.5v10a2.25 2.25 0 0 1-2.25 2.25H4.75A2.25 2.25 0 0 1 2.5 15.5v-10A2.25 2.25 0 0 1 4.75 3.25h.75v-1a.75.75 0 0 1 .75-.75ZM4 8v7.5c0 .41.34.75.75.75h10.5c.41 0 .75-.34.75-.75V8H4Zm12-1.5v-1a.75.75 0 0 0-.75-.75H4.75a.75.75 0 0 0-.75.75v1h12ZM6 10h2.5v2H6v-2Zm4.75 0h2.5v2h-2.5v-2ZM6 13.25h2.5v2H6v-2Zm4.75 0h2.5v2h-2.5v-2Z" />
+    </svg>
+  );
+}

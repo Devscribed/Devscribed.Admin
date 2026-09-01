@@ -17,7 +17,8 @@ import {
   type BlockColor,
   type BlockPlacement,
 } from './TimeGrid';
-import type { TimeEntry } from './types';
+import { HolidayMarker } from './HolidayMarker';
+import type { CalendarHoliday, TimeEntry } from './types';
 
 const WEEKDAY_ABBR = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -28,6 +29,10 @@ const WEEKDAY_ABBR = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
  * drop to a strip below the grid (noted per day). Each day header carries its own total;
  * a footer line carries the week grand total. Clicking a block drills into the daily view
  * for that day. Every total is client-aggregated from `entries`.
+ *
+ * Spec organization/03 requirement 10 adds a read-only holiday marker under the day
+ * header. It is not a click target and does not change how time is logged into the
+ * column (requirement 11).
  */
 export function WeeklyView({
   anchorDate,
@@ -35,6 +40,8 @@ export function WeeklyView({
   tz,
   weekStartsOn,
   entries,
+  holidaysByDate,
+  onHolidayAnnounce,
   onSelectDay,
 }: {
   anchorDate: string;
@@ -43,6 +50,9 @@ export function WeeklyView({
   tz: string;
   weekStartsOn: WeekStart;
   entries: TimeEntry[];
+  /** Spec organization/03 — the visible week's holidays, keyed by ISO day. */
+  holidaysByDate?: Map<string, CalendarHoliday>;
+  onHolidayAnnounce?: (message: string) => void;
   onSelectDay: (date: string) => void;
 }) {
   const days = weekDates(anchorDate, weekStartsOn);
@@ -63,6 +73,8 @@ export function WeeklyView({
         date={date}
         isToday={date === today}
         minutes={dayTotals.get(date) ?? 0}
+        holiday={holidaysByDate?.get(date)}
+        onHolidayAnnounce={onHolidayAnnounce}
       />
     ),
   }));
@@ -142,16 +154,23 @@ function DayHeader({
   date,
   isToday,
   minutes,
+  holiday,
+  onHolidayAnnounce,
 }: {
   date: string;
   isToday: boolean;
   minutes: number;
+  holiday?: CalendarHoliday;
+  onHolidayAnnounce?: (message: string) => void;
 }) {
   const name = WEEKDAY_ABBR[weekdayMon0(date)];
   return (
     <div
       style={{
-        height: 64,
+        // A holiday column tints its header rather than the grid body, so the
+        // entry blocks underneath keep their own project colours.
+        background: holiday ? 'var(--holiday-bg)' : undefined,
+        height: holiday ? 84 : 64,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -195,6 +214,11 @@ function DayHeader({
       >
         {minutes > 0 ? formatDurationHuman(minutes) : '—'}
       </span>
+      {/* The header is inert, so the marker itself takes focus — that is what the
+          §Accessibility live-region announcement fires from on this view. */}
+      {holiday && (
+        <HolidayMarker holiday={holiday} focusable onFocusAnnounce={onHolidayAnnounce} />
+      )}
     </div>
   );
 }

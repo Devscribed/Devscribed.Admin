@@ -73,7 +73,13 @@ export type Capability =
   // `RequireCapability` decorators consume, the other is what `can(role, ...)` reads,
   // and spec organization/01 requires both because reviewers grep for either shape.
   | 'ViewClients'
-  | 'ManageClients';
+  | 'ManageClients'
+  // Spec organization/03 — holidays. Three capabilities, not two, because a manager
+  // may add and correct the calendar while only an admin may remove a day from it:
+  // a delete changes what every future Amounts Owed report pays out.
+  | 'ViewHolidays'
+  | 'ManageHolidays'
+  | 'DeleteHolidays';
 
 /**
  * Permission matrix from spec 01 and spec 02, "Roles & Permission Matrix".
@@ -103,6 +109,9 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     'ManageSigningSettings',
     'ViewClients',
     'ManageClients',
+    'ViewHolidays',
+    'ManageHolidays',
+    'DeleteHolidays',
   ],
   manager: [
     'ViewDocumentTemplates',
@@ -122,6 +131,10 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     // admin (identical row in the Roles & Permission Matrix table).
     'ViewClients',
     'ManageClients',
+    // Spec organization/03's matrix: a manager sees and edits the holiday calendar
+    // but `DeleteHolidays` stops here — deleting is admin only.
+    'ViewHolidays',
+    'ManageHolidays',
   ],
   // `user` looks empty, but a member reading and editing *their own* contract details is
   // authorized below by `canReadProfile` and friends, not from this table. See the note

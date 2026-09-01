@@ -4,7 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { can, hasCapability, type Role } from '@devscribed/validation';
 import { NavItem, SectionLabel } from '@/ds';
 import { DocumentsIcon } from '@/documents/icons';
-import { BriefcaseIcon, ClockIcon, FolderIcon, InboxIcon, PeopleIcon } from './icons';
+import { BriefcaseIcon, CalendarIcon, ClockIcon, FolderIcon, InboxIcon, PeopleIcon } from './icons';
 import { useSession, type SessionFeatures } from './session-context';
 import { usePendingRequests } from './requests-badge-context';
 
@@ -151,18 +151,32 @@ function navigation(
   // so `user` and `viewer` see no Settings group at all: the row is omitted rather than
   // drawn-and-disabled, and the group with no rows is dropped label and all by the filter
   // below. No dead links.
+  const settings: NavEntry[] = [];
+
   if (hasCapability(role, 'ViewSigningSettings')) {
-    groups.push({
-      label: 'Settings',
-      entries: [
-        {
-          testId: 'nav-settings',
-          label: 'Signing',
-          href: `/org/${orgId}/settings/signing`,
-          icon: <DocumentsIcon />,
-        },
-      ],
+    settings.push({
+      testId: 'nav-settings',
+      label: 'Signing',
+      href: `/org/${orgId}/settings/signing`,
+      icon: <DocumentsIcon />,
     });
+  }
+
+  // Spec organization/03 — the Holidays row, gated on `ViewHolidays`, so a `user` or
+  // `viewer` never sees a destination the API answers 404 to. Built into the same
+  // conditional list as Signing so a role holding neither capability drops the whole
+  // group rather than seeing an empty Settings heading.
+  if (hasCapability(role, 'ViewHolidays')) {
+    settings.push({
+      testId: 'settings-tab-holidays',
+      label: 'Holidays',
+      href: `/org/${orgId}/settings/holidays`,
+      icon: <CalendarIcon />,
+    });
+  }
+
+  if (settings.length > 0) {
+    groups.push({ label: 'Settings', entries: settings });
   }
 
   return groups.filter((group) => group.entries.length > 0);
