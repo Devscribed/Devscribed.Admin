@@ -62,7 +62,7 @@ Organizations group projects under **clients** — the third-party companies or 
 12. When a project is created or edited (spec 11), the payload may include `clientId` referencing an **active** client in the same organization. Referencing an archived client on write returns `422 Unprocessable Entity` with `{ error: "client_archived", message: "This client is archived and cannot be assigned to new projects." }`.
 13. When a client is soft-archived, existing `Project.clientId` values are **not** cleared — the FK is preserved. The `ON DELETE SET NULL` cascade only applies to a hard delete, which never happens through the API.
 14. When a project is renamed, archived, or restored (spec 11), the `Client` is unaffected.
-15. A future FX-rate change on `Organization.currencyCode` (spec 02) does not require re-linking projects — the client is currency-agnostic in v1.
+15. Client is currency-agnostic. When a future spec introduces multi-currency, no re-linking of projects to clients is required — the currency will live on the rate side (member/project/client), not on the identifier.
 
 ### List & search
 
