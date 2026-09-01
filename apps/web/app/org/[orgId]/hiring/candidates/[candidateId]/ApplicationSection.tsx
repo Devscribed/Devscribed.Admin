@@ -43,6 +43,7 @@ export function ApplicationSection({
   expanded,
   collapsible,
   deepLinked,
+  openReschedule,
   onToggle,
   onStatusChange,
   onScheduleChange,
@@ -58,6 +59,12 @@ export function ApplicationSection({
   collapsible: boolean;
   /** True for the one section `?application=` named, which scrolls itself into view. */
   deepLinked: boolean;
+  /**
+   * True when the candidate list sent the member here to move this interview
+   * (`?reschedule=1`, 07 §08.40). Read **once**, at mount: it is where the page opened,
+   * not a state the page is held in, so closing the dialog does not reopen it.
+   */
+  openReschedule?: boolean;
   onToggle: () => void;
   onStatusChange: (status: ApplicationStatus) => void;
   /**
@@ -72,7 +79,7 @@ export function ApplicationSection({
   children: ReactNode;
 }) {
   const section = useRef<HTMLDivElement>(null);
-  const [rescheduling, setRescheduling] = useState(false);
+  const [rescheduling, setRescheduling] = useState(Boolean(openReschedule));
   const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {

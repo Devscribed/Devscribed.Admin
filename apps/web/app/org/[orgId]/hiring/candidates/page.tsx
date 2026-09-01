@@ -6,12 +6,17 @@ import {
   APPLICATION_STATUSES,
   APPLICATION_STATUS_LABELS,
   CANDIDATE_MESSAGES,
+  HIRING_MESSAGES,
   INTERVIEW_MESSAGES,
+  candidateActionsLabel,
   candidateFiltersLabel,
   candidateResultLabel,
   candidateScopeTabLabel,
   criterionFilterParam,
+  formatShortDate,
+  formatSlotTime,
   interviewerPickerLabel,
+  pageCount,
   type ApplicationStatus,
   type CandidateScope,
 } from '@devscribed/validation';
@@ -23,19 +28,24 @@ import {
   EmptyState,
   InfoBanner,
   MenuDrawer,
+  Pagination,
+  Popover,
   Preloader,
   Select,
   Table,
   TableToolbar,
+  Toast,
+  ToastHost,
   type SelectOption,
 } from '@/ds';
 import { PageHeader } from '@/layout/PageHeader';
 import { useSession } from '@/layout/session-context';
+import { CancelInterviewDialog } from '@/hiring/CancelInterviewDialog';
 import { StatusBadge } from '@/hiring/StatusBadge';
 import { initialCandidateScope, rememberCandidateScope } from '@/hiring/candidate-scope';
-import { formatListWhen } from '@/hiring/format';
 import { valuesOf } from '@/hiring/select';
 import { useMediaQuery } from '@/hiring/useMediaQuery';
+import { useToasts } from '@/hiring/useToasts';
 import type {
   CandidateDatabase,
   CandidateRow,
@@ -56,9 +66,6 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 /** Below this the email folds under the name (03 design §Responsive). */
 const NARROW = '(max-width: 1023px)';
-
-/** How far ahead of the load-more row the next page starts arriving. */
-const PREFETCH_MARGIN = '200px';
 
 type Phase = 'loading' | 'ready' | 'failed' | 'gone';
 
@@ -108,18 +115,14 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
   const viewer = useSession().account;
 
   const [phase, setPhase] = useState<Phase>('loading');
-  /** The latest response's head — the counts and the zone, never the rows. */
-  const [data, setData] = useState<CandidateDatabase | null>(null);
-  /** Every page fetched for the current question, in order. */
-  const [rows, setRows] = useState<CandidateRow[]>([]);
   /**
-   * A page that answered with nothing ends the scroll.
+   * The whole of the last answer — its counts, its zone **and its page of rows**.
    *
-   * `matched` is counted by one query and the rows by the next, so a candidate booked between
-   * the two leaves the list permanently one short of the count it is compared against — and
-   * the load-more row would then ask for page after page of nothing, forever.
+   * One piece of state rather than two, which is what makes a refetch dim the list instead
+   * of emptying it: the previous page is still here, and it is replaced only when the next
+   * one has actually arrived (03 design §Interactions).
    */
-  const [exhausted, setExhausted] = useState(false);
+  const [data, setData] = useState<CandidateDatabase | null>(null);
   const [pending, setPending] = useState(false);
   const [library, setLibrary] = useState<FilterLibrary | null>(null);
   /** Manage-only, so it is fetched separately and only for the caller who gets the field. */
@@ -140,6 +143,14 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
    */
   const [scope, setScope] = useState<CandidateScope>(initialCandidateScope);
   const narrow = useMediaQuery(NARROW);
+  /**
+   * Toasts, and the one row whose interview is being called off.
+   *
+   * The dialog is mounted **once for the page**, not once per row: twenty-five rows would
+   * otherwise be twenty-five idle dialogs, and only one of them can ever be open.
+   */
+  const { toasts, push, dismiss } = useToasts();
+  const [cancelling, setCancelling] = useState<CandidateRow | null>(null);
 
   // The address and the memory follow the applied scope, including the server's own
   // correction of one it refused: an interviewer who typed `?scope=all` ends up with a
@@ -266,9 +277,6 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
       // own request — which is what makes a hand-crafted `?scope=all` settle on `mine`
       // in the address bar too, instead of the tab and the URL disagreeing forever.
       setScope(body.scope);
-      // Page 1 answers a new question and replaces the list; anything later extends it.
-      setRows((current) => (page === 1 ? body.candidates : [...current, ...body.candidates]));
-      setExhausted(page > 1 && body.candidates.length === 0);
       setPhase('ready');
     } catch {
       if (currentRequest.current === request) setPhase('failed');
@@ -356,28 +364,28 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
     };
   }, [orgId, canSeeAll]);
 
-  const hasMore = data ? !exhausted && rows.length < data.matched : false;
-  /** The refilter dims the rows; loading page 2 must not — nothing on screen changed. */
-  const refiltering = pending && page === 1 && rows.length > 0;
+  /** The page on screen, which is the last answer's — never a page still in flight. */
+  const rows = data?.candidates ?? [];
+  /**
+   * Every request dims the rows rather than replacing them with a loader, page changes
+   * included: a table that collapsed and re-expanded would reflow the page under the
+   * reader, and a page change is exactly when the reader is looking at it.
+   */
+  const refiltering = pending && rows.length > 0;
+  const pages = data ? pageCount(data.matched, data.pageSize) : 1;
 
   /**
-   * The next page starts arriving before the load-more row is reached, so the list grows
-   * under the scroll rather than after it.
+   * A page that no longer exists.
+   *
+   * Every filter change already returns to page 1, so this can only be reached by the
+   * list shrinking under a page somebody was on — a candidate deleted, an interview
+   * cancelled out of a status filter. Falling back to the first page is the only answer
+   * that shows rows; clamping silently to the last would be a page nobody asked for.
    */
-  const loadMore = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const node = loadMore.current;
-    if (!node || !hasMore || pending) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) setPage((current) => current + 1);
-      },
-      { rootMargin: PREFETCH_MARGIN },
-    );
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [hasMore, pending]);
+    if (!data || pending) return;
+    if (data.candidates.length === 0 && data.matched > 0 && page > 1) setPage(1);
+  }, [data, pending, page]);
 
   if (phase === 'gone') notFound();
 
@@ -403,6 +411,71 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
       setInterviewerIds([]);
       setCriteriaRows([]);
     });
+  }
+
+  /**
+   * The row's kebab (03 §10.53).
+   *
+   * Split by what the item is *about*. `View candidate` is about the person and is always
+   * there; the three interview actions are drawn only while there is an interview to act
+   * on — one that has not been called off. Absent rather than disabled, which is the same
+   * rule the candidate card's own pair follows (07 §14.65): the API refuses a cancelled or
+   * past interview anyway, so a disabled row would only invite somebody to work out why.
+   *
+   * A past interview keeps them. `isLiveBooking` is the card's test because the card is
+   * where the whole interview is on screen; here the row carries a date and a status and
+   * nothing else, and hiding the actions on a list would leave a member wondering which of
+   * two rows they were allowed to press. The endpoints answer for themselves.
+   */
+  function rowActions(row: CandidateRow) {
+    const application = row.latestApplication;
+    const open = () => router.push(`/org/${orgId}/hiring/candidates/${row.id}`);
+
+    const items = [];
+    if (application && !application.isCancelled) {
+      items.push({
+        key: 'calendar',
+        label: CANDIDATE_MESSAGES.actions.viewInCalendar,
+        testId: `candidate-action-calendar-${row.id}`,
+        // Confirms and does nothing else — no navigation, no request. The interview's
+        // entry is the interviewer's own mailbox event and this product holds no deep
+        // link into it, so the row says the request landed rather than pretending to
+        // somewhere to go (03 §10.55).
+        onSelect: () =>
+          push({
+            message: CANDIDATE_MESSAGES.toast.viewInCalendar,
+            tone: 'info',
+            testId: `toast-calendar-${row.id}`,
+          }),
+      });
+      items.push({
+        key: 'reschedule',
+        label: CANDIDATE_MESSAGES.actions.reschedule,
+        testId: `candidate-action-reschedule-${row.id}`,
+        // The team never sends the candidate's own manage link (07 §01.5), so the internal
+        // door is the card — opened on this application, with the dialog already up.
+        onSelect: () =>
+          router.push(
+            `/org/${orgId}/hiring/candidates/${row.id}?application=${application.id}&reschedule=1`,
+          ),
+      });
+      items.push({
+        key: 'cancel',
+        label: CANDIDATE_MESSAGES.actions.cancel,
+        testId: `candidate-action-cancel-${row.id}`,
+        danger: true,
+        onSelect: () => setCancelling(row),
+      });
+    }
+
+    items.push({
+      key: 'open',
+      label: CANDIDATE_MESSAGES.actions.viewCandidate,
+      testId: `candidate-action-open-${row.id}`,
+      onSelect: open,
+    });
+
+    return items;
   }
 
   const zone = data?.viewerTimeZone ?? 'UTC';
@@ -729,8 +802,7 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
         /*
           One surface at every state, which is what blue's table screens do: the card gives
           the edge-to-edge table its border and rounds its first and last rows, and the
-          loader, both empty messages and the load-more row sit inside it rather than
-          replacing it.
+          loader and both empty messages sit inside it rather than replacing it.
         */
         <Card padded={false} data-testid="candidates-list">
           {rows.length > 0 && (
@@ -742,33 +814,40 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
               rowTestId={(row) => `candidate-row-${row.id}`}
               onRowClick={(row, event) => {
                 if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+                // The kebab lives inside the row, and pressing it is not opening the row.
+                // `closest` rather than a stopPropagation in the menu, because the menu is
+                // a portal (ledger §55) and its rows are not inside this anchor at all.
+                if ((event.target as HTMLElement).closest('[data-row-actions]')) {
+                  event.preventDefault();
+                  return;
+                }
                 event.preventDefault();
                 router.push(`/org/${orgId}/hiring/candidates/${row.id}`);
               }}
-              footer={
-                hasMore ? (
-                  /* Inside the table, in the row position the next page will occupy —
-                     prod's own `.loadNextTableIndicator`, at the 8/5 it measures rather
-                     than the 12/7 the overlay loader uses. */
-                  <div
-                    ref={loadMore}
-                    data-testid="candidates-load-more"
-                    style={{ display: 'flex', alignItems: 'center' }}
-                  >
-                    <Preloader size={8} margin={5} aria-hidden />
-                    <span aria-live="polite" style={SR_ONLY}>
-                      Loading more candidates
-                    </span>
-                  </div>
-                ) : undefined
-              }
               columns={[
                 {
-                  label: 'Name',
-                  flex: 2,
+                  label: CANDIDATE_MESSAGES.columns.name,
+                  flex: 1.5,
+                  align: 'flex-start',
                   render: (row) => (
-                    <div style={{ minWidth: 0 }}>
-                      <span data-testid={`candidate-name-${row.id}`}>{row.fullName}</span>
+                    <div className="candidate-name-cell">
+                      <span className="candidate-name-line">
+                        <span data-testid={`candidate-name-${row.id}`} className="candidate-name">
+                          {row.fullName}
+                        </span>
+                        {/* Only when there is more than one — "1 application" is noise. It
+                            sits on the name's own line, above the chips, because it is a
+                            fact about the person rather than one more thing they were
+                            assessed as. */}
+                        {row.applicationCount > 1 && (
+                          <span
+                            data-testid={`candidate-app-count-${row.id}`}
+                            className="candidate-name-meta"
+                          >
+                            {row.applicationCount} applications
+                          </span>
+                        )}
+                      </span>
                       {/*
                         Four columns do not fit a tablet, and the email is the one that can
                         be read on a second line without losing its meaning — a date or a
@@ -776,43 +855,31 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
                         so the row still holds exactly one of each testid.
                       */}
                       {narrow && (
-                        <div
+                        <span
                           data-testid={`candidate-email-${row.id}`}
-                          style={{
-                            fontSize: 'var(--font-size-xs)',
-                            color: 'var(--text-tertiary)',
-                          }}
+                          className="candidate-name-meta"
                         >
                           {row.email}
-                        </div>
+                        </span>
                       )}
-                      <div
-                        style={{
-                          display: 'flex',
-                          flexWrap: 'wrap',
-                          alignItems: 'center',
-                          gap: 'var(--space-1)',
-                          marginTop: 'var(--space-1)',
-                        }}
-                      >
-                        {/* The same read-only chip the vacancies list draws (§20) — a
-                            category is a tag, and `Badge` is blue's two-hue status pill. */}
-                        {row.categories.map((category) => (
-                          <Chip key={category.id} label={category.name} />
-                        ))}
-                        {/* Only when there is more than one — "1 application" is noise. */}
-                        {row.applicationCount > 1 && (
-                          <span
-                            data-testid={`candidate-app-count-${row.id}`}
-                            style={{
-                              fontSize: 'var(--font-size-xs)',
-                              color: 'var(--text-secondary)',
-                            }}
-                          >
-                            {row.applicationCount} applications
-                          </span>
-                        )}
-                      </div>
+                      {/*
+                        What this person has been assessed as, rolled up to their most
+                        recent interview that answered each criterion (03 §01.2). The same
+                        read-only `Chip` the candidate card draws an assessment with, and
+                        the same sentence in the other direction: the card records
+                        *English is B1*, this says *English: B1*.
+                      */}
+                      {row.criteria.length > 0 && (
+                        <span className="candidate-criteria">
+                          {row.criteria.map((assessment) => (
+                            <Chip
+                              key={assessment.criterionId}
+                              label={`${assessment.name}: ${assessment.value}`}
+                              data-testid={`candidate-criterion-${row.id}-${assessment.criterionId}`}
+                            />
+                          ))}
+                        </span>
+                      )}
                     </div>
                   ),
                 },
@@ -820,53 +887,109 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
                   ? []
                   : [
                       {
-                        label: 'Email',
-                        flex: 2,
+                        label: CANDIDATE_MESSAGES.columns.email,
+                        flex: 1.2,
+                        align: 'flex-start' as const,
                         render: (row: CandidateRow) => (
-                          <span data-testid={`candidate-email-${row.id}`}>{row.email}</span>
+                          <span data-testid={`candidate-email-${row.id}`} className="candidate-ellipsis">
+                            {row.email}
+                          </span>
                         ),
                       },
                     ]),
                 {
                   /*
-                    The heading moves with the scope, because the column's contents do
-                    (03 §08.44). In `All` this is the candidate's most recent application.
-                    In `Assigned to me` it is the viewer's own interview — the nearest one
-                    ahead, or their most recent behind — and calling that "latest" would
-                    be the row disagreeing with the order it is sorted by, in words.
+                    Vacancy and interview date are two columns rather than one stacked
+                    cell: they are scanned for different reasons, and the date wants
+                    centring while a title wants its left edge.
                   */
-                  label: scope === 'mine' ? 'Interview' : 'Latest application',
-                  flex: 2,
+                  label: CANDIDATE_MESSAGES.columns.vacancy,
+                  flex: 1.1,
+                  align: 'flex-start',
                   render: (row) => (
-                    <div data-testid={`candidate-latest-${row.id}`} style={{ minWidth: 0 }}>
-                      <div>{row.latestApplication?.vacancyTitle}</div>
-                      <div
-                        style={{
-                          fontSize: 'var(--font-size-xs)',
-                          color: 'var(--text-secondary)',
-                        }}
-                      >
-                        {row.latestApplication
-                          ? formatListWhen(row.latestApplication.startUtc, zone)
-                          : null}
-                      </div>
+                    <div data-testid={`candidate-vacancy-${row.id}`} className="candidate-stacked">
+                      <span className="candidate-ellipsis">{row.latestApplication?.vacancyTitle}</span>
+                      {/*
+                        The interviewer rides as a quieter second line under the title
+                        rather than taking a column of its own, which would only repeat the
+                        vacancy: it is 1:1 with it. Absent in `mine`, where it is the viewer
+                        on every row and says nothing (03 §09.48).
+                      */}
+                      {scope !== 'mine' && row.latestApplication && (
+                        <span
+                          data-testid={`candidate-interviewer-${row.id}`}
+                          className="candidate-ellipsis candidate-subline"
+                        >
+                          {row.latestApplication.interviewer.fullName}
+                        </span>
+                      )}
                     </div>
                   ),
                 },
                 {
-                  label: 'Status',
+                  label: CANDIDATE_MESSAGES.columns.interviewDate,
                   flex: 1,
-                  align: 'flex-end',
-                  // Blue caps the last column at 80px for prod's icon-only actions cell
-                  // (§18); "Didn't pass" is wider than that.
-                  maxWidth: 140,
+                  align: 'center',
+                  render: (row) => (
+                    <div data-testid={`candidate-latest-${row.id}`} className="candidate-date">
+                      {row.latestApplication && (
+                        <>
+                          <span>{formatShortDate(new Date(row.latestApplication.startUtc), zone)}</span>
+                          <span className="candidate-subline">
+                            {formatSlotTime(new Date(row.latestApplication.startUtc), zone)}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  label: CANDIDATE_MESSAGES.columns.status,
+                  // `Table` has grow and a cap but no basis, so a fixed 120px column is
+                  // written as the smallest share that reaches the cap at every width
+                  // this screen targets. Blue's own 80px cap is back on the last column,
+                  // where it was measured — prod's icon-only actions cell (§18) — because
+                  // Status is no longer the one holding it.
+                  flex: 0.8,
+                  align: 'flex-start',
+                  maxWidth: 120,
                   render: (row) =>
-                    row.latestApplication ? (
+                    !row.latestApplication ? null : row.latestApplication.isCancelled ? (
+                      /*
+                        A cancelled interview has no stage to report. `isCancelled` says the
+                        interview did not take place and deliberately nothing about the
+                        candidate's standing (07 §01.1), so the row states that instead of a
+                        status the candidate never moved out of.
+                      */
+                      <Badge
+                        status="inactive"
+                        outlined
+                        data-testid={`candidate-status-${row.id}`}
+                      >
+                        {HIRING_MESSAGES.board.cancelled}
+                      </Badge>
+                    ) : (
                       <StatusBadge
                         status={row.latestApplication.status}
                         data-testid={`candidate-status-${row.id}`}
                       />
-                    ) : null,
+                    ),
+                },
+                {
+                  label: CANDIDATE_MESSAGES.columns.actions,
+                  render: (row) => (
+                    <Popover
+                      label={candidateActionsLabel(row.fullName)}
+                      /* The trigger is inside the row's anchor by construction, so the row
+                         has to be told which press was not for it. `Popover` forwards rest
+                         props onto the trigger, so this marks the button itself and the
+                         handler above finds it with `closest`. The menu needs no such mark:
+                         it is portalled, and §55 stops what it raises from reaching here. */
+                      data-row-actions=""
+                      data-testid={`candidate-actions-${row.id}`}
+                      items={rowActions(row)}
+                    />
+                  ),
                 },
               ]}
             />
@@ -921,6 +1044,66 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
           )}
         </Card>
       )}
+
+      {/*
+        Reversal 1, back the other way: the page strip returns, and the count it was once
+        traded for is still above the table — position and volume are two different
+        questions and the two controls answer one each. It draws nothing at one page
+        (ledger §53), so a short list is unchanged.
+      */}
+      {phase === 'ready' && (
+        <Pagination
+          page={page}
+          pageCount={pages}
+          onChange={setPage}
+          label={CANDIDATE_MESSAGES.pagination.label}
+          previousLabel={CANDIDATE_MESSAGES.pagination.previous}
+          nextLabel={CANDIDATE_MESSAGES.pagination.next}
+          pageTestId={(number) => `candidates-page-${number}`}
+          data-testid="candidates-pagination"
+        />
+      )}
+
+      {/*
+        The same dialog the candidate card mounts, over the same endpoint (07 §08.40) —
+        one component, two hosts. Mounted once for the page rather than once per row, and
+        only while a row has actually asked for it.
+      */}
+      {cancelling?.latestApplication && (
+        <CancelInterviewDialog
+          open
+          orgId={orgId}
+          applicationId={cancelling.latestApplication.id}
+          candidateName={cancelling.fullName}
+          startUtc={cancelling.latestApplication.startUtc}
+          timeZone={zone}
+          onClose={() => setCancelling(null)}
+          onCancelled={() => {
+            setCancelling(null);
+            push({
+              message: HIRING_MESSAGES.toast.interviewCancelled,
+              tone: 'success',
+              testId: 'toast-interview-cancelled',
+            });
+            // The row's badge, the status filter and both scope counts all move with it,
+            // so the answer is refetched rather than patched in place.
+            void load();
+          }}
+        />
+      )}
+
+      <ToastHost>
+        {toasts.map((toast) => (
+          <Toast
+            key={toast.id}
+            tone={toast.tone}
+            data-testid={toast.testId}
+            onDismiss={() => dismiss(toast.id)}
+          >
+            {toast.message}
+          </Toast>
+        ))}
+      </ToastHost>
     </>
   );
 }

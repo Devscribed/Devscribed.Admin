@@ -32,6 +32,7 @@ export { TableToolbar } from './components/data/TableToolbar.jsx';
 export { EmptyState } from './components/feedback/EmptyState.jsx';
 export { InfoBanner } from './components/feedback/InfoBanner.jsx';
 export { Preloader } from './components/feedback/Preloader.jsx';
+export { Toast, ToastHost } from './components/feedback/Toast.jsx';
 
 export { Checkbox } from './components/forms/Checkbox.jsx';
 export { CheckboxRow } from './components/forms/CheckboxRow.jsx';
@@ -77,6 +78,7 @@ export {
 
 export { BackTo } from './components/navigation/BackTo.jsx';
 export { NavigationCard } from './components/navigation/NavigationCard.jsx';
+export { Pagination } from './components/navigation/Pagination.jsx';
 export { PageTabs } from './components/navigation/PageTabs.jsx';
 export { Sidebar } from './components/navigation/Sidebar.jsx';
 

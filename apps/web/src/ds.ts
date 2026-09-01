@@ -40,6 +40,7 @@ export {
   Navbar,
   PageTabs,
   PageTitle,
+  Pagination,
   Popover,
   Preloader,
   SearchInput,
@@ -49,6 +50,8 @@ export {
   TableToolbar,
   TextArea,
   TextInput,
+  Toast,
+  ToastHost,
   ToggleButton,
 } from '@ds';
 

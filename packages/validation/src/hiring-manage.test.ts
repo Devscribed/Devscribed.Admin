@@ -545,25 +545,34 @@ describe('the just-moved notice', () => {
  * ------------------------------------------------------------------ */
 
 describe("the team's cancel confirmation", () => {
-  it('names the candidate as well as the interview', () => {
-    // A member reaching this from My interviews was looking at a list of several
+  it('names the candidate, the interview, and what confirming does', () => {
+    // A member reaching this from the candidate list was looking at a page of several
     // people, and the row they pressed is no longer on screen once the dialog is.
+    //
+    // The two sentences after it are the team's alone: pressing this sends mail somebody
+    // else reads, and the fear that stops a member — that cancelling takes the record of
+    // the interview with it — is the one `isCancelled` being a flag already answers.
     expect(
       teamCancelConfirmMessage('Jane Doe', at('2026-08-25T11:00:00.000Z'), 'Europe/Minsk'),
-    ).toBe("Cancel Jane Doe's interview on Tuesday, 25 August 2026 at 14:00? This can't be undone.");
+    ).toBe(
+      "Cancel Jane Doe's interview on Tuesday, 25 August 2026 at 14:00? " +
+        'The candidate is notified by Microsoft. Notes and conclusion are kept.',
+    );
   });
 
-  it("differs from the candidate's only by that name", () => {
+  it("states the same interview as the candidate's, and more about it", () => {
     const start = at('2026-08-25T11:00:00.000Z');
-    // Both dialogs state the same interview and the same irreversibility. The team's
-    // adds who it belongs to, and adds nothing else.
+    // Both dialogs name the same interview in the same words. What differs is who is
+    // being asked: the candidate is told only that it cannot be undone, because notes
+    // and a mailbox are not theirs to worry about.
     expect(teamCancelConfirmMessage('Jane Doe', start, 'UTC')).toContain(
-      'on Tuesday, 25 August 2026 at 11:00? This can\'t be undone.',
+      'on Tuesday, 25 August 2026 at 11:00?',
     );
     expect(cancelConfirmMessage(start, 'UTC')).toContain(
       'on Tuesday, 25 August 2026 at 11:00? This can\'t be undone.',
     );
     expect(cancelConfirmMessage(start, 'UTC')).not.toContain('Jane Doe');
+    expect(cancelConfirmMessage(start, 'UTC')).not.toContain('Notes and conclusion');
   });
 });
 

@@ -236,7 +236,18 @@ export const HIRING_MESSAGES = {
      * time, because a member cancelling from My interviews is looking at a list of
      * several people and the dialog must not ask them to confirm a pronoun.
      */
-    cancelConfirmTeam: "Cancel {name}'s interview on {when}? This can't be undone.",
+    /**
+     * The team's confirmation says the **two things a member is about to do to somebody
+     * else's day**, where the candidate's own says only that it cannot be undone.
+     *
+     * Both are worth a sentence and neither is obvious from the control. Microsoft sends
+     * the cancellation notice, not this product (07 §12), so a member pressing this is
+     * sending mail whether they meant to or not — and the fear that stops them, that a
+     * cancelled interview takes the record of it with it, is answered by the second
+     * sentence. `isCancelled` is a flag and never a delete (07 §05.22).
+     */
+    cancelConfirmTeam:
+      "Cancel {name}'s interview on {when}? The candidate is notified by Microsoft. Notes and conclusion are kept.",
     /**
      * Optional, and said so in the label rather than left to be discovered: a member who
      * believes a reason is required will invent one (07 §10.46).

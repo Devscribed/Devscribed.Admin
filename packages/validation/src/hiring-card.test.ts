@@ -6,6 +6,7 @@ import {
   ASSESSMENT_COLUMN,
   SCALE_OPERATORS,
   applicationStatusOptions,
+  assessedValueLabel,
   compareScale,
   formatShortDate,
   formatShortWhen,
@@ -250,5 +251,37 @@ describe('compareScale', () => {
     }
     // A value that has since been removed from the scale reads the same way.
     expect(scalePosition(CEFR, 'val-gone')).toBeNull();
+  });
+});
+
+describe('assessedValueLabel', () => {
+  /**
+   * One rule, two readers: the candidate card's chip and the database row's. A second
+   * copy is how the two would come to disagree about what a `false` boolean says.
+   */
+  it('reads the one column the criterion type populated', () => {
+    expect(assessedValueLabel({ valueLabel: 'B1' })).toBe('B1');
+    expect(assessedValueLabel({ valueNumber: 7 })).toBe('7');
+    expect(assessedValueLabel({ valueText: 'Two weeks' })).toBe('Two weeks');
+  });
+
+  it('says No rather than nothing for a false boolean', () => {
+    // The case a truthiness check gets wrong, and the reason this is a function: `No` is
+    // an answer, and an empty chip is a criterion that looks unassessed.
+    expect(assessedValueLabel({ valueBool: false })).toBe('No');
+    expect(assessedValueLabel({ valueBool: true })).toBe('Yes');
+  });
+
+  it('reads zero as zero', () => {
+    expect(assessedValueLabel({ valueNumber: 0 })).toBe('0');
+  });
+
+  it('is empty only when nothing was recorded at all', () => {
+    // Unwritable — `validateAssessment` requires exactly one column — so this is a floor
+    // rather than a case anything reaches.
+    expect(assessedValueLabel({})).toBe('');
+    expect(
+      assessedValueLabel({ valueLabel: null, valueBool: null, valueNumber: null, valueText: null }),
+    ).toBe('');
   });
 });

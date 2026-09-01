@@ -241,11 +241,14 @@ for a move as well as for a booking. See §12.
 39. The team's home for both actions is the **candidate card's application section**
     ([04 §04](04-candidate-card.md)), beside the interview facts they change and above the
     scheduling history they write.
-40. The **candidate list** ([03](03-candidate-database.md)) carries the same two actions as a row
-    affordance, on a scheduled row. For a `user` who interviews, that list — opened on its
-    `Assigned to me` scope — is the whole of hiring, and it is the one they actually live on.
-    *(Not yet built: the row affordances went with the My interviews screen the scope replaced, and
-    return with the list's actions kebab. Until then the card is the team's only surface.)*
+40. The **candidate list** ([03](03-candidate-database.md)) carries the same two actions in its
+    row menu ([03 §10](03-candidate-database.md)), on a row whose interview still stands. For a
+    `user` who interviews, that list — opened on its `Assigned to me` scope — is the whole of
+    hiring, and it is the one they actually live on. **Reschedule opens the candidate card with
+    the dialog already up** rather than mounting a second copy of the picker: the team never sends
+    the candidate's own manage link (§01.5), so the card is the internal door, and a row action
+    that merely opened it would be two presses for one intention. **Cancel confirms in the list**,
+    in the same dialog the card mounts and over the same endpoint — one component, two hosts.
 41. **Neither action appears on the board.** The board expresses pipeline stage. Mixing "move this
     candidate to Passed" with "move this interview to Thursday" on one card conflates two unrelated
     kinds of movement.
@@ -683,7 +686,7 @@ updated application. Errors as the public cancel route.
 | CV replace failed | "We couldn't replace your CV. Please try again." |
 | Availability failed | "We couldn't load available times. Try again." |
 | Cancel confirmation — candidate | "Cancel your interview on {date} at {time}? This can't be undone." |
-| Cancel confirmation — team | "Cancel {candidateName}'s interview on {date} at {time}? This can't be undone." |
+| Cancel confirmation — team | "Cancel {candidateName}'s interview on {date} at {time}? The candidate is notified by Microsoft. Notes and conclusion are kept." |
 | Reason too long | "Please keep this under 500 characters" |
 | Unknown link | "This link doesn't lead anywhere." |
 

@@ -5,7 +5,7 @@ title: Candidate Database — Design
 pairs-with: 03-candidate-database.md
 routes: ["/org/{orgId}/hiring/candidates", "/org/{orgId}/hiring/my-interviews (redirect)"]
 design-system: "1_DS for dev"
-tags: [candidates, filters, filter-drawer, infinite-scroll, scope-tabs, teammerly, light-only]
+tags: [candidates, filters, filter-drawer, pagination, row-actions, toasts, scope-tabs, teammerly, light-only]
 ---
 
 # 03 — Candidate Database · Design
@@ -28,24 +28,26 @@ above the table is the scope, the search and the count.
 
 Two things settled elsewhere land on this screen for the first time, and both are recorded below:
 the [status palette](#status-badges) stops being a five-tone scale, and the
-[page controls](#loading-more) go away.
+[page controls](#pagination) are what it reads position by.
+
+The table itself is six columns and a kebab, and every one of them is a fact somebody scans for:
+who, how to reach them, what for, when, where they got to, and what can be done about it.
 
 ## Layout — candidates
 
 ```
   Candidates                                                          ← PageHeader
   Times in Europe/Minsk
-  ────────────────────────────────────────────────────────────────────
+  ──────────────────────────────────────────────────────────────────────────
   ALL (128)  ASSIGNED TO ME (4)   [🔍 Search name or email…] [Filters (3)]  ← TableToolbar
   ═════════
   12 of 128 candidates
-  ┌──────────────────────────────────────────────────────────────────┐
-  │ Name          │ Email            │ Latest application │ Status   │
-  │ Jane Doe      │ jane@example.com │ Senior React Eng.  │ Scheduled│
-  │ ▌React ▌Senior│                  │ 26 Aug 2026, 14:00 │          │
-  │ ────────────────────────────────────────────────────────────────  │
-  │                          ● ● ●                                   │  ← load-more row
-  └──────────────────────────────────────────────────────────────────┘
+  ┌────────────────────────────────────────────────────────────────────────┐
+  │ Name           │ Email        │ Vacancy      │ Interview date│Status│ ⋮ │
+  │ Jane Doe       │jane@examp.com│ Senior React │  26 Aug 2026  │Sched.│ ⋮ │
+  │ ▌English: B1   │              │ Sam Rowe     │     14:00     │      │   │
+  └────────────────────────────────────────────────────────────────────────┘
+                              ‹  1  2  3  ›                                  ← Pagination
 ```
 
 - The row above the table is blue's own `TableToolbar` — the geometry Projects, Clients, Members,
@@ -66,8 +68,61 @@ the [status palette](#status-badges) stops being a five-tone scale, and the
   the controls it clears.
 - The table is edge to edge inside a `Card padded={false}`, the same one surface at every state
   that the vacancies list uses ([01](01-vacancies.design.md)): the card gives the table its border
-  and rounds its first and last rows, and the loader, the empty message and the load-more row all
-  sit inside it rather than replacing it.
+  and rounds its first and last rows, and the loader and both empty messages sit inside it rather
+  than replacing it. The page strip sits **outside** it, under the card — it is a control about
+  the list rather than a part of it, and the last row keeps its own border either way.
+
+## The columns
+
+| Column | `flex` | Holds |
+|---|---|---|
+| Name | 1.5 | the name, the application count beside it, the assessed-criteria chips beneath |
+| Email | 1.2 | one line, ellipsised |
+| Vacancy | 1.1 | the title over its interviewer, `All` scope only |
+| Interview date | 1 | the date over the time, **centred** |
+| Status | fixed 120px | the badge, or the outlined `Cancelled` |
+| Actions | blue's own last column | the row kebab |
+
+- **Vacancy and Interview date are two columns, not one stacked cell.** They are scanned for
+  different reasons — *what for* and *when* — and they want different alignment: a title reads from
+  its left edge and a date reads centred under its heading.
+- The **interviewer** rides as a quieter second line under the vacancy title rather than taking a
+  column of its own, because it is 1:1 with the vacancy and a column would only repeat it. It is
+  absent in `Assigned to me`, where it is the viewer on every row ([03 §09.48](03-candidate-database.md)).
+- The chips under a name are **assessments**, not vacancy categories: `English: B1` — blue's `Chip`
+  again, the same object the candidate card draws an assessment with, the same sentence in the
+  other direction. The categories moved to the drawer with the rest of the filter machinery, and
+  drawing them here as well said nothing the filter did not.
+- Both two-line cells need `Table`'s §48 row growth and CSS of their own for the stack: blue's cell
+  is one line, `nowrap` and clipped, and `text-overflow` cannot be set on the anonymous flex item
+  the component renders.
+- **Status is capped at 120px and Actions takes blue's 80px**, which is the cap `Table` puts on its
+  last column for exactly this — prod's own icon-only actions cell (§18). Before the kebab existed,
+  Status was last and had to override the cap to fit `Didn't pass`; it no longer is, and blue's
+  geometry is back where it was measured.
+
+## The row's actions
+
+```
+  ⋮ ──▸ ┌──────────────────────────┐
+        │ View in calendar         │
+        │ Reschedule interview     │
+        │ Cancel interview         │   ← --status-error
+        │ View candidate           │
+        └──────────────────────────┘
+```
+
+- Blue's `Popover` with no `trigger`, which draws prod's own 32px kebab: `rgba(0,0,0,0.08)` at rest,
+  `--color-blue` with a white glyph while open. Nothing about it is drawn here.
+- It is named for the person — `Actions for Jane Doe` — because twenty-five rows draw one glyph.
+- `Cancel interview` takes `Popover`'s `danger` row, which is `--status-error` ink. It is the one
+  place in this app that opt-in is used; prod has no destructive menu row at all.
+- **The menu must portal**, which is [§55](../design-system/ledger.md): blue positions it `absolute`
+  inside the trigger, and a row menu near the bottom of a scrolling list is then clipped by the
+  scroller. It is `position: fixed` off the trigger's own rectangle now, flipping upward when it
+  would run off the viewport.
+- The three interview actions are **absent** on a cancelled row rather than disabled — there is
+  nothing there to enable ([03 §10.54](03-candidate-database.md)).
 
 ## The filter drawer
 
@@ -169,9 +224,15 @@ the [status palette](#status-badges) stops being a five-tone scale, and the
 | Show results / Clear filters | `Button` | `variant="primary"` / default | `candidates-filters-apply` · `candidates-clear-filters` |
 | Count | native `<p>` + `Preloader size={8}` | `aria-live="polite"` | `candidates-count` |
 | List | `Card padded={false}` > `Table` | `columns`, `rows`, **`busy`** | `candidates-list` |
-| Category chips on a row | `Chip` | — | — |
+| Assessed-criteria chips on a row | `Chip` | `label` | `candidate-criterion-{id}-{criterionId}` |
+| Vacancy + interviewer | native two-line cell | — | `candidate-vacancy-{id}` · `candidate-interviewer-{id}` |
+| Interview date | native two-line cell | `align: 'center'` (§18) | `candidate-latest-{id}` |
 | Status | `Badge` | `status`, `outlined` | `candidate-status-{id}` |
-| **Load more** | `Table footer` > `Preloader size={8} margin={5}` | — | `candidates-load-more` |
+| Cancelled | `Badge` | `status="inactive"`, `outlined` | `candidate-status-{id}` |
+| **Row actions** | `Popover` | `label`, `items` with `danger` / `testId` (§22, §55) | `candidate-actions-{id}` · `candidate-action-{verb}-{id}` |
+| **Pagination** | `Pagination` | `page`, `pageCount`, `onChange`, `pageTestId` (§53) | `candidates-pagination` · `candidates-page-{n}` |
+| **Toast** | `ToastHost` > `Toast` | `tone`, `onDismiss` (§54) | `toast-calendar-{id}` · `toast-interview-cancelled` |
+| Cancel dialog | `Modal` + `FormActions` | the candidate card's own component | `application-cancel-dialog-{id}` |
 | Loading | `Preloader` | — | `candidates-loading` |
 | Empty / no results | `EmptyState` | — | `candidates-empty-state` · `candidates-no-results` |
 
@@ -214,6 +275,14 @@ on the border and the label takes `--text-primary`. No colour is invented — se
 
 Status is carried by the badge's **text** on every screen that draws one. The hue repeats it.
 
+**A cancelled interview draws none of the five.** It takes `Badge status="inactive" outlined` under
+the word `Cancelled`, in place of the status badge rather than beside it: `isCancelled` says the
+interview did not take place and deliberately nothing about the candidate's standing
+([07 §01.1](07-manage-booking.md)), so a row that showed both would be reporting a stage the
+candidate never moved out of, next to the fact that the meeting never happened. Outlined, and not
+the solid red `Didn't pass` takes — this is not an outcome. It is the same pair of values the board
+card and the candidate card already use for the same mark.
+
 ## Copy
 
 | Slot | Text |
@@ -235,12 +304,17 @@ Status is carried by the badge's **text** on every screen that draws one. The hu
 | Count, unfiltered | {n} candidates |
 | Count, filtered | {matched} of {total} candidates |
 | Clear filters | Clear filters |
-| Column headers | Name · Email · Latest application · Status |
+| Column headers | Name · Email · Vacancy · Interview date · Status · Actions |
+| Assessed-criteria chip | {criterion}: {value} |
 | Application count | {n} applications |
+| Cancelled interview | Cancelled |
+| Row menu | View in calendar · Reschedule interview · Cancel interview · View candidate |
+| Row menu name | Actions for {name} |
+| `View in calendar` toast | Opening the interview in the calendar… |
+| Page strip | Pages · Previous page · Next page |
 | Archived marker | Archived |
 | Empty database | No candidates yet. Share a booking link to start. |
 | No results | No candidates match these filters |
-| Loading more | Loading more candidates |
 | Scope tabs | All ({n}) · Assigned to me ({n}) |
 | Scope tablist name | Candidate scope |
 | `Assigned to me`, nothing filtered, nothing to show | No upcoming interviews. |
@@ -252,30 +326,70 @@ Column headers and group labels are **sentence case**. Meridian set them in uppe
 `Table` header is 16px semibold as written, and its only uppercase treatment anywhere is
 `PageTabs`.
 
-## Loading more
+## Pagination
 
-Page controls are gone. `Pagination` was Meridian's, and blue's list screens scroll —
-`ProjectsTable`, `ToDosTable` and `ClientsTable` all load the next page inline
-([§D4](../design-system/README.md)).
+Page controls are back, and [reversal 1](../design-system/README.md) is what they are back from.
 
-[Reversal 1](../design-system/README.md) is the thing to get right here: the candidate database was
-paginated *precisely because* infinite scroll cannot answer "how many match?", and that question is
-this screen's whole purpose. **It is answered by the count line, which does not move.** The count
-was never part of the pagination control — it is its own `aria-live` node above the table, it
-already said `12 of 128 candidates`, and it goes on saying it. What pagination actually carried was
-*position*, and the load-more row carries that instead: rows below the fold mean more to come, no
-row means the list is complete.
+The reversal read: *"the candidate database was paginated precisely because infinite scroll cannot
+answer «how many match?», and that question is this screen's whole purpose"* — and the answer, when
+the load-more row replaced them, was that the count line answers it and does not move. That was
+true, and it is still true: the count line is unchanged, and it is not what came back.
 
-- The next page loads when the load-more row enters the viewport, and the row is only rendered
-  while `rows.length < matched`.
-- It is a row **inside** the table, not a control beneath it: `Table`'s `footer` slot holding a
-  centred `Preloader size={8} margin={5}`. Those two values are blue's own — the readme measures
-  `.loadNextTableIndicator` at exactly that size, distinct from the 12/7 the overlay loader uses.
-- The dots carry no text, so the row is named for a reader by a visually-hidden `aria-live` node
-  beside them, the same pairing the vacancies list uses for its loader.
-- **Changing any filter empties the accumulated list and starts again at page 1.** A filter change
-  is a new question, and rows fetched against the old one are not part of its answer.
-- Scroll position is not restored on a filter change, because the list it indexed no longer exists.
+What pagination carries is **position**, and the load-more row carried it badly on a list this
+long. *Which twenty-five of a hundred and twenty-eight am I looking at* has no answer in a scroll
+bar over an accumulating list, and *go back to where I was* has none at all. The count and the
+strip answer two different questions and neither replaces the other, which is why both are on
+screen.
+
+- `Pagination` ([§53](../design-system/ledger.md)) — nothing in blue paginates, because prod's
+  own list screens all load the next page inline. So its geometry is taken from blue's *small*
+  controls rather than measured off a control that does not exist: 36px targets, `--radius-s`, a 1px
+  `--border-default` hairline, and the current page filled `--color-blue` with `--text-on-accent` —
+  which is exactly how `Calendar` paints a selected day.
+- The arrows are blue's single `ArrowIcon`, rotated. There is no left/right pair in the set, and
+  `Calendar`'s own navigation already rotates this one.
+- Compression: first, last, and the current page's immediate neighbours; everything else collapses
+  into an `aria-hidden` `…`. "There are pages here you cannot see" is not a fact a reader can act
+  on, and the numbers either side already say it.
+- The current page carries `aria-current="page"`. The fill is the paint; that is the statement.
+- **At one page the control is not drawn at all**, which is the same rule the scope strip follows
+  for a caller who may see one scope: a control offering one choice is not a choice.
+- 25 rows to a page, which is the API's own default and needs no parameter from here.
+- **A page change dims the rows exactly as a filter change does.** `Table busy` again — the page
+  that is on screen stays until the next one has arrived, because a table that emptied and refilled
+  would reflow the page under the reader at the one moment they are looking at it.
+- Scroll position is not restored across a page change, and the strip does not scroll the list back
+  to the top either: the rows changed under a viewport that did not move, which is what a page
+  change *is*.
+
+`Table footer` ([§34](../design-system/ledger.md)) loses its only consumer with the load-more row,
+the way `hideHeader` lost its own when the two My interviews groups went. The prop stays and its
+argument is unchanged — prod renders its next-page indicator *inside* the table, in the row position
+the next page will occupy — and the next infinite list this kit grows will want it.
+
+## Toasts
+
+This is the first screen with more than one thing to confirm, and it is where the
+`InfoBanner`-in-a-fixed-container surrogate stopped being adequate.
+
+`InfoBanner` is a static panel inside the content: no enter, no exit, no queue, no notion of time.
+One confirmation could live in the flow — [reversal 4](../design-system/README.md) put the
+candidate card's under its `PageHeader` and it is still there. Three cannot: a panel that pushed
+the table down on every row action would move the list under the hand that is working it.
+
+So `Toast` + `ToastHost` are built here ([§54](../design-system/ledger.md)), and Phases 6, 7 and 9
+each add more on top of them.
+
+- Bottom-right, 25px in, 360px wide, stacked in a column with the oldest at the top. **They stack
+  rather than replace**: two actions taken inside five seconds are two things that happened.
+- The paint is `InfoBanner`'s, unchanged — the same status line over the same 10%-of-status fill,
+  the same mark, the same `--font-size-xs` in `--text-tertiary`, the same `IconButton` dismiss.
+- 0.3s ease-in-out in and out, which is `--duration-hover` and `--ease-standard` — every other
+  motion in blue.
+- They withdraw themselves after 5s, and the timer **holds while the pointer is over one or focus
+  is inside it**: a message somebody is reading is not taken away mid-sentence.
+- `ToastHost` is the `role="status"` `aria-live="polite"` region, not each message: a nested pair
+  would announce one arrival twice.
 
 ## Interactions
 
@@ -296,7 +410,14 @@ row means the list is complete.
   as a filter, so the list never empties while the chip is half-built, and it is not counted in
   `Filters (n)`. A `boolean` chip is complete the moment it appears: `is yes` is a whole question.
 - **Row click** opens the candidate card. Rows are real anchors, so middle-click and copy-address
-  work.
+  work — **except inside the actions menu**, which sits within the row by construction. The row
+  asks whether the press landed in the menu rather than relying on containment, because the menu is
+  a portal and is not a descendant of the anchor at all.
+- **A page change is a request like any other**: the rows dim, the count holds its number, and the
+  new page replaces the old one when it arrives.
+- **`View in calendar` raises a toast and does nothing else.** No navigation, no request. The
+  interview's entry is the interviewer's own mailbox event and there is no deep link into one to
+  offer ([03 §10.55](03-candidate-database.md)).
 
 ## Scope tabs
 
@@ -337,12 +458,15 @@ the old screen drew has an answer here.
 - The `Assigned to me` empty state is the old screen's own line, *No upcoming interviews.*, with no
   clear-filters action beside it — nothing was filtered out, and offering to undo a filter that was
   never applied is worse than saying nothing.
-- **The third column's heading moves with the scope**: `Latest application` in `All`,
-  `Interview` in `Assigned to me`. The column holds a different application in each
-  ([03 §08.44](03-candidate-database.md)) — the candidate's most recent one, against the viewer's
-  own nearest — and the second is what the rows are *sorted by*. A heading that said "latest" over
-  a date the list ordered ascending would be the row contradicting its own position, in words.
-  Nothing else about the column changes: same two lines, same testid, same width.
+- **The column headings no longer move with the scope**, and splitting the column is what settled
+  it. There was one `Latest application` column holding a vacancy over a date, and it had to be
+  re-headed `Interview` in `Assigned to me` — a heading saying "latest" over a date the list orders
+  *ascending* would have been the row contradicting its own position, in words. `Vacancy` and
+  `Interview date` are true readings of either application, so nothing has to move.
+- **One thing still differs inside a row**: the interviewer line under the vacancy title, drawn in
+  `All` and absent in `Assigned to me`, where it is the viewer on every row. It is the same shape as
+  the missing tab strip and the missing Interviewer filter — a fact whose answer is already given is
+  not drawn.
 
 The old screen's two groups, `Upcoming` and `Past`, do not survive as groups: this list is
 candidate-grain, so a person seen twice is one row. What they carried — *what is next for me* — is
@@ -358,24 +482,35 @@ group is named rather than about this screen in particular.
 ## The two dialogs
 
 Reschedule and Cancel are mounted by the candidate card, over the same endpoints the candidate's
-own manage page uses, and they are the same two components in both places (07 design). This screen
-mounted them too while My interviews had rows of its own; the row gets them back when the table
-grows its actions kebab. Both are `Modal` +
-`FormActions`, not `ConfirmDialog` — the call Phase 3 made and
+own manage page uses, and they are the same two components in both places (07 design). The row's
+kebab reaches them, and it reaches them **asymmetrically**: `Cancel interview` mounts the dialog
+here, and `Reschedule interview` navigates to the card with the dialog already up. One is a
+`TextArea` and a confirmation; the other fetches availability, holds a zone and a format, and
+answers with a whole application — a second host for that is a second thing to keep in step, for
+the sake of one click, on a screen whose internal door is the card anyway (07 §01.5).
+
+Both are `Modal` + `FormActions`, not `ConfirmDialog` — the call Phase 3 made and
 [flagged for Phase 6](../design-system/ledger.md): `ConfirmDialog` fires `onClose` in the same
 breath as `onAccept`, so a confirmation whose action is a request with a busy state cannot use it.
-Cancel is exactly that shape.
+Cancel is exactly that shape. §41 has since given `ConfirmDialog` `busy` and `closeOnAccept`, so
+the objection is answered in principle — but Cancel also holds a field, and `ConfirmDialog` has no
+slot for one, so the call stands on its own second reason.
 
 - **Reschedule** holds a `SlotPicker` — the same `Calendar`, slot list, zone `Select` and format
   `ToggleButton` the public booking page draws. One picker, one behaviour, two hosts.
 - **Cancel** holds a `TextArea` for the optional reason, with the character count in its
   **label row** ([§33](../design-system/ledger.md)) rather than under the field, so the count
   changing never moves the field beneath it.
-- Both announce their outcome with an `InfoBanner`, not a toast — [reversal 4](../design-system/README.md),
-  in the slot Phase 3 fixed: directly under `PageHeader`, above the page body. `tone="success"`
-  becomes `variant="success"` ([§7](../design-system/ledger.md)); the `toast-interview-rescheduled`
-  and `toast-interview-cancelled` test ids are kept, because they name the announcement rather than
-  the component that draws it.
+- **On the card** they announce their outcome with an `InfoBanner` —
+  [reversal 4](../design-system/README.md), in the slot Phase 3 fixed: directly under `PageHeader`,
+  above the page body. `tone="success"` becomes `variant="success"`
+  ([§7](../design-system/ledger.md)).
+- **On this list the outcome is a real toast** ([§54](../design-system/ledger.md)), and the
+  difference is the surface rather than an inconsistency: the card reports one outcome about the
+  one interview filling the screen, and the list reports an outcome about a row that is still
+  there — a banner in the flow would push the table down under the hand working it.
+- The `toast-interview-rescheduled` and `toast-interview-cancelled` test ids are kept in both
+  places, because they name the announcement rather than the component that draws it.
 
 ## Responsive
 
@@ -383,7 +518,7 @@ Cancel is exactly that shape.
 |---|---|
 | ≥ 1200px | As drawn |
 | < 1200px | The drawer hangs from the 60px navbar instead of the 80px one (§51); the toolbar wraps, search and `Filters` below the tabs |
-| 768–1023px | The `Email` column folds under `Name` |
+| 768–1023px | The `Email` column folds under `Name`; the other five are unchanged |
 
 The drawer is 340px at every width and `max-width: 100%` below it; its fields are full width and
 the criterion chip wraps its controls onto a second line rather than overflowing. Nothing in it
@@ -408,8 +543,22 @@ scrolls horizontally.
 - The count is `aria-live="polite"` — it is the primary feedback for a filter change and the one
   thing that must be announced.
 - `Table busy` dims the body and sets `aria-busy` together, so the dimming is never the only signal.
-- The load-more row's `Preloader` is `aria-hidden` and announced by a visually-hidden live node
-  beside it.
+- The page strip is a named `<nav>`, its current page carries `aria-current="page"`, its arrows
+  carry names because they are glyphs, and its `…` is `aria-hidden`.
+- The row's kebab is named for the person it belongs to, so twenty-five identical glyphs are
+  twenty-five distinguishable controls. `Popover` (§22) already gives the menu its roles, its
+  keyboard model and its focus return; portalling it (§55) changes none of that.
+- **The kebab's trigger sits inside the row's anchor, and that is a known compromise.** HTML says
+  an `<a>` may hold no interactive descendant, and `Table`'s linked row is one element wrapping
+  every cell (§18) — so a control in the last cell is nested in it. Every browser handles it and
+  the keyboard walk is correct (the anchor, then the button; `Enter` on the button opens the menu,
+  and the row's own handler refuses the press), but it is non-conforming and is written down rather
+  than left to be found. The two ways out are both worse than it at this size: dropping `rowHref`
+  costs the row middle-click, copy-address and open-in-new-tab, which is the whole reason §18 added
+  it; and splitting the anchor so the actions cell falls outside it is surgery on `Table`'s row
+  layout, hover and background for one cell. Revisit it if a third table wants a kebab.
+- `ToastHost` is one polite live region and each `Toast` is a plain node inside it, so an arriving
+  message is announced once. Nothing in a toast takes focus, and its dismiss is a real button.
 - Status badges carry their meaning in text; the hue repeats it.
 - Every day cell, slot and dialog control inside the two dialogs follows the two control specs
   ([calendar](controls/calendar-control.md), [slots](controls/time-slot-picker-control.md)).
@@ -428,5 +577,7 @@ the index.
 | `Table` has no busy, header-less or footer form | [§34](../design-system/ledger.md) |
 | `MenuDrawer` hangs from a hard-coded 60px and cannot be named, tagged or left by keyboard | [§51](../design-system/ledger.md) |
 | `TableToolbar` draws two controls and gives no way to address either | [§52](../design-system/ledger.md) |
-| ~~`Pagination`~~ | Deleted, not built — see [Loading more](#loading-more) |
+| `Pagination` — nothing in blue pages a list | [§53](../design-system/ledger.md) — *composed from measured parts* |
+| `Toast` / `ToastHost` — `InfoBanner` is a static panel with no motion, queue or clock | [§54](../design-system/ledger.md) — *designed* |
+| `Popover` is positioned inside its trigger and is clipped by any scroller | [§55](../design-system/ledger.md) |
 | ~~`Combobox` multi-select with chips~~ | `Select isMulti isSearchable`, [§20](../design-system/ledger.md) / [§21](../design-system/ledger.md) |

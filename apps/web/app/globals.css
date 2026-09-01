@@ -400,6 +400,81 @@
 }
 
 /*
+ * The candidate table's two-line cells (03 §05). `Table`'s own cell is one line, nowrap
+ * and clipped (ledger §18, §48); everything below is what a cell holding a stack has to
+ * turn back on, and it is here rather than inline because `overflow`/`text-overflow`
+ * cannot be set on the anonymous flex item the DS renders.
+ */
+.candidate-name-cell,
+.candidate-stacked,
+.candidate-date {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  width: 100%;
+}
+
+/* The date reads as one object, centred under its heading. */
+.candidate-date {
+  align-items: center;
+  gap: 2px;
+}
+
+/* The name and, beside it, how many applications this person holds — one baseline, so
+   the count reads as an aside to the name rather than as a second name. */
+.candidate-name-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.candidate-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--font-weight-medium);
+}
+
+/* The application count, and the email when it has folded under the name. */
+.candidate-name-meta {
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+/* The assessed-criteria chips. They wrap rather than scroll: a row is allowed to grow
+   (ledger §48), and a chip half off the edge of a cell says less than none. */
+.candidate-criteria {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: 2px;
+  min-width: 0;
+}
+
+/* The interviewer under a vacancy title, and the time under a date: the same step down,
+   because they are the same kind of second line. */
+.candidate-subline {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.candidate-ellipsis {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
  * Manage booking (hiring 07). One rule, and it is the one that matters: below 600px the
  * actions go full width with the destructive one **beneath** the benign one, so it is
  * never adjacent to the thumb's resting position.

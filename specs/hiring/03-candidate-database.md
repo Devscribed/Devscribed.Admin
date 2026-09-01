@@ -2,9 +2,9 @@
 id: "03"
 title: Candidate Database
 routes: ["/org/{orgId}/hiring/candidates", "/org/{orgId}/hiring/my-interviews (redirect)"]
-api: ["GET /api/organizations/{orgId}/hiring/candidates", "GET /api/organizations/{orgId}/hiring/my-interviews"]
+api: ["GET /api/organizations/{orgId}/hiring/candidates", "GET /api/organizations/{orgId}/hiring/my-interviews", "POST /api/organizations/{orgId}/hiring/applications/{id}/reschedule", "POST /api/organizations/{orgId}/hiring/applications/{id}/cancel"]
 entities: [Candidate, Application, ApplicationCriterion]
-tags: [candidates, search, filters, filter-drawer, criteria-filter, pagination, my-interviews, scope, ordering, rollup]
+tags: [candidates, search, filters, filter-drawer, criteria-filter, pagination, row-actions, my-interviews, scope, ordering, rollup]
 depends-on: ["01", "02", "04", "06"]
 ---
 
@@ -38,11 +38,19 @@ me?* — chosen by a tab rather than by a sidebar row.
    a candidate matches when any application satisfies a position or category clause.
 2. Each row shows:
    - Full name and email.
-   - **The application the row speaks for** — its vacancy title, interview date and time, and
-     status. Which application that is depends on the scope (§08.44); in `All` it is the
-     candidate's most recent one.
+   - **The application the row speaks for** — its vacancy title, its vacancy's assigned
+     interviewer, the interview date and time, and the status. Which application that is depends
+     on the scope (§08.44); in `All` it is the candidate's most recent one. The interviewer is
+     shown in `All` only: in `Assigned to me` it is the viewer on every row (§09.48).
    - The number of applications, when more than one. Their whole history, in either scope.
-   - The categories of the vacancies they have applied to, deduplicated.
+   - **What they have been assessed as** — one chip per criterion, carrying the criterion's name
+     and its rolled-up value (§04.16), reading `English: B1`. Alphabetical by criterion, across
+     their whole history, archived criteria included: the assessment happened, and archiving
+     takes a criterion out of the pickers rather than out of the record.
+
+   The chips are **assessments, not vacancy categories**. The categories are what the *filter* is
+   built out of and are already named in the drawer; `English: B1` is the thing a recruiter scans
+   a list of people for, and it is the answer the whole criteria machinery exists to produce.
 3. **Each scope has its own order** (§08.42), because they answer different questions. In `All`,
    every candidate with a `scheduled` application precedes every candidate without one, most
    recently added first inside each group.
@@ -110,9 +118,21 @@ me?* — chosen by a tab rather than by a sidebar row.
 
 ### 05. Volume & Empty States
 
-20. The list is **paginated**, with a **visible result count** above it — "128 candidates" and,
-    when narrowed, "12 of 128". Infinite scroll was rejected: "how many match?" is the question this
-    page exists to answer, and it is the one pattern that cannot show it.
+20. The list is **paginated**, 25 rows to a page, with a **visible result count** above it —
+    "128 candidates" and, when narrowed, "12 of 128". Infinite scroll was rejected: "how many
+    match?" is the question this page exists to answer, and it is the one pattern that cannot
+    show it.
+
+    The two controls answer two questions and neither replaces the other: the count says how many
+    match, the strip says which twenty-five of them are on screen. The strip is **not drawn at
+    all** when the result fits on one page — a control offering one choice is not a choice, which
+    is the same rule the scope tabs follow (§08.41). The current page is stated with
+    `aria-current="page"` and not only painted.
+
+    Any filter, search or scope change returns to page 1 (§08.39, §09.50); paging itself preserves
+    all three. A page that no longer exists — the list shrank under somebody — falls back to page
+    1 rather than clamping silently to the last, because a page nobody asked for is worse than the
+    one they started on.
 21. **Empty database** — "No candidates yet. Share a booking link to start."
 22. **No results** — "No candidates match these filters", with a clear-filters action.
 23. **Loading** — skeleton rows matching the table layout.
@@ -194,8 +214,14 @@ The screen is gone; every clause below survives it, restated against the `Assign
 44. In `Assigned to me`, the application a row speaks for is the **viewer's own** nearest upcoming
     interview, or their most recent past one when they have nothing ahead — the same application
     the order placed them by, so the row can never disagree with the position it sits in. In `All`
-    it is the candidate's most recent application, whoever is interviewing it. The column heading
-    moves with it; the two readings are not the same claim.
+    it is the candidate's most recent application, whoever is interviewing it.
+
+    **The column set does not change with the scope.** `Vacancy` and `Interview date` are true
+    readings of either application, which an earlier single `Latest application` column was not —
+    "latest" over a date the list orders *ascending* would have been the row contradicting its own
+    position, in words, and splitting the column is what removed the need for a heading that moved.
+    The one thing that differs is the **interviewer line** under the vacancy title, absent in
+    `Assigned to me` where it is the viewer on every row (§09.48).
 
 ### 09. Filter Drawer
 
@@ -238,30 +264,78 @@ Five kinds of filter is a query builder, and this screen is a list. So the contr
     options` — and the same rule covers an organization that has not made a category yet. What is
     hidden is only the control: a filter already applied is still applied, and still counted.
 
+### 10. Row Actions
+
+Everything a member does to an interview without opening the person it belongs to. The candidate
+card is still the team's home for both scheduling actions ([07 §08.39](07-manage-booking.md)); this
+is the list's affordance for the same two, which [07 §08.40](07-manage-booking.md) has always
+called for and which returns with the table's actions column.
+
+53. Each row carries an **actions menu**, named for the person it belongs to — `Actions for Jane
+    Doe`, because twenty-five rows draw the same glyph. It holds, in this order:
+
+    | Item | Drawn when | Does |
+    |---|---|---|
+    | View in calendar | the row's interview stands | raises a toast, and nothing else (§10.55) |
+    | Reschedule interview | the row's interview stands | opens the card with the dialog up (§10.56) |
+    | Cancel interview | the row's interview stands | confirms, then calls it off (§10.57) |
+    | View candidate | always | opens the candidate card |
+
+54. The three interview actions are **absent** on a row whose interview has been cancelled, or that
+    has no application at all — there is nothing left to move or call off. Absent rather than
+    disabled: the endpoints refuse either case anyway, so a disabled row would only invite somebody
+    to work out why. A **past** interview keeps them, unlike the candidate card's own pair
+    ([07 §14.65](07-manage-booking.md)): the card has the whole interview on screen to explain
+    itself with and this row has a date and a status, so hiding them here would leave a member
+    guessing which of two rows they were allowed to press.
+55. **View in calendar confirms and does nothing else** — no navigation, no request. The interview's
+    entry is the interviewer's own mailbox event and this product holds no deep link into one, so
+    the row says the request landed rather than claiming somewhere to go. If a deep link is ever
+    wanted it is its own decision, not a detail smuggled in with a column.
+56. **Reschedule opens the candidate card with the reschedule dialog already up**, on the
+    application the row speaks for. The team never sends the candidate's own manage link
+    ([07 §01.5](07-manage-booking.md)), so the internal door is the card — and a row action that
+    merely opened it would be two presses for one intention.
+57. **Cancel confirms in the same dialog the card mounts**, over the same endpoint: one component,
+    two hosts. The confirmation names the candidate and the interview by date, and states the two
+    things the member is about to do — the candidate is notified, and the notes and conclusion are
+    kept. On success the list refetches: the row's badge, the status filter and both scope counts
+    all move with the outcome.
+58. **Pressing inside the menu never opens the row.** The row is a real anchor and the menu is
+    drawn over it, so the two overlap by construction; the row is what a click anywhere else on it
+    reaches.
+59. Both scheduling actions are available to whoever the candidate card's already are — `admin`,
+    `manager` and the assigned interviewer ([07 §08.42](07-manage-booking.md)). No new guard: the
+    menu is drawn for every caller who reached this list, and the endpoints answer for themselves.
+
 ## Screens
 
 ### Candidate database
 
 ```
-┌───────────────────────────────────────────────────────────────────────────────┐
-│  Candidates                                             Times in Europe/Minsk │
-│                                                                               │
-│  ┌ ALL (128) ┐ ASSIGNED TO ME (4)   [🔍 Search name or email…] [ Filters (3) ]│
-│  ─────────────                                                                │
-│                                                                               │
-│  12 of 128 candidates                                                         │
-│  ┌─────────────────────────────────────────────────────────────────────────┐  │
-│  │ Name          │ Email            │ Latest application     │ Status      │  │
-│  ├───────────────┼──────────────────┼────────────────────────┼─────────────┤  │
-│  │ Jane Doe      │ jane@example.com │ Senior React Eng.      │ Scheduled   │  │
-│  │ React·Senior  │                  │ 26 Aug 2026, 14:00     │             │  │
-│  ├───────────────┼──────────────────┼────────────────────────┼─────────────┤  │
-│  │ Ivan Petrov   │ ivan@example.com │ Senior React Eng.      │ Maybe       │  │
-│  │ React  ·2 apps│                  │ 20 Aug 2026, 09:00     │             │  │
-│  └─────────────────────────────────────────────────────────────────────────┘  │
-│                                          ‹ 1  2  3 ›                          │
-└───────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│  Candidates                                                  Times in Europe/Minsk │
+│                                                                                    │
+│  ┌ ALL (128) ┐ ASSIGNED TO ME (4)      [🔍 Search name or email…] [ Filters (3) ]  │
+│  ─────────────                                                                     │
+│                                                                                    │
+│  12 of 128 candidates                                                              │
+│  ┌──────────────────────────────────────────────────────────────────────────────┐  │
+│  │ Name             │ Email          │ Vacancy      │ Interview date│Status │  ⋮ │  │
+│  ├──────────────────┼────────────────┼──────────────┼───────────────┼───────┼────┤  │
+│  │ Jane Doe         │jane@example.com│ Senior React │  26 Aug 2026  │Sched. │  ⋮ │  │
+│  │ ▌English: B1     │                │ Sam Rowe     │     14:00     │       │    │  │
+│  ├──────────────────┼────────────────┼──────────────┼───────────────┼───────┼────┤  │
+│  │ Ivan Petrov  2 ap│ivan@example.com│ Senior React │  20 Aug 2026  │Maybe  │  ⋮ │  │
+│  │ ▌English: A1     │                │ Sam Rowe     │     09:00     │       │    │  │
+│  └──────────────────────────────────────────────────────────────────────────────┘  │
+│                                     ‹ 1  2  3 ›                                    │
+└────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+The chips under a name are what that person has been **assessed as**, rolled up to their latest
+interview that answered each criterion (§01.2). The line under a vacancy title is its assigned
+interviewer, and it is the one thing on the row that the scope removes.
 
 ### The filter drawer
 
@@ -295,25 +369,26 @@ The same screen, with the second tab lit and no tab strip at all for a caller wh
 first. An interviewer's whole hiring navigation is `Members` and `Candidates`.
 
 ```
-┌───────────────────────────────────────────────────────────────────────────────┐
-│  Candidates                                             Times in Europe/Minsk │
-│                                                                               │
-│  ALL (128) ┌ ASSIGNED TO ME (4) ┐                                             │
-│  ─────────────────────────────────────────────────────────────────────────────│
-│                                                                               │
-│  4 of 128 candidates                                                          │
-│  ┌─────────────────────────────────────────────────────────────────────────┐  │
-│  │ Name          │ Email            │ Interview              │ Status      │  │
-│  ├───────────────┼──────────────────┼────────────────────────┼─────────────┤  │
-│  │ Jane Doe      │ jane@example.com │ Senior React Eng.      │ Scheduled   │  │
-│  │               │                  │ 26 Aug 2026, 14:00     │             │  │
-│  └─────────────────────────────────────────────────────────────────────────┘  │
-└───────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────┐
+│  Candidates                                                  Times in Europe/Minsk │
+│                                                                                    │
+│  ALL (128) ┌ ASSIGNED TO ME (4) ┐                                                  │
+│  ──────────────────────────────────────────────────────────────────────────────────│
+│                                                                                    │
+│  4 of 128 candidates                                                               │
+│  ┌──────────────────────────────────────────────────────────────────────────────┐  │
+│  │ Name             │ Email          │ Vacancy      │ Interview date│Status │  ⋮ │  │
+│  ├──────────────────┼────────────────┼──────────────┼───────────────┼───────┼────┤  │
+│  │ Jane Doe         │jane@example.com│ Senior React │  26 Aug 2026  │Sched. │  ⋮ │  │
+│  │ ▌English: B1     │                │              │     14:00     │       │    │  │
+│  └──────────────────────────────────────────────────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-The third column is headed `Interview` rather than `Latest application`, and holds a different
-interview: the viewer's own, nearest first (§08.44). Jane is at the top because 26 August is the
-soonest thing this interviewer has, not because she booked most recently.
+The same columns, holding a different interview: the viewer's own, nearest first (§08.44). Jane is
+at the top because 26 August is the soonest thing this interviewer has, not because she booked most
+recently. The interviewer line under the vacancy is gone, because in this scope it is the viewer on
+every row.
 
 ## Flows
 
@@ -376,16 +451,32 @@ Response `200`:
   "candidates": [
     { "id": "uuid", "fullName": "Jane Doe", "email": "jane@example.com",
       "applicationCount": 1,
-      "categories": [ { "id": "uuid", "name": "React" } ],
+      "criteria": [ { "criterionId": "uuid", "name": "English", "value": "B1" } ],
       "latestApplication": {
         "id": "uuid", "vacancyTitle": "Senior React Engineer",
-        "startUtc": "2026-08-26T11:00:00.000Z", "status": "scheduled" } }
+        "interviewer": { "accountId": "uuid", "fullName": "Sam Rowe" },
+        "startUtc": "2026-08-26T11:00:00.000Z", "status": "scheduled",
+        "isCancelled": false } }
   ]
 }
 ```
 
 - `total` is the **org-wide, unfiltered** count and keeps that meaning in either scope; `matched`
-  is the filtered one, for the scope that was applied. Both are shown.
+  is the filtered one, for the scope that was applied. Both are shown, and `matched` with
+  `pageSize` is what the page strip is drawn from.
+- `criteria` is the **rollup** (§04.16), one entry per criterion the candidate has ever been
+  assessed on, alphabetical by name, archived criteria included. `value` is already read — a
+  scale's label, `Yes`/`No` for a boolean — because a scale value's id means nothing to a reader
+  and comparison by position is a different job (§04.15). It is computed for the page's rows only.
+- `latestApplication.interviewer` is the **vacancy's assigned** interviewer, which is what the
+  `interviewerId` filter matches on and what `mine` is defined by (§09.48). It is deliberately not
+  the application's own frozen interviewer ([07 §13.63](07-manage-booking.md)) — that is a fact
+  about the interview and belongs to the card; a row whose second line named somebody the filter
+  had not matched would be the row disagreeing with its own position.
+- `latestApplication.isCancelled` says the interview did not take place and nothing about the
+  candidate's standing ([07 §01.1](07-manage-booking.md)). The row draws it *instead of* the status
+  badge, and it is what removes the row's three interview actions (§10.54). The `status` is
+  unchanged by it, and the candidate is still ordered by it (§08.42).
 - `scope` is what was **applied**, which may differ from what was asked. It also decides the order
   the `candidates` array arrives in (§08.42) and which application each `latestApplication` is
   (§08.44) — neither is negotiable from the query string, and there is no sort parameter.
@@ -459,6 +550,12 @@ Response `200`:
 | Drawer placeholders | Any status · Any position · Any category · Any interviewer · Type a criterion… |
 | Drawer actions | "Show results" · "Clear filters" |
 | Interviewer picker — the viewer | "{name} (me)" |
+| Column headers | Name · Email · Vacancy · Interview date · Status · Actions |
+| Row menu | "View in calendar" · "Reschedule interview" · "Cancel interview" · "View candidate" |
+| Row menu — accessible name | "Actions for {name}" |
+| `View in calendar` toast | "Opening the interview in the calendar…" |
+| Cancelled interview badge | "Cancelled" |
+| Page strip | "Pages" · "Previous page" · "Next page" |
 
 The empty-database message is driven by `total` — org-wide and unfiltered — and never by a scoped
 count. An interviewer with no interviews must not be told to share a booking link while 35
@@ -467,12 +564,14 @@ candidates sit in a list they cannot see.
 ## UI Notes
 
 - The result count sits directly above the table and updates with every request. It is the only
-  thing left between the toolbar and the table.
+  thing left between the toolbar and the table; the page strip sits under it.
 - Filter chips are removable individually, inside the drawer; `Clear filters` appears there
   whenever one is applied.
 - A criterion chip's operator and value are its own, and changing the operator resets the value
   rather than carrying a meaningless leftover across the question it answers.
-- Rows link to the card; the whole row is the target.
+- Rows link to the card; the whole row is the target, **except** the actions menu inside it.
+- The `Interview date` cell is the date over the time, centred; the `Vacancy` cell is the title
+  over its interviewer. Both are two-line cells in a table whose row grows to hold them.
 - Required `data-testid` attributes:
   - `candidates-list`, `candidates-search-input`, `candidates-count`, `candidates-timezone`
   - `candidates-filters-open`, `candidates-filters`, `candidates-filters-close`,
@@ -484,10 +583,15 @@ candidates sit in a list they cannot see.
     `criteria-filter-op-{index}`, `criteria-filter-value-{index}`,
     `criteria-filter-remove-{index}`, `criteria-filter-archived-{index}`
   - `candidate-row-{id}`, `candidate-name-{id}`, `candidate-email-{id}`,
-    `candidate-latest-{id}`, `candidate-status-{id}`, `candidate-app-count-{id}`
+    `candidate-vacancy-{id}`, `candidate-interviewer-{id}`, `candidate-latest-{id}`,
+    `candidate-status-{id}`, `candidate-app-count-{id}`,
+    `candidate-criterion-{id}-{criterionId}`
+  - `candidate-actions-{id}`, `candidate-action-calendar-{id}`,
+    `candidate-action-reschedule-{id}`, `candidate-action-cancel-{id}`,
+    `candidate-action-open-{id}`, `toast-calendar-{id}`
   - `candidates-pagination`, `candidates-page-{n}`
   - `candidates-scope-tabs`, `candidates-scope-all`, `candidates-scope-mine`
-  - `candidates-empty-state`, `candidates-no-results`, `candidates-loading-skeleton`
+  - `candidates-empty-state`, `candidates-no-results`, `candidates-loading`
 
 ## Out of Scope
 
@@ -706,6 +810,26 @@ candidates sit in a list they cannot see.
   2. The caller's own candidate — the clause is dropped, not intersected, and the response is not an error.
   3. `scopeCounts.mine` is counted without the interviewer clause, so it equals what pressing the tab shows.
 
+### TC-H03-INT-14: The row's chips are the rollup, one per criterion
+- **Level:** Integration
+- **Preconditions:** a candidate assessed `English = A2` in a March interview, `English = B2` in an August one, and `Availability = "Two weeks"` in the August one.
+- **Steps:**
+  1. `GET` the list and read the first row's `criteria`.
+- **Expected Result:**
+  1. Two entries, not three — one criterion is one chip.
+  2. `English` reads `B2`: the later interview wins, the same rule the filter runs on.
+  3. Alphabetical by criterion name, and the scale value's **label** travels, never its id.
+
+### TC-H03-INT-15: A row names its vacancy's interviewer and reports a cancelled interview
+- **Level:** Integration
+- **Preconditions:** one booked interview.
+- **Steps:**
+  1. `GET` the list.
+  2. Cancel the interview and `GET` again.
+- **Expected Result:**
+  1. `latestApplication.interviewer` is the **vacancy's** assigned interviewer — the one the filter matches on — and `isCancelled` is false.
+  2. `isCancelled` is true and `status` is still `scheduled`: the flag says the interview did not take place and nothing about the candidate's standing.
+
 ### TC-H03-E2E-01: Filter by category and criterion, and read the count
 - **Level:** E2E
 - **Preconditions:** logged in as `admin`; seeded candidates with categories and English assessments.
@@ -791,3 +915,42 @@ candidates sit in a list they cannot see.
   3. The status filter survived the tab change; the Interviewer field is **absent** in this scope.
   4. Every filter is dropped and the tab is not — the list is still `Assigned to me`.
 - **Selectors:** `candidates-filters-open`, `candidates-filters`, `candidates-filter-status`, `candidates-filter-interviewer`, `candidates-filters-apply`, `candidates-clear-filters`, `candidates-scope-mine`, `candidates-count`.
+
+### TC-H03-E2E-07: The page strip pages, and disappears when it fits
+- **Level:** E2E
+- **Preconditions:** logged in as `admin`; 26 candidates on one vacancy.
+- **Steps:**
+  1. Open Candidates and count the rows.
+  2. Read the page strip.
+  3. Press page 2.
+  4. Search for a term matching one candidate.
+- **Expected Result:**
+  1. 25 rows, and the count reads "26 candidates" — org-wide and unfiltered, so it does not move with the page.
+  2. Page 1 carries `aria-current="page"`; page 2 does not.
+  3. One row, and `aria-current` has moved with it. The count is unchanged.
+  4. Back to page 1, and the strip is **gone**: what is left fits on one page.
+- **Selectors:** `candidates-pagination`, `candidates-page-{n}`, `candidates-count`, `candidate-row-{id}`.
+
+### TC-H03-E2E-08: A row is acted on without being opened
+- **Level:** E2E
+- **Preconditions:** logged in as `admin`; one scheduled candidate.
+- **Steps:**
+  1. Open the row's actions menu.
+  2. Choose `View in calendar`.
+  3. Choose `Cancel interview` and confirm.
+  4. Reopen the menu.
+- **Expected Result:**
+  1. The menu opens and the row does not navigate.
+  2. A toast appears; the address is unchanged and no request is made.
+  3. The dialog names the candidate and says the candidate is notified; on success a toast appears and the row wears the outlined `Cancelled` badge in place of its status.
+  4. The three interview actions are gone and `View candidate` remains.
+- **Selectors:** `candidate-actions-{id}`, `candidate-action-calendar-{id}`, `toast-calendar-{id}`, `candidate-action-cancel-{id}`, `application-cancel-dialog-{id}`, `toast-interview-cancelled`, `candidate-status-{id}`, `candidate-action-open-{id}`.
+
+### TC-H03-E2E-09: Reschedule lands on the card with the dialog already up
+- **Level:** E2E
+- **Preconditions:** logged in as `admin`; one scheduled candidate.
+- **Steps:**
+  1. Open the row's actions menu and choose `Reschedule interview`.
+- **Expected Result:**
+  1. The candidate card opens on that application with the reschedule dialog already open — one press, not two.
+- **Selectors:** `candidate-action-reschedule-{id}`, `candidate-card`, `application-reschedule-dialog-{id}`.

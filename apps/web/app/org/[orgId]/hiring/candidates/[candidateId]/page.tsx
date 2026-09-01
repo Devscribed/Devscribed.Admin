@@ -58,6 +58,15 @@ export default function CandidateCardPage({
    * an outcome, and the reason for it is the gap.
    */
   const focusConclusion = search.get('focus') === 'conclusion';
+  /**
+   * The candidate list's `Reschedule interview` arrives here (03 §10.56, 07 §08.40).
+   *
+   * The team never sends the candidate's own manage link (07 §01.5), so the internal door
+   * is this card — and a row action that landed on it and then asked the member to find
+   * the same button again would be two presses for one intention. It opens the dialog on
+   * the application `?application=` names, which is the row's own.
+   */
+  const openReschedule = search.get('reschedule') === '1';
 
   const [state, setState] = useState<State>({ status: 'loading' });
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -376,6 +385,7 @@ export default function CandidateCardPage({
               expanded={expandedId === application.id}
               collapsible={applications.length > 1}
               deepLinked={application.id === deepLinkedId}
+              openReschedule={openReschedule && application.id === deepLinkedId}
               onToggle={() =>
                 setExpandedId((current) => (current === application.id ? null : application.id))
               }

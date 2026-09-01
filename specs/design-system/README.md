@@ -232,9 +232,9 @@ upstream push:
 |---|---|---|---|
 | `SectionLabel` | 13 | headings / `PageTabs` / `FieldLabel` | Blue captions nothing; `PageTabs` is its only uppercase. Needs a heading decision per screen. Phase 7 spent that uppercase deliberately — the board's column names are sentence-case `<h2>`s *because* the narrow board's tab strip is the `PageTabs`. **2 left, both Phase 8** |
 | `Skeleton` | 9 | `Preloader` — 3-dot loader, `overlay` mode | Content pops in rather than resolving in place. Phase 6 took two on an internal screen and this row said the board's was the last; it was wrong by one. Phase 7 took the board's. **1 left, on `ManageScreen` — Phase 8** |
-| ~~`Toast`~~ | 5 | `InfoBanner` | ✅ **gone in Phase 7.** Transient became persistent, which needed a slot and a dismissal story on five screens; Phase 3 set both and the four after it followed without reopening either. Phase 6's slot also absorbed its screen's separate error banner — one press, one answer, one place. See *Reversals* 4. |
+| ~~`Toast`~~ | 5 | `InfoBanner`, **and a real `Toast` beside it** | ✅ **gone in Phase 7**, ↩ **partly back in desktop 5.** Transient became persistent, which needed a slot and a dismissal story on five screens; Phase 3 set both and the four after it followed without reopening either. The candidate database's row actions then wanted an announcement about a *row* rather than about the page, and a banner in the flow pushes the list down on every press — so `Toast` + `ToastHost` are built ([§54](ledger.md)) out of `InfoBanner`'s own paint. Every banner site this row settled is unchanged. See *Reversals* 4. |
 | ~~`Tooltip`~~ | 3 | *nothing, a `Popover` row, and an `aria-describedby` target* | ✅ **gone in Phase 6**, and never once as native `title`. Three sites, three different answers — see *Reversals* 2. |
-| ~~`Pagination`~~ | 1 | infinite scroll | ✅ **gone in Phase 4.** `Table footer` ([§34](ledger.md)) holding prod's own `.loadNextTableIndicator` at `Preloader size=8 margin=5`, fetched by an `IntersectionObserver`. The match count never moved — see *Reversals* 1. |
+| ~~`Pagination`~~ | 1 | infinite scroll, **then a real `Pagination`** | ✅ **gone in Phase 4**, ↩ **back in desktop 5.** Phase 4 replaced it with `Table footer` ([§34](ledger.md)) holding prod's own `.loadNextTableIndicator`, fetched by an `IntersectionObserver`, and the match count never moved — which was the finding, and it held. What the load-more row could not carry was *position*, so `Pagination` is built ([§53](ledger.md)) and the count stays where it is. `Table footer` keeps its number and loses its only consumer. See *Reversals* 1. |
 | ~~`Toggle`~~ | 1 | `ToggleButton` | ✅ **gone in Phase 4.** Yellow's was already a segmented pill, so the swap was the prop shape (`value1`/`value2`/`selectedValue`) plus [§31](ledger.md), which made two buttons one `radiogroup`. |
 
 ### Rename — 8
@@ -308,6 +308,15 @@ and so a reviewer can tell a considered reversal from an accident.
    complete. Blue's own list screens work this way (`ProjectsTable`, `ToDosTable`, `ClientsTable`),
    and the indicator is prod's `.loadNextTableIndicator` at the `Preloader size=8 margin=5` the
    readme measures. Full detail in [`03-candidate-database.design.md`](../hiring/03-candidate-database.design.md).
+
+   ↩ **Reopened and re-settled by the desktop design, phase 5, and the half that was right stayed
+   right.** The count was never the thing at risk and never moved — that finding holds. What the
+   load-more row could not carry after all is the other half: *which twenty-five of a hundred and
+   twenty-eight am I looking at*, and *take me back to where I was*, neither of which a scroll bar
+   over an accumulating list answers. So `Pagination` is built (`[§53](ledger.md)`), out of blue's
+   own small controls, and **both are on screen** — the count above the table, the strip beneath
+   it, answering two different questions. This is the one D4 deletion that a later design undid,
+   and it is recorded here rather than in the ledger alone because the deletion was recorded here.
 
 2. **`Tooltip` → native `title` is free only for a pointer.** The PRD calls this a free swap; it is
    not. Yellow's `Menu` + `Tooltip` are a deliberate pair: a blocked action is *disabled rather
@@ -390,12 +399,21 @@ and so a reviewer can tell a considered reversal from an accident.
    few seconds would be a toast wearing a different component, which is the thing blue does not
    have. Full detail in [`01-vacancies.design.md`](../hiring/01-vacancies.design.md).
 
-   ✅ **Closed in Phase 7 on the fifth screen, and no phase reopened the pattern.** That is the
-   result worth recording: of the four reversals that named a decision rather than a component,
-   this is the only one where the first phase's answer held unmodified at every later site. The
-   board is also the site with the strongest case for covering content instead — a toast over a
-   kanban does not push five columns down — and it still takes the slot, because the alternative
-   is a notice floating over the column somebody is looking at while they try to drag in it.
+   ✅ **Closed in Phase 7 on the fifth screen, and no phase of the migration reopened the
+   pattern.** That is the result worth recording: of the four reversals that named a decision
+   rather than a component, this is the only one where the first phase's answer held unmodified at
+   every later site. The board is also the site with the strongest case for covering content
+   instead — a toast over a kanban does not push five columns down — and it still takes the slot,
+   because the alternative is a notice floating over the column somebody is looking at while they
+   try to drag in it.
+
+   ↩ **The desktop design's phase 5 built the real thing (`[§54](ledger.md)`), and the banner
+   pattern is not withdrawn.** The two now coexist, split by what the announcement is *about*: a
+   banner reports an outcome about the **page** and belongs in the page, which is every site this
+   reversal settled; a toast reports an outcome about a **row** in a list the reader is still
+   working, and a panel in the flow would push that list down on every press. The clause this
+   reopens is precisely *"nothing auto-dismisses"* — and only for the second kind, where a message
+   that had to be put away by hand would be three dismissals for three actions.
 
 5. **`SectionLabel` → headings orphans `Table hideHeader`'s rationale.** `hideHeader` exists because
    My interviews' two groups are "already named by the `SectionLabel` above them". Remove
@@ -498,6 +516,14 @@ Full detail in [`plans/yellow-to-blue-migration.md`](../../plans/yellow-to-blue-
 | 6 | hiring settings, `CriterionDialog` | Last of `Tooltip`, `Menu`, `Toast`, `Skeleton`, `Input` · `ConfirmDialog` §40/§41 · `Chip leading` §39 · reversal 2 settled · §8 and §29 corrected |
 | 7 | vacancy board | `BoardCard` + `BoardColumn` §42/§43, *designed not measured* · `FlagIcon` §44 · `PageTabs` made a real `tablist` §45 · last of `Toast` and `Tabs` · reversals 3 and 4 settled |
 | 8 | `/book/{slug}`, `/manage/{slug}/{token}` | `BookingLayout` §46 + `FileInput` §47, *designed not measured* · last of `SectionLabel`, `Skeleton`, `Input`/`Textarea`, `Spinner` · vacancy titles → `PageTitle` · `--fs-34` and `--amber-500` settled · last yellow token in `apps/web` gone |
+
+The migration ended at Phase 8. The **desktop-design** plan that followed it appends to the same
+ledger rather than reopening the migration, and its phases are numbered separately:
+
+| Phase | Surface | Lands |
+|---|---|---|
+| desktop 4 | candidates toolbar + filter drawer | `MenuDrawer top` §51 · `TableToolbar` addressable §52 |
+| desktop 5 | candidates table + pagination | `Pagination` §53 and `Toast`/`ToastHost` §54, *composed from measured parts* · `Popover` portalled and flipping §55 · reversals 1 and 4 reopened, and both re-settled above |
 
 Phase 1 goes first because `app-shell`, `org-scope`, `signup` and `hiring-my-interviews` all
 authenticate through `/login` — most of the suite is blocked until those four screens work.

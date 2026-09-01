@@ -8,18 +8,21 @@ Phase 0 created this file; Phase 1 wrote §1–§11, Phase 2 wrote §12–§18, 
 §19–§29, Phase 4 wrote §30–§36, Phase 5 wrote §37–§38, Phase 6 wrote §39–§41, Phase 7 wrote
 §42–§45 and Phase 8 wrote §46–§47, plus §48–§50 from the narrow-viewport bug report that
 followed it. The **desktop-design** phases append to the same list, and their
-rows say so in the phase column: `desktop 4` wrote §51–§52. `npm run ds:drift` currently reports thirteen local-only
+rows say so in the phase column: `desktop 4` wrote §51–§52 and `desktop 5` wrote §53–§55.
+`npm run ds:drift` currently reports sixteen local-only
 components — `AuthLayout`, `BoardCard`, `BoardColumn`, `BookingLayout`, `Calendar`, `Card`,
-`Chip`, `CrossIcon`, `FileInput`, `FlagIcon`, `IconButton`, `Eye`, `EyeOff` — and each of them is
-numbered below, which is the bar this file exists to hold. Phase 8 added the last two; Phases 5
+`Chip`, `CrossIcon`, `FileInput`, `FlagIcon`, `IconButton`, `Eye`, `EyeOff`, `Pagination`,
+`Toast`, `ToastHost` — and each of them is
+numbered below, which is the bar this file exists to hold. `desktop 5` added the last three; Phases 5
 and 6 added none, because every one of their entries is props on a component already numbered.
 
 **This file is now the push list.** The migration's Phase 8 was its last, and the desktop-design
-work that followed adds to it rather than reopening it — §51 and §52 are both `omission`s on
-components already numbered. The split that push has to defend is
-[the one below](#a-note-on-42-and-what-designed-is-allowed-to-mean): ten `designed` entries, three
-`packaging`, and everything else an `omission` — a gap in the measurement rather than a change to
-the design.
+work that followed adds to it rather than reopening it — §51, §52 and §55 are `omission`s on
+components already numbered, and §53 and §54 are the first two genuinely new components since
+Phase 8. The split that push has to defend is
+[the one below](#a-note-on-42-and-what-designed-is-allowed-to-mean): eleven `designed` entries,
+four `packaging`, and everything else an `omission` — a gap in the measurement rather than a change
+to the design.
 
 Phase 6 also left two things that are **not** new numbers, because neither adds anything — both
 make an existing entry do what it already said it did. They are written up as notes at the end:
@@ -120,6 +123,10 @@ Each entry is one of three, because the distinction decides what the upstream pu
 | 51 | `MenuDrawer` | `top`, `...rest` on the panel, an accessible name and a test id for the close button, focus moved in on open and returned to the opener on close, `Escape`, and `inert` while shut. The `top` is the entry's reason: blue pins the panel and its scrim at `top: 60px`, which is not a drawer measurement but `--layout-navbar-height-mobile` written as a number, so above 1200px — where this shell's navbar is 80px (§14) — both covered the last 20px of the header they hang from. The default now reads the shell's own switch out of `base.css` rather than naming a third value, and `top` overrides it. The rest is the same omission in the same place: blue's drawer forwards nothing, its close button is an unnamed icon, nothing moves focus into a panel that has just covered the page, `Escape` does not leave it, and everything inside it stays tabbable while it is translated off-screen. `AppShell` needed all of it the moment its rail *became* this drawer and got it there; this is the same treatment on the component that lends it the geometry — three rules rather than `Modal`'s four, because like the rail this is a panel a reader may Tab out of. | `omission` | [§D2](README.md) | desktop 4 | [03](../hiring/03-candidate-database.design.md) |
 | 52 | `TableToolbar` | `tabsLabel`, `tabsTestId`, `searchLabel`, `searchTestId`, `...rest` on the row, and the object form of `tabs` in the types. A composition that draws two controls and gives no way to address either: §45 gave `PageTabs` a `label` and an object form and this swallowed both, and the `SearchInput` it renders takes neither a name nor a test id. Blue's own list screens never had to care — their tab rows are three words nothing arrives at by keyboard, and their search is the only field on the page. Nothing here is a new number for `PageTabs` or `SearchInput`: both already take these props, and this is the wrapper learning to pass them. Same shape as §16, §21, §37 and §40. | `omission` | [§D2](README.md) | desktop 4 | [03](../hiring/03-candidate-database.design.md) |
 
+| 53 | `Pagination` | New component. **Nothing in blue pages a list**: prod's own list screens all load the next page inline (`ProjectsTable`, `ToDosTable`, `ClientsTable` → `.loadNextTableIndicator`, which is what §34's `footer` reproduces), so there is no strip, no arrows and no current-page treatment to measure. The candidate database wants one because [reversal 1](README.md) came back the other way — the count line answers *how many match* and always did, and what the load-more row carried badly is **position**: *which twenty-five of a hundred and twenty-eight am I looking at* has no answer in a scroll bar over an accumulating list. Every painted value is taken from blue's *small* controls rather than invented: the 36px target `IconButton` and `Calendar`'s navigation both use, `--radius-s`, a 1px `--border-default` hairline, and the current page filled `--color-blue` with `--text-on-accent`, which is exactly how `Calendar` paints a selected day. The arrows are blue's single `ArrowIcon`, rotated, because the set has no left/right pair and `Calendar` already rotates this one. Three behaviours are the component's own and are why it is a component: the `…` compression, which is `aria-hidden` because "there are pages you cannot see" is not a fact a reader can act on; `aria-current="page"`, which is the statement the fill is only the paint of; and **drawing nothing at one page** — a control offering one choice is not a choice, which is the rule the candidate scope strip already follows (03 §08.41). Presentational: it knows the page, the count and a callback, and nothing about what is being paged. **Composed from measured parts** — the values are blue's, the arrangement is ours. | `designed` | [§D1](README.md), [§D6](README.md) | desktop 5 | [03](../hiring/03-candidate-database.design.md) |
+| 54 | `Toast` / `ToastHost` | New components. Prod uses `react-toastify`, which blue did not recreate, so `InfoBanner` had been standing in for it since Phase 1 — a fixed-position banner, which §7 and §24 were both written for. That held while a screen had exactly one thing to confirm and it could live in the flow: [reversal 4](README.md) put the candidate card's under its `PageHeader` and it is still there. The candidate database has three, and a panel that pushed the table down on each one would move the list under the hand working it. The surface is `InfoBanner`'s **unchanged** — the same 1px status line over the same 10%-of-status fill, the same 16px mark, the same `--font-size-xs` in `--text-tertiary`, the same `IconButton` dismiss (§10, §24). What is new is the three things a banner has never had to do: it **arrives and leaves**, 0.3s ease-in-out both ways, which is `--duration-hover` and `--ease-standard` and therefore every other motion in blue; it **goes away by itself**, holding the timer while the pointer is over it or focus is inside it, because a message somebody is reading must not be taken away mid-sentence; and they **stack**, oldest at the top, which is the whole argument for a host — a single fixed slot loses a message when a second action is taken before the first has faded. The **queue is the caller's**, deliberately: this pair draws and times what it is given, exactly as `AppShell` takes `menuOpen` rather than owning its drawer. Only the motion and the stacking are genuinely without precedent; the surface is measured. | `designed` | [§D1](README.md), [§D6](README.md) | desktop 5 | [03](../hiring/03-candidate-database.design.md) |
+| 55 | `Popover` | `portal` (default `true`) and the placement that comes with it: `position: fixed` in `document.body`, coordinates read off the trigger's own rectangle, re-read on `scroll` (capture, so an inner scroller counts) and `resize`, **flipping upward** when the panel would run off the bottom of the viewport, and outside-click reading the panel as well as the trigger because the panel is no longer a descendant of it. Blue positions the menu `absolute` inside the trigger's box, and that is a correct measurement: prod opens this from a table as tall as its content, on a page that scrolls. Every list screen here has a scroller instead, and the candidate database's Actions column put the menu in one — so the last rows' menus were clipped, which is to say the rows nobody can reach are the ones at the bottom of the page. `overflow: visible` on the cell does not fix it; the ancestor doing the clipping is the scroller. It is the same class of thing as the note on §48–§50 — a value measured correctly at the only geometry prod is ever seen in — and it is also the trap the archived-criterion note already called *general*: **any consumer that dims, transforms or filters a container holding a `Popover` will reproduce it**, and that note named portalling as the durable fix. This is it. The row's font size is carried across explicitly, because a portalled row inherits `document.body`'s instead of its trigger's. Selecting a row now `stopPropagation`s, which is the half of portalling that is not about pixels: **a portal leaves the DOM and not the React tree**, so a click inside the panel still bubbles to whatever rendered the `Popover` — on a table row that is the row's own handler, and choosing `Cancel interview` would have called the interview off *and* opened the record it belongs to. `portal={false}` restores blue's behaviour for a menu inside a `Modal` or a `MenuDrawer`, which wants to stay in the trap it was opened from. | `omission` | [§D2](README.md) | desktop 5 | [03](../hiring/03-candidate-database.design.md), [01](../hiring/01-vacancies.design.md), [06](../hiring/06-libraries.design.md) |
+
 ### A note on §48–§50 and the width nobody had looked at
 
 All three landed together, from one bug report, and every one of them is the same shape: a value
@@ -185,6 +192,8 @@ defend it. This is the whole list; everything not on it is a gap in the measurem
 | §42 / §43 `BoardCard` / `BoardColumn` | prod has no kanban | `Card` (§12), `NavigationCard`'s hover, `AppShell`'s well-and-panel arrangement |
 | §46 `BookingLayout` | prod has no public screen | `AuthLayout` (§11), minus its card and its claim on the wordmark |
 | §47 `FileInput` | prod accepts no file but an avatar | `TextInput`'s field, label, focus, error and message slot, plus `Button`'s neutral paint at `IconButton`'s in-field height |
+| §53 `Pagination` | prod's lists all scroll, so nothing pages one | blue's small controls — `IconButton`'s 36px target, `Calendar`'s navigation chevron and its selected-day fill |
+| §54 `Toast` / `ToastHost` | prod uses react-toastify, which blue did not recreate | `InfoBanner` (§7, §24) entire, plus blue's own `--duration-hover` / `--ease-standard` |
 
 Every row's right-hand column is the same claim: *the values are blue's, the arrangement is ours.*
 That is the strongest form the label can take, and it is the form the push should make in each case
@@ -198,6 +207,12 @@ than the components are, and naming them precisely is what keeps the push from o
   keyboard and focus argument rather than a visual one.
 - **§46** — the **880px column**, and nothing else. Its well, padding, rhythm and type are
   `AuthLayout`'s, which were blue's already.
+- **§53** — the **`…` compression** and the decision to draw nothing at one page. The cell, the
+  target size, the hairline and the selected fill are all blue's, and the arrow is blue's own
+  glyph turned ninety degrees.
+- **§54** — the **motion and the stack**. Every painted value is `InfoBanner`'s and both durations
+  are tokens; what has no precedent is that a notification in this system can now arrive, queue and
+  withdraw itself, which is a behaviour rather than a treatment.
 
 ### A note on §44 and the one row the token map must not be taken on
 

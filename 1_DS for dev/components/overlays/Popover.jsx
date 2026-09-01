@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { ThreeDotsIcon } from '../icons/Icon.jsx';
 
 /**
@@ -20,24 +21,80 @@ import { ThreeDotsIcon } from '../icons/Icon.jsx';
  * unchanged; what is under it is a real `aria-haspopup="menu"` button and a real `role="menu"`.
  * A blocked row is disabled *and still focusable* — `aria-disabled`, never the `disabled`
  * attribute — because the whole point of showing it is that its reason can be read.
+ *
+ * §55 — the menu is a **portal**, and it flips. Blue positions it `absolute` inside the
+ * trigger's own box, which is correct in prod because prod opens this from a table that is
+ * as tall as its content and scrolls the page. A row menu inside a scroller — which is what
+ * every list screen here has, and what the candidate database's Actions column is — has its
+ * lower rows clipped by that scroller, so the last row's menu is the one nobody can reach.
+ * `overflow: visible` on the cell does not fix it: the ancestor doing the clipping is the
+ * scroller, not the cell. The panel is therefore `position: fixed` in `document.body`,
+ * placed off the trigger's own rectangle, re-placed on scroll and resize, and opened
+ * **upward** when it would otherwise run off the bottom of the viewport. Outside-click reads
+ * both nodes, because the panel is no longer a descendant of the trigger.
+ *
+ * `portal` is `true` by default and can be turned off — a menu inside a `Modal` or a
+ * `MenuDrawer` wants to stay inside the focus trap it was opened from.
  */
+
+/** Blue's own offset: `top: 42` under a 32px trigger is 10px of gap, kept as the gap. */
+const GAP = 10;
+
 export function Popover({
-  trigger, items = [], align = 'right', disabled, label, style, ...rest
+  trigger, items = [], align = 'right', disabled, label, portal = true, style, ...rest
 }) {
   const [open, setOpen] = React.useState(false);
   const [hover, setHover] = React.useState(false);
   const [active, setActive] = React.useState(0);
   const ref = React.useRef(null);
   const triggerRef = React.useRef(null);
+  const menuRef = React.useRef(null);
   const itemRefs = React.useRef([]);
   const menuId = React.useId();
   const entries = items.map((item) => (typeof item === 'string' ? { label: item } : item));
+  /* Null until the layout pass has measured the panel; it renders at `opacity: 0` until
+     then, so nothing is painted at the wrong end of the screen and focus can still enter. */
+  const [pos, setPos] = React.useState(null);
 
   React.useEffect(() => {
-    function onDocClick(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    function onDocClick(e) {
+      if (ref.current && ref.current.contains(e.target)) return;
+      // §55 — the panel is not inside the trigger any more, so it has to be asked too.
+      if (menuRef.current && menuRef.current.contains(e.target)) return;
+      setOpen(false);
+    }
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
+
+  /* §55 — where the panel goes. Measured off the trigger rather than inherited from it,
+     which is the whole of what portalling costs and what the flip needs anyway. */
+  const place = React.useCallback(() => {
+    const anchor = triggerRef.current;
+    if (!anchor || !portal) return;
+    const rect = anchor.getBoundingClientRect();
+    const height = menuRef.current ? menuRef.current.offsetHeight : 0;
+    const below = rect.bottom + GAP;
+    // Upward only when it does not fit below *and* fits above: near the bottom of a short
+    // viewport neither is true, and staying put is better than moving off the other edge.
+    const flip = height > 0 && below + height > window.innerHeight && rect.top - GAP >= height;
+    setPos({
+      ...(flip ? { bottom: window.innerHeight - rect.top + GAP } : { top: below }),
+      ...(align === 'left' ? { left: rect.left } : { right: window.innerWidth - rect.right }),
+    });
+  }, [align, portal]);
+
+  React.useLayoutEffect(() => {
+    if (!open || !portal) { setPos(null); return undefined; }
+    place();
+    // `true` — capture, so a scroll inside any ancestor counts and not only the page's.
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+    };
+  }, [open, portal, place]);
 
   /* Focus enters the menu on open and comes back to the trigger on close — without the return
      a keyboard user is left on a node that has just been unmounted, i.e. on <body>. */
@@ -49,7 +106,13 @@ export function Popover({
     return () => { if (triggerRef.current && document.contains(triggerRef.current)) triggerRef.current.focus(); };
   }, [open]);
 
-  function select(entry) {
+  function select(entry, event) {
+    /* §55 — a portalled panel is out of the DOM but **not** out of the React tree: a
+       synthetic event raised inside it still bubbles to whatever rendered the `Popover`.
+       On a table row that is the row's own click handler, so choosing `Cancel` from the
+       menu would call the row's action off *and* open the record it belongs to. The panel
+       is not part of what it was opened from, so nothing it raises may reach it. */
+    if (event) event.stopPropagation();
     if (entry.disabled) return;
     setOpen(false);
     /* `onClick` is blue's own name for this; `onSelect` is §16's, so a consumer writing both
@@ -81,6 +144,98 @@ export function Popover({
   }
 
   const lit = !disabled && (open || hover);
+
+  /* The panel itself, built once and then either portalled or left where blue drew it. */
+  const menu = open && (
+    <div
+      id={menuId}
+      ref={menuRef}
+      role="menu"
+      aria-label={label}
+      onKeyDown={onMenuKeyDown}
+      style={{
+        /* §55 — fixed and placed off the trigger's rectangle when portalled, and blue's
+           own `absolute` box when not. `minWidth`, padding, radius, shadow and z-index are
+           blue's either way; only where the box hangs from changes. */
+        ...(portal
+          ? {
+              position: 'fixed',
+              ...(pos || {}),
+              /* Invisible for the one commit before the layout effect has measured it, and
+                 **`opacity`, never `visibility`**: a `visibility: hidden` element cannot take
+                 focus, and the effect that moves focus into the menu runs in that same
+                 window. The layout effect lands the real position before the browser paints,
+                 so nothing is ever seen at the wrong end of the screen either way. */
+              opacity: pos ? 1 : 0,
+            }
+          : { position: 'absolute', [align]: 0, top: 42 }),
+        minWidth: 160,
+        padding: '5px 0', backgroundColor: '#fff', borderRadius: 'var(--radius-m)',
+        boxShadow: 'var(--shadow-popover)', zIndex: 3001, overflow: 'hidden',
+      }}
+    >
+      {entries.map((item, i) => {
+        const describedBy = item.description ? `${menuId}-desc-${i}` : undefined;
+        return (
+          <div
+            key={item.key || item.label}
+            ref={(node) => { itemRefs.current[i] = node; }}
+            role="menuitem"
+            tabIndex={i === active ? 0 : -1}
+            data-testid={item.testId}
+            /* `aria-disabled`, not `disabled`: the row has to stay focusable, or the reason
+               it is blocked can be seen and never read. */
+            aria-disabled={item.disabled || undefined}
+            aria-describedby={describedBy}
+            onClick={(e) => select(item, e)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(item, e); }
+            }}
+            style={{
+              textAlign: 'left', margin: '0 5px', cursor: item.disabled ? 'default' : 'pointer',
+              color: item.disabled ? 'var(--text-secondary)' : item.danger ? 'var(--status-error)' : 'var(--text-primary)',
+              borderRadius: 4,
+              /* ActionsPopover sets no font-size on its rows, so they inherit the context:
+                 14px inside a table cell (.fBodyCell), 16px in the navbar's AccountMenu.
+                 A portalled panel inherits `document.body`'s instead, so the size the row
+                 would have taken from its trigger is carried across explicitly. */
+              padding: '8px 14px', fontFamily: 'var(--font-family-base)', fontSize: portal ? 14 : 'inherit',
+              /* §50 — the *label* never wraps. Letting the row go `normal` so its
+                 description could wrap took the label with it, and "Delete vacancy" broke
+                 across two lines in a 160px menu. Only the description wraps now. */
+              whiteSpace: 'nowrap',
+            }}
+            onFocus={() => setActive(i)}
+            onMouseEnter={(e) => {
+              if (item.disabled) return;
+              e.currentTarget.style.backgroundColor = '#f8f8f8';
+              if (!item.danger) e.currentTarget.style.color = 'var(--color-blue)';
+            }}
+            onMouseLeave={(e) => {
+              if (item.disabled) return;
+              e.currentTarget.style.backgroundColor = 'transparent';
+              if (!item.danger) e.currentTarget.style.color = 'var(--text-primary)';
+            }}
+          >
+            {item.label}
+            {/* §22 — the reason, drawn in the row rather than in a bubble. Native `title`
+                is not keyboard-reachable in any major browser, and a bubble that renders
+                only on hover cannot be an `aria-describedby` target that always resolves. */}
+            {item.description && (
+              <div
+                id={describedBy}
+                data-testid={item.descriptionTestId}
+                style={{ marginTop: 2, maxWidth: 220, fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', whiteSpace: 'normal' }}
+              >
+                {item.description}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block', marginRight: trigger ? 0 : 8 }}>
       {trigger ? (
@@ -123,77 +278,7 @@ export function Popover({
           <ThreeDotsIcon width="22" aria-hidden />
         </button>
       )}
-      {open && (
-        <div
-          id={menuId}
-          role="menu"
-          aria-label={label}
-          onKeyDown={onMenuKeyDown}
-          style={{
-            position: 'absolute', [align]: 0, top: 42, minWidth: 160,
-            padding: '5px 0', backgroundColor: '#fff', borderRadius: 'var(--radius-m)',
-            boxShadow: 'var(--shadow-popover)', zIndex: 1000, overflow: 'hidden',
-          }}
-        >
-          {entries.map((item, i) => {
-            const describedBy = item.description ? `${menuId}-desc-${i}` : undefined;
-            return (
-              <div
-                key={item.key || item.label}
-                ref={(node) => { itemRefs.current[i] = node; }}
-                role="menuitem"
-                tabIndex={i === active ? 0 : -1}
-                data-testid={item.testId}
-                /* `aria-disabled`, not `disabled`: the row has to stay focusable, or the reason
-                   it is blocked can be seen and never read. */
-                aria-disabled={item.disabled || undefined}
-                aria-describedby={describedBy}
-                onClick={() => select(item)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(item); }
-                }}
-                style={{
-                  textAlign: 'left', margin: '0 5px', cursor: item.disabled ? 'default' : 'pointer',
-                  color: item.disabled ? 'var(--text-secondary)' : item.danger ? 'var(--status-error)' : 'var(--text-primary)',
-                  borderRadius: 4,
-                  /* ActionsPopover sets no font-size on its rows, so they inherit the context:
-                     14px inside a table cell (.fBodyCell), 16px in the navbar's AccountMenu. */
-                  padding: '8px 14px', fontFamily: 'var(--font-family-base)', fontSize: 'inherit',
-                  /* §50 — the *label* never wraps. Letting the row go `normal` so its
-                     description could wrap took the label with it, and "Delete vacancy" broke
-                     across two lines in a 160px menu. Only the description wraps now. */
-                  whiteSpace: 'nowrap',
-                }}
-                onFocus={() => setActive(i)}
-                onMouseEnter={(e) => {
-                  if (item.disabled) return;
-                  e.currentTarget.style.backgroundColor = '#f8f8f8';
-                  if (!item.danger) e.currentTarget.style.color = 'var(--color-blue)';
-                }}
-                onMouseLeave={(e) => {
-                  if (item.disabled) return;
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                  if (!item.danger) e.currentTarget.style.color = 'var(--text-primary)';
-                }}
-              >
-                {item.label}
-                {/* §22 — the reason, drawn in the row rather than in a bubble. Native `title`
-                    is not keyboard-reachable in any major browser, and a bubble that renders
-                    only on hover cannot be an `aria-describedby` target that always resolves. */}
-                {item.description && (
-                  <div
-                    id={describedBy}
-                    data-testid={item.descriptionTestId}
-                    style={{ marginTop: 2, maxWidth: 220, fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', whiteSpace: 'normal' }}
-                  >
-                    {item.description}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {menu && (portal && typeof document !== 'undefined' ? createPortal(menu, document.body) : menu)}
     </div>
   );
 }

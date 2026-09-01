@@ -198,3 +198,38 @@ const mismatch = (): AssessmentResult => ({
   error: 'type_mismatch',
   message: HIRING_MESSAGES.card.criterionTypeMismatch,
 });
+
+/**
+ * One recorded assessment, as anything that only wants to *read* it needs it.
+ *
+ * The four columns are optional rather than nullable because two callers hold this shape
+ * from opposite ends: the card, which receives all four with nulls in the three that do
+ * not apply, and the candidate database's row, which builds it from whichever column the
+ * criterion's type names.
+ */
+export interface AssessedValue {
+  /** The scale value's label, resolved from `valueId` — never the id itself. */
+  valueLabel?: string | null;
+  valueBool?: boolean | null;
+  valueNumber?: number | null;
+  valueText?: string | null;
+}
+
+/**
+ * What an assessment reads as: `B1`, `Yes`, `7`, `Berlin`.
+ *
+ * Here rather than beside either consumer because there are now two — the candidate
+ * card's chip and the database row's — and a second copy is how they would come to
+ * disagree about what a `false` boolean says. A scale is read by **label**, which is the
+ * one place a label is the right thing to show: comparison is by position (03 §04.15),
+ * and this is the other job entirely.
+ *
+ * An empty string for an assessment with nothing in any column. That cannot be written —
+ * `validateAssessment` requires exactly one — so it is a floor rather than a case.
+ */
+export function assessedValueLabel(assessment: AssessedValue): string {
+  if (assessment.valueLabel != null) return assessment.valueLabel;
+  if (assessment.valueBool != null) return assessment.valueBool ? 'Yes' : 'No';
+  if (assessment.valueNumber != null) return String(assessment.valueNumber);
+  return assessment.valueText ?? '';
+}

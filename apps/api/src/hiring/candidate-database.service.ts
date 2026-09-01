@@ -1,5 +1,6 @@
 import { Injectable, UnprocessableEntityException } from '@nestjs/common';
 import {
+  assessedValueLabel,
   candidateFilterPlan,
   latestAssessment,
   matchesEveryCriterion,
@@ -18,14 +19,36 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import { ViewerTimeZoneService } from './viewer-time-zone.service';
 
+/**
+ * One assessed criterion, rolled up to the candidate (03 §01.2, §04.16).
+ *
+ * The **value's label**, not its id: comparison is by position and reading is by name,
+ * and this is the reading half. Built with `assessedValueLabel`, which the candidate
+ * card's own chip uses, so `Yes` means the same thing on both screens.
+ */
+export interface PresentedAssessment {
+  criterionId: string;
+  name: string;
+  value: string;
+}
+
 /** One row of the list: a **person**, with the application it speaks for beside them. */
 export interface PresentedCandidate {
   id: string;
   fullName: string;
   email: string;
   applicationCount: number;
-  /** Deduplicated across every vacancy they have applied to (03 §01.2). */
-  categories: Array<{ id: string; name: string }>;
+  /**
+   * What this candidate has been **assessed as**, one entry per criterion, rolled up
+   * across their whole history to their most recent interview that answered it
+   * (03 §01.2, §04.16). Alphabetical by criterion, so a page of rows reads down a column
+   * rather than in whatever order the assessments were written.
+   *
+   * It is what the row's chips draw, and it replaced the vacancy categories that used to
+   * sit there: the categories are already the thing the *filter* is built out of, while
+   * `English: B1` is what a recruiter scans a list of people for.
+   */
+  criteria: PresentedAssessment[];
   /**
    * The one application the row draws a vacancy, a date and a status from — and, in
    * `mine`, the one the row's position was decided by (03 §08.44).
@@ -38,8 +61,22 @@ export interface PresentedCandidate {
   latestApplication: {
     id: string;
     vacancyTitle: string;
+    /**
+     * The **vacancy's assigned** interviewer, which is the one this screen means
+     * everywhere else: it is what the Interviewer filter matches on and what the `mine`
+     * scope is defined by (03 §09.48). The application's own frozen interviewer is a
+     * different fact and belongs to the card, where the interview itself is the subject.
+     */
+    interviewer: { accountId: string; fullName: string };
     startUtc: string;
     status: string;
+    /**
+     * The interview did not take place — and nothing about the candidate's standing
+     * (07 §01.1). The row draws it *instead of* the status badge, because a cancelled
+     * interview has no stage to report, and it is what removes the row's two interview
+     * actions.
+     */
+    isCancelled: boolean;
   } | null;
 }
 
@@ -53,7 +90,12 @@ interface CandidateRecord {
     id: string;
     status: string;
     start: Date;
-    vacancy: { title: string; categories: Array<{ category: { id: string; name: string } }> };
+    isCancelled: boolean;
+    vacancy: {
+      title: string;
+      interviewerAccountId: string;
+      interviewer: { firstName: string; lastName: string };
+    };
   }>;
 }
 
@@ -71,10 +113,12 @@ const ROW_APPLICATIONS = {
       id: true,
       status: true,
       start: true,
+      isCancelled: true,
       vacancy: {
         select: {
           title: true,
-          categories: { select: { category: { select: { id: true, name: true } } } },
+          interviewerAccountId: true,
+          interviewer: { select: { firstName: true, lastName: true } },
         },
       },
     },
@@ -254,10 +298,91 @@ export class CandidateDatabaseService {
           ? await this.ownEmail(viewer.accountId)
           : await this.firstInterviewerEmail(organizationId),
       ),
-      candidates: listed.rows.map((candidate) =>
-        this.present(candidate, listed.speaksFor.get(candidate.id)),
-      ),
+      candidates: await this.presentPage(listed),
     };
+  }
+
+  /**
+   * The page's rows, with their assessed criteria attached.
+   *
+   * The rollup is one query for the whole page rather than one per row: twenty-five rows
+   * is twenty-five round trips otherwise, and the fold is the same one
+   * `candidateIdsMatchingCriteria` already does — the difference being that this one
+   * reads **every** criterion the candidates hold rather than only the ones a filter
+   * named, because the chips say what is known about a person and not what was asked.
+   */
+  private async presentPage(listed: Listed): Promise<PresentedCandidate[]> {
+    const assessed = await this.assessments(listed.rows.map((row) => row.id));
+    return listed.rows.map((candidate) =>
+      this.present(candidate, assessed.get(candidate.id) ?? [], listed.speaksFor.get(candidate.id)),
+    );
+  }
+
+  /**
+   * Every candidate on this page, and what each of them has been assessed as.
+   *
+   * Same rule as the filter (03 §04.16): across the applications carrying an assessment
+   * for a criterion, the one whose *interview* is latest wins, ties broken on the
+   * assessment's own `updatedAt`. A criterion the last interviewer never asked about does
+   * not blank out an earlier answer — the candidate's English did not become unknown.
+   *
+   * Archived criteria are included. The assessment happened, and archiving a criterion
+   * takes it out of the pickers rather than out of the record (03 §04.19).
+   */
+  private async assessments(
+    candidateIds: string[],
+  ): Promise<ReadonlyMap<string, PresentedAssessment[]>> {
+    if (candidateIds.length === 0) return new Map();
+
+    const rows = await this.prisma.applicationCriterion.findMany({
+      where: { application: { candidateId: { in: candidateIds } } },
+      select: {
+        criterionId: true,
+        valueBool: true,
+        valueNumber: true,
+        valueText: true,
+        updatedAt: true,
+        // The label, resolved here rather than on the row: a scale's id means nothing to
+        // a reader, and reading by label is the one job that is not a comparison.
+        value: { select: { label: true } },
+        criterion: { select: { name: true } },
+        application: { select: { candidateId: true, start: true } },
+      },
+    });
+
+    const byCandidate = new Map<string, Map<string, typeof rows>>();
+    for (const row of rows) {
+      const candidate = byCandidate.get(row.application.candidateId) ?? new Map();
+      candidate.set(row.criterionId, [...(candidate.get(row.criterionId) ?? []), row]);
+      byCandidate.set(row.application.candidateId, candidate);
+    }
+
+    const presented = new Map<string, PresentedAssessment[]>();
+    for (const [candidateId, held] of byCandidate) {
+      const chips: PresentedAssessment[] = [];
+      for (const [criterionId, recorded] of held) {
+        const latest = latestAssessment(
+          recorded.map((row) => ({ ...row, interviewStart: row.application.start })),
+        );
+        if (!latest) continue;
+        chips.push({
+          criterionId,
+          name: latest.criterion.name,
+          value: assessedValueLabel({
+            valueLabel: latest.value?.label ?? null,
+            valueBool: latest.valueBool,
+            valueNumber: latest.valueNumber,
+            valueText: latest.valueText,
+          }),
+        });
+      }
+      presented.set(
+        candidateId,
+        chips.sort((left, right) => left.name.localeCompare(right.name)),
+      );
+    }
+
+    return presented;
   }
 
   /**
@@ -634,14 +759,11 @@ export class CandidateDatabaseService {
    * gone by the time the row was read. A row with a date from the wrong interview would
    * be the exact disagreement §08.44 rules out; a row with no date is merely thin.
    */
-  private present(candidate: CandidateRecord, speaksFor?: string): PresentedCandidate {
-    const categories = new Map<string, { id: string; name: string }>();
-    for (const application of candidate.applications) {
-      for (const assignment of application.vacancy.categories) {
-        categories.set(assignment.category.id, assignment.category);
-      }
-    }
-
+  private present(
+    candidate: CandidateRecord,
+    criteria: PresentedAssessment[],
+    speaksFor?: string,
+  ): PresentedCandidate {
     // Applications arrive latest interview first, so `all`'s headline is simply the first.
     const headline = speaksFor
       ? candidate.applications.find((application) => application.id === speaksFor)
@@ -656,13 +778,18 @@ export class CandidateDatabaseService {
       // Their whole history on either tab: the scope narrows who is listed, not what is
       // read about them.
       applicationCount: candidate.applications.length,
-      categories: [...categories.values()],
+      criteria,
       latestApplication: headline
         ? {
             id: headline.id,
             vacancyTitle: headline.vacancy.title,
+            interviewer: {
+              accountId: headline.vacancy.interviewerAccountId,
+              fullName: `${headline.vacancy.interviewer.firstName} ${headline.vacancy.interviewer.lastName}`,
+            },
             startUtc: headline.start.toISOString(),
             status: headline.status,
+            isCancelled: headline.isCancelled,
           }
         : null,
     };

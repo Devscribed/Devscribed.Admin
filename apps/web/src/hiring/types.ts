@@ -251,14 +251,28 @@ export interface Board {
  * `fullName` is the candidate's current name, which the latest booking may have
  * corrected — the frozen `submittedName` belongs to an application and stays on the card.
  */
+export interface RowAssessment {
+  criterionId: string;
+  name: string;
+  /** Already read: `B1`, `Yes`, `7` — never a scale value's id. */
+  value: string;
+}
+
 export interface CandidateRow {
   id: string;
   fullName: string;
   email: string;
   /** Rendered only when it is more than one (03 §01.2). Their whole history, on either tab. */
   applicationCount: number;
-  /** Deduplicated across every vacancy they have applied to. */
-  categories: Array<{ id: string; name: string }>;
+  /**
+   * What they have been assessed as, rolled up to their most recent interview that
+   * answered each criterion (03 §01.2, §04.16), alphabetical by criterion.
+   *
+   * The row's chips. `English: B1` is what a recruiter scans a list of people for; the
+   * vacancy categories that used to be here are the thing the *filter* is built out of,
+   * and drawing them twice said nothing the drawer did not.
+   */
+  criteria: RowAssessment[];
   /**
    * The application the row speaks about — **which the scope decides** (03 §08.44).
    *
@@ -270,8 +284,12 @@ export interface CandidateRow {
   latestApplication: {
     id: string;
     vacancyTitle: string;
+    /** The vacancy's assigned interviewer — the one the filter and the scope both mean. */
+    interviewer: { accountId: string; fullName: string };
     startUtc: string;
     status: ApplicationStatus;
+    /** The interview did not take place; the row badges that instead of a status. */
+    isCancelled: boolean;
   } | null;
 }
 

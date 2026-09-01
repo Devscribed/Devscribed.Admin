@@ -36,6 +36,7 @@ declare module '@ds' {
   export * from '@ds/components/feedback/EmptyState';
   export * from '@ds/components/feedback/InfoBanner';
   export * from '@ds/components/feedback/Preloader';
+  export * from '@ds/components/feedback/Toast';
 
   export * from '@ds/components/forms/Checkbox';
   export * from '@ds/components/forms/CheckboxRow';
@@ -56,6 +57,7 @@ declare module '@ds' {
   export * from '@ds/components/navigation/BackTo';
   export * from '@ds/components/navigation/NavigationCard';
   export * from '@ds/components/navigation/PageTabs';
+  export * from '@ds/components/navigation/Pagination';
   export * from '@ds/components/navigation/Sidebar';
 
   export * from '@ds/components/overlays/ConfirmDialog';

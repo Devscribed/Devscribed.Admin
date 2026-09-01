@@ -289,19 +289,70 @@ describe('Hiring — candidate database', () => {
     });
   });
 
-  it('deduplicates the categories of every vacancy the candidate applied to', async () => {
-    const { admin, react, reactVacancy, slots } = await seedDatabase();
+  /**
+   * TC-H03-INT-14 — the row's chips are the **rollup**, not a list of assessments.
+   *
+   * One criterion answered twice is one chip carrying the later interview's answer
+   * (03 §04.16), which is the same rule the filter runs on and the reason the two can
+   * never disagree on screen: a row returned by `English at least B1` reads `English: B2`.
+   */
+  it('rolls every assessment up to one chip per criterion, alphabetically', async () => {
+    const { admin, react, reactVacancy, english, slots } = await seedDatabase();
     const second = await createVacancy(app, admin, {
       title: 'React Native Engineer',
       categoryIds: [react.id],
     });
+    const availability = await createCriterion(app, admin, { name: 'Availability', type: 'text' });
 
-    await book(reactVacancy, { email: 'sam@example.com', startUtc: slots[0] });
-    await book(second, { email: 'sam@example.com', startUtc: slots[1] });
+    const march = await book(reactVacancy, { email: 'sam@example.com', startUtc: slots[0] });
+    const august = await book(second, { email: 'sam@example.com', startUtc: slots[1] });
+    await assess(admin, march.applicationId, english.id, { valueId: valueId(english, 'A2') });
+    await assess(admin, august.applicationId, english.id, { valueId: valueId(english, 'B2') });
+    await assess(admin, august.applicationId, availability.id, { valueText: 'Two weeks' });
+
+    // The rollup reads the **interview's** start, so the two have to sit apart in time.
+    await moveTo(march.applicationId, daysFromNow(-120));
+    await moveTo(august.applicationId, daysFromNow(-10));
 
     const response = await list(admin);
 
-    expect(response.body.candidates[0].categories).toEqual([{ id: react.id, name: 'React' }]);
+    expect(response.body.candidates[0].criteria).toEqual([
+      { criterionId: availability.id, name: 'Availability', value: 'Two weeks' },
+      // B2, not A2: the later interview wins, and the id never leaves the server.
+      { criterionId: english.id, name: 'English', value: 'B2' },
+    ]);
+  });
+
+  /**
+   * The row's second line under the vacancy, and the badge that replaces its status.
+   *
+   * The interviewer is the **vacancy's**, which is what the Interviewer filter matches on
+   * and what `mine` is defined by (03 §09.48) — a row whose second line named somebody the
+   * filter had not matched would be the row disagreeing with its own position.
+   */
+  it('names the vacancy\'s interviewer and reports a cancelled interview', async () => {
+    const { admin, reactVacancy, slots } = await seedDatabase();
+    const booked = await book(reactVacancy, { email: 'sam@example.com', startUtc: slots[0] });
+
+    const before = await list(admin);
+    expect(before.body.candidates[0].latestApplication).toMatchObject({
+      vacancyTitle: 'Senior React Engineer',
+      interviewer: { accountId: admin.accountId, fullName: 'Pat Owner' },
+      isCancelled: false,
+    });
+
+    await prisma.application.update({
+      where: { id: booked.applicationId },
+      data: { isCancelled: true },
+    });
+
+    const after = await list(admin);
+    // Still `scheduled`: the flag says the interview did not take place and nothing about
+    // the candidate's standing (07 §01.1). The row draws the flag instead of the column.
+    expect(after.body.candidates[0].latestApplication).toMatchObject({
+      status: 'scheduled',
+      isCancelled: true,
+    });
   });
 
   it('ORs the ids within one multi-select and ANDs across two kinds', async () => {

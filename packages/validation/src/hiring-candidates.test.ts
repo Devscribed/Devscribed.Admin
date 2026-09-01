@@ -3,6 +3,7 @@ import {
   CANDIDATE_MESSAGES,
   CANDIDATE_PAGE_SIZE_DEFAULT,
   CANDIDATE_PAGE_SIZE_MAX,
+  candidateActionsLabel,
   candidateFilterPlan,
   candidateResultLabel,
   candidateScopeTabLabel,
@@ -438,5 +439,24 @@ describe('candidateScopeTabLabel', () => {
   it('carries the count inside the label, where the design puts it', () => {
     expect(candidateScopeTabLabel('all', 128)).toBe('All (128)');
     expect(candidateScopeTabLabel('mine', 0)).toBe('Assigned to me (0)');
+  });
+});
+
+describe('candidateActionsLabel', () => {
+  it('names the person the kebab belongs to', () => {
+    // Twenty-five rows draw the same glyph, so without this a reader walking the page is
+    // told "Actions, menu" twenty-five times and cannot tell which row they are on.
+    expect(candidateActionsLabel('Jane Doe')).toBe('Actions for Jane Doe');
+  });
+});
+
+describe('pageCount', () => {
+  it('is what the page strip is drawn from', () => {
+    // 25 to a page (03 §05.20): 26 candidates is two pages and 25 is one, which is also
+    // the case that makes the whole control disappear.
+    expect(pageCount(26, CANDIDATE_PAGE_SIZE_DEFAULT)).toBe(2);
+    expect(pageCount(25, CANDIDATE_PAGE_SIZE_DEFAULT)).toBe(1);
+    // Never zero: page 1 of 0 must not render, so an empty list is still one page.
+    expect(pageCount(0, CANDIDATE_PAGE_SIZE_DEFAULT)).toBe(1);
   });
 });

@@ -210,23 +210,33 @@ compose it the same way, which is the point: one confirmation pattern, not a sec
 even on a destructive confirmation ([§40](../design-system/ledger.md)), and these are the dialogs
 where the irreversible action must not look like the safe one.
 
-**The outcome `Toast` is an `InfoBanner`.** `Toast` is gone (D4) and Phase 3 settled the
-replacement: a banner with a close control ([§24](../design-system/ledger.md)), because prod's
+**On the candidate card the outcome is an `InfoBanner`.** `Toast` was gone (D4) and Phase 3 settled
+the replacement: a banner with a close control ([§24](../design-system/ledger.md)), because prod's
 banners report a *state* and go away when the state does, while one standing in for a toast reports
 an *event* that nothing later makes untrue. The two test ids are unchanged — they name the
 announcement, not the component that carries it.
 
-On the **candidate list**, the two actions belong to a scheduled row, and they are **not drawn
-yet**. They lived in a trailing cell of My interviews' `Table` — two neutral buttons revealed on row
-hover and on keyboard focus, never a `delete` fill, because a destructive fill repeated down a table
-of interviews turns a calm list into an alarm. That screen is the list's `Assigned to me` scope now
-([03](03-candidate-database.design.md)), and the actions return with the table's own actions kebab,
-where the same argument holds for the same reason: one quiet control per row, and the destructive
-item inside it.
+**On the candidate list it is a real toast** ([§54](../design-system/ledger.md)), and the two are
+not an inconsistency. The card reports one outcome about the one interview filling the screen, and
+a banner under its `PageHeader` is where that belongs — [reversal 4](../design-system/README.md)'s
+own slot. The list reports an outcome about a *row*, and the row is still there: a panel that pushed
+the table down would move the list under the hand working it, and three actions taken in a minute
+would push it three times. Same test ids in both places, for the same reason as ever.
 
-Until then the **candidate card is the team's only surface** for both actions. Nothing is lost that
-the card does not already do — it is one click further from a list somebody is working down, which
-is the whole cost, and it is temporary.
+On the **candidate list** the two actions live in the row's **actions kebab**
+([03 §10](03-candidate-database.design.md)), which is where they were always going to end up. They
+had lived in a trailing cell of My interviews' `Table` — two neutral buttons revealed on row hover
+and on keyboard focus, never a `delete` fill, because a destructive fill repeated down a table of
+interviews turns a calm list into an alarm. That argument survives the move intact: one quiet
+control per row, and the destructive item inside it, drawn in `--status-error` where it is one line
+of a menu rather than a fill repeated down a column.
+
+**Reschedule does not mount the picker here.** It opens the candidate card with the dialog already
+up, on the row's own application. The team never sends the candidate's manage link (§01.5), so the
+card is the internal door; a second host for a picker that has to fetch availability, hold a zone
+and a format, and answer with a whole application would be a second thing to keep in step for the
+sake of one click. **Cancel is mounted**, because it is one `TextArea` and a confirmation, and the
+component is the card's own.
 
 ## Copy
 

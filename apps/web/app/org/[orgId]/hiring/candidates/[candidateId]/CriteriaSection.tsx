@@ -5,6 +5,9 @@ import {
   APPLICATION_LIMITS,
   HIRING_MESSAGES,
   MESSAGES,
+  // The same rule the database row reads an assessment with, so `Yes` means the same
+  // thing on both screens (validation `assessedValueLabel`).
+  assessedValueLabel,
   type AssessmentInput,
 } from '@devscribed/validation';
 import { Button, Chip, Select, TextInput, type SelectOption } from '@/ds';
@@ -501,7 +504,7 @@ function ReadOnlyCriteria({ criteria }: { criteria: CardCriterion[] }) {
                     data-testid={`card-criterion-value-${assessment.criterionId}`}
                     style={{ marginLeft: 'var(--space-2)', marginRight: 3, fontSize: 14 }}
                   >
-                    {recordedValue(assessment)}
+                    {assessedValueLabel(assessment)}
                   </span>
                 }
               >
@@ -513,14 +516,6 @@ function ReadOnlyCriteria({ criteria }: { criteria: CardCriterion[] }) {
       )}
     </div>
   );
-}
-
-/** The one value column the assessment's type names, as the chip reads it. */
-function recordedValue(assessment: CardCriterion): string {
-  if (assessment.valueLabel !== null) return assessment.valueLabel;
-  if (assessment.valueBool !== null) return assessment.valueBool ? 'Yes' : 'No';
-  if (assessment.valueNumber !== null) return String(assessment.valueNumber);
-  return assessment.valueText ?? '';
 }
 
 /**

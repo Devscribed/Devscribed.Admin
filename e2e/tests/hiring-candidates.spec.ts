@@ -395,6 +395,137 @@ test.describe('Candidate database', () => {
     );
   });
 
+
+  /**
+   * TC-H03-E2E-07 — the page strip.
+   *
+   * Reversal 1, back the other way: pagination returns, and the count it was once traded
+   * for is still above the table. The case that matters is the pair of them agreeing — the
+   * count says how many match and the strip says which twenty-five of them are on screen,
+   * and a filter has to move both.
+   */
+  test('pages a list longer than one page, and disappears when it fits', async ({
+    page,
+    request,
+  }) => {
+    // Twenty-six bookings, one at a time against a real availability window — slow by
+    // construction, and the only way to have more than one page of anything.
+    test.setTimeout(240_000);
+
+    const org = await registerOrganization(request, uniqueEmail('cand-pages'));
+    const vacancy = await createVacancy(request, org, { title: 'Senior React Engineer' });
+    for (let index = 0; index < 26; index += 1) {
+      await bookInterview(request, vacancy.publicSlug, {
+        firstName: 'Page',
+        // One token and no space: search ANDs its terms across name and email, and a bare
+        // `07` also matches the timestamp inside a generated address.
+        lastName: `Candidate${String(index).padStart(2, '0')}`,
+        email: uniqueEmail(`paged-${index}`),
+        slotIndex: index,
+      });
+    }
+
+    await signIn(page, org.email);
+    await page.goto(`/org/${org.organizationId}/hiring/candidates`);
+
+    const rows = page.getByTestId('candidates-list').locator('[data-testid^="candidate-row-"]');
+    await expect(page.getByTestId('candidates-count')).toHaveText('26 candidates');
+    await expect(rows).toHaveCount(25);
+
+    // The strip states where it is rather than only painting it.
+    await expect(page.getByTestId('candidates-page-1')).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByTestId('candidates-page-2')).not.toHaveAttribute('aria-current', 'page');
+
+    await page.getByTestId('candidates-page-2').click();
+    await expect(rows).toHaveCount(1);
+    await expect(page.getByTestId('candidates-page-2')).toHaveAttribute('aria-current', 'page');
+    // The count is org-wide and unfiltered, so it does not move with the page.
+    await expect(page.getByTestId('candidates-count')).toHaveText('26 candidates');
+
+    // A filter is a new question: back to page 1, and the strip goes entirely when what
+    // is left fits on it. A control offering one choice is not a choice.
+    await page.getByTestId('candidates-search-input').fill('Candidate07');
+    await expect(page.getByTestId('candidates-count')).toHaveText('1 of 26 candidates');
+    await expect(page.getByTestId('candidates-pagination')).toHaveCount(0);
+  });
+
+  /**
+   * TC-H03-E2E-08 — the row's actions.
+   *
+   * Four claims, and the first is the one the whole column rests on: pressing the kebab is
+   * not pressing the row. The menu is a portal (ledger §55), so the row cannot decide that
+   * by containment and has to be asked directly.
+   */
+  test('acts on a row without opening it, and confirms what it did', async ({ page, request }) => {
+    const { org, path } = await seed(request, 'cand-actions');
+    await signIn(page, org.email);
+    await page.goto(path);
+
+    await page.getByTestId('candidates-search-input').fill('Tom');
+    await expect(page.getByTestId('candidates-count')).toHaveText('1 of 3 candidates');
+    const id = await onlyRowId(page);
+
+    // The kebab opens in place; the row it sits in does not navigate.
+    await page.getByTestId(`candidate-actions-${id}`).click();
+    await expect(page.getByTestId(`candidate-action-calendar-${id}`)).toBeVisible();
+    expect(page.url()).toContain('/hiring/candidates');
+
+    // `View in calendar` confirms and changes nothing else — no navigation, no request.
+    let requests = 0;
+    page.on('request', (sent) => {
+      if (sent.url().includes('/hiring/')) requests += 1;
+    });
+    await page.getByTestId(`candidate-action-calendar-${id}`).click();
+    await expect(page.getByTestId(`toast-calendar-${id}`)).toBeVisible();
+    expect(page.url()).toContain('/hiring/candidates');
+    expect(requests).toBe(0);
+
+    // Cancelling names the interview, warns that the candidate is told, and leaves the
+    // row in place wearing the outlined `Cancelled` badge instead of its status.
+    await page.getByTestId(`candidate-actions-${id}`).click();
+    await page.getByTestId(`candidate-action-cancel-${id}`).click();
+    const dialog = page.locator('[data-testid^="application-cancel-dialog-"]');
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText('Tom Fisher');
+    await expect(dialog).toContainText('notified');
+    await dialog.locator('[data-testid^="application-cancel-confirm-"]').click();
+
+    await expect(page.getByTestId('toast-interview-cancelled')).toBeVisible();
+    await expect(page.getByTestId(`candidate-status-${id}`)).toHaveText('Cancelled');
+
+    // A cancelled interview has nothing left to move, so the three interview actions go
+    // and the one about the person stays.
+    await page.getByTestId(`candidate-actions-${id}`).click();
+    await expect(page.getByTestId(`candidate-action-open-${id}`)).toBeVisible();
+    await expect(page.getByTestId(`candidate-action-reschedule-${id}`)).toHaveCount(0);
+    await expect(page.getByTestId(`candidate-action-calendar-${id}`)).toHaveCount(0);
+  });
+
+  /**
+   * `Reschedule` lands on the card with the dialog already up (07 §01.5) — the team never
+   * sends the candidate's own manage link, so the internal door is the card, and a row
+   * action that merely opened it would be two presses for one intention.
+   */
+  test('opens the candidate card with the reschedule dialog already up', async ({
+    page,
+    request,
+  }) => {
+    const { org, path } = await seed(request, 'cand-resched');
+    await signIn(page, org.email);
+    await page.goto(path);
+
+    await page.getByTestId('candidates-search-input').fill('Tom');
+    await expect(page.getByTestId('candidates-count')).toHaveText('1 of 3 candidates');
+    const id = await onlyRowId(page);
+
+    await page.getByTestId(`candidate-actions-${id}`).click();
+    await page.getByTestId(`candidate-action-reschedule-${id}`).click();
+
+    await page.waitForURL('**/hiring/candidates/**');
+    await expect(page.getByTestId('candidate-card')).toBeVisible();
+    await expect(page.locator('[data-testid^="application-reschedule-dialog-"]')).toBeVisible();
+  });
+
   /** The id of the single row on screen — the tests above narrow to one before asking. */
   async function onlyRowId(page: Page): Promise<string> {
     const row = page.getByTestId('candidates-list').locator('[data-testid^="candidate-row-"]');

@@ -81,6 +81,50 @@ export const CANDIDATE_MESSAGES = {
    */
   addCriterion: { placeholder: 'Type a criterion…' },
   /**
+   * The table's own words (03 §05, design §Copy). The third heading is the one that
+   * moves with the scope (§08.44); the rest are fixed and sentence case, because blue
+   * spends its one uppercase treatment on `PageTabs`.
+   */
+  columns: {
+    name: 'Name',
+    email: 'Email',
+    vacancy: 'Vacancy',
+    interviewDate: 'Interview date',
+    status: 'Status',
+    actions: 'Actions',
+  },
+  /**
+   * The row's kebab (03 §10.53, 07 §08.40). Three of the five are about the *interview*
+   * and are therefore drawn only on a row that still has one; the other two are about
+   * the person and are always there.
+   *
+   * `viewInCalendar` confirms and does nothing else. The interview's calendar entry is
+   * the interviewer's own mailbox event, and this product holds no deep link into it —
+   * so the row acknowledges the request rather than pretending to a navigation it cannot
+   * make. If a link is ever wanted it is its own decision (03 §10.55).
+   */
+  actions: {
+    viewInCalendar: 'View in calendar',
+    reschedule: 'Reschedule interview',
+    cancel: 'Cancel interview',
+    viewCandidate: 'View candidate',
+  },
+  /**
+   * The row's own confirmations. The two interview outcomes are `HIRING_MESSAGES.toast`'s
+   * — they are the same events the candidate card reports, and one wording serves both.
+   * This is the one the list raises alone.
+   */
+  toast: { viewInCalendar: 'Opening the interview in the calendar\u2026' },
+  /**
+   * The page strip (03 §05.20). Named because there may be more than one landmark on
+   * screen, and because the arrows carry a glyph and no text of their own.
+   */
+  pagination: {
+    label: 'Pages',
+    previous: 'Previous page',
+    next: 'Next page',
+  },
+  /**
    * The two scope tabs. `Assigned to me` is what the separate My interviews screen
    * became: the same list, narrowed to the vacancies the viewer interviews for.
    */
@@ -91,6 +135,14 @@ export const CANDIDATE_MESSAGES = {
     tablist: 'Candidate scope',
   },
 } as const;
+
+/**
+ * The kebab's accessible name — `Actions for Jane Doe`.
+ *
+ * Every row draws the same glyph, so without the name a reader walking a page of
+ * twenty-five is told "Actions, menu" twenty-five times over.
+ */
+export const candidateActionsLabel = (fullName: string): string => `Actions for ${fullName}`;
 
 /** `128 candidates`, `1 candidate`. */
 export const candidateCountLabel = (count: number): string =>
