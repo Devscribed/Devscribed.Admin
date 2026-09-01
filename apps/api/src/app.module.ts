@@ -33,6 +33,7 @@ import { ClientsController } from './clients/clients.controller';
 import { ClientsService } from './clients/clients.service';
 import { HolidaysController } from './holidays/holidays.controller';
 import { HolidaysService } from './holidays/holidays.service';
+import { ReportsModule } from './reports/reports.module';
 import { ProjectsController } from './projects/projects.controller';
 import { ProjectsService } from './projects/projects.service';
 import { RequestsController } from './requests/requests.controller';
@@ -88,6 +89,11 @@ import { VacationService } from './vacation/vacation.service';
     // Spec 13 — board columns + tasks. Its own module so the shared
     // `KanbanAccessService` isn't fanned out into every other controller.
     KanbanModule,
+    // Spec reports/01 — the report family. First vertical slice implements
+    // Amounts Owed only (JSON + PDF, All + My). Own module because the
+    // aggregation surface is self-contained and both slices ahead will fold
+    // into it.
+    ReportsModule,
   ],
   controllers: [
     // First, so that a reader looking for "what does the load balancer call" finds it
