@@ -557,7 +557,18 @@ export type MemberCapability =
    * comments, watchers, and activity read reuse `view-board`/`manage-tasks` from
    * spec 13 with the same `user`-role project-membership scoping applied service-side.
    */
-  | 'manage-labels';
+  | 'manage-labels'
+  /**
+   * Spec organization/01 additions — the Clients capabilities.
+   * `manage-clients`: create/rename/archive/restore clients and choose a client
+   * on project create/edit (admin, manager).
+   * `view-clients`: reach the Clients page and its detail (admin, manager);
+   * distinct from `manage-clients` so a future read-only role can be widened
+   * without granting mutations. `user` reads the client NAME on their assigned
+   * project detail via the project endpoint, not through this capability.
+   */
+  | 'manage-clients'
+  | 'view-clients';
 
 /**
  * Pure lookup against spec 04's Roles & Permission Matrix (TC-04-UNIT-05), widened by
@@ -591,6 +602,8 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-tasks': true,
     'manage-board-columns': true,
     'manage-labels': true,
+    'manage-clients': true,
+    'view-clients': true,
   },
   manager: {
     'view-list': true,
@@ -616,6 +629,8 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-tasks': true,
     'manage-board-columns': true,
     'manage-labels': true,
+    'manage-clients': true,
+    'view-clients': true,
   },
   user: {
     'view-list': true,
@@ -641,6 +656,8 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-tasks': true,
     'manage-board-columns': false,
     'manage-labels': false,
+    'manage-clients': false,
+    'view-clients': false,
   },
   viewer: {
     'view-list': true,
@@ -666,6 +683,8 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-tasks': false,
     'manage-board-columns': false,
     'manage-labels': false,
+    'manage-clients': false,
+    'view-clients': false,
   },
 };
 
@@ -2005,6 +2024,115 @@ export function validateMembershipIds(
     return { valid: false, error: PROJECT_MESSAGES.membersEmpty };
   }
   return { valid: true, value: ids as string[] };
+}
+
+// ---------------------------------------------------------------------------
+// Spec organization/01 — Clients
+// ---------------------------------------------------------------------------
+// Pure, isomorphic helpers for the Clients feature: name normalization
+// (trim + whitespace-collapse) and validation shared by the API's POST/PATCH
+// and the web modal, case-insensitive equality used for the duplicate check
+// mirror in the UI, the `status` query-param parser for the list, and the
+// one source of truth for every client message/toast string. Capabilities
+// (`manage-clients`, `view-clients`) live in `CAPABILITY_MATRIX` above and
+// are gated via `can(...)`.
+
+/**
+ * Exact strings from spec organization/01's Error Messages table, verbatim.
+ * The Validation Rules table trailing periods are preserved intentionally
+ * (spec-authoritative wording), which is a deliberate departure from the
+ * period-less style spec 11 used for `PROJECT_MESSAGES`.
+ */
+export const CLIENT_MESSAGES = {
+  nameRequired: 'Client name is required.',
+  nameTooLong: 'Client name cannot exceed 120 characters.',
+  nameInvalidChars:
+    "Client name contains disallowed characters. Use letters, digits, and `- & . , ' ( ) /`.",
+  nameDuplicate: 'A client with this name already exists.',
+  clientNotFound: 'This client does not exist.',
+  clientArchived: 'This client is archived and cannot be assigned to new projects.',
+  forbidden: 'You do not have permission to manage clients.',
+  notFound: 'Client not found.',
+  toastCreated: 'Client created.',
+  toastUpdated: 'Client updated.',
+  toastArchived: 'Client archived.',
+  toastRestored: 'Client restored.',
+  toastServerError: 'Something went wrong. Please try again.',
+  emptyState:
+    "No clients yet. Add your first client to group projects by who you're doing the work for.",
+  emptyArchived: 'No archived clients.',
+  errorLoad: "Couldn't load clients. Retry?",
+  emptySearch: (q: string): string => `No clients match "${q}". Try a shorter query.`,
+  archiveConfirmNoActive: (name: string): string => `Archive ${name}?`,
+  archiveConfirmActive: (name: string, n: number): string =>
+    `Archive ${name}? ${n} active project(s) will keep this client on their records, ` +
+    `but you won't be able to select this client on new projects until it is restored.`,
+} as const;
+
+/** Max length of a client name in Unicode codepoints (spec organization/01 Rule 2). */
+export const CLIENT_NAME_MAX = 120;
+
+/**
+ * Allowed character class for a client name (spec organization/01 requirement 2):
+ * letters of any script (`\p{L}`), digits (`\p{N}`), space, hyphen, ampersand,
+ * period, comma, apostrophe, parentheses, and forward slash. Anchored + `u`
+ * flag so any other character (e.g. `<`, `>`, `@`) fails.
+ */
+const CLIENT_NAME_PATTERN = /^[\p{L}\p{N} \-&.,'()/]+$/u;
+
+/**
+ * Collapse runs of whitespace to a single space and trim the ends. Applied on
+ * save so `"  Acme   Corp  "` and `"Acme Corp"` compare and index equal
+ * (spec organization/01 Rule 2). Whitespace here means any Unicode whitespace,
+ * so a tab or NBSP hiding inside the value is normalised too.
+ */
+export function normalizeClientName(input: string): string {
+  return (input ?? '').trim().replace(/\s+/gu, ' ');
+}
+
+/**
+ * Case-insensitive equality over the normalised value (spec organization/01
+ * Rule 3). The server-side unique index does the real gate; this is the UI's
+ * mirror for pre-submission checks and for a caller comparing two names in a
+ * pure context.
+ */
+export function namesEqual(a: string, b: string): boolean {
+  return normalizeClientName(a).toLocaleLowerCase() === normalizeClientName(b).toLocaleLowerCase();
+}
+
+/**
+ * Client name (spec organization/01 Validation Rules 1–3): normalise first —
+ * trim + collapse consecutive whitespace — then check required → too long →
+ * invalid chars → valid. Length is measured in Unicode codepoints
+ * (`[...value].length`), matching `validateProjectName`.
+ */
+export function validateClientName(name: string): FieldResult {
+  const value = normalizeClientName(name ?? '');
+  if (value.length === 0) return fail(CLIENT_MESSAGES.nameRequired);
+  if ([...value].length > CLIENT_NAME_MAX) return fail(CLIENT_MESSAGES.nameTooLong);
+  if (!CLIENT_NAME_PATTERN.test(value)) return fail(CLIENT_MESSAGES.nameInvalidChars);
+  return ok(value);
+}
+
+/** The three valid values of the clients `status` query parameter (`active` is default). */
+export type ClientStatusFilter = 'active' | 'archived' | 'all';
+
+export const CLIENT_STATUS_FILTERS: readonly ClientStatusFilter[] = [
+  'active',
+  'archived',
+  'all',
+];
+
+/**
+ * Parse the `status` query parameter (GET .../clients?status=...). Returns the
+ * value when it is one of the three valid filters (case-sensitive, lowercase);
+ * otherwise falls back to the default `'active'` — covering `undefined`, empty
+ * string, and any unknown value. Mirrors `parseProjectStatusFilter`.
+ */
+export function parseClientStatusFilter(value: string | undefined): ClientStatusFilter {
+  return CLIENT_STATUS_FILTERS.includes(value as ClientStatusFilter)
+    ? (value as ClientStatusFilter)
+    : 'active';
 }
 
 // ===========================================================================

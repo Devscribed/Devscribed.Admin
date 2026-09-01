@@ -55,6 +55,9 @@ describe('ROLE_CAPABILITIES matrix', () => {
         // Spec 04: choosing the provider is admin only.
         'ViewSigningSettings',
         'ManageSigningSettings',
+        // Spec organization/01: full client-management rights.
+        'ViewClients',
+        'ManageClients',
       ],
       manager: [
         'ViewDocumentTemplates',
@@ -67,6 +70,9 @@ describe('ROLE_CAPABILITIES matrix', () => {
         'ViewMemberProfile',
         // Spec 04: a manager sees the setting and cannot change it.
         'ViewSigningSettings',
+        // Spec organization/01: identical client-management rights to admin.
+        'ViewClients',
+        'ManageClients',
       ],
       // Spec 03's "user (own)" column is not a row here — see `canReadProfile` below.
       user: [],
@@ -115,6 +121,8 @@ describe('capabilitiesFor', () => {
       'EditMemberProfile',
       'ViewSigningSettings',
       'ManageSigningSettings',
+      'ViewClients',
+      'ManageClients',
     ]);
     expect(capabilitiesFor('manager')).toEqual([
       'ViewDocumentTemplates',
@@ -125,6 +133,8 @@ describe('capabilitiesFor', () => {
       'ViewEnvelopeAudit',
       'ViewMemberProfile',
       'ViewSigningSettings',
+      'ViewClients',
+      'ManageClients',
     ]);
     expect(capabilitiesFor('member')).toEqual([]);
     expect(capabilitiesFor(null)).toEqual([]);

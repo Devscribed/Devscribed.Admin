@@ -4,7 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { can, hasCapability, type Role } from '@devscribed/validation';
 import { NavItem, SectionLabel } from '@/ds';
 import { DocumentsIcon } from '@/documents/icons';
-import { ClockIcon, FolderIcon, InboxIcon, PeopleIcon } from './icons';
+import { BriefcaseIcon, ClockIcon, FolderIcon, InboxIcon, PeopleIcon } from './icons';
 import { useSession, type SessionFeatures } from './session-context';
 import { usePendingRequests } from './requests-badge-context';
 
@@ -90,18 +90,28 @@ function navigation(
 
   groups.push({ label: 'People', entries: people });
 
+  const projects: NavEntry[] = [];
   if (can(role as Role, 'manage-projects')) {
-    groups.push({
+    projects.push({
+      testId: 'nav-projects',
       label: 'Projects',
-      entries: [
-        {
-          testId: 'nav-projects',
-          label: 'Projects',
-          href: `/org/${orgId}/projects`,
-          icon: <FolderIcon />,
-        },
-      ],
+      href: `/org/${orgId}/projects`,
+      icon: <FolderIcon />,
     });
+  }
+  if (can(role as Role, 'manage-clients')) {
+    // Sits below the Projects row (spec organization/01 §Sidebar integration).
+    // Omitted — not disabled — for a role without `manage-clients`; the group as a
+    // whole is dropped by the trailing filter below when both entries are gone.
+    projects.push({
+      testId: 'nav-clients',
+      label: 'Clients',
+      href: `/org/${orgId}/clients`,
+      icon: <BriefcaseIcon />,
+    });
+  }
+  if (projects.length > 0) {
+    groups.push({ label: 'Projects', entries: projects });
   }
 
   const documents: NavEntry[] = [];

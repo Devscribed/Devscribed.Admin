@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
-import { Button, Input, Modal } from '@/ds';
+import { Button, Input, Modal, Select } from '@/ds';
 import { errorNode } from '@/field-error';
 import { useToast } from '@/toast';
 import {
+  CLIENT_MESSAGES,
   KANBAN_MESSAGES,
   PROJECT_MESSAGES,
   suggestProjectKey,
@@ -13,9 +14,30 @@ import {
 } from '@devscribed/validation';
 import type { ProjectSummary } from './types';
 
+/**
+ * Row shape returned by `GET /api/organizations/{orgId}/clients?status=active` —
+ * duplicated here rather than imported from the clients types file to keep the
+ * ProjectModal a self-contained sibling of the clients feature.
+ */
+interface ActiveClientOption {
+  id: string;
+  name: string;
+  status: 'active' | 'archived';
+}
+
 type Mode =
   | { kind: 'create' }
-  | { kind: 'edit'; projectId: string; currentName: string };
+  | {
+      kind: 'edit';
+      projectId: string;
+      currentName: string;
+      /**
+       * Current client link so the picker defaults to it. `null` (or omitted) →
+       * "no client" selected. On save a cleared picker sends `clientId: null`
+       * to persist the removal.
+       */
+      currentClientId?: string | null;
+    };
 
 /**
  * The Create/Edit Project modal (spec 11 §Create/Edit Project modal + spec 13 delta).
@@ -48,6 +70,11 @@ export function ProjectModal({
   const [keyTouched, setKeyTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  // Client picker (spec organization/01 §Screens). "" == no client selected.
+  const [clientId, setClientId] = useState<string>('');
+  const [clientError, setClientError] = useState<string | null>(null);
+  const [clientOptions, setClientOptions] = useState<ActiveClientOption[]>([]);
+
   const isEdit = mode.kind === 'edit';
 
   // Reset when the modal opens (or the edited project changes): create starts empty,
@@ -60,8 +87,39 @@ export function ProjectModal({
     setKeyError(null);
     setKeyTouched(false);
     setSubmitting(false);
+    setClientId(mode.kind === 'edit' ? (mode.currentClientId ?? '') : '');
+    setClientError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Fetch active clients whenever the modal opens. Archived clients are excluded
+  // by the server (spec 01 §Archiving & Restoring #8), so this shows what a
+  // caller may actually select.
+  useEffect(() => {
+    if (!open) return;
+    const controller = new AbortController();
+    (async () => {
+      try {
+        const response = await fetch(
+          `/api/organizations/${orgId}/clients?status=active`,
+          { credentials: 'same-origin', signal: controller.signal },
+        );
+        if (!response.ok) {
+          // A 404 here means the caller lacks `manage-clients` — the picker is
+          // simply hidden by leaving `clientOptions` empty; the project can
+          // still be saved without a client.
+          setClientOptions([]);
+          return;
+        }
+        const data = (await response.json()) as { clients: ActiveClientOption[] };
+        setClientOptions(data.clients);
+      } catch (err) {
+        if ((err as Error)?.name === 'AbortError') return;
+        setClientOptions([]);
+      }
+    })();
+    return () => controller.abort();
+  }, [open, orgId]);
 
   function handleClose() {
     if (submitting) return;
@@ -134,8 +192,19 @@ export function ProjectModal({
         ? `/api/organizations/${orgId}/projects/${mode.projectId}`
         : `/api/organizations/${orgId}/projects`;
 
-    const body: { name: string; key?: string } = { name: nameResult.value };
+    const body: { name: string; key?: string; clientId?: string | null } = {
+      name: nameResult.value,
+    };
     if (!isEdit && keyValue) body.key = keyValue;
+    // Client link (spec organization/01). On create only send a non-empty value
+    // (backend treats `undefined` as "no link"); on edit send `null` to clear
+    // and the id to set — undefined would preserve the current link, but the
+    // picker's controlled state always has a definite value here.
+    if (isEdit) {
+      body.clientId = clientId === '' ? null : clientId;
+    } else if (clientId !== '') {
+      body.clientId = clientId;
+    }
 
     try {
       const response = await fetch(url, {
@@ -170,10 +239,19 @@ export function ProjectModal({
         } else {
           setNameError(PROJECT_MESSAGES.nameDuplicate);
         }
+      } else if (responseBody?.error === 'client_archived') {
+        // Spec organization/01 Alt Flow D — an archived client id somehow reached
+        // the server (stale picker option, direct API call). Show inline on the
+        // client field rather than falling through to the toast.
+        setClientError(CLIENT_MESSAGES.clientArchived);
+      } else if (responseBody?.error === 'client_not_found') {
+        setClientError(CLIENT_MESSAGES.clientNotFound);
       } else if (responseBody?.errors?.name) {
         setNameError(responseBody.errors.name);
       } else if (responseBody?.errors?.key) {
         setKeyError(responseBody.errors.key);
+      } else if (responseBody?.errors?.clientId) {
+        setClientError(responseBody.errors.clientId);
       } else {
         showToast(
           isEdit ? 'toast-project-updated' : 'toast-project-created',
@@ -252,6 +330,41 @@ export function ProjectModal({
           style={submitting ? { opacity: 0.55 } : undefined}
           wrapperStyle={{ gap: 0 }}
         />
+
+        {/* Client picker (spec organization/01 §Screens). Optional; the first
+            option clears any link. Alphabetical by name (backend returns them
+            sorted, spec 01 §List & search). Hidden when the caller has no
+            clients yet — the empty options list has just "— No client —". */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+          <Select
+            label="Client (optional)"
+            value={clientId}
+            onChange={(value: string) => {
+              setClientId(value);
+              if (clientError) setClientError(null);
+            }}
+            options={[
+              { value: '', label: '— No client —' },
+              ...clientOptions.map((c) => ({ value: c.id, label: c.name })),
+            ]}
+            disabled={submitting}
+            data-testid="project-client-select"
+          />
+          {clientError && (
+            <div
+              id="field-error-client"
+              data-testid="field-error-client"
+              style={{
+                fontFamily: 'var(--font-text)',
+                fontSize: 'var(--fs-12)',
+                color: 'var(--error-500)',
+                marginTop: 5,
+              }}
+            >
+              {clientError}
+            </div>
+          )}
+        </div>
 
         {!isEdit && (
           <Input

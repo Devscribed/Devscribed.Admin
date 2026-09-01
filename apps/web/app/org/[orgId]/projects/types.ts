@@ -18,6 +18,13 @@ export interface ProjectListItem {
   createdAt: string;
   /** Spec 13 — 2–10 uppercase letters; null until the caller sets it. */
   key?: string | null;
+  /**
+   * Spec organization/01 — client link. `null` when no client is assigned.
+   * The list endpoint carries both id and name so the row can render without a
+   * second fetch (name is authoritative at the time of the query).
+   */
+  clientId: string | null;
+  clientName: string | null;
 }
 
 export interface ProjectsResponse {
@@ -32,6 +39,9 @@ export interface ProjectSummary {
   createdAt: string;
   /** Spec 13 — 2–10 uppercase letters; null until the caller sets it. */
   key?: string | null;
+  /** Spec organization/01 — client link. `null` when no client is assigned. */
+  clientId?: string | null;
+  clientName?: string | null;
 }
 
 /**

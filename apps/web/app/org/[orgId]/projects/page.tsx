@@ -138,6 +138,27 @@ export default function ProjectsPage({ params }: { params: Promise<{ orgId: stri
       ),
     },
     {
+      // Client column (spec organization/01) — read-only surface even for `user`,
+      // who never sees the Clients page itself. Empty link renders as an em-dash.
+      label: 'Client',
+      flex: 1.2,
+      render: (p) => (
+        <span
+          data-testid={`projects-row-${p.id}-client`}
+          style={{
+            fontFamily: 'var(--font-text)',
+            fontSize: 'var(--fs-14)',
+            color: p.clientName ? 'var(--text)' : 'var(--text-faint)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {p.clientName ?? '—'}
+        </span>
+      ),
+    },
+    {
       label: 'Members',
       flex: 1.3,
       render: (p) => <AvatarStack count={p.memberCount} />,
@@ -273,7 +294,12 @@ export default function ProjectsPage({ params }: { params: Promise<{ orgId: stri
         open={editTarget !== null}
         mode={
           editTarget
-            ? { kind: 'edit', projectId: editTarget.id, currentName: editTarget.name }
+            ? {
+                kind: 'edit',
+                projectId: editTarget.id,
+                currentName: editTarget.name,
+                currentClientId: editTarget.clientId,
+              }
             : { kind: 'create' }
         }
         orgId={orgId}
