@@ -84,7 +84,22 @@ export type Capability =
   // `edit-others-billable` in the lowercase-dashed `MemberCapability` union, kept in
   // both shapes so `RequireCapability` decorators and `can(role, ...)` call sites can
   // both name it, matching the pattern used by clients and holidays above.
-  | 'EditOthersBillable';
+  | 'EditOthersBillable'
+  // Spec reports/01 — the nine reporting capabilities. Each report has a paired
+  // (All, My) capability so the report screen can be gated per owner-scope, plus
+  // two column-permission capabilities that shape the Time & Activity projection,
+  // plus `ExportReports` which gates every PDF endpoint. Duplicated in
+  // `MemberCapability` (lowercase-dashed) for the same reason as clients and
+  // holidays above.
+  | 'ViewAmountsOwed'
+  | 'ViewMyAmountsOwed'
+  | 'ViewTimeAndActivity'
+  | 'ViewMyTimeAndActivity'
+  | 'ViewTimeOff'
+  | 'ViewMyTimeOff'
+  | 'ViewTimeAndActivityBilled'
+  | 'ViewTimeAndActivitySpent'
+  | 'ExportReports';
 
 /**
  * Permission matrix from spec 01 and spec 02, "Roles & Permission Matrix".
@@ -118,6 +133,17 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     'ManageHolidays',
     'DeleteHolidays',
     'EditOthersBillable',
+    // Reports (spec reports/01). Admin sees everything, including the Spent column
+    // (pay-rate × hours), which manager does not.
+    'ViewAmountsOwed',
+    'ViewMyAmountsOwed',
+    'ViewTimeAndActivity',
+    'ViewMyTimeAndActivity',
+    'ViewTimeOff',
+    'ViewMyTimeOff',
+    'ViewTimeAndActivityBilled',
+    'ViewTimeAndActivitySpent',
+    'ExportReports',
   ],
   manager: [
     'ViewDocumentTemplates',
@@ -144,12 +170,29 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     // Spec user-management/16's matrix: a manager may toggle billable on any
     // member's entry, same as an admin.
     'EditOthersBillable',
+    // Spec reports/01's matrix: a manager sees every All-variant report and can
+    // export PDFs, but is denied the Spent column — pay rate is admin-only.
+    'ViewAmountsOwed',
+    'ViewMyAmountsOwed',
+    'ViewTimeAndActivity',
+    'ViewMyTimeAndActivity',
+    'ViewTimeOff',
+    'ViewMyTimeOff',
+    'ViewTimeAndActivityBilled',
+    'ExportReports',
   ],
-  // `user` looks empty, but a member reading and editing *their own* contract details is
-  // authorized below by `canReadProfile` and friends, not from this table. See the note
-  // above those helpers for why "self" must never become a row here.
-  user: [],
-  viewer: [],
+  // `user` is empty on the profile/documents matrices, but reports/01 grants a
+  // regular user the three "My" variants so they can see their own payable,
+  // hours, and time-off, plus `ExportReports` so they can PDF their own report.
+  user: [
+    'ViewMyAmountsOwed',
+    'ViewMyTimeAndActivity',
+    'ViewMyTimeOff',
+    'ExportReports',
+  ],
+  // Spec reports/01's matrix: a viewer sees only "My Time Off" — the calendar of
+  // holidays and vacation days that affects their own schedule. No export.
+  viewer: ['ViewMyTimeOff'],
 };
 
 /** Accepts the raw role string so call sites cannot forget to normalize first. */
