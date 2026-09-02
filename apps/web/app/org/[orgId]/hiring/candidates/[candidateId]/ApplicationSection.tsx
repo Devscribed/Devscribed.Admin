@@ -31,7 +31,7 @@ import {
   Popover,
   Select,
   TimeOutlineIcon,
-} from '@/ds';
+} from '@devscribed/ds';
 import { CancelInterviewDialog } from '@/hiring/CancelInterviewDialog';
 import { formatDuration, formatFileSize } from '@/hiring/format';
 import { RescheduleDialog } from '@/hiring/RescheduleDialog';

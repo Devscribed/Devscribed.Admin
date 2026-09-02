@@ -7,7 +7,7 @@ import {
   teamCancelConfirmMessage,
   validateCancelReason,
 } from '@devscribed/validation';
-import { Button, FormActions, InfoBanner, Modal, TextArea } from '@/ds';
+import { Button, FormActions, InfoBanner, Modal, TextArea } from '@devscribed/ds';
 import type { CardApplication } from '@/hiring/types';
 
 /**

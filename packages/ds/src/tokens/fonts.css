@@ -1,0 +1,6 @@
+/* Teammerly (Teamplay) — Webfont loading.
+   Source loads Poppins directly from Google Fonts via @import in src/index.scss
+   (no self-hosted .woff files exist in the codebase), so we reproduce that exactly
+   rather than inventing a self-hosted @font-face. */
+
+@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');

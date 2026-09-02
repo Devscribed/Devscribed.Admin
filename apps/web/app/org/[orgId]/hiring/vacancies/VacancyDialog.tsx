@@ -20,7 +20,7 @@ import {
   TextArea,
   TextInput,
   type SelectOption,
-} from '@/ds';
+} from '@devscribed/ds';
 import { focusByTestId } from '@/field-error';
 import { asOption, asOptions } from '@/hiring/select';
 import type { Category, InterviewerOption, Vacancy } from '@/hiring/types';

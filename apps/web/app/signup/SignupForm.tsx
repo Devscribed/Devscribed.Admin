@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
-import { Button, Eye, EyeOff, IconButton, InfoBanner, TextInput } from '@/ds';
+import { Button, Eye, EyeOff, IconButton, InfoBanner, TextInput } from '@devscribed/ds';
 import { focusByTestId } from '@/field-error';
 import {
   FIELD_VALIDATORS,

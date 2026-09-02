@@ -9,7 +9,7 @@ import {
   isoDateInZone,
   retainSelection,
 } from '@devscribed/validation';
-import { Button, FormActions, InfoBanner, Modal } from '@/ds';
+import { Button, FormActions, InfoBanner, Modal } from '@devscribed/ds';
 import { SlotPicker, readTimeFormat, writeTimeFormat } from '@/hiring/SlotPicker';
 import { useAvailability } from '@/hiring/useAvailability';
 import type { CardApplication } from '@/hiring/types';

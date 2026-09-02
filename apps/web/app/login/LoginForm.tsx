@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
-import { Button, Eye, EyeOff, IconButton, InfoBanner, TextInput } from '@/ds';
+import { Button, Eye, EyeOff, IconButton, InfoBanner, TextInput } from '@devscribed/ds';
 import { focusByTestId } from '@/field-error';
 import {
   LOGIN_FIELD_ORDER,

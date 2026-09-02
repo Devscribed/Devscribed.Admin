@@ -25,7 +25,7 @@ import {
   InfoBanner,
   Modal,
   Preloader,
-} from '@/ds';
+} from '@devscribed/ds';
 import { formatDuration, formatWhen } from '@/hiring/format';
 import { SlotPicker, readTimeFormat, writeTimeFormat } from '@/hiring/SlotPicker';
 import { useAvailability } from '@/hiring/useAvailability';

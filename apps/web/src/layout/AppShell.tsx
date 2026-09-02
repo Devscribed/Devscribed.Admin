@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
-import { AppShell as Frame } from '@/ds';
+import { AppShell as Frame } from '@devscribed/ds';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import type { Session } from './session-context';

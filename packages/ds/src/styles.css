@@ -1,0 +1,10 @@
+/* Teammerly Design System — global stylesheet entry point.
+   Keep this file as @import lines only; the compiler ships everything this
+   file transitively imports. */
+
+@import './tokens/fonts.css';
+@import './tokens/colors.css';
+@import './tokens/typography.css';
+@import './tokens/spacing.css';
+@import './tokens/effects.css';
+@import './base.css';

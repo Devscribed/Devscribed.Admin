@@ -27,7 +27,7 @@ import {
   Preloader,
   TextArea,
   TextInput,
-} from '@/ds';
+} from '@devscribed/ds';
 import { focusByTestId } from '@/field-error';
 import { detectTimeZone, formatDuration, formatFileSize } from '@/hiring/format';
 import { SlotPicker, readTimeFormat, writeTimeFormat } from '@/hiring/SlotPicker';

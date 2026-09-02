@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
-import { AuthLayout, Button, Eye, EyeOff, IconButton, InfoBanner, Preloader, TextInput } from '@/ds';
+import { AuthLayout, Button, Eye, EyeOff, IconButton, InfoBanner, Preloader, TextInput } from '@devscribed/ds';
 import { focusByTestId } from '@/field-error';
 import { AUTH_MESSAGES, MESSAGES, validatePassword } from '@devscribed/validation';
 

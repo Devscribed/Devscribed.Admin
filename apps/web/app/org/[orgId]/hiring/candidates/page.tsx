@@ -39,7 +39,7 @@ import {
   TableToolbar,
   ToastHost,
   type SelectOption,
-} from '@/ds';
+} from '@devscribed/ds';
 import { PageHeader } from '@/layout/PageHeader';
 import { useSession } from '@/layout/session-context';
 import { CancelInterviewDialog } from '@/hiring/CancelInterviewDialog';

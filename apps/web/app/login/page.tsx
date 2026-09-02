@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { AuthLayout } from '@/ds';
+import { AuthLayout } from '@devscribed/ds';
 import { LoginForm } from './LoginForm';
 
 export const metadata = { title: 'Sign in · Teammerly' };

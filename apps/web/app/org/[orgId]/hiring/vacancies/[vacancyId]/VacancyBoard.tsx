@@ -13,7 +13,7 @@ import {
   formatShortWhen,
   type ApplicationStatus,
 } from '@devscribed/validation';
-import { BoardCard, BoardColumn, Button, EmptyState, InfoBanner, PageTabs, Preloader } from '@/ds';
+import { BoardCard, BoardColumn, Button, EmptyState, InfoBanner, PageTabs, Preloader } from '@devscribed/ds';
 import type { Board, BoardCardData } from '@/hiring/types';
 import { useMediaQuery } from '@/hiring/useMediaQuery';
 import type { QueuedToast } from '@/hiring/useToasts';

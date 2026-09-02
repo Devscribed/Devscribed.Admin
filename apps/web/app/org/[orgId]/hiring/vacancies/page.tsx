@@ -23,7 +23,7 @@ import {
   Table,
   TableToolbar,
   ToastHost,
-} from '@/ds';
+} from '@devscribed/ds';
 import { PageHeader } from '@/layout/PageHeader';
 import { useToasts } from '@/hiring/useToasts';
 import { VacancyStatusBadge } from '@/hiring/StatusBadge';

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { HIRING_MESSAGES } from '@devscribed/validation';
-import { Button, InfoBanner, TextArea } from '@/ds';
+import { Button, InfoBanner, TextArea } from '@devscribed/ds';
 import { timeOf, useAutosave } from '@/hiring/useAutosave';
 
 /** How long "Saved just now" holds before it becomes a clock time (04 §UI Notes). */

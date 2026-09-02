@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { fieldLabelStyle } from '@/ds';
+import { fieldLabelStyle } from '@devscribed/ds';
 
 /**
  * A caption inside an application panel — `Criteria`, `From the candidate`, `Candidate's note`.

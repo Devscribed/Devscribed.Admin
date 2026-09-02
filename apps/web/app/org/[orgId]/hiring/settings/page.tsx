@@ -32,7 +32,7 @@ import {
   TableToolbar,
   TextInput,
   ToastHost,
-} from '@/ds';
+} from '@devscribed/ds';
 import { PageHeader } from '@/layout/PageHeader';
 import { CriterionDialog } from '@/hiring/CriterionDialog';
 import { useToasts } from '@/hiring/useToasts';

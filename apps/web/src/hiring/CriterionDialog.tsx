@@ -22,7 +22,7 @@ import {
   InfoBanner,
   Modal,
   TextInput,
-} from '@/ds';
+} from '@devscribed/ds';
 import type { Criterion } from '@/hiring/types';
 
 /** One row of the scale editor. `key` is stable across a reorder; `id` exists once saved. */

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRef, useState, type FormEvent } from 'react';
-import { AuthLayout, Button, InfoBanner, TextInput } from '@/ds';
+import { AuthLayout, Button, InfoBanner, TextInput } from '@devscribed/ds';
 import { focusByTestId } from '@/field-error';
 import { AUTH_MESSAGES, MESSAGES, validateEmail } from '@devscribed/validation';
 

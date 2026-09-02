@@ -9,7 +9,7 @@ import {
   type FilterOperator,
   type FilterOperatorOption,
 } from '@devscribed/validation';
-import { Badge, CloseIcon, IconButton, Select, TextInput, type SelectOption } from '@/ds';
+import { Badge, CloseIcon, IconButton, Select, TextInput, type SelectOption } from '@devscribed/ds';
 import { valueOf } from '@/hiring/select';
 import type { Criterion } from '@/hiring/types';
 

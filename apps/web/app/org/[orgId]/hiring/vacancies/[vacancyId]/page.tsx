@@ -19,7 +19,7 @@ import {
   Popover,
   Preloader,
   ToastHost,
-} from '@/ds';
+} from '@devscribed/ds';
 import { rememberCandidateOrigin } from '@/hiring/candidate-origin';
 import { useToasts } from '@/hiring/useToasts';
 import { VacancyStatusBadge } from '@/hiring/StatusBadge';

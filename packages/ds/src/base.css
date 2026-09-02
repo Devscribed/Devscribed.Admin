@@ -1,0 +1,209 @@
+/* Teammerly (Teamplay) — base element resets, adapted from src/styles/reset.scss
+   and the global rules in src/index.scss (.input-label / .form-control / .errorInput). */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+/* No `color` here on purpose: neither src/index.scss nor src/styles/reset.scss sets a colour
+   on `body`, so inherited text in prod is the browser default #000 (measured on the
+   "Edit Information" h4 in prod-screens/43-account.png — 2940 pure #000000 pixels).
+   Components that are black in prod say so themselves (.fTable{color:$appBlack}). */
+body {
+  margin: 0;
+  font-family: var(--font-family-base);
+  line-height: var(--line-height-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+ul { list-style: none; padding: 0; margin: 0; }
+/* reset.scss only declares a{text-decoration:none}; prod has no global link colour at all — every
+   link takes its colour from its own class, so an unclassed <a> in prod is browser-default blue.
+   DEVIATION (see STATUS.md): this system paints unclassed links with the brand blue instead, so
+   links added later don't render #0000EE. Nothing in the kit relies on it. */
+a { text-decoration: none; color: var(--text-link); }
+a:hover { color: var(--text-link); }
+p, h1, h2, h3, h4, h5, h6 { margin: 0; }
+
+/* PageTitle.module.scss — headLine6, then headLine5 ≥768px, headLine4 ≥1200px. Media queries
+   can't be inline, so PageTitle.jsx renders <h1 class="page-title"> against these rules. */
+.page-title { font-weight: 500; font-size: 16px; line-height: 24px; letter-spacing: -0.32px; }
+@media (min-width: 768px) { .page-title { font-weight: 450; font-size: 20px; line-height: 30px; letter-spacing: -0.32px; } }
+@media (min-width: 1200px) { .page-title { font-weight: 450; font-size: 24px; line-height: 36px; letter-spacing: -0.7px; } }
+img { max-width: 100%; display: block; }
+button {
+  margin: 0; padding: 0; border: 0; background: transparent;
+  font: inherit; cursor: pointer;
+}
+input, textarea, select { font: inherit; }
+
+/* Measured in prod-screens/02, 03, 21 (2x): every <label> in the app renders ~10px right of
+   its field's left edge and ~10px lower than line-height:21px alone would put it (label ink
+   x=962 vs field border x=940; label block 35px, not 25). src/index.scss shows no padding —
+   the deployed build's rule differs from the repo copy, so the measured inset is reproduced. */
+.input-label {
+  display: inline-block;
+  padding: 10px 0 0 10px;
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-xs);
+  line-height: 21px;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-1);
+  white-space: nowrap;
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  font-size: var(--font-size-s);
+  color: var(--text-primary);
+  caret-color: var(--text-primary);
+  background-color: var(--color-white);
+  border: 1.5px solid var(--border-default);
+  border-radius: var(--radius-l);
+  padding: var(--space-4);
+  transition: var(--transition-border-focus);
+}
+.form-control:focus {
+  border-color: var(--color-blue);
+  outline: 0;
+  box-shadow: var(--shadow-focus-input);
+}
+.form-control::placeholder { color: var(--text-secondary); opacity: 1; }
+
+.errorInput {
+  border-color: var(--color-error) !important;
+  outline: 0;
+  box-shadow: var(--shadow-error-glow);
+}
+
+/* §14 — the app frame's one breakpoint. Prod is a fixed 290px rail beside an 80px navbar down
+   to 1200px and a 60px navbar with a drawer below it; every value is already a token, and only
+   the switch between them was never written down, because a recreation of one viewport has one
+   viewport to recreate. It lives here for the same reason `.page-title` does: a media query
+   cannot be an inline style, and width alone must decide, so the server and the hydrated
+   client agree at every size without a stored preference or a `matchMedia` read.
+
+   Below the breakpoint the rail *becomes* the drawer, carrying MenuDrawer's own geometry —
+   340px, `--shadow-drawer`, translateX(105%), 0.3s — rather than a second copy of the
+   navigation sliding in beside it. */
+.ds-navbar { height: var(--layout-navbar-height-desktop); }
+
+.ds-sidebar { width: var(--layout-sidebar-width); }
+
+.ds-app-shell-nav {
+  flex-shrink: 0;
+  border-right: 1px solid var(--border-subtle);
+  background-color: var(--surface-card);
+}
+
+/* Prod draws both of these and then hides them; the breakpoint is what they were waiting for. */
+.ds-navbar-menu, .ds-sidebar-close { display: none; }
+
+@media (max-width: 1199px) {
+  .ds-navbar { height: var(--layout-navbar-height-mobile); }
+
+  .ds-app-shell-nav {
+    position: fixed;
+    top: var(--layout-navbar-height-mobile);
+    right: 0;
+    bottom: 0;
+    z-index: 2002;
+    width: 340px;
+    max-width: 100%;
+    border-right: 0;
+    box-shadow: var(--shadow-drawer);
+    transform: translateX(105%);
+    transition: transform var(--duration-hover);
+  }
+
+  .ds-app-shell-nav[data-open] { transform: translateX(0); }
+
+  /* The rail's own 290px would leave the drawer's last 50px empty. */
+  .ds-app-shell-nav .ds-sidebar { width: 100%; }
+
+  .ds-navbar-menu, .ds-sidebar-close { display: flex; }
+}
+
+.ds-app-shell-scrim { position: fixed; inset: 0; z-index: 2001; }
+
+/* §51 — `MenuDrawer`'s geometry, with the one number that was never a drawer measurement
+   taken out of it. Blue writes `top: 60px` inline; 60px is `--layout-navbar-height-mobile`,
+   and above the shell's breakpoint the navbar is 80. The panel hangs from whatever the
+   navbar currently is, which is the same switch `.ds-navbar` and `.ds-app-shell-nav` make
+   four lines up — and it is here, rather than inline, for `.ds-navbar`'s own reason: a
+   media query cannot be an inline style. Everything else is blue's, values unchanged — the
+   slide and the `data-open` that drives it are `.ds-app-shell-nav`'s own, and the trailing
+   `visibility` step is what keeps a closed panel out of the page rather than merely off the
+   side of it. A caller `top` stays inline, where it can override this. */
+.ds-menu-drawer {
+  position: fixed;
+  top: var(--layout-navbar-height-desktop);
+  right: 0;
+  bottom: 0;
+  z-index: 2002;
+  display: flex;
+  flex-direction: column;
+  width: 340px;
+  max-width: 100%;
+  background-color: #fff;
+  box-shadow: var(--shadow-drawer);
+  transform: translateX(105%);
+  /* Hidden only once it has finished leaving: the panel has to stay painted for the slide
+     and must not stay in the page after it. */
+  visibility: hidden;
+  transition: transform 0.3s, visibility 0s 0.3s;
+}
+
+.ds-menu-drawer[data-open] {
+  transform: translateX(0);
+  visibility: visible;
+  transition: transform 0.3s;
+}
+
+.ds-menu-drawer-scrim {
+  position: fixed;
+  top: var(--layout-navbar-height-desktop);
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2001;
+}
+
+@media (max-width: 1199px) {
+  .ds-menu-drawer,
+  .ds-menu-drawer-scrim { top: var(--layout-navbar-height-mobile); }
+}
+
+/* §30 — `Calendar`'s day cell. react-datepicker sizes a day 1.7rem tall with a .166rem margin
+   above and below, giving a 2.032rem vertical pitch; that is reproduced here so the two grids
+   share a rhythm. It lives in a class for the reason `.page-title` and `.ds-navbar` do: the
+   touch-target rule below is a media query, and a media query cannot be an inline style.
+   Horizontally the column is `1fr` rather than react-datepicker's fixed 1.7rem — prod draws this
+   in a fixed-width popover and this one is inline in a card that flexes. */
+.ds-calendar-day {
+  display: block;
+  /* §72 — `--control-height`, where react-datepicker's cell is 1.7rem (27px). Prod draws this
+     grid inside a fixed-width **popover**, where 27px is a reasonable mouse target and the
+     whole control is a secondary way to type a date. This one is the primary control on a
+     public page a candidate books an interview from, half of it reached on a phone — and the
+     touch-target rule underneath was already conceding the point one media query at a time.
+     One height, every pointer: the same 44px every other control in the system is. */
+  height: var(--control-height);
+  line-height: var(--control-height);
+  margin: 1px 0;
+}
+
+/* Preloader — react-spinners' PulseLoader, read from node_modules/react-spinners@0.13.6.
+   §69 — here rather than injected into `<head>` from `Preloader.jsx`. A module-scope
+   `document.head.appendChild` is a side effect that runs once, on whichever page first
+   imports the component, and it fails silently everywhere it does not: under a strict CSP,
+   in a document the module was evaluated against before hydration, or in any consumer that
+   renders the markup without evaluating the module. A loader whose dots do not move is
+   indistinguishable from a screen that has stopped, which is the one thing a loader exists
+   to rule out — so the animation belongs in the stylesheet that is always loaded. */
+@keyframes ds-pulse-loader {
+  0% { transform: scale(1); opacity: 1; }
+  45% { transform: scale(0.1); opacity: 0.7; }
+  80% { transform: scale(1); opacity: 1; }
+}

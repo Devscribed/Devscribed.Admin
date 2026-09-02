@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { AccountMenu, Navbar } from '@/ds';
+import { AccountMenu, Navbar } from '@devscribed/ds';
 import { useSession } from './session-context';
 
 /**

@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { PageTitle } from '@/ds';
+import { PageTitle } from '@devscribed/ds';
 
 /**
  * The title block every screen inside the shell opens with. The heading itself is blue's

@@ -1,7 +1,7 @@
 'use client';
 
 import { APPLICATION_STATUS_LABELS, type ApplicationStatus } from '@devscribed/validation';
-import { Badge } from '@/ds';
+import { Badge } from '@devscribed/ds';
 
 /**
  * A vacancy's own two states, and the one place they are drawn.

@@ -10,6 +10,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@devscribed/ds": "*",
     "@devscribed/validation": "*",
     "next": "^15.1.6",
     "react": "^19.0.0",

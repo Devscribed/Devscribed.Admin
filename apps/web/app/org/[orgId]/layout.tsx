@@ -2,7 +2,7 @@
 
 import { notFound, useRouter } from 'next/navigation';
 import { use, useEffect, useState, type ReactNode } from 'react';
-import { Preloader } from '@/ds';
+import { Preloader } from '@devscribed/ds';
 import { AppShell } from '@/layout/AppShell';
 import type { Session } from '@/layout/session-context';
 

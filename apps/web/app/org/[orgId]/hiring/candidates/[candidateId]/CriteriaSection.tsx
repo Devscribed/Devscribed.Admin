@@ -11,7 +11,7 @@ import {
   assessedValueLabel,
   type AssessmentInput,
 } from '@devscribed/validation';
-import { Badge, CloseIcon, IconButton, Select, TextInput, type SelectOption } from '@/ds';
+import { Badge, CloseIcon, IconButton, Select, TextInput, type SelectOption } from '@devscribed/ds';
 import { focusByTestId } from '@/field-error';
 import { CriterionDialog } from '@/hiring/CriterionDialog';
 import { valueOf } from '@/hiring/select';

@@ -3,8 +3,8 @@
 import { usePathname, useRouter } from 'next/navigation';
 import type { MouseEvent } from 'react';
 import { canManageHiring } from '@devscribed/validation';
-import { Sidebar as Rail } from '@/ds';
-import type { SidebarItem, SidebarSubItem } from '@ds/components/navigation/Sidebar';
+import { Sidebar as Rail } from '@devscribed/ds';
+import type { SidebarItem, SidebarSubItem } from '@devscribed/ds';
 import { PeopleIcon } from './icons';
 
 /** Only what the navigation asks of the session: a role, and one assignment fact. */

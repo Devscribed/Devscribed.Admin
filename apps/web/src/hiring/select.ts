@@ -1,4 +1,4 @@
-import type { SelectOption } from '@/ds';
+import type { SelectOption } from '@devscribed/ds';
 
 /**
  * Blue's `Select` deals in **options**, not in the values behind them: `onChange` hands back

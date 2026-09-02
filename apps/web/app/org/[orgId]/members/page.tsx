@@ -1,7 +1,7 @@
 'use client';
 
 import { use, useEffect, useState } from 'react';
-import { Badge, Card, EmptyState, Table } from '@/ds';
+import { Badge, Card, EmptyState, Table } from '@devscribed/ds';
 import { PageHeader } from '@/layout/PageHeader';
 
 interface Member {

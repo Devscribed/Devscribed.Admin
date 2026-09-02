@@ -28,7 +28,7 @@ import {
   Popover,
   Preloader,
   ToastHost,
-} from '@/ds';
+} from '@devscribed/ds';
 import { focusByTestId } from '@/field-error';
 import { PageHeader } from '@/layout/PageHeader';
 import { useSession } from '@/layout/session-context';
