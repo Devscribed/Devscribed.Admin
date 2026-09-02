@@ -80,18 +80,32 @@ THE SYSTEM SHALL link one `Account` to one `Client` within one `Organization` th
 #### REQ-02-002 — what a client invitation's acceptance does, by the row the account holds
 
 WHEN a `role = 'client'` invitation is accepted, THE SYSTEM SHALL re-read both membership tables
-inside the accept transaction and decide by the row found, as the table decides.
+inside the accept transaction and decide by the pair of rows found, as the table decides.
 
-`decision-table: keys=(heldRow) domains=(heldRow: none|activeMembership|removedMembership|activeClientMembership|removedClientMembershipBoundClient|removedClientMembershipOtherClient)`
+`accountId` is unique **per table**, so an account holds at most one `Membership` and at most one
+`ClientMembership` and the two are independent: the staff row and the client row are separate keys,
+and every pair of their states is a state this product reaches.
 
-| heldRow | Outcome |
-|---|---|
-| none | The `ClientMembership` is created `active`; the invitation becomes `used`. |
-| activeMembership | `409 CLIENT_USER_MESSAGES.accountIsStaff`. Nothing is written; the invitation stays `pending`. |
-| removedMembership | The `ClientMembership` is created `active`; the removed staff row is untouched. |
-| activeClientMembership | `409 CLIENT_USER_MESSAGES.accountIsClient`. Nothing is written; the invitation stays `pending`. |
-| removedClientMembershipBoundClient | That row is restored (REQ-02-022); no second row is created. |
-| removedClientMembershipOtherClient | `409 CLIENT_USER_MESSAGES.accountLinkedToAnotherClient`. Nothing is written; the invitation stays `pending`. |
+`decision-table: keys=(staffRow, clientRow) domains=(staffRow: none|active|removed, clientRow: none|active|removedBoundClient|removedOtherClient)`
+
+| staffRow | clientRow | Outcome |
+|---|---|---|
+| none | none | The `ClientMembership` is created `active`; the invitation becomes `used`. |
+| none | active | `409 CLIENT_USER_MESSAGES.accountIsClient`. Nothing is written; the invitation stays `pending`. |
+| none | removedBoundClient | That row is restored (REQ-02-023); no second row is created. |
+| none | removedOtherClient | `409 CLIENT_USER_MESSAGES.accountLinkedToAnotherClient`. Nothing is written. |
+| active | none | `409 CLIENT_USER_MESSAGES.accountIsStaff`. Nothing is written; the invitation stays `pending`. |
+| active | active | `409 CLIENT_USER_MESSAGES.accountIsStaff` — the staff row is inspected first. |
+| active | removedBoundClient | `409 CLIENT_USER_MESSAGES.accountIsStaff` — the staff row is inspected first. |
+| active | removedOtherClient | `409 CLIENT_USER_MESSAGES.accountIsStaff` — the staff row is inspected first. |
+| removed | none | The `ClientMembership` is created `active`; the removed staff row is untouched. |
+| removed | active | `409 CLIENT_USER_MESSAGES.accountIsClient`. Nothing is written. |
+| removed | removedBoundClient | That row is restored (REQ-02-023); the removed staff row is untouched. |
+| removed | removedOtherClient | `409 CLIENT_USER_MESSAGES.accountLinkedToAnotherClient`. Nothing is written. |
+
+**Decided:** an **active** staff row decides before the client row is read, so the four `active`
+rows answer one refusal. Rejected: reading the client row first, which would answer
+`accountIsClient` to an account that is plainly staff.
 
 **Decided:** a `removed` row of the other kind does not refuse — a person who left the agency and
 now works for a client is a real case, and only two **active** principals make a capability
@@ -307,12 +321,13 @@ of the two addressee ids set, refusing any other combination with
 
 #### REQ-02-033 — a client request needs a project
 
-IF a request addressed to a client user carries no `projectId`, THEN THE SYSTEM SHALL answer
-`400 REQUEST_MESSAGES.projectRequiredForClient`.
+IF a request is addressed to a client user, by creation or by reassignment, and carries no
+`projectId`, THEN THE SYSTEM SHALL answer `400 REQUEST_MESSAGES.projectRequiredForClient`.
 
 #### REQ-02-034 — the project's client must be theirs
 
-IF the project's `clientId` differs from the addressee's `clientId`, THEN THE SYSTEM SHALL answer
+IF a request is addressed to a client user, by creation or by reassignment, and its project's
+`clientId` differs from the addressee's `clientId`, THEN THE SYSTEM SHALL answer
 `400 REQUEST_MESSAGES.contactProjectMismatch`.
 
 #### REQ-02-035 — only an active user of an active client
@@ -402,10 +417,18 @@ IF a client principal asks for `scope=all`, THEN THE SYSTEM SHALL answer
 IF a client principal creates a request, THEN THE SYSTEM SHALL answer
 `403 REQUEST_MESSAGES.createForbidden`.
 
-#### REQ-02-052 — the detail they are shown
+#### REQ-02-052 — the event trail is withheld at the API
 
-WHERE the viewer is a client principal, THE SYSTEM SHALL omit the History panel and every control
-they cannot use from the request detail.
+WHERE the viewer of a request is a client principal, THE SYSTEM SHALL omit the `events` array from
+the request detail response, so the audit trail is not reachable by reading the API directly.
+
+**Decided:** the trail is withheld by the route, not hidden by the screen. Rejected: returning it
+and drawing no panel, which leaves an internal record one fetch away from a client.
+
+#### REQ-02-056 — the controls they are not shown
+
+WHERE the viewer of a request is a client principal, THE SYSTEM SHALL draw no History panel and no
+control they cannot use on the request detail screen.
 
 #### REQ-02-053 — the assignment mail
 

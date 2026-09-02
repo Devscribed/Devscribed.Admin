@@ -23,7 +23,7 @@ judgement.
 | `POST /api/organizations/{orgId}/requests/{requestId}/decline` | `SessionGuard` → `OrgScopeGuard` | `200` | `400 REQUEST_MESSAGES.declineReasonRequired`; `400 REQUEST_MESSAGES.declineReasonTooLong`; `409 REQUEST_MESSAGES.alreadyTerminal` |
 | `POST /api/organizations/{orgId}/requests/{requestId}/grant` | `SessionGuard` → `OrgScopeGuard` | `200` | `403 REQUEST_MESSAGES.notYoursToGrant` |
 | `POST /api/organizations/{orgId}/requests/{requestId}/cancel` | `SessionGuard` → `OrgScopeGuard` | `200` | `403 REQUEST_MESSAGES.notYoursToCancel` |
-| `POST /api/organizations/{orgId}/requests/{requestId}/reassign` | `SessionGuard` → `OrgScopeGuard` → `CapabilityGuard` | `200` | `403 TEMPLATE_MESSAGES.generic.forbidden`; `400 REQUEST_MESSAGES.clientUserUnavailable` |
+| `POST /api/organizations/{orgId}/requests/{requestId}/reassign` | `SessionGuard` → `OrgScopeGuard` → `CapabilityGuard` | `200` | `403 TEMPLATE_MESSAGES.generic.forbidden`; `400 REQUEST_MESSAGES.assigneeInvalid`; `400 REQUEST_MESSAGES.clientUserUnavailable`; `400 REQUEST_MESSAGES.projectRequiredForClient`; `400 REQUEST_MESSAGES.contactProjectMismatch` |
 | `GET /api/organizations/{orgId}/members` | `SessionGuard` → `OrgScopeGuard`; the service resolves its caller from `Membership` | `200` | `403` with the framework body `{"message":"Forbidden","statusCode":403}` |
 | `GET /api/organizations/{orgId}/projects` | `SessionGuard` → `OrgScopeGuard`; the service resolves its caller from `Membership` | `200` | `403` with the framework body |
 | `GET /api/organizations/{orgId}/clients` | `SessionGuard` → `OrgScopeGuard`; the service resolves its caller from `Membership` | `200` | `403` with the framework body |
@@ -36,8 +36,14 @@ resource and no capability. Under either shape the status is `403` and no route 
 
 ### `GET /api/me` — response for a client principal
 
+The `account` object keeps the shape the endpoint already returns — `firstName` and `lastName`, no
+`displayName` — because the app shell composes the signed-in name and its initials from those two
+fields on every screen. A client principal is drawn by the same shell.
+
 ```json
-{ "account": { "id": "…", "displayName": "J. Client", "email": "j.client@acme.example" },
+{ "account": { "id": "…", "email": "j.client@acme.example",
+               "firstName": "J.", "lastName": "Client",
+               "timezone": "Europe/Berlin", "firstDayOfWeek": 1 },
   "organization": { "id": "…", "name": "Acme Agency" },
   "principalKind": "client",
   "role": null,
@@ -68,15 +74,15 @@ asserting a body never leaves this bundle.
 | `CLIENT_USER_MESSAGES.manageForbidden` | `GET /api/organizations/{orgId}/clients/{clientId}/users`, `PATCH /api/organizations/{orgId}/clients/{clientId}/users/{clientMembershipId}/remove`, `POST /api/invitations` | You do not have permission to manage client users | yes |
 | `CLIENT_USER_MESSAGES.emptyUsers` | — drawn, never returned | Nobody from this client has been invited yet. | yes |
 | `REQUEST_MESSAGES.clientUserUnavailable` | `POST /api/organizations/{orgId}/requests`, `POST /api/organizations/{orgId}/requests/{requestId}/reassign` | That client user is no longer available | yes |
-| `REQUEST_MESSAGES.projectRequiredForClient` | `POST /api/organizations/{orgId}/requests` | Choose the project this client request is for | yes |
-| `REQUEST_MESSAGES.contactProjectMismatch` | `POST /api/organizations/{orgId}/requests` | That person does not belong to this project's client | yes |
+| `REQUEST_MESSAGES.projectRequiredForClient` | `POST /api/organizations/{orgId}/requests`, `POST /api/organizations/{orgId}/requests/{requestId}/reassign` | Choose the project this client request is for | yes |
+| `REQUEST_MESSAGES.contactProjectMismatch` | `POST /api/organizations/{orgId}/requests`, `POST /api/organizations/{orgId}/requests/{requestId}/reassign` | That person does not belong to this project's client | yes |
 | `TEMPLATE_MESSAGES.generic.forbidden` | `POST /api/organizations/{orgId}/requests/{requestId}/reassign`, `GET /api/organizations/{orgId}/document-templates` | You do not have permission to manage templates | no |
 | `REQUEST_MESSAGES.scopeForbidden` | `GET /api/organizations/{orgId}/requests` | You do not have permission to view other people's requests | no |
 | `REQUEST_MESSAGES.createForbidden` | `POST /api/organizations/{orgId}/requests` | You do not have permission to create requests | no |
 | `REQUEST_MESSAGES.notYoursToGrant` | `POST /api/organizations/{orgId}/requests/{requestId}/grant` | Only the person who asked can confirm this | no |
 | `REQUEST_MESSAGES.notYoursToCancel` | `POST /api/organizations/{orgId}/requests/{requestId}/cancel` | Only the person who asked can cancel this | no |
 | `REQUEST_MESSAGES.editForbidden` | `PATCH /api/organizations/{orgId}/requests/{requestId}` | You do not have permission to edit this request | no |
-| `REQUEST_MESSAGES.assigneeInvalid` | `POST /api/organizations/{orgId}/requests` | Choose who this request is for | no |
+| `REQUEST_MESSAGES.assigneeInvalid` | `POST /api/organizations/{orgId}/requests`, `POST /api/organizations/{orgId}/requests/{requestId}/reassign` | Choose who this request is for | no |
 | `REQUEST_MESSAGES.messageRequired` | `POST /api/organizations/{orgId}/requests/{requestId}/messages` | Write a message | no |
 | `REQUEST_MESSAGES.messageTooLong` | `POST /api/organizations/{orgId}/requests/{requestId}/messages` | Message must be 5000 characters or fewer | no |
 | `REQUEST_MESSAGES.threadClosed` | `POST /api/organizations/{orgId}/requests/{requestId}/messages` | This request is closed | no |

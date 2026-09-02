@@ -467,6 +467,10 @@ function checkRequirements(reqs, file) {
           'one observable outcome per requirement, or move the branching into a decision table');
       }
     }
+    for (const msg of r.body.join(' ').match(/\b(?:[A-Z][A-Z0-9_]*_)?MESSAGES\.[\w.]+/g) ?? []) {
+      r.messages ??= new Set();
+      r.messages.add(msg);
+    }
     const len = r.body.filter((l) => l.trim()).length;
     if (len > BUDGET.requirementLines && !hasTable) {
       add('req/verbose', file, r.line,
@@ -538,6 +542,16 @@ function checkCases(cases, reqs, contracts, files) {
     }
   }
 
+  /* A message a rule names and no contract declares is a refusal nobody can build. */
+  for (const [id, r] of reqs) {
+    for (const msg of r.messages ?? []) {
+      if (!contracts.messages.has(msg)) {
+        add('req/message-unknown', r.file, r.line,
+          `${id} names ${msg}, which the Error Messages table does not carry`,
+          'add the row, with the route that emits it, or correct the export');
+      }
+    }
+  }
   for (const [id, r] of reqs) {
     if (!covered.has(id)) {
       add('req/uncovered', r.file, r.line, `${id} is covered by no test case`,
@@ -563,6 +577,39 @@ function checkE2ESelectorsDeclared(cases, contracts, files) {
         add('testid/unknown', files.cases, c.fields['Selectors@line'] ?? c.line,
           `${c.id} asserts ${id}, which the data-testid table does not carry`,
           'add it to the table, or correct the id');
+      }
+    }
+  }
+}
+
+/**
+ * The two contract tables say the same thing from two sides, so they can disagree. A route
+ * declaring a message the message's own row does not list for it is a refusal with two homes.
+ */
+function checkContractAgreement(contracts, file) {
+  for (const [key, route] of contracts.routes) {
+    for (const msg of route.messages) {
+      const rec = contracts.messages.get(msg);
+      if (!rec) {
+        add('route/message-unknown', file, route.line,
+          `${key} declares ${msg}, which the Error Messages table does not carry`);
+      } else if (rec.routes.size && !rec.routes.has(key)) {
+        add('contract/disagreement', file, route.line,
+          `${key} declares ${msg}; that message's row lists ${[...rec.routes].join(', ')}`,
+          'the two tables describe one refusal — add the route to the message row, or drop it here');
+      }
+    }
+  }
+  for (const [msg, rec] of contracts.messages) {
+    for (const key of rec.routes) {
+      const route = contracts.routes.get(key);
+      if (!route) {
+        add('message/route-unknown', file, rec.line,
+          `${msg} is listed for ${key}, which the Routes table does not carry`);
+      } else if (!route.messages.has(msg)) {
+        add('contract/disagreement', file, rec.line,
+          `${msg} is listed for ${key}; that route's errors do not name it`,
+          'the two tables describe one refusal — add it to the route, or drop the route here');
       }
     }
   }
@@ -645,6 +692,7 @@ checkPaths(lines.behaviour, files.behaviour);
 checkPaths(lines.contracts, files.contracts);
 checkDecisionTables(lines.behaviour, files.behaviour);
 checkDecisionTables(lines.contracts, files.contracts);
+checkContractAgreement(contracts, files.contracts);
 checkCases(cases, reqs, contracts, files);
 checkE2ESelectorsDeclared(cases, contracts, files);
 checkAcceptance(lines.behaviour, cases, files.behaviour);

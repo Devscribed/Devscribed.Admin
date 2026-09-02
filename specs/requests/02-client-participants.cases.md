@@ -168,15 +168,18 @@ declare is a lint error before anybody reads the document.
 ### TC-02-INT-11
 
 - **Level:** Integration
-- **Covers:** REQ-02-036, REQ-02-037, REQ-02-039, REQ-02-041, REQ-02-044
-- **Asserts:** `POST /api/organizations/{orgId}/requests/{requestId}/messages` → 201;
+- **Covers:** REQ-02-036, REQ-02-037, REQ-02-039, REQ-02-041, REQ-02-044, REQ-02-052
+- **Asserts:** `GET /api/organizations/{orgId}/requests/{requestId}` → 200;
+  `POST /api/organizations/{orgId}/requests/{requestId}/messages` → 201;
   `POST /api/organizations/{orgId}/requests/{requestId}/answer` → 200;
   `POST /api/organizations/{orgId}/requests/{requestId}/grant` → 403
   REQUEST_MESSAGES.notYoursToGrant;
   `POST /api/organizations/{orgId}/requests/{requestId}/decline` → 200
 - **Steps:** As the client addressee post a message, answer, then attempt to grant. On a second
   request, decline with a reason.
-- **Expected Result:** the message carries `authorKind = 'client'` and
+- **Expected Result:** reading the request as its client addressee returns the row and the
+  conversation and carries no `events` array, where the same read by the requester carries one;
+  the message carries `authorKind = 'client'` and
   `authorClientMembershipId`; the answer moves the request to `answered` and writes a
   `status_changed` event in the same transaction; the grant is refused and writes nothing; the
   decline moves the request to `declined` and stores its reason as a `RequestMessage` with
@@ -381,7 +384,7 @@ declare is a lint error before anybody reads the document.
 ### TC-02-E2E-03
 
 - **Level:** E2E
-- **Covers:** REQ-02-039, REQ-02-041, REQ-02-052
+- **Covers:** REQ-02-039, REQ-02-041, REQ-02-056
 - **Steps:** As the client user open a request from the inbox row, post a reply and click **I have
   provided this**; then on a second request click **I cannot provide this** and submit a reason.
 - **Expected Result:** on arriving at the inbox the Requests row carries its badge reading the two
