@@ -638,19 +638,30 @@ function FilterBar({
           shownColumnCount={shownColumnCount}
         />
         <BillableDropdown value={billable} onChange={onBillableChange} />
-        <span style={{ flex: 1 }} />
-        <ToggleChip
-          label="Sum date ranges"
-          testId="reports-filter-sum-toggle"
-          active={sumDateRanges}
-          onChange={onSumDateRangesChange}
-        />
-        <ToggleChip
-          label="Detailed"
-          testId="reports-filter-detailed-toggle"
-          active={detailedReports}
-          onChange={onDetailedReportsChange}
-        />
+        {/* Aggregation chips always on their own right-aligned row so every
+            report screen's filter bar reads the same regardless of how many
+            primary filters that report has. */}
+        <div
+          style={{
+            flexBasis: '100%',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            gap: 8,
+          }}
+        >
+          <ToggleChip
+            label="Sum date ranges"
+            testId="reports-filter-sum-toggle"
+            active={sumDateRanges}
+            onChange={onSumDateRangesChange}
+          />
+          <ToggleChip
+            label="Detailed"
+            testId="reports-filter-detailed-toggle"
+            active={detailedReports}
+            onChange={onDetailedReportsChange}
+          />
+        </div>
       </div>
       {rangeError && (
         <div
