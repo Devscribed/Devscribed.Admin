@@ -25,7 +25,7 @@ import type { Criterion } from '@/hiring/types';
  * needs one control the card does not, and the operator sits between the name and the
  * value, where it reads as part of that sentence.
  *
- * It is **not** blue's `Chip`. That is the token react-select draws for a value chosen
+ * It is **not** the system's `Chip`. That is the token react-select draws for a value chosen
  * *inside a field* — white, with the 7px blue edge that marks it as a selection — and this
  * is not inside a field and is not a selection: it is a small form, holding two controls
  * of its own. Drawn as a `Chip` it read as a chosen value that happened to contain

@@ -213,7 +213,7 @@ export function CriterionDialog({
         data-testid="criterion-dialog"
         style={{ width: 520 }}
       >
-        {/* 20px is blue's form rhythm and the room every field's message slot needs — the
+        {/* 20px is the system's form rhythm and the room every field's message slot needs — the
             error is pinned under the control rather than pushing it. */}
         <div style={{ display: 'grid', gap: 'var(--space-7)' }}>
           {banner && (
@@ -242,9 +242,9 @@ export function CriterionDialog({
           />
 
           {/*
-            Native radios rather than a design-system control, which blue does not have —
+            Native radios rather than a design-system control, which the system does not have —
             the same shape the vacancy dialog's interview length takes, down to `FieldLabel`
-            being blue's own label so this row matches the fields above it exactly.
+            being the system's own label so this row matches the fields above it exactly.
           */}
           {!editing && (
             <div role="radiogroup" aria-labelledby="criterion-type-label">
@@ -305,13 +305,13 @@ export function CriterionDialog({
 
       {/*
         The only edit in either library with retroactive effect, so it is the only one that
-        confirms — and it is a confirmation rather than a second form, which is blue's
+        confirms — and it is a confirmation rather than a second form, which is the system's
         `ConfirmDialog` rather than another `Modal`. Renaming a value opens nothing:
         comparison reads positions, never labels.
 
         `closeOnAccept={false}` (§41) because accepting starts a request that can come back
         with a duplicate name on the field behind this dialog. Blue dismisses on accept, since
-        prod never has a result to show; dismissing here would flash the edit dialog back up
+        there is no result to show yet; dismissing here would flash the edit dialog back up
         mid-flight and then take it away again.
       */}
       <ConfirmDialog
@@ -542,7 +542,7 @@ function ScaleEditor({
       {/*
         20px, not 5. `TextInput` pins its message *below* the field rather than pushing it, so
         anything following a field needs the 16px of clearance that slot occupies — 20px is the
-        first step of blue's scale that gives it, which is the call the token map recorded for
+        first step of the system's scale that gives it, which is the call the token map recorded for
         `--sp-7` and every other form in the app already makes with its `--space-7` row gap.
         At 5px the duplicate-value error landed on top of this sentence.
       */}
@@ -566,8 +566,8 @@ function ScaleEditor({
 }
 
 /**
- * The grip, drawn rather than typed: blue's icons are geometric, filled and `currentColor`,
- * and it has no drag handle of its own because nothing in prod is draggable.
+ * The grip, drawn rather than typed: the system's icons are geometric, filled and `currentColor`,
+ * and it has no drag handle of its own because nothing else here is draggable.
  */
 function GripIcon() {
   return (

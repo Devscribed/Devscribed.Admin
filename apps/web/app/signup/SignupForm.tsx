@@ -150,7 +150,7 @@ export function SignupForm() {
         </div>
       )}
 
-      {/* 20px is blue's form rhythm, and the room TextInput's error slot needs — see LoginForm. */}
+      {/* 20px is the system's form rhythm, and the room TextInput's error slot needs — see LoginForm. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
         {SIGNUP_FIELD_ORDER.map((field) =>
           field === 'password' ? (

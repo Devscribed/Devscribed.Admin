@@ -4,7 +4,7 @@ kind: design
 title: Candidate Database — Design
 pairs-with: 03-candidate-database.md
 routes: ["/org/{orgId}/hiring/candidates", "/org/{orgId}/hiring/my-interviews (redirect)"]
-design-system: "1_DS for dev"
+design-system: "@devscribed/ds"
 tags: [candidates, filters, filter-drawer, pagination, row-actions, toasts, scope-tabs, teammerly, light-only]
 ---
 
@@ -14,9 +14,10 @@ Visual and interaction specification for the candidate database, whose `Assigned
 what My interviews became. Pairs with [03-candidate-database.md](03-candidate-database.md), which
 owns the rules.
 
-**Design system:** Teammerly Original DS, `1_DS for dev/`. The decisions behind it are in
-[`specs/design-system/README.md`](../design-system/README.md); divergences from the vendored copy
-carry numbers in the [ledger](../design-system/ledger.md).
+**Design system:** [`packages/ds`](../../packages/ds/README.md). Import from `@devscribed/ds`;
+never hardcode a colour, size or font — every value below is a token that already exists. The
+numbered decisions behind it are in [`decisions.md`](../design-system/decisions.md), cited here
+as `§n`.
 
 **Theme:** light only. The screen renders inside the `AppShell`
 (`specs/user-management/00-app-shell.design.md`) and draws no chrome of its own.
@@ -50,19 +51,19 @@ who, how to reach them, what for, when, where they got to, and what can be done 
                               ‹  1  2  3  ›                                  ← Pagination
 ```
 
-- The row above the table is blue's own `TableToolbar` — the geometry Projects, Clients, Members,
+- The row above the table is the system's own `TableToolbar` — the geometry Projects, Clients, Members,
   ToDo, Policies and Holidays all share: the strip on the left, a 250px search and the actions on
   the right, 20px gaps, 20px down to the table. It gained nothing but the ability to be *addressed*
-  ([§52](../design-system/ledger.md)); every number in it is blue's.
+  ([§52](../design-system/decisions.md)); every number in it is the system's.
 - `Filters` is a `Button variant="primary"`, and it carries its own count — `Filters (3)`. The
   count is what buys the hiding: a filter nobody can see is a filter nobody can undo. The search is
   not in it (it has its own field, always visible) and neither is the scope (it is navigation).
 - **The filter `Card` is gone**, and with it the last of the four `--bg-panel-2` uses in the token
   map. It was `--surface-sunken` with `clip={false}` — the surface
-  [reversal 6](../design-system/README.md) was written for and the only thing that ever exercised
+  [§12](../design-system/decisions.md) was written for and the only thing that ever exercised
   it. The prop stays on `Card`; the argument for it is unchanged, and the next list that opens a
   control inside a card will need it. Nothing on this screen does any more.
-- **There is no count line.** `blue-fixes` removed it. Each scope tab already carries its own
+- **There is no count line.** A later pass removed it. Each scope tab already carries its own
   count, computed under the filters that are applied — `All (12)` beside `Assigned to me (4)` — so
   a line under the strip repeating the active tab's number was the same fact twice, and the one it
   repeated is the one already in the reader's eye. What survives is the half a tab cannot show:
@@ -77,7 +78,7 @@ who, how to reach them, what for, when, where they got to, and what can be done 
   The card is the *table's* — drawn around a sentence it is a bordered white slab the height of the
   viewport with one line of grey text near the top — so when there are no rows the `EmptyState`
   stands on the page's own ground, and the way out of it (`Clear filters`, 160px, inside the state
-  rather than under it) is part of what the state says ([§65](../design-system/ledger.md)). The page strip sits **outside** it, under the card — it is a control about
+  rather than under it) is part of what the state says ([§65](../design-system/decisions.md)). The page strip sits **outside** it, under the card — it is a control about
   the list rather than a part of it, and the last row keeps its own border either way.
 
 ## The columns
@@ -89,7 +90,7 @@ who, how to reach them, what for, when, where they got to, and what can be done 
 | Vacancy | 1.1 | the title over its interviewer, `All` scope only |
 | Interview date | 1 | the date over the time, **centred** |
 | Status | fixed 120px | the badge, or the outlined `Cancelled` |
-| Actions | blue's own last column | the row kebab |
+| Actions | the system's own last column | the row kebab |
 
 - **Vacancy and Interview date are two columns, not one stacked cell.** They are scanned for
   different reasons — *what for* and *when* — and they want different alignment: a title reads from
@@ -97,16 +98,16 @@ who, how to reach them, what for, when, where they got to, and what can be done 
 - The **interviewer** rides as a quieter second line under the vacancy title rather than taking a
   column of its own, because it is 1:1 with the vacancy and a column would only repeat it. It is
   absent in `Assigned to me`, where it is the viewer on every row ([03 §09.48](03-candidate-database.md)).
-- The labels under a name are **assessments**, not vacancy categories: `English: B1` — the neutral `Badge` ([§59](../design-system/ledger.md))
+- The labels under a name are **assessments**, not vacancy categories: `English: B1` — the neutral `Badge` ([§59](../design-system/decisions.md))
   again, the same object the candidate card draws an assessment with, the same sentence in the
   other direction. The categories moved to the drawer with the rest of the filter machinery, and
   drawing them here as well said nothing the filter did not.
-- Both two-line cells need `Table`'s §48 row growth and CSS of their own for the stack: blue's cell
+- Both two-line cells need `Table`'s §48 row growth and CSS of their own for the stack: the system's cell
   is one line, `nowrap` and clipped, and `text-overflow` cannot be set on the anonymous flex item
   the component renders.
-- **Status is capped at 120px and Actions takes 96px** ([§60](../design-system/ledger.md)), which is the cap `Table` puts on its
-  last column for exactly this — prod's own icon-only actions cell (§18). Before the kebab existed,
-  Status was last and had to override the cap to fit `Didn't pass`; it no longer is, and blue's
+- **Status is capped at 120px and Actions takes 96px** ([§60](../design-system/decisions.md)), which is the cap `Table` puts on its
+  last column for exactly this — the icon-only actions cell (§18). Before the kebab existed,
+  Status was last and had to override the cap to fit `Didn't pass`; it no longer is, and the system's
   geometry is back where it was measured.
 
 ## The row's actions
@@ -121,16 +122,16 @@ who, how to reach them, what for, when, where they got to, and what can be done 
         └──────────────────────────┘
 ```
 
-- Blue's `Popover` with no `trigger`, which draws prod's own 32px kebab: `rgba(0,0,0,0.08)` at rest,
+- The system's `Popover` with no `trigger`, which draws the 32px kebab: `rgba(0,0,0,0.08)` at rest,
   `--color-blue` with a white glyph while open. Nothing about it is drawn here.
 - It is named for the person — `Actions for Jane Doe` — because twenty-five rows draw one glyph.
 - `Cancel interview` and `Delete candidate` take `Popover`'s `danger` row, which is `--status-error`
-  ink. This is the one place in the app that opt-in is used; prod has no destructive menu row at all.
+  ink. This is the one place in the app that opt-in is used; no other menu in the app has a destructive row.
 - The two destructive rows are **not** adjacent by accident. `View candidate` sits between them
   because the menu is grouped by what an item is *about* — three interview actions, then the two
   about the person — and a `Delete candidate` immediately under `Cancel interview` would put the
   irreversible-looking one exactly where a hand aiming for the reversible one lands.
-- **The menu must portal**, which is [§55](../design-system/ledger.md): blue positions it `absolute`
+- **The menu must portal**, which is [§55](../design-system/decisions.md): positioned `absolute`
   inside the trigger, and a row menu near the bottom of a scrolling list is then clipped by the
   scroller. It is `position: fixed` off the trigger's own rectangle now, flipping upward when it
   would run off the viewport.
@@ -166,14 +167,14 @@ who, how to reach them, what for, when, where they got to, and what can be done 
                                        └────────────────────────────────┘
 ```
 
-- Blue's `MenuDrawer`: 340px, `--shadow-drawer`, `translateX(105%)` at rest and a 0.3s slide,
+- The system's `MenuDrawer`: 340px, `--shadow-drawer`, `translateX(105%)` at rest and a 0.3s slide,
   25/30 padding. It hangs from the navbar rather than over it —
-  [§51](../design-system/ledger.md) replaces its hard-coded `top: 60px` (which was
+  [§51](../design-system/decisions.md) replaces its hard-coded `top: 60px` (which was
   `--layout-navbar-height-mobile`, not a drawer measurement) with the shell's own switch.
 - Five fields, stacked full width at `--space-6`, each one the same `Select`. The gap is the one
   the fields *need* rather than the one they look like they need: every `Select` hangs its
   error/hint slot below itself, and a tighter stack would sit a message on the label under it.
-- Labels are `Select`'s own `label` prop — sentence case, blue's measured `10px 0 0 10px` label
+- Labels are `Select`'s own `label` prop — sentence case, the system's measured `10px 0 0 10px` label
   geometry — not the 96px leading column the card used. In a 340px panel a leading label column
   would leave 200px for a control that has to hold chips.
 - **Interviewer is absent in `Assigned to me`**, not disabled. There is nothing to enable: the
@@ -201,7 +202,7 @@ who, how to reach them, what for, when, where they got to, and what can be done 
   three-`Select` row that read as a query builder.
 - The row is the sunken box, and deliberately **the same object the candidate card draws for an
   assessment** (`card-criterion-*`): the criterion's name as the label, the controls in the
-  `trailing` slot ([§37](../design-system/ledger.md)), a cross to drop it. It is the same thing
+  `trailing` slot ([§37](../design-system/decisions.md)), a cross to drop it. It is the same thing
   said in the other direction — the card records *this candidate's English is B1*, the filter asks
   *whose English is at least B1* — and the operator sits between the name and the value, where it
   reads as part of that sentence.
@@ -217,7 +218,7 @@ who, how to reach them, what for, when, where they got to, and what can be done 
   ordered values), `TextInput type="number"` for `number`, `TextInput` for `text`. A `boolean` has
   **no value control**: its answer travels in its operator (`is yes` / `is no`).
 - An **archived** criterion is offered below the active ones, with the marker as the option's
-  `hint` ([§21](../design-system/ledger.md)) rather than welded into its label: `hint` is drawn
+  `hint` ([§21](../design-system/decisions.md)) rather than welded into its label: `hint` is drawn
   inside the row and is part of the option's accessible name, while the control filters on the
   label alone — so the badge is visible *and* the criterion is still findable by typing its name.
   A chip built from one carries the same `Badge status="inactive" outlined` beside it.
@@ -243,7 +244,7 @@ who, how to reach them, what for, when, where they got to, and what can be done 
 | Show results / Clear filters | `Button` | `variant="primary"` / default | `candidates-filters-apply` · `candidates-clear-filters` |
 | Counting indicator | native `<p>` + `Preloader size={8}` — **only while a request is in flight** | `aria-live="polite"` | `candidates-count` |
 | List | `Card padded={false}` > `Table` | `columns`, `rows`, **`busy`** | `candidates-list` |
-| Assessed-criteria labels on a row | **`Badge status="neutral" size="s"`** ([§59](../design-system/ledger.md)), name in `--text-secondary` and value in `--text-primary` | — | `candidate-criterion-{id}-{criterionId}` |
+| Assessed-criteria labels on a row | **`Badge status="neutral" size="s"`** ([§59](../design-system/decisions.md)), name in `--text-secondary` and value in `--text-primary` | — | `candidate-criterion-{id}-{criterionId}` |
 | Vacancy + interviewer | native two-line cell | — | `candidate-vacancy-{id}` · `candidate-interviewer-{id}` |
 | Interview date | native two-line cell | `align: 'center'` (§18) | `candidate-latest-{id}` |
 | Status | `Badge` | `status`, `outlined` — four of the five outlined, `Offer` alone filled | `candidate-status-{id}` |
@@ -257,15 +258,15 @@ who, how to reach them, what for, when, where they got to, and what can be done 
 
 ## Status badges
 
-The five application statuses do **not** map onto five tones any more. Blue's `Badge` is
+The five application statuses do **not** map onto five tones any more. The system's `Badge` is
 `ActivityBadge` — a two-state pill on a *user*, solid green for active and solid red for inactive,
 plus an outlined form of each for lower-emphasis contexts. Four paints, and no fifth.
 
 Mapping five statuses onto four would force `Scheduled` — which is neither good news nor bad — to
 be painted as one or the other. That is not a lost reinforcement, which is what
-[reversal 9](../design-system/README.md) accepted on the login banner; it is colour actively
-saying something false. So `Badge` gains blue's two remaining status hues
-([§32](../design-system/ledger.md)), which blue's readme already names and scopes:
+[§7](../design-system/decisions.md) accepted on the login banner; it is colour actively
+saying something false. So `Badge` gains the system's two remaining status hues
+([§32](../design-system/decisions.md)), which the system's readme already names and scopes:
 
 > Status colors (green/yellow/red/cyan) are used sparingly and only for real state
 > (active/inactive badges, form errors, info banners).
@@ -281,23 +282,23 @@ fill is spent once**:
 | Offer | `status="active"` | green | The settled good outcome, and the only fill |
 | Didn't pass | `status="inactive" outlined` | red | The settled bad outcome |
 
-*Revised by `blue-fixes`.* The rule was **hue is direction, fill is finality**, which made three of
+*Revised.* The rule was **hue is direction, fill is finality**, which made three of
 the five solid — `Scheduled`, `Maybe` and `Didn't pass` — and put a column of filled pills down a
 list that is mostly in-flight candidates. A list where most rows shout is a list where none of them
-do, and blue's readme scopes the palette with *"used sparingly"*. The funnel is drawn in the
+do, and the system's readme scopes the palette with *"used sparingly"*. The funnel is drawn in the
 outlined idiom `Badge` already has, and the one fill is spent on `Offer`: the terminal good state,
 and the one genuinely worth the loudest ink the palette can produce. It still corrects the
-inversion Meridian had, where `Offer` was the *outlined* variant of `Passed` and the strongest
+inversion the earlier design had, where `Offer` was the *outlined* variant of `Passed` and the strongest
 status in the funnel was drawn with the least emphasis.
 
-`Scheduled` is the one row that overrides an ink. `outlinedInfo`'s cyan is the hue blue spends on a
-**notice**; primary blue is the hue it spends on *the thing being worked on*, which is what an
+`Scheduled` is the one row that overrides an ink. `outlinedInfo`'s cyan is the hue the system spends on a
+**notice**; primary the system is the hue it spends on *the thing being worked on*, which is what an
 interview that is still ahead is. The geometry is `Badge`'s, untouched — only the two colour stops
 move.
 
-`Maybe` takes blue's `outlinedWarning` unaltered: a `--status-warning` border with
+`Maybe` takes the system's `outlinedWarning` unaltered: a `--status-warning` border with
 `--text-primary` ink. §32 already settled that `#FFD02B` carries no legible text of its own, and
-the alternative — mixing the token toward a dark orange — is a colour blue does not have.
+the alternative — mixing the token toward a dark orange — is a colour the system does not have.
 
 Status is carried by the badge's **text** on every screen that draws one. The hue repeats it.
 
@@ -353,18 +354,18 @@ card and the candidate card already use for the same mark.
 Operator wording is deliberately plain English rather than `>=`. `at least B1` is what an
 interviewer would say; `English >= B1` is what a database would.
 
-Column headers and group labels are **sentence case**. Meridian set them in uppercase; blue's
+Column headers and group labels are **sentence case**. the earlier design set them in uppercase; the system's
 `Table` header is 16px semibold as written, and its only uppercase treatment anywhere is
 `PageTabs`.
 
 ## Pagination
 
-Page controls are back, and [reversal 1](../design-system/README.md) is what they are back from.
+Page controls are back, and [§53](../design-system/decisions.md) is what they are back from.
 
 The reversal read: *"the candidate database was paginated precisely because infinite scroll cannot
 answer «how many match?», and that question is this screen's whole purpose"* — and the answer, when
 the load-more row replaced them, was that the count answers it and does not move. That is still
-true, and `blue-fixes` only moved **where** the count is said: it is in each scope tab's own label
+true, and a later pass only moved **where** the count is said: it is in each scope tab's own label
 now, computed under the applied filters, rather than on a line of its own. It is not what came
 back.
 
@@ -374,12 +375,11 @@ bar over an accumulating list, and *go back to where I was* has none at all. The
 strip answer two different questions and neither replaces the other, which is why both are on
 screen.
 
-- `Pagination` ([§53](../design-system/ledger.md)) — nothing in blue paginates, because prod's
-  own list screens all load the next page inline. So its geometry is taken from blue's *small*
-  controls rather than measured off a control that does not exist: 36px targets, `--radius-s`, a 1px
+- `Pagination` ([§53](../design-system/decisions.md)) — no other list in the app pages. So its geometry is taken
+  from the system's *small* controls rather than invented: 36px targets, `--radius-s`, a 1px
   `--border-default` hairline, and the current page filled `--color-blue` with `--text-on-accent` —
   which is exactly how `Calendar` paints a selected day.
-- The arrows are blue's single `ArrowIcon`, rotated. There is no left/right pair in the set, and
+- The arrows are the system's single `ArrowIcon`, rotated. There is no left/right pair in the set, and
   `Calendar`'s own navigation already rotates this one.
 - Compression: first, last, and the current page's immediate neighbours; everything else collapses
   into an `aria-hidden` `…`. "There are pages here you cannot see" is not a fact a reader can act
@@ -395,9 +395,9 @@ screen.
   to the top either: the rows changed under a viewport that did not move, which is what a page
   change *is*.
 
-`Table footer` ([§34](../design-system/ledger.md)) loses its only consumer with the load-more row,
+`Table footer` ([§34](../design-system/decisions.md)) loses its only consumer with the load-more row,
 the way `hideHeader` lost its own when the two My interviews groups went. The prop stays and its
-argument is unchanged — prod renders its next-page indicator *inside* the table, in the row position
+argument is unchanged — the next-page indicator renders *inside* the table, in the row position
 the next page will occupy — and the next infinite list this kit grows will want it.
 
 ## Toasts
@@ -406,11 +406,11 @@ This is the first screen with more than one thing to confirm, and it is where th
 `InfoBanner`-in-a-fixed-container surrogate stopped being adequate.
 
 `InfoBanner` is a static panel inside the content: no enter, no exit, no queue, no notion of time.
-One confirmation could live in the flow — [reversal 4](../design-system/README.md) put the
+One confirmation could live in the flow — [§24](../design-system/decisions.md) put the
 candidate card's under its `PageHeader` and it is still there. Three cannot: a panel that pushed
 the table down on every row action would move the list under the hand that is working it.
 
-So `Toast` + `ToastHost` are built here ([§54](../design-system/ledger.md)), and Phases 6, 7 and 9
+So `Toast` + `ToastHost` are built here ([§54](../design-system/decisions.md)), and Phases 6, 7 and 9
 each add more on top of them.
 
 `{name} deleted` is the first of those, and it is also the only toast in the product raised by a
@@ -424,7 +424,7 @@ because it `404`s the instant the flag is set. The name is handed across that on
 - The paint is `InfoBanner`'s, unchanged — the same status line over the same 10%-of-status fill,
   the same mark, the same `--font-size-xs` in `--text-tertiary`, the same `IconButton` dismiss.
 - 0.3s ease-in-out in and out, which is `--duration-hover` and `--ease-standard` — every other
-  motion in blue.
+  motion in the system.
 - They withdraw themselves after 5s, and the timer **holds while the pointer is over one or focus
   is inside it**: a message somebody is reading is not taken away mid-sentence.
 - `ToastHost` is the `role="status"` `aria-live="polite"` region, not each message: a nested pair
@@ -471,18 +471,18 @@ the old screen drew has an answer here.
 - The strip is `TableToolbar`'s left slot, which is where every other list screen in the kit puts
   one. It is drawn only once the response has said the caller may see both scopes; until then the
   toolbar's left side is empty and the search stays where it is.
-- Blue's `PageTabs`, in the object form ([§45](../design-system/ledger.md)): each tab carries a
+- The system's `PageTabs`, in the object form ([§45](../design-system/decisions.md)): each tab carries a
   `value` distinct from its label, a `testId`, and a label that is **the scope's name and its
   count**. The component deliberately has no `count` prop — a count composes into the label, and a
   strip that grew one would then need a badge for it, and an icon.
 - Real `role="tab"` buttons in a named `role="tablist"`, one tab stop, arrow keys moving and
   selecting as they go. The strip chooses what is shown; it is not a set of destinations, and it is
   not drawn as links.
-- Uppercase, because `PageTabs` is the one place blue uppercases anything — which is also why the
+- Uppercase, because `PageTabs` is the one place the system uppercases anything — which is also why the
   column headers below it are sentence case.
 - **The count lives in the label, and only there.** Each tab counts what *it* would show under the
   filters already applied, so `All (12)` beside `Assigned to me (4)` answers both "how many match"
-  and "and how many would the other one show?" before it is pressed. `blue-fixes` removed the
+  and "and how many would the other one show?" before it is pressed. A later pass removed the
   separate count line this used to sit beside: two places saying one number, and the tab was
   already the one being read. What is lost with it is the org-wide total — a filter that matches
   nobody now reads `All (0)` rather than `0 of 128`. That is the trade, taken deliberately: the
@@ -524,9 +524,9 @@ carried by the scope's ordering instead ([03 §06.28](03-candidate-database.md),
 The order is the server's answer and arrives in it; this screen renders the array as it came, and
 there is no sort control to draw.
 
-`Table hideHeader` ([§34](../design-system/ledger.md)) loses its only consumer with those groups.
+`Table hideHeader` ([§34](../design-system/decisions.md)) loses its only consumer with those groups.
 The prop stays; the argument for it — a short grouped list already named by the surface it sits in
-— is unchanged, and so is [reversal 5](../design-system/README.md), which was about how such a
+— is unchanged, and so is [§34](../design-system/decisions.md), which was about how such a
 group is named rather than about this screen in particular.
 
 ## The dialogs
@@ -537,16 +537,16 @@ mount identically rather than asymmetrically.
 
 ### Delete candidate
 
-Blue's `ConfirmDialog`, which is exactly what it is for: a yes/no whose accept is the whole action,
+The system's `ConfirmDialog`, which is exactly what it is for: a yes/no whose accept is the whole action,
 with no field in it. Two of its props matter here and both were added for this shape of
-confirmation ([§41](../design-system/ledger.md)):
+confirmation ([§41](../design-system/decisions.md)):
 
 - **`closeOnAccept={false}`** — it stays up while the request is in flight. This is the last point
   at which the member can change their mind, and a dialog that dismissed on the press would leave
   the outcome to a toast that has not happened yet.
 - **`busy`** — the accept button carries its preloader and neither control can be pressed again.
 
-Blue paints the accept primary blue even here, and it stays that way. A destructive confirmation
+The system paints the accept primary blue even here, and it stays that way. A destructive confirmation
 says what it is in its title and its sentence, not in a button's fill — the same call the category
 delete made ([06 design](06-libraries.design.md)).
 
@@ -570,7 +570,7 @@ answers with a whole application — a second host for that is a second thing to
 the sake of one click, on a screen whose internal door is the card anyway (07 §01.5).
 
 Both are `Modal` + `FormActions`, not `ConfirmDialog` — the call Phase 3 made and
-[flagged for Phase 6](../design-system/ledger.md): `ConfirmDialog` fires `onClose` in the same
+[flagged for Phase 6](../design-system/decisions.md): `ConfirmDialog` fires `onClose` in the same
 breath as `onAccept`, so a confirmation whose action is a request with a busy state cannot use it.
 Cancel is exactly that shape. §41 has since given `ConfirmDialog` `busy` and `closeOnAccept`, so
 the objection is answered in principle — but Cancel also holds a field, and `ConfirmDialog` has no
@@ -579,13 +579,13 @@ slot for one, so the call stands on its own second reason.
 - **Reschedule** holds a `SlotPicker` — the same `Calendar`, slot list, zone `Select` and format
   `ToggleButton` the public booking page draws. One picker, one behaviour, two hosts.
 - **Cancel** holds a `TextArea` for the optional reason, with the character count in its
-  **label row** ([§33](../design-system/ledger.md)) rather than under the field, so the count
+  **label row** ([§33](../design-system/decisions.md)) rather than under the field, so the count
   changing never moves the field beneath it.
 - **On the card** they announce their outcome with an `InfoBanner` —
-  [reversal 4](../design-system/README.md), in the slot Phase 3 fixed: directly under `PageHeader`,
+  [§24](../design-system/decisions.md), in the slot Phase 3 fixed: directly under `PageHeader`,
   above the page body. `tone="success"` becomes `variant="success"`
-  ([§7](../design-system/ledger.md)).
-- **On this list the outcome is a real toast** ([§54](../design-system/ledger.md)), and the
+  ([§7](../design-system/decisions.md)).
+- **On this list the outcome is a real toast** ([§54](../design-system/decisions.md)), and the
   difference is the surface rather than an inconsistency: the card reports one outcome about the
   one interview filling the screen, and the list reports an outcome about a row that is still
   there — a banner in the flow would push the table down under the hand working it.
@@ -611,7 +611,7 @@ scrolls horizontally.
 - The drawer is a `role="dialog"` labelled by its own `Filters` heading. Focus moves into it when
   it opens and returns to the button when it closes, and `Escape` leaves — but focus is **not
   trapped**, which is the same call `AppShell` made for the rail it turns into below 1200px
-  ([§14](../design-system/ledger.md)): the list behind it is still live, and the panel is a place
+  ([§14](../design-system/decisions.md)): the list behind it is still live, and the panel is a place
   to work rather than a modal question. Everything inside it is one Tab walk, in the order it is
   drawn.
 - Each criterion chip is a labelled group naming its index ("Criteria filter 1"); its operator and
@@ -645,19 +645,19 @@ scrolls horizontally.
 
 ## DS gaps
 
-Every row here is now a numbered entry in the [ledger](../design-system/ledger.md); this table is
+Every row here is now a numbered entry in [decisions](../design-system/decisions.md); this table is
 the index.
 
 | Gap | Entry |
 |---|---|
-| `Calendar` — blue's `DateField` is a 140px text field, and `DateRangePicker` is a range over past dates | [§30](../design-system/ledger.md) — *designed, not measured* |
-| `ToggleButton` forwards nothing and announces two unrelated buttons | [§31](../design-system/ledger.md) |
-| `Badge` has two status hues; the funnel has five states | [§32](../design-system/ledger.md) — *designed* |
-| `TextArea` has no `trailing` slot in the label row | [§33](../design-system/ledger.md) |
-| `Table` has no busy, header-less or footer form | [§34](../design-system/ledger.md) |
-| `MenuDrawer` hangs from a hard-coded 60px and cannot be named, tagged or left by keyboard | [§51](../design-system/ledger.md) |
-| `TableToolbar` draws two controls and gives no way to address either | [§52](../design-system/ledger.md) |
-| `Pagination` — nothing in blue pages a list | [§53](../design-system/ledger.md) — *composed from measured parts* |
-| `Toast` / `ToastHost` — `InfoBanner` is a static panel with no motion, queue or clock | [§54](../design-system/ledger.md) — *designed* |
-| `Popover` is positioned inside its trigger and is clipped by any scroller | [§55](../design-system/ledger.md) |
-| ~~`Combobox` multi-select with chips~~ | `Select isMulti isSearchable`, [§20](../design-system/ledger.md) / [§21](../design-system/ledger.md) |
+| `Calendar` — picking from what is free is not the same as typing a date into a field | [§30](../design-system/decisions.md) |
+| `ToggleButton` forwards nothing and announces two unrelated buttons | [§31](../design-system/decisions.md) |
+| `Badge` has two status hues; the funnel has five states | [§32](../design-system/decisions.md) — *designed* |
+| `TextArea` has no `trailing` slot in the label row | [§33](../design-system/decisions.md) |
+| `Table` has no busy, header-less or footer form | [§34](../design-system/decisions.md) |
+| `MenuDrawer` hangs from a hard-coded 60px and cannot be named, tagged or left by keyboard | [§51](../design-system/decisions.md) |
+| `TableToolbar` draws two controls and gives no way to address either | [§52](../design-system/decisions.md) |
+| `Pagination` — nothing in the system pages a list | [§53](../design-system/decisions.md) — *composed from measured parts* |
+| `Toast` / `ToastHost` — `InfoBanner` is a static panel with no motion, queue or clock | [§54](../design-system/decisions.md) — *designed* |
+| `Popover` is positioned inside its trigger and is clipped by any scroller | [§55](../design-system/decisions.md) |
+| ~~`Combobox` multi-select with chips~~ | `Select isMulti isSearchable`, [§20](../design-system/decisions.md) / [§21](../design-system/decisions.md) |

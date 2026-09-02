@@ -4,7 +4,7 @@ kind: design
 title: Vacancies — Design
 pairs-with: 01-vacancies.md
 routes: ["/org/{orgId}/hiring/vacancies", "/org/{orgId}/hiring/vacancies/{vacancyId}"]
-design-system: "1_DS for dev"
+design-system: "@devscribed/ds"
 tags: [vacancy, table, modal, select, disabled-option, teammerly, light-only]
 ---
 
@@ -14,24 +14,25 @@ Visual and interaction specification for the vacancies list, the vacancy detail 
 create/edit dialog. Pairs with [01-vacancies.md](01-vacancies.md), which owns the rules and every
 validation message.
 
-**Design system:** Teammerly Original DS, `1_DS for dev/`. The decisions behind it are in
-[`specs/design-system/README.md`](../design-system/README.md); divergences from the vendored copy
-carry numbers in the [ledger](../design-system/ledger.md).
+**Design system:** [`packages/ds`](../../packages/ds/README.md). Import from `@devscribed/ds`;
+never hardcode a colour, size or font — every value below is a token that already exists. The
+numbered decisions behind it are in [`decisions.md`](../design-system/decisions.md), cited here
+as `§n`.
 
 **Theme:** light only. Both screens render inside the `AppShell`
 (`specs/user-management/00-app-shell.design.md`) and draw no chrome of their own.
 
 > **Amended by Phase 4.** The category picker in the dialog now **closes its menu** when a
-> category is chosen. Blue kept a multi-select's list open, which react-select — the library blue
+> category is chosen. The system kept a multi-select's list open, which the underlying control
 > recreates — does only when `closeMenuOnSelect` is explicitly `false`; restoring the default is
-> [§36](../design-system/ledger.md). Nothing else on these screens changed, and
+> [§36](../design-system/decisions.md). Nothing else on these screens changed, and
 > `hiring-vacancies.spec.ts` is unaffected.
 
-> **Amended by Phase 7 — the list.** The filter row is gone and blue's `TableToolbar`
-> ([§52](../design-system/ledger.md)) is in its place: the status `Select` became a **tab strip
+> **Amended by Phase 7 — the list.** The filter row is gone and the system's `TableToolbar`
+> ([§52](../design-system/decisions.md)) is in its place: the status `Select` became a **tab strip
 > with counts**, the search moved into the toolbar's own 250px slot, and `New vacancy` came off
 > the page header to join it. Every row grew the **actions kebab** the detail page already had,
-> and the two announcements it raises are real `Toast`s ([§54](../design-system/ledger.md)) rather
+> and the two announcements it raises are real `Toast`s ([§54](../design-system/decisions.md)) rather
 > than the banner slot below — the list is not a page an action was taken *about*, it is a page
 > an action was taken *from*. The [Layout — list](#layout--list), [Component
 > map](#component-map), [Copy](#copy) and [States](#states) sections are Phase 7's; the detail
@@ -55,7 +56,7 @@ A member with no hiring access sees no Hiring group at all, not an empty one —
 the session before rendering anything, so a gated row never flashes into view and back out.
 
 > **Amended by Phase 3.** These rows were a **flat** list of three, the third of which was
-> `My interviews`, gated on assignment rather than role. The rail now takes blue's **collapsible
+> `My interviews`, gated on assignment rather than role. The rail now takes the system's **collapsible
 > submenu** — `Hiring` is a real `<button aria-expanded>` and a toggle, not a destination — and
 > the group holding the current route is open on arrival.
 > [`00-app-shell.design.md`](../user-management/00-app-shell.design.md) owns that shape and is the
@@ -80,12 +81,12 @@ the session before rendering anything, so a gated row never flashes into view an
   └───────────────────────────────────────────────────────────────┘
 ```
 
-- The row above the table is blue's own `TableToolbar` — the geometry Projects, Clients, Members,
+- The row above the table is the system's own `TableToolbar` — the geometry Projects, Clients, Members,
   ToDo, Policies and Holidays all share, and the one the candidate database took in Phase 4: the
   strip on the left, a 250px search and the actions on the right, 20px gaps, 20px down to the
-  table. It gained nothing but the ability to be *addressed* ([§52](../design-system/ledger.md)).
+  table. It gained nothing but the ability to be *addressed* ([§52](../design-system/decisions.md)).
 - **Tabs carry no shadow on click.** The strip's focus ring is keyboard-only
-  ([§68](../design-system/ledger.md)): `focus` fires on a pointer press as well, so a click used
+  ([§68](../design-system/decisions.md)): `focus` fires on a pointer press as well, so a click used
   to leave a glow on the chosen tab until something else was clicked. The ring is unchanged for
   the case it was added for — arriving by `Tab` and moving with the arrow keys.
 - **The status filter is the strip.** It was a 160px `Select` beside the search: three choices,
@@ -99,16 +100,16 @@ the session before rendering anything, so a gated row never flashes into view an
   decision; its candidate database, drawn from the same source, keeps its header.
 - The table is edge to edge inside a `Card padded={false}`, which is what gives it a border and
   rounds its first and last rows. `clip` stays at its default: the row kebab opens *inside* the
-  card now, but `Popover` portals its menu ([§55](../design-system/ledger.md)), so nothing it
-  raises is clipped by the surface it was opened from ([reversal 6](../design-system/README.md)).
+  card now, but `Popover` portals its menu ([§55](../design-system/decisions.md)), so nothing it
+  raises is clipped by the surface it was opened from ([§12](../design-system/decisions.md)).
 - **One surface at every state.** The loader and the empty message render *inside* that card,
-  under the header row, rather than replacing it. This is blue's own table screen, and what the
+  under the header row, rather than replacing it. This is the system's own table screen, and what the
   members list already does. A refetch over rows already on screen dims them instead
-  (`Table busy`, [§34](../design-system/ledger.md)) — a table that collapsed and re-expanded on
+  (`Table busy`, [§34](../design-system/decisions.md)) — a table that collapsed and re-expanded on
   every keystroke would reflow the page under the reader for no information at all.
-- Column alignment is blue's positional rule — first left, last right, everything between
+- Column alignment is the system's positional rule — first left, last right, everything between
   centred — so `Length` and `Candidates` read centred, and the kebab takes the last column's own
-  80px. They were right-aligned Grotesk numerals under Meridian; blue has one family and no mono
+  80px. They were right-aligned Grotesk numerals in the earlier design; the system has one family and no mono
   treatment to align.
 - Category chips sit on a second line inside the title cell.
 
@@ -158,26 +159,26 @@ the one case that produces it.
 
 ### The banner slot
 
-`Toast` is gone ([D4](../design-system/README.md); blue has none, because the live app has none),
-and [reversal 4](../design-system/README.md) is the consequence: **transient becomes persistent,
-so it needs a place and a way out.**
+`Toast` was not available when this screen was written, and
+[§24](../design-system/decisions.md) is the consequence: **transient became persistent, so it
+needed a place and a way out.**
 
 | | Answer |
 |---|---|
 | Where | Directly under `PageHeader`, above the page body, full content width, `--space-7` beneath it |
 | Why there | It is an announcement *about this page*, raised by an action taken from the header above it. In flow it pushes the content down rather than covering it, which is what a thing that does not time out has to do |
-| How it goes away | Dismissed, or replaced. `InfoBanner onDismiss` ([§24](../design-system/ledger.md)) draws an `IconButton` at the trailing edge; a new notice overwrites the old one, so announcements never stack |
+| How it goes away | Dismissed, or replaced. `InfoBanner onDismiss` ([§24](../design-system/decisions.md)) draws an `IconButton` at the trailing edge; a new notice overwrites the old one, so announcements never stack |
 | Tone | `success` for a completed action, `error` for a failure. Both are `role="status"`, `aria-live="polite"` — never focus-stealing, exactly as the toast was |
 
 Nothing auto-dismisses. A banner that removed itself after a few seconds would be a toast wearing
-a different component, and the point of the reversal is that blue has no toast.
+a different component, and the point of the reversal is that the system has no toast.
 
 The dialog's own error banner is the same component in the same role, at the top of the form.
 
 **Phases 4 and 6 follow this**: header, then banner, then body.
 
-> **Amended by Phase 7 — and the reversal is half-undone, deliberately.** Blue has a toast now
-> ([§54](../design-system/ledger.md), built in Phase 5 because the candidate list had more than
+> **Amended by Phase 7 — and the reversal is half-undone, deliberately.** The system has a toast now
+> ([§54](../design-system/decisions.md), built in Phase 5 because the candidate list had more than
 > one thing to confirm). That does **not** move the detail page's announcements: they are about a
 > page the member is standing on, raised by the header above them, and pushing content down rather
 > than covering it is still the right treatment for something that does not time out.
@@ -213,8 +214,8 @@ The dialog's own error banner is the same component in the same role, at the top
 
 ### Headings
 
-`SectionLabel` is gone (D4; blue captions nothing, and `PageTabs` is its only uppercase). Each of
-the detail page's three captions becomes a **card title**, which is blue's own header line at the
+`SectionLabel` is gone (D4; the system captions nothing, and `PageTabs` is its only uppercase). Each of
+the detail page's three captions becomes a **card title**, which is the system's own header line at the
 headline-6 step:
 
 | Was | Is | Element |
@@ -223,26 +224,26 @@ headline-6 step:
 | `SectionLabel` CATEGORIES | `Card title="Categories"` | `<h2>` |
 | `SectionLabel` DESCRIPTION | `Card title="Description"` | `<h2>` |
 
-Sentence case, not caps — blue's card titles are sentence case, and the uppercase micro-caps were
-Meridian's. `<h2>` because `PageTitle` is the page's `<h1>` and these are the sections under it;
-blue renders its titles as `<div>`s, which is [§27](../design-system/ledger.md).
+Sentence case, not caps — the system's card titles are sentence case, and the uppercase micro-caps were
+the earlier design's. `<h2>` because `PageTitle` is the page's `<h1>` and these are the sections under it;
+the system renders its titles as `<div>`s, which is [§27](../design-system/decisions.md).
 
 > **Amended by Phase 8: all three are gone, and so is the question.** Each was a caption over
 > something that says what it is — a URL, two chips, a paragraph — and the fold-in dissolved the
 > cards they titled into one meta line. The `<h2>` level under `PageTitle` did not go with them:
-> `BoardColumn` renders each column name as one ([§43](../design-system/ledger.md)), so the outline
+> `BoardColumn` renders each column name as one ([§43](../design-system/decisions.md)), so the outline
 > beneath the `<h1>` is now the five columns, which is a truer table of contents for this screen
 > than `Booking link · Categories · Description` ever was.
 
 The dialog's micro-labels are field labels rather than captions, so they are the labels the
 fields draw themselves (`TextInput`, `Select`, `TextArea`) plus one `FieldLabel` for the radio
-row — blue's own label, so the row matches the fields above it exactly.
+row — the system's own label, so the row matches the fields above it exactly.
 
 ### The blocked action
 
-[Reversal 2](../design-system/README.md) warned that native `title` is free only for a pointer.
+[§62](../design-system/decisions.md) warned that native `title` is free only for a pointer.
 **It is not used here, and it never will be.** The reason a delete is blocked is a real
-`Tooltip` ([§62](../design-system/ledger.md)) on hover and focus, over a hidden copy of the same
+`Tooltip` ([§62](../design-system/decisions.md)) on hover and focus, over a hidden copy of the same
 sentence that is the row's permanent `aria-describedby` target — see the amendment below for how
 this arrived at its third and final shape.
 
@@ -271,15 +272,15 @@ to caveat.
 Which leaves `description` used by nothing in this menu, and that is the right outcome rather than
 a loss: the slot exists for a row whose destination needs explaining, and none of these six do.
 
-> **Amended by `blue-fixes`, and this is the settled answer.** The reason is now drawn in a
-> **`Tooltip`** bubble ([§62](../design-system/ledger.md)) opening to the left of the menu, and the
+> **Amended, and this is the settled answer.** The reason is now drawn in a
+> **`Tooltip`** bubble ([§62](../design-system/decisions.md)) opening to the left of the menu, and the
 > paragraph above is half-superseded: what is corrected is only *where the sentence is drawn*.
 >
 > §22's actual claim — that a reason reachable only by a pointer is a reason a keyboard user never
 > gets — is untouched and is now **enforced more strictly than before**: the sentence sits in a
 > visually-hidden node that is in the DOM at all times, which is what the row's `aria-describedby`
 > resolves to whether or not anything is hovering. A bubble alone could not do that; this is
-> `BoardCard`'s flag pattern ([§42](../design-system/ledger.md)), and it is why `tooltipTestId`
+> `BoardCard`'s flag pattern ([§42](../design-system/decisions.md)), and it is why `tooltipTestId`
 > names the hidden copy rather than the bubble.
 >
 > What changes is the drawing. A sentence inside a 160px panel made one row twice the height of the
@@ -289,31 +290,31 @@ a loss: the slot exists for a row whose destination needs explaining, and none o
 > view*), **`tooltip` says why a row cannot be used**. A row never carries both, because a row
 > that is blocked has nothing else to add.
 >
-> **Corrected, later in `blue-fixes`.** None of the above was on screen. `Popover`'s panel carried
-> an `overflow: hidden` that was never blue's and had never clipped anything, and a bubble hung at
+> **Corrected later.** None of the above was on screen. `Popover`'s panel carried
+> an `overflow: hidden` that was never the system's and had never clipped anything, and a bubble hung at
 > `right: 100%` of a row is *entirely* outside that panel — so both blocked rows on this screen
 > drew their reason into a zero-width sliver from the day it shipped. The hidden node kept working
 > throughout, which is why a screen reader was told and a member with a mouse was not, and why the
 > test that asserts the reason `toBeVisible()` passed the whole time: the id it names is on the
 > hidden node, and a 1×1 clipped span is visible as far as Playwright is concerned. Reachable is
-> not legible. See the ledger's note on §62.
+> not legible. See the decisions record's note on §62.
 
 ## Component map
 
 | Screen element | DS component | Props | `data-testid` |
 |---|---|---|---|
 | Page header · list | `PageHeader` (app adapter over `PageTitle`) | `title` | `page-title` |
-| Back to the list | `BackTo` ([§56](../design-system/ledger.md)) | `label`, `href`, `onClick`, `data-testid` | `vacancy-back-link` |
+| Back to the list | `BackTo` ([§56](../design-system/decisions.md)) | `label`, `href`, `onClick`, `data-testid` | `vacancy-back-link` |
 | Vacancy title | `PageTitle` | node children | `page-title` |
-| Announcement · both screens | `Toast` inside `ToastHost` ([§54](../design-system/ledger.md)) | `tone`, `onDismiss` | `toast-vacancy-*`, `toast-link-copied`, `toast-link-copy-failed` |
+| Announcement · both screens | `Toast` inside `ToastHost` ([§54](../design-system/decisions.md)) | `tone`, `onDismiss` | `toast-vacancy-*`, `toast-link-copied`, `toast-link-copy-failed` |
 | List toolbar | `TableToolbar` | `tabs`, `activeTab`, `onTab`, `tabsLabel`, `tabsTestId`, `search*` | — |
 | Status tabs | `PageTabs` (through `TableToolbar`) | `TabItem` objects — `value`, `label`, `testId` | `vacancies-status-tabs`, `vacancies-status-{all\|open\|closed}` |
 | Search | `SearchInput` (through `TableToolbar`) | `searchPlaceholder`, `searchLabel`, `searchTestId` | `vacancies-search-input` |
 | List surface | `Card` | `padded={false}` | `vacancies-list` |
 | List | `Table` | `columns`, `rows`, `rowHref`, `rowTestId`, `onRowClick`, `busy` | — |
-| Row actions | `Popover` | `label`, `items` with `disabled` + `tooltip` ([§62](../design-system/ledger.md)) — six rows: Open board · Copy booking link · Open booking page · Edit vacancy · Close/Reopen vacancy · Delete vacancy | `vacancy-actions-menu-{id}` |
+| Row actions | `Popover` | `label`, `items` with `disabled` + `tooltip` ([§62](../design-system/decisions.md)) — six rows: Open board · Copy booking link · Open booking page · Edit vacancy · Close/Reopen vacancy · Delete vacancy | `vacancy-actions-menu-{id}` |
 | Row confirmations | `ConfirmDialog` | `busy`, `closeOnAccept={false}`, `acceptTestId` | `vacancy-close-confirm`, `vacancy-delete-confirm` |
-| Category label | **`Badge status="neutral" size="s"`** ([§59](../design-system/ledger.md)) | — | `vacancy-category-chip-{id}` |
+| Category label | **`Badge status="neutral" size="s"`** ([§59](../design-system/decisions.md)) | — | `vacancy-category-chip-{id}` |
 | Status pill | `Badge` | `status="active"` open, `"inactive"` closed, **`outlined` for both** | `vacancy-status-{id}` |
 | Loading | `Preloader` | default 12/7, centred in the card | `vacancies-loading` |
 | Empty state | `EmptyState` | — | `vacancies-empty-state` |
@@ -338,13 +339,13 @@ a loss: the slot exists for a row whose destination needs explaining, and none o
 The `toast-*` ids are the ones the suite already knows these announcements by. They named a
 `Toast` when there was one to name; what they identify now is the banner slot.
 
-**`Button` variants** are blue's three: `primary` (solid blue), `delete` (solid red) and the
-default outlined neutral. Meridian's `secondary` and `ghost` both land on the default, and
+**`Button` variants** are the system's three: `primary` (solid blue), `delete` (solid red) and the
+default outlined neutral. the earlier design's `secondary` and `ghost` both land on the default, and
 `danger` on `delete`.
 
-**Interview length has no design-system component.** Blue ships no `Radio` or `RadioGroup` — prod
-has no three-way inline choice to measure — so the row stays three native radios in a
-`role="radiogroup"`, with blue's `FieldLabel` above them and `--action-primary` as the
+**Interview length has no design-system component.** The system ships no `Radio` or `RadioGroup` —
+nothing else in the app makes a three-way inline choice — so the row stays three native radios in a
+`role="radiogroup"`, with the system's `FieldLabel` above them and `--action-primary` as the
 `accentColor`. It is the one control on these screens the system does not draw.
 
 ## Copy
@@ -404,7 +405,7 @@ is the one thing that stops the action (`This link is no longer accepting bookin
 vacancy screen's is a statement about the vacancy, made directly above the board that closing did
 not touch. Same fact, two jobs.
 
-Column headers and card titles move from Meridian's uppercase micro-caps to blue's sentence case;
+Column headers and card titles move from the earlier design's uppercase micro-caps to the system's sentence case;
 the words are unchanged. The interviewer hint states *why* a mailbox is required, up front, rather
 than waiting for the visitor to discover it from a disabled row.
 
@@ -414,23 +415,23 @@ than waiting for the visitor to discover it from a disabled row.
 |---|---|
 | **Status · open** | `Badge status="active"` — solid `--status-success`, white text |
 | **Status · closed** | `Badge status="inactive"` — solid `--status-error`, white text |
-| **Category label** | `Badge status="neutral"` ([§59](../design-system/ledger.md)) — `--surface-sunken` hairlined in `--border-subtle`, `--radius-s`, regular weight; `size="s"` in a table row, `m` on the detail header. It was `Chip` until `blue-fixes`, and `Chip` is what `Select isMulti` draws for a value chosen **inside a field**: its 7px `--color-blue` left edge marks a *selection*, and on a table row it put the loudest mark on the screen on the quietest fact on it. Inside the dialog it is still a `Chip`, because there it really is a selection |
+| **Category label** | `Badge status="neutral"` ([§59](../design-system/decisions.md)) — `--surface-sunken` hairlined in `--border-subtle`, `--radius-s`, regular weight; `size="s"` in a table row, `m` on the detail header. It was `Chip` until a later pass, and `Chip` is what `Select isMulti` draws for a value chosen **inside a field**: its 7px `--color-blue` left edge marks a *selection*, and on a table row it put the loudest mark on the screen on the quietest fact on it. Inside the dialog it is still a `Chip`, because there it really is a selection |
 | **Select option · eligible** | `rgba(0, 122, 255, 0.1)` under the pointer *and* under the arrow keys |
 | **Select option · ineligible** | `--text-secondary` ink, reason trailing at `--font-size-xs`, `aria-disabled`, no hover, not selectable — but still reachable by arrow key |
 | **Select option · selected** | `--color-blue` fill, white text (single-value only; a chosen chip leaves the list) |
 | **Menu row · blocked** | `--text-secondary`, `aria-disabled`, focusable, reason drawn beneath |
 | **Link · copied** | `Toast tone="success"`; the button itself does not change label |
-| **Link · closed vacancy** | `Button disabled` — blue's own disabled paint — with the reason drawn as a sentence above it rather than in a `title` |
+| **Link · closed vacancy** | `Button disabled` — the system's own disabled paint — with the reason drawn as a sentence above it rather than in a `title` |
 | **Description · clamped** | Three lines, then an ellipsis, with `View more` beneath. Drawn only when `scrollHeight` exceeds `clientHeight`: whether the clamp cut anything is a fact about the width the header ended up with, not about the string |
 | **Description · expanded** | `max-height` of a fifth of the viewport, floored at 66px and capped at 132px, `overflow-y: auto`. It never grows past its share — the board keeps the rest |
-| **Row · hover** | `--color-row-hover`, blue's neutral grey. Meridian tinted it violet |
+| **Row · hover** | `--color-row-hover`, the system's neutral grey. the earlier design tinted it violet |
 | **Loading** | `Preloader` centred in the card, under the table header. Content pops in rather than resolving in place — the honest cost of losing `Skeleton` (D4) |
-| **Refetching** | The rows stay, dimmed and `aria-busy` (`Table busy`, [§34](../design-system/ledger.md)). Only the first load draws the `Preloader`; a search that replaced the table on every keystroke would reflow the page under the reader |
+| **Refetching** | The rows stay, dimmed and `aria-busy` (`Table busy`, [§34](../design-system/decisions.md)). Only the first load draws the `Preloader`; a search that replaced the table on every keystroke would reflow the page under the reader |
 | **Tab · current** | `PageTabs`' own selected treatment, `aria-selected`. The strip is drawn only once a response has arrived, so no label reads `(0)` and then jumps |
 | **Menu row · blocked copy** | `--text-secondary`, `aria-disabled`, focusable, the closed-link note drawn beneath as its `aria-describedby` |
 
-`--text-faint` is gone: blue has three text levels to yellow's four, so faint and muted are both
-`--text-secondary` ([reversal 7](../design-system/README.md)). On these screens they were never
+`--text-faint` is gone: the system has three text levels to the earlier design's four, so faint and muted are both
+`--text-secondary`. On these screens they were never
 adjacent, so nothing flattened.
 
 ## Interactions
@@ -444,7 +445,7 @@ adjacent, so nothing flattened.
   answered differently on each screen, and the difference is *where else the link is*: a list row
   points at the vacancy, and the vacancy has nowhere further to point, so it says the link out
   loud. The action never silently fails on either.
-- **Back** is a real anchor with a real `href` ([§56](../design-system/ledger.md)): middle-click,
+- **Back** is a real anchor with a real `href` ([§56](../design-system/decisions.md)): middle-click,
   open-in-new-tab and copy-address all work, and only an unmodified click is taken by the router.
   The same rule `Table`'s `rowHref`/`onRowClick` pair follows on the list.
 - **View more** toggles the clamp and nothing else — no scroll, no focus move. The control keeps
@@ -458,11 +459,11 @@ adjacent, so nothing flattened.
 - **A row's menu never navigates.** The kebab is rendered inside the row's anchor, so the row is
   told which press was not for it — the trigger carries `data-row-actions` and the row handler
   looks for it with `closest`. Not `stopPropagation` inside the menu: the menu is portalled
-  ([§55](../design-system/ledger.md)) and its rows are not inside the anchor at all.
-- **Closing confirms, reopening does not.** Both row confirmations are blue's `ConfirmDialog` with
+  ([§55](../design-system/decisions.md)) and its rows are not inside the anchor at all.
+- **Closing confirms, reopening does not.** Both row confirmations are the system's `ConfirmDialog` with
   `closeOnAccept={false}`, so they stay up until the server has answered rather than dismissing on
   the press and leaving the outcome to an announcement that may never arrive
-  ([§41](../design-system/ledger.md)).
+  ([§41](../design-system/decisions.md)).
 - **After any mutation** the list or detail refetches. No optimistic updates. On the list that
   also moves the tab counts, which is the second reason not to patch a row in place.
 
@@ -483,9 +484,9 @@ here, where a clipped header would hide the only control that leaves the page.
 The booking link truncates with `text-overflow: ellipsis`; the page body never scrolls
 horizontally.
 
-**The table has one layout at every width.** Meridian's spec described the `CANDIDATES` column
+**The table has one layout at every width.** the earlier design's spec described the `CANDIDATES` column
 folding into the title cell at 768–1023px and rows becoming stacked cards below 768px. Neither
-was ever built, and blue's `Table` is a fixed 70px flex row with no responsive form to adopt
+was ever built, and the system's `Table` is a fixed 70px flex row with no responsive form to adopt
 (D1) — its columns flex, and that is the whole behaviour. The claim is removed rather than
 carried forward unimplemented.
 
@@ -512,7 +513,7 @@ query cannot be one — the same reason `.page-title` and the shell's breakpoint
 - Toasts arrive in a polite live region and dismiss themselves; they never take focus, and a
   second action taken before the first has faded adds a line rather than replacing one.
 - The back link is an anchor with an `href`, so it is announced as a link to somewhere and behaves
-  like one ([§56](../design-system/ledger.md)).
+  like one ([§56](../design-system/decisions.md)).
 - The meta line's `·` separators are `aria-hidden`: a reader hears `React, Senior, Pat Owner,
   60 min`, not four middle dots.
 - `View more` is a real `<button aria-expanded>` whose label says which way it will go, and the
@@ -520,7 +521,7 @@ query cannot be one — the same reason `.page-title` and the shell's breakpoint
 - The board's own accessibility model is unchanged by the move — see
   [05 design](05-board.design.md). Its columns are the `<h2>`s under this screen's `<h1>`.
 - Both dialogs trap focus, close on `Escape` and return focus to the opener
-  ([§8](../design-system/ledger.md)).
+  ([§8](../design-system/decisions.md)).
 - Announcements are `role="status"`, polite, and never steal focus.
 - The loader is `aria-hidden` with a single polite "Loading vacancies" beside it.
 - Every field's label is a real `<label for>`, and its error or hint is the field's
@@ -529,34 +530,34 @@ query cannot be one — the same reason `.page-title` and the shell's breakpoint
 
 ## DS gaps
 
-Every row is a numbered entry in the [ledger](../design-system/ledger.md). All but two are
-omissions rather than decisions — blue is a measurement of production, and production never had
-to answer these ([§D2](../design-system/README.md)).
+Every row is a numbered entry in [decisions](../design-system/decisions.md). All but two are
+the accessibility floor rather than a change of design — the forwarding, the roles and the keyboard
+a component owes whatever else it does. See [the system's README](../../packages/ds/README.md).
 
 | Gap | Impact | Ledger |
 |---|---|---|
-| `Select` is a `<div onClick>`: no role, nothing focusable, no keys — and `isSearchable` accepted and doing nothing | The category picker could not exist and the interviewer picker was unusable without a pointer | [§21](../design-system/ledger.md) |
-| `SelectOption` carries no `disabled`, `hint` or `testId` | An ineligible interviewer could not be shown-but-disabled, which is what [01 §02.6](01-vacancies.md) requires | [§21](../design-system/ledger.md) |
-| `Select` has no `errorId`, `hint`, `id` or `chipTestId` | §3 and §4's shape on `TextInput`, missing on its sibling | [§21](../design-system/ledger.md) |
-| No creatable option row anywhere in blue | A category the library does not hold yet had nowhere to be offered. **Designed, not measured** | [§29](../design-system/ledger.md) |
-| `Popover` is `<div onClick>` rows in a `<div onClick>` trigger, with no `testId`, `disabled` or description | The actions menu could not be opened, walked or left from a keyboard, and a blocked row could not say why | [§22](../design-system/ledger.md) |
-| `TableToolbar` draws two controls and gives no way to address either | The status tabs could not be named or tested, and the tabs' object form could not be typed | [§52](../design-system/ledger.md) |
-| `Popover`'s menu was clipped by the surface it opened from | A kebab on the last row of a card-bounded table had nowhere to open | [§55](../design-system/ledger.md) |
-| Blue's chip is locked inside `Select` | A read-only category chip had no component; `Badge` is a two-hue status pill, not a tag | [§20](../design-system/ledger.md) |
-| `Badge`, `Preloader`, `EmptyState` forward nothing | No `data-testid`, no `role`, no `aria-live` reached the DOM | [§19](../design-system/ledger.md), [§23](../design-system/ledger.md), [§28](../design-system/ledger.md) |
-| `TextArea` forwards nothing, its label is associated with nothing, and its error is a boolean | The description field could not be named, focused by the validator or described by its error | [§25](../design-system/ledger.md) |
-| `SearchInput` forwards nothing and its clear cross is a `<span onClick>` | The field could not be named or sized, and clearing it needed a pointer | [§26](../design-system/ledger.md) |
-| `Card`'s title is a `<div>` | Captions became card titles, so those titles are now the page's outline | [§27](../design-system/ledger.md) |
-| `InfoBanner` cannot be dismissed | Prod's banners report a state; one standing in for a toast reports an event. **Designed, not measured** | [§24](../design-system/ledger.md) |
-| `BackTo` is an `<a href="#">` with an `onClick` | The one back link on this surface could not be middle-clicked, opened in a new tab or copied, and was announced as a link to nowhere | [§56](../design-system/ledger.md) |
+| `Select` is a `<div onClick>`: no role, nothing focusable, no keys — and `isSearchable` accepted and doing nothing | The category picker could not exist and the interviewer picker was unusable without a pointer | [§21](../design-system/decisions.md) |
+| `SelectOption` carries no `disabled`, `hint` or `testId` | An ineligible interviewer could not be shown-but-disabled, which is what [01 §02.6](01-vacancies.md) requires | [§21](../design-system/decisions.md) |
+| `Select` has no `errorId`, `hint`, `id` or `chipTestId` | §3 and §4's shape on `TextInput`, missing on its sibling | [§21](../design-system/decisions.md) |
+| No creatable option row anywhere in the system | A category the library does not hold yet had nowhere to be offered. **Designed from the system’s own vocabulary** | [§29](../design-system/decisions.md) |
+| `Popover` is `<div onClick>` rows in a `<div onClick>` trigger, with no `testId`, `disabled` or description | The actions menu could not be opened, walked or left from a keyboard, and a blocked row could not say why | [§22](../design-system/decisions.md) |
+| `TableToolbar` draws two controls and gives no way to address either | The status tabs could not be named or tested, and the tabs' object form could not be typed | [§52](../design-system/decisions.md) |
+| `Popover`'s menu was clipped by the surface it opened from | A kebab on the last row of a card-bounded table had nowhere to open | [§55](../design-system/decisions.md) |
+| The system's chip is locked inside `Select` | A read-only category chip had no component; `Badge` is a two-hue status pill, not a tag | [§20](../design-system/decisions.md) |
+| `Badge`, `Preloader`, `EmptyState` forward nothing | No `data-testid`, no `role`, no `aria-live` reached the DOM | [§19](../design-system/decisions.md), [§23](../design-system/decisions.md), [§28](../design-system/decisions.md) |
+| `TextArea` forwards nothing, its label is associated with nothing, and its error is a boolean | The description field could not be named, focused by the validator or described by its error | [§25](../design-system/decisions.md) |
+| `SearchInput` forwards nothing and its clear cross is a `<span onClick>` | The field could not be named or sized, and clearing it needed a pointer | [§26](../design-system/decisions.md) |
+| `Card`'s title is a `<div>` | Captions became card titles, so those titles are now the page's outline | [§27](../design-system/decisions.md) |
+| `InfoBanner` cannot be dismissed | A banner reporting a state goes away when the state does; one standing in for a toast reports an event that nothing later makes untrue | [§24](../design-system/decisions.md) |
+| `BackTo` is an `<a href="#">` with an `onClick` | The one back link on this surface could not be middle-clicked, opened in a new tab or copied, and was announced as a link to nowhere | [§56](../design-system/decisions.md) |
 
 ### Left open for Phase 6 — answered
 
-Neither confirmation on these screens used blue's `ConfirmDialog`, and both were exactly its
+Neither confirmation on these screens used the system's `ConfirmDialog`, and both were exactly its
 shape. `ConfirmDialog` fired `onClose` in the same breath as `onAccept`, so a confirmation whose
 action is a request with a busy state could not use it — which was both of these.
 
-**Phase 6 answered it** with [§41](../design-system/ledger.md): `busy` spins the accept button and
+**Phase 6 answered it** with [§41](../design-system/decisions.md): `busy` spins the accept button and
 locks the panel, and `closeOnAccept={false}` hands the closing back to the caller, so a
 confirmation can stay up until the server has replied. **Phase 7 is the first consumer** — the
 list's `Close this vacancy?` and `Delete this vacancy?` are both `ConfirmDialog`.

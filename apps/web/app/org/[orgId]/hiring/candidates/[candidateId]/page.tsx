@@ -512,7 +512,7 @@ export default function CandidateCardPage({
             {/*
               The copy affordance the design puts against the address. `IconButton` rather
               than a bare glyph, because a glyph-only control still needs a name, a hit
-              area and a focus treatment, and blue already specifies all three (ledger §10).
+              area and a focus treatment, and the system already specifies all three (decisions §10).
             */}
             <IconButton
               label={HIRING_MESSAGES.card.copyEmail}

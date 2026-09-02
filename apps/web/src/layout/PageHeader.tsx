@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { PageTitle } from '@devscribed/ds';
 
 /**
- * The title block every screen inside the shell opens with. The heading itself is blue's
+ * The title block every screen inside the shell opens with. The heading itself is the system's
  * `PageTitle`, whose type steps 16 → 20 → 24px with the viewport; the subtitle and the
  * trailing action are this app's composition around it.
  *

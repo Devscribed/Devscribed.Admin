@@ -68,7 +68,7 @@ type Editing = { id: string | null; name: string };
 export default function HiringSettingsPage({ params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = use(params);
   const [phase, setPhase] = useState<Phase>('loading');
-  /** A request is in flight over rows that are already on screen (ledger §34). */
+  /** A request is in flight over rows that are already on screen (decisions §34). */
   const [refreshing, setRefreshing] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [criteria, setCriteria] = useState<Criterion[]>([]);
@@ -295,7 +295,7 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
     // Deleting an assessed criterion would destroy every judgement recorded against it, so
     // it is disabled rather than hidden and archive is named as what to do instead — in a
     // bubble beside the menu, over a hidden copy that is the row's permanent
-    // `aria-describedby` target, so a keyboard reaches it too (ledger §62).
+    // `aria-describedby` target, so a keyboard reaches it too (decisions §62).
     const blocked = criterion.assessmentCount > 0;
     return [
       {
@@ -414,10 +414,10 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
         </InfoBanner>
       ) : (
         /*
-          One surface at every state, which is what blue's table screens do: the card gives
+          One surface at every state, which is what the system's table screens do: the card gives
           the edge-to-edge table its border and rounds its first and last rows, and the
           loader and both empty messages sit inside it rather than replacing it. The row
-          kebab opens inside it too, but the DS `Popover` portals its menu (ledger §55),
+          kebab opens inside it too, but the DS `Popover` portals its menu (decisions §55),
           so nothing it raises is clipped by the surface it was opened from.
         */
         <Card padded={false} data-testid={onCategories ? 'categories-list' : 'criteria-list'}>
@@ -435,7 +435,7 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
             <Table<Category>
               rows={categoryRows}
               /* A refetch after an action dims the rows in place rather than replacing
-                 them with a loader (ledger §34). */
+                 them with a loader (decisions §34). */
               busy={refreshing}
               rowKey="id"
               rowTestId={(row) => `category-row-${row.id}`}
@@ -481,7 +481,7 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
                   render: (row) => <CriterionNameCell criterion={row} />,
                 },
                 {
-                  // Plain text, like Role or Status in blue's own tables — a chip here
+                  // Plain text, like Role or Status in the system's own tables — a chip here
                   // would read as a label on the criterion rather than this column's
                   // value, and the words are the radio group's, so the row and the
                   // dialog call a type by one name.
@@ -688,7 +688,7 @@ function VacanciesCell({ category }: { category: Category }) {
         <>
           <span style={ELLIPSIS}>{category.vacancies.slice(0, 2).join(', ')}</span>
           {category.vacancies.length > 2 && (
-            // The bubble is `MembersCell`'s, verbatim — same 32px circle, same wash.
+            // A 32px circle on an 8% black wash — the app's own overflow bubble.
             <span
               style={{
                 display: 'flex',
@@ -735,7 +735,7 @@ function CriterionNameCell({ criterion }: { criterion: Criterion }) {
           {criterion.name}
         </span>
         {criterion.isArchived && (
-          // A state, not a classification — the two-valued kind blue's badge was measured
+          // A state, not a classification — the two-valued kind the system's badge was measured
           // for, in the outlined form that belongs on a row already receded to .7.
           <Badge
             status="inactive"

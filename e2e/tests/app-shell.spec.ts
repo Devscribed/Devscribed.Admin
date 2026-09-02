@@ -33,7 +33,7 @@ test.describe('App shell', () => {
     await expect(page.getByTestId('nav-members')).toHaveAttribute('aria-current', 'page');
 
     // The toggle is operable from the keyboard, which is the whole of §13's argument for
-    // making it a real button: prod's was an `<li onClick>` nobody could reach or hear.
+    // making it a real button: an `<li onClick>` is one nobody can reach or hear.
     await hiring.focus();
     await page.keyboard.press('Enter');
     await expect(hiring).toHaveAttribute('aria-expanded', 'true');

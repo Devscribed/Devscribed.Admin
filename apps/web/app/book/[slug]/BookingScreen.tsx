@@ -292,7 +292,7 @@ export function BookingScreen({ slug }: { slug: string }) {
       >
         {/* `PageTitle` is the *app page's* heading — 16px on a phone, 24px on a desktop,
             sized to sit under a navbar in a 290px-railed shell. This page has no shell and
-            one thing on it, and its title is the largest type in the product: blue's
+            one thing on it, and its title is the largest type in the product: the system's
             headline-4, held at one size because there is nothing here for it to step
             with. */}
         <h1
@@ -309,7 +309,7 @@ export function BookingScreen({ slug }: { slug: string }) {
           {vacancy.title}
         </h1>
         {/* The length is a fact about the interview, not a caption under the title — the
-            same neutral label a vacancy's categories take (ledger §59), which is how the
+            same neutral label a vacancy's categories take (decisions §59), which is how the
             rest of the product states a property of the thing above it. */}
         <Badge status="neutral" data-testid="booking-duration">
           {formatDuration(vacancy.durationMinutes)}
@@ -382,7 +382,7 @@ export function BookingScreen({ slug }: { slug: string }) {
                 event.preventDefault();
                 void submit();
               }}
-              // 20px is blue's form rhythm, and the room the fields' message slot needs:
+              // 20px is the system's form rhythm, and the room the fields' message slot needs:
               // it is pinned below the field rather than pushing it (token map, `--sp-7`).
               style={{ display: 'grid', gap: 'var(--space-7)' }}
             >

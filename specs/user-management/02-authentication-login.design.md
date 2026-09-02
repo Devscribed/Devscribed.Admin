@@ -4,7 +4,7 @@ kind: design
 title: Authentication & Login — Design
 pairs-with: 02-authentication-login.md
 routes: ["/login", "/forgot-password", "/reset-password"]
-design-system: "1_DS for dev"
+design-system: "@devscribed/ds"
 tags: [login, forgot-password, reset-password, auth-layout, form-design, teammerly-original, light-only]
 ---
 
@@ -12,23 +12,26 @@ tags: [login, forgot-password, reset-password, auth-layout, form-design, teammer
 
 Visual and interaction specification for `/login`, `/forgot-password`, and `/reset-password`. Pairs with [02-authentication-login.md](02-authentication-login.md), which owns the business rules, the API contracts, and every validation message. This file owns everything a developer would otherwise have to invent: which design-system component to reach for, which token drives which state, and what the on-screen wording is.
 
-**Design system:** Teammerly Original DS, `1_DS for dev/`. Import components from `1_DS for dev/index.js`; never hardcode a color, size, or font — every value below is a token that already exists in `tokens/*.css`. Divergences from upstream are numbered in [`specs/design-system/ledger.md`](../design-system/ledger.md) and cited here as `§n`.
+**Design system:** [`packages/ds`](../../packages/ds/README.md). Import from `@devscribed/ds`;
+never hardcode a colour, size or font — every value below is a token that already exists. The
+numbered decisions behind it are in [`decisions.md`](../design-system/decisions.md), cited here
+as `§n`.
 
-**Theme:** light only. Blue has no dark palette and the app has no toggle, so there is nothing on these routes to switch.
+**Theme:** light only. The system has no dark palette and the app has no toggle, so there is nothing on these routes to switch.
 
 ## The signed-out set
 
 These three screens plus `/signup` (spec 01) are one visual family. They share one shell and one set of rules:
 
 - One `AuthLayout` (§11) — the `#f8fafc` well, wordmark above, a single card capped at 480px, centred. No sidebar, no top bar, no theme toggle.
-- Card chrome is identical on every route: `--radius-l` · 1px `--border-default` · `--surface-card` · padding `--space-10`. **No shadow** — blue reserves shadow for things that float above content, and separates static surfaces with a border.
+- Card chrome is identical on every route: `--radius-l` · 1px `--border-default` · `--surface-card` · padding `--space-10`. **No shadow** — the system reserves shadow for things that float above content, and separates static surfaces with a border.
 - Gap between the title block and the body `--space-8`; between fields `--space-7`; above the submit button `--space-7`.
-- **`--space-7` (20px) is load-bearing.** `TextInput` pins its message 16px below the field instead of pushing the field below it (§4), so every field needs that much clearance underneath. It is also blue's own form rhythm.
+- **`--space-7` (20px) is load-bearing.** `TextInput` pins its message 16px below the field instead of pushing the field below it (§4), so every field needs that much clearance underneath. It is also the system's own form rhythm.
 - **The card title never changes while you are on a route.** Only the card body swaps between states, so the card never jumps under the cursor.
 - **The cross-account link always lives in `AuthLayout`'s footer**, outside the card, on the well. `/signup` says "Sign in", `/login` says "Create an account", `/forgot-password` and `/reset-password` say "Back to login". A visitor learns one place to look.
-- Fields are stacked at every breakpoint. Submit buttons are `variant="primary"` and pass `style={{ width: '100%' }}` — blue ships one 44px height and no `size` prop, and §1 removed the hardcoded full-bleed width, so full width is now asked for rather than assumed.
-- The submit CTA is **never disabled for validation** — see the shared rule in [README.md](README.md). It is not disabled while in flight either: blue's `preloader` shows the spinner and sets `aria-busy` (§2), and the submit handler guards re-entry.
-- Field labels are **sentence case**. Blue's only uppercase is `PageTabs`; its field labels are 12px `--text-secondary`, set by the global `.input-label` rule.
+- Fields are stacked at every breakpoint. Submit buttons are `variant="primary"` and pass `style={{ width: '100%' }}` — the system ships one 44px height and no `size` prop, and §1 removed the hardcoded full-bleed width, so full width is now asked for rather than assumed.
+- The submit CTA is **never disabled for validation** — see the shared rule in [README.md](README.md). It is not disabled while in flight either: the system's `preloader` shows the spinner and sets `aria-busy` (§2), and the submit handler guards re-entry.
+- Field labels are **sentence case**. The system's only uppercase is `PageTabs`; its field labels are 12px `--text-secondary`, set by the global `.input-label` rule.
 
 ---
 
@@ -107,11 +110,11 @@ No password hint on this screen. `/signup` states the policy because the visitor
 | **Deactivated account** | values retained, no field errors added | stays enabled | The **same** banner and the same tone — see below. |
 | **Success** | — | — | No toast, no confirmation. Immediate redirect to `/members`. |
 
-**The tone no longer swaps, and that is a deliberate reversal.** `login-error-message` used to paint amber for a deactivated account and red for a wrong password, on the reasoning that amber says "retrying will not help" where red invites another guess. Blue paints one banner for anything that went wrong: its `InfoBanner` has exactly two measured variants, `info` and a red one, because that is all production has. Amber exists in blue's palette (`--status-warning`) but has never been a banner, so keeping the distinction would have meant inventing a treatment and calling it measured.
+**The tone no longer swaps, and that is a deliberate reversal.** `login-error-message` used to paint amber for a deactivated account and red for a wrong password, on the reasoning that amber says "retrying will not help" where red invites another guess. The system paints one banner for anything that went wrong: its `InfoBanner` has exactly two measured variants, `info` and a red one, because that is all production has. Amber exists in the system's palette (`--status-warning`) but has never been a banner, so keeping the distinction would have meant inventing a treatment and calling it measured.
 
 The argument for dropping it is in the note that introduced it: *the wording carries the full meaning on its own; the tone is reinforcement, never the sole signal*. "Your account has been deactivated" does not read as a retry prompt whatever colour sits behind it. The distinction was reinforcement, and reinforcement is what a measurement is allowed to take away.
 
-This is the one place on the signed-out surface where blue removed something rather than repainting it. It is recorded here, in [`specs/design-system/README.md`](../design-system/README.md) under the reversals, and in `LoginForm.tsx` at the banner itself.
+This is the one place on the signed-out surface where something was removed rather than repainted. It is recorded here and in `LoginForm.tsx` at the banner itself.
 
 ### Interactions
 
@@ -183,7 +186,7 @@ The confirmation wording is fixed by the business spec and must not be softened,
 | **Loading** | field read-only, `opacity: .55` | `preloader`, label "Sending" | — |
 | **Confirmed** | form removed from the DOM | removed | `InfoBanner variant="info"` + supporting line + re-entry link. Subtitle is removed with the form. |
 
-**Why info, not success.** Green asserts "we sent it". The system deliberately refuses to confirm that — it does not know, and will not say, whether that address exists. Blue's `info` (the cyan tint, `--status-info`) is the honest register: here is what happens next, not here is what happened. It is also the one variant on this screen that is measured rather than added.
+**Why info, not success.** Green asserts "we sent it". The system deliberately refuses to confirm that — it does not know, and will not say, whether that address exists. The system's `info` (the cyan tint, `--status-info`) is the honest register: here is what happens next, not here is what happened. It is also the one variant on this screen that is measured rather than added.
 
 **Why a re-entry link.** The confirmation replaces the form, as the business spec requires. Without a way back, a visitor who mistyped their address is stranded on a screen with nothing to act on. "Use a different email" restores the form client-side — no request, no new token, nothing on the server changes.
 
@@ -224,7 +227,7 @@ The footer link is present in all four states, so it is never the thing that mov
 | Screen element | DS component | Props | `data-testid` |
 |---|---|---|---|
 | Page shell | `AuthLayout` (§11) | `title`, `footer` | — |
-| Checking indicator | `Preloader` + muted line | none — blue's page loader is its default (`size=12 margin=7`) | `reset-checking` |
+| Checking indicator | `Preloader` + muted line | none — the system's page loader is its default (`size=12 margin=7`) | `reset-checking` |
 | Form element | native `<form>` | — | `reset-form` |
 | New password | `TextInput` | `label`, `id`, `name`, `hint`, `hintId`, `error`, `errorId`, `type`, `trailing` (§5) | `reset-password-input` |
 | Password reveal | `IconButton` (§10) + `Eye` / `EyeOff` (§9) | `label`, `active`, `size={28}` | `reset-password-toggle` |
@@ -236,7 +239,7 @@ The footer link is present in all four states, so it is never the thing that mov
 
 Inline field errors carry `field-error-password` and `field-error-password-confirm`.
 
-**The loader is three pulsing dots, not an arc, and it does not take a size or a colour.** Blue's `Preloader` is production's `PulseLoader` — three `#0168fa` dots on a 0.75s cubic-bezier cycle staggered 0.12s apart. Its `size` is the dot diameter, not the widget's; passing 28 would draw three 28px circles. The page loader is the default, and the in-table load-more row is the only place that overrides it (`size=8 margin=5`).
+**The loader is three pulsing dots, not an arc, and it does not take a size or a colour.** The system's `Preloader` is production's `PulseLoader` — three `#0168fa` dots on a 0.75s cubic-bezier cycle staggered 0.12s apart. Its `size` is the dot diameter, not the widget's; passing 28 would draw three 28px circles. The page loader is the default, and the in-table load-more row is the only place that overrides it (`size=8 margin=5`).
 
 **No reveal toggle on the confirm field.** If both fields can be read at once, confirming is theatre — the second field exists precisely to catch a typo the eye cannot see. The toggle on the new-password field is enough to check what was typed.
 
@@ -274,7 +277,7 @@ The success supporting line is the only place the visitor is told their other se
 
 **Why a checking state at all.** `GET /api/reset-password/validate` is what lets an expired link show its error before the visitor types a password they will never get to use. It is usually sub-100ms, but rendering nothing during it means a slow connection looks broken, and rendering a skeleton form means watching a form assemble that is about to be thrown away. A loader and a sentence are honest in both outcomes.
 
-**`success` is the one variant on these screens with no production behind it.** Blue's banner has two measured treatments and neither is green; prod has no success banner because prod never tells you something worked in a banner. This screen does — a password reset is the one moment where "it worked" is the entire message. The green follows blue's own 10%-of-status tint rule rather than being picked, and §7 records it as designed rather than measured.
+**`success` is the one variant on these screens with no precedent behind it.** The system's other banner tones are information and refusal, and neither is green. Most screens have no use for a third — something that worked is usually visible in what the screen now shows. This one is the exception: a password reset is the moment where "it worked" is the entire message. The green follows the system's own 10%-of-status tint rule rather than being picked, and §7 records it.
 
 ### Interactions
 
@@ -306,20 +309,20 @@ Identical across all three routes, and identical to `/signup`:
 - `reset-checking` is `role="status"` with the visible line as its text, so a screen reader hears "Checking your reset link" rather than silence. `Preloader` renders decorative spans with no text of their own.
 - Password toggles are real `<button type="button">` elements with an `aria-label` reflecting the *action* ("Show password" / "Hide password") and `aria-pressed` reflecting the current state.
 - Submit buttons carry `aria-busy` while their `preloader` is set (§2).
-- Focus is visible everywhere — blue's `--shadow-focus-input`, never `outline: none` without a replacement.
+- Focus is visible everywhere — the system's `--shadow-focus-input`, never `outline: none` without a replacement.
 - When a body swaps (confirmation replaces a form, invalid state replaces the reset form), focus moves to the new body's heading region so a keyboard user is not left focused on a node that no longer exists.
 - Colour is never the only signal: the wording carries the meaning, and the `*` prefix marks a field error without relying on hue. This matters more than it did — the login banner no longer distinguishes a deactivation from a wrong password by tone, so the sentence is now the whole signal.
 - Contrast: `--text-primary` on `--surface-card`, `--action-primary-text` on `--action-primary`, and `--text-tertiary` (#54595E) on every banner tint all clear AA.
 
-**One regression, recorded rather than hidden.** Blue pins its field message at 8px — what production renders, and what §4 preserves. It is below the size at which a hint or an error is comfortable to read; the wording reaches screen readers through `aria-describedby` regardless, and the field's red border and glow carry the state visually. Raising it is a change to blue's measured geometry and belongs upstream.
+**One regression, recorded rather than hidden.** The system pins its field message at 8px, which §4 preserves. It is below the size at which a hint or an error is comfortable to read; the wording reaches screen readers through `aria-describedby` regardless, and the field's red border and glow carry the state visually. Raising it is a change to the system's own geometry and belongs in the system.
 
 ## Divergences used by these screens
 
-Every one is numbered in the [ledger](../design-system/ledger.md); none is a local workaround. Spec 01 uses §1–§6 and §9–§11; these three routes add:
+Every one is numbered in [decisions](../design-system/decisions.md); none is a local workaround. Spec 01 uses §1–§6 and §9–§11; these three routes add:
 
 | § | What it adds | Kind |
 |---|---|---|
-| 7 | `InfoBanner` gains `error` and `success`. `error` is blue's own red under the name that says what it is; `success` is green and **designed, not measured** | `designed` |
+| 7 | `InfoBanner` gains `error` and `success`. `error` is the system's own red under the name that says what it is; `success` is green and *designed from the system’s own vocabulary* | `designed` |
 | 8 | `Modal` gains a dialog role, `Escape`, a focus trap, focus return and `initialFocusRef` | `omission` |
 
 §8 has no call site on the signed-out surface — there is no dialog on any of these four screens. It lands here because it is the same omissions pass as the rest, and because the first screen that opens a dialog should find the component already correct rather than discover the gap under a deadline. Its first end-to-end coverage is in Phase 3, with `VacancyDialog`.

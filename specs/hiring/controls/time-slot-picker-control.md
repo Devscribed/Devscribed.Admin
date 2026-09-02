@@ -23,10 +23,10 @@ change: **times are 24-hour by default with a 12-hour toggle**, where the source
 
 ## Where it lives
 
-The list is composed from the Teammerly Original DS at `1_DS for dev/` rather than being a
+The list is composed from the design system in `packages/ds` rather than being a
 component of it: `Button variant="secondary"` per slot, `Select` for the zone, `ToggleButton` for
 the format, `Preloader` while a date is in flight. Only the format toggle needed opening
-([§31](../../design-system/ledger.md)) — blue's `ToggleButton` is the segmented pill this control
+([§31](../../design-system/decisions.md)) — the system's `ToggleButton` is the segmented pill this control
 already wanted, but it forwarded nothing and announced its two segments as unrelated buttons.
 
 It ships alongside the [Calendar Control](calendar-control.md) in one `SlotPicker`, which both
@@ -41,7 +41,7 @@ start time the server would reject.
    currently selected there.
 2. Two regions: a **header** naming the selected date, and a **slot list** of selectable start
    times. The header states the active time zone too, but **visually hidden**
-   (`blue-fixes`): the zone is named once on the page, by the labelled control above the two
+   : the zone is named once on the page, by the labelled control above the two
    panels, and printed again under the date it is the same sentence twice on one screen. It stays
    in the accessible tree because a slot list read out of context has to say whose clock the times
    are on.
@@ -78,9 +78,9 @@ start time the server would reject.
 
 12. **Available** — free and bookable. Interactive.
 13. **Selected** — exactly one at a time. `Button pressed`
-    ([§71](../../design-system/ledger.md)): the emphasis colour at 12% behind ink and a border in
+    ([§71](../../design-system/decisions.md)): the emphasis colour at 12% behind ink and a border in
     it, which is the tint the Calendar's selected day takes. It was `variant="primary"` — solid
-    blue — which is the paint of the page's own primary action, so the chosen slot and `Book` were
+    solid blue — which is the paint of the page's own primary action, so the chosen slot and `Book` were
     the same button three rows apart, one of which submits.
 14. **Hover** and **Focus** are distinct from each other and from Selected.
 15. **Unavailable times are not listed at all.** The picker renders only bookable starts, so there
@@ -162,8 +162,8 @@ dialog passes `application-timezone-select-{applicationId}` /
 `application-timeformat-toggle-{applicationId}`.
 
 A selected slot is a `Button` carrying `aria-pressed`, and the format toggle is a
-`role="radiogroup"` of two `role="radio"` segments ([§31](../../design-system/ledger.md)) — two
-buttons that swap a boolean between them are one control, and prod's markup says so nowhere.
+`role="radiogroup"` of two `role="radio"` segments ([§31](../../design-system/decisions.md)) — two
+buttons that swap a boolean between them are one control, and markup that says otherwise tells a reader there are two actions rather than one choice.
 
 ## Test Cases
 

@@ -403,7 +403,7 @@ The page announces on **two** surfaces, split by grain, and the split is the rea
 
 The banner under `PageHeader` reports what happened to an **application** — a status moved, an
 interview rescheduled or called off. It sits in flow, above the sections it is about, which is
-where [reversal 4](../design-system/README.md) put it. A failure there paints `error` and takes
+where [§24](../design-system/decisions.md) put it. A failure there paints `error` and takes
 `role="alert"`; an outcome paints `success` and takes `role="status"` — a refusal rendered in the
 success green would be a banner contradicting its own words.
 

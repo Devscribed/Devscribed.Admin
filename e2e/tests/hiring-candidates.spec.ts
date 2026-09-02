@@ -357,7 +357,7 @@ test.describe('Candidate database', () => {
     ).toHaveText('Ines Interviewer');
 
     // Escape dismisses the list a control opened and **not** the panel it sits in: the
-    // control answers the key first and marks it handled (ledger, the note on §21).
+    // control answers the key first and marks it handled (decisions §21).
     await page.keyboard.press('Escape');
     await expect(
       page.getByTestId(`candidates-filter-interviewer-option-${ines.accountId}`),
@@ -496,7 +496,7 @@ test.describe('Candidate database', () => {
    * TC-H03-E2E-08 — the row's actions.
    *
    * Four claims, and the first is the one the whole column rests on: pressing the kebab is
-   * not pressing the row. The menu is a portal (ledger §55), so the row cannot decide that
+   * not pressing the row. The menu is a portal (decisions §55), so the row cannot decide that
    * by containment and has to be asked directly.
    */
   test('acts on a row without opening it, and confirms what it did', async ({ page, request }) => {

@@ -5,7 +5,7 @@
  * There is no page-level reset here any more. `@devscribed/ds/styles.css` loads `base.css`, which is
  * the design system's own reset: `box-sizing` on everything, `margin: 0` and the Poppins
  * stack on `body`, and the brand blue on an unclassed `<a>`. This file used to repeat all
- * four against yellow's token names, and because it is imported *after* the design system it
+ * four against the earlier design's token names, and because it is imported *after* the design system it
  * won — so on blue those declarations resolved to nothing and took the body font and the
  * link colour down with them. Deleting them is the fix; base.css was always the better copy.
  */
@@ -51,7 +51,7 @@
 
 /*
  * The toggle's own 160px, stated here. `ToggleButton` is a block that caps itself at 160
- * (ledger §49) — and a block at `width: 100%` inside a shrink-to-fit flex item is 100% of
+ * (decisions §49) — and a block at `width: 100%` inside a shrink-to-fit flex item is 100% of
  * nothing, so both segments collapsed onto each other. The width has to be stated by whatever
  * the flex row measures, which is this wrapper.
  */
@@ -490,7 +490,7 @@
 }
 
 /*
- * `View more` and `Add a description`: text that acts, not a `Button`. Blue's three button
+ * `View more` and `Add a description`: text that acts, not a `Button`. The system's three button
  * variants are all filled or outlined boxes, and a box here would read as a second action
  * competing with `Copy booking link` two lines above it.
  */
@@ -660,7 +660,7 @@
 
 /*
  * The candidate table's two-line cells (03 §05). `Table`'s own cell is one line, nowrap
- * and clipped (ledger §18, §48); everything below is what a cell holding a stack has to
+ * and clipped (decisions §18, §48); everything below is what a cell holding a stack has to
  * turn back on, and it is here rather than inline because `overflow`/`text-overflow`
  * cannot be set on the anonymous flex item the DS renders.
  */
@@ -708,7 +708,7 @@
 }
 
 /* The assessed-criteria chips. They wrap rather than scroll: a row is allowed to grow
-   (ledger §48), and a chip half off the edge of a cell says less than none. */
+   (decisions §48), and a chip half off the edge of a cell says less than none. */
 .candidate-criteria {
   display: flex;
   flex-wrap: wrap;

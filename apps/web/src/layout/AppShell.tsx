@@ -9,7 +9,7 @@ import type { Session } from './session-context';
 import { SessionProvider } from './session-context';
 
 /**
- * The signed-in frame, which is blue's `AppShell`: a 290px rail beside an 80px top bar, and
+ * The signed-in frame, which is the system's `AppShell`: a 290px rail beside an 80px top bar, and
  * below 1200px a 60px top bar with the rail as a drawer. Only the content column scrolls.
  *
  * Everything the frame draws is the design system's. What lives here is what the design system

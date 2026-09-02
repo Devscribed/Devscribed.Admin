@@ -4,7 +4,7 @@ kind: design
 title: Category & Criteria Libraries — Design
 pairs-with: 06-libraries.md
 routes: ["/org/{orgId}/hiring/settings"]
-design-system: "1_DS for dev"
+design-system: "@devscribed/ds"
 tags: [settings, categories, criteria, scale-editor, archive, teammerly, light-only]
 ---
 
@@ -13,9 +13,10 @@ tags: [settings, categories, criteria, scale-editor, archive, teammerly, light-o
 Visual and interaction specification for the hiring settings screen and the criterion dialog that
 also opens inline from a candidate card. Pairs with [06-libraries.md](06-libraries.md).
 
-**Design system:** Teammerly Original DS, `1_DS for dev/`. The decisions behind it are in
-[`specs/design-system/README.md`](../design-system/README.md); divergences from the vendored copy
-carry numbers in the [ledger](../design-system/ledger.md).
+**Design system:** [`packages/ds`](../../packages/ds/README.md). Import from `@devscribed/ds`;
+never hardcode a colour, size or font — every value below is a token that already exists. The
+numbered decisions behind it are in [`decisions.md`](../design-system/decisions.md), cited here
+as `§n`.
 **Theme:** light only. Renders inside `AppShell`.
 
 Two design problems: making **usage counts** prominent enough that archive-versus-delete is
@@ -63,13 +64,13 @@ sharing mechanics.
 - **Scale values are joined by `›`**, not commas — the separator states that order is meaningful.
   A comma-separated list reads as a set. The list is a real `<ol>`, so the order is conveyed
   structurally and not only by the glyphs.
-- **The Vacancies cell prints whole titles** — up to two, then a `+N` bubble in `MembersCell`'s
-  exact geometry (32px circle, 8% black wash). Vacancy titles are long, and a chipped or
+- **The Vacancies cell prints whole titles** — up to two, then a `+N` bubble: a 32px circle on an
+  8% black wash. Vacancy titles are long, and a chipped or
   truncated title ("Full Stack Develop…") names nothing. The count that makes the delete decision
   answerable is not painted at all, so it is the cell's accessible name, every folded title
   spelled out.
 - **The type column is plain text**, in the radio group's own words (`Scale`, `Yes/No`), like
-  Role or Status in blue's other tables. The previous revision drew it as a `Chip` on a card row;
+  Role or Status in the system's other tables. The previous revision drew it as a `Chip` on a card row;
   in a column of its own a chip would read as a label *on* the criterion rather than as this
   column's value — and the row and the dialog now call a type by one name.
 - Archived criteria sort last, recede to `opacity: .7`, and carry `Badge status="inactive"
@@ -105,18 +106,18 @@ sharing mechanics.
 ```
 
 - `Modal style={{ width: 520 }}`, the width the vacancy dialog already uses. Actions are a
-  `FormActions align="full"` row inside the body — blue's `Modal` has no `actions` slot, and does
-  not need one. *`blue-fixes` fixed what `full` draws* ([§63](../design-system/ledger.md)): it
+  `FormActions align="full"` row inside the body — the system's `Modal` has no `actions` slot, and does
+  not need one. *A later pass fixed what `full` draws* ([§63](../design-system/decisions.md)): it
   widened the row to 100% and stopped the slots stretching but never said where they go, so a flex
   row packed `Cancel` and the primary against the **left** edge of a 520px dialog. They end right,
-  as blue's own `full` call site always implied.
-- Field labels are blue's own `FieldLabel`, in sentence case.
+  as the system's own `full` call site always implied.
+- Field labels are the system's own `FieldLabel`, in sentence case.
 - The type hint explains *why* the choice matters rather than restating the four options — it is
   the only place a member learns that a scale is what makes `at least` possible.
 - **`Values, worst to best`** states the direction in the label itself. Order is the one thing
   that cannot be corrected later without consequences, so it is spelled out at the moment of entry
   rather than inferred from a drag handle.
-- Values are `Chip`s with a grip in the `leading` slot ([§39](../design-system/ledger.md)); the add
+- Values are `Chip`s with a grip in the `leading` slot ([§39](../design-system/decisions.md)); the add
   field appends on `Enter`, so a six-value scale is six keystrokes and six returns.
 - Reordering is operable by pointer and by keyboard, and both drive the same list: `Space` picks
   up, arrows move, `Space` drops, `Escape` puts it back — each step announced through an
@@ -130,12 +131,12 @@ entry without reaching for the mouse. One dialog, two doors.
 
 ### Why the chip is a `Chip`
 
-Meridian composed this token out of a `Badge`, a handle and an `IconButton`, and this spec used to
+the earlier design composed this token out of a `Badge`, a handle and an `IconButton`, and this spec used to
 say a chip carrying controls is a screen concern. **Phase 5 settled that the other way** — *"not
 composed in the app after all; `Chip` is the component"* ([04](04-candidate-card.design.md)) — and
 this screen follows it. What the composition bought was the handle's position, and that is a slot
 now: `leading`, the mirror of §37's `trailing`. It leads rather than trails because a control that
-picks a value **up** must not sit beside one that **deletes** it, and blue's chip already has a
+picks a value **up** must not sit beside one that **deletes** it, and the system's chip already has a
 grip edge to lead from in its 7px blue left border.
 
 The grip is drawn as an SVG rather than typed as `⠿`, which is a font character in a system whose
@@ -144,7 +145,7 @@ icons are geometric, filled and `currentColor`.
 ### Confirmations
 
 Three, and all of them hold the shape every row confirmation in the module settled on in Phase 7 —
-`ConfirmDialog busy closeOnAccept={false}` ([§41](../design-system/ledger.md)), so the last point
+`ConfirmDialog busy closeOnAccept={false}` ([§41](../design-system/decisions.md)), so the last point
 at which somebody can change their mind is not also the point the outcome stops being visible:
 
 | Dialog | Asks |
@@ -156,7 +157,7 @@ at which somebody can change their mind is not also the point the outcome stops 
 The category **create/rename** dialog is not a confirmation and stays a `Modal`: it is one field
 and a submit. The rule the two draw is **`ConfirmDialog` for a question, `Modal` for a form.**
 
-Blue paints the accept button primary blue even on a destructive confirmation, and both deletes
+The system paints the accept button primary blue even on a destructive confirmation, and both deletes
 adopt that rather than a red `Delete`. A confirmation says what it is in its title and its
 sentence, and each one is reached through a menu — there is no way to arrive at it by accident.
 
@@ -170,7 +171,7 @@ sentence, and each one is reached through a menu — there is no way to arrive a
 | List surface | `Card` | `padded={false}` | `categories-list` · `criteria-list` |
 | Table | `Table` | `columns` (objects, §18), `busy` (§34), `rowTestId` | `category-row-{id}` · `criterion-row-{id}` |
 | Row actions | `Popover` | kebab trigger, `items` with `danger`/`disabled`/`description` (§22), portalled menu (§55) | `category-actions-{id}` · `criterion-actions-{id}` and the item ids |
-| Vacancies cell | app composition | two titles + `MembersCell`'s `+N` bubble; count as `aria-label` | `category-usage-{id}` |
+| Vacancies cell | app composition | two titles + a `+N` bubble (32px circle, 8% black wash); count as `aria-label` | `category-usage-{id}` |
 | Archived mark | `Badge` | `status="inactive"`, `outlined` | `criterion-archived-badge-{id}` |
 | Loading | `Preloader` | `aria-hidden`, beside an `aria-live` node | `libraries-loading` |
 | Empty / no results | `EmptyState` | per tab, per cause | `categories-empty` · `criteria-empty` · `categories-no-results` · `criteria-no-results` |
@@ -187,7 +188,7 @@ sentence, and each one is reached through a menu — there is no way to arrive a
 | Confirmations | `ConfirmDialog` | `busy`, `closeOnAccept={false}`, `acceptTestId` | `category-delete-confirm` · `criterion-delete-confirm` · `criterion-reorder-confirm` |
 | Dialog error | `InfoBanner` | `variant="error"`, `role="alert"` | `criterion-dialog-error` |
 
-There is no `RadioGroup` in blue and none is invented: four mutually exclusive values on one row
+There is no `RadioGroup` in the system and none is invented: four mutually exclusive values on one row
 are native radios under a `FieldLabel`, which is the shape the vacancy dialog's interview length
 already takes.
 
@@ -242,7 +243,7 @@ list follows.
 | **Loading** | Centred `Preloader`, announcement beside it |
 | **Refetch after an action** | Rows dim in place — `Table busy`, `aria-busy` (§34) |
 | **Load failure** | `InfoBanner variant="error"` with a retry `Button` inside, in the table's place |
-| **Delete · blocked** | Menu row `aria-disabled`, still focusable; the reason in a `Tooltip` bubble on hover and focus ([§62](../design-system/ledger.md)) over a hidden copy that is the row's permanent `aria-describedby` target. *The bubble was clipped away by an `overflow: hidden` on `Popover`'s panel until `blue-fixes` removed it — see the ledger's note on §62.* |
+| **Delete · blocked** | Menu row `aria-disabled`, still focusable; the reason in a `Tooltip` bubble on hover and focus ([§62](../design-system/decisions.md)) over a hidden copy that is the row's permanent `aria-describedby` target. *The bubble was clipped away by an `overflow: hidden` on `Popover`'s panel until A later pass removed it — see the decisions record's note on §62.* |
 | **Archived row** | content at `opacity: .7`, sorted last, "Archived" badge, Archive replaced by Restore; the Actions cell never fades |
 | **Value chip · dragging** | `--shadow-popover`, siblings shift |
 | **Value chip · held (keyboard)** | `1.5px solid --action-primary` outline, plus the same shadow |
@@ -273,8 +274,8 @@ on the screen to say the same thing better.
 ## Interactions
 
 - **Rename** is an inline `Modal` with the current value focused, so overwriting is immediate. It
-  stays focused while typing: `blue-fixes` found the dialog's focus effect re-running on every
-  keystroke and moving the caret to the close button ([§61](../design-system/ledger.md)).
+  stays focused while typing: a later pass found the dialog's focus effect re-running on every
+  keystroke and moving the caret to the close button ([§61](../design-system/decisions.md)).
 - **Delete a category** confirms with its usage count interpolated. There is no undo, and the copy
   does not pretend otherwise.
 - **Delete a criterion** is disabled in the menu once assessed, with the reason in the row; on an
@@ -309,11 +310,11 @@ is now the layout at every width. `useMediaQuery` left the screen with the butto
 - Value reordering is keyboard operable: `Space` picks up, arrows move, `Space` drops, `Escape`
   puts it back — each step announced through an `aria-live` node. `Escape` reaches the handle
   rather than the dialog because a dialog only takes the key nothing inside it has claimed
-  ([§8's note](../design-system/ledger.md)).
+  ([§8's note](../design-system/decisions.md)).
 - Disabled menu items stay focusable — `aria-disabled`, never the `disabled` attribute — with the
   reason drawn in the row and wired as `aria-describedby` (§22).
 - All three confirmations are modal dialogs with focus trapped and returned to the trigger
-  ([§40](../design-system/ledger.md)).
+  ([§40](../design-system/decisions.md)).
 - The loading state is a `Preloader` marked `aria-hidden` beside a live region that says what is
   loading — spinning dots announce nothing on their own.
 

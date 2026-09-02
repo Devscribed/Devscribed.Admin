@@ -39,7 +39,7 @@ input, textarea, select { font: inherit; }
 
 /* The field label, as a class for anything that is not a system input. Every label sits 10px
    in from its control's left edge and 10px down from whatever is above it, so a label block is
-   35px rather than 25. `FormField` exports the same values as `fieldLabelStyle` (§75), and the
+   35px rather than 25. `FormField` exports the same values as `fieldLabelStyle` (§74), and the
    three inputs that draw their own label render them inline. */
 .input-label {
   display: inline-block;

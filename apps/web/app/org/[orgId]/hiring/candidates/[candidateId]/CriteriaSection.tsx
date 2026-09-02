@@ -188,10 +188,10 @@ export function CriteriaSection({
       */}
       <div data-testid="card-criteria-add" style={{ marginTop: 'var(--space-3)', maxWidth: 260 }}>
         {/*
-          `Select isSearchable allowCreate` — blue's own control with the capability prod
-          never switches on (§21) and the create row §29 added, not a second combobox. The
+          `Select isSearchable allowCreate` — the system's own control with the search §21 made
+          real and the create row §29 added, not a second combobox. The
           per-option test ids ride on the options themselves, which is the shape §21 gave
-          a listbox blue draws for itself.
+          a listbox the system draws for itself.
         */}
         <Select
           placeholder="Type a criterion…"
@@ -228,7 +228,7 @@ export function CriteriaSection({
           }}
         >
           {/*
-              A **sunken row**, not blue's `Chip`. `Chip` is the token react-select draws
+              A **sunken row**, not the system's `Chip`. `Chip` is the token react-select draws
               for a value chosen inside a field — white, with the 7px blue edge that marks
               it as a selection — and this is a small form: a name, a control that writes a
               value, and a cross that drops the whole assessment. Drawn as a `Chip` the blue
@@ -316,8 +316,8 @@ export function CriteriaSection({
  * keystroke would write `7`, `70`, `700` on the way to `700`, so they commit on blur and
  * on Enter — which is what "on change" means for a field somebody is still typing into.
  *
- * All four are blue's controls at blue's own height. Meridian shrank them to 26px to fit
- * inside a `Badge`; blue's form controls are 44px, the chip grows to hold one, and the
+ * All four are the system's controls at the system's own height. the earlier design shrank them to 26px to fit
+ * inside a `Badge`; the system's form controls are 44px, the chip grows to hold one, and the
  * criteria *filter* row on the candidates screen already reads at that size — the two are
  * the same three-control shape and must not disagree about it (D1).
  */

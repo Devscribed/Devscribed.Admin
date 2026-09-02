@@ -5,9 +5,9 @@ import { AccountMenu, Navbar } from '@devscribed/ds';
 import { useSession } from './session-context';
 
 /**
- * Blue's `Navbar` without its mini tracker: timesheets belong to a product surface no spec
+ * The system's `Navbar` without its mini tracker: timesheets belong to a product surface no spec
  * covers. What is left is the account menu and, below the breakpoint, the drawer's hamburger.
- * The theme toggle the Meridian template carried never existed here — blue has no dark palette.
+ * The theme toggle the the earlier design template carried never existed here — the system has no dark palette.
  */
 export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const { account } = useSession();

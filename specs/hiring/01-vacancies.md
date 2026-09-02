@@ -723,7 +723,7 @@ Errors:
   3. Step 3 opens the edit dialog (§08.30).
   4. After step 4 the description is drawn and **no** toggle is: one line is not three, so nothing
      was cut and there is nothing to expand.
-  5. The back link carries a real `href` to the list and lands on it (ledger §56).
+  5. The back link carries a real `href` to the list and lands on it (decisions §56).
 - **Selectors:** `vacancy-description`, `vacancy-description-toggle`, `vacancy-add-description`, `vacancy-back-link`, `board`, `board-column-count-scheduled`.
 
 ### TC-H01-E2E-09: The old board address forwards to the vacancy

@@ -4,7 +4,7 @@ kind: design
 title: App Shell — Design
 pairs-with: —
 routes: ["/org/{orgId}/*"]
-design-system: "1_DS for dev"
+design-system: "@devscribed/ds"
 tags: [app-shell, sidebar, navbar, page-header, navigation, logout, teammerly, light-only]
 ---
 
@@ -14,9 +14,12 @@ The frame every **signed-in** screen renders inside. It has no paired business s
 
 This is the signed-in counterpart to the "signed-out set" in [02-authentication-login.design.md](02-authentication-login.design.md). The two never mix: `AuthLayout` and the shell never appear on the same screen.
 
-**Design system:** Teammerly Original DS, `1_DS for dev/`. The frame is `AppShell` + `Sidebar` + `Navbar`, which are not a template to copy from but the components themselves — the shell is a measurement of the shipping product, so its proportions are read from the product rather than from a mock. The decisions behind that are in [`specs/design-system/README.md`](../design-system/README.md); divergences from the vendored copy carry numbers in the [ledger](../design-system/ledger.md).
+**Design system:** [`packages/ds`](../../packages/ds/README.md). The frame is `AppShell` +
+`Sidebar` + `Navbar` — not a template to copy from but the components themselves, so the shell's
+proportions are read from the system rather than from a mock. The numbered decisions behind it are
+in [`decisions.md`](../design-system/decisions.md), cited here as `§n`.
 
-**Theme:** light only, no theme toggle. Blue has no dark palette and the app has no toggle, so the state does not exist. Same exclusion as the signed-out set.
+**Theme:** light only, no theme toggle. The system has no dark palette and the app has no toggle, so the state does not exist. Same exclusion as the signed-out set.
 
 ---
 
@@ -46,20 +49,20 @@ This is the signed-in counterpart to the "signed-out set" in [02-authentication-
 
 Sidebar and navbar are fixed. Only the content column scrolls, and the well is the one place page padding and the page background are set — a screen renders straight into it and owns nothing outside its own content.
 
-> **This is the migration's one deliberate relayout.** 252→290px, 68→80px, 1024→1200px, and a warm `#F7F3EC` well for a cool `#f8fafc` one. Blue is the source of truth including layout ([§D1](../design-system/README.md)), so where it has an answer it wins even when elements move.
+> **This is a deliberate relayout.** The frame is 290px beside 80px, switching at 1200px, over a cool `--surface-well`. The design system is the source of truth for layout as much as for colour, so where it has an answer it wins even when elements move.
 
 ## Sidebar
 
-- **Wordmark** in the head: blue's own SVG, the mark the shipping app draws, linking to the members list the way prod's links to its start page. There is no typographic wordmark any more and no `--fs-21` — that token was never defined in the old system either, so the wordmark silently inherited its size for as long as it existed.
-- **Groups** — blue's `SubMenu` title: 16px medium type, a 12px gap to the glyph, a chevron pushed to the right edge, `--text-secondary` going `--color-blue` on hover and while the group is current, 36px between groups. There is no uppercase caption above them; blue captions nothing, and the section labels the old shell drew are gone with it.
-- **Rows** — blue's `SubItem`, indented 8px behind a 1px rule in `--text-secondary`: 14px medium, 4px/12px padding, 16px apart, `--color-blue-tint` behind the current one. A sub-item draws **no glyph** — blue puts the icon on the parent title alone.
-- **Two levels, not one.** Every destination sits inside a titled group, which reverses what the rail shipped with: four unparented links, on the argument that one level deep needs no second one. That held while hiring was three rows out of four, and it is not what blue does with the same content — `People → Members` is a submenu in prod's own nav, and hiring is a section of the same size beside it. Four flat rows read as four unrelated screens; two titled groups say which of them belong together, which is the fact a reader needs before they need a route.
+- **Wordmark** in the head: the system's own SVG, linking to the members list the way a wordmark links to a start page. There is no typographic wordmark any more and no `--fs-21` — that token was never defined in the old system either, so the wordmark silently inherited its size for as long as it existed.
+- **Groups** — the system's `SubMenu` title: 16px medium type, a 12px gap to the glyph, a chevron pushed to the right edge, `--text-secondary` going `--color-blue` on hover and while the group is current, 36px between groups. There is no uppercase caption above them; the system captions nothing, and the section labels the old shell drew are gone with it.
+- **Rows** — the system's `SubItem`, indented 8px behind a 1px rule in `--text-secondary`: 14px medium, 4px/12px padding, 16px apart, `--color-blue-tint` behind the current one. A sub-item draws **no glyph** — the system puts the icon on the parent title alone.
+- **Two levels, not one.** Every destination sits inside a titled group, which reverses what the rail shipped with: four unparented links, on the argument that one level deep needs no second one. That held while hiring was three rows out of four, and it is not what the system does with the same content — `People → Members` is a submenu in the system's default nav, and hiring is a section of the same size beside it. Four flat rows read as four unrelated screens; two titled groups say which of them belong together, which is the fact a reader needs before they need a route.
 - **A title is a toggle, not a destination.** `People` and `Hiring` are real `<button aria-expanded>` controls that open and close their group and go nowhere. `Hiring` has no screen behind it — there is no hiring landing page and no reason to invent one — so making the title a link would have promised a route that does not exist.
 - **Active rule** — a row is active when the current path equals its `href` or is nested beneath it, so a candidate card keeps `Candidates` lit. The row carries `aria-current="page"`. A **group** is current when one of its rows is, and a group that becomes current opens itself — otherwise arriving at a candidate card by deep link would leave its own section shut. Only that group is open: from Members, hiring is one toggle away.
 - **Rows are real links.** Each renders an `<a href>` so middle-click, copy-address and open-in-new-tab all work; an unmodified click is handed to the client router.
-- **Only real destinations appear.** Blue carries seven groups from the wider Teamplay product (Timesheets, Projects, Reports, Time off, Organization). Those are production *content*, not design language ([§D6](../design-system/README.md)); shipping them as dead or disabled rows would promise screens no spec defines. Two of the seven are drawn — `People`, which is blue's own, and `Hiring`, which is this product's. Rows arrive with their specs.
+- **Only real destinations appear.** `Sidebar` ships a default set of groups, and they are a default rather than a fixture: the navigation is content, not design language ([§13](../design-system/decisions.md)), and shipping a group as a dead or disabled row would promise a screen no spec defines. This product draws `People` and `Hiring`. Rows arrive with their specs.
 - **An empty group is not drawn.** A member with no hiring row at all — a `viewer`, or a `user` assigned nothing — gets no `Hiring` title. A titled group announces that it has contents; one that opens onto nothing is worse than an absent section, because it reads as a permission error rather than as a product they are not part of.
-- **Glyphs are hiring's own**, drawn in blue's icon language — geometric, filled, `currentColor`, no icon font. Same split as the nav items. `Hiring` reuses `PeopleIcon`, the mark `People` already draws: the icon set has no hiring glyph, the design asks for one, and reusing an existing mark leaves that gap visible where inventing one would hide it in the one place nobody would look.
+- **Glyphs are hiring's own**, drawn in the system's icon language — geometric, filled, `currentColor`, no icon font. Same split as the nav items. `Hiring` reuses `PeopleIcon`, the mark `People` already draws: the icon set has no hiring glyph, the design asks for one, and reusing an existing mark leaves that gap visible where inventing one would hide it in the one place nobody would look.
 - **Role gating** — spec 10 requires the future `Requests` row to be invisible to `user` and `viewer`. The shell resolves the session before it renders, precisely so a gated row never flashes into view and back out.
 
 ### Rows
@@ -80,10 +83,10 @@ There is no **My interviews** row. Its screen is that scope now, and `/org/{orgI
 
 ## Navbar
 
-Blue's `Navbar` without its mini tracker, so what is left is right-aligned and deliberately thin:
+The system's `Navbar` without its mini tracker, so what is left is right-aligned and deliberately thin:
 
-- **Account** — full name in 14px medium, then blue's `UserIcon` avatar and a chevron. No initials and no photograph: prod draws a generic person glyph, and the product carries no imagery.
-- **Menu** — click opens blue's popover (`--shadow-popover`, 6px radius) holding **Log out**. Closes on outside click or `Escape`, which returns focus to the trigger.
+- **Account** — full name in 14px medium, then the system's `UserIcon` avatar and a chevron. No initials and no photograph: the system draws a generic person glyph, and the product carries no imagery.
+- **Menu** — click opens the system's popover (`--shadow-popover`, 6px radius) holding **Log out**. Closes on outside click or `Escape`, which returns focus to the trigger.
 - **Log out** calls `POST /api/logout` and then replaces the history entry with `/login`, so the signed-in URL is not sitting behind the back button.
 - **Hamburger** — below the breakpoint only, at the left edge. It opens the navigation drawer.
 - **Not shipped:** the tracker chip (`00:00:00`) belongs to Timesheets, which no spec covers.
@@ -92,7 +95,7 @@ Blue's `Navbar` without its mini tracker, so what is left is right-aligned and d
 
 ## Page header
 
-Every screen inside the shell opens with one. The heading is blue's `PageTitle`, whose type steps with the viewport — 16/24 at 500, 20/30 at 450 from 768px, 24/36 at 450 from 1200px — with an optional 14px `--text-tertiary` subtitle and an optional trailing action button. 20px below it, the screen's own content begins.
+Every screen inside the shell opens with one. The heading is the system's `PageTitle`, whose type steps with the viewport — 16/24 at 500, 20/30 at 450 from 768px, 24/36 at 450 from 1200px — with an optional 14px `--text-tertiary` subtitle and an optional trailing action button. 20px below it, the screen's own content begins.
 
 The organization name is **not** shown anywhere in the shell. One account belongs to exactly one organization, so the name distinguishes nothing; it was removed from the members screen when the shell landed.
 
@@ -114,7 +117,7 @@ Below **1200px** the rail leaves the flow and becomes a drawer: a 340px panel ag
 
 **The drawer is the rail, not a copy of it.** One node holds the navigation at every width; below the breakpoint it changes position, width and shadow. A second copy inside a real `MenuDrawer` would put two of every nav row in the document, and with them two of every `data-testid` and two of every `aria-current`.
 
-**Width alone decides.** The switch is a media query in the design system's `base.css`, not a `matchMedia` read — so the server and the hydrated client agree at every size, with no stored preference and nothing to flash. That constraint is why the rule lives in a stylesheet at all: a media query cannot be an inline style, which is the same reason blue's `PageTitle` reaches for a class.
+**Width alone decides.** The switch is a media query in the design system's `base.css`, not a `matchMedia` read — so the server and the hydrated client agree at every size, with no stored preference and nothing to flash. That constraint is why the rule lives in a stylesheet at all: a media query cannot be an inline style, which is the same reason the system's `PageTitle` reaches for a class.
 
 **Focus follows the drawer.** It sits before the navbar in document order, so a reader who opened it with the hamburger would otherwise Tab straight past the navigation they just asked for. Focus moves in when it opens and returns to the opener when it closes.
 
@@ -138,19 +141,19 @@ The hamburger, the drawer's close button and the two group titles are reached by
 
 ## DS gaps
 
-Every row here is a numbered entry in the [ledger](../design-system/ledger.md), and each is an omission rather than a decision: blue is a measurement of production, and production never had to answer these ([§D2](../design-system/README.md)).
+Every row here is a numbered entry in [decisions](../design-system/decisions.md), and most are the accessibility floor rather than a change of design — the forwarding, the roles and the keyboard a component owes whatever else it does.
 
 | Gap | Impact | Ledger |
 |---|---|---|
-| `Sidebar` hardcodes Teamplay's seven groups and has no items API | The frame could not carry hiring's navigation at all | [§13](../design-system/ledger.md) |
-| Its rows take no `href`, no `testId` and no external `active`; the submenu title is a bare `<li onClick>`; an open submenu never re-syncs with the route | No routing, no test hooks, no keyboard on a submenu | [§13](../design-system/ledger.md) |
-| `AppShell` renders the rail unconditionally and never wires the 1200px breakpoint | Every value the switch needs is a token; only the switch was missing | [§14](../design-system/ledger.md) |
-| `Navbar` draws `MiniTracker` unconditionally and pins 80px inline | A product with no timesheets has no counter, and 60px cannot be an inline style | [§15](../design-system/ledger.md) |
-| `AccountMenu` is a `<div onClick>` wrapping its own popover | Not openable from a keyboard, not announced, no `Escape`, and it re-toggles when an item is clicked | [§16](../design-system/ledger.md) |
-| `PageTitle` takes a string and forwards nothing | A heading that tags a name inside it needs children; the `<h1>` needs to be reachable | [§17](../design-system/ledger.md) |
-| `Table` takes `string[]` columns and `ReactNode[][]` rows | No per-row test id, no records, and a pointer cursor on rows that go nowhere | [§18](../design-system/ledger.md) |
-| No `Card` in the library — `NavigationCard` is a 250px clickable tile with no `children` | 34 call sites across 12 files, and nothing to round an edge-to-edge table's corners | [§12](../design-system/ledger.md) |
+| `Sidebar` carried a fixed set of groups and no items API | The frame could not carry hiring's navigation at all | [§13](../design-system/decisions.md) |
+| Its rows take no `href`, no `testId` and no external `active`; the submenu title is a bare `<li onClick>`; an open submenu never re-syncs with the route | No routing, no test hooks, no keyboard on a submenu | [§13](../design-system/decisions.md) |
+| `AppShell` renders the rail unconditionally and never wires the 1200px breakpoint | Every value the switch needs is a token; only the switch was missing | [§14](../design-system/decisions.md) |
+| `Navbar` draws `MiniTracker` unconditionally and pins 80px inline | A product with no timesheets has no counter, and 60px cannot be an inline style | [§15](../design-system/decisions.md) |
+| `AccountMenu` is a `<div onClick>` wrapping its own popover | Not openable from a keyboard, not announced, no `Escape`, and it re-toggles when an item is clicked | [§16](../design-system/decisions.md) |
+| `PageTitle` takes a string and forwards nothing | A heading that tags a name inside it needs children; the `<h1>` needs to be reachable | [§17](../design-system/decisions.md) |
+| `Table` takes `string[]` columns and `ReactNode[][]` rows | No per-row test id, no records, and a pointer cursor on rows that go nowhere | [§18](../design-system/decisions.md) |
+| No general content surface in the library — the nearest thing was a fixed-width clickable tile with no `children` | 34 call sites across 12 files, and nothing to round an edge-to-edge table's corners | [§12](../design-system/decisions.md) |
 
-One gap here carries **no ledger number**, and the reason is the rule the ledger states: a number is assigned when code lands, and nothing lands for a glyph that is not drawn. The icon set has no `Hiring` mark, the section reuses `PeopleIcon`, and the vendored copy is untouched — so there is no divergence to number, only a want. It is recorded where the want is: in the rail's own comment, and in the design's list of what it had to hand-build.
+One gap here carries **no number**, and the reason is the rule the decisions record states: a number is assigned when code lands, and nothing lands for a glyph that is not drawn. The icon set has no `Hiring` mark, the section reuses `PeopleIcon`, and the design system is untouched — so there is nothing to number, only a want. It is recorded where the want is: in the rail's own comment, and in the design's list of what it had to hand-build.
 
-The other gap that is **not** filled in the design system is the frame's binding to Next.js: `apps/web/src/layout/` holds `AppShell`, `Sidebar`, `Topbar` and `PageHeader` as thin adapters that supply the session, hiring's nav items and the router, and nothing else. That is the same deliberate exception the shell has always carried — routing and role rules are not the design system's business — but it is now four adapters over blue's components rather than a frame built from scratch beside them.
+The other gap that is **not** filled in the design system is the frame's binding to Next.js: `apps/web/src/layout/` holds `AppShell`, `Sidebar`, `Topbar` and `PageHeader` as thin adapters that supply the session, hiring's nav items and the router, and nothing else. That is the same deliberate exception the shell has always carried — routing and role rules are not the design system's business — but it is now four adapters over the system's components rather than a frame built from scratch beside them.

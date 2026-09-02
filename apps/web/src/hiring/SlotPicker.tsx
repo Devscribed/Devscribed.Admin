@@ -109,11 +109,11 @@ export function SlotPicker({
         <div className="booking-format">
           {/*
             One control with two answers, not two buttons: `ToggleButton` is a `radiogroup`
-            of two `radio` segments (ledger §31). Both values stay legible, which is what a
+            of two `radio` segments (decisions §31). Both values stay legible, which is what a
             format control needs — a switch labelled only by its current state cannot say what
             pressing it would do.
 
-            The root's `margin-bottom: 20px` is prod's, and it belongs to a stacked form rather
+            The root's `margin-bottom: 20px` is the control's own, and it belongs to a stacked form rather
             than to a control sharing a row with a zone picker.
 
             The wrapper carries the 160px: §49 restored the control's own block behaviour, but a
@@ -299,7 +299,7 @@ export function SlotList({
                 // is expressed in — a bare "14:00" means nothing on its own.
                 aria-label={`${label}, ${timeZone}`}
                 onClick={() => onSelect(slot)}
-                // `pressed`, not `primary` (ledger §71). A solid blue chip is the paint of
+                // `pressed`, not `primary` (decisions §71). A solid blue chip is the paint of
                 // the page's primary action, and `Book` — a few rows below — is that: two
                 // solid blue buttons, one of which submits. The chosen slot takes the 12%
                 // tint the Calendar's selected day takes (§72), so the two halves of the

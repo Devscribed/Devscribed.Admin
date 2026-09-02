@@ -98,7 +98,7 @@ const EMPTY_LIBRARY: FilterLibrary = { vacancies: [], categories: [], criteria: 
  * question being asked, and it is the one thing announced.
  *
  * So a refilter never replaces the list with a loader. The rows stay, dimmed and
- * `aria-busy` (`Table busy`, ledger §34), and only the number becomes a `Preloader`: a
+ * `aria-busy` (`Table busy`, decisions §34), and only the number becomes a `Preloader`: a
  * table that collapsed and re-expanded on every keystroke would reflow the page under the
  * reader for no information at all.
  *
@@ -194,7 +194,7 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
    * `busy` matters here in a way it does not for the interview actions: this confirmation
    * is the last point at which the member can change their mind, so it stays up until the
    * server has actually answered rather than dismissing on the press and leaving the
-   * outcome to a toast that may never come (ledger §41).
+   * outcome to a toast that may never come (decisions §41).
    */
   const [deleting, setDeleting] = useState<CandidateRow | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
@@ -683,7 +683,7 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
   const criterionById = new Map(shelf.criteria.map((criterion) => [criterion.id, criterion]));
   /**
    * The picker offers what is not already a chip, archived below active and marked
-   * (03 §04.19). The marker is the option's `hint` (ledger §21), drawn inside the row and
+   * (03 §04.19). The marker is the option's `hint` (decisions §21), drawn inside the row and
    * part of its accessible name — and *not* in the label, which is what the control
    * filters on: a badge welded into the text would make an archived criterion unfindable
    * by typing its name.
@@ -717,7 +717,7 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
       />
 
       {/*
-        Blue's own list-screen row (§52): the strip on the left, the 250px search and the
+        The system's own list-screen row (§52): the strip on the left, the 250px search and the
         actions on the right, 20px gaps. The scope tabs are drawn only once the response
         has said the caller may see both — which is also why they are not rendered while
         the first request is in flight: a strip that appeared and then vanished would be
@@ -767,7 +767,7 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
 
       {/*
         Five kinds of filter behind one button (03 §09). The panel is the shell's own
-        drawer, hung from the navbar rather than over it (ledger §51), and it is a dialog:
+        drawer, hung from the navbar rather than over it (decisions §51), and it is a dialog:
         focus moves in, `Escape` and the scrim leave, and focus comes back to the button
         that opened it.
       */}
@@ -1029,7 +1029,7 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
                 if (event.metaKey || event.ctrlKey || event.shiftKey) return;
                 // The kebab lives inside the row, and pressing it is not opening the row.
                 // `closest` rather than a stopPropagation in the menu, because the menu is
-                // a portal (ledger §55) and its rows are not inside this anchor at all.
+                // a portal (decisions §55) and its rows are not inside this anchor at all.
                 if ((event.target as HTMLElement).closest('[data-row-actions]')) {
                   event.preventDefault();
                   return;
@@ -1079,7 +1079,7 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
                         What this person has been assessed as, rolled up to their most
                         recent interview that answered each criterion (03 §01.2). The same
                         neutral label the candidate card draws a recorded assessment with
-                        (ledger §59), and the same sentence in the other direction: the
+                        (decisions §59), and the same sentence in the other direction: the
                         card records *English is B1*, this says *English: B1*.
                       */}
                       {row.criteria.length > 0 && (
@@ -1169,8 +1169,8 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
                   label: CANDIDATE_MESSAGES.columns.status,
                   // `Table` has grow and a cap but no basis, so a fixed 120px column is
                   // written as the smallest share that reaches the cap at every width
-                  // this screen targets. Blue's own 80px cap is back on the last column,
-                  // where it was measured — prod's icon-only actions cell (§18) — because
+                  // this screen targets. The system's own 80px cap is back on the last column,
+                  // where the actions cell belongs (§18) — because
                   // Status is no longer the one holding it.
                   flex: 0.8,
                   align: 'flex-start',
@@ -1234,7 +1234,7 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
         Reversal 1, back the other way: the page strip returns, and the count it was once
         traded for is still above the table — position and volume are two different
         questions and the two controls answer one each. It draws nothing at one page
-        (ledger §53), so a short list is unchanged.
+        (decisions §53), so a short list is unchanged.
       */}
       {phase === 'ready' && (
         <Pagination
@@ -1277,8 +1277,8 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
       )}
 
       {/*
-        A yes/no whose accept is the whole action, which is what blue's `ConfirmDialog` is
-        for. It stays up while the request is in flight (`closeOnAccept={false}`, ledger
+        A yes/no whose accept is the whole action, which is what the system's `ConfirmDialog` is
+        for. It stays up while the request is in flight (`closeOnAccept={false}`, decisions
         §41): this is the last point at which the member can change their mind, and a
         dialog that dismissed on the press would leave the outcome to a toast that has not
         happened yet.

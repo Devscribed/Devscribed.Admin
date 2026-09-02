@@ -252,7 +252,7 @@ export function VacancyDialog({
         data-testid="vacancy-dialog"
         style={{ width: 520 }}
       >
-        {/* 20px is blue's form rhythm and the room every field's message slot needs — the
+        {/* 20px is the system's form rhythm and the room every field's message slot needs — the
             error and the hint are pinned 16px under the control rather than pushing it. */}
         <form onSubmit={submit} noValidate style={{ display: 'grid', gap: 'var(--space-7)' }}>
           {banner && (
@@ -319,7 +319,7 @@ export function VacancyDialog({
           />
 
           {/* The one control the design system has no component for: three mutually exclusive
-              values, drawn on one row. `FieldLabel` is blue's own label, so it matches the
+              values, drawn on one row. `FieldLabel` is the system's own label, so it matches the
               fields above it exactly. */}
           <div role="radiogroup" aria-labelledby="vacancy-duration-label">
             <FieldLabel>

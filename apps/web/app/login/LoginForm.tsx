@@ -143,7 +143,7 @@ export function LoginForm() {
         <div style={{ marginBottom: 'var(--space-6)' }}>
           {/*
             A deactivated account used to get its own amber tone, on the reasoning that amber
-            says "retrying will not help" where red invites another guess. Blue paints one
+            says "retrying will not help" where red invites another guess. The system paints one
             banner for anything that went wrong, and the tone was only ever reinforcement —
             the wording carries the meaning on its own, as the note that introduced it said.
           */}
@@ -159,7 +159,7 @@ export function LoginForm() {
       )}
 
       {/*
-        20px is blue's own form rhythm, and it is what the error slot needs: TextInput pins the
+        20px is the system's own form rhythm, and it is what the error slot needs: TextInput pins the
         message 16px under the field rather than pushing the field below it, so anything under a
         field has to leave that much room. 14px, which is what this gap used to be, does not.
       */}

@@ -189,8 +189,8 @@ export function RescheduleDialog({
         />
 
         {/*
-          `FormActions`, not `Modal`'s own actions slot — blue's Modal has none, and this is
-          the row prod closes a form with. Not `ConfirmDialog` either: it fires `onClose` in
+          `FormActions`, not `Modal`'s own actions slot — the system's Modal has none, and this is
+          the row a form is closed with. Not `ConfirmDialog` either: it fires `onClose` in
           the same breath as `onAccept`, so a confirmation whose action is a request with a
           busy state cannot use it (03 design §The two dialogs).
         */}

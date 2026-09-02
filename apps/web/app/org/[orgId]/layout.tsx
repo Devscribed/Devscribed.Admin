@@ -75,7 +75,7 @@ export default function OrgLayout({
           justifyContent: 'center',
         }}
       >
-        {/* Blue's loader paints its own colour; the well it sits on is the one AppShell paints. */}
+        {/* The system's loader paints its own colour; the well it sits on is the one AppShell paints. */}
         <Preloader />
       </div>
     );

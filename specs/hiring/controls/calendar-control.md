@@ -27,19 +27,18 @@ three links was opened.
 
 ## Where it lives
 
-The control is `Calendar`, a component of the Teammerly Original DS at `1_DS for dev/`
-([§30](../../design-system/ledger.md)). It has **no production precedent** — Teamplay books
-nothing — so it is *designed, not measured*, and its paint is taken from the one place blue does
-render a month grid: `DateRangePicker`, which is a faithful recreation of the react-datepicker 4.x
-defaults the product actually ships. Cell metrics, header, navigation chevrons, and the available /
-selected / disabled treatments all come from there.
+The control is `Calendar` ([§30](../../design-system/decisions.md)), and it is the only month grid
+in the system — nothing else in the app books anything, so there was no second grid to match. Its
+cell metrics, header, navigation chevrons and its available / selected / disabled treatments are
+therefore stated here and in the component, and nowhere else: this document is the grid's spec
+rather than a comparison against one.
 
 Two things in this document do **not** follow that grid, and both are deliberate. They are named
 here rather than left to be rediscovered:
 
 - **The week runs Monday to Sunday** (§03.12), where react-datepicker's default — and therefore
-  blue's measurement — runs Sunday to Saturday. Week start is a locale convention, not design
-  language: it is the same class of thing as the month names being English, and blue's own note
+  the system's measurement — runs Sunday to Saturday. Week start is a locale convention, not design
+  language: it is the same class of thing as the month names being English, and the system's own note
   records `week starts Sunday (Su…Sa)` as *the library default, reproduced rather than
   redesigned*. Prod never made this choice; it inherited it. This product did make it, wrote it
   down, and tests it — `monthMatrix` in `@devscribed/validation`, TC-HCAL-UNIT-01.
@@ -47,7 +46,7 @@ here rather than left to be rediscovered:
   months' day numbers greyed. The reason is in the requirement: a day number in the grid looks
   selectable, and every one of these is outside the window.
 
-Both are decisions about what the grid *contains*. Everything about how it is *drawn* is blue's.
+Both are decisions about what the grid *contains*. Everything about how it is *drawn* is the system's.
 
 Availability, the booking window and the time zone are business rules and stay with whatever
 fetched them — the component is handed the weeks to draw, which dates may be chosen, and the bounds
@@ -86,7 +85,7 @@ it may navigate between.
 11. Seven columns, one per weekday, each a single letter.
 12. The week **always runs Monday to Sunday** — `M T W T F S S`. This never varies by locale, and
     it does not follow react-datepicker's Sunday-first default — see [Where it lives](#where-it-lives).
-13. Labels are static and align with the columns below. They take blue's day-name treatment:
+13. Labels are static and align with the columns below. They take the system's day-name treatment:
     `--text-primary` at `--font-weight-headline` (450), on the header's own surface above the grid.
 
 ### 04. Date Grid
@@ -103,17 +102,17 @@ it may navigate between.
 Mutually exclusive, except that **Today** may combine with Available or Unavailable, and with
 Selected.
 
-*Revised by `blue-fixes`, [§72](../../design-system/ledger.md).* Blue draws three of these, and
+*Revised, [§72](../../design-system/decisions.md).* The system draws three of these, and
 they were adopted as measured: an ordinary cell untinted with `--text-primary`, a **selected** cell
 `--color-blue` filled in white at 13px/600, a **disabled** cell `--color-gray-light` filled at
-`opacity: .5`. Every one of those is correct **in a popover attached to a date field**, which is
-the only place prod draws this grid. This one is the primary control on a public page, and the
+`opacity: .5`. Every one of those is correct **in a popover attached to a date field**. This
+one is the primary control on a public page, and the
 three repaint:
 
 | State | Now | Why |
 |---|---|---|
 | Available | untinted, `--text-primary`, hover `--color-row-hover` | unchanged |
-| **Selected** | `--color-blue` at 12% behind `--color-blue` ink, with a `--border-width-control` border in the same hue | Solid blue is right for a **range**, where ten days have to read as one block. A single chosen date beside a list of times is one mark, and filled it became the loudest thing on a page whose primary action is a button below it. It is the tint a `pressed` slot chip takes ([§71](../../design-system/ledger.md)), so both halves of the picker agree |
+| **Selected** | `--color-blue` at 12% behind `--color-blue` ink, with a `--border-width-control` border in the same hue | Solid the system is right for a **range**, where ten days have to read as one block. A single chosen date beside a list of times is one mark, and filled it became the loudest thing on a page whose primary action is a button below it. It is the tint a `pressed` slot chip takes ([§71](../../design-system/decisions.md)), so both halves of the picker agree |
 | **Unavailable** | faint ink on the panel's own ground — **no fill** | `--color-gray-light` put a block on every weekend, so a month with four bookable days read as mostly blocks. "Nothing here" is an absence, and absence is what it should look like |
 | **Today** | a border at 45% of `--color-blue` | Present, and never mistaken for the selection |
 
@@ -122,7 +121,7 @@ was 1.7rem with a `@media (pointer: coarse)` rule conceding the point one query 
 selected day no longer changes size or weight either: a grid of tabular figures where one is
 13px/600 is a grid that twitches the instant a date is picked.
 
-Unavailable, Past and Beyond-the-window still share one paint — blue has one treatment for "you
+Unavailable, Past and Beyond-the-window still share one paint — the system has one treatment for "you
 cannot pick this", and the three differ in *why* rather than in what the candidate may do. Their
 accessible names still distinguish them (§10.42).
 
@@ -138,10 +137,10 @@ accessible names still distinguish them (§10.42).
     outline rather than a fill, so it never reads as the selection.
 22. **Selected** — exactly one date at a time across the whole control.
 23. **Hover** and **Focus** are distinct from each other and from Selected. Hover takes
-    `--color-row-hover`, blue's neutral row tint; focus takes `--shadow-focus-input`, the ring
-    every other blue control uses. react-datepicker leaves its keyboard-selected day transparent,
-    which is survivable only while nothing can focus it — this grid is a keyboard grid (§10.41),
-    so the ring is not optional.
+    `--color-row-hover`, the system's neutral row tint; focus takes `--shadow-focus-input`, the ring
+    every other control in the system uses. A grid whose focused day paints nothing is survivable
+    only while nothing can focus it — this grid is a keyboard grid (§10.41), so the ring is not
+    optional.
 
 ### 06. Selection
 
@@ -213,7 +212,7 @@ Required `data-testid` attributes:
 
 Each day cell is a real `<button>`, and an unpickable one carries the **`disabled` attribute**,
 not `aria-disabled` alone. This is the opposite of the call made for a blocked menu row
-([§22](../../design-system/ledger.md)), and for the opposite reason: there, the point was that a
+([§22](../../design-system/decisions.md)), and for the opposite reason: there, the point was that a
 blocked action stays readable, so it kept its place in the keyboard walk. Here §10.41 requires the
 walk to *skip* unavailable days, and 30 cells of which four are pickable is a grid nobody should
 have to arrow through. Tests select on it directly — `[data-testid^="calendar-day-"]:not([disabled])`.
@@ -221,7 +220,7 @@ have to arrow through. Tests select on it directly — `[data-testid^="calendar-
 State is also exposed on `calendar-day-{isoDate}` via `aria-selected` and `aria-current="date"`
 for today.
 
-The month controls are `IconButton label="Previous month"` / `"Next month"`, which carries blue's
+The month controls are `IconButton label="Previous month"` / `"Next month"`, which carries the system's
 own disabled treatment and hit area. The chevron is drawn as react-datepicker draws it: a 9px box
 with two 3px borders, rotated.
 

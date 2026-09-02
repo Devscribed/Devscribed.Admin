@@ -14,7 +14,7 @@ boundaries and the rules that are easy to mistake for omissions.
 |---|---|
 | API | NestJS 11, Prisma, PostgreSQL (Docker locally, Neon in production) |
 | Web | Next.js 15 (App Router), React 19 |
-| UI | Teammerly Original DS (`1_DS for dev/`), imported through `@ds` — no hardcoded colors or sizes |
+| UI | the design system (`packages/ds`), imported through `@devscribed/ds` — no hardcoded colors or sizes |
 | Unit tests | Vitest |
 | Integration tests | Jest + Supertest against a disposable Postgres database |
 | E2E | Playwright |
@@ -854,31 +854,25 @@ record the exposure that leaves open rather than implying the endpoints are prot
 
 ## Design-system notes
 
-> **The reskin is complete.** The app has moved off yellow (Teammerly Meridian, the prototype skin)
-> and onto blue (Teammerly Original DS, the system measured from the live Teamplay/Teammerly
-> product). The notes below describe blue.
-> [`specs/design-system/README.md`](specs/design-system/README.md) is the decision record — the
-> token map, the component inventory, and the eight numbered decisions everything else cites — and
-> [`specs/design-system/ledger.md`](specs/design-system/ledger.md) records what the vendored copy
-> adds beyond upstream. `1_DS for dev/` holds blue. Every screen is on it: the shell, vacancies,
-> candidates, my interviews, the candidate card, the libraries, the board, and — as of Phase 8 —
-> the two public surfaces, `/book/{slug}` and `/manage/{slug}/{token}`. No yellow token remains in
-> `apps/web`. `npm run ds:drift` still reports a gap and always will, because the vendored copy has
-> thirteen components upstream does not; the bar it holds is that **every disagreement it names
-> carries a ledger number**, and every one of them does. That ledger is the push list for the one
-> batched `DesignSync` upstream, which is the last thing outstanding.
+> **The design system is [`packages/ds`](packages/ds/README.md)**, a workspace package this
+> repository owns: 40 component modules in TSX behind one `'use client'` index, its tokens, and the
+> four rules everything in it follows. Every screen is on it — the shell, vacancies, candidates, my
+> interviews, the candidate card, the libraries, the board, and the two public surfaces
+> `/book/{slug}` and `/manage/{slug}/{token}`. No token of the earlier design remains in `apps/web`.
+>
+> Its numbered decisions are in
+> [`specs/design-system/decisions.md`](specs/design-system/decisions.md), cited from the code as
+> `§n`, and `npm run ds:check` reports where a value has escaped the vocabulary.
 
-- Components come from `1_DS for dev/index.js` via the `@ds` alias
-  (`experimental.externalDir`), re-exported through `apps/web/src/ds.ts` — a single
-  `'use client'` boundary, since the DS uses hooks and ships no directives.
-- **Blue is a measurement, not a design**, and that distinction settles most arguments. Where blue
-  made a choice it wins, layout included. Where blue merely never wrote something down — rest-prop
-  forwarding, `ref`, aria hooks, keyboard handling — it is silent rather than authoritative: blue's
-  `Modal` has no focus trap because production never wrote one. Those get added to the vendored
-  copy, numbered in the ledger, and pushed back upstream in one batch. `npm run ds:drift` is what
-  keeps that from happening quietly — it diffs `index.js`'s exports against `_ds_manifest.json` and
-  exits non-zero when they disagree.
-- **Blue's components are closed.** `Button` destructures exactly seven props with no `...rest`, so
+- Components come from `@devscribed/ds`, which is compiled from source by `transpilePackages` —
+  no build step sits between an edit and the next render. The package's index carries the single
+  `'use client'` boundary, so a screen imports UI without thinking about it.
+- **The system is the authority on how anything looks**, layout included. A screen that wants a
+  value the vocabulary does not have adds it to the system, with a reason, rather than writing it
+  locally — and `npm run ds:check` is what keeps that from happening quietly. A component that is
+  missing something every screen needs gets it in the system too, and a number in the decisions
+  record.
+- **The system's components are closed.** `Button` destructures exactly seven props with no `...rest`, so
   `data-testid`, `ref`, `aria-*`, `className` and `style` all vanish without an error — 81
   attributes feeding 632 e2e selectors. It also hardcodes `width: '100%'`. Opening them changes no
   pixels and is the first task after vendoring.
@@ -898,24 +892,24 @@ record the exposure that leaves open rather than implying the endpoints are prot
   saved-at indicator lives in that slot so it can appear and change without moving the field below
   it — the alternative shifts the layout on every autosave. `TextArea` also needs a real
   `<label for>`; a micro-label sitting above a field never names it. Both landed:
-  [§25](specs/design-system/ledger.md) in Phase 3 and [§33](specs/design-system/ledger.md) in
+  [§25](specs/design-system/decisions.md) in Phase 3 and [§33](specs/design-system/decisions.md) in
   Phase 4, one phase early, for the cancel dialog's character count — including the part that
   matters here, the label's `margin-bottom` zeroed inside the row so the field sits at the same y
   either way.
 - **A `Chip`'s label ellipsises to one line**, which is the same trap as a `Card` clipping a
   popover, one component down: the criterion chip has to hold a value control that opens a list,
   and a control in that span is cut off at the chip's edge. `trailing` is the slot outside it
-  ([§37](specs/design-system/ledger.md)), and it is also what makes `Chip` — rather than `Badge`,
-  which in blue is a four-paint status pill — the right component for a chosen thing with a value
+  ([§37](specs/design-system/decisions.md)), and it is also what makes `Chip` — rather than `Badge`,
+  which in the system is a four-paint status pill — the right component for a chosen thing with a value
   set on it.
 - **`Button` needs `as="a"`** for an action that is really a navigation. The CV download is one: a
   download through an `onClick` loses middle-click, copy-address and the browser's own download
-  handling. Landed as [§38](specs/design-system/ledger.md) in Phase 5, in the shape `Table`'s
+  handling. Landed as [§38](specs/design-system/decisions.md) in Phase 5, in the shape `Table`'s
   `rowHref` already uses — same paint, an anchor when it navigates.
-- **`Select isSearchable` replaces `Combobox`** — the prop exists in blue, and until Phase 3 that
-  was all it was: accepted and ignored, because blue measured the painted box of a react-select
+- **`Select isSearchable` replaces `Combobox`** — the prop exists in the system, and until Phase 3 that
+  was all it was: accepted and ignored, because the system measured the painted box of a react-select
   wrapper and left a `<div onClick>` behind it. Implemented as
-  [ledger §21](specs/design-system/ledger.md), with the create row as §29. The rules the libraries screen established travel with it. Its filter folds
+  [decisions §21](specs/design-system/decisions.md), with the create row as §29. The rules the libraries screen established travel with it. Its filter folds
   case deliberately: an option that already exists must never hide behind a create row over a
   difference in capitalisation, because creating it is exactly what the API will refuse. The create
   row appears only when the typed text matches **nothing at all**, not merely when it is not an
@@ -945,7 +939,7 @@ record the exposure that leaves open rather than implying the endpoints are prot
   and the one thing this state must do is stay unremarkable. `hideHeader` drops the uppercase rule
   and keeps the column widths — My interviews is two groups of a few rows each, and a header rule
   over three rows reads as a report rather than as a glance at today.
-- **Six of yellow's components go away rather than get repainted**, because blue already has the
+- **Six of the earlier design's components go away rather than get repainted**, because the system already has the
   pattern: `SectionLabel` → headings, `Skeleton` → `Preloader`, `Toast` → `InfoBanner`, `Tooltip` →
   native `title`, `Pagination` → infinite scroll, `Toggle` → `ToggleButton`. Three of those
   overturn a decision this repo made deliberately, and each needs a call rather than a swap:
@@ -961,7 +955,7 @@ record the exposure that leaves open rather than implying the endpoints are prot
     browser, so this is a free swap for a pointer and a regression for everyone else. **Phase 3
     answered the vacancy site with visible text**: the reason is drawn in the menu row and wired
     as its `aria-describedby`, and the row stays `aria-disabled` and focusable
-    ([§22](specs/design-system/ledger.md)). **Phase 5 deleted the candidate card's without
+    ([§22](specs/design-system/decisions.md)). **Phase 5 deleted the candidate card's without
     replacing it**: the cancelled badge's `aria-label` was already the whole cancellation and the
     painted text only a truncation of it, and the scheduling history below draws the same fact as
     a real row. It also found what makes `title` worse than nothing on a named element — it
@@ -978,19 +972,19 @@ record the exposure that leaves open rather than implying the endpoints are prot
   - `Toast` → `InfoBanner` turns transient into persistent, which needs both a slot and a
     dismissal story on five screens. **Phase 3 set both**: the slot is directly under
     `PageHeader`, above the page body; dismissal is `InfoBanner onDismiss`
-    ([§24](specs/design-system/ledger.md)), and a new notice replaces the old one rather than
+    ([§24](specs/design-system/decisions.md)), and a new notice replaces the old one rather than
     stacking. Nothing auto-dismisses — that would be a toast wearing a different component.
 - **`BoardColumn` and `BoardCard` are the only drag-and-drop primitive in either system**, and
   production has no kanban at all — so they are designed rather than measured, and the
   pick-up/gap/drop visual language is the system's rather than one screen's. They stay
   presentational and drag-mechanical only: a column turns a pointer position into a **slot index**
   and hands it back, and what the slots mean, which columns exist, and what a drop writes all stay
-  in the app. *Designed* is narrower than it sounds, and the ledger's note on
-  [§42](specs/design-system/ledger.md) pins it down for the upstream push: the card is `Card`'s
-  surface wearing `NavigationCard`'s measured hover, and the column is a `Card` whose body is a
+  in the app. *Designed* is narrower than it sounds, and the decisions record's note on
+  [§42](specs/design-system/decisions.md) pins it down: the card is `Card`'s
+  surface wearing the hover `Card` itself refuses, and the column is a `Card` whose body is a
   `--surface-sunken` well — which is what `AppShell` does one level up. Only three things have no
   precedent anywhere: the **held** card state, the **travelling placeholder**, and the slot index
-  itself. Nothing in blue does any of them, because nothing in blue drags.
+  itself. Nothing in the system does any of them, because nothing in the system drags.
 - **One placeholder, and it travels.** A card dragged with a pointer is not rendered at all; the
   gap it would fill is a single card-sized placeholder that moves to wherever the drop would land.
   Its height is measured from the card at pick-up, so the gap is exactly the size of the thing
@@ -1026,12 +1020,12 @@ record the exposure that leaves open rather than implying the endpoints are prot
 - **`PageTabs` is a real `tablist`.** Both systems drew it as anchors to `#`, which a screen reader
   announces as links that go nowhere, and it is a control that chooses which panel is shown rather
   than a set of destinations — so they are buttons, with `aria-selected`, `aria-controls`, a single
-  tab stop, arrow-key movement and a `testId` per item ([§45](specs/design-system/ledger.md)).
+  tab stop, arrow-key movement and a `testId` per item ([§45](specs/design-system/decisions.md)).
   Selection follows focus, because the panel is already rendered and a keyboard user should not
   have to press twice for what a pointer does once. The count on the board's mobile tabs rides in
   the item's `label` node: a strip that grew a `count` prop would then need a badge, and an icon.
-  This is also the one place the app spends blue's single uppercase, which is why the board's
-  column headings are sentence-case `<h2>`s rather than the captions Meridian drew.
+  This is also the one place the app spends the system's single uppercase, which is why the board's
+  column headings are sentence-case `<h2>`s rather than the captions the earlier design drew.
 - **The scale editor is composed in the app, not added to the DS.** Its chips carry a drag handle
   and a remove control, and [04's design spec](specs/hiring/04-candidate-card.design.md) already
   records the rule that decides this: a `Badge` is a `<span>` with text, and a chip carrying
@@ -1044,9 +1038,8 @@ record the exposure that leaves open rather than implying the endpoints are prot
   be chosen, and the bounds it may navigate between. Availability, the booking window and the time
   zone are business rules and stay on the page. It owns the grid semantics and the keyboard —
   arrows by day and by week, `Home`/`End`, `PageUp`/`PageDown`, and focus that only ever lands on a
-  selectable date. Blue's `DateField` is a 140px text field holding a formatted date and is not a
-  substitute; the grid is modelled on `react-datepicker`'s defaults, which is what production
-  actually renders.
+  selectable date. A text field holding a formatted date is not a substitute: a candidate is
+  choosing from what is free, not typing a date they already know.
 - The public booking page and the candidate card are the two screens with real breakpoints, and
   inline styles cannot express a media query, so their layout classes live in
   `apps/web/app/globals.css`. Every value there is still a token. The booking page's breakpoints
@@ -1055,8 +1048,8 @@ record the exposure that leaves open rather than implying the endpoints are prot
 - **`BookingLayout` is the third shell**, after `AppShell` and `AuthLayout`, and both public
   screens share it — the well, an 880px column, and a wordmark that is the *organization's* name
   rather than Teammerly's. `AuthLayout` draws the product's own mark precisely because a login page
-  belongs to the product; a booking page belongs to the customer advertising the vacancy. Meridian
-  put an amber pin after that name, which is gone: it imitated yellow's own wordmark, and yellow
+  belongs to the product; a booking page belongs to the customer advertising the vacancy. the earlier design
+  put an amber pin after that name, which is gone: it imitated the earlier design's own wordmark, and the earlier design
   had one only because it had no logo file.
 - **`FileInput` is `TextInput`'s sibling**, not a new species of field: the same 44px box, label,
   focus, error and message slot, plus a leading `Choose file` affordance. The
@@ -1064,8 +1057,8 @@ record the exposure that leaves open rather than implying the endpoints are prot
   what keeps it one tab stop, with the focus ring where the focus actually is and the picker
   opening on `Enter` and `Space` with nothing scripted.
 - **Still outstanding.** Promoting the template's `P` glyph dictionary to real icon exports —
-  raised for the fourth time now, since My interviews borrows the `timesheets` clock. Blue's icon
+  raised for the fourth time now, since My interviews borrows the `timesheets` clock. The system's icon
   rules say how (geometric, filled, `currentColor`, 12–24px, no icon font), but hiring keeps its
   own glyphs: production's nav items and glyphs are content, not design language. And the one
-  batched `DesignSync` push upstream, for which the [ledger](specs/design-system/ledger.md) is the
+  record of what the system decided, for which [decisions](specs/design-system/decisions.md) is the
   list and the *measured / designed* split is the claim it has to make.

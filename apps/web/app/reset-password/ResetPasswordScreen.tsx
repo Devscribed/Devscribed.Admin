@@ -134,7 +134,7 @@ export function ResetPasswordScreen() {
             padding: 'var(--space-8) 0 var(--space-7)',
           }}
         >
-          {/* Blue's loader is three pulsing dots at a fixed size, not a sizable arc — the page
+          {/* The system's loader is three pulsing dots at a fixed size, not a sizable arc — the page
               loader is `size=12 margin=7`, which is the default. */}
           <Preloader />
           <p style={{ margin: 0, fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}>
@@ -192,7 +192,7 @@ export function ResetPasswordScreen() {
   return (
     <AuthLayout title="Set a new password" footer={backToLogin}>
       <form onSubmit={submit} noValidate data-testid="reset-form">
-        {/* 20px is blue's form rhythm, and the room TextInput's error slot needs — see LoginForm. */}
+        {/* 20px is the system's form rhythm, and the room TextInput's error slot needs — see LoginForm. */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
           <TextInput
             label="New password"

@@ -59,7 +59,7 @@ Capabilities from specs 07–08 continue to apply. This spec introduces:
 ### Request Review
 
 11. An `admin` or `manager` approves or rejects a pending request. Only `pending` requests can be reviewed.
-12. **Approve:** creates a `debit` transaction in the ledger for the `deductionAmount`. The request status changes to `approved`. `ReviewedAt` and `ReviewedByAccountId` are recorded.
+12. **Approve:** creates a `debit` transaction in the decisions record for the `deductionAmount`. The request status changes to `approved`. `ReviewedAt` and `ReviewedByAccountId` are recorded.
 13. **Reject:** no ledger transaction is created. The request status changes to `rejected`. `ReviewedAt` and `ReviewedByAccountId` are recorded. An optional `ReviewerComment` (max 500 characters) may be provided.
 14. A reviewer cannot approve their own request. Error: "You cannot approve your own vacation request." A different `admin`/`manager` must approve it.
 

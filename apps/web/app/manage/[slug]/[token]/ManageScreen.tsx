@@ -407,9 +407,9 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
         >
           {HIRING_MESSAGES.manage.cvAttached}
         </p>
-        {/* Hidden while the chooser is open — the chooser is the control now. Blue's neutral
+        {/* Hidden while the chooser is open — the chooser is the control now. The system's neutral
             outlined button is the only quiet one it has; `ghost` and `secondary` were two
-            names for the same intent in Meridian and arrive here as one. */}
+            names for the same intent in the earlier design and arrive here as one. */}
         {!replacingCv && (
           <Button
             onClick={() => {
@@ -665,10 +665,10 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
       </div>
 
       {/*
-        Blue's `Modal` has no `actions` slot: prod's dialogs put their button row in the body,
+        The system's `Modal` has no `actions` slot — the button row goes in the body,
         and `FormActions` is the row. The team's cancel dialog already composes it this way,
         which is the point — one confirmation pattern, not a second one for the public page.
-        `ConfirmDialog` is deliberately not used here: its accept button is blue's primary blue
+        `ConfirmDialog` is deliberately not used here: its accept button is the system's primary blue
         even on a destructive confirmation (§40), and this is the one dialog in the product
         where the irreversible action must not look like the safe one.
       */}

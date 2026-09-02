@@ -14,16 +14,15 @@ interface NavSession {
 }
 
 /**
- * Only destinations that exist today. Blue's `Sidebar` carries seven groups from the wider
- * Teamplay product (Timesheets, Reports, Time off…); those are prod **content**, not design
- * language (§D6), and shipping them as dead links would promise screens no spec has yet
- * defined. Entries arrive as their specs land, so two of blue's seven are drawn: `People`
- * and `Hiring`.
+ * Only destinations that exist today. `Sidebar` ships a default set of groups, and they are a
+ * default rather than a fixture: the navigation is **content**, not design language (§13), and
+ * shipping a group as a dead link would promise a screen no spec has yet defined. Entries arrive
+ * as their specs land, so this rail draws two: `People` and `Hiring`.
  *
  * Both are submenus, which is the reversal this rail makes. Every destination used to be a
  * top-level link, on the argument that one level deep needs no second one — and that held
- * while hiring was three rows out of four. It is not what blue does with the same content:
- * `People → Members` is a submenu in prod's own nav, and hiring is a section of the same
+ * while hiring was three rows out of four. It is not what the system does with the same content:
+ * `People → Members` is a submenu in its own default nav, and hiring is a section of the same
  * size beside it. Four unparented rows read as four unrelated screens; two titled groups say
  * which of them belong together, which is the fact a reader needs before they need a route.
  *
@@ -129,7 +128,7 @@ export function Sidebar({
       items={items}
       // Every row stays a real link — middle-click, copy address and open-in-new-tab all work —
       // while an unmodified click is handed to the client router. The group titles are not
-      // rows: blue draws them as `<button aria-expanded>`, so `Hiring` toggles and goes nowhere.
+      // rows: the system draws them as `<button aria-expanded>`, so `Hiring` toggles and goes nowhere.
       onNavigate={(event: MouseEvent, href?: string) => {
         if (!href || event.metaKey || event.ctrlKey || event.shiftKey) return;
         event.preventDefault();

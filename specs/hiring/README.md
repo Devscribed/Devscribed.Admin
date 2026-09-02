@@ -147,21 +147,20 @@ user-management 01 Organization Creation
 ## Design Layer
 
 Same split as user-management: business specs own behaviour, API contracts, and validation
-messages; a paired `NN-name.design.md` owns visuals and references Teammerly Original DS
-(`1_DS for dev/`) by component and token, never by hex value or pixel size. The reskin off the
-earlier Meridian prototype is **complete** — every design spec in this set describes blue, and
-[`specs/design-system/README.md`](../design-system/README.md) is the decision record behind them,
-kept for the reasoning rather than as a checklist.
+messages; a paired `NN-name.design.md` owns visuals and references the design system
+(`packages/ds`) by component and token, never by hex value or pixel size. Every design spec in this set describes
+that system, and [`specs/design-system/decisions.md`](../design-system/decisions.md) is the
+numbered record behind it, kept for the reasoning rather than as a checklist.
 
 - **Light theme only** this release, matching user-management. The public booking page follows the
   same rule.
 - **Copy ownership** — validation messages belong to the business spec; headings, placeholders,
   hints, and micro-labels belong to the design spec.
-- **DS gaps** go into the design system, not into the screen, and every addition to the vendored
-  copy is numbered in the [divergence ledger](../design-system/ledger.md). Five of this set's
-  surfaces have no counterpart in the shipping product and are therefore *designed, not measured*:
-  `BookingLayout` (the public shell — see [02 design](02-booking-page.design.md)), `FileInput`,
-  `Calendar`, `BoardCard` and `BoardColumn`.
+- **DS gaps** go into the design system, not into the screen, and every addition is numbered in
+  the [decisions](../design-system/decisions.md). Five components in this set had nothing in the
+  rest of the app to draw from and were designed from the system's own vocabulary rather than
+  found in it: `BookingLayout` (the public shell — see [02 design](02-booking-page.design.md)),
+  `FileInput`, `Calendar`, `BoardCard` and `BoardColumn`.
 - **The signed-in shell** — every `/org/{orgId}/hiring/*` route renders inside the existing
   `AppShell` (user-management `00-app-shell.design.md`). The public booking page renders inside
   neither `AppShell` nor `AuthLayout`.

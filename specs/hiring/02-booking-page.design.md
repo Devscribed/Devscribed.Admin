@@ -4,7 +4,7 @@ kind: design
 title: Booking Page — Design
 pairs-with: 02-booking-page.md
 routes: ["/book/{slug}"]
-design-system: "1_DS for dev"
+design-system: "@devscribed/ds"
 tags: [public, booking-layout, calendar, slots, file-upload, teammerly, light-only]
 ---
 
@@ -15,14 +15,17 @@ with [02-booking-page.md](02-booking-page.md), which owns the rules, the API con
 validation message. This file owns what a developer would otherwise invent: which component to
 reach for, which token drives which state, and the on-screen wording.
 
-**Design system:** Teammerly Original DS (blue), vendored at `1_DS for dev/`. Import from
-`index.js` through the app's `@/ds` barrel; never hardcode a colour, size, or font.
+**Design system:** [`packages/ds`](../../packages/ds/README.md). Import from `@devscribed/ds`;
+never hardcode a colour, size or font — every value below is a token that already exists. The
+numbered decisions behind it are in [`decisions.md`](../design-system/decisions.md), cited here
+as `§n`.
 
 **Theme:** light only.
 
 **This screen renders in neither `AppShell` nor `AuthLayout`.** It is the public shell,
-[`BookingLayout`](#ds-gaps) — [ledger §46](../design-system/ledger.md), *designed, not measured*,
-because prod has no public-facing surface of any kind.
+[`BookingLayout`](#ds-gaps) — [decisions §46](../design-system/decisions.md). It is the only
+other shell in the system, and it exists because a page the product does not own cannot wear the
+product's own frame.
 
 ## Layout
 
@@ -74,7 +77,7 @@ textarea, as though it submitted only the part it sat in. It carries `form=` so 
 the fields it no longer stands among.
 
 - Gap between regions `--space-8` (24px); the form's own rows are `--space-7` (20px) apart, which
-  is blue's form rhythm and the clearance a field's message slot needs beneath it.
+  is the system's form rhythm and the clearance a field's message slot needs beneath it.
 - **The format toggle's width is stated by its wrapper**, not by the control. §49 restored
   `ToggleButton`'s block behaviour so its own `max-width: 160px` decides the width — but a block
   at `width: 100%` inside a **shrink-to-fit flex item** is 100% of nothing, and in this row the two
@@ -83,24 +86,24 @@ the fields it no longer stands among.
 - The header block is centred; the two Cards and the form Card are full width of the column.
 - The zone selector and format toggle sit on one row directly under the two Cards, zone leading and
   toggle trailing.
-- Panels are `Card variant="panel"` ([§66](../design-system/ledger.md)): `--surface-card`,
+- Panels are `Card variant="panel"` ([§66](../design-system/decisions.md)): `--surface-card`,
   `--radius-xl` (20px) over `--shadow-card-soft` (`0 60px 120px rgba(38,51,77,.05)`), **no border**.
-  *Revised by `blue-fixes`.* They were blue's 8px-with-a-hairline `Card` — which is measured, but
-  measured off prod's *small* cards; prod's large white sections (the Timesheets calendar card, the
+  *Revised.* They were the system's 8px-with-a-hairline `Card` — which is measured, but
+  the small-card treatment; a large white section (this page's picker cards, the
   report tables) take this treatment instead. The two are a scale decision, not a style one: a
   hairline separates a 300px box from the boxes beside it, and a section as wide as the column it
   sits in has nothing beside it to be separated from, so the border becomes an outline drawn round
-  the whole page. Neither value is Meridian's `--shadow-card`; both are prod's own.
+  the whole page. Neither value is the earlier design's `--shadow-card`; both are the system's own.
 
 ### The wordmark
 
-The organization's name, drawn by the shell at blue's headline-4 step in `--text-primary`. It is
+The organization's name, drawn by the shell at the system's headline-4 step in `--text-primary`. It is
 **not** Teammerly's mark: this page belongs to the customer whose vacancy it advertises, and
 `AuthLayout` draws the product's own mark precisely because *that* page does not.
 
-Meridian put a 7px amber square after the name. It is gone, and the reasoning is in the
-[ledger](../design-system/ledger.md#a-note-on-46-and-the-wordmark-that-is-not-the-products): the
-square imitated yellow's own wordmark, which existed only because yellow had no logo file. Blue
+the earlier design put a 7px amber square after the name. It is gone, and the reasoning is in the
+[decisions](../design-system/decisions.md#a-note-on-46-and-the-wordmark-that-is-not-the-products): the
+square imitated the earlier design's own wordmark, which existed only because the earlier design had no logo file. The system
 ships a real one, so the imitation has nothing left to imitate — and lending Teammerly's actual
 mark to a customer's name would be worse than dropping it.
 
@@ -111,7 +114,7 @@ mark to a customer's name would be worse than dropping it.
 | Page shell | **`BookingLayout`** (§46) | `wordmark`, `wordmarkTestId` | `booking-page` |
 | Organization | drawn by the shell | — | `booking-org-wordmark` |
 | Vacancy title | native `<h1>` at `--headline-4-*` | — | `booking-vacancy-title` |
-| Duration | **`Badge status="neutral"`** ([§59](../design-system/ledger.md)) | — | `booking-duration` |
+| Duration | **`Badge status="neutral"`** ([§59](../design-system/decisions.md)) | — | `booking-duration` |
 | Description | native `<p>` | — | `booking-description` |
 | Date panel | `Card variant="panel"` | `title="Date"` | — |
 | Date grid | `Calendar` (§30) | `month`, `weeks`, `availableDates`, `selected`, `onSelect`, `onMonthChange`, `minDate`, `maxDate`, `today`, `loading` | `calendar-control` |
@@ -135,32 +138,32 @@ mark to a customer's name would be worse than dropping it.
 
 Inline field errors come from each field's own `error` prop; `errorId` tags the message node
 `field-error-{fieldName}`, which is what makes it an `aria-describedby` target
-([§4](../design-system/ledger.md)). The convention is spec 01 of user-management's, unchanged.
+([§4](../design-system/decisions.md)). The convention is spec 01 of user-management's, unchanged.
 
-**Four components from the Meridian version are gone**, and each was replaced rather than
+**Four components from the the earlier design version are gone**, and each was replaced rather than
 repainted (D4):
 
 | Was | Is | Why |
 |---|---|---|
-| `SectionLabel` "YOUR DETAILS" | the panel's own `title` | A caption over a whole surface is that surface's title, and it stays a real `<h2>` ([§27](../design-system/ledger.md)) so it joins the outline. *Revised by `blue-fixes`:* on a `panel` that title is **drawn** as the small-caps micro label this app leads a section with (the Timesheets day header), not headline-6 — at 880px it is not competing with the card beside it but with the page's own `<h1>` two rows up |
-| `Input` / `Textarea` | `TextInput` / `TextArea` | blue's names for blue's fields |
-| `Toggle` | `ToggleButton` | one control with two answers, as a `radiogroup` ([§31](../design-system/ledger.md)) |
-| `Spinner` | `Preloader` | blue answers a wait with its pulse loader; there is no second spinner |
+| `SectionLabel` "YOUR DETAILS" | the panel's own `title` | A caption over a whole surface is that surface's title, and it stays a real `<h2>` ([§27](../design-system/decisions.md)) so it joins the outline. *Revised:* on a `panel` that title is **drawn** as the small-caps micro label this app leads a section with (the Timesheets day header), not headline-6 — at 880px it is not competing with the card beside it but with the page's own `<h1>` two rows up |
+| `Input` / `Textarea` | `TextInput` / `TextArea` | the system's names for the system's fields |
+| `Toggle` | `ToggleButton` | one control with two answers, as a `radiogroup` ([§31](../design-system/decisions.md)) |
+| `Spinner` | `Preloader` | the system answers a wait with its pulse loader; there is no second spinner |
 
-**The vacancy title is blue's headline-4, held at one size.** Meridian set it at 34px, which blue's
+**The vacancy title is the system's headline-4, held at one size.** the earlier design set it at 34px, which the system's
 scale has no counterpart for — one of the two token-map rows that needed a human call.
 
-*Revised by `blue-fixes`.* It was `PageTitle`, and `PageTitle` is what blue titles an **app page**
+*Revised.* It was `PageTitle`, and `PageTitle` is what blue titles an **app page**
 with: 16px on a phone, 24px on a desktop, sized to sit under a navbar inside a 290px-railed shell.
 This page has no shell and one thing on it, and its title is the largest type in the product — so
 it is a plain `<h1>` at `--headline-4-*`, which is where `PageTitle` tops out anyway, without the
 steps it takes to get there. There is nothing here for it to step with.
 
 **The length is a neutral label, not a caption.** `Badge status="neutral"`
-([§59](../design-system/ledger.md)) — it is a fact *about* the interview, and this is how the rest
+([§59](../design-system/decisions.md)) — it is a fact *about* the interview, and this is how the rest
 of the product states a property of the thing above it.
 
-**Required fields carry a trailing asterisk** ([§64](../design-system/ledger.md)): `First name*`,
+**Required fields carry a trailing asterisk** ([§64](../design-system/decisions.md)): `First name*`,
 `Last name*`, `Email*`, `CV*`. Always `aria-hidden` — the requirement itself reaches a reader
 through the control's own `required`, and a label announced as "Email star" says it twice.
 
@@ -196,12 +199,12 @@ Validation messages are **not** here — they belong to
 | Closed | This position is no longer accepting applications. |
 | Not found | This link doesn't lead anywhere. |
 
-**Sentence case throughout, and no uppercase anywhere on this screen.** Meridian set every
-micro-label in `UPPERCASE` with `--ls-wider`; blue's content rule spends its one uppercase
-treatment on `PageTabs`, which this page does not use. The labels are now the field labels blue
+**Sentence case throughout, and no uppercase anywhere on this screen.** the earlier design set every
+micro-label in `UPPERCASE` with `--ls-wider`; the system's content rule spends its one uppercase
+treatment on `PageTabs`, which this page does not use. The labels are now the field labels the system
 draws — 12px, `--text-secondary`, sentence case.
 
-Voice is otherwise unchanged: no exclamation marks, no emoji, and errors stay terse — blue prefixes
+Voice is otherwise unchanged: no exclamation marks, no emoji, and errors stay terse — the system prefixes
 them with a bare `*`, which `TextInput`, `TextArea` and `FileInput` all draw for themselves. Times
 carry `tabular-nums` so a column of slots aligns.
 
@@ -217,20 +220,20 @@ Every value is a token; nothing here is a literal.
 | **Date · selected** | solid `--color-blue`, white ink, 13px/600 — react-datepicker's own selected day |
 | **Date · focus** | `--shadow-focus-input`, which react-datepicker leaves transparent (§30) |
 | **Slot · available** | `Button` default — `--surface-card`, 1.5px `--border-default`, `--action-neutral-text` |
-| **Slot · selected** | `Button pressed` ([§71](../design-system/ledger.md)) — the emphasis colour at 12% behind ink and a border in it, `aria-pressed="true"`. The same tint the Calendar paints its selected day with ([§72](../design-system/ledger.md)): one answer to "this is the one you picked" across both halves of the picker. It was `variant="primary"`, which made the chosen slot the same solid blue as `Book` — two solid blue buttons on one page, one of which submits |
-| **Slot · focus** | blue's own button focus |
+| **Slot · selected** | `Button pressed` ([§71](../design-system/decisions.md)) — the emphasis colour at 12% behind ink and a border in it, `aria-pressed="true"`. The same tint the Calendar paints its selected day with ([§72](../design-system/decisions.md)): one answer to "this is the one you picked" across both halves of the picker. It was `variant="primary"`, which made the chosen slot the same solid blue as `Book` — two solid blue buttons on one page, one of which submits |
+| **Slot · focus** | the system's own button focus |
 | **Field · error** | 1.5px `--status-error` border, `--shadow-error-glow`, the message `*`-prefixed beneath |
-| **CV · empty** | a `Choose file` chooser, then `No file chosen` in `--text-secondary` — a row, not a field box ([§73](../design-system/ledger.md)) |
+| **CV · empty** | a `Choose file` chooser, then `No file chosen` in `--text-secondary` — a row, not a field box ([§73](../design-system/decisions.md)) |
 | **CV · attached** | the same chooser, then the filename in `--text-primary` (ellipsised at 260px), its weight in `--text-secondary`, and a 24px cross to drop it |
-| **Submit · disabled** | blue's own disabled Button — `opacity: .6`, `cursor: not-allowed` |
+| **Submit · disabled** | the system's own disabled Button — `opacity: .6`, `cursor: not-allowed` |
 | **Submit · loading** | `Button preloader` — the spinner takes the icon slot, `aria-busy`, label "Booking" |
 | **Page · loading** | a centred `Preloader` in the shell, `aria-hidden`, with "Loading this position" in a polite region beside it — the dots carry no text of their own |
 | **Availability · loading** | grid and list replaced by a centred `Preloader` |
 | **Availability · error** | `InfoBanner variant="warning"` replacing the grid or list, with a retry `Button` |
 
-Hover is blue's: `primary` brightens with `filter: brightness(90%)`, the neutral button fades to
-`opacity: .6`. **There is no press treatment.** Meridian dropped a "lip" on press and shifted the
-button 1px; blue's buttons have neither a lip nor a press state, and inventing one here would give
+Hover is the system's: `primary` brightens with `filter: brightness(90%)`, the neutral button fades to
+`opacity: .6`. **There is no press treatment.** the earlier design dropped a "lip" on press and shifted the
+button 1px; the system's buttons have neither a lip nor a press state, and inventing one here would give
 this screen a motion vocabulary the rest of the product does not have.
 
 ## Interactions
@@ -267,7 +270,7 @@ this screen a motion vocabulary the rest of the product does not have.
 | < 600px | Everything stacks; the submit goes full width; the slot list caps at `60vh` and scrolls in its own region |
 
 The breakpoints are this spec's own and do not change — they belong to the content, not to the
-shell, and blue's 1200px `AppShell` breakpoint has nothing to say about a page that does not use
+shell, and the system's 1200px `AppShell` breakpoint has nothing to say about a page that does not use
 `AppShell`. They live in `globals.css` because a media query cannot be an inline style, which is
 the same reason `.page-title` and `.ds-sidebar` exist.
 
@@ -280,8 +283,8 @@ never scrolls horizontally.
   and disabled dates removed from the tab order entirely.
 - Slot entries form a single-selection group; each carries an accessible name of its start time
   **in the current format** plus the active zone.
-- Every field has a real `<label for>` — blue's own label had no `htmlFor` at all, which
-  [§3](../design-system/ledger.md) added and `TextArea` (§25) and `FileInput` (§47) both inherit.
+- Every field has a real `<label for>` — the system's own label had no `htmlFor` at all, which
+  [§3](../design-system/decisions.md) added and `TextArea` (§25) and `FileInput` (§47) both inherit.
 - A field in error carries `aria-invalid="true"` and `aria-describedby` pointing at
   `field-error-{fieldName}`.
 - The CV hint is referenced by `aria-describedby` so the constraints are announced before a file is
@@ -300,20 +303,20 @@ never scrolls horizontally.
 
 ## DS gaps
 
-Nothing on this screen may be improvised locally. Both entries below are in the vendored copy and
-numbered in the [divergence ledger](../design-system/ledger.md).
+Nothing on this screen may be improvised locally. Both entries below are in the design system and
+numbered in the [decisions](../design-system/decisions.md).
 
 | Gap | Why the existing bundle cannot cover it | Resolution |
 |---|---|---|
-| **`BookingLayout`** | `AuthLayout` is one 480px card for a login form; this screen needs a wide public shell with no card, and a wordmark that is the customer's rather than the product's | `components/appLayout/BookingLayout.jsx` — §46, *designed* |
-| **`FileInput`** | Nothing in blue accepts a file: prod uploads only an avatar, through a cropper of its own | `components/forms/FileInput.jsx` — §47, *designed*; repainted as a chooser row by [§73](../design-system/ledger.md) |
-| **`Calendar`** | Blue's `DateField` is a 140px text field holding `"Mar 18, 2026"` | `components/data/Calendar.jsx` — §30, landed in Phase 4 |
+| **`BookingLayout`** | `AuthLayout` is one 480px card for a login form; this screen needs a wide public shell with no card, and a wordmark that is the customer's rather than the product's | `packages/ds/src/components/appLayout/BookingLayout.tsx` — §46, *designed* |
+| **`FileInput`** | Nothing else in the system accepts a file | `packages/ds/src/components/forms/FileInput.tsx` — §47, *designed*; repainted as a chooser row by [§73](../design-system/decisions.md) |
+| **`Calendar`** | A date a candidate has to *choose from what is free* cannot be a text field holding a formatted date | `components/data/Calendar.tsx` — §30 |
 | **`Preloader` at page scale** | Exists, and needs nothing — compose it, centred | No change; recorded so nobody adds a second loader |
 
 `Calendar` is deliberately presentational: availability, the booking window, and the time zone are
 business rules that belong to the API and the page, not to a design-system component.
 
-**A clear control on `FileInput` was refused by §47 and added by [§73](../design-system/ledger.md).**
+**A clear control on `FileInput` was refused by §47 and added by [§73](../design-system/decisions.md).**
 The refusal read: on this screen a CV is required, so clearing one only produces an invalid form
 that re-choosing would fix anyway. True, and beside the point — somebody who has attached the wrong
 document wants it gone before they choose again, and the alternative is re-choosing to overwrite a

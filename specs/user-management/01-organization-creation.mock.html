@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>01 — Organization Creation · Teammerly mockup</title>
-<link rel="stylesheet" href="../../1_DS%20for%20dev/styles.css">
+<link rel="stylesheet" href="../../packages/ds/src/styles.css">
 <style>
   /* Nothing below invents a value — every color, size and font is a Teammerly token, and every
-     component reproduces what `1_DS for dev/components/` renders. Where a number is literal here
-     it is literal in the component too (blue measured production in px, not in steps). */
+     component reproduces what `packages/ds/src/components/` renders. Where a number is literal here
+     it is literal in the component too (the system measured production in px, not in steps). */
   *{box-sizing:border-box}
   html,body{margin:0;background:var(--surface-card);color:var(--text-primary);font-family:var(--font-family-base)}
 
@@ -24,7 +24,7 @@
   .state-label{font-weight:var(--font-weight-medium);font-size:var(--font-size-xs);
                text-transform:uppercase;color:var(--text-secondary)}
 
-  /* ---- AuthLayout (ledger §11) ---- */
+  /* ---- AuthLayout (decisions §11) ---- */
   .stage{background:#f8fafc;border:1px solid var(--border-subtle);border-radius:var(--radius-l);
          padding:var(--space-12) var(--space-6);display:flex;flex-direction:column;
          align-items:center;gap:var(--space-10)}
@@ -37,7 +37,7 @@
   .form{margin-top:var(--space-8);display:flex;flex-direction:column;gap:var(--space-7)}
   .footer{font-size:var(--font-size-s);color:var(--text-secondary)}
 
-  /* ---- TextInput (ledger §3–§5) ---- */
+  /* ---- TextInput (decisions §3–§5) ---- */
   .field label{display:inline-block;font-weight:var(--font-weight-regular);font-size:var(--font-size-xs);
                line-height:21px;color:var(--text-secondary);margin-bottom:4px;padding:10px 0 0 10px}
   .control{position:relative;display:block}
@@ -61,7 +61,7 @@
   .field.focused input{border-color:var(--color-blue);box-shadow:var(--shadow-focus-input)}
   .field.error.focused input{border-color:var(--status-error);box-shadow:var(--shadow-error-glow)}
 
-  /* ---- IconButton (ledger §10) ---- */
+  /* ---- IconButton (decisions §10) ---- */
   .icon-btn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;
             padding:0;border:0;background:transparent;color:var(--text-secondary);cursor:pointer;
             transition:transform var(--duration-hover),var(--transition-color-hover)}
@@ -75,13 +75,13 @@
        font-size:16px;font-weight:var(--font-weight-button);line-height:24px;cursor:pointer;
        background:var(--action-primary);border-color:var(--action-primary);color:var(--action-primary-text);
        transition:var(--transition-opacity-hover),var(--transition-filter-hover)}
-  .btn:hover{filter:brightness(90%)}          /* blue brightens; it never swaps to a darker hex */
+  .btn:hover{filter:brightness(90%)}          /* the system brightens; it never swaps to a darker hex */
   .btn .title{display:flex;align-items:center;justify-content:center;margin:0 10px}
   .btn .slot{display:flex;align-items:center;justify-content:center;width:20px;height:20px;flex-shrink:0}
   .btn .slot svg{width:20px;height:20px;animation:ds-btn-spin 2s linear infinite}
   @keyframes ds-btn-spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
 
-  /* ---- InfoBanner (ledger §6–§7) ---- */
+  /* ---- InfoBanner (decisions §6–§7) ---- */
   .banner{padding:6px;display:flex;align-items:center;border-radius:var(--radius-l);gap:6px;
           flex-wrap:nowrap;overflow:hidden;margin-bottom:var(--space-6)}
   .banner .glyph{display:flex;width:16px;height:16px}
@@ -122,11 +122,11 @@
 
   <div class="legend">
     <h1>01 — Organization Creation</h1>
-    <p>Visual acceptance target for <code>/signup</code>, on the <strong>Teammerly Original DS</strong>.
+    <p>Visual acceptance target for <code>/signup</code>, on the <strong>the design system</strong>.
     Every state on one page. Pairs with <code>01-organization-creation.design.md</code>; the numbered
-    <code>§n</code> references there point at <code>specs/design-system/ledger.md</code>.</p>
+    <code>§n</code> references there point at <code>specs/design-system/decisions.md</code>.</p>
     <p>Three things separate this from the screen it replaced: labels are sentence case (blue
-    capitalises only <code>PageTabs</code>), the card has a border and no shadow (blue reserves shadow
+    capitalises only <code>PageTabs</code>), the card has a border and no shadow (the system reserves shadow
     for things that float), and the field message is pinned 16&nbsp;px below the field rather than
     sitting in flow — which is why the gap between fields is 20&nbsp;px and not 14.</p>
   </div>

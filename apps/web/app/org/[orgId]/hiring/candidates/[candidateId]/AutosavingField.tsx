@@ -16,7 +16,7 @@ const JUST_NOW_MS = 60_000;
  * its height whether or not it has text; the failure banner appears *below* the field
  * rather than above it; and neither ever replaces what is in the editor.
  *
- * The label row is `TextArea`'s `trailing` slot (ledger §33), which Phase 4 built one phase
+ * The label row is `TextArea`'s `trailing` slot (decisions §33), which Phase 4 built one phase
  * early for the cancel dialog's character count — including the part that matters here, the
  * label's `margin-bottom` zeroed inside the row so the field sits at the same y with a
  * trailing node and without one.
@@ -68,7 +68,7 @@ export function AutosavingField({
         onChange={(event) => editor.change(event.target.value)}
         data-testid={`${testId}-input`}
         /*
-         * Blue pins its textarea at a flat 100px, because prod's one textarea is a comment
+         * The system pins its textarea at a flat 100px, which suits a comment
          * box and 100px is what it measures. `height: auto` hands the sizing back to `rows`,
          * which is the platform's own answer and the one the spec is written in — and it is
          * the whole reason the notes field is the tallest thing on the page while the
@@ -76,7 +76,7 @@ export function AutosavingField({
          */
         style={{ height: 'auto' }}
         /*
-         * The indicator, in the label row (ledger §33). The row's height does not depend on
+         * The indicator, in the label row (decisions §33). The row's height does not depend on
          * the value, and the label's `margin-bottom` is zeroed inside it, so this appears,
          * changes and empties without the field beneath it moving a pixel.
          *

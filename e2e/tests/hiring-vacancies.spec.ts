@@ -208,8 +208,7 @@ test.describe('Vacancies', () => {
       And it is on the screen. The assertion above is about the node `aria-describedby`
       resolves to, which is visually hidden on purpose — a 1x1 clipped span, which is
       "visible" as far as this runner is concerned. It stayed green for the whole time
-      `Popover`'s panel was clipping the drawn bubble out of existence (ledger, note on
-      §62), so the bubble is now asserted as itself: focus raises it, and it says the
+      `Popover`'s panel was clipping the drawn bubble out of existence (decisions §62), so the bubble is now asserted as itself: focus raises it, and it says the
       same sentence the hidden copy does.
     */
     const bubble = page.getByRole('tooltip');

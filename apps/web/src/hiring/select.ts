@@ -1,7 +1,7 @@
 import type { SelectOption } from '@devscribed/ds';
 
 /**
- * Blue's `Select` deals in **options**, not in the values behind them: `onChange` hands back
+ * The system's `Select` deals in **options**, not in the values behind them: `onChange` hands back
  * the option object it was given (or the array of them when `isMulti`), because the control
  * owns both halves of the pair. Every screen that stores a value rather than an option has to
  * cross that boundary, and these are the two ways of doing it.

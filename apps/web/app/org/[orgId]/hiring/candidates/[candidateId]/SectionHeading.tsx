@@ -8,11 +8,11 @@ import { fieldLabelStyle } from '@devscribed/ds';
  *
  * These were `SectionLabel`, and `SectionLabel` is gone (D4). Phase 3 settled the replacement
  * for a caption over a whole surface — it becomes that surface's `Card` title at `<h2>`
- * (reversal 5, [ledger §27]) — but these sit *inside* a panel that already has a heading, so
+ * (reversal 5, [decisions §27]) — but these sit *inside* a panel that already has a heading, so
  * they are the level below it rather than a second one at the same level. The outline the card
  * ends up with is `PageTitle`'s `<h1>` → the application's `<h2>` → these.
  *
- * **The paint is `fieldLabelStyle` ([ledger §75])**, and that is the point of it. This card is
+ * **The paint is `fieldLabelStyle` ([decisions §74])**, and that is the point of it. This card is
  * four captions in two columns, and two of them are not captions at all — `Interview notes` and
  * `Conclusion` are `TextArea`'s own labels, drawn by the design system. Painting the other two
  * as body-s medium in `--text-primary` set them a size up and a shade darker than the two

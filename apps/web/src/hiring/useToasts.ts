@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from 'react';
 
 /**
- * The queue behind `ToastHost` (ledger §54).
+ * The queue behind `ToastHost` (decisions §54).
  *
  * The design system draws a toast and times it; **which** messages exist is application
  * state, exactly as `AppShell` takes `menuOpen` rather than owning its drawer. This is
@@ -24,9 +24,9 @@ import { useCallback, useRef, useState } from 'react';
  */
 
 /**
- * The design system's own set, which is `react-toastify`'s (ledger §54). Most of what this
+ * The design system's own set, which is `react-toastify`'s (decisions §54). Most of what this
  * app confirms is **untyped** — `default`, the white message with no mark — because that is
- * what prod raises and because a status hue on "Vacancy updated" claims a significance the
+ * what most confirmations are, and because a status hue on "Vacancy updated" claims a significance the
  * event does not have. The coloured types are kept for the case that earns one: a request
  * that failed.
  */

@@ -1,10 +1,14 @@
 'use client';
 
 /**
- * Meridian ships no icon library — the app template carries its glyphs as raw paths in
- * one `P` dictionary. These are lifted verbatim from
- * `1_DS for dev/templates/meridian-app/MeridianApp.dc.html` so the shell stays on-brand:
- * geometric, filled with `currentColor`, no strokes.
+ * The shell's own glyphs — the two nav marks and the section icons this app needs and the design
+ * system has no export for. They follow the system's icon rules exactly (`packages/ds/README.md`
+ * → Iconography): hand-authored inline SVG, geometric, filled with `currentColor`, no strokes,
+ * a `viewBox` matching the intrinsic size.
+ *
+ * They live here rather than in the package because they are *this product's* sections. A glyph
+ * belongs in the system when a second screen would reach for it; until then it belongs to the
+ * screen that draws it.
  */
 
 export function PeopleIcon() {
@@ -22,7 +26,7 @@ export function PeopleIcon() {
  *
  * `VacanciesIcon` (a folded document), `CandidatesIcon` (a ruled sheet) and `SettingsIcon`
  * (a cog) followed them for the same reason, and it is worth saying which reason: their
- * rows still exist, but they are sub-items now, and blue's submenu draws a glyph on the
+ * rows still exist, but they are sub-items now, and the system's submenu draws a glyph on the
  * parent title alone. Three icons nothing renders would have read as three the rail had
  * simply forgotten to hang.
  *

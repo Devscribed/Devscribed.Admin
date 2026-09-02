@@ -132,7 +132,7 @@ export function CancelInterviewDialog({
           data-testid={`application-cancel-reason-${applicationId}`}
           // The count is the answer to "how much is left", which a member writing to a
           // limit needs before they hit it rather than after. It sits in the label row
-          // (ledger §33) rather than under the field: the field's own message slot is
+          // (decisions §33) rather than under the field: the field's own message slot is
           // where the error goes, and a count that shared it would flicker away every
           // time the reason went over.
           // Readable rather than `aria-hidden`: it is not in a live region, so it is never

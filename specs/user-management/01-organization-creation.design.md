@@ -4,7 +4,7 @@ kind: design
 title: Organization Creation — Design
 pairs-with: 01-organization-creation.md
 routes: ["/signup"]
-design-system: "1_DS for dev"
+design-system: "@devscribed/ds"
 tags: [signup, auth-layout, form-design, teammerly-original, light-only]
 ---
 
@@ -12,9 +12,12 @@ tags: [signup, auth-layout, form-design, teammerly-original, light-only]
 
 Visual and interaction specification for `/signup`. Pairs with [01-organization-creation.md](01-organization-creation.md), which owns the business rules, the API contract, and every validation message. This file owns everything a developer would otherwise have to invent: which design-system component to reach for, which token drives which state, and what the on-screen wording is.
 
-**Design system:** Teammerly Original DS, `1_DS for dev/`. Import components from `1_DS for dev/index.js`; never hardcode a color, size, or font — every value below is a token that already exists in `tokens/*.css`. Divergences from upstream are numbered in [`specs/design-system/ledger.md`](../design-system/ledger.md) and cited here as `§n`.
+**Design system:** [`packages/ds`](../../packages/ds/README.md). Import from `@devscribed/ds`;
+never hardcode a colour, size or font — every value below is a token that already exists. The
+numbered decisions behind it are in [`decisions.md`](../design-system/decisions.md), cited here
+as `§n`.
 
-**Theme:** light only. Blue has no dark palette and the app has no toggle, so there is nothing on `/signup` to switch.
+**Theme:** light only. The system has no dark palette and the app has no toggle, so there is nothing on `/signup` to switch.
 
 ## Layout
 
@@ -45,10 +48,10 @@ The screen is one `AuthLayout` (§11) — the signed-out shell, with no sidebar 
    Already have an account? Sign in   ← outside the card
 ```
 
-- Card: `--radius-l` · 1px `--border-default` · `--surface-card`, capped at 480px and centred. **No shadow** — blue separates static surfaces with a border and reserves shadow for things that float.
-- The page well is `#f8fafc`, the same value `AppShell` paints behind every signed-in screen. It is hardcoded in blue and absent from `tokens/colors.css`; the decision record notes it as un-tokenised.
+- Card: `--radius-l` · 1px `--border-default` · `--surface-card`, capped at 480px and centred. **No shadow** — the system separates static surfaces with a border and reserves shadow for things that float.
+- The page well is `#f8fafc`, the same value `AppShell` paints behind every signed-in screen. It is hardcoded in the system and absent from `tokens/colors.css`; the decision record notes it as un-tokenised.
 - Card padding `--space-10` (30px); gap between the title block and the form `--space-8`; gap between fields `--space-7`; gap above the submit button `--space-7`.
-- **`--space-7` (20px) is not decoration.** `TextInput` pins its message 16px under the field rather than pushing the field below it (§4), so anything under a field has to leave that much room. 20px is also blue's own form rhythm. The 14px this screen used before does not clear the slot.
+- **`--space-7` (20px) is not decoration.** `TextInput` pins its message 16px under the field rather than pushing the field below it (§4), so anything under a field has to leave that much room. 20px is also the system's own form rhythm. The 14px this screen used before does not clear the slot.
 - Field order matches the business spec: organization name, first name, last name, email, password. Vertical stack at every breakpoint — never two fields on one row.
 - The error banner sits inside the card, above the first field, and only exists once a server error has come back.
 - The "Already have an account?" line sits below the card, on the well — not inside it.
@@ -71,7 +74,7 @@ The screen is one `AuthLayout` (§11) — the signed-out shell, with no sidebar 
 
 Inline field errors are rendered by `TextInput`'s own `error` prop, tagged by `errorId` (§4): `field-error-orgName`, `field-error-firstName`, `field-error-lastName`, `field-error-email`, `field-error-password`.
 
-**Blue has no `size` on `Button` and no `loading`.** It ships one 44px height, and its in-flight prop is `preloader`. Full width is passed as a style rather than assumed, because §1 removed the hardcoded `width: '100%'`.
+**The system has no `size` on `Button` and no `loading`.** It ships one 44px height, and its in-flight prop is `preloader`. Full width is passed as a style rather than assumed, because §1 removed the hardcoded `width: '100%'`.
 
 ## Copy
 
@@ -96,7 +99,7 @@ Validation messages are **not** listed here. They are owned by the business spec
 | Submit button, in flight | Creating account |
 | Footer | Already have an account? **Sign in** |
 
-**Labels are sentence case, not uppercase.** Blue capitalises exactly one thing — `PageTabs`, via `text-transform` — and its field labels are 12px `--text-secondary` in sentence case, set by the global `.input-label` rule. The uppercase micro-labels this screen used before were yellow's idiom and do not survive the reskin.
+**Labels are sentence case, not uppercase.** The system capitalises exactly one thing — `PageTabs`, via `text-transform` — and its field labels are 12px `--text-secondary` in sentence case, set by the global `.input-label` rule. The uppercase micro-labels this screen used before were the earlier design's idiom and do not survive the reskin.
 
 Voice: sentence case in prose, no exclamation marks, no emoji, errors terse and factual. The password hint states the policy up front rather than waiting for the visitor to fail it — it is the same rule as the business spec's password errors, phrased as guidance.
 
@@ -114,7 +117,7 @@ Every value below is a token; nothing here is a literal.
 | **Server error** | values retained, no field errors added | stays enabled | `InfoBanner variant="error"` above the first field. |
 | **Success** | — | — | No toast, no confirmation. Immediate redirect to the Members list. |
 
-Hover on the submit button: `filter: brightness(90%)` over `--duration-hover` — blue brightens its solid buttons rather than swapping to a darker hex. Hover on the reveal toggle: `scale(1.1)`, the same treatment blue gives the Modal close button. **There is no press state**: blue's source has no shrink, lip or translate on any control, and inventing one would be the only motion in the system that is not measured.
+Hover on the submit button: `filter: brightness(90%)` over `--duration-hover` — the system brightens its solid buttons rather than swapping to a darker hex. Hover on the reveal toggle: `scale(1.1)`, the same treatment the system gives the Modal close button. **There is no press state**: the system's source has no shrink, lip or translate on any control, and inventing one would be the only motion in the system that is not measured.
 
 ## Interactions
 
@@ -133,21 +136,21 @@ Hover on the submit button: `filter: brightness(90%)` over `--duration-hover` �
 
 ## Accessibility
 
-- Every `TextInput` renders a real `<label for>` bound to the field's `id` (§3). Blue's own label is associated with nothing.
+- Every `TextInput` renders a real `<label for>` bound to the field's `id` (§3). The system's own label is associated with nothing.
 - A field in error carries `aria-invalid="true"` and `aria-describedby` pointing at its `field-error-{fieldName}` node, which exists because of `errorId` (§4).
 - The password hint is referenced by `aria-describedby` through `hintId`, so the policy is announced before the visitor types. Hint and error share one slot, so only one of the two is ever a describedby target.
 - The error banner is `role="alert"` / `aria-live="polite"` so a server error is announced without stealing focus — it reaches the DOM because of §6.
 - The password toggle is a real `<button type="button">` with an `aria-label` that reflects the *action* ("Show password" / "Hide password") and `aria-pressed` reflecting the current state.
 - The submit button carries `aria-busy` while its `preloader` is set (§2).
-- Focus is visible everywhere — blue's `--shadow-focus-input`, never `outline: none` without a replacement.
+- Focus is visible everywhere — the system's `--shadow-focus-input`, never `outline: none` without a replacement.
 - Colour is never the only error signal: the message text carries the meaning, and the `*` prefix marks it without relying on hue.
 - Contrast: `--text-primary` (#1B1B1B) on `--surface-card` and `--action-primary-text` on `--action-primary` (#007AFF) both clear AA. `--text-secondary` (#64748B) is used for supporting copy and labels only.
 
-**One regression, recorded rather than hidden.** Blue pins its field message at 8px. That is what production renders and what §4 preserves, but it is below the size at which a hint or an error is comfortable to read. The wording is carried to screen readers by `aria-describedby` regardless, and the field's own red border and glow carry the error state visually. Raising the size is a change to blue's measured geometry, so it belongs upstream rather than in a shim here.
+**One regression, recorded rather than hidden.** The system pins its field message at 8px, which §4 preserves — and it is below the size at which a hint or an error is comfortable to read. The wording is carried to screen readers by `aria-describedby` regardless, and the field's own red border and glow carry the error state visually. Raising it is a change to the system's own geometry, so it belongs in the system rather than in a shim here.
 
 ## Divergences used by this screen
 
-Blue is a measurement of a product with no signed-out surface, so this screen needs more of it opened than most. Each of these is numbered in the [ledger](../design-system/ledger.md); none is a local workaround.
+This screen was the first signed-out surface in the product, so it needed more of the system opened than most. Each of these is numbered in [decisions](../design-system/decisions.md); none is a local workaround.
 
 | § | What it adds | Kind |
 |---|---|---|
@@ -157,9 +160,9 @@ Blue is a measurement of a product with no signed-out surface, so this screen ne
 | 4 | `TextInput` gains `errorId` / `hintId` and a hint that shares the error's slot | `omission` |
 | 5 | `TextInput` gains the `trailing` slot the reveal toggle sits in | `omission` |
 | 6 | `InfoBanner` forwards rest props, so `role`/`aria-live`/`data-testid` reach the DOM | `omission` |
-| 9 | `Eye` / `EyeOff` glyphs, drawn to blue's stated icon rules | `packaging` |
-| 10 | `IconButton`, the treatment blue's readme specifies but never promoted | `packaging` |
-| 11 | `AuthLayout` — **designed, not measured**; prod has no login screen to copy | `designed` |
+| 9 | `Eye` / `EyeOff` glyphs, drawn to the system's stated icon rules | `packaging` |
+| 10 | `IconButton`, the treatment the system's readme specifies but never promoted | `packaging` |
+| 11 | `AuthLayout` — the signed-out shell; there was no other signed-out screen to draw from | `designed` |
 
 ## Reference mockup
 

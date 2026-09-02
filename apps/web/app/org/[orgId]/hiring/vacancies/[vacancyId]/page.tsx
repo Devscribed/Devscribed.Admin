@@ -356,7 +356,7 @@ export default function VacancyDetailPage({
                   danger: !blocked,
                   disabled: blocked,
                   // In a bubble beside the menu, not a third line inside a 160px panel —
-                  // and never a native `title` (ledger §62).
+                  // and never a native `title` (decisions §62).
                   tooltip: blocked ? HIRING_MESSAGES.vacancy.deleteBlocked : undefined,
                   tooltipTestId: 'vacancy-delete-guard-message',
                   onSelect: () => setPending('delete'),
@@ -409,7 +409,7 @@ export default function VacancyDetailPage({
       />
 
       {/*
-        Blue's own `ConfirmDialog` with `closeOnAccept={false}` (ledger §41), the same pair
+        The system's own `ConfirmDialog` with `closeOnAccept={false}` (decisions §41), the same pair
         the list raises. This screen had been holding a hand-built `Modal` because that
         prop did not exist when it was written; it does, and one confirmation is one
         component.

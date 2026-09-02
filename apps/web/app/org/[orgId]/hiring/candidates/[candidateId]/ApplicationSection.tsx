@@ -170,7 +170,7 @@ export function ApplicationSection({
             {expanded && (
               <>
                 {/* The vacancy's labels, under its name — the same neutral pill the list
-                    and the vacancy page draw them with (ledger §59). */}
+                    and the vacancy page draw them with (decisions §59). */}
                 {application.vacancy.categories.length > 0 && (
                   <div className="application-categories">
                     {application.vacancy.categories.map((category) => (
@@ -449,8 +449,8 @@ export function ApplicationSection({
  * inside the button, which is the disclosure pattern: the section is still findable by heading,
  * and the control that opens it is still a control.
  *
- * The type is blue's headline-6 — 16px, `--font-weight-medium`, -0.32px — which is exactly
- * what `Card` paints its own titles with. Meridian's `--font-display` at 600 and -.2px is the
+ * The type is the system's headline-6 — 16px, `--font-weight-medium`, -0.32px — which is exactly
+ * what `Card` paints its own titles with. the earlier design's `--font-display` at 600 and -.2px is the
  * same idea in a family the app no longer has.
  */
 function Heading({
@@ -554,7 +554,7 @@ function Heading({
 /**
  * The application's status, and the one control on this page that writes without a save.
  *
- * Blue's `Select` deals in options rather than the values behind them, so the current status
+ * The system's `Select` deals in options rather than the values behind them, so the current status
  * is looked up in the list rather than handed over as a bare string — passing the string would
  * draw `didnt_pass` where the label belongs.
  */
@@ -671,7 +671,7 @@ function SchedulingHistory({
       {/*
         The last of the token map's four `--bg-panel-2` surfaces, and it takes the answer
         Phase 4 gave the candidates filter bar rather than the one Phase 2 gave the shell:
-        `--surface-sunken`, the tone blue already puts behind a `Table`'s own header row. A
+        `--surface-sunken`, the tone the system already puts behind a `Table`'s own header row. A
         log inset into the panel it belongs to is a recessed surface, not a second white card
         floating inside a white card.
       */}
@@ -704,7 +704,7 @@ function SchedulingHistory({
                   <span style={{ color: 'var(--text-tertiary)' }}>— {entry.reason}</span>
                 )}
                 {/*
-                  Meridian drew this in `--text-faint`, the fourth text level blue does not
+                  the earlier design drew this in `--text-faint`, the fourth text level the system does not
                   have (reversal 7). It takes `--text-secondary`, the answer Phase 3 settled
                   and Phase 4 applied twice: a timestamp beside the fact it dates is shown
                   but receded, which is the same reading as a past interview's date.
@@ -732,8 +732,8 @@ function SchedulingHistory({
  * on this page to leak (04 §07.33) — the key never leaves the server. Real links rather
  * than buttons, so the browser's own download handling applies.
  *
- * `Button as="a"` (ledger §38) is what keeps that true under blue, which measured a
- * `<button>` because prod has no control that navigates. Scripted navigation would lose
+ * `Button as="a"` (decisions §38) is what keeps that true under blue, which measured a
+ * `<button>`. Scripted navigation would lose
  * middle-click, copy-address, open-in-new-tab and `download`'s own filename handling, and
  * the CV test asserts three of the four.
  */
@@ -760,7 +760,7 @@ function CvRow({ orgId, application }: { orgId: string; application: CardApplica
       {/*
         The ordinary attachment row — an extension tile, the file's name, its weight — which
         is the shape a file has in every mail client and tracker, so it is recognised before
-        it is read. It replaced a line of text led by a 📄: blue draws icons, never emoji,
+        it is read. It replaced a line of text led by a 📄: the system draws icons, never emoji,
         and the emoji was decoration beside a name that already said what it was (the same
         call 05 made on the board card's `CV` mark).
 

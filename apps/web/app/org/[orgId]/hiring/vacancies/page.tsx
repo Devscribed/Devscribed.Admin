@@ -55,7 +55,7 @@ type Pending = { action: 'close' | 'delete'; vacancy: Vacancy };
  * that used to need the detail page, and the two lifecycle actions. Both blocked items —
  * copy on a closed vacancy, delete on one with candidates — are drawn **disabled with
  * their reason** rather than hidden: a missing action is indistinguishable from a bug, and
- * a reason nobody can reach is the same failure one step later (ledger §22).
+ * a reason nobody can reach is the same failure one step later (decisions §22).
  *
  * `Open board` was the fifth, and it went with the fold-in (01 §08.27): the board is the
  * vacancy now, so the row already had that item — it is the row itself.
@@ -68,7 +68,7 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
   const { orgId } = use(params);
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>('loading');
-  /** A request is in flight over rows that are already on screen (ledger §34). */
+  /** A request is in flight over rows that are already on screen (decisions §34). */
   const [refreshing, setRefreshing] = useState(false);
   const [data, setData] = useState<VacancyList | null>(null);
   /** Absent is closed; `{ vacancy: undefined }` creates, a vacancy edits. */
@@ -279,7 +279,7 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
         danger: vacancy.deletable,
         disabled: !vacancy.deletable,
         // In a bubble beside the menu, not a third line inside a 160px panel — and never
-        // a native `title`, which no browser opens from a keyboard (ledger §62).
+        // a native `title`, which no browser opens from a keyboard (decisions §62).
         tooltip: vacancy.deletable ? undefined : HIRING_MESSAGES.vacancy.deleteBlocked,
         tooltipTestId: `vacancy-delete-guard-message-${vacancy.id}`,
         onSelect: () => setPending({ action: 'delete', vacancy }),
@@ -292,7 +292,7 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
       <PageHeader title="Vacancies" />
 
       {/*
-        Blue's own list-screen row (ledger §52), the same one the candidate database took
+        The system's own list-screen row (decisions §52), the same one the candidate database took
         in Phase 4: the strip on the left, a 250px search and the actions on the right.
         `New vacancy` moved off the page header and into it, because the toolbar is now
         where everything that acts on the whole list lives.
@@ -332,13 +332,13 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
       </TableToolbar>
 
       {/*
-        One surface at every state, which is what blue's table screens do and what the
+        One surface at every state, which is what the system's table screens do and what the
         members and candidates lists already do: the card gives the edge-to-edge table its
         border and rounds its first and last rows, and the loader and the empty message
         sit inside it rather than replacing it.
 
         `clip` stays at its default. The row kebab opens *inside* this card, but the DS
-        `Popover` portals its menu (ledger §55), so nothing it raises is clipped by the
+        `Popover` portals its menu (decisions §55), so nothing it raises is clipped by the
         surface it was opened from.
       */}
       <Card padded={false} data-testid="vacancies-list">
@@ -346,7 +346,7 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
           rows={vacancies}
           /* A refilter dims the rows in place rather than replacing them with a loader:
              a table that collapsed and re-expanded on every keystroke would reflow the
-             page under the reader for no information at all (ledger §34). */
+             page under the reader for no information at all (decisions §34). */
           busy={refreshing && vacancies.length > 0}
           rowKey="id"
           rowHref={(row) => `/org/${orgId}/hiring/vacancies/${row.id}`}
@@ -355,7 +355,7 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
             if (event.metaKey || event.ctrlKey || event.shiftKey) return;
             // The kebab lives inside the row, and pressing it is not opening the row.
             // `closest` rather than a stopPropagation in the menu, because the menu is a
-            // portal (ledger §55) and its rows are not inside this anchor at all.
+            // portal (decisions §55) and its rows are not inside this anchor at all.
             if ((event.target as HTMLElement).closest('[data-row-actions]')) {
               event.preventDefault();
               return;
@@ -418,9 +418,9 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
               ),
             },
             {
-              // Length and Candidates take blue's positional rule rather than saying anything:
+              // Length and Candidates take the system's positional rule rather than saying anything:
               // a middle column reads centred. They were right-aligned Grotesk numerals under
-              // Meridian, and blue has one family and no mono treatment to align.
+              // the earlier design, and the system has one family and no mono treatment to align.
               label: 'Length',
               flex: 1,
               render: (row) => (
@@ -510,7 +510,7 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
       />
 
       {/*
-        Blue's own `ConfirmDialog`, which 01 design left open for Phase 6 and §41 answered:
+        The system's own `ConfirmDialog`, which 01 design left open for Phase 6 and §41 answered:
         `closeOnAccept={false}` keeps the dialog up until the server has replied, so the
         last point at which somebody can change their mind is not also the point the
         outcome stops being visible.
