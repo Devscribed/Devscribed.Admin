@@ -1370,15 +1370,21 @@ export class ReportsService {
     const memberById = new Map(memberships.map((m) => [m.id, m]));
     const columnSet = new Set<ReportColumn>(query.columns);
 
-    // (projectId | 'no-project') -> memberId -> aggregate bucket
+    // Group by date (spec §Aggregation branches — reports/01 keys groups by
+    // day, or by the whole range when sumDateRanges=true). Within each group,
+    // rows bucket by (projectId, membershipId).
     interface Bucket {
+      projectId: string;
+      projectName: string;
+      clientName: string;
+      membershipId: string;
       timeHours: number;
       billableHours: number;
       nonBillableHours: number;
       billedAmount: number;
       spent: number;
       notes: string[];
-      /** dayKey -> per-day roll-up (only used when detailedReports=true). */
+      /** dayKey -> per-day roll-up (only used when detailedReports=true with sumDateRanges=true). */
       perDay: Map<
         string,
         {
@@ -1390,25 +1396,21 @@ export class ReportsService {
         }
       >;
     }
-    interface GroupMeta {
-      projectId: string;
-      projectName: string;
-      clientName: string;
-    }
+    /** groupKey -> rowKey -> bucket */
     const buckets = new Map<string, Map<string, Bucket>>();
-    const groupMeta = new Map<string, GroupMeta>();
+    /** Earliest date seen per groupKey — for stable ordering when summed. */
+    const groupSeed = new Map<string, string>();
 
     for (const entry of entries) {
       const member = memberById.get(entry.membershipId);
       if (!member) continue;
       const projectKey = entry.projectId ?? 'no-project';
-      if (!groupMeta.has(projectKey)) {
-        groupMeta.set(projectKey, {
-          projectId: projectKey,
-          projectName: entry.projectName ?? '(No project)',
-          clientName: entry.clientName ?? '',
-        });
-      }
+      const dayKey = this.dayKey(entry.date);
+      const groupKey = query.sumDateRanges ? '__range__' : dayKey;
+      const rowKey = `${projectKey}::${entry.membershipId}`;
+
+      if (!groupSeed.has(groupKey)) groupSeed.set(groupKey, dayKey);
+      else if (dayKey < (groupSeed.get(groupKey) ?? dayKey)) groupSeed.set(groupKey, dayKey);
 
       const rate = resolveRateAtDate(
         snapshotsByMember.get(entry.membershipId) ?? [],
@@ -1422,14 +1424,18 @@ export class ReportsService {
       // of the time the member logged, whatever its billability.
       const spent = hours * rate.payRate;
 
-      let byMember = buckets.get(projectKey);
-      if (!byMember) {
-        byMember = new Map();
-        buckets.set(projectKey, byMember);
+      let byRow = buckets.get(groupKey);
+      if (!byRow) {
+        byRow = new Map();
+        buckets.set(groupKey, byRow);
       }
-      let bucket = byMember.get(entry.membershipId);
+      let bucket = byRow.get(rowKey);
       if (!bucket) {
         bucket = {
+          projectId: projectKey,
+          projectName: entry.projectName ?? '(No project)',
+          clientName: entry.clientName ?? '',
+          membershipId: entry.membershipId,
           timeHours: 0,
           billableHours: 0,
           nonBillableHours: 0,
@@ -1438,7 +1444,7 @@ export class ReportsService {
           notes: [],
           perDay: new Map(),
         };
-        byMember.set(entry.membershipId, bucket);
+        byRow.set(rowKey, bucket);
       }
       bucket.timeHours += hours;
       if (entry.billable) bucket.billableHours += hours;
@@ -1466,22 +1472,28 @@ export class ReportsService {
     }
 
     const groups: TimeAndActivityGroup[] = [];
-    // Stable order: by project title.
-    const orderedProjectKeys = [...buckets.keys()].sort((a, b) => {
-      const ta = groupMeta.get(a)?.projectName ?? '';
-      const tb = groupMeta.get(b)?.projectName ?? '';
-      return ta.localeCompare(tb);
+    // Stable order: by group seed date ascending (chronological). When
+    // sumDateRanges=true there is only one group anyway.
+    const orderedGroupKeys = [...buckets.keys()].sort((a, b) => {
+      const sa = groupSeed.get(a) ?? a;
+      const sb = groupSeed.get(b) ?? b;
+      return sa.localeCompare(sb);
     });
 
-    for (const projectKey of orderedProjectKeys) {
-      const byMember = buckets.get(projectKey)!;
-      const meta = groupMeta.get(projectKey)!;
+    for (const groupKey of orderedGroupKeys) {
+      const byRow = buckets.get(groupKey)!;
 
-      const orderedMemberIds = [...byMember.keys()].sort((a, b) =>
-        (memberById.get(a)?.displayName ?? '').localeCompare(
-          memberById.get(b)?.displayName ?? '',
-        ),
-      );
+      // Order rows by (project name, member display name) — deterministic and
+      // reads like "these three projects on this day" left-to-right.
+      const orderedRowKeys = [...byRow.keys()].sort((a, b) => {
+        const ba = byRow.get(a)!;
+        const bb = byRow.get(b)!;
+        const pn = ba.projectName.localeCompare(bb.projectName);
+        if (pn !== 0) return pn;
+        const ma = memberById.get(ba.membershipId)?.displayName ?? '';
+        const mb = memberById.get(bb.membershipId)?.displayName ?? '';
+        return ma.localeCompare(mb);
+      });
 
       const rows: TimeAndActivityRow[] = [];
       let totalTime = 0;
@@ -1490,22 +1502,20 @@ export class ReportsService {
       let totalBilled = 0;
       let totalSpent = 0;
 
-      for (const memberId of orderedMemberIds) {
-        const bucket = byMember.get(memberId)!;
-        const member = memberById.get(memberId)!;
+      for (const rowKey of orderedRowKeys) {
+        const bucket = byRow.get(rowKey)!;
+        const member = memberById.get(bucket.membershipId);
+        if (!member) continue;
 
-        // Empty-row filter (spec req 30) — drop members whose total time is 0.
+        // Empty-row filter (spec req 30).
         if (Number(toHours(bucket.timeHours)) === 0) continue;
 
         const row: TimeAndActivityRow = {
-          // Project is always shown (spec req 9). Emit the group's project
-          // name on every row so the response is usable as a flat export
-          // where the group structure is lost.
-          project: meta.projectName,
+          project: bucket.projectName,
           member: member.displayName,
           time: toHours(bucket.timeHours),
         };
-        if (columnSet.has('Client')) row.client = meta.clientName;
+        if (columnSet.has('Client')) row.client = bucket.clientName;
         if (columnSet.has('Billable Time')) row.billableTime = toHours(bucket.billableHours);
         if (columnSet.has('Non-Billable Time'))
           row.nonBillableTime = toHours(bucket.nonBillableHours);
@@ -1550,8 +1560,11 @@ export class ReportsService {
       if (columnSet.has('Spent')) total.spent = toMoney(totalSpent);
 
       groups.push({
-        id: meta.projectId,
-        title: meta.clientName ? `${meta.projectName} · ${meta.clientName}` : meta.projectName,
+        id: groupKey === '__range__' ? `${query.startDate}_${query.endDate}` : groupKey,
+        title:
+          groupKey === '__range__'
+            ? this.formatRangeLabel(query, caller.timezone)
+            : this.formatDayLabel(groupKey, caller.timezone),
         rows,
         total,
       });

@@ -295,7 +295,9 @@ describe('Reports · Time & Activity (spec reports/01)', () => {
       'Time',
     ]);
     expect(res.body.groups).toHaveLength(1);
-    expect(res.body.groups[0].title).toBe('Website Redesign · Acme Corp');
+    // Groups are per-day (spec §Aggregation branches). Title is the calendar
+    // day; the row carries the project/client identity.
+    expect(res.body.groups[0].title).toMatch(/2026/);
     expect(res.body.groups[0].rows[0]).toMatchObject({
       project: 'Website Redesign',
       member: 'Alex Kaminski',
@@ -518,10 +520,12 @@ describe('Reports · Time & Activity (spec reports/01)', () => {
       billable: false,
     });
 
+    // Groups are per-day; sumDateRanges=true collapses them into one group
+    // so the row totals combine entries seeded across different days.
     const res = await getTA(
       admin.cookies,
       admin.organizationId,
-      `${rangeQuery()}&columns=Billable+Time&columns=Non-Billable+Time&columns=Billed+Amount`,
+      `${rangeQuery()}&sumDateRanges=true&columns=Billable+Time&columns=Non-Billable+Time&columns=Billed+Amount`,
     );
     expect(res.status).toBe(200);
     expect(res.body.groups[0].rows[0]).toMatchObject({
@@ -556,7 +560,7 @@ describe('Reports · Time & Activity (spec reports/01)', () => {
     const res = await getTA(
       admin.cookies,
       admin.organizationId,
-      `${rangeQuery()}&columns=Billable+Time&columns=Non-Billable+Time`,
+      `${rangeQuery()}&sumDateRanges=true&columns=Billable+Time&columns=Non-Billable+Time`,
     );
     const row = res.body.groups[0].rows[0];
     expect(Number(row.time)).toBeCloseTo(Number(row.billableTime) + Number(row.nonBillableTime));
@@ -582,11 +586,11 @@ describe('Reports · Time & Activity (spec reports/01)', () => {
       billable: false,
     });
 
-    // billable=billable
+    // billable=billable  (sumDateRanges collapses per-day groups into one)
     const bOnly = await getTA(
       admin.cookies,
       admin.organizationId,
-      `${rangeQuery()}&billable=billable&columns=Billable+Time&columns=Non-Billable+Time&columns=Billed+Amount`,
+      `${rangeQuery()}&sumDateRanges=true&billable=billable&columns=Billable+Time&columns=Non-Billable+Time&columns=Billed+Amount`,
     );
     expect(bOnly.status).toBe(200);
     expect(bOnly.body.groups[0].rows[0]).toMatchObject({
@@ -600,7 +604,7 @@ describe('Reports · Time & Activity (spec reports/01)', () => {
     const nb = await getTA(
       admin.cookies,
       admin.organizationId,
-      `${rangeQuery()}&billable=non-billable&columns=Billable+Time&columns=Non-Billable+Time&columns=Billed+Amount`,
+      `${rangeQuery()}&sumDateRanges=true&billable=non-billable&columns=Billable+Time&columns=Non-Billable+Time&columns=Billed+Amount`,
     );
     expect(nb.status).toBe(200);
     expect(nb.body.groups[0].rows[0]).toMatchObject({

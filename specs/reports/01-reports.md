@@ -114,12 +114,12 @@ The **Reports** sidebar group renders when the caller holds any of the eight `Vi
 
 ### Aggregation branches — Amounts Owed & Time & Activity
 
-The `(sumDateRanges, detailedReports)` matrix produces four output shapes; each report reproduces Teammerly's branches:
+The `(sumDateRanges, detailedReports)` matrix produces four output shapes. Groups are keyed by **date** in both reports (Amounts Owed rows are `(member, activity)`; T&A rows are `(project, member)`) — the day is the primary axis a finance reader scans down, and putting date in the group band lets the same visual pattern (a date-labelled band + a table of rows underneath it) serve both reports. Reproduces Teammerly's four branches:
 
-26. `sumDateRanges = false, detailedReports = false` — **default**. Groups are per-day; per-member totals only.
-27. `sumDateRanges = false, detailedReports = true` — Groups are per-day; per-member `details` bucketed by activity (project name, or `"Holiday · X"`, or `"Vacation (approved)"`).
-28. `sumDateRanges = true, detailedReports = false` — One group covering the whole range; per-member totals only.
-29. `sumDateRanges = true, detailedReports = true` — One group covering the whole range; per-member `details` bucketed by activity.
+26. `sumDateRanges = false, detailedReports = false` — **default**. Groups are per-day; totals only per row.
+27. `sumDateRanges = false, detailedReports = true` — Groups are per-day; each row carries a `details` array bucketed by activity (Amounts Owed: `"Holiday · X"`/`"Vacation (approved)"`/project name; T&A: task name from the entry).
+28. `sumDateRanges = true, detailedReports = false` — One group covering the whole range; totals only per row.
+29. `sumDateRanges = true, detailedReports = true` — One group covering the whole range; each row carries a `details` array with per-day breakdown.
 
 ### Empty-row filtering
 
@@ -241,12 +241,12 @@ Same query envelope. Response is `application/pdf`. **Capability:** `ViewAmounts
   ],
   "groups": [
     {
-      "id": "prj_website",
-      "title": "Website Redesign · Acme Corp",
+      "id": "2026-08-03",
+      "title": "Aug 3, 2026",
       "rows": [
-        { "project": "Website Redesign", "member": "Alex Kaminski", "time": "84.00", "client": "Acme Corp", "billableTime": "80.00", "nonBillableTime": "4.00", "billedAmount": "4000.00", "notes": "Design review, QA fixes, client demo" }
+        { "project": "Website Redesign", "member": "Alex Kaminski", "time": "8.00", "client": "Acme Corp", "billableTime": "8.00", "nonBillableTime": "0.00", "billedAmount": "400.00", "notes": "Design review" }
       ],
-      "total": { "time": "242.50", "billableTime": "232.50", "nonBillableTime": "10.00", "billedAmount": "12125.00" }
+      "total": { "time": "8.00", "billableTime": "8.00", "nonBillableTime": "0.00", "billedAmount": "400.00" }
     }
   ],
   "summary": [
