@@ -51,9 +51,14 @@ export const REPORT_CURRENCY_CODE = 'USD';
  * optional columns require only the base `View*TimeAndActivity` capability.
  */
 export const REPORT_COLUMNS = [
+  // Project first — the group band already names the project, and repeating
+  // the name per row keeps the response usable as a flat CSV export where the
+  // group structure is lost. Then Member (the who), then Time (the how much);
+  // remaining optional columns follow. The order here becomes the response's
+  // `headers` order, which the frontend renders 1:1.
   'Project',
-  'Time',
   'Member',
+  'Time',
   'Client',
   'Billable Time',
   'Non-Billable Time',
@@ -68,7 +73,7 @@ export type ReportColumn = (typeof REPORT_COLUMNS)[number];
  * them (spec requirement 9). Named as a separate constant so a future spec can
  * change the default set in one place.
  */
-export const REPORT_ALWAYS_SHOWN_COLUMNS: readonly ReportColumn[] = ['Project', 'Time', 'Member'];
+export const REPORT_ALWAYS_SHOWN_COLUMNS: readonly ReportColumn[] = ['Project', 'Member', 'Time'];
 
 /** Columns whose visibility is gated by capabilities beyond the base `View*`. */
 export const REPORT_COLUMN_CAPABILITY: Partial<Record<ReportColumn, 'billed' | 'spent'>> = {

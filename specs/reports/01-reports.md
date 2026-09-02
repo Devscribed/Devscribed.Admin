@@ -81,8 +81,8 @@ The **Reports** sidebar group renders when the caller holds any of the eight `Vi
 
 ### Column permission filter (Time & Activity only)
 
-8. Time & Activity supports these columns: `Project`, `Time`, `Member`, `Client`, `Billable Time`, `Non-Billable Time`, `Billed Amount`, `Spent`, `Notes`.
-9. `Project`, `Time`, and `Member` are **always-shown defaults** (spec parity with Teammerly's Permissions 516-524 model — the caller cannot deselect them from the request and cannot filter them out from the response).
+8. Time & Activity supports these columns, emitted in this order in the response `headers`: `Project`, `Member`, `Time`, `Client`, `Billable Time`, `Non-Billable Time`, `Billed Amount`, `Spent`, `Notes`.
+9. `Project`, `Member`, and `Time` are **always-shown defaults** (spec parity with Teammerly's Permissions 516-524 model — the caller cannot deselect them from the request and cannot filter them out from the response). Rendered order is Project → Member → Time so the "who did what on which project, and how much" reads left-to-right without jumping; the group band already carries the project name, and repeating it on every row keeps the response usable as a flat CSV export where the group structure is lost.
 10. `Billed Amount` requires `ViewTimeAndActivityBilled`. `Spent` requires `ViewTimeAndActivitySpent`. Other optional columns require only the base `View*` capability.
 11. The server takes the caller's requested `columns[]`, intersects with the caller's granted column capabilities, unions with the always-shown defaults, and returns exactly that projection. Denied columns are dropped from the response — they are never `null`-blanked, they simply do not appear on the payload.
 
@@ -230,9 +230,10 @@ Same query envelope. Response is `application/pdf`. **Capability:** `ViewAmounts
 ```json
 {
   "headers": [
+    { "title": "Project",        "value": "project" },
     { "title": "Member",         "value": "member" },
-    { "title": "Client",         "value": "client" },
     { "title": "Time",           "value": "time" },
+    { "title": "Client",         "value": "client" },
     { "title": "Billable Time",  "value": "billableTime" },
     { "title": "Non-Billable",   "value": "nonBillableTime" },
     { "title": "Billed Amount",  "value": "billedAmount" },
@@ -243,7 +244,7 @@ Same query envelope. Response is `application/pdf`. **Capability:** `ViewAmounts
       "id": "prj_website",
       "title": "Website Redesign · Acme Corp",
       "rows": [
-        { "member": "Alex Kaminski", "client": "Acme Corp", "time": "84.00", "billableTime": "80.00", "nonBillableTime": "4.00", "billedAmount": "4000.00", "notes": "Design review, QA fixes, client demo" }
+        { "project": "Website Redesign", "member": "Alex Kaminski", "time": "84.00", "client": "Acme Corp", "billableTime": "80.00", "nonBillableTime": "4.00", "billedAmount": "4000.00", "notes": "Design review, QA fixes, client demo" }
       ],
       "total": { "time": "242.50", "billableTime": "232.50", "nonBillableTime": "10.00", "billedAmount": "12125.00" }
     }

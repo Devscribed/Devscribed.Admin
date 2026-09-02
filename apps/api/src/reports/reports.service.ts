@@ -147,6 +147,7 @@ export interface TimeOffQueryInput {
 /** A single per-member row inside a project group. Keys are optional so denied
  *  columns are simply absent from the payload (spec req 11 — never null-blanked). */
 export interface TimeAndActivityRow {
+  project: string;
   member: string;
   client?: string;
   time: string;
@@ -1497,6 +1498,10 @@ export class ReportsService {
         if (Number(toHours(bucket.timeHours)) === 0) continue;
 
         const row: TimeAndActivityRow = {
+          // Project is always shown (spec req 9). Emit the group's project
+          // name on every row so the response is usable as a flat export
+          // where the group structure is lost.
+          project: meta.projectName,
           member: member.displayName,
           time: toHours(bucket.timeHours),
         };

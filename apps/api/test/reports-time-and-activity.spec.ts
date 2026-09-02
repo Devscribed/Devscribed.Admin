@@ -291,12 +291,13 @@ describe('Reports · Time & Activity (spec reports/01)', () => {
     // set only.
     expect(res.body.headers.map((h: { title: string }) => h.title)).toEqual([
       'Project',
-      'Time',
       'Member',
+      'Time',
     ]);
     expect(res.body.groups).toHaveLength(1);
     expect(res.body.groups[0].title).toBe('Website Redesign · Acme Corp');
     expect(res.body.groups[0].rows[0]).toMatchObject({
+      project: 'Website Redesign',
       member: 'Alex Kaminski',
       time: '4.00',
     });

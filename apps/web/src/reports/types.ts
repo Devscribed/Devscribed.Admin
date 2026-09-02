@@ -76,6 +76,7 @@ export type OwnerScope = 'all' | 'my';
  * columns to render; they never assume a field is present.
  */
 export interface TimeAndActivityRow {
+  project?: string;
   member: string;
   client?: string | null;
   time?: string;

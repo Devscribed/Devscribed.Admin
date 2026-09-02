@@ -1329,7 +1329,7 @@ function renderCell(
   if (NUMERIC_COLUMN_KEYS.has(key)) {
     return <span style={{ fontFamily: 'var(--font-mono)' }}>{formatHours(raw as string)}</span>;
   }
-  if (key === 'member') {
+  if (key === 'member' || key === 'project') {
     return (
       <span
         style={{ fontFamily: 'var(--font-display)', fontWeight: 500, color: 'var(--text)' }}

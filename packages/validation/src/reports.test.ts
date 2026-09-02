@@ -142,7 +142,7 @@ describe('TC-01-UNIT-04..06: intersectReportColumns (spec §Column permission fi
       ['Client', 'Spent'],
       { billed: true, spent: false },
     );
-    expect(cols).toEqual(['Project', 'Time', 'Member', 'Client']);
+    expect(cols).toEqual(['Project', 'Member', 'Time', 'Client']);
   });
 
   it('TC-01-UNIT-05: allow Spent — Spent stays in the projection', () => {
@@ -150,12 +150,12 @@ describe('TC-01-UNIT-04..06: intersectReportColumns (spec §Column permission fi
       ['Client', 'Spent'],
       { billed: true, spent: true },
     );
-    expect(cols).toEqual(['Project', 'Time', 'Member', 'Client', 'Spent']);
+    expect(cols).toEqual(['Project', 'Member', 'Time', 'Client', 'Spent']);
   });
 
-  it('TC-01-UNIT-06: default columns cannot be removed — Project/Time/Member always shown', () => {
+  it('TC-01-UNIT-06: default columns cannot be removed — Project/Member/Time always shown', () => {
     const cols = intersectReportColumns(['Client'], { billed: false, spent: false });
-    expect(cols).toEqual(['Project', 'Time', 'Member', 'Client']);
+    expect(cols).toEqual(['Project', 'Member', 'Time', 'Client']);
   });
 
   it('unknown items are silently dropped', () => {
@@ -163,7 +163,7 @@ describe('TC-01-UNIT-04..06: intersectReportColumns (spec §Column permission fi
       ['Client', 'GarbageColumn', 'Spent'],
       { billed: false, spent: false },
     );
-    expect(cols).toEqual(['Project', 'Time', 'Member', 'Client']);
+    expect(cols).toEqual(['Project', 'Member', 'Time', 'Client']);
   });
 
   it('order matches REPORT_COLUMNS regardless of caller ordering', () => {
@@ -176,7 +176,7 @@ describe('TC-01-UNIT-04..06: intersectReportColumns (spec §Column permission fi
       { billed: true, spent: true },
     );
     expect(a).toEqual(b);
-    expect(a).toEqual(['Project', 'Time', 'Member', 'Client', 'Billed Amount', 'Notes']);
+    expect(a).toEqual(['Project', 'Member', 'Time', 'Client', 'Billed Amount', 'Notes']);
   });
 
   it('Billed Amount gated by billed grant', () => {
@@ -184,7 +184,7 @@ describe('TC-01-UNIT-04..06: intersectReportColumns (spec §Column permission fi
       ['Billed Amount'],
       { billed: false, spent: true },
     );
-    expect(cols).toEqual(['Project', 'Time', 'Member']);
+    expect(cols).toEqual(['Project', 'Member', 'Time']);
   });
 });
 
