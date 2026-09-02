@@ -425,7 +425,8 @@ one thing this screen exists not to do.
   - `candidate-actions`, `candidate-action-delete`, `candidate-delete-dialog`,
     `candidate-delete-confirm`, `card-delete-failed`
   - `application-section-{applicationId}`, `application-vacancy-{applicationId}`,
-    `application-when-{applicationId}`, `application-interviewer-{applicationId}`,
+    `application-when-{applicationId}` (the date), `application-time-{applicationId}`
+    (the clock, length and zone), `application-interviewer-{applicationId}`,
     `application-submitted-as-{applicationId}`, `application-status-select-{applicationId}`
   - `card-cv-name`, `card-cv-view`, `card-cv-download`
   - `card-notes-input`, `card-notes-save`, `card-notes-saved-at`,

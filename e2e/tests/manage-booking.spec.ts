@@ -219,7 +219,7 @@ test.describe('Manage booking', () => {
     // one line until now.
     await signIn(page, org.email);
     await page.goto(invite.path);
-    await expect(page.getByTestId(`application-when-${invite.applicationId}`)).toContainText(
+    await expect(page.getByTestId(`application-time-${invite.applicationId}`)).toContainText(
       new Date(startUtc).toLocaleTimeString('en-GB', {
         hour: '2-digit',
         minute: '2-digit',

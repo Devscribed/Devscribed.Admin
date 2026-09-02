@@ -337,7 +337,7 @@ Neither surface ever draws the same event twice: no action on this page raises b
 | Page header | `PageHeader` → `PageTitle` | `title`, `subtitle`, **`action`** | `page-title` |
 | Vacancy status | **`VacancyStatusBadge`** — `Badge outlined` | — | `application-vacancy-status-{applicationId}` |
 | Category labels | **`Badge status="neutral" size="s"`** ([§59](../design-system/decisions.md)) | — | `application-category-chip-{applicationId}-{categoryId}` |
-| Interview facts | `CalendarIcon` · `TimeOutlineIcon` · `PersonOutlineIcon` ([§67](../design-system/decisions.md)) | `aria-hidden` | `application-when-{id}` · `application-interviewer-{id}` |
+| Interview facts — one per line | `CalendarIcon` · `TimeOutlineIcon` · `PersonOutlineIcon` ([§67](../design-system/decisions.md)) | `aria-hidden` | `application-when-{id}` *(the date)* · `application-time-{id}` *(the clock, length and zone)* · `application-interviewer-{id}` |
 | Copy email | `IconButton` + **`CopyIcon`** | `label`, `size={28}` ([§10](../design-system/decisions.md), [§57](../design-system/decisions.md)) | `candidate-email-copy` |
 | Page actions | **`Popover`** | `label`, `items` *(one, `danger`)* | `candidate-actions` · `candidate-action-delete` |
 | Delete confirmation | **`ConfirmDialog`** | `busy`, **`closeOnAccept={false}`** ([§41](../design-system/decisions.md)) | `candidate-delete-dialog` · `candidate-delete-confirm` |

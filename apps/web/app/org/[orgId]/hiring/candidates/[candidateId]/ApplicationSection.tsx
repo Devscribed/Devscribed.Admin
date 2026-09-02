@@ -207,7 +207,10 @@ export function ApplicationSection({
                     means time. The zone carries its offset, because a bare IANA id answers
                     which zone and not what time that is.
                   */}
-                  <p className="application-meta-row">
+                  <p
+                    className="application-meta-row"
+                    data-testid={`application-time-${application.id}`}
+                  >
                     <TimeOutlineIcon aria-hidden width="18" height="18" />
                     <span>
                       {formatSlotTime(start, viewerTimeZone)}
