@@ -1,12 +1,13 @@
-/* Teammerly (Teamplay) — Typography tokens
-   Font family + sizes come from src/index.scss and src/styles/variables.scss.
-   Headline scale comes from the headLine4/5/6 mixins in src/styles/mixins.scss —
-   note the non-4/8-grid weights (450, 550) and letter-spacing are copied verbatim. */
+/* Typography tokens.
+
+   Four body sizes and three headline steps, and that is the whole scale. The weights are not on
+   a round grid — 450 and 550 sit between the named faces the webfont ships — and the headline
+   steps carry negative tracking, because at 20px and above the default spacing reads loose. */
 
 :root {
   --font-family-base: 'Poppins', sans-serif;
 
-  /* Literal weights used across the app (Poppins loaded 300–700) */
+  /* The weights, and the one role each has. */
   --font-weight-light: 300;
   --font-weight-regular: 400;
   --font-weight-headline: 450;   /* headLine4 / headLine5 */
@@ -15,7 +16,7 @@
   --font-weight-semibold: 600;   /* modal / dialog titles */
   --font-weight-bold: 700;
 
-  /* Body sizes ($fontSize*) */
+  /* Body sizes. */
   --font-size-xs: 12px;   /* fontSizeBodyXS */
   --font-size-s: 14px;    /* fontSizeBodyS */
   --font-size-base: 16px; /* fontSizeBody */
@@ -23,7 +24,8 @@
 
   --line-height-base: 1.5;
 
-  /* Headline scale (mixins.scss) */
+  /* Headline scale. Each step is a size, a line height, a tracking and a weight together —
+     a heading that takes the size without the tracking is not on the scale. */
   --headline-4-size: 24px;
   --headline-4-line: 36px;
   --headline-4-tracking: -0.7px;

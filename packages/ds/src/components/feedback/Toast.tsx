@@ -1,25 +1,23 @@
 import React from 'react';
 
 /**
- * §54 — `react-toastify@9.1` under prod's own configuration (`position="top-right"`,
- * `hideProgressBar`, `closeOnClick`, `pauseOnHover`, `theme="colored"`), carried across for a
- * codebase that cannot take the dependency. Every value is the library's, so none of them
- * should be folded into system tokens.
+ * §54 — the transient confirmation plate. Its values are deliberately literals rather than
+ * tokens; see the component note for why.
  *
  * The **queue is the caller's**: this pair draws and times what it is given, exactly as
  * `AppShell` takes `menuOpen` rather than owning its drawer.
  */
 export interface ToastProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'children'> {
   /**
-   * `default` is the untyped message — white, no icon — and is what prod's own confirmations
-   * are. The four types take `theme="colored"`'s fill, white ink and the library's mark.
+   * `default` is the untyped message — white, no icon — and is what most confirmations are.
+   * The four types take a coloured fill, white ink and a mark.
    */
   tone?: 'default' | 'info' | 'success' | 'warning' | 'error';
   /** Dismiss. The host passes one that drops the entry from its list. */
   onClose?: () => void;
-  /** `closeOnClick` — the whole message is a dismiss target. On by default, as in prod. */
+  /** The whole message is a dismiss target. On by default. */
   closeOnClick?: boolean;
-  /** Accessible name of the × . The library's own is the lowercase `close`. */
+  /** Accessible name of the ×. */
   closeLabel?: string;
   children?: React.ReactNode;
 }
@@ -41,8 +39,7 @@ export interface ToastHostProps extends Omit<React.HTMLAttributes<HTMLDivElement
   onDismiss?: (id: string | number) => void;
   /**
    * Milliseconds before an entry withdraws itself; `0` leaves them standing. Defaults to
-   * **3400**, where prod passes 1000 — see the component for why that one value is not the
-   * library's.
+   * **3400** — see the host for how that number was chosen.
    */
   autoClose?: number;
   closeOnClick?: boolean;
@@ -52,47 +49,40 @@ export interface ToastHostProps extends Omit<React.HTMLAttributes<HTMLDivElement
 }
 
 /**
- * Toast / ToastHost — §54, rewritten.
+ * Toast / ToastHost — §54.
  *
- * The first version of this entry reasoned from `InfoBanner`: prod uses `react-toastify`,
- * blue did not recreate it, so the surface was taken from the nearest measured thing and the
- * motion and stacking were designed on top. That was the right method with the wrong premise.
- * **`react-toastify` is not an absence — it is the measurement.** The app imports the
- * library's own stylesheet and overrides nothing, so what a Teamplay user sees when something
- * is confirmed is the library's default plate under one configuration, and every value below
- * is read out of `react-toastify@9.1`'s `dist/ReactToastify.css` and `dist/react-toastify.js`
- * rather than composed here:
+ * **The plate is not part of the page's surface vocabulary, and its values are deliberately
+ * literals rather than tokens.** Everything else in this system paints *the app*: a `Card` is
+ * the app's card, and when `--radius-l` moves every card moves with it, which is the point. A
+ * toast is not on the page — it is a fixed object floating over whatever page happens to be
+ * underneath, for three seconds, and it has to look the same over all of them. So `#757575` is
+ * not `--text-secondary` and `4px` is not `--radius-s`: they are this plate's own, and folding
+ * them into tokens would let a change to the app's ink silently restyle a thing that is not
+ * part of the app. If the plate should change, change it here, on purpose.
  *
- * ```
- * position="top-right"  autoClose  hideProgressBar  closeOnClick  pauseOnHover  theme="colored"
- * ```
+ * The rest is what a transient confirmation has to be:
  *
- * Which makes the shape of this entry `packaging`, not `designed`: nothing is invented, a
- * dependency's paint is simply carried across for a codebase that cannot take the dependency.
- * **Do not fold these values into system tokens.** `#757575` is not `--text-secondary` and
- * `4px` is not `--radius-s`; they are what the library paints, and a token here would quietly
- * stop matching production the first time the token moved.
+ * - **Top-right.** A confirmation lands beside the header the action was taken from, rather
+ *   than in the far corner from it.
+ * - **`default` is white and has no mark.** Only a *typed* message takes a fill and an icon;
+ *   most confirmations are untyped, because a message that something ordinary happened is not
+ *   a status and a green plate for every saved field is noise.
+ * - **Clicking it dismisses it.** The × stays as well, because a control that is only
+ *   discoverable by trying is not one.
  *
- * Three consequences worth naming, because they reverse what §54 first said:
- *
- * - **Top-right, not bottom-right.** A confirmation lands beside the header it was raised
- *   from rather than in the far corner from it.
- * - **`default` is white and has no icon.** In `theme="colored"` only the four *typed* toasts
- *   take a fill and a mark; an untyped one falls back to the light surface. Prod's own
- *   confirmations are untyped, so most of this app's are too — a message that something
- *   ordinary happened is not a status.
- * - **Clicking it dismisses it**, which `closeOnClick` says and the old surface had no notion
- *   of. The × stays, because a control that is only discoverable by trying is not one.
- *
- * Not reproduced, all three deliberately: `draggable` (on in prod, and a drag target that
- * does nothing else is a poor one), the ≤480px full-width breakpoint (this app's toasts are
- * already `max-width`-bound by the column), and the exit animation — the host drops an entry
- * the moment it is dismissed, exactly as the bundle does.
+ * Three things it deliberately does not do: it is not draggable (a drag target that does
+ * nothing else is a poor one), it does not go full-width on a narrow viewport (the column
+ * already bounds it), and it has no exit animation — the host drops an entry the moment it is
+ * dismissed, because an animation on the way out delays the next one on the way in.
  */
 
-/* The library's own bounce, verbatim. Injected once into `<head>` rather than rendered as a
-   sibling `<style>`, which is `Preloader`'s rule and for `Preloader`'s reason: a sibling is a
-   real element and breaks a consumer's `:nth-child` counts. */
+/* The entrance: a bounce in from the right, overshooting and settling. It is the one piece of
+   motion in the system that is not a 0.1–0.3s state change, and it earns that because the whole
+   job of the plate is to be noticed arriving over a page nobody was looking away from.
+
+   Injected once into `<head>` rather than rendered as a sibling `<style>`, which is
+   `Preloader`'s rule and for `Preloader`'s reason: a sibling is a real element and breaks a
+   consumer's `:nth-child` counts. */
 const KEYFRAMES = `@keyframes ds-toast-bounce-in-right{from,60%,75%,90%,to{animation-timing-function:cubic-bezier(.215,.61,.355,1)}from{opacity:0;transform:translate3d(3000px,0,0)}60%{opacity:1;transform:translate3d(-25px,0,0)}75%{transform:translate3d(10px,0,0)}90%{transform:translate3d(-5px,0,0)}to{transform:none}}`;
 
 if (typeof document !== 'undefined' && !document.getElementById('ds-toast-style')) {
@@ -102,10 +92,8 @@ if (typeof document !== 'undefined' && !document.getElementById('ds-toast-style'
   document.head.appendChild(el);
 }
 
-/* `--toastify-color-*` and the colored-theme rules, read from the library's stylesheet.
-   `default` is **not** coloured: `.Toastify__toast-theme--colored.Toastify__toast--default`
-   falls back to the light surface and `--toastify-text-color-light`, and it gets no icon at
-   all, because the library's `Icons` map only defines the four types. */
+/* The plate's own palette — see the note above on why these are literals. `default` is **not**
+   coloured and gets no mark: it is the ordinary case, and the four types are the exceptions. */
 const TONES: Record<string, { background: string; color: string }> = {
   default: { background: '#fff', color: '#757575' },
   info: { background: '#3498db', color: '#fff' },
@@ -114,8 +102,7 @@ const TONES: Record<string, { background: string; color: string }> = {
   error: { background: '#e74c3c', color: '#fff' },
 };
 
-/* `Icons.info` / `.success` / `.warning` / `.error` — path data verbatim from
-   `dist/react-toastify.js`. Filled with `currentColor`, i.e. white in the coloured theme. */
+/* One mark per type, filled with `currentColor` — white on every coloured plate. */
 const ICON_PATHS: Record<string, string> = {
   info: 'M12 0a12 12 0 1012 12A12.013 12.013 0 0012 0zm.25 5a1.5 1.5 0 11-1.5 1.5 1.5 1.5 0 011.5-1.5zm2.25 13.5h-4a1 1 0 010-2h.75a.25.25 0 00.25-.25v-4.5a.25.25 0 00-.25-.25h-.75a1 1 0 010-2h1a2 2 0 012 2v4.75a.25.25 0 00.25.25h.75a1 1 0 110 2z',
   warning: 'M23.32 17.191L15.438 2.184C14.728.833 13.416 0 11.996 0c-1.42 0-2.733.833-3.443 2.184L.533 17.448a4.744 4.744 0 000 4.368C1.243 23.167 2.555 24 3.975 24h16.05C22.22 24 24 22.044 24 19.632c0-.904-.251-1.746-.68-2.44zm-9.622 1.46c0 1.033-.724 1.823-1.698 1.823s-1.698-.79-1.698-1.822v-.043c0-1.028.724-1.822 1.698-1.822s1.698.79 1.698 1.822v.043zm.039-12.285l-.84 8.06c-.057.581-.408.943-.897.943-.49 0-.84-.367-.896-.942l-.84-8.065c-.057-.624.25-1.095.779-1.095h1.91c.528.005.84.476.784 1.1z',
@@ -149,9 +136,9 @@ export function Toast({
         boxShadow: '0 1px 10px 0 rgba(0, 0, 0, 0.1), 0 2px 15px 0 rgba(0, 0, 0, 0.05)',
         backgroundColor: paint.background,
         color: paint.color,
-        /* The library sets only `font-family` and inherits the size from the page. Ours is
-           mounted at the document root rather than inside a screen, so the family is named
-           and the size left to inherit, exactly as there. */
+        /* The family is named and the size is left to inherit. The host mounts at the
+           document root rather than inside a screen, so there is no local type scale to take
+           one from — and nothing about a confirmation wants a size of its own. */
         fontFamily: 'var(--font-family-base)',
         animation: 'ds-toast-bounce-in-right 0.7s both',
         ...style,
@@ -189,18 +176,17 @@ export function Toast({
 }
 
 /**
- * The `ToastContainer`: a fixed 320px column at `top: 1em; right: 1em`, 4px of padding,
- * `z-index: 9999`. **Controlled** — the caller owns the list and drops an entry in
- * `onDismiss`, exactly as `AppShell` takes `menuOpen` rather than owning its drawer;
- * `autoClose` schedules that call, and a pointer anywhere over the column pauses every
- * timer in it (`pauseOnHover`, which the library applies to the container and not to the
- * message).
+ * The host: a fixed 320px column at `top: 1em; right: 1em`, 4px of padding, `z-index: 9999`.
  *
- * `autoClose` defaults to **3400ms** where prod passes 1000. It is the one value here that
- * is not the library's, and the reason is that prod's 1000 is a measurement of a product
- * whose toasts confirm a timer starting — five words a user is already expecting. Ours name
- * a record that changed, and a second is not long enough to find the message, let alone
- * read it. Overridable, and prod's own number is one prop away.
+ * **Controlled** — the caller owns the list and drops an entry in `onDismiss`, exactly as
+ * `AppShell` takes `menuOpen` rather than owning its drawer. `autoClose` schedules that call,
+ * and a pointer anywhere over the *column* pauses every timer in it, not only the one under
+ * the pointer: somebody reading the second message is not asking the first one to leave.
+ *
+ * `autoClose` is **3400ms**, and the number is a reading speed. These messages name a record
+ * that changed — "Vacancy archived", "Interview rescheduled to Tuesday" — and a second is not
+ * long enough to notice the plate, let alone read it. A product whose confirmations tell a
+ * reader something they are already expecting can pass a shorter one.
  *
  * Renders nothing while empty — an empty fixed box still sits over the corner of the page.
  */

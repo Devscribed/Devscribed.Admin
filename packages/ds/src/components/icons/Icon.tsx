@@ -1,7 +1,12 @@
 import React from 'react';
 
-/* Icon primitives — path data copied verbatim from the app's assets/icons/*.tsx files
-   (also mirrored as standalone .svg files in /assets/icons for non-React use). */
+/* The icon set. Every glyph is a hand-authored inline `<svg>` React component — never a font,
+   never a raster, never an emoji — drawn geometric and filled, painted with `currentColor` at
+   12–24px, with a `viewBox` matching its intrinsic size. Anything added here follows those
+   rules; a glyph that cannot be drawn to them belongs in the page, not in the set.
+
+   The four `1em`-sized outline glyphs are the one exception, and they are a family of their
+   own: see `CalendarIcon` for when a new member may join it. */
 
 /** Every glyph forwards to its `<svg>`, so a caller sizes and paints it with the
  *  attributes it already knows: `width`, `height`, `color`, `aria-hidden`, `style`. */
@@ -39,9 +44,8 @@ export function TrashIcon(props: GlyphProps) {
   );
 }
 
-/* assets/icons/ThreeDotsIcon: no fill/stroke attrs in source, so the path renders FILLED
-   (SVG default) — ActionsPopover then drives it with `svg{width:22px;fill:$appBlack}` and
-   `fill:#fff` on hover/active. strokeWidth="0.5" is inert without a stroke; kept as in prod. */
+/* Filled, with no stroke: `Popover`'s kebab trigger drives it entirely through `color`, and a
+   stroked glyph would not follow the fill when the circle behind it lights up. */
 export function ThreeDotsIcon(props: GlyphProps) {
   return (
     <svg width="4" height="16" viewBox="0 0 4 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -58,9 +62,10 @@ export function UserIcon(props: GlyphProps) {
   );
 }
 
-/* react-icons/io5 (Ionicons 5) defaults, used verbatim by MemberProfileCard — the app does not
-   override them. IconBase renders `stroke="currentColor" fill="currentColor" strokeWidth="0"`
-   plus the icon's own child attrs; size defaults to 1em, so every call site sets width/height. */
+/* The outline family: a 512 viewBox at `1em`, `stroke` and `fill` both `currentColor` with
+   `strokeWidth="0"`. Because the size is `1em` rather than a pixel pair, every call site sets
+   its own `width`/`height` — see `CalendarIcon` for when a mark may join this family rather
+   than the filled set. */
 export function PersonCircleIcon(props: GlyphProps) {
   return (
     <svg viewBox="0 0 512 512" stroke="currentColor" fill="currentColor" strokeWidth="0" width="1em" height="1em" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -90,17 +95,18 @@ export function TimeOutlineIcon(props: GlyphProps) {
 /**
  * §67 — `CalendarIcon` and `PersonOutlineIcon`, drawn as **outlines**.
  *
- * §44 and §57 both refused this family for a new glyph, and both were right about the glyph
- * they were deciding: a lone mark joins blue's filled main set, because that is what the
- * readme licenses and the four Ionicons outlines here are only what prod happened to import.
+ * The rule everywhere else is that a lone new mark joins the filled main set (§44, §57), and
+ * that rule is right for a lone mark. This is the case it does not cover.
  *
- * This is the case those entries did not cover. The candidate card states three facts about
- * an interview as a **list, one glyph per line** — when it is, how long, with whom — and the
- * middle line is already `TimeOutlineIcon`, which came from prod. A filled calendar over an
- * outline clock over a filled person is not a list of three facts; it is three marks, two of
- * which read as active states. The set is what is being drawn here, not the glyph, so the
- * two new members take the geometry of the one that was measured: 512 viewBox,
- * `fill: none`, `strokeWidth="32"`, round joins.
+ * The candidate card states three facts about an interview as a **list, one glyph per line** —
+ * when it is, how long, with whom — and the middle line is already `TimeOutlineIcon`, an
+ * outline. A filled calendar over an outline clock over a filled person is not a list of three
+ * facts; it is three marks, two of which read as active states. What is being drawn here is the
+ * *set*, not the glyph, so the two new members take the geometry of the one already in it: 512
+ * viewBox, `fill: none`, `strokeWidth="32"`, round joins.
+ *
+ * That is the whole licence for this family. A mark that is not joining an existing outline row
+ * is filled.
  */
 export function CalendarIcon(props: GlyphProps) {
   return (
@@ -212,10 +218,9 @@ export function OrgIcon(props: GlyphProps) {
   );
 }
 
-/* §9 — Eye / EyeOff. Prod is a time tracker with no password field, so it has no reveal glyph
-   to measure; these are drawn to blue's stated icon rules instead (geometric, filled,
-   `currentColor`, 12-24px, viewBox matching the intrinsic size, no icon font) and forward props
-   like every glyph above. */
+/* §9 — Eye / EyeOff, the reveal toggle on a password field. Drawn to the set's rules —
+   geometric, filled, `currentColor`, a viewBox matching the intrinsic size — and forwarding
+   props like every glyph above. */
 export function EyeIcon(props: GlyphProps) {
   return (
     <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -234,13 +239,9 @@ export function EyeOffIcon(props: GlyphProps) {
   );
 }
 
-/* §44 — the missing-conclusion marker on a `BoardCard`. Meridian drew it as `⚑`, a dingbat
-   character; blue's iconography rule is absolute — "every icon is a hand-authored inline SVG
-   React component, not glyphs from Lucide/Heroicons/Font Awesome", and "no PNG/raster icons and
-   no emoji are used as icons anywhere in the app" — so the mark is drawn rather than typed. Prod
-   flags nothing and has no pennant to measure, which is §9's position exactly: blue's rules are
-   explicit enough to draw to (geometric, filled, `currentColor`, 12-24px, viewBox matching the
-   intrinsic size, no icon font). The caller paints it; nothing here picks a hue. */
+/* §44 — the missing-conclusion marker on a `BoardCard`. A pennant, drawn rather than typed:
+   `⚑` is a dingbat character, and the set's rule is that an icon is an authored `<svg>`, never
+   a glyph from a font. The caller paints it; nothing here picks a hue. */
 export function FlagIcon(props: GlyphProps) {
   return (
     <svg width="14" height="14" viewBox="0 0 12 12" fill="currentColor" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -250,13 +251,10 @@ export function FlagIcon(props: GlyphProps) {
   );
 }
 
-/* §57 — the copy affordance beside the candidate's email. Prod copies nothing anywhere, so there
-   is no mark to measure, which is §9's and §44's position exactly: blue's icon rules are explicit
-   enough to draw to (geometric, filled, `currentColor`, 12-24px, viewBox matching the intrinsic
-   size, no icon font). Drawn **filled**, not to the four Ionicons outline glyphs the vendored set
-   also carries — those arrived verbatim from prod and are what prod happened to have, not a family
-   the readme licenses new members of. The sheet behind is an open band rather than a second solid
-   square, so the two read as two sheets at 18px instead of one blot. */
+/* §57 — the copy affordance beside an address. Drawn **filled**, joining the main set rather
+   than the four outline glyphs: outline is a closed family here (see `CalendarIcon`), and a lone
+   new mark takes the set's default treatment. The sheet behind is an open band rather than a
+   second solid square, so the two read as two sheets at 18px instead of one blot. */
 export function CopyIcon(props: GlyphProps) {
   return (
     <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -266,10 +264,9 @@ export function CopyIcon(props: GlyphProps) {
   );
 }
 
-/* §20 — react-select's own clear/remove cross, the glyph the app's `Select` draws on a multi
-   value and on the clear indicator. It was inlined inside `Select.jsx`, which is where it had
-   to be duplicated from the moment `Chip` was promoted out of that file. Moved here unchanged;
-   `size` becomes the `width`/`height` pair every other glyph here takes. */
+/* §20 — the clear/remove cross, drawn on a `Chip` and on `Select`'s clear indicator. It lives
+   here rather than inside either of them, because the moment `Chip` became a component of its
+   own a cross defined in `Select` would have had to be copied into it. */
 export function CrossIcon(props: GlyphProps) {
   return (
     <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" focusable="false" style={{ display: 'inline-block', lineHeight: 1 }} {...props}>

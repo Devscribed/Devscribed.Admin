@@ -7,16 +7,16 @@ export interface TableColumn<Row = any> {
   render?: (row: Row) => React.ReactNode;
   /** Flex ratio. Defaults to an equal share, as in source. */
   flex?: number;
-  /** Defaults to prod's positional rule: first left, last right, everything between centred. */
+  /** Defaults to the positional rule: first left, last right, everything between centred. */
   align?: 'flex-start' | 'center' | 'flex-end';
-  /** Defaults to 96 on the last column — prod's actions column, §60 — and none elsewhere. */
+  /** Defaults to 96 on the last column — the actions column, §60 — and none elsewhere. */
   maxWidth?: number | 'none';
 }
 
 export interface TableProps<Row = any> extends Omit<React.HTMLAttributes<HTMLDivElement>, 'rows'> {
-  /** Strings are prod's own shape; objects carry alignment and a renderer. */
+  /** A string is just a heading; an object carries alignment, width and a renderer. */
   columns?: (string | TableColumn<Row>)[];
-  /** Arrays of cells (prod's shape), or the records themselves when columns say how to read them. */
+  /** Arrays of cells, or the records themselves when the columns say how to read them. */
   rows?: Row[] | React.ReactNode[][];
   /** A string names the field to read; a function reads the row. Falls back to the index. */
   rowKey?: string | ((row: Row) => string | number);
@@ -25,29 +25,26 @@ export interface TableProps<Row = any> extends Omit<React.HTMLAttributes<HTMLDiv
   /** Turns each row into a real anchor. A string applies to every row. */
   rowHref?: string | ((row: Row) => string | null | undefined);
   onRowClick?: (row: Row, event: React.MouseEvent) => void;
-  /** Row indices to render grayscale/disabled (matches the source's inactive-member styling). */
+  /** Row indices to render grayscale and unclickable — a removed member, an archived record. */
   disabledRowIds?: number[];
   /** §34 — dims the rows and sets `aria-busy` together, for a list being refiltered in place.
    *  The rows stay and stay clickable; only the header is left alone, because it did not change. */
   busy?: boolean;
   /** §34 — drops the header row, for a short grouped list already named by the surface it sits in. */
   hideHeader?: boolean;
-  /** §34 — a node in the row position after the last row, centred. The infinite-scroll load-more
-   *  indicator, which prod renders inside the table rather than as a control beneath it. */
+  /** §34 — a node in the row position after the last row, centred: the load-more indicator,
+   *  which belongs inside the table rather than as a control beneath it. */
   footer?: React.ReactNode;
 }
 
-/* Blue's positional rule: the first column reads left, the last reads right and is capped for
-   the actions it holds in prod, everything between is centred. A column that says otherwise
-   says so itself.
+/* The positional rule: the first column reads left, the last reads right and is capped for the
+   actions it holds, everything between is centred. A column that wants otherwise says so itself.
 
-   §60 — the cap is 96, where blue measured 80. Prod's actions column holds a 32px kebab under a
-   header that is never read, so 80px was measured off the *content* and the label was free to
-   clip behind it. Ours is a real column heading in blue's own 16px semibold, and `Actions` is
-   62px of it: at 80px, minus the 12px of padding on each side, every list screen in the app
-   drew `Actio…`. 96 is the first step that fits the word blue itself put there, and it is the
-   only column in the table whose width nothing else depends on — the flex share of every other
-   column is unchanged, because this one was already at its cap and still is. */
+   §60 — the cap is 96. A column holding a 32px kebab needs only 80, but the heading over it is
+   a real 16px semibold word, and `Actions` is 62px of it: at 80px, minus 12px of padding on each
+   side, every list screen drew `Actio…`. 96 is the first step that fits the word. It is also
+   the one column whose width nothing else depends on — every other column's flex share is
+   unchanged, because this one was already at its cap and still is. */
 const ACTIONS_MAX_WIDTH = 96;
 
 function geometry(col: TableColumn, i: number, count: number): React.CSSProperties {
@@ -62,21 +59,22 @@ function geometry(col: TableColumn, i: number, count: number): React.CSSProperti
 }
 
 /**
- * Table — row/column table recreated from components/shared/tables (infiniteScrollTable
- * styling): sticky light-gray header, 70px rows, hover tint, optional disabled/grayscale rows.
+ * Table — a sticky recessed header over 70px rows, with a hover tint and optional
+ * grayscale rows.
  *
- * §18 — prod builds these from a typed column list; the `string[]` / `ReactNode[][]` pair blue
- * measured is what a hand-written kit screen passes, not an API a screen with real records can
- * use. Both shapes work: a column may be a string or an object carrying `label`, alignment and
- * a `render`, and a row may be an array of cells or the record itself.
+ * §18 — it takes records, not cells. A `string[]` of headings over a `ReactNode[][]` of cells
+ * is what a hand-written demo passes; a screen with real rows needs to say how a column is
+ * read, which row a `data-testid` belongs to and where a row goes. Both shapes work — a column
+ * may be a string or an object carrying `label`, alignment and a `render`, and a row may be an
+ * array of cells or the record itself.
  *
- * `rowHref` and `onRowClick` are the other half of that. Prod's rows all navigate, so the
- * pointer cursor measured as unconditional; a list that goes nowhere must not claim otherwise.
- * A linked row is a real anchor, so middle-click and copy-address work.
+ * `rowHref` and `onRowClick` are the other half. A linked row is a real anchor, so middle-click
+ * and copy-address work, and the pointer cursor is conditional: a list that goes nowhere must
+ * not claim otherwise.
  */
 export function Table<Row = any>({
   columns = [], rows = [], rowKey, rowTestId, rowHref, onRowClick, disabledRowIds = [],
-  /* §34 — three forms prod has and blue never exposed.
+  /* §34 — three states a list has that a static table does not.
 
      `busy` dims the rows and sets `aria-busy` **together**, so a filterable list gets one
      treatment instead of each screen dimming its own body and forgetting the announcement. The
@@ -84,11 +82,10 @@ export function Table<Row = any>({
      under the reader for no information at all. The header does not dim — it did not change.
 
      `hideHeader` is for a short grouped list whose columns are self-evident and whose name is
-     already above it. Prod's own tables all carry headers, because prod's own tables are all one
-     list of one thing.
+     already above it. A table that is the only list on its page keeps its header.
 
-     `footer` is the infinite-scroll load-more row, which prod renders *inside* the table
-     (`.loadNextTableIndicator`, centred) rather than as a control beneath it. */
+     `footer` is the load-more row, drawn *inside* the table rather than as a control beneath
+     it — see the note where it renders. */
   busy, hideHeader, footer,
   style, ...rest
 }: TableProps<Row>) {
@@ -108,11 +105,10 @@ export function Table<Row = any>({
         <div style={{ display: 'flex', width: '100%', height: 70, padding: '0 16px', backgroundColor: 'var(--surface-sunken)', borderBottom: '1px solid var(--color-gray-lighter)', position: 'sticky', top: 0, zIndex: 1 }}>
           {cols.map((col, i) => (
             <div key={i} style={{ ...geometry(col, i, cols.length), fontWeight: 'var(--font-weight-semibold)', fontSize: 16, lineHeight: '24px' }}>
-              {/* §48 — the label truncates, as every body cell already did. The cell is a flex
-                  box, so `text-overflow` has to sit on the child rather than on the cell: an
-                  anonymous flex item is not a line box and never ellipsises. Without this a
-                  header narrower than its own word paints straight over its neighbour, which
-                  is the one place blue's table had no clipping at all. */}
+              {/* §48 — the heading truncates, as every body cell already does. The cell is a
+                  flex box, so `text-overflow` has to sit on the child rather than on the cell:
+                  an anonymous flex item is not a line box and never ellipsises. Without this a
+                  heading narrower than its own word paints straight over its neighbour. */}
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
                 {col.label}
               </span>
@@ -133,11 +129,10 @@ export function Table<Row = any>({
             data-testid={value(rowTestId, row)}
             onClick={onRowClick && !disabled ? (e: React.MouseEvent) => onRowClick(row, e) : undefined}
             style={{
-              /* §48 — `minHeight`, where prod measured a flat `height: 70`. Every row prod has
-                 holds one line per cell, so the two are identical there and blue's 70px is
-                 untouched. A cell of ours can hold two — a title over its category chips, a
-                 name over an email — and a fixed height does not contain that content, it lets
-                 it paint over the row beneath. The row grows instead. */
+              /* §48 — `minHeight`, not a flat height. A cell may hold two lines — a title over
+                 its category chips, a name over an email — and a fixed height does not contain
+                 that content, it lets it paint over the row beneath. The row grows instead, and
+                 a one-line row is still exactly 70px. */
               /* The 8px is only ever visible on a row that has grown: `box-sizing: border-box`
                  means a one-line row is still exactly 70px, padding included. Without it a
                  wrapped cell sits flush against both borders. */
@@ -150,7 +145,7 @@ export function Table<Row = any>({
               transition: 'opacity var(--duration-fast) var(--ease-standard)',
               cursor: disabled ? 'default' : clickable ? 'pointer' : 'default',
               color: 'var(--text-primary)', textDecoration: 'none',
-              /* .disabledRow also blocks interaction, hover included */
+              /* A disabled row is not hoverable either: the tint would promise a click. */
               pointerEvents: disabled ? 'none' : undefined,
             }}
             onMouseEnter={(e: React.MouseEvent<HTMLElement>) => { if (!disabled) e.currentTarget.style.backgroundColor = 'var(--color-row-hover)'; }}
@@ -165,9 +160,8 @@ export function Table<Row = any>({
         );
       })}
       {footer && (
-        /* Inside the table, not beneath it: prod's infinite-scroll tables put the next-page
-           indicator in the row position the next page will occupy, which is what makes its
-           arrival replace it rather than push it. */
+        /* Inside the table, not beneath it: the indicator sits in the row position the next
+           page will occupy, which is what makes its arrival replace it rather than push it. */
         <div style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-6)' }}>
           {footer}
         </div>

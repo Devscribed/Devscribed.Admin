@@ -7,8 +7,8 @@ export interface SearchInputProps extends React.InputHTMLAttributes<HTMLInputEle
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   /** Called by the clear cross, which only renders while the field has a value. */
   onClear?: () => void;
-  /** Bordered field. Defaults to `false` (borderless), as in source — every real call site in
-   *  the app passes `outlined`. */
+  /** Bordered field. `false` is the borderless variant, for a search that sits inside a
+   *  surface that already has an edge. */
   outlined?: boolean;
   /** §26 — style for the 44px positioning root; `...rest` and `style` address the `<input>`. */
   wrapperStyle?: React.CSSProperties;
@@ -26,25 +26,24 @@ if (typeof document !== 'undefined' && !document.getElementById('ds-search-input
 }
 
 /**
- * SearchInput — components/shared/forms/SearchForm/SearchInput. `outlined` (the variant every
- * call site in the app passes) gives the 1.5px field with the magnifier at 10px, an inset hover
- * shadow and a blue focus ring; the component's own default is the borderless variant, with the
- * icons flush at the edges — same default as in source.
- * SearchInput.module.scss: .root{width:100%;height:44px}
- * .searchIconContainer{20x20; svg 16x16 fill $appGray}
- * input{padding:10px 30px; border:none; 14px; caret+color $appBlack}
- * .outlinedInput input{padding:10px 30px 10px 40px; border:1.5px solid $appGrayLight;
- *   radius:8px; :hover{box-shadow:0 0 3px 0 rgba(0,0,0,.1) inset};
- *   :focus{border-color:$appBlue; box-shadow:inset 0 2px 2px rgb(0 0 0/5%), 0 0 10px rgb(1 104 250/50%)}}
- * .closeIconContainer{20x20; right:0 (10px when outlined); svg 12x12 fill $appGray} — rendered
- * only while the field has a value.
+ * SearchInput — a 44px field with a magnifier at the leading edge and, once there is something
+ * to clear, a cross at the trailing one.
+ *
+ * `outlined` is the standalone field: a 1.5px border at `--radius-l`, both glyphs inset 10px,
+ * an inset shadow on hover and the system's focus ring. Without it the field is borderless and
+ * the glyphs sit flush at the edges — for a search that lives inside a surface that already
+ * has an edge of its own.
+ *
+ * The focus glow here is 10px rather than the 7px every other field takes. A search field is
+ * usually the only control in its row, with nothing beside it for the wider glow to crowd.
  */
 export function SearchInput({
   placeholder = 'Search…', value, onChange, onClear, outlined = false,
-  /* §26 — blue forwards nothing, so `data-testid`, `aria-label` and `name` never reached the
-     `<input>`. `wrapperStyle` is separate on purpose: the root is the 44px positioning box the
-     icons are pinned to, and a caller placing this field in a row is sizing that box, not the
-     input inside it. */
+  /* §26 — `...rest` and `style` address the `<input>`, so `data-testid`, `aria-label` and
+     `name` land where a test and a reader look for them. `wrapperStyle` is separate on purpose:
+     the root is the 44px positioning box the glyphs are pinned to, and a caller placing this
+     field in a row is sizing that box, not the input inside it. `TextInput` (§35) and `Select`
+     (§21) carry the same split, for the same reason. */
   wrapperStyle, style, clearLabel = 'Clear search', ...rest
 }: SearchInputProps) {
   const [focused, setFocused] = React.useState(false);
@@ -77,7 +76,7 @@ export function SearchInput({
           backgroundColor: outlined ? '#fff' : 'transparent', cursor: 'text', outline: 'none',
           borderRadius: outlined ? 'var(--radius-l)' : 0,
           border: outlined ? `1.5px solid ${focused ? 'var(--color-blue)' : 'var(--border-default)'}` : 'none',
-          /* the search field's focus glow is 10px, not the 7px used by .form-control */
+          /* 10px, not the 7px every other field takes — see the note above. */
           boxShadow: outlined ? (focused ? 'inset 0 2px 2px rgb(0 0 0 / 5%), 0 0 10px rgb(1 104 250 / 50%)' : hover ? 'inset 0 0 3px 0 rgba(0, 0, 0, 0.1)' : 'none') : 'none',
           padding: outlined ? '10px 30px 10px 40px' : '10px 30px',
           transition: 'var(--transition-border-focus)',
@@ -85,8 +84,8 @@ export function SearchInput({
         }}
       />
       {!!(value && String(value).length) && (
-        /* §26 — prod's clear cross is a `<span onClick>`: a control that empties the field and
-           cannot be reached without a pointer. */
+        /* §26 — a real `<button>` with a name. It empties the field, which is an action, and
+           an action reachable only by pointer is one a keyboard user cannot take. */
         <button type="button" aria-label={clearLabel} onClick={handleClear} style={{ position: 'absolute', right: outlined ? 10 : 0, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, color: 'var(--text-secondary)', cursor: 'pointer' }}>
           <CloseIcon width="12" height="12" aria-hidden />
         </button>

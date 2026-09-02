@@ -23,16 +23,14 @@ export interface AccountMenuProps extends React.ButtonHTMLAttributes<HTMLButtonE
 const DEFAULT_ITEMS = ['My account', 'My organization', 'Log out'];
 
 /**
- * Avatar + name in the navbar, with the account dropdown.
- * UserIcon renders at its own 46x46 — the .avatar{45x45} rule in AccountMenu.module.scss is
- * never applied to it. .menuArrow is a 14px box around the 12x8 ArrowIcon, rotated 180deg,
- * fill $appGray -> $appBlue while the whole wrapper is hovered.
+ * Avatar + name in the navbar, with the account dropdown. `UserIcon` renders at its own 46x46;
+ * the arrow is a 14px box around the 12x8 `ArrowIcon`, rotated 180deg, turning from
+ * `--text-secondary` to `--color-blue` while the whole wrapper is hovered.
  *
- * §16 — prod's trigger is a `<div onClick>` wrapping the popover, so the menu cannot be opened
- * from a keyboard, cannot be left with `Escape`, is announced as nothing, and re-toggles itself
- * when an item inside it is clicked. The paint is unchanged; the control under it is a real
- * button and the list is a real menu. Items may still be plain strings — prod's shape — or
- * objects carrying their own `testId` and handler.
+ * §16 — the trigger is a real `<button>` and the list a real `role="menu"`. A `<div onClick>`
+ * wrapping a popover cannot be opened from a keyboard, cannot be left with `Escape`, is
+ * announced as nothing, and re-toggles itself when an item inside it is clicked. Items are
+ * plain strings, or objects carrying their own `testId` and handler.
  */
 export function AccountMenu({
   name = 'Alex Chen', items = DEFAULT_ITEMS, onNavigate, nameTestId, menuTestId, style, ...rest
@@ -78,8 +76,8 @@ export function AccountMenu({
       {open && (
         <div role="menu" data-testid={menuTestId} style={{ position: 'absolute', right: 0, top: 50, minWidth: 160, padding: '5px 0', backgroundColor: '#fff', borderRadius: 6, boxShadow: 'var(--shadow-popover)', zIndex: 1000 }}>
           <ul style={{ margin: 0, padding: 0, listStyle: 'none', overflow: 'hidden' }}>
-            {/* .popover li — hover paints the li (#f8f8f8 + $appBlue text) and the link
-               inherits the navbar's 16px body size; only padding and colour are set. */}
+            {/* Hover paints the row, not the label: the background lifts to #f8f8f8 and the
+               ink turns blue together. The size is inherited from the navbar's 16px body. */}
             {entries.map((entry) => (
               <li key={entry.label} style={{ margin: '0 5px', borderRadius: 4, textAlign: 'left', whiteSpace: 'nowrap' }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = '#f8f8f8'; (e.currentTarget.firstElementChild as HTMLElement).style.color = 'var(--color-blue)'; }}

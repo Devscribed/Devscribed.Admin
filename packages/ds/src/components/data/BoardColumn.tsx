@@ -1,9 +1,8 @@
 import React from 'react';
 
 /**
- * §43 — **designed, not measured**, though the shape is one blue already draws: a
- * `--surface-sunken` well holding white cards, which is `AppShell`'s own arrangement one
- * level down. The name is a label *on* that ground, not a card title above it.
+ * §43 — a `--surface-sunken` well holding white cards, which is `AppShell`'s own arrangement
+ * one level down. The name is a label *on* that ground, not a card title above it.
  *
  * Presentational and drag-mechanical only. The column converts a pointer position into a
  * **slot index** and hands it back; which columns exist, what a slot means, and what a drop
@@ -36,19 +35,19 @@ export interface BoardColumnProps
 }
 
 /**
+/**
  * BoardColumn — §43. One column of a board: a head carrying its name and count, and a
  * scrolling body of cards with a card-sized placeholder holding open the gap a drop would
  * land in.
  *
- * **Designed, not measured**, like `BoardCard` (§42) — but the shape is one blue already
- * draws twice. The whole column is a `--surface-sunken` well holding white cards, which is
- * `AppShell`'s own arrangement one level down: blue's single answer to "a container of
- * things" is a recessed ground with white panels on it, and a kanban column is exactly that.
+ * The whole column is a `--surface-sunken` well holding white cards, which is `AppShell`'s own
+ * arrangement one level down: the system's single answer to "a container of things" is a
+ * recessed ground with white panels on it, and a board column is exactly that.
  *
  * **The head sits inside the well rather than above it in a card of its own.** The first
  * version of this entry wrapped the well in a `Card` (§12) and gave it `Card`'s title row at
- * blue's headline-6 over a hairline — five bordered white boxes each containing a grey box,
- * with a 24px heading on top of a 14px card. That is a container drawn twice. A column is not
+ * headline-6 over a hairline — five bordered white boxes each containing a grey box, with a
+ * 24px heading on top of a 14px card. That is a container drawn twice. A column is not
  * a card; it is the ground the cards are on, and its name is a label on that ground: the
  * label takes `--font-size-s` at `--font-weight-medium`, which is exactly the weight a
  * `BoardCard`'s own name takes, and the count sits beside it rather than pushed to the far
@@ -116,8 +115,9 @@ export function BoardColumn({
         // In a scrolling flex column an empty box is the first thing to be squeezed.
         flexShrink: 0,
         borderRadius: 'var(--radius-l)',
-        /* The gap is the well showing through, outlined in the one emphasis colour blue has.
-           A tinted fill would be a second object on a board that must only ever show one. */
+        /* The gap is the well showing through, outlined in the one emphasis colour the palette
+           has. A tinted fill would be a second object on a board that must only ever show
+           one. */
         backgroundColor: 'var(--surface-sunken)',
         border: '1px dashed var(--action-primary)',
         boxSizing: 'border-box',

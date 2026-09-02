@@ -19,15 +19,16 @@ export interface NavbarProps extends React.HTMLAttributes<HTMLElement> {
 }
 
 /**
- * Top bar of the app shell: mini tracker on the left, account menu on the right.
- * PageTitle is commented out in prod's Navbar, so there is no heading here.
+ * Top bar of the app shell: mini tracker on the left, account menu on the right. There is
+ * deliberately no page heading here — the page owns its own `PageTitle`, one `<h1>` per screen.
  * Pass `children` to put something between the two (it takes the free space).
  *
- * §15 — the height moves to `.ds-navbar` because prod is 80px on the desktop breakpoint and
- * 60px below it (`--layout-navbar-height-*`), and a media query cannot be an inline style.
- * `tracker` and `account` exist because prod is a time tracker and blue measured the one
- * navbar it had: a product with no timesheets has no counter to show, and the account row is
- * where a consuming app needs its own items and its own test hooks.
+ * §15 — the height lives in `.ds-navbar` rather than inline, because it is 80px above
+ * `--layout-breakpoint-desktop` and 60px below it (`--layout-navbar-height-*`) and a media
+ * query cannot be an inline style.
+ *
+ * `tracker` and `account` are both replaceable: a product with no timesheets has no counter to
+ * show, and the account row is where a screen needs its own items and its own test hooks.
  */
 export function Navbar({
   trackerCounter = '00:00:00', onOpenTracker, tracker = true, onMenuClick,

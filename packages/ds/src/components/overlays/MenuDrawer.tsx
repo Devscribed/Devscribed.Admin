@@ -5,9 +5,9 @@ export interface MenuDrawerProps extends React.HTMLAttributes<HTMLDivElement> {
   open: boolean;
   onClose: () => void;
   /**
-   * §51 — where the panel and its scrim start. Defaults to the shell's navbar height,
-   * which switches with the shell's own breakpoint; pass a value only for a host whose
-   * header is not that navbar.
+   * §51 — where the panel and its scrim start. Defaults to the shell's navbar height, which
+   * switches with the shell's own breakpoint; pass a value only for a host whose header is not
+   * that navbar.
    */
   top?: number | string;
   /** §51 — accessible name for the close button, which the component draws itself. */
@@ -19,23 +19,18 @@ export interface MenuDrawerProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 /**
- * MenuDrawer — right-edge slide-in drawer recreated from components/shared/MenuDrawer.
+ * MenuDrawer — the right-edge slide-in panel.
  *
- * §51 — blue pins the panel at `top: 60px`, which is not a drawer offset at all: it is
- * `--layout-navbar-height-mobile`, written as a number because the recreation had one
- * viewport to recreate. Above 1200px this shell's navbar is 80px (§14), so the panel and
- * its scrim covered the last 20px of the header they were meant to hang from. The default
- * now tracks the shell's own navbar across the shell's own breakpoint — both tokens and
- * the switch already exist, and `base.css` reads them rather than naming a third value —
- * and `top` overrides it for a host whose header is something else.
+ * §51 — **it hangs from the shell's navbar, not from a number.** A hard-coded `top: 60px` is
+ * the mobile navbar height written as a literal, and above `--layout-breakpoint-desktop` the
+ * navbar is 80px (§14) — so the panel and its scrim covered the last 20px of the header they
+ * were meant to hang from. The default tracks `--layout-navbar-height-*` across that same
+ * breakpoint, in `base.css` because a breakpoint cannot be an inline style, and `top` overrides
+ * it for a host whose header is something else.
  *
- * The rest is the same omission in the same place. Blue's drawer forwards nothing, so it
- * cannot be tagged or named; its close button is an icon with no accessible name; nothing
- * moves focus into a panel that has just covered the page, and `Escape` does not leave it.
- * `AppShell` needed all four the moment its rail *became* this drawer (§14) and got them
- * there — this is the same treatment, on the component that lends it the geometry, and
- * deliberately the same three rules rather than `Modal`'s four: like the rail, this panel
- * is one a reader may Tab out of.
+ * Focus moves in when it opens and returns to the opener when it closes, and `Escape` leaves.
+ * That is deliberately **three** rules rather than `Modal`'s four: focus is not trapped, because
+ * like the shell's own rail this is a panel a reader may Tab out of into the page behind it.
  */
 export function MenuDrawer({
   open,
@@ -54,9 +49,9 @@ export function MenuDrawer({
   const opener = React.useRef<HTMLElement | null>(null);
   /* Callers pass a fresh arrow every render; keeping the latest in a ref is what lets the
      effect below depend on `open` alone rather than re-running — and re-moving focus — on
-     every render the drawer happens to be open for. §14's own note, and it matters more
-     here: the state this panel edits lives in the screen that renders it, so it re-renders
-     on every keystroke inside it. */
+     every render the drawer happens to be open for. §61's argument, and it matters more here:
+     the state this panel edits lives in the screen that renders it, so it re-renders on every
+     keystroke inside it. */
   const close = React.useRef(onClose);
   close.current = onClose;
 
@@ -65,9 +60,9 @@ export function MenuDrawer({
     opener.current = document.activeElement as HTMLElement | null;
     const first = panel.current && panel.current.querySelector<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
     if (first) first.focus({ preventScroll: true });
-    /* Escape on the bubble, and only when nothing inside has claimed it — a `Select` with
-       an open listbox owns the key first and says so. §8's correction, which every
-       dialog-shaped thing now takes. */
+    /* Escape on the bubble, and only when nothing inside has claimed it — a `Select` with an
+       open listbox owns the key first and says so. §8's rule, which every dialog-shaped thing
+       in the system takes. */
     const escape = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented && close.current) close.current(); };
     document.addEventListener('keydown', escape);
     return () => {
@@ -85,13 +80,12 @@ export function MenuDrawer({
         {...rest}
         ref={panel}
         className="ds-menu-drawer"
-        /* §51 — the panel is never unmounted, only translated off-screen, so everything in
-           it stays in the tab order, in the accessibility tree and on the page while it is
-           shut. Blue has no keyboard to have noticed with. `data-open` drives the slide and
-           a `visibility` step that lands after it (`base.css`), exactly as §14's rail does;
-           `inert` covers the 300ms in between, where the panel is still painted and already
-           on its way out. Unmounting the children would answer all of it and lose the
-           animation. */
+        /* §51 — the panel is never unmounted, only translated off-screen, so without help
+           everything in it stays in the tab order and in the accessibility tree while it is
+           shut. `data-open` drives the slide and a `visibility` step that lands after it
+           (`base.css`), exactly as §14's rail does; `inert` covers the 300ms in between, where
+           the panel is still painted and already on its way out. Unmounting the children would
+           answer all of it and lose the animation. */
         data-open={open ? '' : undefined}
         inert={!open}
         style={{ ...(top === undefined ? null : { top }), ...style }}

@@ -32,16 +32,15 @@ export interface AppShellProps extends Omit<React.HTMLAttributes<HTMLDivElement>
  * The well is the one place page padding (25px) and the page background (#f8fafc) are set —
  * screens render straight into `children` and own nothing outside their own content.
  *
- * §14 — prod's layout is a fixed 290px rail beside a 60/80px navbar, switching at 1200px, and
- * every value that switch needs is already a token (`--layout-*`, `--shadow-drawer`). Only the
- * switch itself was never measured, because a recreation of one viewport has one viewport to
- * recreate. It lives in `base.css` rather than here: a media query cannot be an inline style,
- * which is the same reason `PageTitle` reaches for a class.
+ * §14 — a fixed 290px rail beside a 60/80px navbar, switching at `--layout-breakpoint-desktop`.
+ * Every value in that switch is a token (`--layout-*`, `--shadow-drawer`), and the switch itself
+ * lives in `base.css` rather than here: a media query cannot be an inline style, which is the
+ * same reason `PageTitle` reaches for a class.
  *
- * Below the breakpoint the rail *becomes* the drawer — `MenuDrawer`'s own geometry, applied to
- * the node that is already holding the navigation. Wrapping a second copy in a real
- * `MenuDrawer` would put two of every nav row in the document, and with them two of every
- * `data-testid` and two of every `aria-current`.
+ * Below the breakpoint the rail *becomes* the drawer — `MenuDrawer`'s geometry, applied to the
+ * node that is already holding the navigation. Wrapping a second copy in a real `MenuDrawer`
+ * would put two of every nav row in the document, and with them two of every `data-testid` and
+ * two of every `aria-current`.
  */
 export function AppShell({
   section, sub, onSelect, onLogoClick,
@@ -58,8 +57,8 @@ export function AppShell({
 
   /* §14 — the drawer sits before the navbar in document order, so a reader who opened it with
      the hamburger would Tab *past* the navigation they just asked for. Focus moves in with it
-     and comes back out when it closes, and Escape leaves — the same three rules `Modal` needed
-     for the same reason (§8). Prod has no drawer to have measured any of this on. */
+     and comes back out when it closes, and Escape leaves — the same three rules `Modal` needs
+     for the same reason (§8). */
   React.useEffect(() => {
     if (!menuOpen) return undefined;
     opener.current = document.activeElement as HTMLElement | null;

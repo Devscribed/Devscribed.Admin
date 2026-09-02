@@ -2,9 +2,9 @@ import React from 'react';
 import { isKeyboardFocus } from '../core/focus-visible';
 
 /**
- * §45 — the object form, beside prod's `string[]`. `Table` (§18) took column objects for the
- * same reason and in the same shape: the pair blue measured is what a hand-written kit screen
- * passes, not an API a real screen can use.
+ * §45 — the object form, beside a plain `string[]`. `Table` (§18) takes column objects for the
+ * same reason and in the same shape: a bare list of labels is what a demo passes, and a real
+ * strip needs a value distinct from its label, a test id, and the panel each tab controls.
  *
  * There is no `count` — a count composes into `label`, and a strip that grew one would then
  * need a badge for it, and an icon.
@@ -25,7 +25,7 @@ export interface PageTabsProps extends Omit<React.HTMLAttributes<HTMLDivElement>
   /** The chosen tab's value. Omit to let the component hold its own. */
   active?: string;
   onChange?: (value: string) => void;
-  /** §45 — accessible name for the tablist. Blue draws the row and names nothing. */
+  /** §45 — accessible name for the tablist. A strip of tabs is a control, and named. */
   label?: string;
 }
 
@@ -38,25 +38,23 @@ interface TabButtonProps {
   children?: React.ReactNode;
 }
 
-/** A tab is a bare string, or an object carrying the parts prod never had to name. */
+/** A tab is a bare string, or an object carrying the parts a string cannot say. */
 const valueOf = (tab: string | TabItem): string => (typeof tab === 'object' && tab !== null ? tab.value : tab);
 const labelOf = (tab: string | TabItem): React.ReactNode => (typeof tab === 'object' && tab !== null ? tab.label : tab);
 
 /**
- * PageTabs — underline tab row recreated from components/shared/PageTabs.
+ * PageTabs — the underline tab row.
  *
- * §45 — blue's tabs were `<a href="#">`, which a screen reader announces as links that go
- * nowhere, and clicking one calls `preventDefault` and swaps a panel: they are a control that
- * chooses what is shown, not a set of destinations. Prod gets away with it because prod's tab
- * rows are three words on a members screen and nothing arrives at them by keyboard. They are
- * `role="tab"` buttons now, inside a `role="tablist"`, with `aria-selected`, `aria-controls`,
- * a single tab stop and arrow keys — the semantics the role promises the moment it is claimed,
- * which is §31's argument on `ToggleButton` and §21's on `Select`.
+ * §45 — **tabs are buttons, not links.** A tab chooses what is shown; it is not a destination,
+ * and an `<a href="#">` that calls `preventDefault` and swaps a panel is announced as a link
+ * that goes nowhere. These are `role="tab"` buttons inside a `role="tablist"`, with
+ * `aria-selected`, `aria-controls`, a single tab stop and arrow keys — the semantics the role
+ * promises the moment it is claimed, which is §31's argument on `ToggleButton` and §21's on
+ * `Select`.
  *
- * The object form is §18's shape on `Table`: prod builds these from a `string[]` because
- * prod's tab labels *are* strings, and a strip whose items need a value distinct from their
- * label, a node for a label, a test id, or the id of the panel they control cannot say so.
- * Both forms still work and the paint is untouched — every value below is blue's own.
+ * The object form is §18's shape on `Table`: a bare `string[]` cannot give a tab a value
+ * distinct from its label, a node for a label, a test id, or the id of the panel it controls.
+ * Both forms work.
  *
  * There is deliberately **no `count` prop**. A count composes into the item's `label` node,
  * and a strip that grew one would then need a badge for it, and an icon.
@@ -65,7 +63,7 @@ export function PageTabs({
   tabs = [],
   active,
   onChange,
-  /** §45 — the tablist's accessible name. Blue draws the row and names nothing. */
+  /** §45 — the tablist's accessible name. A strip of tabs is a control, and named. */
   label,
   style,
   ...rest
@@ -143,8 +141,8 @@ function TabButton({ value, isActive, testId, controls, onSelect, children }: Ta
       onFocus={(event) => setFocused(isKeyboardFocus(event.currentTarget))}
       onBlur={() => setFocused(false)}
       style={{
-        /* Prod's `<a>` carried no background, border or padding of its own; a button does, so
-           those are zeroed and only prod's own three values are set. */
+        /* A `<button>` brings a background, a border and padding of its own; the tab has none
+           of those, so they are zeroed and only the row's three real values are set. */
         background: 'none',
         border: 0,
         paddingLeft: 0,
@@ -154,16 +152,15 @@ function TabButton({ value, isActive, testId, controls, onSelect, children }: Ta
         marginRight: 20,
         cursor: 'pointer',
         /* §58 — a column, so the label sits at the top of the box and the bar under it.
-           A `<button>` centres its content, and blue's active tab is 16px taller than an
-           inactive one, so every inactive label was pushed 8px down and every label in the
-           row moved when the choice changed. Both halves are fixed here: the column stops
-           the centring, and the bar below is always rendered. */
+           A `<button>` centres its content, and a chosen tab is 16px taller than an unchosen
+           one, so centring pushed every unchosen label 8px down and moved the whole row when
+           the choice changed. Both halves are fixed here: the column stops the centring, and
+           the bar below is always rendered. */
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'stretch',
-        /* §45 — the source declares no `:focus` state, which is survivable while nothing is
-           expected to arrive by keyboard. A tablist is not. `--shadow-focus-input` is the ring
-           every other blue control takes. */
+        /* §45 — a tablist is walked by keyboard, so it needs a visible focus. It takes
+           `--shadow-focus-input`, the ring every control in the system uses. */
         boxShadow: focused ? 'var(--shadow-focus-input)' : undefined,
         borderRadius: focused ? 'var(--radius-s)' : undefined,
       }}

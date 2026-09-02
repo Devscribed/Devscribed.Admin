@@ -1,6 +1,8 @@
-/* Teammerly (Teamplay) — Color tokens
-   Extracted verbatim from src/styles/variables.scss and component .module.scss
-   files in the attached teamplay-react-app codebase. */
+/* Colour tokens.
+
+   The base palette is the raw values; **nothing outside this file should name one.** Components
+   reach for the semantic aliases below it, so a surface, a border and an action can move
+   independently of the hue they happen to share today. */
 
 :root {
   /* Base palette */
@@ -24,7 +26,8 @@
   --color-error: #D80027;
   --color-info: #00B6FF;
 
-  /* Structural / border colors (literal rgba values from source) */
+  /* Structural colours. These are the translucent ones, and they are translucent on purpose:
+     each sits over a surface it must not fully replace. */
   --color-border-subtle: rgba(72, 94, 144, 0.16);
   --color-row-hover: rgba(211, 211, 211, 0.1);
   --color-overlay-scrim: rgba(0, 0, 0, 0.6);

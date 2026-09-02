@@ -4,7 +4,7 @@ import { SearchInput } from '../forms/SearchInput';
 import type { TabItem } from '../navigation/PageTabs';
 
 export interface TableToolbarProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** §52 — `PageTabs`' own array, object form included (§45). Forwarded whole. */
+  /** `PageTabs`' own array, object form included (§45). Forwarded whole. */
   tabs?: Array<string | TabItem>;
   activeTab?: string;
   onTab?: (tab: string) => void;
@@ -29,18 +29,13 @@ export interface TableToolbarProps extends React.HTMLAttributes<HTMLDivElement> 
 }
 
 /**
- * The row above a list table: tabs on the left, search + actions on the right.
- * Projects, Clients, Members, ToDo, Policies and Holidays all use this exact geometry
- * (20px gaps, 250px search, 20px below).
+ * The row above a list table: tabs on the left, search and actions on the right. One geometry
+ * for every list screen — 20px gaps, a 250px search, 20px of clearance below.
  *
- * §52 — a composition that draws two controls and gives no way to address either. Blue's
- * own list screens never had to: their tabs are three words nothing arrives at by
- * keyboard, and their search is the only field on the page. Ours needs the tablist named
- * (§45 gave `PageTabs` a `label` and this swallowed it), both controls tagged for the
- * test ids every spec lists, and the tabs in the object form §45 added — which already
- * worked at runtime, because this forwards the array whole, and could not be said in the
- * types. Same shape as §16, §21, §37 and §40: the component draws the node, so the
- * component has to take its name.
+ * §52 — it draws two controls, so it has to take both their names. A composition that renders
+ * a tablist and a search field and offers no way to label or tag either leaves every screen
+ * with an unnamed tablist and a field whose only description is its placeholder. Same rule as
+ * §16, §21, §37 and §40: whoever draws the node owns its name and its test id.
  */
 export function TableToolbar({
   tabs, activeTab, onTab,

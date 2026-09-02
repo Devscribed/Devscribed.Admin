@@ -4,14 +4,13 @@ import { CloseIcon } from '../icons/Icon';
 
 export interface InfoBannerProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
-   * `info` and `warning` are blue's own two, unchanged — prod's `warning` paints red, with the
-   * error palette. `error` (§7) is that same treatment under the name that says so, and
-   * `success` (§7) is green, which prod has no banner for.
+   * `info` and `warning`; `error` (§7) is `warning`'s treatment under the name that says what
+   * it means, and `success` (§7) is the green counterpart.
    */
   variant?: 'info' | 'warning' | 'error' | 'success';
   /**
-   * §24 — draws a trailing close button. Prod has none: its banners report a state and go away
-   * when the state does. One reporting an event that already happened cannot.
+   * §24 — draws a trailing close button. A banner reporting a *state* goes away when the state
+   * does and needs none; one reporting an event that already happened has no other way out.
    */
   onDismiss?: () => void;
   /** Accessible name for that button. Defaults to `Dismiss`. */
@@ -19,12 +18,12 @@ export interface InfoBannerProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
 }
 
-/* Blue measured two banners, because prod has two. `info` and `warning` are those, unchanged —
-   note that prod's `warning` paints with the *error* palette, which is why `error` below is the
-   same treatment under the name that says what it is. `success` (§7) has no production
-   precedent: its tint follows the 10%-of-status rule the other two tints already use
-   (--color-info-tint is the info blue at 10%, --color-error-tint the error red at 10%), so the
-   value is derived from blue's own palette rather than picked. */
+/* Four tones, three treatments. `warning` and `error` are the same paint under two names —
+   a warning *is* the error palette here, and `error` is the name that says so.
+
+   Every tint is its status colour at 10%: `--color-info-tint` is the info cyan at 10% and
+   `--color-error-tint` the error red at 10%, so `success`'s green follows the same rule rather
+   than being picked by eye. That 10%-of-status rule is what any tone added later must follow. */
 const variants: Record<string, { line: string; fill: string }> = {
   info: { line: 'var(--status-info)', fill: 'var(--color-info-tint)' },
   warning: { line: 'var(--status-error)', fill: 'var(--color-error-tint)' },
@@ -33,19 +32,19 @@ const variants: Record<string, { line: string; fill: string }> = {
 };
 
 /**
- * InfoBanner — inline callout recreated from components/shared/InfoBanner.
- * `info` uses the info-blue tint; `warning` reuses the error-red tint (as in source).
+ * InfoBanner — an inline callout. `info` takes the info-blue tint; `warning` and `error` share
+ * the error-red one; `success` the green.
  */
 export function InfoBanner({
   variant = 'info',
   children,
-  /* §6 — blue forwards neither `style` nor rest props, so `role="alert"`, `aria-live` and
-     `data-testid` never reached the DOM. Every banner in this app is an announcement. */
+  /* §6 — everything reaches the banner, `role="alert"` and `aria-live` included. A banner is
+     an announcement, and an announcement nothing can announce is decoration. */
   style,
-  /* §24 — prod's banners report a *state*: they are drawn while the thing is true and removed
-     when it stops being. A banner standing in for a toast reports an *event*, which nothing
-     later makes untrue, so it needs a way to be put away. The control is `IconButton` (§10),
-     which is blue's own Modal-close treatment, at the banner's trailing edge. */
+  /* §24 — a banner reporting a *state* is drawn while the thing is true and removed when it
+     stops being, and needs no control. One reporting an *event* — which nothing later makes
+     untrue — has no way to leave, so it takes a dismiss. The control is `IconButton` (§10) at
+     the banner's trailing edge. */
   onDismiss,
   dismissLabel = 'Dismiss',
   ...rest

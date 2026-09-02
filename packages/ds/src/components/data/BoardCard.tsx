@@ -4,10 +4,8 @@ import { Badge } from '../core/Badge';
 import { FlagIcon } from '../icons/Icon';
 
 /**
- * §42 — **designed, not measured.** Teamplay has no kanban, so nothing here was reproduced
- * from production; the surface is `Card`'s treatment (§12) and the hover is
- * `NavigationCard`'s, which §12 declined precisely because a static container is not a
- * control. This one is.
+ * §42 — the surface is `Card`'s treatment (§12) and the hover is the pair §12 declined,
+ * precisely because a static container is not a control. This one is.
  */
 export interface BoardCardProps
   extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onDragStart' | 'onDragEnd' | 'onKeyDown'> {
@@ -45,10 +43,10 @@ export interface BoardCardProps
 }
 
 /**
- * Blue's motion rule is "minimal and utilitarian" — 0.1–0.3s transitions and nothing else —
- * and everything this card animates is decoration: the travelling placeholder is what
- * carries the information, so a visitor who has asked for less motion loses nothing by
- * losing the transform.
+ * Motion in this system is minimal and utilitarian — 0.1–0.3s state changes and nothing else —
+ * and everything this card animates is decoration: the travelling placeholder is what carries
+ * the information, so a visitor who has asked for less motion loses nothing by losing the
+ * transform.
  */
 function useReducedMotion() {
   const [reduced, setReduced] = React.useState(false);
@@ -80,13 +78,11 @@ const VISUALLY_HIDDEN: React.CSSProperties = {
  * BoardCard — §42. One draggable card on a board: a name, when it is, and the two marks a
  * column can put on it.
  *
- * **Designed, not measured.** Teamplay has no kanban, so there is no card to reproduce.
- * Every value here is blue's own vocabulary rather than an invention: the surface is `Card`'s
- * ([§12](../../../specs/design-system/ledger.md)) — white, a 1px `--border-default` hairline,
- * the 8px workhorse radius, no shadow at rest — and the hover is `NavigationCard`'s, which is
- * the treatment §12 declined. That is not a contradiction, it is §12's own condition: blue's
- * `--shadow-card-hover` and `scale(1.01)` "belong to `NavigationCard`, which is a control;
- * painting them on a static container promises a click that is not there". This card *is* a
+ * Every value is the system's existing vocabulary rather than a new one. The surface is
+ * `Card`'s (§12) — white, a 1px `--border-default` hairline, the 8px workhorse radius, no
+ * shadow at rest — and the hover is the `--shadow-card-hover` + `scale(1.01)` pair §12
+ * declined. That is not a contradiction, it is §12's own condition: those belong to a control,
+ * and painting them on a static container promises a click that is not there. This card *is* a
  * control — it opens the candidate — so the promise is true and the treatment is right.
  *
  * Presentational and drag-mechanical only. What the statuses are, which column a card may
@@ -131,10 +127,10 @@ export function BoardCard({
   const [focused, setFocused] = React.useState(false);
   const flagId = flag ? `board-card-flag-${cardId}` : undefined;
 
-  /* Three states over one surface, in the order they win. Hover is blue's measured card
-     hover — the border goes transparent as the shadow paints, so the edge is replaced
-     rather than doubled. Lifted outranks it: a card in somebody's hand says so with the
-     popover shadow and the one emphasis colour blue has. */
+  /* Three states over one surface, in the order they win. On hover the border goes transparent
+     as the shadow paints, so the edge is replaced rather than doubled. Lifted outranks it: a
+     card in somebody's hand says so with the popover shadow and the one emphasis colour the
+     palette has. */
   const edge = (): React.CSSProperties => {
     if (lifted) return { borderColor: 'var(--action-primary)', boxShadow: 'var(--shadow-popover)' };
     if (hover) return { borderColor: 'transparent', boxShadow: 'var(--shadow-card-hover)' };
@@ -185,7 +181,7 @@ export function BoardCard({
         transform: lifted && !reducedMotion ? 'translateY(-1px)' : hover && !reducedMotion ? 'scale(1.01)' : 'none',
         transition: reducedMotion ? undefined : 'var(--transition-card-hover)',
         cursor: draggable ? 'grab' : 'pointer',
-        /* Blue's own disabled-row reading — transparency, no second ink. The card keeps its
+        /* The system's disabled reading — transparency, no second ink. The card keeps its
            column and its assessment; it is not struck through and not moved. */
         opacity: cancelled ? 0.65 : 1,
         userSelect: 'none',
@@ -215,11 +211,9 @@ export function BoardCard({
         </span>
         {flag && (
           <>
-            {/* `--status-warning` rather than the tracker hue the token map would have mapped
-                yellow's amber onto: blue reserves `--color-tracker-blue` for the one floating
-                widget and says so, while the readme scopes the status palette to "real state",
-                which a recorded outcome with no reason behind it is. The colour is never the
-                only signal — the meaning is the card's own description, below. */}
+            {/* `--status-warning`, because the status palette is scoped to real state and an
+                interview with no recorded outcome is exactly that. The colour is never the only
+                signal — the meaning is the card's own description, below. */}
             <span
               data-testid={`board-card-no-conclusion-${cardId}`}
               title={flag}
@@ -263,9 +257,9 @@ export function BoardCard({
               computation. */}
           <Badge
             status="inactive"
-            /* Outlined. A solid red pill is the loudest thing blue can paint, and a called-off
-               interview is a fact about a card that is already dimmed to 0.65 — the fill would
-               make the one card nobody has to act on the first one the eye lands on. */
+            /* Outlined. A solid red pill is the loudest thing the palette can paint, and a
+               called-off interview is a fact about a card already dimmed to 0.65 — the fill
+               would make the one card nobody has to act on the first the eye lands on. */
             outlined
             size="s"
             aria-label={cancelledTooltip || undefined}

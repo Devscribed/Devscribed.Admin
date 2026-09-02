@@ -32,30 +32,30 @@ if (typeof document !== 'undefined' && !document.getElementById('ds-text-input-s
   document.head.appendChild(el);
 }
 
-/* Blue's error message: absolute, 8px, `*`-prefixed, 16px below the field. `hint` (§4) takes the
-   same slot and the same geometry deliberately — a hint that sat in flow would push the field
-   below it every time an error replaced it, and a hint drawn larger than the error it swaps with
-   would make the swap jump. One slot, one geometry, error wins when both are given. */
+/* The message slot: absolute, 8px, `*`-prefixed for an error, 16px below the field. `hint` (§4)
+   takes the same slot and the same geometry deliberately — a hint that sat in flow would push
+   the field below it every time an error replaced it, and a hint drawn larger than the error it
+   swaps with would make the swap jump. One slot, one geometry, error wins when both are given. */
 const messageSlot: React.CSSProperties = {
   position: 'absolute', fontSize: 8, bottom: -16, left: 0, whiteSpace: 'nowrap',
 };
 
 /**
- * TextInput — labeled text field recreated from components/shared/forms/ValidationTextInput
- * and the global `.form-control` / `.input-label` / `.errorInput` rules in index.scss.
+ * TextInput — the labelled text field, and the shape every other field in the system follows:
+ * a 12px label inset 10px above a 44px box with a 1.5px border, `--shadow-focus-input` on focus
+ * and `--shadow-error-glow` when the value is refused, over a message slot pinned below.
  */
 export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(function TextInput({
   label, description, error, errorId, hint, hintId, trailing,
   placeholder, value, onChange, type = 'text',
-  /* §3 — blue forwards nothing, so `data-testid`, `readOnly`, `autoFocus`, `onBlur`, `name`,
-     `required` and every `aria-*` vanished before reaching the DOM. `id` is new here too: blue's
-     <label> has no `htmlFor`, which is an accessibility gap rather than a measured choice. */
+  /* §3 — everything reaches the `<input>`: `data-testid`, `readOnly`, `autoFocus`, `onBlur`,
+     `name`, `required` and every `aria-*`. `id` wires the label's `htmlFor` as well, so the
+     label is actually the input's name rather than text that happens to sit above it. */
   id, style, onFocus, onBlur,
   /* §35 — style for the field's own box, which `...rest` and `style` cannot reach because they
-     address the `<input>`. `Select` (§21) and `SearchInput` (§26) both grew this for the same
-     reason and in the same words: a caller placing this field in a row is sizing that box, not
-     the input inside it. The three are siblings and disagreed only because they were measured
-     separately. */
+     address the `<input>`. `Select` (§21) and `SearchInput` (§26) carry the same slot for the
+     same reason: a caller placing a field in a row is sizing that box, not the input inside it.
+     The three are siblings and agree by design. */
   wrapperStyle, ...rest
 }, ref) {
   const [focused, setFocused] = React.useState(false);

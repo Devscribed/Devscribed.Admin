@@ -37,16 +37,14 @@ export interface FileInputProps
 }
 
 /**
- * FileInput — §47, **repainted by §73**. Nothing in blue accepts a file: prod uploads only an
- * avatar, through a cropper of its own, and offers every document as a row in a table. So this
- * is **designed, not measured**.
+ * FileInput — §47, **repainted by §73**.
  *
- * §47 designed it as `TextInput`'s sibling — a 44px field box with a 1.5px border, a leading
- * 32px chooser inside it and the file's name where a value would be — on the argument that a
- * CV field in a column of text fields should sit at the same height on the same baseline with
- * the same ring. What that produced is a control that **looks like a field you can type in and
- * is not one**: a bordered 44px box whose only interactive part is a button, next to three
- * boxes that take a caret.
+ * §47 drew it as `TextInput`'s sibling — a 44px field box with a 1.5px border, a leading 32px
+ * chooser inside it and the file's name where a value would be — on the argument that a CV
+ * field in a column of text fields should sit at the same height on the same baseline with the
+ * same ring. What that produced is a control that **looks like a field you can type in and is
+ * not one**: a bordered 44px box whose only interactive part is a button, next to three boxes
+ * that take a caret.
  *
  * It is a row now: the chooser as a real `Button`, and beside it either the chosen file — name,
  * weight, and a cross to drop it — or the words that say there is none. Nothing about a file
@@ -77,7 +75,7 @@ export const FileInput = React.forwardRef<HTMLInputElement, FileInputProps>(func
   clearLabel, clearTestId, onClear,
   error, errorId, hint, hintId, disabled,
   /* `onSelect` hands back the `File` the browser gave, or `null` — the caller owns what a file
-     means, exactly as `Calendar`'s does. A caller's own `onChange` still runs. */
+     means, exactly as `Calendar`'s `onSelect` does. A caller's own `onChange` still runs. */
   onSelect, onChange, onFocus, onBlur,
   /* `id` wires the label's `htmlFor`, falling back to `useId`; `style` addresses the `<input>`
      and `wrapperStyle` the box around it, which is §35's split on `TextInput`. */

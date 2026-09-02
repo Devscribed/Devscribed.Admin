@@ -9,16 +9,15 @@ export interface BackToProps extends Omit<React.AnchorHTMLAttributes<HTMLAnchorE
 }
 
 /**
- * BackTo — recreated from components/shared/BackTo (back-link above detail pages):
- * 16px medium black label, blue on hover, 20px bottom spacing.
+ * BackTo — the back-link above a detail page: a 16px medium label turning blue on hover, with
+ * 20px of clearance under it.
  *
- * §56 — `href` and `...rest`. Prod's version is an `<a href="#">` with an `onClick`, which
- * is the same defect §45 found in `PageTabs`' tabs, except that this one really is a link:
- * it has exactly one destination and it is the page the reader came from. Given an `href`
- * the anchor is left alone — middle-click, "copy link address" and open-in-new-tab all
- * work — and the caller's `onClick` receives the event, so an unmodified click can be
- * handed to a client router the way `Table`'s `rowHref`/`onRowClick` pair already is
- * (§18). Without one, blue's own behaviour is unchanged.
+ * §56 — **give it an `href`.** This really is a link: it has exactly one destination, and it is
+ * the page the reader came from. With one, the anchor is left alone, so middle-click, "copy
+ * link address" and open-in-new-tab all work, and the caller's `onClick` still receives the
+ * event — an unmodified click can be handed to a client router, which is the `rowHref` /
+ * `onRowClick` pair `Table` already uses (§18). Without one it falls back to `href="#"` with
+ * the default prevented, which is a button wearing a link's clothes.
  */
 export function BackTo({ label = 'Back', href, onClick, style, ...rest }: BackToProps) {
   const [hover, setHover] = React.useState(false);

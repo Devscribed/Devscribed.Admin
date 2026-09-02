@@ -12,7 +12,7 @@ export interface SelectOption {
   /** §21 — trailing note on the row, e.g. why it is disabled. Drawn inside the option, so it
    *  is part of the option's accessible name rather than something only seen. */
   hint?: React.ReactNode;
-  /** §21 — `data-testid` for the row; blue draws the listbox itself and tags nothing. */
+  /** §21 — `data-testid` for the row. This component draws the listbox, so only it can tag. */
   testId?: string;
 }
 
@@ -23,24 +23,22 @@ export interface SelectProps extends Omit<React.HTMLAttributes<HTMLElement>, 'on
   label?: string;
   /** §64 — draws the label's trailing asterisk and sets `aria-required` on the combobox. */
   required?: boolean;
-  /** Defaults to react-select's own `Select...`. */
+  /** Defaults to `Select...`. */
   placeholder?: string;
   /** A single option, or an array when `isMulti`. */
   value?: SelectOptionLike | SelectOptionLike[];
   options?: SelectOptionLike[];
   onChange?: (option: SelectOptionLike | SelectOptionLike[]) => void;
-  /** §21 — now implemented: renders react-select's own text input inside the control and
-   *  filters the list case-insensitively. Accepted-and-ignored before. */
+  /** §21 — renders a text input inside the control and filters the list case-insensitively. */
   isSearchable?: boolean;
-  /** Greys the value and indicators (neutral40 / neutral10) and blocks pointer events. */
+  /** Greys the value and the indicators, and blocks pointer events. */
   isDisabled?: boolean;
-  /** Renders the selection as removable `Chip`s (white, 7px blue left border, 8px radius). */
+  /** Renders the selection as removable `Chip`s. */
   isMulti?: boolean;
-  /** §36 — react-select's own prop and default: the menu closes when an option is chosen, for
-   *  `isMulti` as much as for single. Blue kept a multi-select's menu open, which react-select
-   *  does only when this is explicitly `false`. Pass `false` for that behaviour. */
+  /** §36 — the menu closes when an option is chosen, for `isMulti` as much as for single.
+   *  Pass `false` to keep it open for a control whose whole job is picking several at once. */
   closeMenuOnSelect?: boolean;
-  /** Red border + red glow (`.errorInput` treatment). */
+  /** Red border and red glow — the same refusal treatment every field in the system takes. */
   error?: boolean;
   /** Message under the control: 10px / -20px in `dropdown`, 8px / -16px in `formik`. */
   errorMessage?: React.ReactNode;
@@ -50,18 +48,18 @@ export interface SelectProps extends Omit<React.HTMLAttributes<HTMLElement>, 'on
   hint?: React.ReactNode;
   /** §21 — id for the hint node, so it can be an `aria-describedby` target. */
   hintId?: string;
-  /** Mirrors DropdownSelect's `withDescription`: suppresses the blue selected-row highlight
-   *  (used by filters whose options render a two-line description + value). */
+  /** Suppresses the blue selected-row highlight, for a list whose options render a two-line
+   *  description and value — a solid fill over two lines of type is unreadable. */
   withDescription?: boolean;
-  /** Mirrors react-select's `formatOptionLabel(option, { context })`. */
+  /** Renders an option, in the menu and in the closed control, as the caller wants it. */
   formatOptionLabel?: (option: SelectOptionLike, meta: { context: 'menu' | 'value' }) => React.ReactElement | string;
-  /** `dropdown` = DropdownSelect (4px control, menu +10px, 150px min width; default).
-   *  `formik` = CustomFormikSelect / AutocompleteSelect (8px control, menu +8px). */
+  /** `dropdown` — a 4px control with the menu 10px below it and a 150px floor, for a filter
+   *  standing on its own. `formik` — an 8px control with the menu 8px below, for a field in a
+   *  form, where it has to match the `TextInput`s above and below it. */
   variant?: 'dropdown' | 'formik';
   /** §21 — `data-testid` per chip, which is a different node from the option that made it. */
   chipTestId?: (option: SelectOptionLike) => string | undefined;
-  /** §29 — offers a `Create "…"` row when the query matches no option. **Designed, not
-   *  measured**: prod uses react-select, never react-select/creatable. */
+  /** §29 — offers a `Create "…"` row when the query matches no option. */
   allowCreate?: boolean;
   onCreate?: (label: string) => void;
   /** §29 — `data-testid` for that create row. */
@@ -74,19 +72,19 @@ export interface SelectProps extends Omit<React.HTMLAttributes<HTMLElement>, 'on
 }
 
 /**
- * Select — the app's react-select 5.5.6 wrappers.
- * `variant="dropdown"` (default) mirrors shared/forms/DropdownSelect: the control keeps
- * react-select's own 4px radius and the menu sits 10px below with a 150px min width.
- * `variant="formik"` mirrors CustomFormikSelect / AutocompleteSelect: control radius 8,
- * menu 8px below, and an 8px error message 16px under the field instead of 10px/20px.
- * Everything not listed in those files is the library default, reproduced here.
+ * Select — the system's dropdown, in two densities.
  *
- * §21 — and the library default blue did not reproduce is *the control being a control*.
- * react-select renders a focusable combobox with a listbox, arrow keys, `Escape`, and a text
- * input when `isSearchable`; blue measured the painted box and left a `<div onClick>`, so the
- * prop was accepted and did nothing (`Tracker` has passed `isSearchable` since it was written).
- * The paint below is unchanged — what is new is the keyboard, the roles, per-option `disabled`
- * / `hint` / `testId`, and `allowCreate`.
+ * `variant="dropdown"` (default) is the standalone filter: a 4px control with the menu 10px
+ * below it and a 150px floor. `variant="formik"` is the one that lives in a form: an 8px
+ * control with the menu 8px below, and a message slot matching `TextInput`'s (8px, -16px)
+ * rather than the looser 10px/-20px a filter can afford. The two differ only where a form
+ * forces them to.
+ *
+ * §21 — **it is a real combobox.** A painted box with a click handler is not one: it cannot be
+ * reached by Tab, walked with arrows, left with `Escape`, or announced as anything, and a
+ * `isSearchable` prop on it is a prop that does nothing. This is `role="combobox"` over a
+ * `role="listbox"`, with a roving `aria-activedescendant`, a real text input when searchable,
+ * per-option `disabled` / `hint` / `testId`, and `allowCreate`.
  */
 const N = { n5: 'hsl(0, 0%, 95%)', n10: 'hsl(0, 0%, 90%)', n20: 'hsl(0, 0%, 80%)', n40: 'hsl(0, 0%, 60%)', n60: 'hsl(0, 0%, 40%)', n80: 'hsl(0, 0%, 20%)' };
 
@@ -99,35 +97,32 @@ if (typeof document !== 'undefined' && !document.getElementById('ds-select-style
   document.head.appendChild(el);
 }
 
-/* §29 — the value of the synthetic `Create "…"` row. Prod uses react-select, never
-   react-select/creatable, so this row has no production precedent to measure. */
+/* §29 — the value of the synthetic `Create "…"` row. Namespaced so it can never collide with
+   a real option's value. */
 const CREATE = '__ds_create__';
 
 /* The message slot: absolute, under the control, and the same one a hint takes (§21). */
 const messageSlot: React.CSSProperties = { position: 'absolute', left: 0, whiteSpace: 'nowrap' };
 
-/* Both dispatch on what they are handed at runtime — a bare string, a record, or nothing —
-   which is the shape react-select's own accessors have for the same reason. */
+/* Both dispatch on what they are handed at runtime — a bare string, a record, or nothing. */
 const labelOf = (o: any): string => (o == null ? '' : typeof o === 'string' ? o : o.label);
-/* Options are matched by value where they carry one — an id list is the case blue's own kit
-   never had, and matching on the label there would collapse two people with the same name. */
+/* Options are matched by value where they carry one. Matching on the label instead would
+   collapse two people with the same name into one option. */
 const keyOf = (o: any): string => (o == null ? '' : typeof o === 'string' ? o : (o.value != null ? o.value : o.label));
 
 export function Select({
-  /* react-select 5.5.6 default placeholder is the literal 'Select...' (Select-*.esm.js:962);
-     the app never overrides it on the holiday-members field, so it must be three periods. */
+  /* Three periods, not an ellipsis character: this string is compared against in tests and
+     copied into specs, and the two are indistinguishable on screen and not in a file. */
   label, placeholder = 'Select...', value, options = [], onChange, isSearchable, isDisabled, isMulti,
-  /* §36 — react-select's own prop and its own default (`closeMenuOnSelect: true`, for multi
-     as much as for single). Blue closed the menu only when `!isMulti`, which is a divergence
-     from the library it recreates rather than something measured off it: prod passes no such
-     prop anywhere. Left open, a multi-select covers whatever sits under it with a list that
-     `hideSelectedOptions` has often just emptied — the filter bar picks a position and the
-     category row below it disappears behind `No options`. Restoring the default is §21's move
-     again: toward react-select, not away from it. */
+  /* §36 — the menu closes on select, for multi as much as for single. Left open, a
+     multi-select covers whatever sits under it with a list that has often just emptied —
+     the filter bar picks a position and the category row below it disappears behind
+     `No options`. A caller that really is picking several at once passes `false`. */
   closeMenuOnSelect = true,
   error, errorMessage, errorId, hint, hintId, withDescription, formatOptionLabel, variant = 'dropdown',
-  /* §21 — blue draws the chip, the create row and the listbox itself and gives no way to tag
-     any of them; per-option `testId` covers the rows. Same shape as §4 and §16. */
+  /* §21 — the chip, the create row and the listbox are all drawn by this component, so only
+     this component can tag them; per-option `testId` covers the rows. Same shape as §4 and
+     §16: whoever renders a node owns its test id. */
   chipTestId, createTestId, allowCreate, onCreate, id, wrapperStyle, onFocus, onBlur,
   /* §64 — there is no native control under this one to carry `required`, so it is a prop.
      It draws the label's asterisk and sets `aria-required` on the combobox. */
@@ -155,17 +150,15 @@ export function Select({
   const selectedList = isMulti ? ((value || []) as SelectOptionLike[]) : [];
   const hasValue = isMulti ? selectedList.length > 0 : !!value;
 
-  /* hideSelectedOptions defaults to true when isMulti; the search then narrows what is left,
-     which is what react-select's own default filter does (case-insensitive substring). */
+  /* A multi-select hides what is already chosen; the search then narrows what is left, on a
+     case-insensitive substring of the label. */
   const matches = (opt: SelectOptionLike) => labelOf(opt).toLowerCase().includes(query.trim().toLowerCase());
   const visible = options
     .filter((opt) => !isMulti || !selectedList.some((s) => keyOf(s) === keyOf(opt)))
     .filter((opt) => !isSearchable || !query || matches(opt));
-  /* §29 — "when the query matches **no option**", which is what the prop has always claimed and
-     what every spec that asks for this row says: 01's flow and 06 §04.21 both offer `Create "…"`
-     only for a name that matches nothing. It was written as *no exact match*, which is
-     react-select/creatable's default and offers `Create "Eng"` while `English` is sitting in the
-     list above it. The test is run over `options` rather than over `visible`, so a name already
+  /* §29 — the row appears when the query matches **no option at all**, not when it matches no
+     option *exactly*. The looser test offers `Create "Eng"` while `English` is sitting in the
+     list above it. The test runs over `options` rather than over `visible`, so a name already
      chosen in an `isMulti` control still counts as matching — otherwise picking `React` would
      make the next `React` look creatable. */
   const unmatched = !options.some(matches);
@@ -175,12 +168,11 @@ export function Select({
 
   const isDisabledRow = (opt: SelectOptionLike) => typeof opt !== 'string' && opt.disabled === true;
 
-  /* react-select focuses an option as soon as the menu has one — the selected one if there is
-     one, else the first — so the active row is derived from the list rather than stored against
-     it. An index pinned when the menu opened goes stale the moment the options arrive (they are
-     usually fetched) or the query narrows them, and a combobox with nothing focused swallows
-     `Enter`. Defaulting to the selection also means opening a filled control highlights nothing
-     new: the selected row already paints blue. */
+  /* The active row is **derived** from the list rather than stored against it: the selected
+     option if there is one, else the first. An index pinned when the menu opened goes stale the
+     moment the options arrive (they are usually fetched) or the query narrows them, and a
+     combobox with nothing focused swallows `Enter`. Defaulting to the selection also means
+     opening a filled control highlights nothing new — the chosen row already paints blue. */
   const selectedIndex = !isMulti && hasValue ? rows.findIndex((o) => keyOf(o) === keyOf(value)) : -1;
   const activeIndex = open && rows.length
     ? (active >= 0 ? Math.min(active, rows.length - 1) : Math.max(selectedIndex, 0))
@@ -219,24 +211,23 @@ export function Select({
     }
     /* Both, and both are needed. `stopPropagation` is for a host listening on an ancestor
        node; `preventDefault` is how a dialog listening on `document` is told the key was
-       already answered — see the note on §21 in the ledger. Under Next's App Router React
-       dispatches from `document` itself, so stopping propagation there does not reach a
-       second `document` listener at all, and a `Select` inside a drawer would close both. */
+       already answered. React dispatches from `document` itself, so stopping propagation there
+       never reaches a second `document` listener — without the `preventDefault`, `Escape` on a
+       `Select` inside a drawer would close both. */
     if (e.key === 'Escape' && open) { e.preventDefault(); e.stopPropagation(); setOpen(false); setQuery(''); setActive(-1); return; }
     if (e.key === 'Tab') { setOpen(false); return; }
-    /* react-select drops the last value on Backspace in an empty input, which is the only way
-       a chip comes off without a pointer. */
+    /* Backspace in an empty input drops the last chip. It is the only way one comes off
+       without a pointer — the crosses are inside the control, after the input. */
     if (e.key === 'Backspace' && isMulti && isSearchable && !query && selectedList.length) {
       onChange && onChange(selectedList.slice(0, -1));
     }
   }
 
-  // react-select DropdownIndicator defaults: neutral20 (rest), neutral40 (rest+hover),
-  // neutral60 (focused), neutral80 (focused+hover), neutral10 when disabled.
+  // The arrow darkens in two steps: once when the control is open, once under the pointer.
+  // Disabled it goes lighter than rest, which is the only state where it is not a control.
   const arrowColor = isDisabled ? N.n10 : open ? (arrowHover ? N.n80 : N.n60) : (arrowHover ? N.n40 : N.n20);
-  /* Blue lit the border on `open` because clicking is the only way it could open. react-select
-     lights it on `isFocused` — the same border, one state earlier — and a control that can now
-     be reached by Tab has to show that it has been. */
+  /* Lit on focus, not on open: a control that can be reached by Tab has to show that it has
+     been, and `open` is one state too late for a keyboard. */
   const lit = open || focused;
   const activeId = activeIndex >= 0 ? `${controlId}-option-${activeIndex}` : undefined;
 
@@ -260,7 +251,7 @@ export function Select({
   return (
     <div ref={ref} style={{ width: '100%', position: 'relative', fontFamily: 'var(--font-family-base)', pointerEvents: isDisabled ? 'none' : undefined, ...wrapperStyle }}>
       {label && (
-        /* global .input-label */
+        /* The system's field-label treatment, inline because this control draws its own. */
         <label htmlFor={controlId} style={{ display: 'inline-block', fontWeight: 400, fontSize: 'var(--font-size-xs)', lineHeight: '21px', whiteSpace: 'nowrap', color: 'var(--text-secondary)', marginBottom: 4, padding: '10px 0 0 10px' }}>
           {label}
           {/* §64 — an explicit prop, unlike the three fields with a native control under
@@ -287,8 +278,8 @@ export function Select({
           boxShadow: error ? 'var(--shadow-error-glow)' : lit ? 'var(--shadow-focus-input)' : 'none',
         }}
       >
-        {/* ValueContainer: padding 2px 8px — the control itself has no padding, the right-side
-           gap comes only from the indicator's own padding below. */}
+        {/* The value area carries the padding; the control itself has none, so the gap at the
+           right edge comes only from the indicator's own padding below. */}
         <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', padding: '2px 8px', overflow: 'hidden', flex: 1, position: 'relative' }}>
           {isMulti && selectedList.map((o) => (
             <Chip
@@ -299,12 +290,12 @@ export function Select({
             />
           ))}
           {!isMulti && hasValue && !query && (
-            /* singleValue: color neutral80 (never overridden), neutral40 when disabled. */
+            /* The chosen value's ink, one step lighter when the control is disabled. */
             <span style={{ marginLeft: 2, marginRight: 2, maxWidth: 'calc(100% - 8px)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: isDisabled ? N.n40 : N.n80 }}>
               {formatOptionLabel ? formatOptionLabel(value as SelectOptionLike, { context: 'value' }) : labelOf(value)}
             </span>
           )}
-          {/* placeholder colour is the one react-select default DropdownSelect overrides. */}
+          {/* The placeholder takes `--text-secondary`: it is not a value. */}
           {!hasValue && !isSearchable && <span style={{ marginLeft: 2, marginRight: 2, color: 'var(--text-secondary)' }}>{placeholder}</span>}
           {isSearchable && (
             <input
@@ -318,16 +309,15 @@ export function Select({
               placeholder={hasValue ? '' : placeholder}
               value={query}
               onChange={(e) => { setQuery(e.target.value); setOpen(true); setActive(-1); }}
-              /* react-select's Input: no border, no background, inherits the control's type,
-                 and grows to fill what the value and the chips leave. */
+              /* No border, no background: the control around it is the field. It inherits the
+                 type and grows to fill whatever the value and the chips leave. */
               style={{ flex: '1 1 auto', minWidth: 2, margin: 2, border: 0, padding: 0, outline: 0, background: 'transparent', font: 'inherit', color: N.n80, boxSizing: 'border-box' }}
             />
           )}
         </span>
-        {/* indicatorSeparator (1px, neutral20 / neutral10 disabled) + dropdownIndicator —
-           DropdownSelect.tsx overrides neither, but it does hide clearIndicator; the Formik-based
-           selects don't, so a multi value there shows react-select's clear cross (neutral20,
-           neutral40 on hover) as in prod-screens/31, 33. */}
+        {/* A 1px separator and the arrow. The clear-all cross appears only on a `formik`
+           multi-select: that is the one case where a value is a *set* somebody may want to
+           empty in one move, and a filter's single value is cleared by picking another. */}
         <span style={{ display: 'flex', alignItems: 'center', alignSelf: 'stretch', flexShrink: 0 }}>
           {formik && isMulti && hasValue && !isDisabled && (
             <button
@@ -355,10 +345,9 @@ export function Select({
           </span>
         </span>
       </div>
-      {/* Unmounted when closed, as blue's menu is and as react-select's is — a listbox left in
-          the document keeps every option's `data-testid` reachable by a query that should have
-          found nothing. `aria-controls` is dropped with it rather than pointing at a node that
-          is not there. */}
+      {/* Unmounted when closed — a listbox left in the document keeps every option's
+          `data-testid` reachable by a query that should have found nothing. `aria-controls` is
+          dropped with it rather than pointing at a node that is not there. */}
       {open && (
       <div
         id={listId}
@@ -366,17 +355,17 @@ export function Select({
         aria-label={label}
         style={{ position: 'absolute', top: '100%', left: 0, right: 0, boxSizing: 'border-box', marginTop: formik ? 8 : 10, minWidth: formik ? undefined : 150, paddingTop: 5, paddingBottom: 5, background: '#fff', borderRadius: 8, boxShadow: '0 6px 12px rgb(0 0 0 / 18%)', zIndex: 1000 }}
       >
-        {/* menuList: 4px vertical padding, maxHeight 300 with its own scroll. */}
+        {/* The list scrolls at 300px rather than growing: a menu taller than that runs off
+            whatever it was opened from. */}
         <div style={{ paddingTop: 4, paddingBottom: 4, maxHeight: 300, overflowY: 'auto', position: 'relative', boxSizing: 'border-box' }}>
           {rows.map((opt, i) => {
             const l = labelOf(opt);
             const disabled = isDisabledRow(opt);
-            /* option{backgroundColor: isSelected && !withDescription ? blue : …} — with a
-               description renderer the selected row is NOT highlighted. */
+            /* A row with a two-line description is never highlighted: a solid fill under two
+               lines of type is unreadable, which is what `withDescription` is for. */
             const selected = !isMulti && !withDescription && hasValue && keyOf(value) === keyOf(opt);
-            /* The override drops react-select's primary25, so prod's keyboard-focused row has
-               no highlight at all — unusable the moment the arrow keys exist (§21). It gets the
-               tint the pointer already gets, not a new value. */
+            /* The keyboard-focused row takes the same tint the pointer already gets, rather
+               than a colour of its own: arrowing to a row and hovering it are the same act. */
             const tinted = !selected && !disabled && (i === activeIndex || i === hovered);
             return (
               <div
@@ -392,8 +381,8 @@ export function Select({
                 onMouseDown={(e) => e.preventDefault()}
                 onMouseEnter={() => setHovered(i)}
                 onMouseLeave={() => setHovered(-1)}
-                /* DropdownSelect sets font-size only on the control, so the menu keeps the
-                   inherited 16px body size; CustomFormikSelect sets menu/menuList to 14. */
+                /* A form's menu is 14px, matching the fields around it; a standalone filter's
+                   is the inherited 16px body size. */
                 style={{
                   display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8,
                   width: '100%', boxSizing: 'border-box', padding: '8px 12px',

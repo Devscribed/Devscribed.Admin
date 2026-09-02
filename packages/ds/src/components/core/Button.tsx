@@ -38,10 +38,10 @@ export interface ButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonE
  */
 type ButtonInternalProps = Omit<ButtonProps, 'as'> & { as?: React.ElementType };
 
+/* The icon slot is a rule rather than an inline style because it applies to whatever `<svg>` a
+   caller puts in the slot, and a component cannot style a child it did not render. The box is
+   20px and centred. */
 const spinKeyframes = `@keyframes ds-btn-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-/* Button.module.scss .title svg{margin-top:6px;width:20px;height:20px;fill:#fff}. The margin-top
-   has no layout effect on an inline svg, and the icon measures dead centre in prod
-   (prod-screens/03.png: ink 1449-1487 vs button 1425-1511, 2x), so the box is centred here. */
 .ds-btn-title { display: flex; align-items: center; justify-content: center; }
 .ds-btn-title > svg { width: 20px; height: 20px; fill: #fff; }`;
 
@@ -59,11 +59,10 @@ function base(variant: ButtonProps['variant'], disabled: boolean | undefined): R
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    /* §1 — prod's Button is always inside a width-constrained wrapper, so `width: '100%'`
-       measured as harmless there and is not a design decision. Removed, because a button that
-       cannot be narrower than its parent has no way to sit next to anything. Blue's own
-       compositions that leaned on it now say so themselves: ConfirmDialog passes the width,
-       FormActions stretches its slot with a grid. */
+    /* §1 — no `width: '100%'`. A button that cannot be narrower than its parent has no way to
+       sit next to anything, and a control's own paint is the wrong place to decide how much of
+       a row it takes. The two compositions that want a full-width button say so themselves:
+       `ConfirmDialog` passes the width, `FormActions` stretches its slot with a grid. */
     padding: '0 8px',
     height: 44,
     border: '1.5px solid transparent',
@@ -86,17 +85,17 @@ function base(variant: ButtonProps['variant'], disabled: boolean | undefined): R
   return { ...common, backgroundColor: 'var(--surface-card)', borderColor: 'var(--border-default)', color: 'var(--action-neutral-text)' };
 }
 
-/* §71 — the chosen one of a set. Blue has no such state: prod's buttons all *do* something and
-   none of them stay down afterwards, so there was nothing to measure. A booking page is a grid
-   of times where exactly one is picked, and painting that with `variant="primary"` — the only
-   selected treatment available — made the chosen slot look like the page's primary action while
-   `Book`, a few rows below, looked the same. Two solid blue buttons, one of which submits.
+/* §71 — the chosen one of a set. Most buttons *do* something and none of them stay down
+   afterwards, so a pressed state is a different kind of thing and needs a paint of its own. A
+   booking page is a grid of times where exactly one is picked, and painting that with
+   `variant="primary"` — the only other selected-looking treatment — made the chosen slot look
+   like the page's primary action while `Book`, a few rows below, looked the same. Two solid
+   blue buttons, one of which submits.
 
-   The paint is the tint blue already uses for a chosen thing: the emphasis colour at 12% behind
-   ink and a border in the colour itself, which is exactly how a selected calendar day reads
-   (§30). It composes over the default variant, so the box, the height and the radius are
-   unchanged, and it sets `aria-pressed` — a control that says it is chosen has to say so to a
-   reader as well. */
+   The paint is the system's one reading of *chosen*: the emphasis colour at 12% behind ink and
+   a border in the colour itself, which is exactly how a selected calendar day reads (§30). It
+   composes over the default variant, so the box, the height and the radius are unchanged, and
+   it sets `aria-pressed` — a control that says it is chosen has to say so to a reader too. */
 const pressedPaint: React.CSSProperties = {
   backgroundColor: 'color-mix(in oklch, var(--action-primary) 12%, transparent)',
   borderColor: 'var(--action-primary)',
@@ -104,25 +103,25 @@ const pressedPaint: React.CSSProperties = {
 };
 
 /**
- * Button — primary action control, recreated from components/shared/Button.
+ * Button — the primary action control.
  * Variants: default (outlined neutral), primary (solid blue), delete (solid red).
- * Hover: default fades to 60% opacity; primary/delete brighten via filter — never darken with a new color.
+ * Hover: default fades to 60% opacity; primary/delete brighten via filter — never darken with a
+ * new colour, so hover adds no value to the palette.
  */
 export const Button: React.ForwardRefExoticComponent<
   ButtonProps & React.RefAttributes<HTMLButtonElement | HTMLAnchorElement>
 > = React.forwardRef(function Button(
-  /* §2 — blue destructures seven props and forwards nothing, so `data-testid`, `ref`, `aria-*`,
-     `className` and `style` were dropped on the floor. That is a measurement gap, not an API:
-     prod never needed them because prod has no test ids. */
+  /* §2 — everything not named here reaches the element: `data-testid`, `ref`, `aria-*`,
+     `className` and `style`. A control that swallows them is one a test cannot find and a
+     caller cannot place. */
   { variant, icon, preloader, disabled, children, onClick, type = 'button', style, onMouseEnter, onMouseLeave,
     /* §71 — chosen, for a button that is one of a set. Also sets `aria-pressed`. */
     pressed,
     /* §38 — the element, so a control that *navigates* can be a real `<a>` wearing this paint.
-       Prod has no such control — every download it offers is a row in a table — so blue measured
-       a `<button>` and stopped. A `<button onClick={() => location.assign(...)}>` loses
-       middle-click, copy-address, open-in-new-tab and the browser's own download handling, none
-       of which any amount of script gets back. `Table` already makes this exact swap for a row
-       that navigates (§18: `const Row = href ? 'a' : 'div'`), and this is that, on a button. */
+       A `<button onClick={() => location.assign(...)}>` loses middle-click, copy-address,
+       open-in-new-tab and the browser's own download handling, none of which any amount of
+       script gets back. `Table` already makes this exact swap for a row that navigates
+       (§18: `const Row = href ? 'a' : 'div'`), and this is that, on a button. */
     as: Tag = 'button',
     ...rest }: ButtonInternalProps,
   ref: React.Ref<HTMLButtonElement | HTMLAnchorElement>,
@@ -144,7 +143,7 @@ export const Button: React.ForwardRefExoticComponent<
          unavailable. */
       {...(link ? { 'aria-disabled': disabled || undefined } : { type, disabled })}
       /* §2 — a button that has swapped its label for "Signing in" and started a request is busy,
-         and a screen reader has no other way to know. Prod never announced it. */
+         and a screen reader has no other way to know. */
       aria-busy={preloader ? true : undefined}
       /* §71 — the state the paint is only the picture of. */
       aria-pressed={pressed === undefined ? undefined : Boolean(pressed)}

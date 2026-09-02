@@ -1,19 +1,20 @@
-/* Teammerly (Teamplay) — Shadow & motion tokens, copied verbatim from source box-shadow
-   and transition/animation declarations. No new easing/timing values invented. */
+/* Shadow and motion tokens.
+
+   Motion here is minimal and utilitarian: four durations, one easing, and named transitions
+   built from them. Nothing in the system animates for effect — a transition marks a state
+   change, and anything longer than 0.3s is a state change the reader is waiting on. */
 
 :root {
-  /* Shadows */
-  /* ChapterNavigationCard:hover declares -webkit-box-shadow: 0 6px 12px rgb(0 0 0 / 18%) and
-     THEN box-shadow: 0 0 4px 2px rgb(0 0 0 / 4%). The standard property wins, so the shadow
-     that actually paints is the faint one only — the two are not composited. */
+  /* Shadows. Depth is reserved for things that float: a static surface takes a border, and a
+     shadow on it promises a lift that is not there (§12). */
   --shadow-card-hover: 0 0 4px 2px rgb(0 0 0 / 4%);
   --shadow-popover: 0 6px 12px rgb(0 0 0 / 18%);
   --shadow-modal: 0 0 2px rgba(0, 0, 0, 0.12), 0 20px 20px rgba(0, 0, 0, 0.08);
   --shadow-tracker: 0 4px 12px rgba(0, 0, 0, 0.2);
   --shadow-drawer: -4px 4px 16px rgb(0 0 0 / 10%);
-  /* §66 — the lift on those same large sections. A 120px blur at 5% is not a shadow that
-     reads as depth; it is the faint settling that keeps a big white panel from cutting out
-     of the `#f8fafc` field it sits on. Measured off the Timesheets card. */
+  /* §66 — the lift on a large section. A 120px blur at 5% is not a shadow that reads as depth;
+     it is the faint settling that keeps a big white panel from cutting out of the `#f8fafc`
+     field it sits on. */
   --shadow-card-soft: 0 60px 120px rgba(38, 51, 77, 0.05);
   --shadow-toggle-active: 0 2px 4px 0 rgb(0 0 0 / 18%);
   --shadow-focus-input: inset 0 2px 2px rgb(0 0 0 / 5%), 0 0 7px rgb(1 104 250 / 50%);
@@ -26,7 +27,8 @@
   --duration-hover: 0.3s; /* @kind other */
   --duration-spin: 2s; /* @kind other */
 
-  /* Named transitions, copied from source */
+  /* Named transitions. Reach for one of these rather than composing a duration and an easing
+     at a call site — that is how two controls end up half a frame apart. */
   --transition-opacity-hover: opacity var(--duration-hover);
   --transition-filter-hover: filter var(--duration-hover);
   --transition-color-hover: color var(--duration-hover);

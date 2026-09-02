@@ -18,32 +18,31 @@ const FOCUSABLE = [
 /**
  * §8 / §40 — what a dialog does with focus and with `Escape`.
  *
- * Prod's overlays are plain `<div>`s that close only by click, so blue measured no dialog role,
- * no `Escape`, no focus trap and no focus return on either of the two it draws. That is not a
- * design decision; it is a keyboard user being unable to use the dialog at all.
+ * A dialog that only closes by click is one a keyboard user cannot leave. All four rules go
+ * together, and they are not separable: focus moves in on open, is trapped while open, returns
+ * to the opener on close, and `Escape` closes.
  *
- * It lives in its own file because blue has *two* dialog shells — `Modal` and `ConfirmDialog` —
- * and the fix is the same for both. §8 wrote it inside `Modal`; §40 needed it a second time, and
- * a second copy is how the two drift apart.
+ * It lives in its own file because there are *two* dialog shells — `Modal` and `ConfirmDialog` —
+ * and the behaviour is the same for both. §8 wrote it inside `Modal`; §40 needed it a second
+ * time, and a second copy is how the two drift apart.
  */
 export function useDialogFocus({ open, onClose, panelRef, initialFocusRef }: DialogFocusOptions) {
   const returnFocusTo = React.useRef<HTMLElement | null>(null);
 
   /* §61 — the callback is read through a ref rather than depended on.
    *
-   * Every dialog in the app is opened from a screen that owns its state, so `onClose` is an
-   * arrow rebuilt on each of that screen's renders — and a dialog with a field in it makes the
-   * screen render on **every keystroke**. With `onClose` in the dependency list this effect
-   * therefore tore down and re-ran between one letter and the next: the cleanup handed focus
-   * back to the opener, the body moved it to `panel.querySelector(FOCUSABLE)`, and that is the
-   * close button. Typing a name into "New category" put the caret on the × after the first
-   * letter, every time.
+   * A dialog is opened from a screen that owns its state, so `onClose` is an arrow rebuilt on
+   * each of that screen's renders — and a dialog with a field in it makes the screen render on
+   * **every keystroke**. With `onClose` in the dependency list this effect tears down and
+   * re-runs between one letter and the next: the cleanup hands focus back to the opener, the
+   * body moves it to `panel.querySelector(FOCUSABLE)`, and that is the close button. Typing a
+   * name into "New category" put the caret on the × after the first letter, every time.
    *
    * The fix is not a stabler caller. What this effect *does* is entirely about `open` — move
    * focus in, trap it, put it back — and none of that should happen again while the dialog
    * stays open, whoever re-renders around it. So the identity of the handler is kept out of
-   * the dependency list and read at call time, which is the same shape as the `place()`
-   * callback §55 gave `Popover`. */
+   * the dependency list and read at call time, which is the shape §55 gives `Popover`'s
+   * `place()`. */
   const closeRef = React.useRef(onClose);
   closeRef.current = onClose;
 
@@ -57,11 +56,11 @@ export function useDialogFocus({ open, onClose, panelRef, initialFocusRef }: Dia
       || panel;
     if (target) target.focus();
 
-    /* Escape on the bubble, and only if nothing inside has claimed it. §8 handled it in the
-       same capture listener as Tab, which meant the dialog always won: a control that owns
-       `Escape` for itself — a chip held mid-reorder, `Popover`'s open menu (§22) — could not
-       be reached, because a capture listener on `document` fires before the event has got
-       anywhere near it. Tab still traps on capture, which is the phase that job needs. */
+    /* Escape on the bubble, and only if nothing inside has claimed it. Handling it in the same
+       capture listener as Tab means the dialog always wins: a control that owns `Escape` for
+       itself — a chip held mid-reorder, `Popover`'s open menu (§22), a `Select` with its list
+       down — is never reached, because a capture listener on `document` fires before the event
+       has got anywhere near it. Tab still traps on capture, which is the phase that job needs. */
     function onEscape(event: KeyboardEvent) {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
       if (closeRef.current) closeRef.current();

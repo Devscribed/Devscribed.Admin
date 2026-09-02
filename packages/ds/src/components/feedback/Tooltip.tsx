@@ -24,12 +24,9 @@ export interface TooltipProps extends Omit<React.HTMLAttributes<HTMLSpanElement>
 /**
  * Tooltip — §62. A dark bubble on hover and on focus, wrapping any trigger.
  *
- * **Designed, not measured**, with one qualification that matters to the push: prod has no
- * tooltip *component*, but it does have tooltips — two of its tables hand
- * `data-tooltip-content` to a library instance — so this is a shape the product already uses
- * and had never promoted, rather than a new idea. Every value is built out of tokens that
- * exist: `--text-primary` for the fill, white ink at `--font-size-xs`, `--radius-m`,
- * `--shadow-popover`, and the 200px cap that keeps a reason to about two lines.
+ * Every value is built from tokens that already exist: `--text-primary` for the fill, white ink
+ * at `--font-size-xs`, `--radius-m`, `--shadow-popover`, and a 200px cap that holds a reason to
+ * about two lines. Anything longer than two lines is a sentence that belongs on the page.
  *
  * It exists because of the row it was written for. A blocked action must be **shown and
  * blocked** rather than hidden — an action that vanishes is indistinguishable from a bug —

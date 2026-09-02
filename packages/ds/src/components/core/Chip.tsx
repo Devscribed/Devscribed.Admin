@@ -23,39 +23,38 @@ export interface ChipProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 /**
- * Chip — §20. Blue draws this already: it is the multi-value token react-select renders inside
- * a `Select isMulti`, styled by the app's own `multiValue` / `multiValueRemove` overrides —
- * white, a 1px `--border-default` hairline, a 7px `--color-blue` left border, the 8px radius,
- * a 14px label, and a cross that lightens to `--border-default` on hover. Only the component
- * was never promoted out of `Select`, which is why a screen that wants to *show* a chosen
- * thing rather than choose one had nowhere to get it.
+ * Chip — §20. One chosen thing, with a way to drop it: white, a 1px `--border-default`
+ * hairline, a 7px `--color-blue` left border, the 8px radius, a 14px label, and a cross that
+ * lightens to `--border-default` on hover.
  *
- * Two things prod never had to say, because prod only ever draws this inside a control:
- * the cross is a real `<button>` with a name rather than a `<span onClick>`, and the pointer
- * cursor is conditional — a chip that cannot be removed must not claim it can. §18 made the
- * same call for `Table`'s rows.
+ * It is a component in its own right rather than something `Select` draws privately, because a
+ * screen that wants to *show* a chosen thing is doing the same work as one that chooses it, and
+ * two chips that drift apart are worse than one.
+ *
+ * Two rules a chip drawn only inside a control never has to state. The cross is a real
+ * `<button>` with a name, not a `<span onClick>` — it is an action, and an action must be
+ * reachable by keyboard. And the pointer cursor is conditional: a chip that cannot be removed
+ * must not claim it can, which is the call §18 makes for `Table`'s rows.
  */
 export function Chip({
   label, onRemove, removeLabel, style, children,
-  /* §39 — a node *before* the label, which blue has no slot for at all. Same measurement gap as
-     `trailing`, on the other side: inside `Select isMulti` nothing ever leads the label, so the
-     only thing at the chip's left edge is the 7px blue border. A chip that can be picked up and
-     moved needs a grip there, and putting one in `trailing` would sit it beside the cross —
-     a control that reorders adjacent to one that deletes. */
+  /* §39 — a node *before* the label. A chip that can be picked up and moved needs a grip, and
+     putting one in `trailing` would sit it beside the cross: a control that reorders adjacent
+     to one that deletes. */
   leading,
-  /* §37 — a node between the label and the cross. The label span is the only slot blue has, and
-     it is `overflow: hidden` + `text-overflow: ellipsis` + `white-space: nowrap`, because inside
-     `Select isMulti` it only ever holds one line of text. Anything else put there is clipped —
-     and a control that drops a list is cut off at the chip's edge, which is the failure `Card`'s
-     `clip` names. So the slot sits outside that span, and does not shrink. */
+  /* §37 — a node between the label and the cross, and it sits *outside* the label span. That
+     span is `overflow: hidden` + `text-overflow: ellipsis` + `white-space: nowrap`, so anything
+     put in it is clipped — and a control that drops a list is cut off at the chip's edge, which
+     is the failure `Card`'s `clip` names. This slot does not shrink either. */
   trailing,
-  /* §37 — the cross is drawn by the component, so a caller has no way to tag it. §16's
-     `nameTestId` / `menuTestId` and §21's `chipTestId` are the same gap in the same shape. */
+  /* §37 — the cross is drawn by the component, so only the component can tag it. §16's
+     `nameTestId` / `menuTestId` and §21's `chipTestId` are the same rule in the same shape:
+     whoever renders a node owns its test id. */
   removeTestId,
   /* §39 — the cross, blocked. `aria-disabled` and still focusable, never the `disabled`
-     attribute: prod's chip can always be removed, so blue never had to say what an unavailable
-     one does, and a cross that vanishes is indistinguishable from a bug. §22's rule on
-     `Popover`'s rows, on the control `Chip` draws for itself. */
+     attribute: a cross that vanishes is indistinguishable from a bug, and a reason nobody can
+     focus is a reason nobody reads. §22's rule on `Popover`'s rows, on the control `Chip` draws
+     for itself. */
   removeDisabled,
   /* §39 — id of the node carrying *why*, drawn by the consumer where there is room for a
      sentence. The cross keeps `Remove {label}` as its name, so the reason is a description and
@@ -73,9 +72,8 @@ export function Chip({
         border: '1px solid var(--border-default)', borderLeft: '7px solid var(--color-blue)',
         borderRadius: 8, padding: onRemove ? '4px 0 4px 4px' : '4px 7px 4px 4px', color: '#000',
         cursor: onRemove && !removeDisabled ? 'pointer' : 'default', boxSizing: 'border-box',
-        /* §37 — everything blue puts in a chip is one line of 14px text, so `stretch` and
-           `center` paint identically and blue never had to choose. A trailing control is taller
-           than the label beside it, and only then does the choice exist. */
+        /* §37 — with one line of 14px text `stretch` and `center` paint identically, so the
+           choice only exists once something taller than the label is in the row. */
         ...(trailing || leading ? { alignItems: 'center' } : null),
         ...style,
       }}

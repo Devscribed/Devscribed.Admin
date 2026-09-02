@@ -2,9 +2,8 @@ import React from 'react';
 
 export interface EmptyStateProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
-   * The message. Blue types this `string`, because prod's empty states are one sentence and
-   * nothing else — but §65 is that an empty state whose only content is a sentence is a dead
-   * end, and the way out of it belongs *in* the state rather than under it. A node, so a
+   * The message. §65 — a node, not a string: an empty state whose only content is a sentence
+   * is a dead end, and the way out of it belongs *in* the state rather than under it. A
    * message can be followed by the action that fills the list.
    */
   children?: React.ReactNode;
@@ -14,15 +13,15 @@ export interface EmptyStateProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 /**
- * EmptyState — recreated from components/shared/EmptyStatePlaceholder
- * (a single centered gray message, no illustration in source).
- * Source takes the text as `children: string` — the `message` prop is kept as an alias, but
- * every call site in the app passes children, so children win when both are given.
+ * EmptyState — a single centred grey message where a list would be. No illustration: an empty
+ * list is a fact, not an occasion.
+ *
+ * `message` and `children` are the same slot. Children win when both are given.
  */
 export function EmptyState({
   message = 'No data to display', children,
-  /* §28 — blue forwards nothing, so `data-testid` and `role` never reached the DOM. The only
-     node on the screen saying why a list is empty is the one a test most needs to name. */
+  /* §28 — everything reaches the wrapper. The only node on the screen saying why a list is
+     empty is the one a test most needs to name, and the one that most often needs a `role`. */
   style, ...rest
 }: EmptyStateProps) {
   return (

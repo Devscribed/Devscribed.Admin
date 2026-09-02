@@ -7,9 +7,9 @@ export interface CardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 't
    */
   title?: React.ReactNode;
   /**
-   * §66 — `default` is blue's 8px hairline card, for a box among boxes. `panel` is the
-   * treatment its *large* white sections take (the Timesheets calendar card, the report
-   * tables): `--radius-xl` over `--shadow-card-soft`, no border, and a small-caps title.
+   * §66 — `default` is the 8px hairline card, for a box among boxes. `panel` is the treatment
+   * a *large* white section takes: `--radius-xl` over `--shadow-card-soft`, no border, and a
+   * small-caps title.
    */
   variant?: 'default' | 'panel';
   /** §27 — element for that header line. A real heading by default, so a page whose captions
@@ -29,37 +29,30 @@ export interface CardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 't
 }
 
 /**
- * Card — §12. Blue never promoted a general content surface, but it specifies the treatment
- * exactly: a white `--surface-card` box, a 1px `--border-default` hairline, the 8px workhorse
- * radius, and no shadow — "static cards use a border, not a shadow, until hovered"
- * (readme → Visual foundations → Borders & shadows). `NavigationCard` is that same treatment
- * wearing a fixed 250px width, a click handler and a title/description pair instead of
- * `children`: a dashboard tile, not a substitute for this.
+ * Card — §12. The general content surface: a white `--surface-card` box, a 1px
+ * `--border-default` hairline, the 8px workhorse radius, and no shadow. **A static card uses a
+ * border, not a shadow, until hovered** — that is the system's rule for depth, and it is why
+ * nothing here hovers: `--shadow-card-hover` and `scale(1.01)` belong to controls, and painting
+ * them on a static container promises a click that is not there. `BoardCard` (§42) takes them
+ * precisely because it *is* a control.
  *
- * Nothing here hovers. Blue's `--shadow-card-hover` and its `scale(1.01)` belong to
- * `NavigationCard`, which is a control; painting them on a static container would promise a
- * click that is not there.
+ * §66 — `variant="panel"` is the *other* white surface: a 20px radius over a 120px-blur 5%
+ * lift, with no border at all. The two are a scale decision, not a style one — a hairline is
+ * what separates a 300px box from the boxes beside it, and a section as wide as the column it
+ * is in has nothing beside it to be separated from, so the border becomes an outline drawn
+ * around the whole page. The public booking and manage screens are made of these, which is why
+ * the variant exists rather than three screens spelling the same three declarations.
  *
- * §66 — `variant="panel"` is the app's *other* white surface, and it is as measured as this
- * one: the Timesheets calendar card and the report tables are not 8px-with-a-hairline, they
- * are a 20px radius over a 120px-blur 5% lift with no border at all. The two are a scale
- * decision, not a style one — a hairline is what separates a 300px box from the boxes beside
- * it, and a section as wide as the column it is in has nothing beside it to be separated
- * from, so the border becomes an outline drawn around the whole page. The public booking and
- * manage screens are made of these, which is why the variant exists rather than three
- * screens spelling the same three declarations.
- *
- * A panel's title is the small-caps micro label that leads a section in this app (the
- * Timesheets day header) rather than headline-6: at this size the heading is not competing
- * with the card next to it, it is competing with the page's own `<h1>` two rows up. It stays
- * a real `<h2>` — prod draws it as a `<span>`, and that is §27's argument, not a decision.
+ * A panel's title is the small-caps micro label that leads a section rather than headline-6: at
+ * this size the heading is not competing with the card next to it, it is competing with the
+ * page's own `<h1>` two rows up. It is still a real `<h2>`, which is §27.
  */
 export function Card({
   title, action, padded = true, clip = true, variant = 'default', style, children,
-  /* §27 — prod's card headings are `<div>`s, because prod's card headings are `<div>`s. A
-     screen that replaced its captions with card titles is relying on them to *be* the outline
-     under `PageTitle`'s `<h1>`, and blue already renders that one as a real heading. Every
-     value below is unchanged; only the element is. */
+  /* §27 — a card heading is a real heading. A screen that replaced its captions with card
+     titles is relying on them to *be* the outline under `PageTitle`'s `<h1>`, and a `<div>`
+     is not in that outline. The paint does not depend on the element, so a caller who needs a
+     different level changes only the level. */
   titleAs: TitleTag = 'h2',
   ...rest
 }: CardProps) {

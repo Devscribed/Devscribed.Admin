@@ -5,7 +5,7 @@ export interface IconButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLBut
   label: string;
   /** Hit area in px. The glyph inside keeps its own size. Default 34. */
   size?: number;
-  /** Paints the glyph with the primary blue, as blue does for any control reading as current. */
+  /** Paints the glyph with the primary blue, as anything reading as *current* is painted. */
   active?: boolean;
   disabled?: boolean;
   children?: React.ReactNode;
@@ -13,15 +13,15 @@ export interface IconButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLBut
 }
 
 /**
- * IconButton — §10. Blue never promoted this to a component, but it specifies the treatment
- * exactly: the Modal and ConfirmDialog close buttons are a bare glyph in `--text-secondary`
- * that scales to 1.1 on hover over 0.3s, with no background, border or radius of its own
- * ("icon buttons (modal close) scale to 1.1", readme → Visual foundations → Hover states).
- * This is that button with a label and a hit area, so a glyph-only control is still reachable
- * by name and still big enough to press.
+ * IconButton — §10. A glyph-only control: a bare mark in `--text-secondary` on no background,
+ * border or radius of its own, scaling to 1.1 on hover over 0.3s. **Icon buttons scale; they do
+ * not fill** — that is the system's hover rule for a control with no box.
  *
- * `active` paints the glyph with the primary blue, which is what blue does everywhere a
- * control reads as current (nav links, popover rows, tabs).
+ * The label and the hit area are what make it a control rather than a picture. A glyph has no
+ * text to be named by, so `label` is required, and 34px is the smallest square worth aiming at.
+ *
+ * `active` paints the glyph with the primary blue, which is how anything reading as *current*
+ * is painted throughout — nav links, popover rows, tabs.
  *
  * Takes a `ref` to the `<button>`, which is what a popover trigger anchors to.
  */

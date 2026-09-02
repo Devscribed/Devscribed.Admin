@@ -15,15 +15,15 @@ export interface ModalProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 /**
- * Modal — centered dialog recreated from components/shared/Modal.
- * Opens by animating up from 80% to 50% vertical position with a fade.
+ * Modal — the centred dialog: a white panel on a scrim, capped at 70% of the viewport with a
+ * 360px floor, scrolling inside itself rather than growing past the screen.
  */
 export function Modal({
   title, open, onClose, children,
-  /* §8 — prod's Modal is a plain <div> that closes only by click, so blue measured no dialog
-     role, no `Escape`, no focus trap and no focus return. None of that is a design decision;
-     it is a keyboard user being unable to use the dialog at all. The behaviour itself moved to
-     `useDialogFocus` when §40 found `ConfirmDialog` had the identical gap. */
+  /* §8 — the dialog is a real `role="dialog" aria-modal`, and focus moves into it, is trapped
+     while it is open, and returns to the opener when it closes; `Escape` leaves. A panel that
+     only closes by click is one a keyboard user cannot leave. The behaviour lives in
+     `useDialogFocus`, shared with `ConfirmDialog` (§40). */
   initialFocusRef, style, ...rest
 }: ModalProps) {
   const [closeHover, setCloseHover] = React.useState(false);
@@ -56,7 +56,8 @@ export function Modal({
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div id={titleId} style={{ fontFamily: 'var(--font-family-base)', fontWeight: 'var(--font-weight-semibold)', fontSize: 20, lineHeight: '24px', color: 'var(--text-tertiary)' }}>{title}</div>
-          {/* .closeBtn svg{13x13; fill:$appGray; transition:transform .3s} :hover svg{scale(1.1)} */}
+          {/* The close mark scales rather than filling on hover — `IconButton`'s rule (§10),
+              inline here because this shell draws its own. */}
           <button type="button" aria-label="Close dialog" onClick={onClose} onMouseEnter={() => setCloseHover(true)} onMouseLeave={() => setCloseHover(false)}
             style={{ display: 'flex', width: 13, height: 13, color: 'var(--text-secondary)', transform: closeHover ? 'scale(1.1)' : 'none', transition: 'transform 0.3s' }}>
             <CloseIcon />

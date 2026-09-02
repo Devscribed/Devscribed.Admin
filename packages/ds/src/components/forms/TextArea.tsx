@@ -17,7 +17,7 @@ export interface TextAreaProps extends React.TextareaHTMLAttributes<HTMLTextArea
    *  and `id` also wires the label's `htmlFor`. Falls back to a generated id. */
 }
 
-/* Blue's error message: absolute, 8px, 16px below the field — the same slot and geometry
+/* The message slot: absolute, 8px, 16px below the field — the same slot and geometry
    `TextInput` pins its own message into (§4), so the two fields never disagree about how far
    below them anything else may sit. */
 const messageSlot: React.CSSProperties = {
@@ -25,18 +25,15 @@ const messageSlot: React.CSSProperties = {
 };
 
 /**
- * TextArea — shared/forms/textAreas/TextArea: a `.form-control` textarea with an inline
- * 12px label above it and an absolutely-positioned 8px error message below.
- * TextArea.module.scss: .root{position:relative} .label{color:$appGray;margin-bottom:7px;
- * font-size:12px} textarea{width:100%;resize:none;height:100px}
- * .errorMessage{position:absolute;font-size:8px;bottom:-16px;left:0;color:$errorColor;
- * white-space:nowrap}. The rest comes from the global `.form-control` / `.errorInput`.
+ * TextArea — `TextInput`'s multi-line twin: the same 1.5px box, the same focus ring, the same
+ * error treatment and the same message slot. It is 100px tall and does not resize, because a
+ * handle that grows a field inside a dialog grows it past the dialog.
  */
 export const TextArea = React.forwardRef<HTMLTextAreaElement, TextAreaProps>(function TextArea({
   label, placeholder, value, onChange, error, errorId,
-  /* §25 — blue forwards nothing, so `data-testid`, `name`, `required`, `readOnly` and every
-     `aria-*` vanished before the DOM, and the `<label>` was associated with nothing. Both are
-     `TextInput`'s §3 and §4, which this field is the twin of; it gets the same shape. */
+  /* §25 — everything reaches the `<textarea>`, and `id` wires the label's `htmlFor` so the
+     two are actually associated. Both are `TextInput`'s §3 and §4; this field is its twin and
+     takes the same shape. */
   id, style, onFocus, onBlur,
   /* §33 — a node at the trailing end of the **label row**: a character count, an autosave
      indicator. It goes there rather than inside the field, which is `TextInput`'s answer (§5),
@@ -50,10 +47,10 @@ export const TextArea = React.forwardRef<HTMLTextAreaElement, TextAreaProps>(fun
   const [focused, setFocused] = React.useState(false);
   const generatedId = React.useId();
   const fieldId = id || generatedId;
-  /* prod renders a plain <label> (display: inline), so its margin-bottom: 7px has no layout
-     effect — the block-level textarea simply starts on the next line. In the row below it would
-     have one, so it is zeroed there: the field sits at the same y with a trailing node and
-     without one, which is the whole reason the slot is in this row. */
+  /* The label's 7px margin has no layout effect on its own — it is inline, and the block-level
+     textarea starts on the next line regardless. Inside the flex row below it *would* have one,
+     so it is zeroed there: the field sits at the same y with a trailing node and without one,
+     which is the whole reason the slot is in this row. */
   const labelNode = label ? (
     <label
       htmlFor={fieldId}

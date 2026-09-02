@@ -44,11 +44,9 @@ export { Tooltip } from './components/feedback/Tooltip';
 export { Checkbox } from './components/forms/Checkbox';
 export { FileInput } from './components/forms/FileInput';
 export { FormActions } from './components/forms/FormActions';
-/* §75 — `fieldLabelStyle` joins the three components it belongs to. It is blue's own
-   measurement (the deploy's `padding: 10px 0 0 10px` on every `<label>`, 12px regular in
-   `--text-secondary`) and every system input already renders it; what was missing was a way
-   for a screen to put a *caption* on the same line as the field labels beside it without
-   copying four numbers into app code. */
+/* §75 — `fieldLabelStyle` is exported beside the components it belongs to. Every system input
+   already renders it; what was missing was a way for a screen to put a *caption* on the same
+   line as the field labels beside it without copying four numbers into app code. */
 export { FieldLabel, fieldLabelStyle, FormField, RequiredMark } from './components/forms/FormField';
 export { SearchInput } from './components/forms/SearchInput';
 export { Select } from './components/forms/Select';

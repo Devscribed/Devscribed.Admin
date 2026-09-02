@@ -2,9 +2,7 @@ import React from 'react';
 import { ArrowIcon } from '../icons/Icon';
 
 /**
- * §53 — page controls. Nothing in blue paginates, because prod's list screens all load the
- * next page inline, so every value is taken from blue's small controls rather than measured
- * off a control that does not exist.
+ * §53 — page controls, for a list that does not scroll to its end.
  */
 export interface PaginationProps extends Omit<React.HTMLAttributes<HTMLElement>, 'onChange'> {
   /** 1-based. A page beyond `pageCount` still renders, so the strip never lies about where it is. */
@@ -22,13 +20,10 @@ export interface PaginationProps extends Omit<React.HTMLAttributes<HTMLElement>,
 /**
  * Pagination — page controls for a list that does not scroll to its end.
  *
- * §53 — nothing in blue paginates. Prod's list screens all load the next page inline
- * (`ProjectsTable`, `ToDosTable`, `ClientsTable` → `.loadNextTableIndicator`), so there is
- * no control to measure: no arrows, no numbers, no current-page treatment. Every value
- * below is therefore taken from blue's *small* controls rather than invented — the 36px
- * target `IconButton` and the calendar's navigation already use, `--radius-s`, a 1px
+ * §53 — every value is borrowed from the system's *small* controls rather than invented: the
+ * 36px target `IconButton` and the calendar's navigation already use, `--radius-s`, a 1px
  * `--border-default` hairline, and `--color-blue` filled with `--text-on-accent` for the
- * current page, which is exactly how `Calendar` paints a selected day.
+ * current page, which is how `Calendar` marks a chosen day.
  *
  * Three behaviours are the component's own and are the reason it is a component:
  *
@@ -101,9 +96,9 @@ export function Pagination({
         cursor: blocked ? 'default' : 'pointer',
       })}
     >
-      {/* One glyph, rotated: blue ships a single chevron, pointing up, and no left/right
-          pair. Rotating it is what `Calendar`'s own navigation does with the same mark, and
-          the intrinsic 12×8 is left alone so the stroke weight matches everywhere else. */}
+      {/* One glyph, rotated. The set has a single chevron and no left/right pair — rotating it
+          is what `Calendar`'s navigation does with the same mark, and leaving the intrinsic
+          12×8 alone is what keeps the stroke weight matching everywhere else. */}
       <span
         aria-hidden="true"
         style={{ display: 'flex', transform: `rotate(${to < page ? -90 : 90}deg)` }}

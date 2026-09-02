@@ -4,35 +4,29 @@ import { ThreeDotsIcon } from '../icons/Icon';
 import { Tooltip } from '../feedback/Tooltip';
 
 /**
- * Popover — click-to-open menu list recreated from ActionsPopover (row kebab menu) and
- * AccountMenu's user popover. With no `trigger` it renders ActionsPopover's own button:
- * a 32x32 circle, `rgba(0,0,0,0.08)` background and a 22px dark kebab that both turn blue /
- * white on hover and while the menu is open (`.activeBtn`).
- * ActionsPopover.module.scss: .wrapper{display:inline-block;32x32;margin-right:8px}
- * .btn{transition:background-color .2s; svg{transition:fill .2s}}
- * .popover{right:0; top:42px; min-width:160px; padding:5px 0; radius:6px;
- * box-shadow:0 6px 12px rgb(0 0 0 / 18%); z-index:1000}
- * li{margin:0 5px; radius:4px; :hover{background:#f8f8f8; color:$appBlue}}
- * a,button{padding:8px 14px; width:100%; text-align:left; color:$appBlack}
- * Note: no destructive styling exists in prod — every row, "Delete project" included, is
- * $appBlack turning $appBlue on hover, so `danger` is an opt-in this app never uses.
+ * Popover — the click-to-open menu list, and the row-actions kebab.
  *
- * §22 — prod's rows are `<div onClick>` inside a `<div onClick>` trigger, so the menu could
- * not be opened, walked or left from a keyboard and was announced as nothing. The paint is
- * unchanged; what is under it is a real `aria-haspopup="menu"` button and a real `role="menu"`.
- * A blocked row is disabled *and still focusable* — `aria-disabled`, never the `disabled`
- * attribute — because the whole point of showing it is that its reason can be read.
+ * With no `trigger` it draws its own button: a 32x32 circle at `rgba(0,0,0,0.08)` behind a 22px
+ * kebab, both going blue-on-white while the pointer is over it or the menu is open. The panel
+ * is a 160px-minimum list, `--radius-m` over `--shadow-popover`, its rows inset 5px so none of
+ * them ever reaches a rounded corner.
  *
- * §55 — the menu is a **portal**, and it flips. Blue positions it `absolute` inside the
- * trigger's own box, which is correct in prod because prod opens this from a table that is
- * as tall as its content and scrolls the page. A row menu inside a scroller — which is what
- * every list screen here has, and what the candidate database's Actions column is — has its
- * lower rows clipped by that scroller, so the last row's menu is the one nobody can reach.
- * `overflow: visible` on the cell does not fix it: the ancestor doing the clipping is the
- * scroller, not the cell. The panel is therefore `position: fixed` in `document.body`,
- * placed off the trigger's own rectangle, re-placed on scroll and resize, and opened
- * **upward** when it would otherwise run off the bottom of the viewport. Outside-click reads
- * both nodes, because the panel is no longer a descendant of the trigger.
+ * `danger` paints a row in `--status-error`. It is opt-in and rare: a menu where the delete row
+ * is red every time teaches a reader to stop seeing red.
+ *
+ * §22 — **it is a real menu.** `<div onClick>` rows inside a `<div onClick>` trigger cannot be
+ * opened, walked or left from a keyboard and are announced as nothing; this is a real
+ * `aria-haspopup="menu"` button over a real `role="menu"`, with arrow keys, `Home`/`End` and
+ * `Escape`. A blocked row is disabled *and still focusable* — `aria-disabled`, never the
+ * `disabled` attribute — because the whole point of showing it is that its reason can be read.
+ *
+ * §55 — the menu is a **portal**, and it flips. Positioned `absolute` inside the trigger's box
+ * it is clipped by whatever scroller the trigger sits in, so on a scrolling list the last row's
+ * menu is the one nobody can reach. `overflow: visible` on the cell does not fix it: the
+ * ancestor doing the clipping is the scroller, not the cell. So the panel is `position: fixed`
+ * in `document.body`, placed off the trigger's own rectangle, re-placed on scroll and resize,
+ * and opened **upward** when it would otherwise run off the bottom of the viewport.
+ * Outside-click reads both nodes, because the panel is no longer a descendant of the trigger.
  *
  * `portal` is `true` by default and can be turned off — a menu inside a `Modal` or a
  * `MenuDrawer` wants to stay inside the focus trap it was opened from.
@@ -42,7 +36,7 @@ export interface PopoverItem {
   label: React.ReactNode;
   /** React key and identity. Falls back to `label`. */
   key?: string;
-  /** §22 — `onSelect` is §16's name for the same thing; `onClick` is blue's own. Either works. */
+  /** §22 — `onSelect` is `AccountMenu`'s name for the same thing (§16). Either works. */
   onSelect?: () => void;
   onClick?: () => void;
   danger?: boolean;
@@ -61,11 +55,11 @@ export interface PopoverItem {
 }
 
 export interface PopoverProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'onSelect'> {
-  /** Omit to render ActionsPopover's own 32x32 kebab circle. */
+  /** Omit to render the default 32x32 kebab circle. */
   trigger?: React.ReactNode;
   items?: (PopoverItem | string)[];
   align?: 'left' | 'right';
-  /** `.disabledBtn`: not-allowed cursor, no hover colour change, menu cannot open. */
+  /** Not-allowed cursor, no hover change, and the menu cannot open. */
   disabled?: boolean;
   /** §22 — accessible name for the trigger and the menu. Defaults to `Actions` on the kebab. */
   label?: string;
@@ -74,14 +68,13 @@ export interface PopoverProps extends Omit<React.ButtonHTMLAttributes<HTMLButton
   portal?: boolean;
 }
 
-/** Blue's own offset: `top: 42` under a 32px trigger is 10px of gap, kept as the gap. */
+/** 10px of clearance under the trigger, wherever the panel hangs from. */
 const GAP = 10;
 
 /* §62 — present to a screen reader, absent to everything else. `BoardCard`'s flag uses the
    same pair and for the same reason: the *meaning* has to be in the tree at all times so
    `aria-describedby` always resolves, and the bubble is only what a pointer or a focus ring
-   brings to the surface. This is the half §22 was right about — a reason that exists only on
-   hover is a reason a reader never gets — kept, while the drawn half moves into a bubble. */
+   brings to the surface. A reason that exists only on hover is a reason a reader never gets. */
 const VISUALLY_HIDDEN: React.CSSProperties = {
   position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)',
 };
@@ -113,8 +106,8 @@ export function Popover({
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
 
-  /* §55 — where the panel goes. Measured off the trigger rather than inherited from it,
-     which is the whole of what portalling costs and what the flip needs anyway. */
+  /* §55 — where the panel goes. Measured off the trigger rather than inherited from it, which
+     is the whole of what portalling costs — and what the flip needs anyway. */
   const place = React.useCallback(() => {
     const anchor = triggerRef.current;
     if (!anchor || !portal) return;
@@ -161,8 +154,8 @@ export function Popover({
     if (event) event.stopPropagation();
     if (entry.disabled) return;
     setOpen(false);
-    /* `onClick` is blue's own name for this; `onSelect` is §16's, so a consumer writing both
-       of the system's menus writes one shape. */
+    /* Both names work, so a consumer writing this menu and `AccountMenu`'s (§16) writes one
+       shape rather than remembering which takes which. */
     if (entry.onSelect) entry.onSelect();
     else if (entry.onClick) entry.onClick();
   }
@@ -191,7 +184,7 @@ export function Popover({
 
   const lit = !disabled && (open || hover);
 
-  /* The panel itself, built once and then either portalled or left where blue drew it. */
+  /* The panel itself, built once and then either portalled or left inside the trigger. */
   const menu = open && (
     <div
       id={menuId}
@@ -200,9 +193,9 @@ export function Popover({
       aria-label={label}
       onKeyDown={onMenuKeyDown}
       style={{
-        /* §55 — fixed and placed off the trigger's rectangle when portalled, and blue's
-           own `absolute` box when not. `minWidth`, padding, radius, shadow and z-index are
-           blue's either way; only where the box hangs from changes. */
+        /* §55 — fixed and placed off the trigger's rectangle when portalled, and an `absolute`
+           box inside the trigger when not. The paint is the same either way; only what the
+           box hangs from changes. */
         ...(portal
           ? {
               position: 'fixed',
@@ -218,12 +211,11 @@ export function Popover({
         minWidth: 160,
         padding: '5px 0', backgroundColor: '#fff', borderRadius: 'var(--radius-m)',
         boxShadow: 'var(--shadow-popover)', zIndex: 3001,
-        /* §74 — **no `overflow: hidden`**. It was ours, not blue's: prod's `.popover` is
-           `radius: 6px` with `padding: 5px 0` and rows inset `margin: 0 5px`, so no row ever
-           reaches a rounded corner and there has never been anything here to clip. What it did
-           clip was §62's bubble, which hangs at `right: 100%` of a row and is therefore
-           *entirely* outside this box — so every blocked row in the product drew its reason
-           into a zero-width sliver and nobody saw one. */
+        /* §74 — **no `overflow: hidden`**. There is nothing here to clip: the panel is 6px
+           round with 5px of vertical padding and its rows inset 5px, so no row ever reaches a
+           corner. What clipping *did* catch was §62's bubble, which hangs at `right: 100%` of
+           a row and is therefore entirely outside this box — so every blocked row drew its
+           reason into a zero-width sliver and nobody saw one. */
       }}
     >
       {entries.map((item, i) => {
@@ -251,10 +243,9 @@ export function Popover({
               textAlign: 'left', margin: '0 5px', cursor: item.disabled ? 'default' : 'pointer',
               color: item.disabled ? 'var(--text-secondary)' : item.danger ? 'var(--status-error)' : 'var(--text-primary)',
               borderRadius: 4,
-              /* ActionsPopover sets no font-size on its rows, so they inherit the context:
-                 14px inside a table cell (.fBodyCell), 16px in the navbar's AccountMenu.
-                 A portalled panel inherits `document.body`'s instead, so the size the row
-                 would have taken from its trigger is carried across explicitly. */
+              /* A row inherits its size from whatever the menu is opened in — 14px in a table
+                 cell, 16px in the navbar. A portalled panel inherits `document.body`'s instead,
+                 so the size the row would have taken from its trigger is carried across. */
               padding: '8px 14px', fontFamily: 'var(--font-family-base)', fontSize: portal ? 14 : 'inherit',
               /* §50 — the *label* never wraps. Letting the row go `normal` so its
                  description could wrap took the label with it, and "Delete vacancy" broke
@@ -274,9 +265,10 @@ export function Popover({
             }}
           >
             {item.label}
-            {/* §22 — the reason, drawn in the row rather than in a bubble. Native `title`
-                is not keyboard-reachable in any major browser, and a bubble that renders
-                only on hover cannot be an `aria-describedby` target that always resolves. */}
+            {/* §22 — a second line the row is *about*, drawn in the row rather than in a
+                bubble. Native `title` is not keyboard-reachable in any major browser, and a
+                node that renders only on hover cannot be an `aria-describedby` target that
+                always resolves. */}
             {item.description && (
               <div
                 id={describedBy}

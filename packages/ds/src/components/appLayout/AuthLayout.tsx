@@ -10,10 +10,9 @@ export interface AuthLayoutProps extends React.HTMLAttributes<HTMLDivElement> {
   children?: React.ReactNode;
 }
 
-/* The same mark Sidebar draws, inlined rather than shared — which is blue's own practice:
-   "the sidebar component still renders its own inline copy so the kit matches the shipped app
-   pixel-for-pixel" (readme → Caveats → Logo variants). Sized down to 148x28 here, because a
-   signed-out page has no 80px navbar to fill. */
+/* The same mark `Sidebar` draws, inlined rather than shared. The two are different sizes for
+   different reasons — 185x35 fills an 80px navbar, 148x28 sits above a signed-out card — and a
+   shared component parameterised by size would be a component whose only prop is its size. */
 function Wordmark() {
   return (
     <svg width="148" height="28" viewBox="0 0 71 15" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Teammerly">
@@ -28,11 +27,12 @@ function Wordmark() {
 }
 
 /**
- * AuthLayout — §11. Prod has no signed-out surface at all, so there is nothing to measure and
- * this is **designed, not measured**. Everything it draws is blue's own vocabulary: the
- * `#f8fafc` well `AppShell` paints, a `--surface-card` panel with a 1px `--border-default` and
- * `--radius-l` and no shadow (blue reserves shadow for things that float), the headline-5 step
- * for the title, and body-s in `--text-secondary` for the subtitle and footer.
+ * AuthLayout — §11. The signed-out shell: one centred card on the page well.
+ *
+ * Every value is the system's existing vocabulary rather than a new one — the `#f8fafc` well
+ * `AppShell` paints, a `--surface-card` panel with a 1px `--border-default` and `--radius-l`
+ * and no shadow (shadow is reserved for things that float), the headline-5 step for the title,
+ * and body-s in `--text-secondary` for the subtitle and footer.
  *
  * The footer sits outside the card on purpose: every signed-out screen puts its cross-account
  * link there, so a visitor learns one place to look for it.

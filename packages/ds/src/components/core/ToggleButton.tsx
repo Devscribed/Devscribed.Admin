@@ -10,36 +10,31 @@ export interface ToggleButtonProps extends Omit<React.HTMLAttributes<HTMLDivElem
   selectedValue?: string;
   onValue1Click?: () => void;
   onValue2Click?: () => void;
-  /** §31 — `data-testid` per segment; blue draws both and tags neither. */
+  /** §31 — `data-testid` per segment. The component draws both, so only it can tag them. */
   value1TestId?: string;
   value2TestId?: string;
-  /** §31 — style for the root, which carries prod's `margin-bottom: 20px` and `max-width: 160px`. */
+  /** §31 — style for the root, which carries the 20px of clearance below and the 160px cap. */
   style?: React.CSSProperties;
 }
 
 /**
- * ToggleButton — two-value segmented control recreated from components/shared/ToggleButton.
- * ToggleButton.module.scss: .root{position:relative;margin-bottom:20px;max-width:160px},
- * .toggleWrapper{display:flex;flex-wrap:nowrap;background:$appGrayLight;border-radius:20px;
- * height:32px}, >button{flex:1 1 0;centered;background:$appGrayLight;border-radius:20px;
- * font-size:12px}, .activeBtn{height:36px;font-size:13px;font-weight:500;line-height:1;
- * background:#fff;box-shadow:0 2px 4px 0 rgb(0 0 0 / 18%);border-radius:20px;
- * margin-top:-2px;outline:0}. The label uses the global `.input-label` rule.
- * The source declares no :hover / :focus / :disabled state for either button.
+ * ToggleButton — a two-value segmented pill. The track is a 32px `--color-gray-light` capsule at
+ * `--radius-pill`; the chosen segment is a white 36px pill lifted out of it by 2px, carrying
+ * `--shadow-toggle-active` and one step up in size and weight. The label above takes the
+ * system's field-label treatment.
  *
- * §31 — blue forwards nothing, so `data-testid` and every `aria-*` vanished before the DOM, and
- * the paint was the only thing saying which segment was chosen. Two buttons that swap a boolean
- * between them are **one control**: it is now a `role="radiogroup"` of two `role="radio"`
- * segments, with a roving tab stop and arrow keys, which is what a segmented control is. Prod's
- * markup says none of that, because prod's markup is two `<button>`s — and a reader met with
- * "24h, button" then "12h, button" is told there are two actions rather than one choice with two
- * answers.
+ * §31 — **it is one control, not two buttons.** Two buttons that swap a boolean between them
+ * are a single choice with two answers, and a reader met with "24h, button" then "12h, button"
+ * is told there are two actions. So it is a `role="radiogroup"` of two `role="radio"` segments,
+ * with one tab stop and arrow keys that move and select — the semantics the shape already
+ * implies. `data-testid` reaches each segment, because the paint cannot be the only thing
+ * saying which one is chosen.
  *
  * Give it a name — `label` if it should be drawn, `aria-label` if it should only be announced.
  *
- * The focus ring is the second addition. The source declares no `:focus` state at all, which is
- * survivable while nothing is expected to arrive by keyboard; a radio group is. It takes
- * `--shadow-focus-input`, the ring every other blue control uses.
+ * The focus ring is the other half. A group that can be reached and changed by keyboard has to
+ * show where the keystrokes land; it takes `--shadow-focus-input`, the ring every control in
+ * the system uses.
  */
 export function ToggleButton({
   label, value1, value2, selectedValue, onValue1Click, onValue2Click,
@@ -100,15 +95,14 @@ export function ToggleButton({
   };
 
   return (
-    /* §49 — `width: '100%'` beside prod's `max-width: 160px`. In prod this root is a block in a
-       stacked form, so it fills its parent and the cap is what limits it; measured as a bare
-       `max-width`, it collapses the moment a caller puts it in a flex row, because a flex item
-       sizes to content and both segments are `flex-basis: 0`. The control then shrinks to the
-       width of "24h12h" with the active segment painting over its neighbour. Restoring the
-       block behaviour costs nothing anywhere else — the cap still decides the width. */
+    /* §49 — `width: '100%'` beside the 160px cap, and the width is why. A bare `max-width`
+       collapses the moment a caller puts this in a flex row: a flex item sizes to content and
+       both segments are `flex-basis: 0`, so the control shrinks to the width of "24h12h" with
+       the chosen segment painting over its neighbour. Filling the line first and capping second
+       costs nothing in a stacked form — the cap still decides the width there. */
     <div {...rest} style={{ position: 'relative', marginBottom: 20, width: '100%', maxWidth: 160, ...style }}>
       {label && (
-        /* global .input-label */
+        /* The system's field-label treatment, inline because this control draws its own. */
         <label id={labelId} style={{ display: 'inline-block', padding: '10px 0 0 10px', fontWeight: 'var(--font-weight-regular)', fontSize: 'var(--font-size-xs)', lineHeight: '21px', color: 'var(--text-secondary)', marginBottom: 'var(--space-1)', whiteSpace: 'nowrap', fontFamily: 'var(--font-family-base)' }}>{label}</label>
       )}
       <div

@@ -7,30 +7,29 @@ export interface PreloaderProps extends React.HTMLAttributes<HTMLSpanElement> {
   margin?: number;
   /** Centres the loader absolutely with `z-index: 1002`, as Preloader's own `.overlay` does. */
   overlay?: boolean;
-  /** Divides the 0.75s duration and the 0.12s-per-dot stagger, as in react-spinners. */
+  /** Divides the 0.75s duration and the 0.12s-per-dot stagger together. */
   speedMultiplier?: number;
   /** §23 — every other attribute reaches the wrapper; `style` merges over the painted one. */
 }
 
-/* components/shared/Preloader is NOT a spinner: it portals react-spinners' PulseLoader
-   (color #0168fa, size 12, margin 7, speedMultiplier 1) into #portal and centres it with
-   .overlay{position:absolute; top/left:50%; translate(-50%,-50%); z-index:1002}.
-   The infinite-scroll tables render the same loader inline at size 8 / margin 5
-   (ProjectsTable.tsx, ToDosTable.tsx, ClientsTable.tsx → .loadNextTableIndicator, centeredFlex).
-   Animation read from node_modules/react-spinners@0.13.6/PulseLoader.js: three inline-block
-   spans, borderRadius 100%, animation `${0.75 / speedMultiplier}s ${(i * 0.12) / speedMultiplier}s
-   infinite cubic-bezier(0.2, 0.68, 0.18, 1.08)` with i = 1, 2, 3 (so the delays are .12/.24/.36s),
-   animation-fill-mode both, and a wrapper span at `display: inherit`. */
-/* §69 — the keyframes live in `base.css`, not in a module-scope `document.head.appendChild`
+/* The loader is a **pulse, not a spin**: three dots at `--color-blue`, each pulsing on a
+   0.75s cycle staggered by 0.12s, so they read as one object breathing rather than three
+   things moving. `speedMultiplier` divides both numbers together, which is what keeps the
+   stagger proportional at any speed.
+
+   Two sizes, and only two: 12/7 stands in for a screen, 8/5 sits in a table row waiting for
+   the next page. A third would be a loader nobody could place.
+
+   §69 — the keyframes live in `base.css`, not in a module-scope `document.head.appendChild`
    here. A side effect that runs once on whichever page first imports this component fails
    silently everywhere it does not run, and a loader whose dots do not move is
    indistinguishable from a screen that has stopped. */
 
 export function Preloader({
   size = 12, margin = 7, overlay = false, speedMultiplier = 1,
-  /* §23 — blue forwards nothing, so `data-testid`, `role="status"` and `aria-label` never
-     reached the DOM. Prod portals this into #portal and nothing has to find it; a loader that
-     stands in for a screen's content has to be both findable and announceable. */
+  /* §23 — everything reaches the wrapper. A loader standing in for a screen's content has to
+     be findable by a test and announceable as `role="status"`; one that is neither is a
+     picture of waiting. */
   style, ...rest
 }: PreloaderProps) {
   return (

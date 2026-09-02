@@ -47,30 +47,26 @@ interface DayProps {
 /**
  * Calendar — §30. A month of dates, one at a time, for picking a day.
  *
- * **Designed, not measured.** Teamplay books nothing, so there is no production date *picker* to
- * recreate. What there is, and what every value below comes from, is `DateRangePicker`: a faithful
- * recreation of the react-datepicker 4.x defaults the product ships, which is the one place blue
- * draws a month grid at all. Its metrics are reproduced here rather than reinvented —
- * `.react-datepicker__day` 1.7rem/1.7rem with a .166rem margin and a 3px radius, `__month`
- * .4rem, the header at 8px 0 over a `--color-gray` bottom rule, `__current-month` .944rem/500,
- * `__day-name` in `--text-primary`/450, navigation 32x32 with a 9px border-drawn chevron, and the
- * three day states: selected `--color-blue`/white/13px/600, disabled `--color-gray-light` at
- * opacity .5 with not-allowed, everything else untinted.
+ * The grid is built on a rem scale rather than the pixel spacing tokens: cells are 1.7rem square
+ * with a .166rem gutter, the month .4rem in, the month name at .944rem. A date grid is the one
+ * place in the system where seven columns and six rows have to stay square and stay aligned
+ * while the type around them changes size, and a rem grid does that where a px grid drifts.
+ * Everything else is the system's — `--radius-s` on a cell, `--color-blue` for the selection,
+ * `--shadow-focus-input` for the ring, 32x32 navigation.
  *
- * Three things depart from that grid, each because this is an availability picker rather than a
- * range picker over past dates, and each written down in `controls/calendar-control.md`:
+ * Three decisions the shape does not make for itself, each written down in
+ * `controls/calendar-control.md`:
  *
- * 1. **The week runs Monday to Sunday.** react-datepicker's Sunday-first default is a locale
- *    convention it inherited, not a choice prod made — the same class of thing as the month names
- *    being English. The consumer decides, by way of the `weeks` it hands in.
- * 2. **Leading and trailing cells are blank**, where react-datepicker greys the adjacent months'
- *    numbers. A day number in the grid looks selectable and every one of these is out of window.
- * 3. **It is a keyboard grid.** react-datepicker leaves `__day--keyboard-selected` transparent,
- *    which is survivable exactly as long as nothing can focus a day; here arrows move by day and
- *    by week, so focus takes `--shadow-focus-input` — the ring every other blue control uses.
+ * 1. **The week runs Monday to Sunday**, and the consumer decides, by way of the `weeks` it
+ *    hands in. This component never computes a month; it draws the one it is given.
+ * 2. **Leading and trailing cells are blank** rather than showing the adjacent months' greyed
+ *    numbers. A day number in the grid looks selectable, and every one of these is out of the
+ *    booking window.
+ * 3. **It is a keyboard grid.** Arrows move by day and by week, `Home`/`End` to the ends of the
+ *    week, `PageUp`/`PageDown` between months — so focus needs a ring, and takes the system's.
  *
- * Deliberately presentational. Availability, the booking window and the zone they were reckoned in
- * are business rules; they belong to whatever fetched them, and arrive here as props.
+ * Deliberately presentational. Availability, the booking window and the zone they were reckoned
+ * in are business rules; they belong to whatever fetched them, and arrive here as props.
  *
  * Keyboard: arrows move by day and by week, `Home`/`End` to the ends of the focused week,
  * `PageUp`/`PageDown` between months, `Enter`/`Space` to select. Focus only ever lands on a
@@ -88,8 +84,9 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
    under them cannot disagree. */
 const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
-/* react-datepicker's navigation glyph is not an svg: it is a 9px box with two 3px borders,
-   rotated. Reproduced rather than replaced with a path, so the two grids match. */
+/* The navigation glyph is a 9px box with two 3px borders, rotated — not an `<svg>`. At this
+   size a drawn chevron's stroke rounds unevenly against the cell grid beside it, and a border
+   is snapped to the pixel by the browser. */
 const Chevron = ({ back }: { back?: boolean }) => (
   <span
     aria-hidden
@@ -225,7 +222,8 @@ export function Calendar({
       data-testid={(rest as Record<string, any>)['data-testid'] || 'calendar-control'}
       style={{ fontFamily: 'var(--font-family-base)', fontSize: '0.8rem', ...style }}
     >
-      {/* react-datepicker's header holds the month and the day names together, over one rule. */}
+      {/* The month name and the day initials share one header, over one rule: they are the
+          same fact about the grid below — which month, and which column is which day. */}
       <div
         style={{
           position: 'relative', textAlign: 'center', padding: '8px 0',
@@ -347,10 +345,10 @@ function Day({ date, selectable, selected, today, tabStop, onSelect, onFocus }: 
         type="button"
         data-date={date}
         data-testid={`calendar-day-${date}`}
-        /* A real `disabled`, not `aria-disabled`: calendar-control §10.41 requires the arrow
-           walk to skip unpickable days, and a month of which four cells are bookable is not a
-           grid anybody should have to arrow through. The opposite call to §22's menu row, whose
-           whole point was that a blocked action stays readable. */
+        /* A real `disabled`, not `aria-disabled`: the arrow walk skips unpickable days, and a
+           month of which four cells are bookable is not a grid anybody should have to arrow
+           through one cell at a time. The opposite call to §22's menu row — there the whole
+           point is that a blocked action stays readable, and here there is nothing to read. */
         disabled={!selectable}
         aria-selected={selected || undefined}
         aria-current={today ? 'date' : undefined}
@@ -376,12 +374,12 @@ function Day({ date, selectable, selected, today, tabStop, onSelect, onFocus }: 
           fontVariantNumeric: 'tabular-nums',
           borderRadius: 'var(--radius-s)',
           boxSizing: 'border-box',
-          /* §72 — the selection is a **tint**, not a fill. `DateRangePicker` paints a solid
-             `--color-blue` cell with white ink, which is right for a range where a run of ten
-             days has to read as one block; a single chosen date beside a list of times is one
-             mark, and the solid version made it the loudest thing on a page whose primary
-             action is a button below it. The 12% tint over a `--color-blue` border is what a
-             `pressed` slot chip takes (§71), so the two halves of the picker agree.
+          /* §72 — the selection is a **tint**, not a fill. A solid `--color-blue` cell with
+             white ink is right for a *range*, where a run of ten days has to read as one block;
+             a single chosen date beside a list of times is one mark, and the solid version made
+             it the loudest thing on a page whose primary action is a button below it. The 12%
+             tint over a `--color-blue` border is exactly what a `pressed` slot chip takes
+             (§71), so the two halves of the picker agree.
 
              Today is a border at 45% of the same hue — present, and never mistaken for the
              selection. */
@@ -391,10 +389,9 @@ function Day({ date, selectable, selected, today, tabStop, onSelect, onFocus }: 
               ? 'var(--border-width-control) solid color-mix(in oklch, var(--color-blue) 45%, transparent)'
               : 'var(--border-width-control) solid transparent',
           boxShadow: focus ? 'var(--shadow-focus-input)' : 'none',
-          /* §72 — an unavailable day is **not filled**. It was `--color-gray-light` at 0.6
-             opacity, which put a grey block on every weekend and read as a second kind of
-             selection: a month with four bookable days was mostly blocks. It is faint ink on
-             the panel's own ground now, which is what "nothing here" looks like. */
+          /* §72 — an unavailable day is **not filled**. A grey block on every weekend reads as
+             a second kind of selection, and a month with four bookable days was mostly blocks.
+             Faint ink on the panel's own ground is what "nothing here" looks like. */
           backgroundColor: selected
             ? 'color-mix(in oklch, var(--color-blue) 12%, transparent)'
             : selectable && hover
