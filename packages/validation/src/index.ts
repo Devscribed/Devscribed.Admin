@@ -588,7 +588,20 @@ export type MemberCapability =
    * `manage-own-time-entries`; this capability lets a future role hold
    * `manage-all-time-entries` while still being locked out of billable changes.
    */
-  | 'edit-others-billable';
+  | 'edit-others-billable'
+  /**
+   * Requests spec 01 additions — requests between members of the organization.
+   * `create-request`: raise a request (admin, manager, user — being asked something is
+   * not a privilege, but asking is).
+   * `view-own-requests`: see requests I raised or that are addressed to me (all four
+   * roles; it is what makes the Requests page everyone's inbox).
+   * `view-all-requests`: the All scope — every request in the organization
+   * (admin, manager). Distinct from `view-requests`, which keeps its spec-10 meaning
+   * and its grants and now gates only the vacation section inside the page.
+   */
+  | 'create-request'
+  | 'view-own-requests'
+  | 'view-all-requests';
 
 /**
  * Pure lookup against spec 04's Roles & Permission Matrix (TC-04-UNIT-05), widened by
@@ -628,6 +641,9 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-holidays': true,
     'delete-holidays': true,
     'edit-others-billable': true,
+    'create-request': true,
+    'view-own-requests': true,
+    'view-all-requests': true,
   },
   manager: {
     'view-list': true,
@@ -659,6 +675,9 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-holidays': true,
     'delete-holidays': false,
     'edit-others-billable': true,
+    'create-request': true,
+    'view-own-requests': true,
+    'view-all-requests': true,
   },
   user: {
     'view-list': true,
@@ -690,6 +709,9 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-holidays': false,
     'delete-holidays': false,
     'edit-others-billable': false,
+    'create-request': true,
+    'view-own-requests': true,
+    'view-all-requests': false,
   },
   viewer: {
     'view-list': true,
@@ -721,6 +743,9 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-holidays': false,
     'delete-holidays': false,
     'edit-others-billable': false,
+    'create-request': false,
+    'view-own-requests': true,
+    'view-all-requests': false,
   },
 };
 
@@ -1803,6 +1828,45 @@ export const REQUEST_MESSAGES = {
   toastCancelledPending: 'Request cancelled',
   toastCancelledApproved: 'Request cancelled and reserve refunded',
   genericError: 'Something went wrong. Please try again.',
+
+  /* ---------------------------------------------------------------- *
+   * Requests spec 01 — requests between members. Extended in place rather than
+   * exported a second time: web and API read one object, so they cannot disagree, and
+   * none of the keys below collides with a vacation key above (`cancelForbidden` and
+   * `reviewForbidden` are spec 09's and are distinct from `notYoursToCancel` and
+   * `editForbidden`).
+   * ---------------------------------------------------------------- */
+  createForbidden: 'You do not have permission to create requests',
+  scopeForbidden: "You do not have permission to view other people's requests",
+  typeUnknown: 'Choose a request type',
+  titleRequired: 'Enter a title',
+  titleTooShort: 'Title must be at least 3 characters',
+  titleTooLong: 'Title must be 200 characters or fewer',
+  descriptionTooLong: 'Description must be 5000 characters or fewer',
+  accessKindRequired: 'Choose what kind of access this is',
+  accessKindNotAllowed: 'A question does not have an access kind',
+  accessKindUnknown: 'Choose a valid access kind',
+  priorityUnknown: 'Choose a valid priority',
+  neededByInvalid: 'Enter a valid date',
+  neededByPast: 'The date needed cannot be in the past',
+  assigneeInvalid: 'Choose who this request is for',
+  assigneeInactive: 'That person is no longer active in this organization',
+  projectUnavailable: 'That project is not available',
+  messageRequired: 'Write a message',
+  messageTooLong: 'Message must be 5000 characters or fewer',
+  threadClosed: 'This request is closed',
+  alreadyTerminal: 'This request has already been closed',
+  invalidTransition: 'This request cannot move to that state',
+  notYoursToAnswer: 'Only the person this is addressed to can answer it',
+  notYoursToGrant: 'Only the person who asked can confirm this',
+  notYoursToDecline: 'Only the person this is addressed to can decline it',
+  notYoursToCancel: 'Only the person who asked can cancel this',
+  editForbidden: 'You do not have permission to edit this request',
+  fieldImmutable: 'That field cannot be changed after the request is created',
+  declineReasonRequired: 'Say why you cannot provide this',
+  declineReasonTooLong: 'Reason must be 1000 characters or fewer',
+  emptyMine: 'Nothing is waiting on you.',
+  emptyFiltered: 'No requests match these filters.',
 } as const;
 
 /** Max length of an optional reviewer comment (spec 09 Validation Rule 6). */
@@ -3482,3 +3546,9 @@ export * from './signing-providers';
 
 export * from './holiday-messages';
 export * from './holidays';
+
+/* ------------------------------------------------------------------ *
+ * Requests area — specs/requests
+ * ------------------------------------------------------------------ */
+
+export * from './requests';

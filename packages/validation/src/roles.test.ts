@@ -64,6 +64,10 @@ describe('ROLE_CAPABILITIES matrix', () => {
         'DeleteHolidays',
         // Spec user-management/16: toggle billable on any member's entry.
         'EditOthersBillable',
+        // Requests spec 01: all three request capabilities.
+        'CreateRequest',
+        'ViewOwnRequests',
+        'ViewAllRequests',
       ],
       manager: [
         'ViewDocumentTemplates',
@@ -84,10 +88,18 @@ describe('ROLE_CAPABILITIES matrix', () => {
         'ManageHolidays',
         // Spec user-management/16: manager may also cross-edit the billable flag.
         'EditOthersBillable',
+        // Requests spec 01: the same three request capabilities as an admin; the
+        // transitions are decided by identity, not by capability.
+        'CreateRequest',
+        'ViewOwnRequests',
+        'ViewAllRequests',
       ],
       // Spec 03's "user (own)" column is not a row here — see `canReadProfile` below.
-      user: [],
-      viewer: [],
+      // Requests spec 01 is the first spec to put anything in these two rows: everybody
+      // sees the requests they raised or that are addressed to them, and a `viewer` may
+      // not raise one.
+      user: ['CreateRequest', 'ViewOwnRequests'],
+      viewer: ['ViewOwnRequests'],
     });
   });
 });
@@ -138,6 +150,9 @@ describe('capabilitiesFor', () => {
       'ManageHolidays',
       'DeleteHolidays',
       'EditOthersBillable',
+      'CreateRequest',
+      'ViewOwnRequests',
+      'ViewAllRequests',
     ]);
     expect(capabilitiesFor('manager')).toEqual([
       'ViewDocumentTemplates',
@@ -153,9 +168,17 @@ describe('capabilitiesFor', () => {
       'ViewHolidays',
       'ManageHolidays',
       'EditOthersBillable',
+      'CreateRequest',
+      'ViewOwnRequests',
+      'ViewAllRequests',
     ]);
-    expect(capabilitiesFor('member')).toEqual([]);
-    expect(capabilitiesFor(null)).toEqual([]);
+    // `member` normalizes to `user`, and `null` to `viewer` — both rows are non-empty
+    // since requests spec 01, so each is asserted against the role it normalizes to
+    // rather than against the empty list it used to produce.
+    expect(capabilitiesFor('member')).toEqual(capabilitiesFor('user'));
+    expect(capabilitiesFor('member')).toEqual(['CreateRequest', 'ViewOwnRequests']);
+    expect(capabilitiesFor(null)).toEqual(capabilitiesFor('viewer'));
+    expect(capabilitiesFor(null)).toEqual(['ViewOwnRequests']);
   });
 });
 
@@ -202,8 +225,9 @@ describe('TC-02-UNIT-06: Capability map', () => {
     expect(capabilitiesFor('member')).toEqual(capabilitiesFor('user'));
   });
 
-  it('grants an unknown role nothing, because normalization lands on viewer', () => {
-    expect(capabilitiesFor('superadmin')).toEqual([]);
+  it('grants an unknown role no more than a viewer, because normalization lands there', () => {
+    expect(capabilitiesFor('superadmin')).toEqual(capabilitiesFor('viewer'));
+    expect(capabilitiesFor('superadmin')).toEqual(['ViewOwnRequests']);
   });
 
   it('leaves the spec 01 capabilities exactly as they were', () => {
@@ -266,7 +290,8 @@ describe('spec 03 profile capabilities', () => {
   it('never invents a `self` role — the table only holds values the column can hold', () => {
     expect(Object.keys(ROLE_CAPABILITIES)).toEqual(['admin', 'manager', 'user', 'viewer']);
     expect(normalizeRole('self')).toBe('viewer');
-    expect(capabilitiesFor('self')).toEqual([]);
+    expect(capabilitiesFor('self')).toEqual(capabilitiesFor('viewer'));
+    expect(capabilitiesFor('self')).toEqual(['ViewOwnRequests']);
   });
 });
 

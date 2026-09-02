@@ -78,6 +78,9 @@ Run this before showing a spec to anyone. A "no" is a defect, not a style prefer
 - [ ] Every `##` section has at least one test case, or an explicit note saying it has none and
       why. Verification Plan is the standing exception — it is the rig those cases run on, not a
       behaviour to test.
+- [ ] The Verification Plan records routes, states and observers — never a port, a database
+      name or a connection string. The harness chooses those, and a spec that pins one sends
+      the next run at a server this repository does not publish.
 - [ ] E2E cases that mutate process-wide state are marked serial.
 - [ ] Every premise about the pipeline or infrastructure is cited by file path, not restated from
       CLAUDE.md.

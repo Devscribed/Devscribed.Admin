@@ -73,6 +73,8 @@ model Account {
   clientsArchived           Client[]                     @relation("ClientsArchived")
   /// Spec organization/03 — audit back-relation for the Holiday entity.
   holidaysCreated           Holiday[]                    @relation("HolidaysCreated")
+  /// Requests spec 01 — the account that moved a request into a terminal status.
+  requestsResolved          Request[]                    @relation("RequestResolvedBy")
 }
 
 /// Pending email-change confirmation grant (spec 06). The account's email is only
@@ -162,6 +164,12 @@ model Organization {
 
   signatureProviderSetByAccount Account? @relation("SignatureProviderSetBy", fields: [signatureProviderSetBy], references: [id], onDelete: SetNull)
 
+  /// Requests spec 01 requirement 10 — atomically-allocated per-organization request
+  /// counter. Advanced inside a `SELECT ... FOR UPDATE` transaction on the organization
+  /// row before every Request insert, mirroring `Project.nextTaskNumber`. The default is
+  /// what makes a backfill unnecessary for organizations that predate the column.
+  nextRequestNumber Int @default(1)
+
   memberships       Membership[]
   documentTemplates DocumentTemplate[]
   envelopes         Envelope[]
@@ -173,6 +181,8 @@ model Organization {
   clients           Client[]
   /// Spec organization/03 — the organization's paid public-holiday calendar.
   holidays          Holiday[]
+  /// Requests spec 01 — the organization's requests.
+  requests          Request[]
 }
 
 /// Links an account to its organization. One per account — single-org-per-user (FR-8).
@@ -208,6 +218,11 @@ model Membership {
   commentsAuthored    TaskComment[]                @relation("TaskCommentAuthor")
   watchedTasks        TaskWatcher[]                @relation("TaskWatcherMembership")
   taskActivity        TaskActivity[]               @relation("TaskActivityActor")
+  /// Requests spec 01 — the request rows this membership takes part in.
+  requestsRaised      Request[]                    @relation("RequestRequester")
+  requestsAssigned    Request[]                    @relation("RequestAssignee")
+  requestMessages     RequestMessage[]             @relation("RequestMessageAuthor")
+  requestEvents       RequestEvent[]               @relation("RequestEventActor")
 
   @@index([organizationId])
 }
@@ -753,6 +768,8 @@ model Project {
   columns       BoardColumn[]
   tasks         Task[]
   labels        TaskLabel[]
+  /// Requests spec 01 — requests raised against this project (SetNull on hard delete).
+  requests      Request[]
 
   @@index([organizationId])
   @@index([clientId])
@@ -1098,4 +1115,109 @@ model TaskActivity {
   actor Membership @relation("TaskActivityActor", fields: [actorId], references: [id], onDelete: Cascade)
 
   @@index([taskId, createdAt])
+}
+
+/// Requests spec 01 — one record of somebody needing something from somebody else: an
+/// access, a seat on a tool, an answer to a question. Every value set below is a
+/// documented `String` column rather than a Prisma enum (following `Project.status` and
+/// `Client.status`), so adding a request type, an access kind, or spec 02's second
+/// addressee kind is additive and needs no migration.
+model Request {
+  id                    String    @id @default(uuid())
+  /// Scope key. A required argument on every service method; there is no default.
+  organizationId        String
+  /// Per-organization human-readable number. Written exactly once, under a `FOR UPDATE`
+  /// lock on the organization row inside the creating transaction (requirement 10).
+  number                Int
+  /// 'access' | 'question'.
+  type                  String
+  /// Required when `type = 'access'`, absent otherwise. One of repository, environment,
+  /// server, vpn, saas, admin_panel, documentation, other.
+  accessKind            String?
+  title                 String    @db.VarChar(200)
+  /// Plain text, <= 5000 chars. No markup is accepted, stored or interpreted.
+  description           String?   @db.Text
+  /// SetNull rather than Cascade: a request outlives a hard-deleted project.
+  projectId             String?
+  requesterMembershipId String
+  /// 'member' is the only valid value in this spec; spec 02 adds `client`.
+  assigneeKind          String
+  /// Required while `assigneeKind = 'member'`. Nullable in the column so spec 02's
+  /// second addressee kind needs no column change.
+  assigneeMembershipId  String?
+  /// 'low' | 'normal' | 'high' | 'urgent'.
+  priority              String    @default("normal")
+  blocking              Boolean   @default(false)
+  /// Date-only. `overdue` is derived from it per reading account's timezone and is
+  /// never stored (requirement 33).
+  neededBy              DateTime? @db.Date
+  /// 'open' | 'answered' | 'granted' | 'declined' | 'cancelled'.
+  status                String    @default("open")
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  /// Written exactly once, on the first entry into `answered`.
+  answeredAt            DateTime?
+  /// Written exactly once, on entry into a terminal status.
+  resolvedAt            DateTime?
+  resolvedByAccountId   String?
+  /// Sort key. Updated by any message, status change or reassignment.
+  lastActivityAt        DateTime  @default(now())
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  requester    Membership       @relation("RequestRequester", fields: [requesterMembershipId], references: [id], onDelete: Cascade)
+  assignee     Membership?      @relation("RequestAssignee", fields: [assigneeMembershipId], references: [id], onDelete: SetNull)
+  resolvedBy   Account?         @relation("RequestResolvedBy", fields: [resolvedByAccountId], references: [id], onDelete: SetNull)
+  messages     RequestMessage[]
+  events       RequestEvent[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@index([organizationId, assigneeMembershipId, status])
+  @@index([organizationId, lastActivityAt])
+}
+
+/// Requests spec 01 — one message in a request's conversation. Append-only: the
+/// application has no edit path and no delete path.
+model RequestMessage {
+  id                 String   @id @default(uuid())
+  requestId          String
+  /// 'member' only in this spec; the same seam as `Request.assigneeKind`.
+  authorKind         String
+  authorMembershipId String?
+  /// Plain text, 1-5000 chars.
+  body               String   @db.Text
+  createdAt          DateTime @default(now())
+
+  request Request     @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  author  Membership? @relation("RequestMessageAuthor", fields: [authorMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([requestId, createdAt])
+}
+
+/// Requests spec 01 — append-only journal of what happened to a request. No hash chain:
+/// this is an operational trail, not the evidence of a legally executed contract, and
+/// claiming tamper-evidence it does not have would be worse than not claiming it.
+model RequestEvent {
+  id                String   @id @default(uuid())
+  requestId         String
+  /// 'member' | 'system'.
+  actorKind         String
+  actorMembershipId String?
+  /// 'created' | 'status_changed' | 'assignee_changed' | 'field_changed' | 'message_posted'.
+  action            String
+  /// Set for `field_changed`.
+  field             String?
+  oldValue          String?
+  newValue          String?
+  /// Display-name snapshots taken at write time, so the trail survives a removed or
+  /// renamed member (the device `TaskActivity` uses).
+  oldLabel          String?
+  newLabel          String?
+  createdAt         DateTime @default(now())
+
+  request Request     @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  actor   Membership? @relation("RequestEventActor", fields: [actorMembershipId], references: [id], onDelete: SetNull)
+
+  @@index([requestId, createdAt])
 }

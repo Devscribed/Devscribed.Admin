@@ -31,6 +31,27 @@ and the member detail tabs from spec 05 (it adds a Contract details tab). It als
 first role-based authorization in the codebase and, until the role enum below is migrated, resolves
 capabilities through a `normalizeRole()` helper that maps the legacy `member` value to `user`.
 
+[`specs/requests/`](../requests/README.md) — access requests and questions, addressed to a member
+of staff (spec 01 there) or to a person at a client (spec 02 there). It builds on spec 04
+(`Membership` and its soft delete), spec 11 (`Project`), spec 03 (`Invitation` and its token),
+and organization spec 01 (`Client`).
+
+**It introduces a second kind of signed-in principal.** A client user is an `Account` plus a
+`ClientMembership` — deliberately *not* a `Membership` with a fifth role, because `Membership`
+means "member of staff" at 35 query sites across 16 files and a client row there would reach
+vacation accrual, the members list and project assignment silently. Nothing in this area's
+queries changes as a result. Two things here do change: `CapabilityGuard` resolves the principal
+from either table, and login (spec 02) stops refusing an account whose only link to the
+organization is a `ClientMembership`.
+
+**It amends spec 10.** The Requests page stops being gated by `view-requests` and opens to every
+signed-in member, because a person must be able to see requests addressed to them regardless of
+role. The capability itself is unchanged in meaning and in grants — it moves from the page to the
+organization-wide vacation section within it, and `view-all-requests` gates the new All scope. No
+role gains sight of anything it cannot see today; see requests/01 requirements 41–45 and
+TC-01-INT-24. Vacation requests remain `VacationRequest` rows: the page unifies, the model does
+not.
+
 ## Shared Rules
 
 | Rule | Defined in | Referenced by |

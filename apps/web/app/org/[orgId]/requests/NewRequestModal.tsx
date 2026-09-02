@@ -1,0 +1,462 @@
+'use client';
+
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
+import { Button, Checkbox, Input, Modal, Select } from '@/ds';
+import { useSession } from '@/layout/session-context';
+import {
+  ACCESS_KINDS,
+  REQUEST_MESSAGES,
+  REQUEST_PRIORITIES,
+  todayInTimeZone,
+  validateNewRequest,
+} from '@devscribed/validation';
+import { ACCESS_KIND_LABEL } from './RequestRow';
+import type { RequestRowData } from './types';
+
+/** Active members of the organization, as the members list returns them. */
+interface MemberOption {
+  id: string;
+  fullName: string;
+  status: 'active' | 'removed';
+}
+
+const microLabel: CSSProperties = {
+  display: 'block',
+  fontFamily: 'var(--font-display)',
+  fontSize: 'var(--fs-11)',
+  letterSpacing: 'var(--ls-wider)',
+  textTransform: 'uppercase',
+  color: 'var(--text-muted)',
+  marginBottom: 'var(--sp-4)',
+};
+
+/**
+ * The order errors are reported in, which is also the order the first invalid field is
+ * looked for in. Clicking an invalid form shows every error and moves focus to the first
+ * one (AC-10); the submit control is never disabled for validation.
+ */
+const FIELD_ORDER = [
+  'type',
+  'title',
+  'accessKind',
+  'description',
+  'assigneeMembershipId',
+  'priority',
+  'neededBy',
+] as const;
+
+/** Inline field error. Only `title` and `accessKind` carry test ids the spec names. */
+function FieldError({ field, message }: { field: string; message: string }) {
+  const testId =
+    field === 'title'
+      ? 'request-new-error-title'
+      : field === 'accessKind'
+        ? 'request-new-error-accessKind'
+        : undefined;
+  return (
+    <div
+      id={`request-new-error-${field}`}
+      data-testid={testId}
+      style={{
+        fontFamily: 'var(--font-text)',
+        fontSize: 'var(--fs-12)',
+        color: 'var(--error-500)',
+        marginTop: 'var(--sp-2)',
+      }}
+    >
+      {message}
+    </div>
+  );
+}
+
+/**
+ * New request (requests spec 01 requirements 1–15). The client validates rules 1–7 for
+ * immediate feedback and the server re-validates every one of them, including the two it
+ * cannot check — an active membership and an available project.
+ *
+ * Two `@ds` gaps are filled here with token-carrying native elements, exactly as the
+ * vacation modals already do: there is no textarea primitive and no date primitive. Both
+ * are recorded in the spec's DS-gaps table; neither gets a style of its own.
+ */
+export function NewRequestModal({
+  orgId,
+  open,
+  projects,
+  onClose,
+  onCreated,
+}: {
+  orgId: string;
+  open: boolean;
+  projects: { id: string; name: string }[];
+  onClose: () => void;
+  onCreated: (request: RequestRowData) => void;
+}) {
+  const session = useSession();
+  const today = todayInTimeZone(session.account.timezone);
+
+  const [type, setType] = useState('access');
+  const [accessKind, setAccessKind] = useState('');
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [projectId, setProjectId] = useState('');
+  const [assigneeMembershipId, setAssigneeMembershipId] = useState('');
+  const [priority, setPriority] = useState('normal');
+  const [blocking, setBlocking] = useState(false);
+  const [neededBy, setNeededBy] = useState('');
+
+  const [members, setMembers] = useState<MemberOption[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [descriptionFocus, setDescriptionFocus] = useState(false);
+  const [dateFocus, setDateFocus] = useState(false);
+
+  const titleRef = useRef<HTMLDivElement>(null);
+  const accessKindRef = useRef<HTMLDivElement>(null);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
+  const assigneeRef = useRef<HTMLDivElement>(null);
+  const priorityRef = useRef<HTMLDivElement>(null);
+  const typeRef = useRef<HTMLDivElement>(null);
+  const neededByRef = useRef<HTMLInputElement | null>(null);
+
+  // Re-seed clean whenever the modal opens, and load the addressee choices.
+  useEffect(() => {
+    if (!open) return;
+    setType('access');
+    setAccessKind('');
+    setTitle('');
+    setDescription('');
+    setProjectId('');
+    setAssigneeMembershipId('');
+    setPriority('normal');
+    setBlocking(false);
+    setNeededBy('');
+    setFieldErrors({});
+    setFormError(null);
+    setSaving(false);
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(`/api/organizations/${orgId}/members`, {
+          credentials: 'same-origin',
+        });
+        if (!response.ok) return;
+        const data = (await response.json()) as { members: MemberOption[] };
+        if (!cancelled) setMembers(data.members.filter((m) => m.status === 'active'));
+      } catch {
+        // The addressee list stays empty; the server refuses a request with no
+        // addressee, and the inline error says so.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, orgId]);
+
+  function focusFirstInvalid(errors: Record<string, string>): void {
+    const first = FIELD_ORDER.find((field) => errors[field]);
+    const target: Record<string, HTMLElement | null> = {
+      type: typeRef.current?.querySelector('button') ?? null,
+      title: titleRef.current?.querySelector('input') ?? null,
+      accessKind: accessKindRef.current?.querySelector('button') ?? null,
+      description: descriptionRef.current,
+      assigneeMembershipId: assigneeRef.current?.querySelector('button') ?? null,
+      priority: priorityRef.current?.querySelector('button') ?? null,
+      neededBy: neededByRef.current,
+    };
+    if (first) target[first]?.focus();
+  }
+
+  async function submit(event: FormEvent): Promise<void> {
+    event.preventDefault();
+    if (saving) return;
+
+    const body = {
+      type,
+      accessKind: type === 'access' ? accessKind : undefined,
+      title,
+      description: description.trim().length > 0 ? description : undefined,
+      projectId: projectId.length > 0 ? projectId : undefined,
+      assigneeKind: 'member',
+      assigneeMembershipId: assigneeMembershipId.length > 0 ? assigneeMembershipId : undefined,
+      priority,
+      blocking,
+      neededBy: neededBy.length > 0 ? neededBy : undefined,
+    };
+
+    const parsed = validateNewRequest(body, today);
+    if (!parsed.valid) {
+      setFieldErrors(parsed.fields);
+      setFormError(null);
+      focusFirstInvalid(parsed.fields);
+      return;
+    }
+
+    setFieldErrors({});
+    setFormError(null);
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/organizations/${orgId}/requests`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(body),
+      });
+      if (response.status === 201) {
+        const created = (await response.json()) as RequestRowData;
+        setSaving(false);
+        onCreated(created);
+        onClose();
+        return;
+      }
+      const failure = await response.json().catch(() => null);
+      if (failure?.fields && typeof failure.fields === 'object') {
+        setFieldErrors(failure.fields as Record<string, string>);
+        focusFirstInvalid(failure.fields as Record<string, string>);
+      } else {
+        setFormError(failure?.message ?? REQUEST_MESSAGES.genericError);
+      }
+    } catch {
+      setFormError(REQUEST_MESSAGES.genericError);
+    }
+    setSaving(false);
+  }
+
+  return (
+    <Modal
+      open={open}
+      title="New request"
+      onClose={() => {
+        if (!saving) onClose();
+      }}
+      width={520}
+      data-testid="request-new-modal"
+      actions={
+        <>
+          <Button
+            type="button"
+            variant="secondary"
+            size="lg"
+            onClick={onClose}
+            disabled={saving}
+            style={{ flex: 1 }}
+          >
+            Cancel
+          </Button>
+          {/* Disabled only while the request is in flight — never for validation. */}
+          <Button
+            type="submit"
+            form="request-new-form"
+            variant="primary"
+            size="lg"
+            loading={saving}
+            data-testid="request-new-submit"
+            style={{ flex: 1 }}
+          >
+            {saving ? 'Creating' : 'Create request'}
+          </Button>
+        </>
+      }
+    >
+      <form id="request-new-form" onSubmit={submit} noValidate>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-6)' }}>
+          <div ref={typeRef}>
+            <Select
+              label="Type"
+              value={type}
+              options={[
+                { value: 'access', label: 'Access' },
+                { value: 'question', label: 'Question' },
+              ]}
+              onChange={(value) => {
+                setType(value);
+                if (value !== 'access') setAccessKind('');
+              }}
+              error={fieldErrors.type}
+              data-testid="request-new-type"
+            />
+            {fieldErrors.type && <FieldError field="type" message={fieldErrors.type} />}
+          </div>
+
+          {type === 'access' && (
+            <div ref={accessKindRef}>
+              <Select
+                label="Access kind"
+                value={accessKind}
+                options={ACCESS_KINDS.map((kind) => ({
+                  value: kind,
+                  label: ACCESS_KIND_LABEL[kind] ?? kind,
+                }))}
+                onChange={setAccessKind}
+                error={fieldErrors.accessKind}
+                data-testid="request-new-access-kind"
+              />
+              {fieldErrors.accessKind && (
+                <FieldError field="accessKind" message={fieldErrors.accessKind} />
+              )}
+            </div>
+          )}
+
+          <div ref={titleRef}>
+            <Input
+              label="Title"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              error={fieldErrors.title}
+              data-testid="request-new-title"
+            />
+            {fieldErrors.title && <FieldError field="title" message={fieldErrors.title} />}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <label htmlFor="request-new-description" style={microLabel}>
+              Description
+            </label>
+            {/* @ds ships no textarea; this is the token-carrying native element the
+                vacation reject modal already uses. Recorded in the spec's DS gaps. */}
+            <textarea
+              id="request-new-description"
+              ref={descriptionRef}
+              value={description}
+              rows={4}
+              onChange={(event) => setDescription(event.target.value)}
+              onFocus={() => setDescriptionFocus(true)}
+              onBlur={() => setDescriptionFocus(false)}
+              data-testid="request-new-description"
+              style={{
+                width: '100%',
+                border: `var(--border-crisp) solid ${
+                  fieldErrors.description
+                    ? 'var(--error-500)'
+                    : descriptionFocus
+                      ? 'var(--accent)'
+                      : 'var(--border-strong)'
+                }`,
+                borderRadius: 'var(--radius-lg)',
+                padding: 'var(--sp-4) var(--sp-6)',
+                fontFamily: 'var(--font-text)',
+                fontSize: 'var(--fs-15)',
+                color: 'var(--text)',
+                background: 'var(--bg-field)',
+                outline: 'none',
+                boxShadow: descriptionFocus ? 'var(--shadow-glow-accent)' : 'none',
+                transition: 'border-color .15s, box-shadow .15s',
+                resize: 'vertical',
+              }}
+            />
+            {fieldErrors.description && (
+              <FieldError field="description" message={fieldErrors.description} />
+            )}
+          </div>
+
+          <div>
+            <Select
+              label="Project"
+              value={projectId}
+              placeholder="Any"
+              options={projects.map((project) => ({ value: project.id, label: project.name }))}
+              onChange={setProjectId}
+              error={fieldErrors.projectId}
+              data-testid="request-new-project"
+            />
+            {fieldErrors.projectId && (
+              <FieldError field="projectId" message={fieldErrors.projectId} />
+            )}
+          </div>
+
+          <div ref={assigneeRef}>
+            <Select
+              label="For"
+              value={assigneeMembershipId}
+              placeholder="Choose a person"
+              options={members.map((member) => ({ value: member.id, label: member.fullName }))}
+              onChange={setAssigneeMembershipId}
+              error={fieldErrors.assigneeMembershipId}
+              data-testid="request-new-assignee-member"
+            />
+            {fieldErrors.assigneeMembershipId && (
+              <FieldError
+                field="assigneeMembershipId"
+                message={fieldErrors.assigneeMembershipId}
+              />
+            )}
+          </div>
+
+          <div ref={priorityRef}>
+            <Select
+              label="Priority"
+              value={priority}
+              options={REQUEST_PRIORITIES.map((value) => ({
+                value,
+                label: value.charAt(0).toUpperCase() + value.slice(1),
+              }))}
+              onChange={setPriority}
+              error={fieldErrors.priority}
+              data-testid="request-new-priority"
+            />
+            {fieldErrors.priority && <FieldError field="priority" message={fieldErrors.priority} />}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <label htmlFor="request-new-needed-by" style={microLabel}>
+              Needed by
+            </label>
+            {/* @ds ships no date field either — same precedent, same DS-gaps row. */}
+            <input
+              id="request-new-needed-by"
+              ref={neededByRef}
+              type="date"
+              value={neededBy}
+              min={today}
+              onChange={(event) => setNeededBy(event.target.value)}
+              onFocus={() => setDateFocus(true)}
+              onBlur={() => setDateFocus(false)}
+              data-testid="request-new-needed-by"
+              style={{
+                height: 'var(--field-h-lg)',
+                width: '100%',
+                border: `var(--border-crisp) solid ${
+                  fieldErrors.neededBy
+                    ? 'var(--error-500)'
+                    : dateFocus
+                      ? 'var(--accent)'
+                      : 'var(--border-strong)'
+                }`,
+                borderRadius: 'var(--radius-lg)',
+                padding: '0 var(--sp-6)',
+                fontFamily: 'var(--font-text)',
+                fontSize: 'var(--fs-15)',
+                color: 'var(--text)',
+                background: 'var(--bg-field)',
+                outline: 'none',
+                boxShadow: dateFocus ? 'var(--shadow-glow-accent)' : 'none',
+                transition: 'border-color .15s, box-shadow .15s',
+              }}
+            />
+            {fieldErrors.neededBy && <FieldError field="neededBy" message={fieldErrors.neededBy} />}
+          </div>
+
+          <Checkbox
+            checked={blocking}
+            onChange={setBlocking}
+            label="Work is stopped until this is done"
+            data-testid="request-new-blocking"
+          />
+
+          {formError && (
+            <div
+              style={{
+                fontFamily: 'var(--font-text)',
+                fontSize: 'var(--fs-13)',
+                color: 'var(--error-500)',
+              }}
+            >
+              {formError}
+            </div>
+          )}
+        </div>
+      </form>
+    </Modal>
+  );
+}

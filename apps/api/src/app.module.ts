@@ -37,6 +37,8 @@ import { ProjectsController } from './projects/projects.controller';
 import { ProjectsService } from './projects/projects.service';
 import { RequestsController } from './requests/requests.controller';
 import { RequestsService } from './requests/requests.service';
+import { RequestEventsService } from './requests/request-events.service';
+import { VacationRequestFeedService } from './requests/vacation-request-feed.service';
 import { SignupController } from './signup/signup.controller';
 import { SignupService } from './signup/signup.service';
 import { TimeTrackingController } from './time-tracking/time-tracking.controller';
@@ -143,6 +145,8 @@ import { VacationService } from './vacation/vacation.service';
     VacationService,
     VacationRequestsService,
     RequestsService,
+    RequestEventsService,
+    VacationRequestFeedService,
     ProjectsService,
     ClientsService,
     HolidaysService,

@@ -84,7 +84,15 @@ export type Capability =
   // `edit-others-billable` in the lowercase-dashed `MemberCapability` union, kept in
   // both shapes so `RequireCapability` decorators and `can(role, ...)` call sites can
   // both name it, matching the pattern used by clients and holidays above.
-  | 'EditOthersBillable';
+  | 'EditOthersBillable'
+  // Requests spec 01 — requests between members. Duplicates of `create-request` /
+  // `view-own-requests` / `view-all-requests` in the lowercase-dashed
+  // `MemberCapability` union for the same reason the client capabilities are
+  // duplicated: this set is what `@RequireCapability` decorators consume, the other is
+  // what `can(role, ...)` reads, and the spec requires both.
+  | 'CreateRequest'
+  | 'ViewOwnRequests'
+  | 'ViewAllRequests';
 
 /**
  * Permission matrix from spec 01 and spec 02, "Roles & Permission Matrix".
@@ -118,6 +126,9 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     'ManageHolidays',
     'DeleteHolidays',
     'EditOthersBillable',
+    'CreateRequest',
+    'ViewOwnRequests',
+    'ViewAllRequests',
   ],
   manager: [
     'ViewDocumentTemplates',
@@ -144,12 +155,21 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     // Spec user-management/16's matrix: a manager may toggle billable on any
     // member's entry, same as an admin.
     'EditOthersBillable',
+    // Requests spec 01's matrix gives a manager the same request rights as an admin
+    // everywhere except the transitions, which are decided by identity rather than by
+    // capability (see `canReadRequest` below).
+    'CreateRequest',
+    'ViewOwnRequests',
+    'ViewAllRequests',
   ],
-  // `user` looks empty, but a member reading and editing *their own* contract details is
-  // authorized below by `canReadProfile` and friends, not from this table. See the note
-  // above those helpers for why "self" must never become a row here.
-  user: [],
-  viewer: [],
+  // Requests spec 01 is the first spec to put anything in these two rows. A member
+  // reading and editing *their own* contract details is still authorized below by
+  // `canReadProfile` and friends rather than from this table — see the note above those
+  // helpers for why "self" must never become a row here.
+  user: ['CreateRequest', 'ViewOwnRequests'],
+  // Being asked something is not a privilege: a `viewer` sees the requests they raised
+  // or that are addressed to them, and may not raise one.
+  viewer: ['ViewOwnRequests'],
 };
 
 /** Accepts the raw role string so call sites cannot forget to normalize first. */
@@ -206,4 +226,23 @@ export function canReadProfilePii(role: string | null | undefined, isSelf: boole
 /** The matrix row `EditMemberProfile`: admin, or the member editing their own details. */
 export function canEditProfile(role: string | null | undefined, isSelf: boolean): boolean {
   return isSelf || hasCapability(role, 'EditMemberProfile');
+}
+
+/* ------------------------------------------------------------------ *
+ * Requests spec 01 — "party to a request", where role is again only half the answer
+ *
+ * The same composition `canReadProfile` uses, for the same reason: "may this role see
+ * every request in the organization" is a property of the role, while "am I the person
+ * who asked, or the person being asked" is a property of the request. A fifth role
+ * called `party` would be a value `Membership.role` can never hold.
+ * ------------------------------------------------------------------ */
+
+/**
+ * Requests spec 01, "Party to a request": the requester, the addressee, or a holder of
+ * `ViewAllRequests`. `isParty` is the identity half and is computed by the caller from
+ * the request row; a caller who is neither is answered 404, never 403, so request
+ * existence is not enumerable.
+ */
+export function canReadRequest(role: string | null | undefined, isParty: boolean): boolean {
+  return isParty || hasCapability(role, 'ViewAllRequests');
 }

@@ -1,64 +1,79 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { can, type Role } from '@devscribed/validation';
+import { can, normalizeRole } from '@devscribed/validation';
 import { useSession } from './session-context';
 
 interface RequestsBadgeValue {
-  /** Count of pending requests across the org, driving the sidebar badge. 0 hides it. */
-  pendingCount: number;
-  /** Refetch the pending count from the server; called by the Requests page after any
-   * successful action so the badge updates in place. No-op for user/viewer. */
+  /**
+   * What the sidebar badge shows: the work waiting on the caller. 0 hides it.
+   * Requests spec 01 requirement 44 — non-terminal requests addressed to the caller,
+   * plus, for a holder of `view-requests`, the pending vacation count the badge shows
+   * today.
+   */
+  badgeCount: number;
+  /** Refetch the count from the server; called after any successful action so the badge
+   * updates in place. Fired for every role — everyone now has an inbox. */
   refresh: () => Promise<void>;
 }
 
 const RequestsBadgeContext = createContext<RequestsBadgeValue | null>(null);
 
 /**
- * Shell-level source of the sidebar's pending-requests badge count (spec 10). Mounted in
- * `AppShell` inside the session provider so it can read the caller's role.
+ * Shell-level source of the sidebar's Requests badge. Mounted in `AppShell` inside the
+ * session provider so it can read the caller's role.
  *
- * For `admin`/`manager` only (same gate as the sidebar row's visibility, so `user`/`viewer`
- * never fire the request) it fetches `GET .../requests?status=pending` once on mount and
- * seeds `pendingCount` from the response's authoritative `pendingCount`. The Requests page
- * calls `refresh()` after each approve/reject/cancel so the badge stays in sync without any
- * optimistic patching — the server's count is always the source of truth.
+ * It counts the **work**, not the view: the call sends no `scope`, `type` or `status`,
+ * and reads the two counters the server computes before any filter is applied. A badge
+ * that moved when someone narrowed a filter would be reporting what is on screen rather
+ * than what is waiting.
+ *
+ * Every role fetches it, because every role now has requests of their own. The
+ * `view-requests` capability decides only which counters are in the response: a `user`
+ * gets `counts.waitingOnMe` and no `vacation` block at all.
  */
 export function RequestsBadgeProvider({ children }: { children: ReactNode }) {
   const session = useSession();
   const orgId = session.organization.id;
-  const canView = can(session.role as Role, 'view-requests');
-  const [pendingCount, setPendingCount] = useState(0);
+  // The session carries `Membership.role` verbatim, and the database still holds the
+  // legacy `member`, which `can()` does not know. Normalizing first keeps this read
+  // answering the same question the server does about the same account.
+  const canSeeVacation = can(normalizeRole(session.role), 'view-requests');
+  const [badgeCount, setBadgeCount] = useState(0);
 
   const refresh = useCallback(async (): Promise<void> => {
-    if (!canView) return;
     try {
-      const response = await fetch(
-        `/api/organizations/${orgId}/requests?status=pending`,
-        { credentials: 'same-origin' },
-      );
+      const response = await fetch(`/api/organizations/${orgId}/requests`, {
+        credentials: 'same-origin',
+      });
       if (!response.ok) return;
       const data = await response.json().catch(() => null);
-      if (data && typeof data.pendingCount === 'number') {
-        setPendingCount(data.pendingCount);
-      }
+      if (!data) return;
+      const waitingOnMe = typeof data.counts?.waitingOnMe === 'number' ? data.counts.waitingOnMe : 0;
+      // The vacation half is only in the response for a `view-requests` holder; for
+      // anyone else there is nothing to add, which is the same thing as adding zero.
+      const pending =
+        canSeeVacation && typeof data.vacation?.pendingCount === 'number'
+          ? data.vacation.pendingCount
+          : 0;
+      setBadgeCount(waitingOnMe + pending);
     } catch {
       // A failed count fetch leaves the badge at its last value; not user-facing.
     }
-  }, [orgId, canView]);
+  }, [orgId, canSeeVacation]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
   return (
-    <RequestsBadgeContext.Provider value={{ pendingCount, refresh }}>
+    <RequestsBadgeContext.Provider value={{ badgeCount, refresh }}>
       {children}
     </RequestsBadgeContext.Provider>
   );
 }
 
-/** Read the shared pending-requests count and its refresher. Only valid inside the shell. */
+/** Read the shared Requests badge count and its refresher. Only valid inside the shell. */
 export function usePendingRequests(): RequestsBadgeValue {
   const value = useContext(RequestsBadgeContext);
   if (!value) throw new Error('usePendingRequests must be used inside the app shell');
