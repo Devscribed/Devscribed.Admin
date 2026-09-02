@@ -7,10 +7,11 @@ routes:
   - "/org/{orgId}/clients/{clientId}"
   - "/accept-invite"
 api:
-  - "GET/POST /api/organizations/{orgId}/clients/{clientId}/users"
+  - "GET /api/organizations/{orgId}/clients/{clientId}/users"
   - "PATCH /api/organizations/{orgId}/clients/{clientId}/users/{clientMembershipId}/remove"
   - "POST /api/invitations (extended: role=client, clientId)"
   - "POST /api/login (extended: resolves a client principal)"
+  - "GET /api/me (extended: resolves a client principal)"
 entities: [ClientMembership, Invitation, Request, RequestMessage, RequestEvent]
 tags:
   [client, client-user, principal, invitation, capability-guard, navigation, session, request]
@@ -24,24 +25,22 @@ depends-on: ["requests/01", "organization/01", "user-management/03"]
 A person at a client signs in to this product like anyone else: an email, a password, a
 session cookie, the same login screen. What differs is what links them to the organization —
 a **`ClientMembership`** bound to a `Client`, not a `Membership`. That choice is the whole
-spec: `Membership` means "member of staff" at 35 query sites across 16 files, and widening it
-would put a client row into vacation accrual, the members list, project assignment and time
-tracking, where nothing would crash and everything would be quietly wrong.
+spec: `Membership` means "member of staff" everywhere it is read, and widening it would put a
+client row into vacation accrual, the members list, project assignment and time tracking, where
+nothing would crash and everything would be quietly wrong.
 
 With the principal in place, a client can be the addressee of a request from spec 01. They see
 one screen — the requests addressed to them — and nothing else of the organization.
 
 **Depends on:** spec 01 (`Request` and its lifecycle, `assigneeKind`), organization spec 01
-(`Client`), user-management spec 03 (`Invitation` and its token). **Spec 01 must be merged and
-running before this spec's verification route can be walked** — see
-[Verification Plan](#verification-plan).
+(`Client`), user-management spec 03 (`Invitation` and its token).
 
 ## Actors & Preconditions
 
 | Actor | Preconditions |
 |---|---|
 | **Admin / manager** | Active staff member holding `manage-client-users`. Invites and removes client users. |
-| **Client user** | An `Account` plus an active `ClientMembership` bound to an active `Client` of the organization. Holds a session exactly like staff; holds no `Membership`. |
+| **Client user** | An `Account` plus an active `ClientMembership` bound to a `Client` of the organization, whatever that client's status. Holds a session exactly like staff; holds no `Membership`. **Decided:** the client's status does not bear on the principal — an active membership in an archived client is still a principal and still signs in (requirement 24, edge case 22). Rejected: requiring an active `Client` to be a principal, which would log a person out because their client was archived. The active-client condition applies only to being chosen as an addressee (requirement 27). |
 | **Client** | An existing `Client` row (organization spec 01) with status `active`. |
 | **Project** | A `Project` whose `clientId` is that client — required before a request can be addressed to one of its users. |
 
@@ -61,7 +60,9 @@ Capability is resolved from the **principal kind** first (requirement 9).
 | Post a message on a request I am party to | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Mark `answered` / `declined` on a request addressed to me | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Mark `granted` | requester or admin | requester | requester | requester | ❌ |
-| Reassign, cancel, edit | per spec 01 | | | | ❌ |
+| Reassign an `open` or `answered` request | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Cancel a request | requester or admin | requester | requester | requester | ❌ |
+| Edit a request while `open` or `answered` | requester or admin | requester | requester | requester | ❌ |
 | Every other surface — members, projects, time tracking, vacation, documents, clients, settings | per their role | | | | ❌ |
 
 A client user's capability set is exactly `{ ViewOwnRequests }`. Everything else they may do is
@@ -73,14 +74,17 @@ an actor rule of spec 01 (being the addressee), not a capability.
 
 1. A `ClientMembership` links one `Account` to one `Client` within one `Organization`. Its
    `status` is `active` or `removed`; removal is soft, mirroring `Membership`.
-2. **An account holds either a `Membership` or a `ClientMembership`, never both.** Both tables
-   carry `accountId @unique`, and the accept-invitation handler re-reads both inside its
-   transaction and refuses when the other kind already exists, with 409 and
-   `CLIENT_USER_MESSAGES.accountIsStaff` or `…accountIsClient`. Staff and client are different
-   kinds of relationship to the organization, and an account that is both makes every
-   capability question ambiguous.
-3. `SessionPayload` is unchanged — `{ accountId, organizationId, securityStamp }`
-   (`apps/api/src/auth/session.service.ts:7`). The principal kind is **not** in the cookie: it
+2. **An account holds either an active `Membership` or an active `ClientMembership`, never
+   both.** Both tables carry `accountId @unique`, and the accept-invitation handler re-reads
+   both inside its transaction and refuses when an **active** row of the other kind already
+   exists, with 409 and `CLIENT_USER_MESSAGES.accountIsStaff` or `…accountIsClient`. **Decided:**
+   a `removed` row of the other kind does not refuse — the accept succeeds and the new principal
+   is created (edge case 20). Rejected: refusing whenever any row of the other kind exists, which
+   would permanently bar a person who left the agency and now works for a client. Staff and
+   client are different kinds of relationship to the organization, and an account that is both
+   **active** makes every capability question ambiguous.
+3. `SessionPayload` (`apps/api/src/auth/session.service.ts`) is unchanged —
+   `{ accountId, organizationId, securityStamp }`. The principal kind is **not** in the cookie: it
    is resolved from the database on each request, for the same reason `CapabilityGuard` reads
    the role from the membership rather than the cookie — so a revocation takes effect on the
    next request rather than the next sign-in.
@@ -93,7 +97,9 @@ an actor rule of spec 01 (being the addressee), not a capability.
 6. Login today refuses an account with no active `Membership`. Observed:
    `POST /api/login` → `400 {"message":"Your account has been deactivated. Contact your
    administrator."}`. Login must resolve **either** an active `Membership` **or** an active
-   `ClientMembership`, and refuse only when neither exists.
+   `ClientMembership`, and refuse only when neither exists. The principal is resolved **before**
+   the password is verified, and that ordering is preserved: verifying the password first would
+   let a caller tell a correct password from a wrong one on an account with no active principal.
 7. When the account has a `ClientMembership` whose status is `removed`, or whose `Client` is
    archived **and** whose membership is `removed`, login is refused with the **existing**
    message, unchanged. A different message for this case would tell a stranger which kind of
@@ -106,32 +112,104 @@ an actor rule of spec 01 (being the addressee), not a capability.
 9. `CapabilityGuard` (`apps/api/src/auth/capability.guard.ts`) resolves the principal before it
    decides: an active `Membership` → capability comes from `ROLE_CAPABILITIES` as today; an
    active `ClientMembership` → capability comes from a new `CLIENT_CAPABILITIES` list; neither
-   → 403 with the existing fixed message. The two branches are exhaustive and the fall-through
-   fails closed, exactly as the undecorated-route case does today.
+   → 403. The two branches are exhaustive and the fall-through fails closed, exactly as the
+   undecorated-route case does today. Every refusal this guard makes carries its existing fixed
+   body — `{ "error": "forbidden", "message": TEMPLATE_MESSAGES.generic.forbidden }` — which
+   names no resource and no capability.
+
+9a. **Where a refusal message is named, the check is not the guard.** The three client-user
+   routes — the People list, the client invitation and the remove — check
+   `manage-client-users` **in the service**, before the guard's fixed body can be produced, and
+   refuse **every** caller who does not hold it — a staff member of any role and a client
+   principal alike — with 403 and `CLIENT_USER_MESSAGES.manageForbidden`. **Decided:** one
+   refusal whichever principal the caller is; rejected: a distinct answer for a client
+   principal, which would tell a caller which kind of account they hold from a route neither
+   kind may use.
+
+   The capability is checked **before** the client or the client membership named in the URL is
+   read, so that 403 is identical for an id that exists and one that does not, and a caller
+   without the capability learns nothing about what the organization holds. Only a caller who
+   does hold it reaches the lookup, and for them a client or a row outside their organization is
+   404. **Decided:** these three routes answer a named 403 where the other clients-scoped routes
+   answer 404 to a staff caller who lacks `view-clients`; rejected: collapsing these three to
+   404 as well, which the ordering above makes unnecessary — nothing is revealed either way —
+   and which would leave `manageForbidden` unreachable.
+
+   **Decided:** a named message means a service-level check, which is the discipline spec 01
+   already follows for `createForbidden` and `scopeForbidden`; rejected: gating those three
+   routes with `CapabilityGuard`, which would answer the fixed body and make
+   `manageForbidden` unreachable. This spec changes the gate on no other route: a route gated by
+   `CapabilityGuard` keeps that guard and therefore the fixed body (requirement 9).
+
 10. `CLIENT_CAPABILITIES` is a flat readonly list, not a role-keyed table. There is one kind of
     client user and inventing a role dimension for a set with one member would be a table
     nobody can populate a second row of.
-11. **No existing query against `Membership` changes.** A client is never a `Membership` row, so
-    the 35 call sites in 16 files that read one keep their present meaning without being
-    visited. This is the property the whole design exists to buy, and TC-02-INT-09 asserts it
-    against the surfaces where a wrong answer would be silent.
+11. **No query that reads `Membership` gains a client row.** A client is never a `Membership`
+    row, so every query that reads one keeps its present meaning. This is the property the whole
+    design exists to buy, and TC-02-INT-09 asserts it against the surfaces where a wrong answer
+    would be silent. **Decided:** this rule constrains what a `Membership` query may *return*,
+    not which handlers may be edited — a handler may read `ClientMembership` as well, which is
+    what requirement 11a requires of the session endpoint. Rejected: reading it as "no handler
+    that reads `Membership` is visited", which would forbid the one change the sidebar needs.
 
 ### Navigation
 
-12. The sidebar is composed from the principal, not only from the role. A client user sees
-    exactly one row: **Requests**.
-13. **`nav-members` is today added unconditionally** (`apps/web/src/layout/Sidebar.tsx:71`) — the
+11a. **`GET /api/me` resolves either principal.** It answers `200` with the account, the
+    organization and `features` exactly as today, plus `principalKind`. For an account with an
+    active `Membership`: `principalKind: "staff"` and `role` as today. For an account with an
+    active `ClientMembership` and no active `Membership`: `principalKind: "client"`,
+    `role: null`, and the organization taken from the `ClientMembership`. For an account with
+    neither the body is `null`, as today, and the shell sends that caller to the login screen.
+    **Decided:** `role` is `null` for a client principal; rejected: sending `role: "client"`,
+    which would put a client value into a role-keyed lookup that requirement 10 and the roles
+    matrix exist to keep staff-only.
+
+12. The sidebar is composed from `principalKind` first and from the role second. A client
+    principal sees exactly one row: **Requests**. No row is drawn from a role lookup for a
+    caller whose `principalKind` is `client`.
+13. **`nav-members` is today added unconditionally** (`apps/web/src/layout/Sidebar.tsx`) — the
     Members row is drawn for every signed-in member. This spec moves it behind a staff check. It
     is a defect against the existing "a nav item the current role cannot use is not rendered"
     rule the moment a non-staff principal exists, and it is fixed here rather than carved out.
+
+13a. **Where a client principal lands.** After a successful login, and after accepting an
+    invitation, the screen resolves `GET /api/me` and sends a caller whose `principalKind` is
+    `client` to `/org/{orgId}/requests`; a staff principal continues to `/org/{orgId}/members`,
+    unchanged. Accepting a `role = 'client'` invitation establishes the session cookie in the
+    same response, exactly as accepting a staff invitation does, so a client user reaches
+    Requests without a second sign-in. **Decided:** the accept screen branches on
+    `principalKind` rather than sending everyone to Members; rejected: leaving the shared
+    destination, which lands a client principal on the one screen requirement 12 says they never
+    see and edge case 8 says answers 403.
+
 14. A client user who types the URL of any staff screen reaches no data: the API answers 403 for
     a capability-gated route and 404 for an org-scoped resource they are not party to. The
     absent nav row is a convenience; the server is the gate.
 
+14a. **The two shapes of that 403.** A route gated by `CapabilityGuard` answers the guard's
+    fixed body (requirement 9). A staff route that instead resolves its caller from `Membership`
+    inside its own service — the members, projects, time-tracking, vacation and clients routes
+    among them — finds none for a client principal and answers
+    `403 {"message":"Forbidden","statusCode":403}`, which names no resource and no capability.
+    **Decided:** those routes keep the refusal they already make; rejected: teaching them the
+    guard's fixed body or a message of this spec's own, which would be a new answer on every
+    staff surface for a caller they already refuse, and would give a client principal a way to
+    tell one staff surface from another. Under either shape the status is 403 and no route
+    returns data.
+
+14b. **What a client principal sees on a staff URL.** The shell resolves `GET /api/me` and sends
+    a caller whose `principalKind` is `client` who opens any `/org/{orgId}/…` route other than
+    `/org/{orgId}/requests` and `/org/{orgId}/requests/{requestId}` to `/org/{orgId}/requests`;
+    no staff screen is rendered for them. **Decided:** the shell redirects to the one screen
+    they have; rejected: drawing a forbidden state on the staff screen, which would introduce an
+    empty state, a `data-testid` and a message for a screen a client principal has no reason to
+    stand on. The redirect is a convenience and never a gate — requirements 14 and 14a are what
+    withhold the data.
+
 ### Inviting a client user
 
-15. Client invitations reuse `Invitation` (`apps/api/prisma/schema.prisma:102`) rather than a
-    parallel table: the token, its SHA-256 storage, the seven-day expiry, the supersession rule
+15. Client invitations reuse the `Invitation` model (`apps/api/prisma/schema.prisma`) rather
+    than a parallel table: the token, its SHA-256 storage, the seven-day expiry, the supersession rule
     and the accept screen are all built and tested in user-management spec 03.
 16. `Invitation` gains one nullable column, `clientId`, and one new accepted value of `role`:
     `client`. `role = 'client'` requires `clientId`; any other role requires it to be absent.
@@ -156,11 +234,15 @@ an actor rule of spec 01 (being the addressee), not a capability.
     defines.
 22. Removal is soft. The row survives so that historical requests, messages and events keep
     resolving the person's name.
-23. Open requests addressed to a removed client user read `assignee.inactive: true` and are
-    offered for reassignment, exactly as spec 01 requirement 36 does for staff.
+23. An `open` or `answered` request addressed to a removed client user is **not** cancelled and
+    **not** reassigned automatically. It reads `assignee.inactive: true`, which draws the
+    inactive banner and the reassign control on the detail screen and nothing on the list row.
+    An admin or manager may then reassign it — to a member, or to another active client user of
+    the project's client — and the reassignment writes a `RequestEvent` with
+    `action = 'assignee_changed'` carrying both display names in `oldLabel` / `newLabel`.
 24. Archiving a `Client` does **not** remove its users and does not revoke their sessions.
     Conversations already under way finish; the client is simply no longer offered for new work
-    (requirement 26). Consistent with spec 01's treatment of an archived project.
+    (requirement 27). Consistent with spec 01's treatment of an archived project.
 
 ### Addressing a request to a client user
 
@@ -178,10 +260,28 @@ an actor rule of spec 01 (being the addressee), not a capability.
 28. `RequestMessage.authorKind` and `RequestEvent.actorKind` gain the value `client`, with
     nullable `authorClientMembershipId` and `actorClientMembershipId`. Display-name snapshots in
     `oldLabel` / `newLabel` work identically.
-29. A client user may post messages, mark `answered` and `decline` on a request addressed to
-    them, under spec 01's rules 23, 25 and 16–17 unchanged. They may **not** grant: only the
-    requester or an admin does that (spec 01 requirement 24), and a client is never the
-    requester in this spec.
+29. **What a client principal may do to a request addressed to them**, in full:
+    - **Post a message**, while the status is `open` or `answered`. The body is required, 1–5000
+      characters (`REQUEST_MESSAGES.messageRequired` / `messageTooLong`), and is written with
+      `authorKind = 'client'`. In a terminal status the composer is not drawn and
+      `POST …/messages` answers `409 REQUEST_MESSAGES.threadClosed`.
+    - **`open → answered`**, through `POST …/answer`, answering `200` with the row and writing a
+      `status_changed` event in the same transaction. A second answer, attempted from
+      `answered`, answers `409 REQUEST_MESSAGES.invalidTransition`.
+    - **`open → declined`** and **`answered → declined`**, through `POST …/decline`, which
+      **requires** a reason of 1–1000 characters (`REQUEST_MESSAGES.declineReasonRequired` /
+      `declineReasonTooLong`, `400` on either). The reason is stored as the body of a
+      `RequestMessage` with `authorKind = 'client'`, written in the same transaction as the
+      status, so a refusal is always visible in the conversation.
+    - Any transition attempted from a terminal status answers
+      `409 REQUEST_MESSAGES.alreadyTerminal`. A terminal request stays readable to them.
+    - They may **not** grant, cancel, edit or reassign, and none of those controls is drawn:
+      `POST …/grant` answers `403 REQUEST_MESSAGES.notYoursToGrant` — only the requester or an
+      admin grants, and a client is never the requester in this spec; `POST …/cancel` answers
+      `403 …notYoursToCancel`; `PATCH …/requests/{id}` answers `403 …editForbidden`;
+      `POST …/reassign` is capability-gated on `ViewAllRequests`, which no client holds, and
+      answers `403` with the guard's fixed body (requirement 9).
+    - A request they are not party to answers `404`, identical to a non-existent id.
 30. A client user's request list is scoped to requests where they are the addressee. `scope=all`
     answers 403 with `REQUEST_MESSAGES.scopeForbidden`, as it does for a `user`.
 31. The request detail rendered for a client user omits the **History** panel and every control
@@ -323,7 +423,7 @@ No History panel, no Grant, no Reassign, no Cancel, no Edit.
 ├──────────────────────────────────────────────────────────────────────────────┤
 │ People                                              [ + Invite a person ]    │
 │  J. Client      j.client@acme.example      active        [ Remove ]          │
-│  R. Ops         r.ops@acme.example         invited       [ Remove ]          │
+│  R. Ops         r.ops@acme.example         invited                           │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -336,9 +436,12 @@ No History panel, no Grant, no Reassign, no Cancel, no Edit.
    stored, and any live pending invitation for that address in this organization is superseded.
 3. `client_invitation` is sent after commit.
 4. The recipient opens the accept screen from spec 03, sets a name and a password, and submits.
-5. The accept handler re-reads both membership tables inside its transaction, finds neither,
-   creates the `Account` and the `ClientMembership`, and marks the invitation `used`.
-6. They sign in at the ordinary login screen and land on Requests — the only row they have.
+5. The accept handler re-reads both membership tables inside its transaction, finds no active
+   row of either kind, creates the `Account` and the `ClientMembership`, and marks the
+   invitation `used`. The response sets the session cookie.
+6. The accept screen resolves `GET /api/me`, reads `principalKind: "client"`, and lands them on
+   `/org/{orgId}/requests` (requirement 13a). Signing in later at the ordinary login screen
+   lands them on the same route — the only row they have.
 
 ### Flow: a developer asks the client for an access
 
@@ -379,8 +482,14 @@ write.
 
 ### `GET /api/organizations/{orgId}/clients/{clientId}/users`
 
-`SessionGuard` → `OrgScopeGuard` → `ViewClients`. Returns active and removed client users plus
-pending client invitations for that client.
+`SessionGuard` → `OrgScopeGuard`, then a **service-level** `manage-client-users` check
+(requirement 9a). Returns active and removed client users plus pending client invitations for
+that client.
+
+**Errors:** `403 CLIENT_USER_MESSAGES.manageForbidden` for any caller without the capability,
+staff or client principal, and the capability is checked before the client is read, so that 403
+is the same for a `clientId` that does not exist (requirement 9a); `404` when the client is not
+in the caller's organization — never 403.
 
 ```json
 {
@@ -394,17 +503,39 @@ pending client invitations for that client.
 
 ### `POST /api/invitations` (extended)
 
-`ManageClientUsers` when `role = 'client'`; otherwise unchanged from spec 03. Body gains
-`clientId`.
+When `role = 'client'`, a **service-level** `manage-client-users` check (requirement 9a);
+otherwise unchanged from spec 03. Body gains `clientId`.
 
-**Errors:** `400 …invitationShapeInvalid` for a role/clientId mismatch;
+**Errors:** `403 CLIENT_USER_MESSAGES.manageForbidden` when `role = 'client'` and the caller
+lacks the capability, staff or client principal; `400 …invitationShapeInvalid` for a
+role/clientId mismatch;
 `400 …clientArchived`; everything else exactly as spec 03 defines it.
 
 ### `PATCH …/clients/{clientId}/users/{clientMembershipId}/remove`
 
-`ManageClientUsers`. `204`. Rotates the security stamp in the same transaction.
+`SessionGuard` → `OrgScopeGuard`, then a **service-level** `manage-client-users` check
+(requirement 9a). `204`. Rotates the security stamp in the same transaction.
 
-**Errors:** `404` when the row is not in the caller's organization — never 403.
+**Errors:** `403 CLIENT_USER_MESSAGES.manageForbidden` for any caller without the capability,
+staff or client principal, and checked before the row is read, so that 403 is the same for a
+`clientMembershipId` that does not exist (requirement 9a); `404` when the row is not in the
+caller's organization — never 403.
+
+### `GET /api/me` (extended)
+
+`SessionGuard`. Unchanged request. The response gains `principalKind` and resolves a client
+principal (requirement 11a):
+
+```json
+{ "account": { "…": "unchanged" },
+  "organization": { "id": "…", "name": "Acme Agency" },
+  "principalKind": "client",
+  "role": null,
+  "features": { "mailOutbox": false } }
+```
+
+**Errors:** `401` without a valid session, as today; body `null` for an account with no active
+principal of either kind, as today.
 
 ### `POST /api/login` (extended)
 
@@ -433,7 +564,7 @@ client principal can now be party to a request and therefore pass spec 01's part
 | 5 | `role = 'user'` with a `clientId` | `400 invitationShapeInvalid`. |
 | 6 | Inviting a client user for an archived client | `400 clientArchived`. |
 | 7 | A client user signs in | Lands on Requests. The sidebar has exactly one row; `nav-members` is absent. |
-| 8 | A client user types `/org/{orgId}/members` | The API answers 403; the screen shows the standard forbidden state and offers Requests. |
+| 8 | A client user types `/org/{orgId}/members` | The shell sends them to `/org/{orgId}/requests` and draws no staff screen (requirement 14b); the members route answers `403 {"message":"Forbidden","statusCode":403}` (requirement 14a). |
 | 9 | A client user requests `scope=all` | `403 scopeForbidden`. |
 | 10 | A client user tries `POST …/requests` | `403 createForbidden` — `CreateRequest` is not in `CLIENT_CAPABILITIES`. |
 | 11 | A client user tries to grant a request addressed to them | `403 notYoursToGrant`, and the control is not rendered. |
@@ -446,14 +577,14 @@ client principal can now be party to a request and therefore pass spec 01's part
 | 18 | A client user is removed while a request addressed to them is open | The request stays open, reads `assignee.inactive: true`, and is offered for reassignment. |
 | 19 | An account with neither kind of membership attempts to log in | `400` with the existing message, byte-identical to the removed-membership case, so the answer distinguishes nothing. |
 | 20 | A staff member's `Membership` is removed but a `ClientMembership` is later created for the same account | Permitted: rule 2 forbids holding **both active**, and the accept handler re-reads for an *active* row of the other kind. A person who left the agency and now works for a client is a real case. |
-| 21 | Two managers invite the same address to the same client at once | The supersession index of spec 03 serializes them; exactly one invitation is `pending` afterwards. |
+| 21 | Two managers invite the same address to the same client at once | Nothing serializes the two writes, and both may leave a `pending` invitation: the supersession rule is last-writer-wins and this spec adds no lock and no unique constraint. **Decided:** the guarantee lives at acceptance, not at invitation — whichever token is accepted first creates the `ClientMembership`, and accepting a second token for that address afterwards answers `409 accountIsClient` (requirement 2), so at most one principal exists whatever the order. Rejected: claiming exactly one `pending` invitation survives, which no mechanism in this spec provides. |
 | 22 | A client user's account holds a `ClientMembership` in an archived client, and they log in | Login succeeds while the membership is `active` (requirement 24); they see their existing requests and can be addressed no new ones. |
 
 ## Validation Rules
 
 | # | Field | Constraint | Message |
 |---|---|---|---|
-| 1 | `role` | One of `admin`, `manager`, `user`, `viewer`, `client` | spec 03's existing message |
+| 1 | `role` | One of `admin`, `manager`, `user`, `viewer`, `client` | `MESSAGES.role.invalid` |
 | 2 | `clientId` | Required iff `role = 'client'`; must be an active client of the caller's organization | `invitationShapeInvalid` / `clientArchived` |
 | 3 | invite `email` | The shared email rule of user-management spec 01 | spec 01's existing messages |
 | 4 | `assigneeKind` | One of `member`, `client`, with exactly the matching id set | `REQUEST_MESSAGES.assigneeInvalid` |
@@ -475,37 +606,58 @@ New strings live in `CLIENT_USER_MESSAGES`; the three request-side additions ext
 | Account is already a client user | `CLIENT_USER_MESSAGES.accountIsClient` | `POST /api/invitations/accept` | This email address already belongs to a client user |
 | Invitation shape invalid | `CLIENT_USER_MESSAGES.invitationShapeInvalid` | `POST /api/invitations` | Choose a client for a client invitation, and none for a team invitation |
 | Client archived | `CLIENT_USER_MESSAGES.clientArchived` | `POST /api/invitations` | You cannot invite people for an archived client |
-| Manage without capability | `CLIENT_USER_MESSAGES.manageForbidden` | client-user routes | You do not have permission to manage client users |
+| Manage without capability | `CLIENT_USER_MESSAGES.manageForbidden` | `GET …/clients/{clientId}/users`, `POST /api/invitations` with `role = 'client'`, `PATCH …/users/{id}/remove` — emitted by the service check of requirement 9a, never by `CapabilityGuard` | You do not have permission to manage client users |
 | Client user unavailable | `REQUEST_MESSAGES.clientUserUnavailable` | `POST …/requests`, `/reassign` | That client user is no longer available |
 | Project required | `REQUEST_MESSAGES.projectRequiredForClient` | `POST …/requests`, `/reassign` | Choose the project this client request is for |
 | Project/client mismatch | `REQUEST_MESSAGES.contactProjectMismatch` | `POST …/requests`, `/reassign` | That person does not belong to this project's client |
-| Empty people list | `CLIENT_USER_MESSAGES.emptyUsers` | `/org/{orgId}/clients/{clientId}` | Nobody from this client has been invited yet. |
+| Empty people list, and the empty client picker | `CLIENT_USER_MESSAGES.emptyUsers` | `/org/{orgId}/clients/{clientId}`, and the new-request modal's client person picker | Nobody from this client has been invited yet. |
 
-The login refusal message is spec 02 of user-management's and is **not** restated, changed, or
-duplicated here.
+**Reused, not added.** Messages this spec's requirements and test cases assert without changing
+them. The text below is the text in `packages/validation` today, and it is restated here so a
+case author asserting a body never leaves this document.
+
+| Context | Export | Route that emits it | Message |
+|---|---|---|---|
+| Any refusal by `CapabilityGuard` | `TEMPLATE_MESSAGES.generic.forbidden` | in this spec: `POST …/requests/{id}/reassign` and the guard-gated staff routes of TC-02-INT-08 | You do not have permission to manage templates |
+| `scope=all` by a client user | `REQUEST_MESSAGES.scopeForbidden` | `GET …/requests` | You do not have permission to view other people's requests |
+| Create attempted by a client user | `REQUEST_MESSAGES.createForbidden` | `POST …/requests` | You do not have permission to create requests |
+| Grant attempted by a client user | `REQUEST_MESSAGES.notYoursToGrant` | `POST …/requests/{id}/grant` | Only the person who asked can confirm this |
+| Cancel attempted by a client user | `REQUEST_MESSAGES.notYoursToCancel` | `POST …/requests/{id}/cancel` | Only the person who asked can cancel this |
+| Edit attempted by a client user | `REQUEST_MESSAGES.editForbidden` | `PATCH …/requests/{id}` | You do not have permission to edit this request |
+| Addressee malformed | `REQUEST_MESSAGES.assigneeInvalid` | `POST …/requests`, `/reassign` | Choose who this request is for |
+| Message body missing / too long | `REQUEST_MESSAGES.messageRequired` / `…messageTooLong` | `POST …/messages` | Write a message / Message must be 5000 characters or fewer |
+| Posting on a terminal request | `REQUEST_MESSAGES.threadClosed` | `POST …/messages` | This request is closed |
+| Transition from a terminal status | `REQUEST_MESSAGES.alreadyTerminal` | every transition route | This request has already been closed |
+| A second answer, from `answered` | `REQUEST_MESSAGES.invalidTransition` | every transition route | This request cannot move to that state |
+| Decline reason missing / too long | `REQUEST_MESSAGES.declineReasonRequired` / `…declineReasonTooLong` | `POST …/decline` | Say why you cannot provide this / Reason must be 1000 characters or fewer |
+| Invitation role not one of the five | `MESSAGES.role.invalid` | `POST /api/invitations` | Invalid role |
+| A superseded or used invitation token | `INVITE_MESSAGES.tokenInvalid` | `POST /api/invitations/accept` | This invitation is no longer valid |
+| Login with no active principal of either kind | `AUTH_MESSAGES.deactivated` | `POST /api/login` | Your account has been deactivated. Contact your administrator. |
 
 ## UI Description
 
 | State | Behaviour |
 |---|---|
-| Client user, sidebar | Exactly one row, Requests. `nav-members`, `nav-projects`, `nav-clients`, `nav-time-tracking`, `nav-envelopes`, `nav-documents` all absent. |
+| Client user, sidebar | Exactly one row, Requests. `nav-members`, `nav-projects`, `nav-clients`, `nav-time-tracking`, `nav-envelopes`, `nav-documents`, `nav-outbox`, `nav-settings` all absent. |
 | Client user, request list | No scope control, no New Request; status filter only. |
 | Client user, request detail | No History panel; Answer and Decline only; Grant, Reassign, Cancel and Edit absent. |
 | Client user, terminal request | Composer absent, both action controls absent, thread readable. |
-| Staff, client detail, People section | Invite control for `manage-client-users` only; otherwise the list renders read-only. |
-| Pending invitation row | Shown with status `invited` and a Remove control that revokes the invitation. |
+| Staff, client detail, People section | Drawn only for a caller holding `manage-client-users`, always with the invite control. **Decided:** there is no read-only rendering — one capability gates both the section and the control, and a staff caller without it is refused by the API (`403 manageForbidden`). Rejected: a read-only People section, which no role could reach, since `manage-client-users` and `view-clients` are held by the same two roles. |
+| Pending invitation row | Drawn as `client-user-pending-row-{email}`, showing the address and the status `invited`, with **no control**. **Decided:** the row is keyed by the invited address, which is what the People payload carries for a pending invitation; rejected: keying it by an id, which would mean adding one to that payload for a row that has no action on it. **Decided:** a pending invitation is not revoked from this screen — re-inviting the same address supersedes it (requirement 19) and it expires on its own after seven days. Rejected: a Remove control on the pending row, which would need a revoke route and a refusal message that this spec does not define. |
 | Empty People list | `client-users-empty-state` with `emptyUsers`. |
-| New-request modal, addressee kind `client` | The person picker is filtered to active users of the selected project's client, and is empty with an explanatory hint when that client has none. |
+| New-request modal, addressee kind `client` | The person picker is filtered to active users of the selected project's client. When that client has none, the picker is empty and `request-new-assignee-client-empty` is drawn with `CLIENT_USER_MESSAGES.emptyUsers`. |
 
 ## Required `data-testid` Attributes
 
 **Client detail, People** — `client-users-section`, `client-users-invite-btn`,
 `client-users-empty-state`, `client-user-row-{id}`, `client-user-row-{id}-status`,
-`client-user-row-{id}-remove-btn`, `client-user-invite-modal`, `client-user-invite-email`,
+`client-user-row-{id}-remove-btn`, `client-user-pending-row-{email}`,
+`client-user-invite-modal`, `client-user-invite-email`,
 `client-user-invite-submit`, `client-user-invite-error-email`.
 
 **New request** — `request-new-assignee-kind`, `request-new-assignee-client`,
-`request-new-project`, `request-new-error-assigneeClientMembershipId`.
+`request-new-assignee-client-empty`, `request-new-project`,
+`request-new-error-assigneeClientMembershipId`.
 
 **Client's own surface** — `requests-page`, `request-row-{id}`, `request-detail-page`,
 `request-detail-thread`, `request-detail-composer`, `request-detail-composer-submit`,
@@ -513,8 +665,12 @@ duplicated here.
 `request-detail-decline-confirm`, `request-detail-history`, `request-detail-grant-btn`,
 `requests-scope-toggle`, `requests-new-btn`, `nav-members`, `sidebar-requests-link`.
 
-Every id in the last group except the first six is asserted **absent** for a client principal
-and present for a staff one, and both halves appear in the cases below.
+Five ids in the last group — `request-detail-history`, `request-detail-grant-btn`,
+`requests-scope-toggle`, `requests-new-btn` and `nav-members` — are asserted **absent** for a
+client principal, in TC-02-E2E-01 and TC-02-E2E-03, and **present** for a staff one, in
+TC-02-E2E-02 and TC-02-E2E-05. Every other id in that group is asserted present for a client
+principal. **Decided:** the absent set is named here; rejected: deriving it from a position in
+the list, which counted five ids the cases assert present for a client principal.
 
 ## Security
 
@@ -551,8 +707,8 @@ and present for a staff one, and both halves appear in the cases below.
 
 | Gap | Why acceptable now | What closes it |
 |---|---|---|
-| **This spec's verification route cannot be walked until spec 01 is merged.** Every state involving a `Request` is `not run` below. | The principal, the invitation and the guards are provable today and were proved; what is unprovable is unprovable because the entity it hangs off does not exist yet, not because it was skipped. | Walking the route at the start of this spec's implementation, on a branch with 01 merged, and filling in the `not run` rows before its cases are trusted. |
-| Login answers a different message for a valid password on an account with no active principal than for a wrong password, which is an account-existence oracle | **Pre-existing**, observed while probing this spec and not introduced by it. Narrowing it changes a message user-management spec 02 owns. | An amendment to user-management spec 02 making the two refusals identical. Named here so it is not rediscovered as this spec's defect. |
+| **Every state that needs a request addressed to a client user is `not run` below.** | The principal, the invitation and the guards are provable today and were proved; what is unprovable is unprovable because the column and the table it hangs off are this spec's own work, not because it was skipped. | Walking those rows at the start of this spec's implementation, once `ClientMembership` and `Request.assigneeClientMembershipId` exist, and filling them in before the cases that need them are trusted. |
+| Login refuses an account with no active principal with a different message than it refuses a wrong password on an account that has one, which is an account-existence oracle. The principal is checked **before** the password, so a valid and a wrong password on such an account are answered identically — that ordering is the property requirement 6 preserves. | **Pre-existing**, observed while probing this spec and not introduced by it. Narrowing it changes a message user-management spec 02 owns. | An amendment to user-management spec 02 making the two refusals identical. Named here so it is not rediscovered as this spec's defect. |
 | A person who is both staff and a client contact must use two email addresses | Rule 2 forbids two active principals for one account, and the alternative — a principal switcher — is a product decision nobody has asked for | A spec that makes `accountId` non-unique in both tables and adds an organization/principal switcher, which is also what multi-org would need |
 | No audit record of an invitation being sent to a client | `Invitation` rows carry their own history and spec 03 owns that surface | Whatever closes it for staff invitations closes it here |
 
@@ -576,17 +732,17 @@ and present for a staff one, and both halves appear in the cases below.
 
 ## Verification Plan
 
-**This spec's route is walked in two parts.** Everything that does not depend on spec 01 was
-walked now and is recorded as observed. Everything that does is marked `not run`, and is walked
-at the start of this spec's implementation on a branch with spec 01 merged. That ordering is
-inherent: the entity these cases hang off does not exist in the tree yet.
+**This spec's route is walked in two parts.** Everything reachable at spec time was walked then
+and is recorded as observed. Everything that needs a state this spec itself creates — a
+`ClientMembership`, or a request addressed to one — is marked `not run`, and is walked at the
+start of this spec's implementation.
 
 ### Bringing it up
 
 Identical to spec 01's, including the two environment repairs (`prisma generate` from
 `apps/api`, `npm run build --workspace @devscribed/validation`) that a fresh checkout after the
 `organization/01` merge needs. Ports `E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1`, database
-`devscribed_e2e` at `localhost:5434`.
+`devscribed_e2e` at `localhost:5433`, which is the port the tracked harness defaults to.
 
 ### Reaching the states the cases need
 
@@ -597,12 +753,12 @@ Identical to spec 01's, including the two environment repairs (`prisma generate`
 | A project linked to that client | `PUT …/projects/{id}` with `clientId` | yes | yes — 200 |
 | **An account with no `Membership`** | `createBareAccount` (`helpers.ts:898`) | yes | yes |
 | **What login does with such an account** | `POST /api/login` | yes | yes — `400 {"message":"Your account has been deactivated. Contact your administrator."}`, reproduced across two runs. This is the exact refusal requirement 6 changes and AC-11 pins. |
-| **The refusal shape with no session at all** | `GET …/requests`, `…/clients`, `…/members` with an empty cookie jar | yes | yes — all three answer `401 {"message":"Not signed in","error":"Unauthorized","statusCode":401}`, identical to a caller holding a session that cannot resolve a principal |
+| **The refusal shape with no session at all** | `GET …/requests`, `…/clients`, `…/members` with an empty cookie jar | yes | yes — all three answer `401 {"message":"Not signed in","error":"Unauthorized","statusCode":401}` |
 | A staff invitation and its token | `inviteAndAcceptViaApi` (`helpers.ts:921`), `latestInvitationToken` (`:794`) | yes | yes |
 | Mail readable by a test | `GET /api/test/mail/latest?email=&type=` | yes | yes — 200 |
 | A `ClientMembership` | — | no | **not run** — created by this spec. Helper `inviteAndAcceptClientViaApi`, a thin variant of `inviteAndAcceptViaApi`, is work this spec owes. |
-| A request addressed to a client user | — | no | **not run** — depends on spec 01 |
-| A request in each status, addressed to a client user | — | no | **not run** — depends on spec 01 |
+| A request addressed to a client user | — | no | **not run** — nothing can be addressed to a client user until `Request.assigneeClientMembershipId` exists, which is this spec's column |
+| A request in each status, addressed to a client user | — | no | **not run** — same reason |
 | A removed client user holding a live session | — | no | **not run** — depends on this spec's own remove route |
 
 ### Access this needs
@@ -616,10 +772,10 @@ Identical to spec 01's, including the two environment repairs (`prisma generate`
 | Acceptance criterion | Observer | Level | Proven at spec time |
 |---|---|---|---|
 | AC-1 | TC-02-E2E-01 | E2E | login path observed; the membership half is not run |
-| AC-2 | TC-02-E2E-01 | E2E | `nav-members` confirmed unconditional in `Sidebar.tsx:71` — the defect is real today |
+| AC-2 | TC-02-E2E-01 | E2E | `nav-members` confirmed unconditional in `Sidebar.tsx` — the defect is real today |
 | AC-3 | TC-02-E2E-05 | E2E | staff sidebar reachable today |
 | AC-4 | TC-02-INT-03, TC-02-INT-04 | Integration | not run |
-| AC-5 | TC-02-INT-09 | Integration | the 35 call sites in 16 files were enumerated by grep at spec time |
+| AC-5 | TC-02-INT-09 | Integration | the surfaces the case compares all exist today; the client half is not run |
 | AC-6 | TC-02-INT-08 | Integration | today's 401/403 shapes observed |
 | AC-7 | TC-02-INT-10 | Integration | not run |
 | AC-8 | TC-02-INT-11, TC-02-E2E-03 | Integration + E2E | not run |
@@ -727,9 +883,11 @@ the rig. Every other section is covered below.
 ### TC-02-INT-06
 
 - **Level:** Integration
-- **Steps:** Sign a client user in, then remove them, then reuse the same cookie jar.
-- **Expected Result:** the first call succeeds; after removal the next call answers 401; a fresh
-  login answers 400 with the existing message. `ClientMembership.status` is `removed` and the
+- **Steps:** Sign a client user in, call `GET /api/me`, then remove them, then reuse the same
+  cookie jar.
+- **Expected Result:** `GET /api/me` answers 200 with `principalKind: 'client'`, `role: null` and
+  the organization (requirement 11a); after removal the next call answers 401; a fresh login
+  answers 400 with the existing message. `ClientMembership.status` is `removed` and the
   account's `securityStamp` differs from before.
 
 ### TC-02-INT-07
@@ -743,11 +901,16 @@ the rig. Every other section is covered below.
 ### TC-02-INT-08
 
 - **Level:** Integration
-- **Steps:** As a client user, call every capability-gated staff route (members, projects, time
-  tracking, vacation, documents, clients, signing settings) and one org-scoped request they are
+- **Steps:** As a client user, call the guard-gated staff routes — `GET …/document-templates`,
+  `GET …/envelopes`, `GET …/outbox`, `GET …/settings/signing` and
+  `POST …/requests/{id}/reassign`. Then the staff routes that resolve their caller from
+  `Membership` in their own service — `GET …/members`, `GET …/projects`, `GET …/time-entries`,
+  `GET …/members/{memberId}/vacation` and `GET …/clients`. Then one org-scoped request they are
   not party to.
-- **Expected Result:** 403 with the fixed forbidden message for each capability-gated route; 404
-  for the request. No route returns data.
+- **Expected Result:** the first group answers 403 with the fixed forbidden body
+  (`TEMPLATE_MESSAGES.generic.forbidden`); the second group answers
+  `403 {"message":"Forbidden","statusCode":403}` (requirement 14a); the request answers 404. No
+  route returns data.
 
 ### TC-02-INT-09
 
@@ -799,18 +962,80 @@ the rig. Every other section is covered below.
 - **Expected Result:** 200 with only requests addressed to them; 403 `scopeForbidden`; 403
   `createForbidden`.
 
+### TC-02-INT-15
+
+- **Level:** Integration
+- **Steps:** Invite an address as a staff `user`, then invite the same address as a client user
+  of an active client. Then attempt to accept the first (staff) token, and then the second
+  (client) token. Covers edge case 3.
+- **Expected Result:** the staff invitation's status is `invalidated` and the client one is
+  `pending`; accepting the staff token answers 400 `INVITE_MESSAGES.tokenInvalid` and writes no
+  membership of either kind; accepting the client token creates the `ClientMembership` and marks
+  its invitation `used`.
+
+### TC-02-INT-16
+
+- **Level:** Integration
+- **Steps:** Mint two client invitations for the same address and client, keeping both tokens —
+  the state two simultaneous invites can leave (edge case 21). Accept one token, then the other.
+- **Expected Result:** the first acceptance creates exactly one `ClientMembership`; the second
+  answers 409 `accountIsClient` and creates nothing. The number of `pending` rows left behind is
+  not asserted — this spec makes no serialization guarantee at invitation time.
+
+### TC-02-INT-17
+
+- **Level:** Integration
+- **Steps:** With an active client user holding requests addressed to them, archive their
+  `Client`. Then log in as that user, list their requests, and attempt to address a new request
+  to them. Covers edge case 22 and the success half of requirement 24.
+- **Expected Result:** login answers 200 and the session resolves; `GET …/requests` returns
+  their existing requests; the `ClientMembership` is still `active` and its session was never
+  revoked; creating a new request addressed to them answers 400 `clientUserUnavailable`.
+
+### TC-02-INT-18
+
+- **Level:** Integration
+- **Steps:** As the client user addressee, on a request that is `open`: `POST …/cancel`,
+  `PATCH …/requests/{id}` and `POST …/requests/{id}/reassign`. On the same request once it is
+  `answered`: `POST …/answer` a second time. On a request in a terminal status:
+  `POST …/messages` and `POST …/answer`.
+- **Expected Result:** 403 `notYoursToCancel`; 403 `editForbidden`; 403 with the guard's fixed
+  body (requirement 29); 409 `invalidTransition`; 409 `threadClosed`; 409 `alreadyTerminal`.
+  After all six the requests' statuses, fields and message counts are unchanged, and the
+  terminal request is still readable by that client user.
+
+### TC-02-INT-19
+
+- **Level:** Integration
+- **Steps:** On one client holding an active client user, a removed client user and a pending
+  client invitation, call `GET …/clients/{clientId}/users` as an admin, as a `user`, and as a
+  `user` for a `clientId` that does not exist; then as an admin for a client of another
+  organization. Then call `PATCH …/clients/{clientId}/users/{clientMembershipId}/remove` as a
+  `user`, and as an admin for a client membership of another organization.
+- **Expected Result:** 200 whose `users` carries the active and the removed row with `id`,
+  `displayName`, `email`, `status` and `joinedAt`, and whose `pendingInvitations` carries the
+  invited address and its `expiresAt`; 403 `manageForbidden`; 403 `manageForbidden`
+  byte-identical to the previous answer, so the absent client is not distinguishable
+  (requirement 9a); 404; 403 `manageForbidden`; 404. No `ClientMembership` changes status in any
+  refused call.
+
 ### TC-02-E2E-01
 
 - **Level:** E2E
 - **Steps:** Open the invite modal and submit a malformed email first, then a valid one; accept
-  through the invitation screen; sign in at the ordinary login screen.
+  through the invitation screen; then sign out and sign in at the ordinary login screen; then,
+  still signed in as the client user, type `/org/{orgId}/members`.
 - **Expected Result:** the malformed address shows the inline field error and the submit control
-  stays enabled; the valid one creates the invitation. After accepting, the Requests page
-  renders; the sidebar has exactly one row; `nav-members` is absent from the DOM; neither the
-  scope control nor New Request is drawn.
+  stays enabled; the valid one creates the invitation and draws the invited address as a pending
+  row with the status `invited` and no control. Accepting lands on
+  `/org/{orgId}/requests` without a second sign-in, and signing in afterwards lands on the same
+  route (requirement 13a); on both arrivals the Requests page renders, the sidebar has exactly
+  one row, `nav-members` is absent from the DOM, and neither the scope control nor New Request
+  is drawn. Typing the members URL lands on `/org/{orgId}/requests` with the Requests page drawn
+  and no members screen (requirement 14b).
 - **Selectors:** `client-users-section`, `client-users-invite-btn`, `client-user-invite-modal`,
   `client-user-invite-email`, `client-user-invite-error-email`, `client-user-invite-submit`,
-  `client-user-row-{id}`,
+  `client-user-pending-row-{email}`, `client-user-row-{id}`,
   `client-user-row-{id}-status`, `sidebar-requests-link`, `requests-page`, `nav-members`
   (asserted absent), `requests-scope-toggle` (asserted absent), `requests-new-btn` (asserted
   absent).
@@ -818,12 +1043,19 @@ the rig. Every other section is covered below.
 ### TC-02-E2E-02
 
 - **Level:** E2E
-- **Steps:** As a `user`, create a request addressed to a client user, choosing the addressee
-  kind and then the person; first with a project of the wrong client, then the right one.
-- **Expected Result:** the wrong client shows the inline error and the submit control stays
-  enabled; the right one creates the request.
-- **Selectors:** `request-new-assignee-kind`, `request-new-project`,
-  `request-new-assignee-client`, `request-new-error-assigneeClientMembershipId`.
+- **Steps:** As a `user`, open the requests page and start a new request addressed to a client
+  user, choosing the addressee kind and then the project: first a project whose client has no
+  client users, then a project of the wrong client, then the right one. Open the created
+  request.
+- **Expected Result:** `requests-new-btn` is drawn; the client with no users leaves the person
+  picker empty and draws the hint carrying `emptyUsers`; the wrong client shows the inline error
+  and the submit control stays enabled; the right one creates the request. On the created
+  request the History panel and the Grant control are drawn for the requester — the staff half
+  of the ids TC-02-E2E-03 asserts absent for a client principal.
+- **Selectors:** `requests-new-btn`, `request-new-assignee-kind`, `request-new-project`,
+  `request-new-assignee-client`, `request-new-assignee-client-empty`,
+  `request-new-error-assigneeClientMembershipId`, `request-detail-page`,
+  `request-detail-history`, `request-detail-grant-btn`.
 
 ### TC-02-E2E-03
 
@@ -850,10 +1082,13 @@ the rig. Every other section is covered below.
 ### TC-02-E2E-05
 
 - **Level:** E2E
-- **Steps:** Sign in as each of admin, manager, user and viewer and inspect the sidebar; then
-  open a client's detail as an admin and as a `user`.
+- **Steps:** Sign in as each of admin, manager, user and viewer and inspect the sidebar. As the
+  admin, open the requests page, then open a client's detail.
 - **Expected Result:** `nav-members` is present for all four staff roles — the regression witness
-  that requirement 13's fix did not over-reach; the People section renders for the admin with an
-  invite control and for the `user` without one.
-- **Selectors:** `nav-members`, `sidebar-requests-link`, `client-users-section`,
-  `client-users-invite-btn` (asserted absent for `user`), `client-users-empty-state`.
+  that requirement 13's fix did not over-reach; the scope control is drawn for the admin, whose
+  role holds `view-all-requests`; the People section renders for the admin with its invite
+  control. What a `user` sees of the People section is not asserted here — a `user` reaches no
+  client detail at all — and the refusal the gating rests on is TC-02-INT-19's.
+- **Selectors:** `nav-members`, `sidebar-requests-link`, `requests-page`,
+  `requests-scope-toggle`, `client-users-section`, `client-users-invite-btn`,
+  `client-users-empty-state`.

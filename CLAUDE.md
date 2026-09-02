@@ -154,9 +154,20 @@ refiner nor the reviewer settles a contradiction by preferring one side; that de
 person's, and it is made in the document. A contradiction resolved silently upstream is
 implemented, and then found by the gate that is forbidden to resolve it.
 
-**A spec that overrules another spec amends it, statement by statement.** Marked beside each
-statement, naming the requirement that overrules it. A banner at the top of a document is a
-promise about the document, not an amendment to it.
+**A spec is frozen once it is written and refined. Older specs are never edited to stay
+current.** They record what was decided then, and that record is worth more than a document
+that pretends to have always known the answer.
+
+**The newest spec that speaks about a behaviour governs it.** When a new spec changes something
+an older one describes, it states the whole new rule **in its own text** — who may call it,
+what comes back, which status, which message — completely enough that a reader of the new spec
+never has to open the old one. It does not plant markers in the old document, and it does not
+write "this overrules requirement 45 of spec 01": a cross-reference sends the reader away
+instead of answering them, and it is bookkeeping that goes stale on the next edit and is then
+found as a defect of its own.
+
+A spec is judged on whether it is implementable and checkable **from itself alone**. That is
+what `/refine` protects.
 
 Investigate a defect with the `bug` skill (`/bug`). It writes `specs/bugs/BUG-NNN-slug.md` and
 ends in one of three verdicts — the code is wrong, the spec is wrong, or the spec is silent —

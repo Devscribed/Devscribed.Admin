@@ -1,0 +1,125 @@
+{
+  "spec": "specs/requests/02-client-participants.md",
+  "verdict": ".workflow/refine/requests-02.verdict.json",
+  "fixed": [
+    {
+      "id": "R2",
+      "rule": "spec/missing-artefact",
+      "edited": ["specs/requests/02-client-participants.md"],
+      "change": "added TC-02-INT-18, covering the six answers requirement 29 states for a client principal that no case observed: cancel (403 notYoursToCancel), edit (403 editForbidden), reassign (403 fixed body), a second answer (409 invalidTransition), a message on a terminal request (409 threadClosed) and a transition from terminal (409 alreadyTerminal)",
+      "verifiedBy": "requirement 29 of the spec; apps/api/src/requests/requests.controller.ts shows reassign carrying @UseGuards(CapabilityGuard) @RequireCapability('ViewAllRequests'), which is the fixed-body refusal the case asserts"
+    },
+    {
+      "id": "R3",
+      "rule": "spec/missing-artefact",
+      "edited": ["specs/requests/02-client-participants.md"],
+      "change": "added TC-02-INT-19, which observes the People list contract — its 200 body with users and pendingInvitations, its 403 manageForbidden for a staff caller without the capability and for an absent clientId, and its 404 for a client of another organization — and asserts the same 403 and 404 on the remove route",
+      "verifiedBy": "the GET .../clients/{clientId}/users contract in the spec; apps/api/src/clients/clients.controller.ts (@UseGuards(SessionGuard, OrgScopeGuard), no RequireCapability)"
+    },
+    {
+      "id": "R6",
+      "rule": "spec/stale-statement",
+      "edited": ["specs/requests/02-client-participants.md"],
+      "change": "the Verification Plan now names devscribed_e2e at localhost:5433, the port the tracked harness defaults to",
+      "verifiedBy": "grep -n '543' docker-compose.yml -> \"- '5433:5432'\"; sed -n '70,90p' e2e/environment.ts -> FALLBACK_DATABASE_URL returns postgresql://devscribed:devscribed@localhost:5433/devscribed_e2e"
+    },
+    {
+      "id": "R7",
+      "rule": "spec/stale-statement",
+      "edited": ["specs/requests/02-client-participants.md"],
+      "change": "deleted the sentence claiming the login refusal message is not restated here, and gave the message a row in the reused-messages table so a case author asserting AC-11 has the export and the bytes in one place",
+      "verifiedBy": "sed -n '215,230p' packages/validation/src/index.ts -> AUTH_MESSAGES.deactivated = 'Your account has been deactivated. Contact your administrator.'"
+    },
+    {
+      "id": "R8",
+      "rule": "spec/stale-statement",
+      "edited": ["specs/requests/02-client-participants.md"],
+      "change": "deleted the trailing clause equating the empty-cookie-jar 401 with a caller whose session resolves no principal; the observed empty-jar result stands",
+      "verifiedBy": "apps/api/src/auth/session.guard.ts reads only Account.securityStamp; apps/api/src/members/members.service.ts requireCaller and apps/api/src/projects/projects.service.ts requireCaller throw ForbiddenException, not Unauthorized"
+    },
+    {
+      "id": "R9",
+      "rule": "spec/stale-statement",
+      "edited": ["specs/requests/02-client-participants.md"],
+      "change": "requirement 24's parenthetical now points at requirement 27, which is the rule that an archived client's users may not be chosen",
+      "verifiedBy": "requirements 26 and 27 of the spec"
+    },
+    {
+      "id": "R10",
+      "rule": "spec/missing-artefact",
+      "edited": ["specs/requests/02-client-participants.md"],
+      "change": "the sidebar row of the UI Description table now lists nav-outbox and nav-settings among the ids absent for a client principal",
+      "verifiedBy": "grep -n \"testId: 'nav-\" apps/web/src/layout/Sidebar.tsx -> nav-time-tracking, nav-members, nav-projects, nav-clients, nav-envelopes, nav-documents, nav-outbox, nav-settings"
+    }
+  ],
+  "decided": [
+    {
+      "id": "R1",
+      "rule": "spec/stale-statement",
+      "edited": ["specs/requests/02-client-participants.md"],
+      "question": "what a client principal receives from the staff routes that resolve their caller from Membership in their own service, which carry no CapabilityGuard and so cannot answer the fixed forbidden body",
+      "chose": "403 {\"message\":\"Forbidden\",\"statusCode\":403} from those routes, the refusal they already make; TC-02-INT-08 now names the guard-gated routes and the service-gated routes separately and asserts the matching body for each",
+      "rejected": "teaching those routes the guard's fixed body or a message of this spec's own",
+      "why": "rule 1 — the spec had taken no position on the body of those routes, and the code already refuses a caller with no active Membership with that body; a new named message on every staff surface would also let a client principal tell one surface from another",
+      "recordedAt": "requirement 14a, and the Expected Result of TC-02-INT-08",
+      "verifiedBy": "grep -rln \"RequireCapability\" apps/api/src --include=*.controller.ts -> documents/autofill, documents/document-templates, documents/envelopes, mail/outbox, organizations/signing-settings, requests/requests only; members/projects/time-tracking/vacation/clients controllers carry @UseGuards(SessionGuard, OrgScopeGuard); their requireCaller throws `new ForbiddenException()`, and node_modules/@nestjs/common/exceptions/http.exception.js createBody returns { message: 'Forbidden', statusCode: 403 } for an empty argument"
+    },
+    {
+      "id": "R4",
+      "rule": "spec/incomplete-decision",
+      "edited": ["specs/requests/02-client-participants.md"],
+      "question": "what a client principal sees when they type the URL of a staff screen",
+      "chose": "the shell sends a client principal who opens any /org/{orgId}/... route other than the two requests routes to /org/{orgId}/requests, and draws no staff screen",
+      "rejected": "a forbidden state drawn on the staff screen",
+      "why": "rule 4 — the redirect uses screens and a principalKind this spec already defines and needs no new empty state, data-testid or message, where a shared forbidden state would be a new artefact on every staff screen and could not be taken back cheaply",
+      "recordedAt": "requirement 14b, edge case 8, and the last step and expected result of TC-02-E2E-01",
+      "verifiedBy": "requirement 11a and 13a of the spec (principalKind from GET /api/me); apps/web/app/org/[orgId]/members/page.tsx has no 403 branch to inherit"
+    },
+    {
+      "id": "R5",
+      "rule": "spec/untestable-case",
+      "edited": ["specs/requests/02-client-participants.md"],
+      "question": "how the People section's gating is observed for a role that cannot reach the client detail at all",
+      "chose": "drop the `user` half of TC-02-E2E-05 and observe the rule at integration, in TC-02-INT-19, which calls GET .../clients/{clientId}/users as a `user` and asserts 403 manageForbidden",
+      "rejected": "keeping the E2E assertion that the People section and the invite control are absent for a `user`",
+      "why": "rule 3 — the E2E assertion cannot fail: a `user` is answered 404 by the client detail before any People markup exists, so it passes whether or not the section is gated; the integration observation can fail",
+      "recordedAt": "the steps, expected result and selectors of TC-02-E2E-05, and TC-02-INT-19",
+      "verifiedBy": "packages/validation/src/index.ts gives the user role 'view-clients': false; apps/api/src/clients/clients.service.ts requireViewCapability throws NotFoundException when the capability is missing"
+    },
+    {
+      "id": "R11",
+      "rule": "spec/missing-artefact",
+      "edited": ["specs/requests/02-client-participants.md"],
+      "question": "how the pending invitation row on the People section is addressed, given a pending invitation carries no id in the payload",
+      "chose": "client-user-pending-row-{email}, keyed by the invited address the payload already carries",
+      "rejected": "adding an id to the pending payload to key the row by",
+      "why": "rule 4 — the address is already in the payload and the row has no action on it, so an id would be a payload change made only to name a row; the narrower change is the one that can be reversed",
+      "recordedAt": "the Pending invitation row of the UI Description table, the Client detail People group of the Required data-testid list, and TC-02-E2E-01",
+      "verifiedBy": "the GET .../clients/{clientId}/users response body in the spec, whose pendingInvitations rows are { email, expiresAt }"
+    },
+    {
+      "id": "R12",
+      "rule": "spec/incomplete-decision",
+      "edited": ["specs/requests/02-client-participants.md"],
+      "question": "what a client principal receives from the three client-user routes, which carry no CapabilityGuard",
+      "chose": "403 CLIENT_USER_MESSAGES.manageForbidden for every caller who does not hold manage-client-users, whichever principal they are",
+      "rejected": "a distinct answer for a client principal",
+      "why": "rule 3 — one refusal for both kinds tells a caller nothing about which kind of account they hold, from routes neither kind may use",
+      "recordedAt": "requirement 9a, first paragraph, and the Errors line of each of the three route contracts",
+      "verifiedBy": "apps/api/src/auth/capability.guard.ts (the fixed body it produces) and apps/api/src/clients/clients.controller.ts, which carries SessionGuard and OrgScopeGuard only"
+    },
+    {
+      "id": "R13",
+      "rule": "spec/divergence",
+      "edited": ["specs/requests/02-client-participants.md"],
+      "question": "whether a clients-scoped route may answer a named 403 where the existing clients routes collapse a missing capability to 404 so the resource is not revealed",
+      "chose": "the three client-user routes answer 403 manageForbidden, and the capability is checked before the client or the client membership named in the URL is read, so the refusal is identical for an id that exists and one that does not",
+      "rejected": "collapsing these three routes to 404 as the other clients-scoped routes do",
+      "why": "rule 3 — with the capability checked before the lookup, the 403 reveals nothing about what exists, so the safe answer and the named message are both available; collapsing to 404 would make manageForbidden unreachable",
+      "recordedAt": "requirement 9a, second paragraph, and the Errors line of the People list and remove contracts",
+      "verifiedBy": "apps/api/src/clients/clients.service.ts requireManageCapability and requireViewCapability, which throw NotFoundException for a missing capability"
+    }
+  ],
+  "left": [],
+  "filesTouched": ["specs/requests/02-client-participants.md"]
+}
