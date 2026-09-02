@@ -16,3 +16,4 @@ itself.
 | [2026-08-30](2026-08-30-review-sharding.md) | Does splitting a review across parallel subagents find more? What does model, effort and shard size change? |
 | [2026-08-31](2026-08-31-what-review-cannot-see.md) | Twenty-three review passes against an afternoon of using it: which defects each kind of check can reach |
 | [2026-08-31](2026-08-31-open-profile-blockers.md) | Appendix to the sharding record: every blocker the checklist-free reviewer raised, in full, by shard model |
+| [2026-09-02](2026-09-02-what-blocked-the-requests-runs.md) | Eleven runs of one spec, 24 blockers classified: where the defects actually lived, and why the stage that found them first did not stop for them |

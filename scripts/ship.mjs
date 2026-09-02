@@ -20,6 +20,11 @@
  *   --branch <name>    create and switch to this branch first
  *   --from <ref>       measure the diff from this ref instead of HEAD — for a run that
  *                      continues work already committed, after a spec defect was fixed
+ *   --carry <runId>    pin the run whose unresolved `code` blockers this run inherits.
+ *                      Found automatically when omitted: the newest earlier run of the same
+ *                      spec that ended holding them. They reach pre_implement and implement
+ *                      only, never a gate, and are spent on the first implement attempt.
+ *   --no-carry         start clean, inheriting nothing
  *   --resume           continue the active run instead of starting a new one
  *   --skip <stages>    comma-separated stages to skip (e.g. --skip qa)
  *   --permission-mode  passed to claude; default acceptEdits
@@ -35,7 +40,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const WF = join(ROOT, 'scripts', 'wf.mjs');
 
 const argv = process.argv.slice(2);
-const VALUE_FLAGS = new Set(['branch', 'skip', 'permission-mode', 'from']);
+const VALUE_FLAGS = new Set(['branch', 'skip', 'permission-mode', 'from', 'carry']);
 
 const flag = (n) => argv.includes(`--${n}`);
 const opt = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
@@ -112,9 +117,26 @@ function promptFor(stage, run, verdictPath) {
     + `Write your verdict to \`${verdictPath}\` in the schema from your agent definition. `
     + `Write it even when everything passes.\n`;
 
-  const feedback = lastBlockers(run);
+  /* Carried findings reach the two stages that plan and build, and no gate. A reviewer who
+     has read the previous reviewer agrees with a text instead of with the code: on this
+     spec's own history two shards reached the same finding independently, which is the only
+     reason it could be trusted. Independence at the gates is worth more than the time it
+     costs. The spend rule below stops them anyway once implement has run; this states the
+     rule rather than leaving it to be inferred from that side effect. */
+  const CARRY_STAGES = new Set(['pre_implement', 'implement']);
+  const carried = blockersAreCarried(run) && CARRY_STAGES.has(stage);
+  const feedback = blockersAreCarried(run) && !carried ? [] : lastBlockers(run);
+  const heading = carried
+    /* These were written against an earlier run's tree. The spec has changed since, and the
+       code may have too, so they are leads to check rather than facts to act on — an
+       implementer told otherwise will "fix" something already fixed and report it as work. */
+    ? `\n## Carried findings\n\n`
+      + `**Verify each against the current code first.** Then: still present — fix it; already fixed — `
+      + `say so and name what fixed it; no longer applicable under the current spec — say which requirement `
+      + `retired it. Do not take any of them as a current fact.\n\n`
+    : `\n## What sent this back\n\nAddress every one of these explicitly — fixed and how, or contested with a counter-witness.\n\n`;
   const back = feedback.length
-    ? `\n## What sent this back\n\nAddress every one of these explicitly — fixed and how, or contested with a counter-witness.\n\n`
+    ? heading
       + feedback.map((f) => `- **${f.rule}** (${f.file ?? '-'}${f.symbol ? `#${f.symbol}` : ''}) — ${f.claim}\n  witness: ${f.witness?.detail ?? '-'}`).join('\n')
       + '\n'
     : '';
@@ -128,7 +150,7 @@ function promptFor(stage, run, verdictPath) {
         + `\`.workflow/runs/${run.id}/stages/implement.attempt-${(run.stages.implement.attempts ?? 0) + 1}.md\`.${back}`;
     case 'review': {
       const done = run.stages.review.attempts ?? 0;
-      const ledger = `\n\n## Your worklist\n\nRun \`node scripts/review-ledger.mjs\` first. It splits the diff into what must be read this `
+      const ledger = `\n\n## Your worklist\n\nRun \`node scripts/review-slice.mjs\` first. It splits the diff into what must be read this `
         + `pass and what an earlier pass settled, and it decides the second by comparing each file against the commit that pass `
         + `actually saw. You may not write a verdict while the worklist is non-empty; if the fuse runs out first, report the `
         + `remainder in \`covered.unreached\` and do not call it a pass.\n`;
@@ -150,7 +172,7 @@ They are claims to check, not conclusions to trust. If you disagree with an earl
 
 ## What has and has not been looked at
 
-Run \`node scripts/review-ledger.mjs\`. It is derived from what earlier reviews actually opened — not from what they claimed — and from the commit each of those passes saw, so "unchanged since" is checked rather than remembered. It is the plan for this pass:
+Run \`node scripts/review-slice.mjs\`. It is derived from the commit each earlier verdict names as judged and the files it reported unreached. It is the plan for this pass:
 
 1. **Confirm each earlier blocker is closed** by checking its witness against the code. Say so per finding.
 2. **Then work the worklist**, largest first. A previous pass is not proof of absence — on the first run of this spec, four passes named 55, 46, 50 and 44 files of a diff that grew to 84, and nine files were never opened by any of them.
@@ -183,7 +205,18 @@ function lastBlockers(run) {
     const blockers = (v.findings ?? []).filter((f) => f.severity !== 'note');
     if (blockers.length) return blockers;
   }
+  /* Nothing in this run has sent work back yet, so a carried set from the run a spec
+     correction ended is still the freshest thing there is. Spent on the first implement
+     attempt only: after that this run's own gates have looked at the code, and a stale
+     finding they did not repeat is one they cleared. */
+  if ((run.stages.implement?.attempts ?? 0) === 0) return run.carriedFindings ?? [];
   return [];
+}
+
+/** True when lastBlockers is serving a previous run's findings rather than this run's. */
+function blockersAreCarried(run) {
+  const own = ['qa', 'review', 'static_gate'].some((s) => (run.stages[s]?.attempts ?? 0) > 0);
+  return !own && (run.carriedFindings ?? []).length > 0;
 }
 
 /* ── stage runners ───────────────────────────────────────────────────────── */
@@ -414,12 +447,16 @@ async function main() {
 
   if (!flag('resume')) {
     if (!specArg) {
-      say('usage: node scripts/ship.mjs <spec path> [--branch <name>] [--skip qa] [--resume]');
+      say('usage: node scripts/ship.mjs <spec path> [--branch <name>] [--from <ref>] [--carry <runId>|--no-carry] [--skip qa] [--resume]');
       process.exit(1);
     }
     step(`init ${specArg}`);
     const from = opt('from');
-    if (wf('init', '--spec', specArg, ...(from ? ['--from', from] : [])) !== 0) process.exit(1);
+    const carry = opt('carry');
+    if (wf('init', '--spec', specArg,
+      ...(from ? ['--from', from] : []),
+      ...(carry ? ['--carry', carry] : []),
+      ...(flag('no-carry') ? ['--no-carry'] : [])) !== 0) process.exit(1);
     step('preflight');
     if (wf('preflight') !== 0) process.exit(2);
   }

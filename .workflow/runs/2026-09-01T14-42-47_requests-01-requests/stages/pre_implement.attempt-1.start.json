@@ -1,0 +1,11 @@
+{
+  "stage": "pre_implement",
+  "attempt": 1,
+  "agent": "pre-implementer",
+  "model": "opus",
+  "resumedSession": null,
+  "fuseMin": 20,
+  "startedAt": "2026-09-01T14:42:48.111Z",
+  "baseRef": "f06c7d844daeba66bc0f2545c5071600e6cb4037",
+  "head": "0814187f4af813a106fe2f6736decf0c5891fc7e"
+}

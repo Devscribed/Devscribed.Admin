@@ -1,0 +1,65 @@
+{
+  "stage": "static_gate",
+  "status": "blocked",
+  "base": "f06c7d844daeba66bc0f2545c5071600e6cb4037",
+  "findings": [
+    {
+      "id": "S1",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "pipeline/no-detector-weakening",
+      "file": "apps/api/test/requests-page.spec.ts",
+      "claim": "3 more assertion(s) removed than added",
+      "witness": {
+        "kind": "rule",
+        "detail": "The diff removes 22 assertion(s) and adds 19 in a test file. Net-negative assertions in a change meant to add behaviour is the signature of fixing the test instead of the code.",
+        "source": "CLAUDE.md"
+      },
+      "suggestedFix": "restore the assertions, or contest with the reason each removed one is now wrong"
+    },
+    {
+      "id": "S2",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "pipeline/no-detector-weakening",
+      "file": "apps/web/app/org/[orgId]/requests/page.tsx",
+      "claim": "a disabled lint rule was added",
+      "witness": {
+        "kind": "rule",
+        "detail": "The diff adds a disabled lint rule:\n    // eslint-disable-next-line react-hooks/exhaustive-deps\nA change that makes the checks weaker passes the gate without making the code correct.",
+        "source": "CLAUDE.md"
+      },
+      "suggestedFix": "fix the underlying defect, or contest this finding with the reason the suppression is correct here"
+    },
+    {
+      "id": "S3",
+      "severity": "note",
+      "target": "code",
+      "rule": "spec/message-duplicated",
+      "file": "apps/api/src/requests/requests.controller.ts",
+      "symbol": "Create without capability",
+      "claim": "\"Create without capability\" is in packages/validation and also written out in 1 file(s) under apps",
+      "witness": {
+        "kind": "command",
+        "detail": "git grep -lF -- \"`createForbidden`\" -- apps\napps/api/src/requests/requests.controller.ts",
+        "source": "specs/requests/01-requests.md"
+      },
+      "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
+    },
+    {
+      "id": "S4",
+      "severity": "note",
+      "target": "code",
+      "rule": "spec/message-duplicated",
+      "file": "apps/api/src/requests/requests.controller.ts",
+      "symbol": "`scope=all` without capability",
+      "claim": "\"`scope=all` without capability\" is in packages/validation and also written out in 1 file(s) under apps",
+      "witness": {
+        "kind": "command",
+        "detail": "git grep -lF -- \"`scopeForbidden`\" -- apps\napps/api/src/requests/requests.controller.ts",
+        "source": "specs/requests/01-requests.md"
+      },
+      "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
+    }
+  ]
+}

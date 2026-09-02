@@ -82,6 +82,15 @@ Run this before showing a spec to anyone. A "no" is a defect, not a style prefer
 - [ ] Every premise about the pipeline or infrastructure is cited by file path, not restated from
       CLAUDE.md.
 - [ ] No message text is duplicated between the business spec and a `.design.md`.
+- [ ] Every control the screens need that `@ds` does not export has a row in a `## DS gaps`
+      table, naming what the screen does instead and what closes it. A spec that states the
+      obligation and carries no table has not met it.
+- [ ] Every statement this spec overrules in another document is amended **in that document**,
+      marked beside the statement, naming the requirement that overrules it. A banner at the top
+      saying some statements below are superseded is a promise, not an amendment — and one that
+      names line offsets is stale on the next edit.
+- [ ] A test case amended for a new contract is amended on its Expected Result as well as its
+      Steps.
 - [ ] Rules shared with other specs live in the area README, not copied.
 - [ ] The area README index, dependency graph, and cross-spec side effects are updated.
 - [ ] Cross-references to other specs use their number and are accurate.

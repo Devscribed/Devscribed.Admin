@@ -1,0 +1,114 @@
+{
+  "stage": "pre_implement",
+  "status": "blocked",
+  "spec": "specs/requests/01-requests.md",
+  "handoff": ".workflow/runs/2026-09-01T12-17-50_requests-01-requests/handoff.json",
+  "coverage": {
+    "command": "node scripts/handoff-coverage.mjs --run 2026-09-01T12-17-50_requests-01-requests",
+    "result": "pass — requirements 47/47, cases 40/40, sections 20/20"
+  },
+  "findings": [
+    {
+      "id": "P1",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "req-9",
+      "claim": "A projectId belonging to another organization is given two different, mutually exclusive answers: requirement 9 says 400 with projectUnavailable, and the POST …/requests contract says 404 and 'never 403'.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "A `user` in org A posts POST /api/organizations/A/requests with a projectId that exists in org B. Requirement 9 (line 96): 'A project that is archived, or belongs to another organization, is rejected with 400 and `REQUEST_MESSAGES.projectUnavailable`.' The POST contract (line 487): '`404` for a project or membership outside the caller's organization — never 403.' One implementation answers 400 {\"error\":\"validation_error\",\"fields\":{\"projectId\":\"That project is not available\"}}; the other answers 404 with the not-found body. No test case decides it: TC-01-INT-15 covers only the archived project (400 projectUnavailable) and TC-01-INT-06 covers only the cross-org membership (404). Whichever the implementer picks, they will write the integration case that pins it, and QA will confirm the implementer's guess rather than the spec."
+      },
+      "suggestedFix": "Pick one and state it in both places. The cross-org membership already answers 404 'so ids cannot be probed across organizations' (requirement 13); the same argument applies to a project id, which suggests amending requirement 9 to say 400 projectUnavailable for an ARCHIVED project in the caller's organization and 404 for one outside it — then add the second half to TC-01-INT-15."
+    },
+    {
+      "id": "P2",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "req-42",
+      "claim": "The `status` query parameter of GET …/requests already has a different, incompatible vocabulary that filters the vacation feed. Requirement 42 replaces it and the contract makes an unknown value a 400, but nothing says how — or whether — the vacation section is filtered afterwards, and the answer changes what a manager sees on a page that ships today.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Today `GET /api/organizations/{orgId}/requests?status=…` accepts pending | approved | rejected | cancelled | all, defaults to 'pending', and silently falls back rather than erroring (packages/validation/src/index.ts:1878-1897, consumed at apps/api/src/requests/requests.service.ts). apps/api/test/requests-page.spec.ts:301-320 asserts that filtering; apps/web/src/layout/requests-badge-context.tsx sends status=pending. Requirement 42 (line 195) redefines the same parameter as all | open | answered | granted | declined | cancelled, and the contract (line 468) says '400 for an unknown status or type value' — so `pending` becomes a 400, while `cancelled` remains valid and now means a cancelled *request*. Concrete divergence: an organization has one PENDING and one REJECTED vacation request; a manager opens /org/{orgId}/requests with no filter. Implementation A applies `status` to Request rows only and renders the spec-10 feed unfiltered — two vacation cards, where today the manager sees one. Implementation B keeps a separate vacation status filter — one card, but then the endpoint accepts a value requirement 42's closed set excludes. Both satisfy the text; they differ in what is on the screen and in whether a manager can still narrow the vacation section to pending at all, which is the only thing that page does today. Backward Compatibility 3 ('VacationRequest is not touched — not a column, not a query') claims the second and requirement 42 claims the first."
+      },
+      "suggestedFix": "State in requirement 41 or 42 whether `status` and `type` apply to the vacation section, what the section shows by default, and what replaces today's Pending-only default view — then say explicitly that the spec-10 status vocabulary is retired on this endpoint and name apps/api/test/requests-page.spec.ts:301-320 as the assertion that changes with it."
+    },
+    {
+      "id": "P3",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "req-23",
+      "claim": "Requirement 23 restricts `answered` to the addressee or an admin, but the spec defines no status and no message for refusing anyone else — the Error Messages table has notYoursToGrant, notYoursToDecline and notYoursToCancel and no answer row, and the transition contract lists only those three 403s.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Sam (role `user`) raises a request addressed to the admin and then posts POST /api/organizations/{orgId}/requests/{id}/answer. Sam is a party to the request, so 404 (line 517's 'when not party') does not apply; the row is `open`, so alreadyTerminal and invalidTransition do not apply; and requirement 23 forbids the write. Line 517 lists the available refusals: '403 …notYoursToGrant / …notYoursToDecline / …notYoursToCancel'. None fits. Implementation A invents REQUEST_MESSAGES.notYoursToAnswer with text no table specifies — text review will then flag it as a user-facing string absent from the spec. Implementation B reuses notYoursToDecline ('Only the person this is addressed to can decline it') on an answer route. Implementation C returns 404 and makes a request the caller can see unanswerable-and-invisible at the same time. All three are observable and different, and no test case covers the row."
+      },
+      "suggestedFix": "Add a `notYoursToAnswer` row to the Error Messages table with its exact text and route, add it to the transition contract's 403 list beside the other three, and add the case to TC-01-INT-08 (which today probes grant only)."
+    },
+    {
+      "id": "N1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "AC-3",
+      "claim": "AC-3 and Backward Compatibility 5, read literally, forbid requirements 37 and 38 and the case that asserts them.",
+      "witness": {
+        "kind": "rule",
+        "detail": "AC-3: 'No role sees a request, a vacation row, or a control that it cannot see before this spec ships.' README Backward Compatibility 5: 'No role gains visibility of anything it cannot see today.' Requirement 38 makes the sidebar Requests row render for every signed-in member, and TC-01-E2E-10 asserts it is present for all four roles, citing a measured count of 0 for a `user` before this spec. A `user` therefore gains a nav row, a page and their own request rows. The plan reads both criteria as being about pre-existing DATA — vacation rows and other people's requests — which is how their named observers (TC-01-INT-18, TC-01-E2E-08) test them.",
+        "source": "specs/requests/01-requests.md:700 and specs/requests/README.md (Backward Compatibility 5)"
+      },
+      "suggestedFix": "Narrow AC-3 to 'no role sees a vacation row, or a request it is not party to, that it cannot see today' so the criterion and requirement 38 stop disagreeing on paper."
+    },
+    {
+      "id": "N2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-premise",
+      "file": "specs/requests/README.md",
+      "symbol": "Blast Radius — packages/validation",
+      "claim": "The blast radius reads as though REQUEST_MESSAGES were a new export; it already exists and holds spec 09's vacation-request strings.",
+      "witness": {
+        "kind": "rule",
+        "detail": "'**`packages/validation`.** Three new capabilities in `MemberCapability` **and** `Capability`, plus `REQUEST_MESSAGES`.' The const is defined at packages/validation/src/index.ts:1746 with 21 spec-09 keys (startInPast, insufficientBalance, cancelForbidden, reviewForbidden, …) and is imported by apps/web/app/org/[orgId]/requests/page.tsx and packages/validation/src/vacation-requests.test.ts. None of this spec's 30 keys collides with them, so the plan extends the existing const in place; a rename would touch every vacation call site, which this spec forbids.",
+        "source": "packages/validation/src/index.ts:1746"
+      },
+      "suggestedFix": "Say 'extends `REQUEST_MESSAGES` (packages/validation/src/index.ts:1746, spec 09's) with 30 keys' so the next reader does not create a second export."
+    },
+    {
+      "id": "N3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "req-43",
+      "claim": "Requirement 43's comparator and TC-01-UNIT-04's stated principle agree only for the row configuration the case happens to describe.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Requirement 43 orders by 'blocking and non-terminal first, then overdue, then priority descending, then lastActivityAt descending' — there is no key that says terminal rows sort last. TC-01-UNIT-04 expects 'the terminal row sorts below every non-terminal one despite being blocking', which the literal comparator delivers only because the case's terminal row is neither overdue nor (implicitly) high-priority. Rows [granted+urgent, open+normal] sort granted-first under the requirement and last under the case's principle.",
+        "source": "specs/requests/01-requests.md:196 (req 43) and the TC-01-UNIT-04 body"
+      },
+      "suggestedFix": "Either add 'non-terminal before terminal' as the first sort key in requirement 43, or fix the terminal row's priority and lastActivityAt in TC-01-UNIT-04 so the case tests the comparator as written."
+    },
+    {
+      "id": "N4",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "GET …/requests response",
+      "claim": "`counts.total` is undefined, and `type=vacation` has no stated effect on the `requests[]` array.",
+      "witness": {
+        "kind": "rule",
+        "detail": "The response carries `\"counts\": { \"waitingOnMe\": 1, \"total\": 3 }` and no requirement says whether `total` is org-wide or the count matching the active filters — today's equivalent, `totalCount`, is deliberately computed from the unfiltered set (apps/api/src/requests/requests.service.ts). Requirement 42 admits `type=vacation` while requirement 41 says vacation rows are not `Request` rows in this release, so the filter selects a section rather than filtering the array. The plan mirrors today's unfiltered `total` and treats `type=vacation` as an empty `requests[]` plus the unchanged vacation block.",
+        "source": "specs/requests/01-requests.md:442-465"
+      },
+      "suggestedFix": "State both in the API contract — one sentence each."
+    }
+  ]
+}

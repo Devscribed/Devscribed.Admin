@@ -5,9 +5,9 @@
   "task": "documents-04-signature-providers",
   "branch": "spec/signwell-provider",
   "baseRef": "57d55acd03b825aeed9c85836e85138f12b01be1",
-  "status": "implement",
+  "status": "aborted",
   "createdAt": "2026-08-28T16:54:11.899Z",
-  "updatedAt": "2026-08-28T17:11:18.947Z",
+  "updatedAt": "2026-09-01T14:40:17.935Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -94,7 +94,10 @@
       "suggestedFix": "None needed from a human. Recorded so the reviewer, who will diff all 65 files from 57d55ac, knows the plan deliberately describes existing code rather than proposing to write it again, and so a reader of the run digest can tell this apart from a plan that quietly dropped the hard part."
     }
   ],
-  "halt": null,
+  "halt": {
+    "reason": "abandoned",
+    "detail": "Orchestrator stopped; agent process killed. Superseded by a later run."
+  },
   "preflight": {
     "at": "2026-08-28T16:54:12.013Z",
     "checks": [

@@ -16,6 +16,7 @@
     "release": "release-it",
     "release:dry": "release-it --dry-run",
     "spec": "node scripts/claude-cmd.mjs spec",
+    "refine": "node scripts/claude-cmd.mjs refine",
     "bug": "node scripts/claude-cmd.mjs bug",
     "ship": "node scripts/claude-cmd.mjs ship",
     "ship:run": "node scripts/ship.mjs",

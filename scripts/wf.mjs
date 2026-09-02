@@ -21,11 +21,12 @@
  * and therefore cannot be wrong about the code.
  *
  * Usage:
- *   node scripts/wf.mjs init --spec <path> [--task <slug>]
+ *   node scripts/wf.mjs init --spec <path> [--task <slug>] [--from <ref>] [--carry <runId>|--no-carry]
  *   node scripts/wf.mjs preflight
  *   node scripts/wf.mjs stage <name> --start|--end
  *   node scripts/wf.mjs verdict <stage> --file <verdict.json>
  *   node scripts/wf.mjs contest --finding <id> --reason <text>
+ *   node scripts/wf.mjs resume --stage <name> [--reason <text>] [--accept-spec-edits]
  *   node scripts/wf.mjs status [--json]
  *   node scripts/wf.mjs log [--tail N]
  *   node scripts/wf.mjs abort --reason <text>
@@ -257,6 +258,16 @@ function route(run, stage, verdict, classified) {
 
   if (!blockers.length) {
     run.stages[stage].status = 'passed';
+
+    /* `specSha` means "the sha handoff.json was compiled from", so it is stamped where the plan
+       is rebuilt, not where a rebuild is asked for. A resume into pre_implement records the
+       intent; if that stage is killed before it writes handoff.json, the intent expires with it
+       and the guard still sees the sha of the plan actually on disk. */
+    if (stage === 'pre_implement' && run.pendingSpecSha) {
+      run.specSha = run.pendingSpecSha;
+      delete run.pendingSpecSha;
+    }
+
     const next = STAGES[STAGES.indexOf(stage) + 1];
     if (!next) {
       run.status = 'ready';
@@ -272,8 +283,10 @@ function route(run, stage, verdict, classified) {
   /* Auto-contest. A blocker that survives two implement attempts has been tried and not
      fixed; that is a de facto counter-witness. This one line replaces the no-progress
      and oscillation detectors — it catches the same situations, earlier. */
-  for (const f of blockers) {
-    const key = findingKey(f);
+  /* Keys, deduplicated: two distinct defects in one verdict can share `rule@file#symbol` —
+     two predicate-sweep findings against one function do — and counting occurrences instead of
+     attempts declared them stuck on the first pass, before any attempt to fix either. */
+  for (const key of new Set(blockers.map(findingKey))) {
     run.findingHistory[key] = (run.findingHistory[key] ?? 0) + 1;
     if (run.findingHistory[key] >= cfg.convergence.autoContestAfter) {
       return halt(run, 'stuck-finding', `"${key}" survived ${run.findingHistory[key]} attempts — the requirement is ambiguous or the finding is wrong`);
@@ -315,6 +328,64 @@ function route(run, stage, verdict, classified) {
 
 /* ── commands ────────────────────────────────────────────────────────────── */
 
+/* The `code` blockers a previous run ended on, for `init --carry <runId>`.
+   Correcting a spec forces a new run — the spec sha is pinned at init — and without this the
+   next run rediscovers the same code defects through a full review cycle before the implementer
+   hears about them. Only `target: 'code'` travels: a `spec` finding is the human's to rule on
+   and is answered by the spec edit that caused the restart, so carrying it would send the
+   implementer to argue with a file it may not touch. These are older than the working tree, so
+   they are offered for verification and never as current fact — see the prompt in ship.mjs. */
+function carriedBlockers(runId) {
+  const dir = runDir(runId);
+  if (!existsSync(dir)) fail(`--carry names a run that does not exist: ${runId}`);
+  /* The attempt counter in run.json is not the source of truth here: that file is rewritten
+     throughout a run and can be reverted with the working tree, while the verdict it counted
+     stays on disk. Read the artefacts and take the highest attempt that actually exists. */
+  const stageDir = join(dir, 'stages');
+  const attemptsOnDisk = (stage) => (existsSync(stageDir) ? readdirSync(stageDir) : [])
+    .map((f) => new RegExp(`^${stage}\\.attempt-(\\d+)\\.json$`).exec(f))
+    .filter(Boolean)
+    .map((m) => Number(m[1]))
+    .sort((a, b) => b - a);
+
+  for (const stage of ['qa', 'review', 'static_gate']) {
+    const n = attemptsOnDisk(stage)[0];
+    if (!n) continue;
+    const p = join(stageDir, `${stage}.attempt-${n}.json`);
+    const findings = JSON.parse(readFileSync(p, 'utf8')).findings ?? [];
+    const carried = findings.filter((f) => f.severity !== 'note' && f.target === 'code');
+    if (carried.length) return { from: `${runId}#${stage}`, findings: carried };
+  }
+  return { from: null, findings: [] };
+}
+
+/**
+ * The newest earlier run of this spec that ended holding code blockers.
+ *
+ * Automatic because the case it serves is the common one and forgetting it is silent: a spec
+ * correction forces a new run, and a run started without its predecessor's findings looks
+ * healthy while it re-derives them. Runs are named by an ISO timestamp, so a lexicographic
+ * sort is chronological. A run that reached `ready` is skipped — its findings were answered by
+ * the code that made it green — and any run whose gates left no verdict yields nothing and
+ * falls through to an older one.
+ */
+function findCarrySource(specRel) {
+  if (!existsSync(RUNS)) return null;
+  const candidates = readdirSync(RUNS)
+    .filter((id) => {
+      const p = join(runDir(id), 'run.json');
+      if (!existsSync(p)) return false;
+      try { const r = read(p); return r.spec === specRel && r.status !== 'ready'; } catch { return false; }
+    })
+    .sort()
+    .reverse();
+  for (const id of candidates) {
+    const c = carriedBlockers(id);
+    if (c.findings.length) return c;
+  }
+  return null;
+}
+
 function cmdInit(args) {
   const specRel = args.spec;
   if (!specRel) fail('init needs --spec <path>');
@@ -329,6 +400,12 @@ function cmdInit(args) {
   if (existsSync(LOCK)) {
     fail(`another run holds ${relative(ROOT, LOCK)} (${readFileSync(LOCK, 'utf8').trim()}). Runs share ports and databases, so they are serialised.`);
   }
+
+  /* `--carry <runId>` pins the source; `--no-carry` turns it off for a deliberately clean
+     run; neither means "find it yourself". */
+  const carried = args['no-carry'] ? { from: null, findings: [] }
+    : args.carry ? carriedBlockers(args.carry)
+    : findCarrySource(specRel) ?? { from: null, findings: [] };
 
   const slug = args.task ?? specRel.replace(/^specs\//, '').replace(/\.md$/, '').replace(/[\/_]/g, '-');
   const runId = `${now().replace(/[:.]/g, '-').slice(0, 19)}_${slug}`;
@@ -359,6 +436,11 @@ function cmdInit(args) {
       infra: 0,
     },
     findingHistory: {},
+    /* Blockers a previous run ended on, offered to this run's first implement attempt.
+       Spent once — see lastBlockers in ship.mjs — so a later stage is never handed a defect
+       an earlier one already signed off. */
+    carriedFindings: carried.findings,
+    carriedFrom: carried.from,
     contested: [],
     notes: [],
     halt: null,
@@ -462,6 +544,120 @@ function cmdStage(args) {
   }
   saveRun(run);
   process.stdout.write(`${stage}: ${run.stages[stage].status} (attempt ${run.stages[stage].attempts})\n`);
+}
+
+/**
+ * Re-enter a halted run at one stage, after a person resolved what halted it.
+ *
+ * A halt asks for a person; this is how that person says the answer is in and where the run
+ * picks up. It is not an extra attempt at the same wall — `refuseIfHalted` still guards every
+ * other entry point, and the override is recorded in `resumes` so a run that reached `ready`
+ * still shows who overruled what.
+ *
+ * The spec sha is the safety condition, and it is checked rather than trusted: `handoff.json`
+ * was compiled from the spec as it read at init, so a resume past `pre_implement` into a spec
+ * that has since changed would build the wrong plan while every stage reports success. When the
+ * sha moved, the plan is stale and only a new run is honest.
+ */
+function cmdResume(args) {
+  const stage = args.stage;
+  if (!STAGES.includes(stage)) fail(`resume needs --stage <${STAGES.slice(1).join('|')}>`);
+  if (stage === 'preflight') fail('resume into preflight is a new run — use `init`');
+
+  const run = loadRun();
+  /* Two ways a run stops needing a person: the router halted it, or its orchestrator died and
+     left a stage marked `running` that nothing is running. Both are re-entered here — the
+     difference matters to the reader of the log, not to what has to happen next. A finished run
+     is the one case with nothing to resume. */
+  if (run.status === 'ready') fail(`run ${run.runId} is already ready — nothing to resume`);
+  const stopped = run.halt ? `halted: ${run.halt.reason}` : `abandoned mid-${run.status}`;
+
+  const replans = STAGES.indexOf(stage) <= STAGES.indexOf('pre_implement');
+  const specPath = resolve(ROOT, run.spec);
+  if (!existsSync(specPath)) fail(`spec is gone: ${run.spec}`);
+  const sha = sha256(readFileSync(specPath, 'utf8'));
+  if (sha !== run.specSha && !replans) {
+    fail(
+      `${run.spec} changed since this run was planned, so handoff.json describes a spec that no `
+      + 'longer exists.\n    Resuming past pre_implement would build the old plan and pass every '
+      + 'gate doing it. Start a new run, or resume into pre_implement to replan.',
+    );
+  }
+
+  /* Advancing the mark hides every spec edit committed before now, and nothing here can tell
+     the person's deliberate fix from one an implement stage committed before it was killed —
+     which is exactly what rule 1 of the static gate exists to catch. So the edits are named
+     rather than assumed: the operator states that they are theirs, and the list is recorded. */
+  const specEdits = git('diff', '--name-only', run.headAtInit, 'HEAD', '--', 'specs')
+    .split('\n').filter(Boolean);
+  if (specEdits.length && !args['accept-spec-edits']) {
+    fail(
+      `${specEdits.length} spec file(s) changed since this run began:\n`
+      + specEdits.map((f) => `      ${f}`).join('\n')
+      + '\n    Resuming moves the static gate\'s spec-immutability mark past them, so a spec edit'
+      + '\n    an implement stage made would stop being reported. Pass --accept-spec-edits to say'
+      + '\n    these are yours; it is recorded in the run.',
+    );
+  }
+
+  const was = run.halt ?? { reason: 'abandoned', detail: `orchestrator stopped during ${run.status}` };
+  delete run.halt;
+
+  /* Everything committed up to this moment is the person's — including the deliberate spec fix
+     the halt asked for. The static gate's rule 1 asks "did the implementation stage edit its own
+     contract" and measures from `headAtInit`; left at the original init, the person's fix falls
+     inside that window and the gate charges the implementer with it, then tells it to revert the
+     very edit that unblocked the run. Advancing the mark is what keeps the rule asking its
+     question. */
+  const priorHead = run.headAtInit;
+  run.headAtInit = git('rev-parse', 'HEAD');
+
+  /* `specSha` means "the sha the current plan was built from", not "the sha at init" — and
+     pre_implement is about to rebuild the plan from what is on disk. Left unstamped, the run
+     becomes permanently unresumable past pre_implement, refused by a guard whose message is
+     false: handoff.json would describe exactly the spec it claims is gone.
+
+     `pendingSpecSha` is the sha the next replan will compile handoff.json from, so every resume
+     states it afresh: the intent belongs to the resume that recorded it and is dead the moment
+     another resume asks the question again. Clearing first is what keeps the two the same
+     question — an intent left standing from a resume whose pre_implement never passed would
+     otherwise be stamped onto `specSha` by a later replan that compiled something else. */
+  const priorSha = run.specSha;
+  delete run.pendingSpecSha;
+  if (replans && sha !== run.specSha) run.pendingSpecSha = sha;
+
+  (run.resumes ??= []).push({
+    at: now(), stage, from: was.reason, detail: was.detail, reason: args.reason ?? null,
+    headAtInit: { from: priorHead, to: run.headAtInit },
+    specEdits: specEdits.length ? specEdits : undefined,
+    specSha: run.pendingSpecSha ? { from: priorSha, pendingUntilReplan: run.pendingSpecSha } : undefined,
+  });
+
+  /* A stage before the resume point that is still marked `running` is one whose agent was
+     killed. Nothing will ever end it, and the run report measures an unfinished stage to
+     `Date.now()`, so it counts upward for as long as the record exists. Close it here — this is
+     the moment a person confirms it is over. */
+  for (const s of STAGES.slice(0, STAGES.indexOf(stage))) {
+    if (run.stages[s].status !== 'running') continue;
+    run.stages[s].status = 'aborted';
+    run.stages[s].endedAt = now();
+    event(run, { event: 'stage-end', name: s, note: 'closed by resume; the agent did not finish' });
+  }
+
+  /* Everything from here on has not happened yet. Attempts are left standing: they are what
+     the budget is counted from, and a resume is not an amnesty on the attempts already spent. */
+  for (const s of STAGES.slice(STAGES.indexOf(stage))) {
+    run.stages[s].status = 'pending';
+    delete run.stages[s].endedAt;
+  }
+  run.status = stage;
+  event(run, { event: 'resume', name: stage, from: was.reason, reason: args.reason ?? null });
+  saveRun(run);
+  process.stdout.write(
+    `resumed ${run.runId} at ${stage} (was ${stopped})\n`
+    + `spec sha matches the one recorded at init — handoff.json still describes this spec\n`
+    + `spec-edit baseline moved to ${run.headAtInit.slice(0, 7)} — commits up to here are the person's\n`,
+  );
 }
 
 function cmdVerdict(args) {
@@ -729,6 +925,7 @@ switch (cmd) {
   case 'stage':     cmdStage(args); break;
   case 'verdict':   cmdVerdict(args); break;
   case 'contest':   cmdContest(args); break;
+  case 'resume':    cmdResume(args); break;
   case 'abort':     cmdAbort(args); break;
   case 'status':    cmdStatus(args); break;
   case 'log':       cmdLog(args); break;

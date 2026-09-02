@@ -1,0 +1,59 @@
+{
+  "stage": "pre_implement",
+  "status": "pass",
+  "spec": "specs/requests/01-requests.md",
+  "handoff": ".workflow/runs/2026-09-01T16-08-11_requests-01-requests/handoff.json",
+  "coverage": {
+    "requirements": "47/47",
+    "cases": "41/41 (verified by hand - handoff-coverage reports a vacuous 0/0 on this file; see finding P2)",
+    "sections": "21/21"
+  },
+  "carriedFindings": [
+    {
+      "id": "F1",
+      "from": "2026-09-01T15-33-10_requests-01-requests#review",
+      "disposition": "still present",
+      "verifiedAt": "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx:46 `const role = session.role as Role`, consumed by can(role, 'view-all-requests') at :47 and by role === 'admin' at :48; those two feed isParty (:185), showAnswer/showGrant/showDecline/showCancel (:188-191) and showReassign (:192). can() is still a bare CAPABILITY_MATRIX lookup with a `?? false` fallback at packages/validation/src/index.ts:716-718 and the matrix still has no `member` key. The two siblings still normalize: apps/web/app/org/[orgId]/requests/page.tsx:93 and apps/web/src/layout/requests-badge-context.tsx:41; the server does it once in requireCaller at apps/api/src/requests/requests.service.ts:861. Not retired by the corrected spec - amended requirement 36 keeps the reassign control on this screen, which is one of the two things the un-normalized read gates.",
+      "plannedAs": "T1 - one line, `const role: Role = normalizeRole(session.role)`, matching page.tsx:93"
+    },
+    {
+      "id": "F6",
+      "from": "2026-09-01T15-33-10_requests-01-requests#review",
+      "disposition": "already fixed",
+      "verifiedAt": "scripts/ship.mjs:393 now reads `...(flag('no-carry') ? ['--no-carry'] : [])`, beside the --carry spread at :392, so wf.mjs:393 sees the flag and takes the `{ from: null, findings: [] }` branch instead of falling through to findCarrySource at :395. Fixed by commit 3d46cb3, whose diffstat carries `scripts/ship.mjs | 3 +-`.",
+      "plannedAs": "no task owed"
+    }
+  ],
+  "findings": [
+    {
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "State Machine invariant 8",
+      "claim": "invariant 8 enumerates the writers of a Request row exhaustively and omits the message handler, which requirements 19 and 32 require to write Request.lastActivityAt",
+      "witness": {
+        "kind": "rule",
+        "detail": "State Machine invariant 8: 'Writers of a `Request` row are exactly: the create handler, the four transition handlers, the edit handler and the reassign handler.' Requirement 19: 'Every message writes a `RequestEvent` with `action = 'message_posted'` in the same transaction as the `RequestMessage` row, and updates `Request.lastActivityAt`.' Requirement 32: '`lastActivityAt` is updated by any message, any status change and any reassignment. It is the sort key of the list.' A message handler that updates lastActivityAt is a seventh writer of the Request row; one that does not violates 19 and 32, and the observable difference is whether a request rises to the top of the list after somebody posts on it (requirement 43's last sort key). The shipped code takes the requirement-19 reading and writes it under the same row lock as every other writer - apps/api/src/requests/requests.service.ts:448, inside the transaction that locks at :419.",
+        "source": "specs/requests/01-requests.md, State Machine invariant 8 against requirements 19 and 32"
+      },
+      "suggestedFix": "add the message handler to invariant 8's enumeration - 'and the message handler, which writes lastActivityAt' - so the exhaustive list stays exhaustive. A note and not a blocker: only one of the two readings survives requirement 43 making lastActivityAt the sort key, the code already takes it, and no implementer would build the other."
+    },
+    {
+      "id": "P2",
+      "target": "self",
+      "severity": "note",
+      "rule": "self/unverified-coverage-claim",
+      "file": ".workflow/runs/2026-09-01T16-08-11_requests-01-requests/handoff.json",
+      "symbol": "testCases",
+      "claim": "handoff-coverage's live-case check is blind on this spec because the file is CRLF, so its `pass` says nothing about the testCases block; I verified those 41 ids directly instead",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Run `node scripts/handoff-coverage.mjs --run 2026-09-01T16-08-11_requests-01-requests`: it prints `pass  requirements 47/47  cases 0/0  sections 21/21`. The spec has 41 `### TC-` headings. Commit 3d46cb3 rewrote specs/requests/01-requests.md with CRLF (`node -e` over the file: 1320 CRLF pairs, 0 bare LF), and the script's case regex at scripts/handoff-coverage.mjs:85 requires `[: \\n]` immediately after the id - a `\\r` sits there, so the match set is empty and `live.length` is 0, which makes `missingCases` empty and the check pass vacuously. The requirement check (`/^(\\d+)\\. /gm`) and the section check survive CRLF because `\\r` lands at end-of-line for the first and the heading is `.trim()`ed in the second. Hand check instead: 41 headings, none carrying `- **Retired.**`, and handoff.testCases claims exactly those 41 - set difference empty in both directions.",
+        "source": "scripts/handoff-coverage.mjs:85"
+      },
+      "suggestedFix": "tolerate CRLF in the case regex - `[: \\r\\n]` after the id, and `\\r?\\n` in the lookahead - so the check that exists to catch a dropped case cannot itself be dropped by a line ending. Until then, a `cases 0/0` line in any verdict should be read as 'not checked', never as 'nothing to check'."
+    }
+  ]
+}
