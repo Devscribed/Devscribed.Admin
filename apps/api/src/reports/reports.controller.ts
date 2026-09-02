@@ -7,6 +7,7 @@ import {
   ReportsService,
   type AmountsOwedQueryInput,
   type TimeAndActivityQueryInput,
+  type TimeOffQueryInput,
 } from './reports.service';
 
 /**
@@ -110,6 +111,54 @@ export class ReportsController {
     @Res() res: Response,
   ) {
     const { buffer, filename } = await this.reports.renderTimeAndActivityPdf(
+      req.session!,
+      'my',
+      query,
+    );
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.status(200).send(buffer);
+  }
+
+  /* -------------------------------------------------------------- *
+   * Time Off — spec reports/01 third slice
+   * -------------------------------------------------------------- */
+
+  @Get('reports/time-off')
+  async timeOff(@Req() req: AuthenticatedRequest, @Query() query: TimeOffQueryInput) {
+    return this.reports.runTimeOff(req.session!, 'all', query);
+  }
+
+  @Get('reports/time-off/my')
+  async timeOffMy(@Req() req: AuthenticatedRequest, @Query() query: TimeOffQueryInput) {
+    return this.reports.runTimeOff(req.session!, 'my', query);
+  }
+
+  @Get('reports/time-off/pdf')
+  async timeOffPdf(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: TimeOffQueryInput,
+    @Res() res: Response,
+  ) {
+    const { buffer, filename } = await this.reports.renderTimeOffPdf(
+      req.session!,
+      'all',
+      query,
+    );
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.status(200).send(buffer);
+  }
+
+  @Get('reports/time-off/pdf/my')
+  async timeOffPdfMy(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: TimeOffQueryInput,
+    @Res() res: Response,
+  ) {
+    const { buffer, filename } = await this.reports.renderTimeOffPdf(
       req.session!,
       'my',
       query,

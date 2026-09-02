@@ -26,17 +26,25 @@ import {
   validateBillableFilter,
   validateCuidList,
   validateReportRange,
+  validateTimeOffStatusFilter,
+  validateTimeOffTypeFilter,
   weightedAverageRate,
   type AmountRow,
   type ReportBillableFilter,
   type ReportColumn,
   type ReportOwnerScope,
+  type ReportTimeOffStatusFilter,
+  type ReportTimeOffTypeFilter,
   type Role,
 } from '@devscribed/validation';
 import type { SessionPayload } from '../auth/session.service';
 import { PdfRenderer } from '../pdf/pdf-renderer';
 import { PrismaService } from '../prisma.service';
-import { renderAmountsOwedHtml, renderTimeAndActivityHtml } from './reports.pdf-template';
+import {
+  renderAmountsOwedHtml,
+  renderTimeAndActivityHtml,
+  renderTimeOffHtml,
+} from './reports.pdf-template';
 
 /** The raw query strings straight from Express — every field is `unknown`. */
 export interface AmountsOwedQueryInput {
@@ -120,6 +128,22 @@ export interface TimeAndActivityQueryInput extends AmountsOwedQueryInput {
   billable?: unknown;
 }
 
+/**
+ * Time Off query envelope. Projects/clients filters are not accepted — the
+ * report has no project dimension (spec §Query shape). `sumDateRanges` /
+ * `detailedReports` are read but ignored: Time Off groups are member-keyed,
+ * not date-keyed.
+ */
+export interface TimeOffQueryInput {
+  startDate?: unknown;
+  endDate?: unknown;
+  memberIds?: unknown;
+  sumDateRanges?: unknown;
+  detailedReports?: unknown;
+  type?: unknown;
+  status?: unknown;
+}
+
 /** A single per-member row inside a project group. Keys are optional so denied
  *  columns are simply absent from the payload (spec req 11 — never null-blanked). */
 export interface TimeAndActivityRow {
@@ -169,6 +193,40 @@ export interface TimeAndActivityResponse {
   };
 }
 
+/**
+ * Time Off report — a single row inside a member's group or the
+ * organization-wide group. `status` only appears on vacation rows. `deduction`
+ * is `null` for holiday rows (org-paid) and a two-decimal string for vacations.
+ */
+export interface TimeOffRow {
+  type: 'Vacation' | 'Holiday';
+  period: string;
+  status?: string;
+  days: string;
+  workingDays: string;
+  deduction: string | null;
+  kind: 'vacation' | 'holiday';
+}
+
+export interface TimeOffGroup {
+  id: string;
+  title: string;
+  rows: TimeOffRow[];
+  total: { days: string; workingDays: string; deduction: string | null };
+}
+
+export interface TimeOffResponse {
+  headers: { title: string; value: string }[];
+  groups: TimeOffGroup[];
+  summary: { label: string; value: string }[];
+  meta: {
+    currencyCode: string;
+    timezone: string;
+    startDate: string;
+    endDate: string;
+  };
+}
+
 /** Ordered header dictionary — the response only exposes keys projected by grants. */
 const T_AND_A_HEADER_BY_COLUMN: Record<ReportColumn, { title: string; value: string }> = {
   Project: { title: 'Project', value: 'project' },
@@ -196,6 +254,22 @@ const AMOUNTS_OWED_HEADERS: { title: string; value: string }[] = [
   { title: 'Rate', value: 'rate' },
   { title: 'Amount', value: 'amount' },
 ];
+
+/**
+ * Time Off headers are fixed (spec §API Contracts · Time Off) — this report
+ * has no column-permission gating. `deduction` is emitted as string-or-null
+ * per row; the header entry names the JSON key the row uses.
+ */
+const TIME_OFF_HEADERS: { title: string; value: string }[] = [
+  { title: 'Type', value: 'type' },
+  { title: 'Period', value: 'period' },
+  { title: 'Days', value: 'days' },
+  { title: 'Working days', value: 'workingDays' },
+  { title: 'Deduction', value: 'deduction' },
+];
+
+/** Vacation status strings surfaced on rows — lowercase, spec §API Contracts. */
+type VacationStatus = 'pending' | 'approved' | 'rejected' | 'cancelled';
 
 /**
  * Spec reports/01 — the Amounts Owed report family. Capability checks live here
@@ -372,6 +446,75 @@ export class ReportsService {
   }
 
   /* ---------------------------------------------------------------- *
+   * Time Off endpoints
+   * ---------------------------------------------------------------- */
+
+  /**
+   * `GET /organizations/:orgId/reports/time-off(/my)`. Same 404-on-view-refusal
+   * shape as the other reports (spec req 7). Viewer holds only
+   * `view-my-time-off` — Time Off is the sole report they can see; `/my` must
+   * succeed for them.
+   */
+  async runTimeOff(
+    session: SessionPayload,
+    scope: ReportOwnerScope,
+    input: TimeOffQueryInput,
+  ): Promise<TimeOffResponse> {
+    const startedAt = Date.now();
+    const caller = await this.loadCaller(session);
+    this.gateTimeOffScope(caller.role, scope);
+
+    const query = this.parseTimeOffQuery(input, scope, caller);
+    const response = await this.buildTimeOffResponse(caller, scope, query);
+
+    this.logTimeOffFetch(caller, scope, query, response, Date.now() - startedAt);
+    return response;
+  }
+
+  /**
+   * `GET /organizations/:orgId/reports/time-off/pdf(/my)`. `export-reports`
+   * refusal is 403 (spec §Security). Viewer does NOT hold `export-reports`, so
+   * a viewer hitting `/pdf/my` gets 403 even though their `/my` JSON succeeds.
+   */
+  async renderTimeOffPdf(
+    session: SessionPayload,
+    scope: ReportOwnerScope,
+    input: TimeOffQueryInput,
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    const startedAt = Date.now();
+    const caller = await this.loadCaller(session);
+    this.gateTimeOffScope(caller.role, scope);
+    if (!can(caller.role, 'export-reports')) {
+      throw new ForbiddenException({ error: 'forbidden', message: REPORTS_MESSAGES.toastForbidden });
+    }
+    this.checkPdfRateLimit(caller.accountId);
+
+    const query = this.parseTimeOffQuery(input, scope, caller);
+    const response = await this.buildTimeOffResponse(caller, scope, query);
+
+    const rowCount = response.groups.reduce((n, g) => n + g.rows.length, 0);
+    if (rowCount > REPORT_PDF_ROW_BUDGET) {
+      throw new UnprocessableEntityException({
+        error: 'range_too_large_for_pdf',
+        message: REPORTS_MESSAGES.pdfTooLarge,
+      });
+    }
+
+    const displayName = scope === 'my' ? 'My Time Off' : 'Time Off';
+    const html = renderTimeOffHtml(response, {
+      title: displayName,
+      organizationName: caller.organizationName,
+      rangeLabel: this.formatRangeLabel(query, caller.timezone),
+      generatedAt: this.formatInstantIn(new Date(), caller.timezone),
+    });
+    const buffer = await this.pdf.render(html);
+    const filename = pdfReportFilename(displayName, query.startDate, query.endDate);
+
+    this.logTimeOffExport(caller, scope, query, response, buffer.length, Date.now() - startedAt);
+    return { buffer, filename };
+  }
+
+  /* ---------------------------------------------------------------- *
    * Gates & caller resolution
    * ---------------------------------------------------------------- */
 
@@ -421,6 +564,14 @@ export class ReportsService {
   /** Same 404-on-view-refusal shape for Time & Activity (spec req 7). */
   private gateTimeAndActivityScope(role: Role, scope: ReportOwnerScope): void {
     const capability = scope === 'my' ? 'view-my-time-and-activity' : 'view-time-and-activity';
+    if (!can(role, capability)) {
+      throw new NotFoundException();
+    }
+  }
+
+  /** Same 404-on-view-refusal shape for Time Off (spec req 7). */
+  private gateTimeOffScope(role: Role, scope: ReportOwnerScope): void {
+    const capability = scope === 'my' ? 'view-my-time-off' : 'view-time-off';
     if (!can(role, capability)) {
       throw new NotFoundException();
     }
@@ -1585,6 +1736,437 @@ export class ReportsService {
           detailedReports: query.detailedReports,
           billable: query.billable,
           columns: query.columns.map((c) => String(c)),
+        },
+        rowCount,
+        bytes,
+        durationMs,
+      }),
+    );
+  }
+
+  /* ---------------------------------------------------------------- *
+   * Time Off — query, aggregation, logging
+   * ---------------------------------------------------------------- */
+
+  /**
+   * Parse the Time Off query envelope. Projects/clients filters are not
+   * accepted (spec §Query shape — the report has no project dimension); we do
+   * not read `projectIds` / `clientIds` from `input` even if present.
+   * `sumDateRanges` and `detailedReports` are read for logging parity but
+   * IGNORED for aggregation: Time Off groups are member-keyed, not date-keyed
+   * (spec req 26–29 apply to the two Amounts Owed / T&A branches only).
+   * On `scope='my'`, `memberIds[]` is discarded and replaced with
+   * `[caller.membershipId]` (spec req 6).
+   */
+  private parseTimeOffQuery(
+    input: TimeOffQueryInput,
+    scope: ReportOwnerScope,
+    caller: Caller,
+  ): ParsedQuery & { type: ReportTimeOffTypeFilter; status: ReportTimeOffStatusFilter } {
+    const range = validateReportRange(input.startDate, input.endDate, caller.timezone);
+    if (!range.valid) {
+      throw new UnprocessableEntityException({
+        error: 'validation_error',
+        fields: { [range.field]: range.error },
+      });
+    }
+
+    const members =
+      scope === 'my'
+        ? { valid: true as const, value: [caller.membershipId] }
+        : validateCuidList(input.memberIds, REPORTS_MESSAGES.invalidMemberRef);
+    if (!members.valid) {
+      throw new UnprocessableEntityException({
+        error: 'validation_error',
+        fields: { memberIds: members.error },
+      });
+    }
+
+    const typeFilter = validateTimeOffTypeFilter(input.type);
+    if (!typeFilter.valid) {
+      throw new UnprocessableEntityException({
+        error: 'validation_error',
+        fields: { type: typeFilter.error },
+      });
+    }
+    const statusFilter = validateTimeOffStatusFilter(input.status);
+    if (!statusFilter.valid) {
+      throw new UnprocessableEntityException({
+        error: 'validation_error',
+        fields: { status: statusFilter.error },
+      });
+    }
+
+    const startDateOnly = new Date(`${range.startDate}T00:00:00.000Z`);
+    const [y, m, d] = range.endDate.split('-').map(Number);
+    const endDayAfter = new Date(Date.UTC(y, m - 1, d + 1));
+    const endIso = `${endDayAfter.getUTCFullYear()}-${String(endDayAfter.getUTCMonth() + 1).padStart(2, '0')}-${String(endDayAfter.getUTCDate()).padStart(2, '0')}`;
+    const endDateOnlyExclusive = new Date(`${endIso}T00:00:00.000Z`);
+
+    return {
+      startDate: range.startDate,
+      endDate: range.endDate,
+      startUtc: range.startUtc,
+      endUtcExclusive: range.endUtcExclusive,
+      startDateOnly,
+      endDateOnlyExclusive,
+      memberIds: members.value,
+      // Read but unused for aggregation — Time Off has no project/client
+      // dimension. Kept empty so the shared logging shape does not surface
+      // filters the endpoint does not accept.
+      projectIds: [],
+      clientIds: [],
+      // `sumDateRanges` / `detailedReports` are IGNORED for Time Off (its
+      // groups are member-keyed, not date-keyed). Kept in the parsed struct
+      // to match `ParsedQuery`'s shape; the aggregation never branches on them.
+      sumDateRanges: coerceQueryBoolean(input.sumDateRanges, false),
+      detailedReports: coerceQueryBoolean(input.detailedReports, false),
+      type: typeFilter.value,
+      status: statusFilter.value,
+    };
+  }
+
+  /**
+   * Build the Time Off response. Vacations are grouped per member; holidays
+   * are collected under a single `organization_wide` group at the bottom
+   * (spec req 21). `type` narrows which kinds appear; `status` narrows which
+   * vacation lifecycle states appear (holidays are unaffected).
+   *
+   * Empty-row filter (spec req 30 discipline): a per-member group with no
+   * rows after filtering drops; the org_wide group with no holidays drops.
+   */
+  private async buildTimeOffResponse(
+    caller: Caller,
+    scope: ReportOwnerScope,
+    query: ParsedQuery & { type: ReportTimeOffTypeFilter; status: ReportTimeOffStatusFilter },
+  ): Promise<TimeOffResponse> {
+    const memberships = await this.resolveSubjectMemberships(caller, scope, query);
+    if (memberships.length === 0) {
+      return this.emptyTimeOffResponse(query, caller);
+    }
+    const memberIdSet = new Set(memberships.map((m) => m.id));
+    const memberById = new Map(memberships.map((m) => [m.id, m]));
+
+    // For the org-wide group we always list holidays applicable to the
+    // caller-visible subject set: on `all`, that's the org's active
+    // membership country union; on `my`, only the caller's country. Loaded
+    // separately from the subject memberships (which may have been narrowed
+    // by `memberIds[]`) — the org-wide group's country coverage is broader
+    // than the subject filter.
+    const orgCountriesMemberships =
+      scope === 'my'
+        ? memberships
+        : await this.prisma.membership.findMany({
+            where: { organizationId: caller.organizationId, status: 'active' },
+            include: { account: { select: { phoneCountryCode: true } } },
+          }).then((rows) =>
+            rows.map((r) => ({
+              id: r.id,
+              displayName: '',
+              countryCode: r.account.phoneCountryCode ?? null,
+            })),
+          );
+
+    const wantVacation = query.type === 'all' || query.type === 'vacation';
+    const wantHoliday = query.type === 'all' || query.type === 'holiday';
+
+    const [vacations, holidays] = await Promise.all([
+      wantVacation
+        ? this.fetchVacationsForTimeOff(caller.organizationId, memberIdSet, query)
+        : Promise.resolve([]),
+      wantHoliday
+        ? this.fetchHolidays(caller.organizationId, query)
+        : Promise.resolve([]),
+    ]);
+
+    // ── Vacation groups (per member) ───────────────────────────────────
+    interface Bucket {
+      rows: TimeOffRow[];
+      days: number;
+      workingDays: number;
+      deduction: number;
+    }
+    const perMember = new Map<string, Bucket>();
+
+    for (const vac of vacations) {
+      const member = memberById.get(vac.membershipId);
+      if (!member) continue;
+      const days = this.calendarDaysInclusive(vac.startDate, vac.endDate);
+      const workingDays = Number(vac.workingDays) || 0;
+      const deduction = Number(vac.deductionAmount) || 0;
+      const row: TimeOffRow = {
+        type: 'Vacation',
+        period: this.formatVacationPeriod(vac.startDate, vac.endDate),
+        status: vac.status,
+        days: String(days),
+        workingDays: String(workingDays),
+        deduction: toMoney(deduction),
+        kind: 'vacation',
+      };
+      let bucket = perMember.get(vac.membershipId);
+      if (!bucket) {
+        bucket = { rows: [], days: 0, workingDays: 0, deduction: 0 };
+        perMember.set(vac.membershipId, bucket);
+      }
+      bucket.rows.push(row);
+      bucket.days += days;
+      bucket.workingDays += workingDays;
+      bucket.deduction += deduction;
+    }
+
+    // Stable order: by member displayName.
+    const memberIdsOrdered = [...perMember.keys()].sort((a, b) =>
+      (memberById.get(a)?.displayName ?? '').localeCompare(
+        memberById.get(b)?.displayName ?? '',
+      ),
+    );
+
+    const groups: TimeOffGroup[] = [];
+    for (const mid of memberIdsOrdered) {
+      const bucket = perMember.get(mid)!;
+      if (bucket.rows.length === 0) continue;
+      const member = memberById.get(mid)!;
+      groups.push({
+        id: `membership_${mid}`,
+        title: member.displayName,
+        rows: bucket.rows,
+        total: {
+          days: String(bucket.days),
+          workingDays: String(bucket.workingDays),
+          deduction: toMoney(bucket.deduction),
+        },
+      });
+    }
+
+    // ── Organization-wide holidays group ───────────────────────────────
+    if (wantHoliday) {
+      const orgWideRows: TimeOffRow[] = [];
+      let orgDays = 0;
+      let orgWorking = 0;
+      // Sort holidays by date ascending, then name for deterministic output.
+      const sortedHolidays = [...holidays].sort((a, b) => {
+        const dt = a.date.getTime() - b.date.getTime();
+        if (dt !== 0) return dt;
+        return a.name.localeCompare(b.name);
+      });
+      for (const h of sortedHolidays) {
+        // Applicable if any covered member's country matches, or global.
+        if (h.countryCode !== null) {
+          const covered = orgCountriesMemberships.some((m) =>
+            isHolidayApplicableToMember({ countryCode: h.countryCode }, { countryCode: m.countryCode }),
+          );
+          if (!covered) continue;
+        }
+        orgWideRows.push({
+          type: 'Holiday',
+          period: this.formatHolidayPeriod(h.date, h.name),
+          // A holiday is one calendar day off — `days=1`, `workingDays=1`
+          // (a holiday counts as a working day off), `deduction=null`
+          // (org-paid, never deducted from the member's balance).
+          days: '1',
+          workingDays: '1',
+          deduction: null,
+          kind: 'holiday',
+        });
+        orgDays += 1;
+        orgWorking += 1;
+      }
+      if (orgWideRows.length > 0) {
+        groups.push({
+          id: 'organization_wide',
+          title: 'Organization-wide',
+          rows: orgWideRows,
+          total: {
+            days: String(orgDays),
+            workingDays: String(orgWorking),
+            deduction: null,
+          },
+        });
+      }
+    }
+
+    // ── Summary strip ──────────────────────────────────────────────────
+    // `Vacation days`: sum of workingDays across every vacation row surfaced.
+    let vacationWorkingDays = 0;
+    // `Deduction`: sum of deductionAmount across APPROVED vacation rows only.
+    // Non-approved requests never land on the balance until they approve, so
+    // pending / rejected / cancelled contribute 0 to the deduction line.
+    let deductionApproved = 0;
+    // `Public holidays`: count of rows in the organization_wide group.
+    let publicHolidayCount = 0;
+
+    for (const g of groups) {
+      if (g.id === 'organization_wide') {
+        publicHolidayCount += g.rows.length;
+        continue;
+      }
+      for (const row of g.rows) {
+        if (row.kind !== 'vacation') continue;
+        vacationWorkingDays += Number(row.workingDays) || 0;
+        if (row.status === 'approved') {
+          deductionApproved += Number(row.deduction) || 0;
+        }
+      }
+    }
+
+    const summary: { label: string; value: string }[] = [
+      { label: 'Vacation days', value: String(vacationWorkingDays) },
+      { label: 'Deduction', value: toMoney(deductionApproved) },
+      { label: 'Public holidays', value: String(publicHolidayCount) },
+    ];
+
+    return {
+      headers: TIME_OFF_HEADERS,
+      groups,
+      summary,
+      meta: {
+        currencyCode: REPORT_CURRENCY_CODE,
+        timezone: caller.timezone,
+        startDate: query.startDate,
+        endDate: query.endDate,
+      },
+    };
+  }
+
+  /**
+   * Fetch vacations that overlap the query range. Overlap rule:
+   * `startDate <= query.endDateOnlyExclusive - 1 AND endDate >= query.startDateOnly`.
+   * Applies the `status` filter here (holidays are unaffected).
+   */
+  private async fetchVacationsForTimeOff(
+    organizationId: string,
+    memberIdSet: Set<string>,
+    query: ParsedQuery & { status: ReportTimeOffStatusFilter },
+  ): Promise<{
+    membershipId: string;
+    startDate: Date;
+    endDate: Date;
+    workingDays: number;
+    deductionAmount: number;
+    status: VacationStatus;
+  }[]> {
+    const rows = await this.prisma.vacationRequest.findMany({
+      where: {
+        membershipId: { in: [...memberIdSet] },
+        membership: { organizationId },
+        startDate: { lt: query.endDateOnlyExclusive },
+        endDate: { gte: query.startDateOnly },
+        ...(query.status !== 'all' ? { status: query.status } : {}),
+      },
+    });
+    return rows.map((r) => ({
+      membershipId: r.membershipId,
+      startDate: r.startDate,
+      endDate: r.endDate,
+      workingDays: r.workingDays,
+      deductionAmount: r.deductionAmount.toNumber(),
+      status: r.status as VacationStatus,
+    }));
+  }
+
+  private emptyTimeOffResponse(
+    query: ParsedQuery,
+    caller: Caller,
+  ): TimeOffResponse {
+    return {
+      headers: TIME_OFF_HEADERS,
+      groups: [],
+      summary: [
+        { label: 'Vacation days', value: '0' },
+        { label: 'Deduction', value: toMoney(0) },
+        { label: 'Public holidays', value: '0' },
+      ],
+      meta: {
+        currencyCode: REPORT_CURRENCY_CODE,
+        timezone: caller.timezone,
+        startDate: query.startDate,
+        endDate: query.endDate,
+      },
+    };
+  }
+
+  /** Inclusive calendar day count between two UTC-midnight `@db.Date` values. */
+  private calendarDaysInclusive(start: Date, end: Date): number {
+    const s = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+    const e = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+    return Math.floor((e - s) / 86_400_000) + 1;
+  }
+
+  private formatVacationPeriod(start: Date, end: Date): string {
+    // Same year: "15 Feb – 28 Feb 2026". Cross-year: "28 Dec 2025 – 3 Jan 2026".
+    const sy = start.getUTCFullYear();
+    const ey = end.getUTCFullYear();
+    const monthShort = (d: Date): string =>
+      new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' }).format(d);
+    const startDay = start.getUTCDate();
+    const endDay = end.getUTCDate();
+    if (sy === ey) {
+      return `${startDay} ${monthShort(start)} – ${endDay} ${monthShort(end)} ${sy}`;
+    }
+    return `${startDay} ${monthShort(start)} ${sy} – ${endDay} ${monthShort(end)} ${ey}`;
+  }
+
+  private formatHolidayPeriod(date: Date, name: string): string {
+    const monthShort = new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      timeZone: 'UTC',
+    }).format(date);
+    const trimmed = (name ?? '').trim();
+    const base = `${date.getUTCDate()} ${monthShort} ${date.getUTCFullYear()}`;
+    return trimmed.length > 0 ? `${base} · ${trimmed}` : base;
+  }
+
+  private logTimeOffFetch(
+    caller: Caller,
+    scope: ReportOwnerScope,
+    query: ParsedQuery & { type: ReportTimeOffTypeFilter; status: ReportTimeOffStatusFilter },
+    response: TimeOffResponse,
+    durationMs: number,
+  ): void {
+    const rowCount = response.groups.reduce((n, g) => n + g.rows.length, 0);
+    this.logger.log(
+      JSON.stringify({
+        event: 'report_fetched',
+        actorAccountId: caller.accountId,
+        organizationId: caller.organizationId,
+        report: 'time-off',
+        ownerScope: scope,
+        startDate: query.startDate,
+        endDate: query.endDate,
+        // No projectCount / clientCount — Time Off has no project dimension.
+        filters: {
+          memberCount: query.memberIds.length,
+          type: query.type,
+          status: query.status,
+        },
+        rowCount,
+        durationMs,
+      }),
+    );
+  }
+
+  private logTimeOffExport(
+    caller: Caller,
+    scope: ReportOwnerScope,
+    query: ParsedQuery & { type: ReportTimeOffTypeFilter; status: ReportTimeOffStatusFilter },
+    response: TimeOffResponse,
+    bytes: number,
+    durationMs: number,
+  ): void {
+    const rowCount = response.groups.reduce((n, g) => n + g.rows.length, 0);
+    this.logger.log(
+      JSON.stringify({
+        event: 'report_exported',
+        actorAccountId: caller.accountId,
+        organizationId: caller.organizationId,
+        report: 'time-off',
+        ownerScope: scope,
+        startDate: query.startDate,
+        endDate: query.endDate,
+        filters: {
+          memberCount: query.memberIds.length,
+          type: query.type,
+          status: query.status,
         },
         rowCount,
         bytes,
