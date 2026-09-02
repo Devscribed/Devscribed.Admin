@@ -1,113 +1,102 @@
 {
   "status": "blocked",
   "mode": "diff",
-  "range": "a009c65..10abb07 on specs/requests/02-client-participants.md — a .fix.json for this spec exists, so the sweeps ran over the added and modified lines and the rules they touch, and every rule that changed was checked against the whole document for contradiction",
+  "range": "f283a5a -- specs/requests/02-client-participants.md (the only change since the fix pass; git diff HEAD is empty)",
   "spec": "specs/requests/02-client-participants.md",
   "request": "Client participants: let a client contact hold a principal in an organization and take part in requests raised for their client, without becoming a member of the organization.",
   "read": {
-    "specs": ["specs/requests/02-client-participants.md"],
+    "specs": ["specs/requests/02-client-participants.md", "specs/requests/README.md"],
     "files": [
-      "apps/api/src/auth/capability.guard.ts",
-      "apps/api/src/auth/session.service.ts",
-      "apps/api/src/auth/login.service.ts",
-      "apps/api/src/members/me.controller.ts",
-      "apps/api/src/members/members.service.ts",
-      "apps/api/src/projects/projects.service.ts",
-      "apps/api/src/time-tracking/time-tracking.service.ts",
-      "apps/api/src/vacation/vacation.service.ts",
-      "apps/api/src/vacation/vacation-requests.service.ts",
-      "apps/api/src/clients/clients.service.ts",
-      "apps/api/src/clients/clients.controller.ts",
-      "apps/api/src/invitations/invitations.controller.ts",
-      "apps/api/src/invitations/invitations.service.ts",
-      "apps/api/src/requests/requests.controller.ts",
-      "apps/api/src/requests/requests.service.ts",
-      "apps/api/src/requests/requests.serializer.ts",
-      "apps/api/src/requests/request-events.service.ts",
-      "apps/api/src/documents/envelopes.controller.ts",
-      "apps/api/src/documents/document-templates.controller.ts",
-      "apps/api/src/mail/outbox.controller.ts",
-      "apps/api/src/organizations/signing-settings.controller.ts",
-      "apps/api/prisma/schema.prisma",
-      "apps/web/src/layout/Sidebar.tsx",
-      "apps/web/app/org/[orgId]/requests",
       "packages/validation/src/index.ts",
-      "packages/validation/src/roles.ts",
-      "packages/validation/src/documents.ts",
-      "e2e/environment.ts",
-      "docker-compose.yml",
-      ".workflow/refine/requests-02.fix.json"
+      "apps/api/src/invitations/invitations.service.ts",
+      "apps/web/src/layout/Sidebar.tsx",
+      "apps/web/src/layout/requests-badge-context.tsx"
     ]
   },
   "sweeps": {
-    "currency": 34,
-    "contradiction": 24,
-    "selfSufficiency": 28,
-    "testability": 28,
-    "selfDescription": 8,
-    "obligations": 46,
-    "scope": 7
+    "currency": 22,
+    "contradiction": 23,
+    "selfSufficiency": 12,
+    "testability": 15,
+    "selfDescription": 6,
+    "obligations": 13,
+    "scope": 5
   },
   "findings": [
     {
       "id": "R1",
       "severity": "blocker",
-      "rule": "spec/untestable-case",
+      "rule": "spec/ambiguous-requirement",
       "file": "specs/requests/02-client-participants.md",
-      "symbol": "TC-02-INT-16",
-      "line": 979,
-      "claim": "the case's steps cannot reach the state its expected result needs — minting two invitations for one address invalidates the first token, so no ordering of the two acceptances produces 'a ClientMembership, then 409 accountIsClient'",
+      "symbol": "requirement 19a",
+      "line": 227,
+      "claim": "Requirement 19a decides what invitation time inspects on the ClientMembership side but leaves the Membership side undecided for a client invitation: whether the inherited alreadyMember refusal fires when role = 'client'. One reading makes edge case 1 and TC-02-INT-03 unreachable.",
       "witness": {
         "kind": "rule",
-        "detail": "TC-02-INT-16 (:979): 'Mint two client invitations for the same address and client, keeping both tokens - the state two simultaneous invites can leave (edge case 21). Accept one token, then the other.' Expected (:981): 'the first acceptance creates exactly one ClientMembership; the second answers 409 accountIsClient and creates nothing.' Requirement 19 (:222): 'at most one live pending invitation per (email, organization), whichever kind it is.' TC-02-INT-15 (:971) spells out what that does to the earlier token: 'the staff invitation's status is invalidated and the client one is pending; accepting the staff token answers 400 INVITE_MESSAGES.tokenInvalid and writes no membership of either kind.' So after the second mint the first token is invalidated, and neither ordering works: accepting the invalidated token first answers 400 tokenInvalid and creates no ClientMembership, and accepting the surviving token first leaves the invalidated one to answer 400 tokenInvalid rather than 409 accountIsClient. Edge case 21 (:580) says the two-live-pending state arises only because 'nothing serializes the two writes' — a race the steps neither describe nor stage. The code is the same: apps/api/src/invitations/invitations.service.ts:106-111 runs invitation.updateMany({ where: { email, organizationId, status: 'pending' }, data: { status: 'invalidated' } }) in the same transaction as every create, for any role.",
-        "source": "specs/requests/02-client-participants.md:979 against :222 and :971"
+        "detail": "Requirement 19a (:227): 'Invitation time inspects no ClientMembership. Spec 03's alreadyMember refusal — 400 INVITE_MESSAGES.alreadyMember — reads active Membership rows only, and this spec adds no counterpart for ClientMembership.' It says which rows the check reads, never which invitations it applies to. The POST /api/invitations contract (:522) says 'everything else exactly as spec 03 defines it', and apps/api/src/invitations/invitations.service.ts:92-97 runs that check for every role before any role branch: 'const invitee = await this.prisma.account.findUnique({ where: { email }, include: { memberships: { where: { organizationId: caller.organizationId, status: active } } } }); if (invitee && invitee.memberships.length > 0) throw new BadRequestException({ message: INVITE_MESSAGES.alreadyMember });'. Reading A — the check applies to role = 'client' too — makes it impossible ever to mint a client invitation for an address that holds an active Membership, so edge case 1 (:581) 'An address that is already an active staff member accepts a client invitation | 409 accountIsStaff. No ClientMembership; the invitation stays pending' is unreachable and TC-02-INT-03 (:891) 'Accept a client invitation with an address that is already an active staff member' cannot reach its state: the mint answers 400 alreadyMember. Reading B — the check is skipped for a client invitation — runs both, and is what the new Error Messages row (:657) implies by scoping the message to 'An address that already holds an active Membership is invited as staff'. The two readings differ by a status, a message and the existence of an invitation row.",
+        "source": "specs/requests/02-client-participants.md:227 against :657, :581, :891 and apps/api/src/invitations/invitations.service.ts:92"
       },
-      "suggestedFix": "say in the steps how two live pending rows are reached — the only mechanism this spec describes is edge case 21's unserialized race, so either the case seeds the second pending row directly and says so, or it becomes the sequence it can actually run (mint, re-mint, accept the surviving token, then accept the superseded one for 400 tokenInvalid) and the acceptance guarantee edge case 21 rests on is observed instead by accepting a second live token for an address that already holds an active ClientMembership"
+      "suggestedFix": "In requirement 19a, say whether the alreadyMember refusal fires for role = 'client'. The table row at :657 and edge case 1 both point one way: a client invitation for an address that holds an active Membership is minted and mailed, and the refusal is the accept transaction's 409 accountIsStaff — state that sentence in 19a, and keep the row's 'invited as staff' scoping."
     },
     {
       "id": "R2",
       "severity": "note",
-      "rule": "spec/missing-artefact",
+      "rule": "spec/incomplete-decision",
       "file": "specs/requests/02-client-participants.md",
-      "symbol": "requirement 23",
-      "line": 240,
-      "claim": "the clause added to requirement 23 — that a request left with a removed client user may be reassigned to another active client user of the project's client — is observed by no case; every reassignment in the cases targets a member",
+      "symbol": "requirement 2",
+      "line": 77,
+      "claim": "Requirement 2 states the accept-time refusal only for an active row of the other kind, while requirement 19a, edge case 21 and TC-02-INT-16 all require a refusal for a same-kind acceptance — an account already holding an active ClientMembership accepting a further client invitation.",
       "witness": {
         "kind": "rule",
-        "detail": "Requirement 23 (:240): 'An admin or manager may then reassign it - to a member, or to another active client user of the project's client - and the reassignment writes a RequestEvent with action = assignee_changed carrying both display names in oldLabel / newLabel.' TC-02-INT-12 (:947), the only reassignment case, asserts only 'reassigning it to a member succeeds and writes assignee_changed with both display-name snapshots'. TC-02-INT-10 exercises assigneeKind 'client' on POST .../requests alone, and TC-02-INT-18 only asserts that a client principal cannot call reassign. Nothing observes assigneeKind: 'client' on POST .../requests/{id}/reassign, although the API Contracts section (:549-554) states that route accepts it and adds projectRequiredForClient, contactProjectMismatch and clientUserUnavailable to it.",
-        "source": "specs/requests/02-client-participants.md:240 against :947"
+        "detail": "Requirement 2 (:77): 'the accept-invitation handler re-reads both inside its transaction and refuses when an active row of the other kind already exists, with 409 and CLIENT_USER_MESSAGES.accountIsStaff or …accountIsClient.' Requirement 19a (:231): 'an address that already holds an active ClientMembership can be minted a client invitation and a staff invitation alike, each succeeding, and the refusal comes at acceptance: 409 accountIsClient (requirement 2).' For a client invitation there is no active row of the other kind, so requirement 2's condition never fires; the data model's ClientMembership.accountId @unique is what stops the insert, and the spec never says what that answers except in 19a and TC-02-INT-16. The rule is stated, but not where the mechanism is.",
+        "source": "specs/requests/02-client-participants.md:77 against :231"
       },
-      "suggestedFix": "extend TC-02-INT-12 with a second reassignment, to another active client user of the same client, asserting 200, assigneeKind 'client' on the row, and the assignee_changed event carrying both labels"
+      "suggestedFix": "Extend requirement 2's mechanism sentence: the accept handler refuses when an active row of either kind already exists for the account — the other kind with accountIsStaff/accountIsClient as today, and a second active ClientMembership with 409 accountIsClient."
     },
     {
       "id": "R3",
       "severity": "note",
-      "rule": "spec/missing-artefact",
+      "rule": "spec/untestable-case",
       "file": "specs/requests/02-client-participants.md",
-      "symbol": "UI Description, 'Client user, sidebar'",
-      "line": 641,
-      "claim": "the enumeration of nav ids that must be absent for a client principal is still short by one of the rows the sidebar draws",
+      "symbol": "TC-02-INT-12",
+      "line": 973,
+      "claim": "TC-02-INT-12 does not say when the second request is created. Created after the removal, as the step order reads, it cannot be addressed to that client user at all.",
       "witness": {
-        "kind": "command",
-        "detail": "grep -n \"testId: '\" apps/web/src/layout/Sidebar.tsx returns ten navigation entries: nav-time-tracking (:64), nav-members (:75), sidebar-requests-link (:84), nav-projects (:97), nav-clients (:108), nav-envelopes (:122), nav-documents (:131), nav-outbox (:140), nav-settings (:159) and settings-tab-holidays (:171) — the last is the Holidays row, pushed into the same Settings group as nav-settings and gated on ViewHolidays. The spec's row (:641) names nav-members, nav-projects, nav-clients, nav-time-tracking, nav-envelopes, nav-documents, nav-outbox and nav-settings and stops. Requirement 12 ('exactly one row') still governs, so nothing wrong is drawn; the enumeration is simply incomplete.",
-        "source": "apps/web/src/layout/Sidebar.tsx:169-176"
+        "kind": "rule",
+        "detail": "TC-02-INT-12 (:972): 'address a request to the first on a project of that client, then remove that user. Reassign the request to a member. Then repeat on a second request in the same state…'. Requirement 27 (:268): 'Only an active client user of an active client may be chosen. A removed user … is 400 with REQUEST_MESSAGES.clientUserUnavailable', and edge case 15 (:595) says the same; state machine invariant 2 gives no restore path. So the second request must have been created before the removal, which the steps never say.",
+        "source": "specs/requests/02-client-participants.md:973 against :268 and :595"
       },
-      "suggestedFix": "add settings-tab-holidays to the absent list"
+      "suggestedFix": "Say it in the steps: address two requests to the first client user, then remove them, then reassign one to a member and the other to the client's second active client user."
     },
     {
       "id": "R4",
       "severity": "note",
-      "rule": "spec/divergence",
+      "rule": "spec/ambiguous-requirement",
       "file": "specs/requests/02-client-participants.md",
-      "symbol": "POST /api/invitations (extended), Errors",
-      "line": 509,
-      "claim": "the refusal a caller without the capability receives from POST /api/invitations changes for role = 'client', from the message that route answers today to this spec's own",
+      "symbol": "UI Description, Client user, sidebar",
+      "line": 664,
+      "claim": "The sidebar row's absolute — sidebar-requests-link is the only navigation data-testid in the sidebar — does not say whether the Requests badge counts, and a client user is exactly the caller who has work waiting.",
       "witness": {
         "kind": "rule",
-        "detail": "The contract (:509): '403 CLIENT_USER_MESSAGES.manageForbidden when role = client and the caller lacks the capability, staff or client principal.' apps/api/src/invitations/invitations.service.ts:66-73 refuses every caller who is not an active admin or manager of the session's organization with 403 { message: INVITE_MESSAGES.permissionDenied } ('You do not have permission to invite members'), and does so before the body is validated at all — so the same caller sending role='client' is answered a different message after this spec than before it. manage-client-users and the invite permission are held by exactly the same two roles, so nothing about who may invite changes; only what the refused caller is told.",
-        "source": "specs/requests/02-client-participants.md:509"
+        "detail": "The row (:664): 'sidebar-requests-link is the only navigation data-testid in the sidebar, and every other navigation id the sidebar can draw is absent from the DOM'. apps/web/src/layout/Sidebar.tsx:84-90 draws the Requests entry with badge and badgeTestId 'sidebar-requests-badge', and apps/web/src/layout/requests-badge-context.tsx:45 feeds it from GET /api/organizations/{orgId}/requests — a route requirement 30 lets a client user call, returning the non-terminal requests addressed to them. Read strictly, the rule requires the badge suppressed for a client principal; read as nav rows only, it stays. No case in this spec settles it.",
+        "source": "specs/requests/02-client-participants.md:664 against apps/web/src/layout/Sidebar.tsx:89"
       },
-      "suggestedFix": "none — the spec states its rule in full; this is recorded so a person can confirm the changed message on an existing route was meant"
+      "suggestedFix": "Add a clause to that row saying whether the Requests row carries its pending badge for a client principal, and scope the absolute to navigation destinations."
+    },
+    {
+      "id": "R5",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/requests/02-client-participants.md",
+      "symbol": "POST /api/invitations — Decided (permissionDenied vs manageForbidden)",
+      "line": 524,
+      "claim": "The new Decided block fixes which 403 a refused caller meets but not whether that 403 precedes the shape refusal, and TC-02-INT-02's new step does not say whether its client body carries a clientId.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "A caller holding role 'user' posts { role: 'client' } with no clientId. Requirement 16 (:216): 'role = client requires clientId; any other role requires it to be absent. Both are rejected with 400 and CLIENT_USER_MESSAGES.invitationShapeInvalid.' The Decided block (:524): 'the refusal a caller without permission meets is chosen by the role in the body … role = client answers 403 CLIENT_USER_MESSAGES.manageForbidden.' Both outcomes — 400 invitationShapeInvalid and 403 manageForbidden — satisfy the text, and TC-02-INT-02's fourth step (:881) 'as a user, with role=client' does not say which body it sends, where its neighbours name the clientId explicitly.",
+        "source": "specs/requests/02-client-participants.md:524 against :216 and :881"
+      },
+      "suggestedFix": "Say in the Decided block that the permission refusal is chosen and returned before the body's shape is validated, and name the clientId in TC-02-INT-02's fourth step."
     }
   ]
 }

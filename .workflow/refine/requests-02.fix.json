@@ -4,39 +4,50 @@
   "fixed": [
     {
       "id": "R2",
-      "rule": "spec/missing-artefact",
+      "rule": "spec/incomplete-decision",
       "edited": ["specs/requests/02-client-participants.md"],
-      "change": "TC-02-INT-12 now runs on a client holding two active client users and reassigns a second request to the client's other active client user, asserting 200, assigneeKind 'client' with assigneeClientMembershipId set, and the assignee_changed event carrying both display names in oldLabel / newLabel — the clause of requirement 23 that no case observed",
-      "verifiedBy": "specs/requests/02-client-participants.md, requirement 23 and the API Contracts entry for POST …/requests/{id}/reassign, which already admits assigneeKind 'client'"
+      "change": "requirement 2 now states the accept-time refusal in full as a three-row table: a client invitation meets 409 accountIsStaff against an active Membership and 409 accountIsClient against an active ClientMembership, and a staff invitation meets 409 accountIsClient against an active ClientMembership; a second client principal is refused by that read and never by a bare unique-constraint error. TC-02-INT-16 already observes the same-kind refusal.",
+      "verifiedBy": "specs/requests/02-client-participants.md, requirement 19a and TC-02-INT-16, which asserted the same-kind 409 accountIsClient the mechanism sentence omitted"
     },
     {
       "id": "R3",
-      "rule": "spec/missing-artefact",
+      "rule": "spec/untestable-case",
       "edited": ["specs/requests/02-client-participants.md"],
-      "change": "the sidebar row of UI Description no longer enumerates a closed list: it states that sidebar-requests-link is the only navigation data-testid drawn for a client principal and that every other navigation id the sidebar can draw is absent, naming settings-tab-holidays alongside the eight already named, so a row added to the sidebar later is covered without editing this one",
-      "verifiedBy": "grep -n \"testId: '\" apps/web/src/layout/Sidebar.tsx"
+      "change": "TC-02-INT-12's steps now create both requests while the first client user is still active and remove that user only afterwards, then reassign one to a member and the other to the client's second active client user; the step names requirement 27 as the reason the order is forced.",
+      "verifiedBy": "specs/requests/02-client-participants.md, requirement 27 and edge case 15 (a removed client user is 400 clientUserUnavailable) and state-machine invariant 2 (no restore path)"
     }
   ],
   "decided": [
     {
       "id": "R1",
-      "rule": "spec/untestable-case",
+      "rule": "spec/ambiguous-requirement",
       "edited": ["specs/requests/02-client-participants.md"],
-      "question": "how does a case reach a second live client invitation token for an address, given that minting a second invitation supersedes the first",
-      "chose": "invitation time inspects no ClientMembership, so a second token is minted after the first has been accepted, and the refusal is the accept transaction's 409 accountIsClient; TC-02-INT-16 now mints, re-mints, accepts the surviving token, accepts the superseded one for 400 INVITE_MESSAGES.tokenInvalid, then mints a third for the now-active client user and accepts it for 409 accountIsClient",
-      "rejected": "a mirror alreadyMember refusal at invitation time for an active ClientMembership, which would need a message this spec does not define and would make edge cases 2 and 21 unreachable",
-      "why": "rule 1 — the invite handler's already-a-member refusal reads active Membership rows only, and this spec had taken no contrary position; requirement 2 already places the one-active-principal guarantee in the accept transaction",
-      "recordedAt": "requirement 19a, with the superseded-token answer added to requirement 19 and to the Decided clause of edge case 21; observed by TC-02-INT-16"
+      "question": "does the inherited alreadyMember refusal fire when an invitation carries role = 'client' for an address that holds an active Membership",
+      "chose": "it does not fire: the client invitation is minted, stored and mailed (201), and the refusal is the accept transaction's 409 accountIsStaff",
+      "rejected": "letting alreadyMember fire for a client invitation too, answering 400 INVITE_MESSAGES.alreadyMember at mint time",
+      "why": "the rejected reading makes it impossible ever to mint a client invitation for a staff address, which would leave edge case 1 and TC-02-INT-03 unreachable and would contradict the Error Messages row that already scopes alreadyMember to an address 'invited as staff'; repairing it the other way would mean retiring a case, which is not available",
+      "recordedAt": "requirement 19a, the second paragraph ('The alreadyMember refusal does not fire for role = client'), with TC-02-INT-03 rewritten to mint the invitation first and assert 201 rather than 400 alreadyMember"
     },
     {
       "id": "R4",
-      "rule": "spec/divergence",
+      "rule": "spec/ambiguous-requirement",
       "edited": ["specs/requests/02-client-participants.md"],
-      "question": "does POST /api/invitations keep its present refusal message for a caller without permission, or answer this spec's manageForbidden",
-      "chose": "the refusal is chosen by the role in the body — role = 'client' answers 403 CLIENT_USER_MESSAGES.manageForbidden; any body that does not carry role = 'client' keeps 403 INVITE_MESSAGES.permissionDenied unchanged; who may invite does not change",
-      "rejected": "answering permissionDenied for a client invitation too, which would leave manageForbidden unreachable on this route and name the wrong permission",
-      "why": "rule 4 — the narrower change, scoped to the one body shape this spec introduces, leaves every existing caller's refusal exactly as it is",
-      "recordedAt": "the Decided paragraph under `POST /api/invitations` (extended) in API Contracts; observed by TC-02-INT-02, whose steps now cover both branches, and restated in the Reused, not added message table"
+      "question": "does the Requests row carry its pending badge for a client principal, or does the sidebar absolute suppress it",
+      "chose": "the badge is drawn, counting the non-terminal requests addressed to that client user and nothing else, absent at zero; the sidebar absolute is scoped to navigation destinations",
+      "rejected": "suppressing the badge for a client principal by reading the absolute as covering every data-testid the sidebar draws",
+      "why": "rule 1 — the shell already draws that badge for every signed-in caller from GET /api/organizations/{orgId}/requests, a route requirement 30 lets a client user call, and the spec took no contrary position; suppressing it would hide the work waiting on the one caller whose whole surface is that inbox",
+      "recordedAt": "the UI Description row 'Client user, Requests badge' (the absolute in the row above it now says 'navigation destination'), requirement 30's new sentence about counts.waitingOnMe and the absent vacation key, the sidebar-requests-badge entry in the Required data-testid list and the paragraph below it, and the assertions added to TC-02-INT-14, TC-02-E2E-01 and TC-02-E2E-03"
+    },
+    {
+      "id": "R5",
+      "rule": "spec/ambiguous-requirement",
+      "edited": ["specs/requests/02-client-participants.md"],
+      "question": "for a caller without permission sending role = 'client' with no clientId, is the answer the 403 or the 400 shape refusal",
+      "chose": "the permission refusal is chosen and returned before the body's shape is validated, so that caller meets 403 manageForbidden whether or not the body carries a clientId",
+      "rejected": "validating the shape first and answering 400 invitationShapeInvalid to a caller who may not invite",
+      "why": "rules 1 and 3 — POST /api/invitations already throws its permission refusal before validateInviteCreate runs, and shape-first would tell a caller who may invite nothing which bodies the route accepts",
+      "recordedAt": "the second Decided block under the POST /api/invitations contract, carried into requirement 16, edge case 4 and a new fifth step in TC-02-INT-02 that sends role = 'client' with no clientId as a `user` and expects 403 manageForbidden",
+      "verifiedBy": "grep -n \"permissionDenied\\|validateInviteCreate\" apps/api/src/invitations/invitations.service.ts — the ForbiddenException is thrown at :72, validateInviteCreate is called at :75"
     }
   ],
   "left": [],

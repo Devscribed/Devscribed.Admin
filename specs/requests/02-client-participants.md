@@ -76,8 +76,17 @@ an actor rule of spec 01 (being the addressee), not a capability.
    `status` is `active` or `removed`; removal is soft, mirroring `Membership`.
 2. **An account holds either an active `Membership` or an active `ClientMembership`, never
    both.** Both tables carry `accountId @unique`, and the accept-invitation handler re-reads
-   both inside its transaction and refuses when an **active** row of the other kind already
-   exists, with 409 and `CLIENT_USER_MESSAGES.accountIsStaff` or `…accountIsClient`. **Decided:**
+   both inside its transaction and refuses with 409 when an **active** row of **either** kind
+   already exists for that account:
+
+   | Invitation being accepted | Active row already held | Refusal |
+   |---|---|---|
+   | `role = 'client'` | `Membership` | `409 CLIENT_USER_MESSAGES.accountIsStaff` |
+   | `role = 'client'` | `ClientMembership` | `409 CLIENT_USER_MESSAGES.accountIsClient` |
+   | any staff role | `ClientMembership` | `409 CLIENT_USER_MESSAGES.accountIsClient` |
+
+   A second client principal is refused by that read like any other, and never by a bare unique
+   constraint error on `ClientMembership.accountId`. **Decided:**
    a `removed` row of the other kind does not refuse — the accept succeeds and the new principal
    is created (edge case 20). Rejected: refusing whenever any row of the other kind exists, which
    would permanently bar a person who left the agency and now works for a client. Staff and
@@ -213,7 +222,10 @@ an actor rule of spec 01 (being the addressee), not a capability.
     and the accept screen are all built and tested in user-management spec 03.
 16. `Invitation` gains one nullable column, `clientId`, and one new accepted value of `role`:
     `client`. `role = 'client'` requires `clientId`; any other role requires it to be absent.
-    Both are rejected with 400 and `CLIENT_USER_MESSAGES.invitationShapeInvalid`.
+    Both are rejected with 400 and `CLIENT_USER_MESSAGES.invitationShapeInvalid`. This shape is
+    checked only after the caller's permission to send that body has been decided: a caller
+    without it meets the 403 the `POST /api/invitations` contract names, whatever shape the body
+    has.
 17. Inviting a client user requires `manage-client-users` (admin, manager) and an **active**
     `Client`. An archived client is rejected with 400 and `CLIENT_USER_MESSAGES.clientArchived`.
 18. Accepting a `role = 'client'` invitation creates the `Account` (when new) and a
@@ -232,6 +244,16 @@ an actor rule of spec 01 (being the addressee), not a capability.
     **Decided:** the one-active-principal guarantee is enforced only in the accept transaction;
     rejected: a mirror refusal at invitation time, which would need a message this spec does not
     define and would make edge cases 2 and 21 unreachable.
+
+    **The `alreadyMember` refusal does not fire for `role = 'client'`.** A body carrying
+    `role = 'client'` is minted, stored and mailed like any other client invitation even when
+    that address holds an active `Membership`, and the refusal comes at acceptance:
+    `409 accountIsStaff` (requirement 2, edge case 1). `400 INVITE_MESSAGES.alreadyMember` is
+    answered only when the body invites that address as staff, which is what the Error Messages
+    row for `alreadyMember` scopes it to. **Decided:** the staff refusal is scoped to staff
+    invitations; rejected: letting it fire for a client invitation too, which would make it
+    impossible ever to mint a client invitation for a staff address and would leave edge case 1
+    and TC-02-INT-03 unreachable.
 20. A `client_invitation` mail type is added. It names the organization, the client, and who
     invited, and carries the accept link. It does not name any project, any request, or any
     member's email address.
@@ -293,7 +315,10 @@ an actor rule of spec 01 (being the addressee), not a capability.
       answers `403` with the guard's fixed body (requirement 9).
     - A request they are not party to answers `404`, identical to a non-existent id.
 30. A client user's request list is scoped to requests where they are the addressee. `scope=all`
-    answers 403 with `REQUEST_MESSAGES.scopeForbidden`, as it does for a `user`.
+    answers 403 with `REQUEST_MESSAGES.scopeForbidden`, as it does for a `user`. The response
+    carries `counts.waitingOnMe`, the non-terminal requests addressed to them, and **no**
+    `vacation` key — a client principal holds no `view-requests`. That counter, alone, is what
+    the sidebar badge shows them.
 31. The request detail rendered for a client user omits the **History** panel and every control
     they cannot use — reassign, cancel, edit, grant. The audit trail is an internal record; the
     conversation is the shared one.
@@ -532,6 +557,13 @@ invite does not change**: `manage-client-users` is held by admin and manager, an
 already admits only an active admin or manager of the session's organization. Only what a refused
 caller sending `role = 'client'` is told changes, and TC-02-INT-02 observes both branches.
 
+**Decided:** the permission refusal is chosen and returned **before** the body's shape is
+validated. A caller who lacks the capability and sends `role = 'client'` meets
+`403 manageForbidden` whether or not the body carries a `clientId`, and never
+`400 invitationShapeInvalid`; the shape rule of requirement 16 is applied only to a caller who
+passes the permission check. Rejected: validating the shape first, which would tell a caller
+who may invite nothing at all which bodies this route accepts.
+
 ### `PATCH …/clients/{clientId}/users/{clientMembershipId}/remove`
 
 `SessionGuard` → `OrgScopeGuard`, then a **service-level** `manage-client-users` check
@@ -581,8 +613,8 @@ client principal can now be party to a request and therefore pass spec 01's part
 | 1 | An address that is already an active staff member accepts a client invitation | `409 accountIsStaff`. No `ClientMembership`; the invitation stays `pending`. |
 | 2 | An address that is already an active client user accepts a staff invitation | `409 accountIsClient`, symmetrically. |
 | 3 | A pending staff invitation exists and a client invitation is sent to the same address | The staff one is superseded, per spec 03's rule inherited unchanged. |
-| 4 | `role = 'client'` without `clientId` | `400 invitationShapeInvalid`. |
-| 5 | `role = 'user'` with a `clientId` | `400 invitationShapeInvalid`. |
+| 4 | `role = 'client'` without `clientId`, from an admin or manager | `400 invitationShapeInvalid`. From a caller without `manage-client-users` the same body answers `403 manageForbidden`, because permission is decided before shape. |
+| 5 | `role = 'user'` with a `clientId`, from an admin or manager | `400 invitationShapeInvalid`. |
 | 6 | Inviting a client user for an archived client | `400 clientArchived`. |
 | 7 | A client user signs in | Lands on Requests. The sidebar has exactly one row; `nav-members` is absent. |
 | 8 | A client user types `/org/{orgId}/members` | The shell sends them to `/org/{orgId}/requests` and draws no staff screen (requirement 14b); the members route answers `403 {"message":"Forbidden","statusCode":403}` (requirement 14a). |
@@ -661,7 +693,8 @@ case author asserting a body never leaves this document.
 
 | State | Behaviour |
 |---|---|
-| Client user, sidebar | Exactly one row, Requests: `sidebar-requests-link` is the only navigation `data-testid` in the sidebar, and every other navigation id the sidebar can draw is absent from the DOM — `nav-members`, `nav-projects`, `nav-clients`, `nav-time-tracking`, `nav-envelopes`, `nav-documents`, `nav-outbox`, `nav-settings` and `settings-tab-holidays` among them. Nothing is drawn from a role lookup for this caller (requirement 12), so a navigation row added later is absent here without this row being edited. |
+| Client user, sidebar | Exactly one row, Requests: `sidebar-requests-link` is the only navigation **destination** the sidebar draws, and every other navigation id the sidebar can draw is absent from the DOM — `nav-members`, `nav-projects`, `nav-clients`, `nav-time-tracking`, `nav-envelopes`, `nav-documents`, `nav-outbox`, `nav-settings` and `settings-tab-holidays` among them. Nothing is drawn from a role lookup for this caller (requirement 12), so a navigation row added later is absent here without this row being edited. |
+| Client user, Requests badge | The Requests row carries its badge, `sidebar-requests-badge`, counting the non-terminal requests addressed to that client user and nothing else — no vacation count, which a client principal holds no capability to see. It is absent at zero, as it is for staff. **Decided:** the badge is drawn for a client principal, and the absolute above is a rule about navigation destinations only, which the badge is not; rejected: suppressing the badge for a client principal, which would hide the work waiting on exactly the caller whose whole surface is that one inbox. |
 | Client user, request list | No scope control, no New Request; status filter only. |
 | Client user, request detail | No History panel; Answer and Decline only; Grant, Reassign, Cancel and Edit absent. |
 | Client user, terminal request | Composer absent, both action controls absent, thread readable. |
@@ -686,14 +719,18 @@ case author asserting a body never leaves this document.
 `request-detail-thread`, `request-detail-composer`, `request-detail-composer-submit`,
 `request-detail-answer-btn`, `request-detail-decline-btn`, `request-detail-decline-reason`,
 `request-detail-decline-confirm`, `request-detail-history`, `request-detail-grant-btn`,
-`requests-scope-toggle`, `requests-new-btn`, `nav-members`, `sidebar-requests-link`.
+`requests-scope-toggle`, `requests-new-btn`, `nav-members`, `sidebar-requests-link`,
+`sidebar-requests-badge`.
 
 Five ids in the last group — `request-detail-history`, `request-detail-grant-btn`,
 `requests-scope-toggle`, `requests-new-btn` and `nav-members` — are asserted **absent** for a
 client principal, in TC-02-E2E-01 and TC-02-E2E-03, and **present** for a staff one, in
-TC-02-E2E-02 and TC-02-E2E-05. Every other id in that group is asserted present for a client
-principal. **Decided:** the absent set is named here; rejected: deriving it from a position in
-the list, which counted five ids the cases assert present for a client principal.
+TC-02-E2E-02 and TC-02-E2E-05. `sidebar-requests-badge` is asserted both ways for a client
+principal, because the badge is drawn only for a non-zero count: absent in TC-02-E2E-01, where
+nothing is addressed to them yet, and present in TC-02-E2E-03, where a request is. Every other
+id in that group is asserted present for a client principal. **Decided:** the absent set is
+named here; rejected: deriving it from a position in the list, which counted five ids the cases
+assert present for a client principal.
 
 ## Security
 
@@ -878,19 +915,24 @@ the rig. Every other section is covered below.
 
 - **Level:** Integration
 - **Steps:** Invite with `role=client` and no `clientId`; with `role=user` and a `clientId`; for
-  an archived client; as a `user`, with `role=client`; as the same `user`, with `role=user` and no
-  `clientId`.
+  an archived client; as a `user`, with `role=client` and the active client's `clientId`; as the
+  same `user`, with `role=client` and **no** `clientId`; as the same `user`, with `role=user` and
+  no `clientId`.
 - **Expected Result:** 400 `invitationShapeInvalid`; 400 `invitationShapeInvalid`; 400
-  `clientArchived`; 403 `manageForbidden`; 403 `INVITE_MESSAGES.permissionDenied`, spec 03's
+  `clientArchived`; 403 `manageForbidden`; 403 `manageForbidden` again — the permission refusal
+  precedes the shape rule, so a malformed client body from a caller without the capability is
+  never answered 400 `invitationShapeInvalid`; 403 `INVITE_MESSAGES.permissionDenied`, spec 03's
   refusal unchanged for a body that is not a client invitation. No invitation row written in any
   case.
 
 ### TC-02-INT-03
 
 - **Level:** Integration
-- **Steps:** Accept a client invitation with an address that is already an active staff member.
-- **Expected Result:** 409 `accountIsStaff`; no `ClientMembership`; the invitation is still
-  `pending`.
+- **Steps:** Invite an address that is already an active staff member as a client user of an
+  active client, then accept that invitation.
+- **Expected Result:** the invitation is minted, 201, and not refused with 400
+  `INVITE_MESSAGES.alreadyMember` (requirement 19a); accepting it answers 409 `accountIsStaff`;
+  no `ClientMembership`; the invitation is still `pending`.
 
 ### TC-02-INT-04
 
@@ -969,10 +1011,10 @@ the rig. Every other section is covered below.
 ### TC-02-INT-12
 
 - **Level:** Integration
-- **Steps:** On one client holding two active client users, address a request to the first on a
-  project of that client, then remove that user. Reassign the request to a member. Then repeat on
-  a second request in the same state, reassigning it instead to the client's other active client
-  user.
+- **Steps:** On one client holding two active client users, address **two** requests to the
+  first on a project of that client — both created while that user is still active, since
+  requirement 27 refuses a removed addressee — and only then remove that user. Reassign the
+  first request to a member and the second to the client's other active client user.
 - **Expected Result:** each request stays `open` and reads `assignee.inactive: true` while its
   addressee is removed. Reassigning to a member answers 200, leaves the row with
   `assigneeKind = 'member'`, and writes `assignee_changed` with both display-name snapshots.
@@ -992,8 +1034,9 @@ the rig. Every other section is covered below.
 - **Level:** Integration
 - **Steps:** As a client user, `GET …/requests` with no query, then `scope=all`, then
   `POST …/requests`.
-- **Expected Result:** 200 with only requests addressed to them; 403 `scopeForbidden`; 403
-  `createForbidden`.
+- **Expected Result:** 200 with only requests addressed to them, carrying
+  `counts.waitingOnMe` equal to the non-terminal ones among them and no `vacation` key
+  (requirement 30); 403 `scopeForbidden`; 403 `createForbidden`.
 
 ### TC-02-INT-15
 
@@ -1068,15 +1111,16 @@ the rig. Every other section is covered below.
   row with the status `invited` and no control. Accepting lands on
   `/org/{orgId}/requests` without a second sign-in, and signing in afterwards lands on the same
   route (requirement 13a); on both arrivals the Requests page renders, the sidebar has exactly
-  one row, `nav-members` is absent from the DOM, and neither the scope control nor New Request
+  one row, `nav-members` is absent from the DOM, the Requests row carries no badge because
+  nothing is addressed to that client user yet, and neither the scope control nor New Request
   is drawn. Typing the members URL lands on `/org/{orgId}/requests` with the Requests page drawn
   and no members screen (requirement 14b).
 - **Selectors:** `client-users-section`, `client-users-invite-btn`, `client-user-invite-modal`,
   `client-user-invite-email`, `client-user-invite-error-email`, `client-user-invite-submit`,
   `client-user-pending-row-{email}`, `client-user-row-{id}`,
   `client-user-row-{id}-status`, `sidebar-requests-link`, `requests-page`, `nav-members`
-  (asserted absent), `requests-scope-toggle` (asserted absent), `requests-new-btn` (asserted
-  absent).
+  (asserted absent), `sidebar-requests-badge` (asserted absent), `requests-scope-toggle`
+  (asserted absent), `requests-new-btn` (asserted absent).
 
 ### TC-02-E2E-02
 
@@ -1101,9 +1145,12 @@ the rig. Every other section is covered below.
 - **Steps:** As the client user, open the request **from the inbox row**, post a reply, click
   **I have provided this**; then on a second request click **I cannot provide this** and submit a
   reason.
-- **Expected Result:** the first reaches `answered`, the second `declined` with the reason last
-  in the thread; on both, the History panel and the Grant control are absent throughout.
-- **Selectors:** `requests-page`, `request-row-{id}`, `request-detail-page`,
+- **Expected Result:** on arriving at the inbox the Requests row carries its badge, reading the
+  two open requests addressed to them; the first reaches `answered`, the second `declined` with
+  the reason last in the thread; on both, the History panel and the Grant control are absent
+  throughout.
+- **Selectors:** `requests-page`, `sidebar-requests-badge`, `request-row-{id}`,
+  `request-detail-page`,
   `request-detail-thread`, `request-detail-composer`,
   `request-detail-composer-submit`, `request-detail-answer-btn`, `request-detail-decline-btn`,
   `request-detail-decline-reason`, `request-detail-decline-confirm`, `request-detail-history`
