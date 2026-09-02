@@ -315,8 +315,8 @@ session.
 
 #### REQ-02-032 — the addressee column
 
-THE SYSTEM SHALL accept `assigneeKind = 'client'` with `assigneeClientMembershipId` and exactly one
-of the two addressee ids set, refusing any other combination with
+THE SYSTEM SHALL accept `assigneeKind = 'client'` with `assigneeClientMembershipId` set and
+`assigneeMembershipId` absent, refusing any other combination of kind and id with
 `400 REQUEST_MESSAGES.assigneeInvalid`.
 
 #### REQ-02-033 — a client request needs a project

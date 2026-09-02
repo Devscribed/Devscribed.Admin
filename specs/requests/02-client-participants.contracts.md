@@ -14,8 +14,8 @@ judgement.
 | `POST /api/invitations/accept` | none — the token is the credential | `200` | `409 CLIENT_USER_MESSAGES.accountIsStaff`; `409 CLIENT_USER_MESSAGES.accountIsClient`; `409 CLIENT_USER_MESSAGES.accountLinkedToAnotherClient`; `400 INVITE_MESSAGES.tokenInvalid` |
 | `POST /api/login` | none | `200` | `400 AUTH_MESSAGES.deactivated` |
 | `GET /api/me` | `SessionGuard` | `200` | `401` |
-| `POST /api/organizations/{orgId}/requests` | `SessionGuard` → `OrgScopeGuard` → `CapabilityGuard` | `201` | `403 REQUEST_MESSAGES.createForbidden`; `400 REQUEST_MESSAGES.assigneeInvalid`; `400 REQUEST_MESSAGES.projectRequiredForClient`; `400 REQUEST_MESSAGES.contactProjectMismatch`; `400 REQUEST_MESSAGES.clientUserUnavailable` |
-| `GET /api/organizations/{orgId}/requests` | `SessionGuard` → `OrgScopeGuard` | `200` | `403 REQUEST_MESSAGES.scopeForbidden` |
+| `POST /api/organizations/{orgId}/requests` | `SessionGuard` → `OrgScopeGuard`, then a service-level capability check | `201` | `403 REQUEST_MESSAGES.createForbidden`; `400 REQUEST_MESSAGES.assigneeInvalid`; `400 REQUEST_MESSAGES.projectRequiredForClient`; `400 REQUEST_MESSAGES.contactProjectMismatch`; `400 REQUEST_MESSAGES.clientUserUnavailable` |
+| `GET /api/organizations/{orgId}/requests` | `SessionGuard` → `OrgScopeGuard`, then a service-level capability check | `200` | `403 REQUEST_MESSAGES.scopeForbidden` |
 | `GET /api/organizations/{orgId}/requests/{requestId}` | `SessionGuard` → `OrgScopeGuard` | `200` | `404` |
 | `PATCH /api/organizations/{orgId}/requests/{requestId}` | `SessionGuard` → `OrgScopeGuard` | `200` | `403 REQUEST_MESSAGES.editForbidden` |
 | `POST /api/organizations/{orgId}/requests/{requestId}/messages` | `SessionGuard` → `OrgScopeGuard` | `201` | `400 REQUEST_MESSAGES.messageRequired`; `400 REQUEST_MESSAGES.messageTooLong`; `409 REQUEST_MESSAGES.threadClosed` |
@@ -146,8 +146,8 @@ changes and every migration here is additive.
 | 5 | `assigneeClientMembershipId` | an active client user of an active client of the organization | `REQUEST_MESSAGES.clientUserUnavailable` | yes |
 | 6 | `projectId` | required when `assigneeKind = 'client'`; its `clientId` matches the addressee's | `REQUEST_MESSAGES.projectRequiredForClient`, `REQUEST_MESSAGES.contactProjectMismatch` | yes |
 
-The client's copy of the four client-side rules is a convenience; the server re-validates all six.
-Submit controls are never disabled for validation.
+The client's copy of every rule whose `Server-only` cell reads `no` is a convenience; the server
+re-validates every row of this table. Submit controls are never disabled for validation.
 
 ## Required `data-testid` Attributes
 

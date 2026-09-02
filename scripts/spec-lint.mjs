@@ -65,8 +65,15 @@ const POINTER = [
 ];
 
 /** A number in prose about something a table already counts. The table moves; the number lies. */
-const PROSE_COUNT =
-  /\b(?:two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d{1,3})\s+(?:of the\b|ids\b|rows\b|sites\b|cases\b|sections\b|columns\b|statements\b|call sites\b)|\bthe (?:two|three|four|five|six|seven|eight|nine|ten|\d{1,3}) (?:above|below)\b/i;
+const COUNT_WORD = '(?:two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\\d{1,3})';
+const COUNTED_NOUN =
+  '(?:ids|rows|sites|cases|sections|columns|statements|call ?sites|rules|routes|messages|requirements|criteria|entries|fields|values|tables|selectors)';
+const PROSE_COUNT = new RegExp(
+  `\\b${COUNT_WORD}\\s+of the\\b` + // "eight of the 53"
+    `|\\b${COUNT_WORD}(?:\\s+[a-z][\\w-]*){0,2}\\s+${COUNTED_NOUN}\\b` + // "the four client-side rules"
+    `|\\bthe ${COUNT_WORD} (?:above|below)\\b`,
+  'i',
+);
 
 /** A line number into code goes stale on the next edit to that file. */
 const CODE_LINE_CITE = /\b[\w./-]+\.(?:ts|tsx|mjs|js|prisma|json|sql)\s*:\s*\d+/;
@@ -404,7 +411,8 @@ function checkProse(lines, file, { skipHeadings = [] } = {}) {
         break;
       }
     }
-    if (PROSE_COUNT.test(line)) {
+    /* The rule is about prose. A table row counts nothing — it is the thing being counted. */
+    if (!line.startsWith('|') && PROSE_COUNT.test(line)) {
       add('prose/count', file, idx + 1,
         `a count in prose about something a table holds: "${line.slice(0, 110)}"`,
         'delete the number, or derive it in the table itself');
@@ -586,6 +594,18 @@ function checkE2ESelectorsDeclared(cases, contracts, files) {
  * The two contract tables say the same thing from two sides, so they can disagree. A route
  * declaring a message the message's own row does not list for it is a refusal with two homes.
  */
+/** A REQ id named anywhere in the bundle and defined nowhere sends a reader to a rule that is not there. */
+function checkRequirementReferences(lines, file, reqs) {
+  lines.forEach((raw, idx) => {
+    if (REQ_HEADING.test(raw)) return;
+    for (const id of raw.match(/REQ-\d{2}-\d{3}/g) ?? []) {
+      if (!reqs.has(id)) {
+        add('req/unknown-reference', file, idx + 1, `${id} is referenced and defined nowhere`);
+      }
+    }
+  });
+}
+
 function checkContractAgreement(contracts, file) {
   for (const [key, route] of contracts.routes) {
     for (const msg of route.messages) {
@@ -692,6 +712,7 @@ checkPaths(lines.behaviour, files.behaviour);
 checkPaths(lines.contracts, files.contracts);
 checkDecisionTables(lines.behaviour, files.behaviour);
 checkDecisionTables(lines.contracts, files.contracts);
+for (const [k, f] of Object.entries(files)) checkRequirementReferences(lines[k], f, reqs);
 checkContractAgreement(contracts, files.contracts);
 checkCases(cases, reqs, contracts, files);
 checkE2ESelectorsDeclared(cases, contracts, files);
