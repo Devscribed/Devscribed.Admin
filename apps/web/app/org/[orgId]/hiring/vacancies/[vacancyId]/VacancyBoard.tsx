@@ -310,6 +310,8 @@ export function VacancyBoard({
         // Below 768px the column *is* the panel the tab strip chose, and that strip points
         // `aria-controls` at this id. Above it there is no strip and no panel to be.
         {...(asPanel ? { role: 'tabpanel' } : null)}
+        // The tab that chose this panel already carries its name and its count, 8px above.
+        hideHeader={asPanel}
         status={status}
         name={APPLICATION_STATUS_LABELS[status]}
         count={column.cards.length}
@@ -341,7 +343,6 @@ export function VacancyBoard({
                 card.isCancelled ? cancelledTooltip(card.cancellation, viewerTimeZone) : null
               }
               flag={flagged ? HIRING_MESSAGES.board.noConclusion : null}
-              hasCv={card.hasCv}
               label={`${card.name}, ${APPLICATION_STATUS_LABELS[status]}, ${formatShortWhen(
                 start,
                 viewerTimeZone,

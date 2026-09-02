@@ -31,7 +31,9 @@ deliberately, so nobody adds a fifth surface or a second confirmation pattern on
 **Five Meridian components are gone from this spec** and were replaced rather than repainted (D4):
 `SectionLabel` → `Card` titles, `Skeleton` → `Preloader`, `Toast` → a dismissible `InfoBanner`,
 `Tooltip` → the badge's own accessible name, `Toggle` → `ToggleButton`. Each is worked through
-where it appears below.
+where it appears below. *(Two of the five moved again in `blue-fixes`: `Toast` is a real
+`Toast` — `react-toastify`'s own plate, [§54](../design-system/ledger.md) — and `Tooltip` is a
+real component again, [§62](../design-system/ledger.md), though not on this screen.)*
 
 ## Layout — the public page
 
@@ -58,8 +60,8 @@ block — a candidate arriving from their invite must recognise the page they bo
 ```
 
 - Gap between regions `--space-6` (16px); the action row sits `--space-7` (20px) below the record.
-- One `Card` ([§12](../design-system/ledger.md)) — `--surface-card`, a 1px `--border-default`
-  hairline, `--radius-l`, **no shadow** — capped at **560px** and centred, narrower than the
+- One `Card variant="panel"` ([§66](../design-system/ledger.md)) — `--surface-card`,
+  `--radius-xl` over `--shadow-card-soft`, **no border** — capped at **560px** and centred, narrower than the
   booking page's full column, because this screen has one short record to state and an 880px card
   holding four lines reads as a form with its fields missing.
 - The action row is inside the Card, Reschedule leading and Cancel trailing, pushed to opposite
@@ -74,11 +76,13 @@ block — a candidate arriving from their invite must recognise the page they bo
   only; the flag is stripped from the URL on the first paint. `info` rather than `success`, because
   the record beneath is the celebration and this page is meant to read calm.
 
-**"Your interview" is the `Card`'s own `title`, not a caption above it.** `SectionLabel` is gone
+**"Your interview" is the panel's own `title`, not a caption above it.** `SectionLabel` is gone
 (D4), and Phase 3 settled the replacement for a caption over a whole surface: it becomes that
-surface's title at `<h2>` ([§27](../design-system/ledger.md)), joining the outline under
-`PageTitle`'s `<h1>`. It is sentence case now, not `YOUR INTERVIEW` — blue spends its one uppercase
-treatment on `PageTabs`, which this page does not use.
+surface's title at `<h2>` ([§27](../design-system/ledger.md)), joining the outline under the
+page's `<h1>`. *Revised by `blue-fixes`:* on a `panel` that title is **drawn** as this app's
+small-caps micro label — `YOUR INTERVIEW` — because that is the idiom leading a section of this
+size in the product (the Timesheets day header), and it is the second uppercase treatment blue
+has after `PageTabs`. The element is unchanged; only the paint is.
 
 ## Layout — rescheduling
 
@@ -136,9 +140,9 @@ Both states are the same composition, differing only in banner variant and wordi
 |---|---|---|---|
 | Page shell | `BookingLayout` (§46) | `wordmark`, `wordmarkTestId` | `manage-page` |
 | Organization | drawn by the shell | — | `manage-org-wordmark` |
-| Vacancy title | `PageTitle` | — | `manage-vacancy-title` |
-| Duration | native `<div>` | — | `manage-duration` |
-| Booking panel | `Card` | `title="Your interview"` | — |
+| Vacancy title | native `<h1>` at `--headline-4-*` | — | `manage-vacancy-title` |
+| Duration | **`Badge status="neutral"`** ([§59](../design-system/ledger.md)) | — | `manage-duration` |
+| Booking panel | `Card variant="panel"` ([§66](../design-system/ledger.md)) | `title="Your interview"` | — |
 | When | native `<p>` | headline-5, tabular-nums | `manage-booking-when` |
 | Zone | native `<span>` | — | `manage-booking-zone` |
 | CV present | native `<p>` | — | `manage-cv-present` |
@@ -186,8 +190,9 @@ pulse loader rather than a guess at what is coming. The test id changes with it:
 
 | Screen element | DS component | Props | `data-testid` |
 |---|---|---|---|
-| Reschedule (card) | `Button` | *(no variant)* | `application-reschedule-{applicationId}` |
-| Cancel (card) | `Button` | `variant="delete"` | `application-cancel-{applicationId}` |
+| Interview actions (card) | `Popover` | `items` with `danger` on the cancel row | `application-actions-{applicationId}` |
+| Reschedule (card) | menu row | — | `application-reschedule-{applicationId}` |
+| Cancel (card) | menu row, `danger` | — | `application-cancel-{applicationId}` |
 | Reschedule dialog | `Modal` | `title`, `style={{ width: 720 }}` | `application-reschedule-dialog-{applicationId}` |
 | Cancel dialog | `Modal` | `title`, `style={{ width: 520 }}` | `application-cancel-dialog-{applicationId}` |
 | Reason | `TextArea` | `label`, `rows={3}`, `error`, `errorId`, `trailing` | `application-cancel-reason-{applicationId}` |

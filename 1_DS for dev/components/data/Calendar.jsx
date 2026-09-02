@@ -1,4 +1,5 @@
 import React from 'react';
+import { isKeyboardFocus } from '../core/focus-visible.js';
 import { IconButton } from '../core/IconButton.jsx';
 import { Preloader } from '../feedback/Preloader.jsx';
 
@@ -310,7 +311,9 @@ function Day({ date, selectable, selected, today, tabStop, onSelect, onFocus }) 
         aria-label={`${spokenDate(date)}, ${state}${today ? ', today' : ''}`}
         tabIndex={selectable && tabStop ? 0 : -1}
         onClick={() => selectable && onSelect && onSelect(date)}
-        onFocus={() => { setFocus(true); if (onFocus) onFocus(date); }}
+        /* §68 — a keyboard's ring, not a pointer's. The roving `onFocus` still fires either
+           way: which day owns the tab stop is not a question about how it was reached. */
+        onFocus={(event) => { setFocus(isKeyboardFocus(event.currentTarget)); if (onFocus) onFocus(date); }}
         onBlur={() => setFocus(false)}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
@@ -318,27 +321,44 @@ function Day({ date, selectable, selected, today, tabStop, onSelect, onFocus }) 
         style={{
           width: '100%', padding: 0, textAlign: 'center',
           fontFamily: 'var(--font-family-base)',
-          fontSize: selected ? 13 : 'inherit',
-          fontWeight: selected ? 600 : undefined,
+          /* §72 — one size and one weight, whatever the state. The selected day bumped to
+             13px at 600, which moved the number inside its own cell the instant it was
+             picked: a grid of tabular figures where one is a different size is a grid that
+             twitches under the cursor. The border and the fill say which day it is. */
+          fontSize: 'var(--font-size-s)',
           fontVariantNumeric: 'tabular-nums',
-          borderRadius: 3,
-          /* Today is outlined rather than filled, so it never reads as the selection. The
-             1px is inset so an outlined cell and a plain one keep the same box. */
-          boxShadow: focus
-            ? 'var(--shadow-focus-input)'
-            : today && !selected
-              ? 'inset 0 0 0 1px var(--color-blue)'
-              : 'none',
+          borderRadius: 'var(--radius-s)',
+          boxSizing: 'border-box',
+          /* §72 — the selection is a **tint**, not a fill. `DateRangePicker` paints a solid
+             `--color-blue` cell with white ink, which is right for a range where a run of ten
+             days has to read as one block; a single chosen date beside a list of times is one
+             mark, and the solid version made it the loudest thing on a page whose primary
+             action is a button below it. The 12% tint over a `--color-blue` border is what a
+             `pressed` slot chip takes (§71), so the two halves of the picker agree.
+
+             Today is a border at 45% of the same hue — present, and never mistaken for the
+             selection. */
+          border: selected
+            ? 'var(--border-width-control) solid var(--color-blue)'
+            : today
+              ? 'var(--border-width-control) solid color-mix(in oklch, var(--color-blue) 45%, transparent)'
+              : 'var(--border-width-control) solid transparent',
+          boxShadow: focus ? 'var(--shadow-focus-input)' : 'none',
+          /* §72 — an unavailable day is **not filled**. It was `--color-gray-light` at 0.6
+             opacity, which put a grey block on every weekend and read as a second kind of
+             selection: a month with four bookable days was mostly blocks. It is faint ink on
+             the panel's own ground now, which is what "nothing here" looks like. */
           backgroundColor: selected
+            ? 'color-mix(in oklch, var(--color-blue) 12%, transparent)'
+            : selectable && hover
+              ? 'var(--color-row-hover)'
+              : 'transparent',
+          color: selected
             ? 'var(--color-blue)'
-            : !selectable
-              ? 'var(--color-gray-light)'
-              : hover
-                ? 'var(--color-row-hover)'
-                : 'transparent',
-          color: selected ? '#fff' : 'var(--text-primary)',
-          opacity: selectable || selected ? 1 : 0.5,
-          cursor: selectable ? 'pointer' : 'not-allowed',
+            : selectable
+              ? 'var(--text-primary)'
+              : 'color-mix(in oklch, var(--color-gray) 55%, var(--color-white))',
+          cursor: selectable ? 'pointer' : 'default',
           transition: 'background-color var(--duration-fast) var(--ease-standard)',
         }}
       >

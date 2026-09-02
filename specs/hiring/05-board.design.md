@@ -34,7 +34,6 @@ already draws, and the sections that follow say which.
   │┌────────────┐││┌────────────┐││             ││            ││         │
   ││ Jane Doe   ││││ Ann Lee  ⚑ ││                                       
   ││ 26 Aug 14:00││││ 18 Aug 11:00                                       
-  ││ CV          ││││ CV                                                 
   │└────────────┘││└────────────┘│
 ```
 
@@ -50,18 +49,22 @@ already draws, and the sections that follow say which.
 
 ## The column
 
-**`BoardColumn` is a `Card` whose body is a well.** That is blue's one answer to "a container of
-things", and it is `AppShell`'s own arrangement one level down: a recessed ground with white panels
-on it. The column takes `Card`'s treatment ([§12](../design-system/ledger.md)) — `--surface-card`,
-a 1px `--border-default` hairline, `--radius-l`, **no shadow** — and its body is `--surface-sunken`
-holding white cards.
+**`BoardColumn` is the well.** That is blue's one answer to "a container of things", and it is
+`AppShell`'s own arrangement one level down: a recessed ground with white panels on it. The column
+is `--surface-sunken` at `--radius-l`, and the only white on the board is the cards.
+
+*Revised by `blue-fixes`.* It was first drawn as a `Card` ([§12](../design-system/ledger.md))
+*containing* that well — five bordered white boxes each holding a grey box, with a 24px heading over
+a 14px card, which is a container drawn twice. A column is not a card; it is the ground the cards
+are on, and its name is a label on that ground rather than a title above it.
 
 | Part | Treatment |
 |---|---|
-| Head | `--surface-card`, `--space-4` / `--space-5` padding, a 1px `--border-default` rule beneath |
-| Column name | A real `<h2>` at blue's headline-6 (16px / `--font-weight-medium` / `-0.32px`), **sentence case** |
-| Count | `--font-size-s`, `--font-weight-medium`, `--text-secondary`, tabular-nums |
-| Body | `--surface-sunken`, `--space-3` padding and gap, its own `overflow-y: auto`, `min-height: 84` — one card's worth, so an empty column is still worth aiming at |
+| Head | Inside the well, `0 var(--space-4)` padding, no rule and no second surface |
+| Column name | A real `<h2>` at `--font-size-s` / `--font-weight-medium` — the same weight a card's own name takes — **sentence case** |
+| Count | `--font-size-xs`, `--text-secondary`, tabular-nums, **beside** the name and not pushed to the far edge: five columns of one word each, and a count 200px from what it counts reads as a column of its own |
+| Body | `--space-2` / `--space-3` padding, `--space-3` gap, its own `overflow-y: auto`, `min-height: 76` — one card's worth, so an empty column is still worth aiming at |
+| Head, narrow | **Absent.** Below 768px the column *is* the panel the tab strip chose, and that tab already carries both facts (`hideHeader`) |
 
 The column names were uppercase under Meridian and are not any more. Blue's content rule is
 explicit — *"Sentence case for everything except nav section titles… Tab labels (`PageTabs`) are the
@@ -73,9 +76,8 @@ name is the column's own `<h2>` in the outline under `PageTitle`'s `<h1>`, not a
 
 ```
 ┌──────────────────────────┐
-│ Jane Doe               ⚑ │   ← --font-size-base / medium / --text-primary
-│ 26 Aug 2026, 14:00       │   ← --font-size-s / --text-tertiary, tabular-nums
-│ CV                       │   ← --font-size-xs / --text-secondary
+│ Jane Doe               ⚑ │   ← --font-size-s / medium / --text-primary
+│ Fri, Aug 28 · 14:00      │   ← --font-size-xs / --text-primary, tabular-nums
 └──────────────────────────┘
 ```
 
@@ -90,10 +92,19 @@ adoption are the same rule read twice, not a disagreement.
 |---|---|
 | Rest | `--surface-card`, 1px `--border-default`, `--radius-l`, no shadow |
 | Hover | Border to `transparent`, `--shadow-card-hover`, `scale(1.01)`, over `--transition-card-hover` — `NavigationCard`'s measured hover, unchanged |
-| Focus | `--shadow-focus-input`, composed with whatever shadow the card already carries |
+| Focus | `--shadow-focus-input`, composed with whatever shadow the card already carries — **on keyboard focus only** ([§68](../design-system/ledger.md)). A pointer press focuses the card too, and a ring left behind by a click answers a question nobody asked; on the keyboard it is the only thing saying where the arrow keys apply |
 | **Held** (keyboard only) | `--action-primary` border, `--shadow-popover`, `translateY(-1px)`. A card dragged with a *pointer* is not drawn at all; what lifts under the cursor is the browser's own drag image |
-| **Cancelled** | The whole card at `opacity: .65`, with a `Badge status="inactive"` that names who cancelled. Never removed from its column |
-| **Past interview** | The date recedes by one level. Nothing else changes; the card does not move |
+| **Cancelled** | The whole card at `opacity: .65`, with a `Badge status="inactive" outlined size="s"` that names who cancelled. Never removed from its column. *Revised by `blue-fixes`: outlined, because a solid red pill is blue's loudest paint and this is the one card nobody has to act on, already dimmed* |
+| **Past interview** | The date recedes to `--text-secondary`. Nothing else changes; the card does not move |
+
+*Revised by `blue-fixes`.* Two type steps moved. The name is `--font-size-s`, not
+`--font-size-base`: a board is five 220px columns of these and the name is the one line that must
+never wrap, so the step down is what buys the characters — and `--font-size-s` at `medium` is what
+every other name in the product is set in. The date is `--font-size-xs` and reads at
+`--text-primary` while the interview is still ahead, receding to `--text-secondary` only once it is
+behind. It previously started at `--text-tertiary` and stepped down from there, which made an
+upcoming interview quieter than the name above it — and the date is the reason to look at the
+card.
 
 ### The cancelled mark
 
@@ -144,21 +155,33 @@ user something and takes nothing from a reader, who has the always-resolving des
 The rule reversal 2 actually found — *whether the screen already has somewhere to say it* — is what
 forces the hidden node here: a card is three lines and has nowhere.
 
-### The CV mark
+### The CV mark, and why there is not one
 
-`📄 CV` becomes `CV`. The emoji was decoration beside a text label that already said the same thing,
-and blue forbids emoji outright, so it goes and nothing replaces it. No glyph was drawn for this:
-`CloudDownloadOutlineIcon` is blue's only document-adjacent mark and it means *download*, which this
-is not — the card navigates, it does not fetch a file.
+`📄 CV` first became `CV` — the emoji was decoration beside a text label that already said the same
+thing, and blue forbids emoji outright.
+
+**`blue-fixes` removed the label too, and the argument that removed it is the stronger one:
+it was on every card.** A booking cannot be made without a CV ([02 §03.8](02-booking-page.md)), so
+the mark was true of every card in every column and distinguished nothing — while costing a third
+line of height in five columns that scroll. A card is a glance, and every line on it has to earn
+its place by being sometimes absent: the name always, the date always, the flag and the cancelled
+badge only when they are true.
+
+The CV itself did not go anywhere. It is on the candidate card, drawn as an attachment row that
+opens it ([04 design](04-candidate-card.design.md)) — which is the screen with room to do something
+about it, and the screen a board card is one click from.
+
+`hasCv` leaves the board's payload with it ([05 §API](05-board.md)): nothing renders it, and a
+field the response carries for no reader is a promise the next change has to keep.
 
 ## Component map
 
 | Screen element | DS component | Props | `data-testid` |
 |---|---|---|---|
 | Header | *the vacancy's* — see [01 design](01-vacancies.design.md) | — | `page-title` |
-| Column | **`BoardColumn`** ([§43](../design-system/ledger.md)) | `status`, `name`, `count`, `nameAs`, `placeholderIndex`, `placeholderHeight`, `onDragOverIndex`, `onDrop` | `board-column-{status}` · `board-column-count-{status}` · `board-column-empty-{status}` |
+| Column | **`BoardColumn`** ([§43](../design-system/ledger.md)) | `status`, `name`, `count`, `nameAs`, `hideHeader`, `placeholderIndex`, `placeholderHeight`, `onDragOverIndex`, `onDrop` | `board-column-{status}` · `board-column-count-{status}` · `board-column-empty-{status}` |
 | Drop placeholder | **`BoardColumn`** | — | `board-placeholder-{status}` |
-| Card | **`BoardCard`** ([§42](../design-system/ledger.md)) | `draggable`, `lifted`, `past`, `flag`, `onDragStart`, `onDragEnd`, `onKeyDown`, `onOpen` | `board-card-{id}` · `board-card-name-{id}` · `board-card-when-{id}` · `board-card-cv-{id}` |
+| Card | **`BoardCard`** ([§42](../design-system/ledger.md)) | `draggable`, `lifted`, `past`, `flag`, `onDragStart`, `onDragEnd`, `onKeyDown`, `onOpen` | `board-card-{id}` · `board-card-name-{id}` · `board-card-when-{id}` |
 | Cancelled mark | `Badge` | `status="inactive"`, `aria-label` | `board-card-cancelled-{id}` |
 | Missing conclusion | `FlagIcon` ([§44](../design-system/ledger.md)) | `title`, `aria-hidden` | `board-card-no-conclusion-{id}` |
 | Narrow column picker | `PageTabs` ([§45](../design-system/ledger.md)) | `tabs` (object form), `active`, `onChange`, `label` | `board-tab-{status}` |

@@ -9,7 +9,7 @@ export interface TableColumn<Row = any> {
   flex?: number;
   /** Defaults to prod's positional rule: first left, last right, everything between centred. */
   align?: 'flex-start' | 'center' | 'flex-end';
-  /** Defaults to 80 on the last column — prod's actions column — and none elsewhere. */
+  /** Defaults to 96 on the last column — prod's actions column, §60 — and none elsewhere. */
   maxWidth?: number | 'none';
 }
 

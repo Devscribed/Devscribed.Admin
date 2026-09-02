@@ -14,16 +14,15 @@ import {
   Badge,
   Button,
   Card,
-  Chip,
   ConfirmDialog,
   PageTitle,
   Popover,
   Preloader,
-  Toast,
   ToastHost,
 } from '@/ds';
 import { rememberCandidateOrigin } from '@/hiring/candidate-origin';
 import { useToasts } from '@/hiring/useToasts';
+import { VacancyStatusBadge } from '@/hiring/StatusBadge';
 import type { Board, Vacancy } from '@/hiring/types';
 import { VacancyDialog } from '../VacancyDialog';
 import { VacancyBoard, type BoardState } from './VacancyBoard';
@@ -95,7 +94,6 @@ export default function VacancyDetailPage({
     announcedCreate.current = true;
     push({
       message: HIRING_MESSAGES.toast.vacancyCreated,
-      tone: 'success',
       testId: 'toast-vacancy-created',
     });
     router.replace(`/org/${orgId}/hiring/vacancies/${vacancyId}`);
@@ -181,7 +179,6 @@ export default function VacancyDetailPage({
           next === 'closed'
             ? HIRING_MESSAGES.toast.vacancyClosed
             : HIRING_MESSAGES.toast.vacancyReopened,
-        tone: 'success',
         testId: next === 'closed' ? 'toast-vacancy-closed' : 'toast-vacancy-reopened',
       });
     } catch {
@@ -252,13 +249,15 @@ export default function VacancyDetailPage({
    * is not something anybody reads, and the board needs the room. That costs the one
    * fallback the field gave a refused clipboard, so the message carries the link instead.
    */
+  /** The candidate's own view of this vacancy — the address `copyLink` copies. */
+  const bookingUrl = (): string => `${window.location.origin}/book/${vacancy.publicSlug}`;
+
   async function copyLink(): Promise<void> {
-    const url = `${window.location.origin}/book/${vacancy.publicSlug}`;
+    const url = bookingUrl();
     try {
       await navigator.clipboard.writeText(url);
       push({
         message: HIRING_MESSAGES.toast.linkCopied,
-        tone: 'success',
         testId: 'toast-link-copied',
       });
     } catch {
@@ -293,12 +292,10 @@ export default function VacancyDetailPage({
             <span>
               <PageTitle data-testid="page-title">{vacancy.title}</PageTitle>
             </span>
-            <Badge
-              status={open ? 'active' : 'inactive'}
-              data-testid={`vacancy-status-${vacancy.id}`}
-            >
-              {open ? 'Open' : 'Closed'}
-            </Badge>
+            <VacancyStatusBadge
+              status={vacancy.status}
+              testId={`vacancy-status-${vacancy.id}`}
+            />
           </div>
 
           <div className="vacancy-screen-actions">
@@ -319,6 +316,18 @@ export default function VacancyDetailPage({
               label="Vacancy actions"
               data-testid="vacancy-actions-menu"
               items={[
+                {
+                  /*
+                    The same row the list's menu carries, and the same reasoning: it is not
+                    disabled on a closed vacancy, because the page still exists and explains
+                    itself (02 §02.6). `Open board` is the one row this menu does not take —
+                    the board is on this page, under this header.
+                  */
+                  key: 'booking-page',
+                  label: HIRING_MESSAGES.vacancy.actions.openBookingPage,
+                  testId: 'vacancy-action-open-booking',
+                  onSelect: () => window.open(bookingUrl(), '_blank', 'noopener,noreferrer'),
+                },
                 {
                   key: 'edit',
                   label: HIRING_MESSAGES.vacancy.actions.edit,
@@ -346,10 +355,10 @@ export default function VacancyDetailPage({
                   testId: 'vacancy-action-delete',
                   danger: !blocked,
                   disabled: blocked,
-                  // Drawn in the row rather than hidden in a `title`, which no browser
-                  // reaches from a keyboard (ledger §22).
-                  description: blocked ? HIRING_MESSAGES.vacancy.deleteBlocked : undefined,
-                  descriptionTestId: 'vacancy-delete-guard-message',
+                  // In a bubble beside the menu, not a third line inside a 160px panel —
+                  // and never a native `title` (ledger §62).
+                  tooltip: blocked ? HIRING_MESSAGES.vacancy.deleteBlocked : undefined,
+                  tooltipTestId: 'vacancy-delete-guard-message',
                   onSelect: () => setPending('delete'),
                 },
               ]}
@@ -394,7 +403,6 @@ export default function VacancyDetailPage({
           void load();
           push({
             message: HIRING_MESSAGES.toast.vacancyUpdated,
-            tone: 'success',
             testId: 'toast-vacancy-updated',
           });
         }}
@@ -434,18 +442,7 @@ export default function VacancyDetailPage({
         acceptTestId="vacancy-delete-confirm-button"
       />
 
-      <ToastHost>
-        {toasts.map((toast) => (
-          <Toast
-            key={toast.id}
-            tone={toast.tone}
-            data-testid={toast.testId}
-            onDismiss={() => dismiss(toast.id)}
-          >
-            {toast.message}
-          </Toast>
-        ))}
-      </ToastHost>
+      <ToastHost toasts={toasts} onDismiss={dismiss} />
     </div>
   );
 }
@@ -468,13 +465,18 @@ function VacancyMeta({
     <div className="vacancy-screen-meta">
       {vacancy.categories.length > 0 && (
         <>
-          <span data-testid="vacancy-detail-categories" style={{ display: 'flex', flexWrap: 'wrap' }}>
+          <span
+            data-testid="vacancy-detail-categories"
+            style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}
+          >
             {vacancy.categories.map((category) => (
-              <Chip
+              <Badge
                 key={category.id}
-                label={category.name}
+                status="neutral"
                 data-testid={`vacancy-category-chip-${category.id}`}
-              />
+              >
+                {category.name}
+              </Badge>
             ))}
           </span>
           <Separator />

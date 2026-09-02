@@ -1,4 +1,5 @@
 import React from 'react';
+import { isKeyboardFocus } from '../core/focus-visible.js';
 import { Badge } from '../core/Badge.jsx';
 import { FlagIcon } from '../icons/Icon.jsx';
 
@@ -72,8 +73,6 @@ export function BoardCard({
   cancelledTooltip = null,
   /** The reason for the marker. Absent means no marker — the common case. */
   flag = null,
-  hasCv = false,
-  cvLabel = 'CV',
   /** Accessible name — "{name}, {column}, {date}". Built by the caller, which knows the column. */
   label,
   draggable = true,
@@ -128,12 +127,16 @@ export function BoardCard({
       onClick={onOpen}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      onFocus={() => setFocused(true)}
+      /* §68 — a keyboard's ring, not a pointer's. The ring matters most here, because a
+         card held mid-drag has nothing else saying where the arrow keys apply. */
+      onFocus={(event) => setFocused(isKeyboardFocus(event.currentTarget))}
       onBlur={() => setFocused(false)}
       style={{
         display: 'grid',
-        gap: 'var(--space-1)',
-        padding: 'var(--space-4) var(--space-5)',
+        /* 6px and 12px, which are the two steps a card this small has room for: the three
+           lines in it are one fact each and read as a block, not as three sections. */
+        gap: 'var(--space-2)',
+        padding: 'var(--space-5)',
         backgroundColor: 'var(--surface-card)',
         border: '1px solid',
         borderRadius: 'var(--radius-l)',
@@ -159,7 +162,11 @@ export function BoardCard({
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
             fontWeight: 'var(--font-weight-medium)',
-            fontSize: 'var(--font-size-base)',
+            /* 14px, not 16. A board is five columns of these at 220px, and the name is the
+               only thing on the card that must never wrap — the step down is what buys the
+               characters, and `--font-size-s` at `medium` is what every other name in the
+               product is set in. */
+            fontSize: 'var(--font-size-s)',
             color: 'var(--text-primary)',
           }}
         >
@@ -190,41 +197,43 @@ export function BoardCard({
       <div
         data-testid={`board-card-when-${cardId}`}
         style={{
-          fontSize: 'var(--font-size-s)',
+          fontSize: 'var(--font-size-xs)',
           fontVariantNumeric: 'tabular-nums',
-          /* Blue has three inks where yellow had four, and this is the one card where the
-             collapse would have erased a distinction rather than a nuance — the date recedes
-             *from* a receded level, not from the primary one. So it steps tertiary → secondary
-             and lands on the footnote's level, instead of both readings sharing one ink. */
-          color: past ? 'var(--text-secondary)' : 'var(--text-tertiary)',
+          /* The date is the reason to look at the card, so while the interview is still ahead
+             it is read at full strength and only *recedes* once it is behind — which is the
+             opposite of the earlier reading, where an upcoming interview was already quieter
+             than the name above it and a past one quieter still. Two inks, one step apart. */
+          color: past ? 'var(--text-secondary)' : 'var(--text-primary)',
         }}
       >
         {when}
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-        {hasCv && (
-          <span
-            data-testid={`board-card-cv-${cardId}`}
-            style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}
-          >
-            {cvLabel}
-          </span>
-        )}
-        {cancelled && (
-          /* The badge is truncated to a first name by design — a board card is a glance — so
-             the whole fact is its accessible **name**, not what is drawn. It has to be an
-             `aria-label`: a native `title` on an element that already has text content becomes
-             its *description*, and the text content still wins the name computation. */
+      {/* §42 — a third line only when there is something on it. The card carried a `CV` mark
+          here on every card, which is to say on every card: a booking cannot be made without
+          a CV, so the mark distinguished nothing and cost a row of height in a column that is
+          scrolling. What is left is the one thing that is not always true. */}
+      {cancelled && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+          {/* The badge is truncated to a first name by design — a board card is a glance —
+              so the whole fact is its accessible **name**, not what is drawn. It has to be an
+              `aria-label`: a native `title` on an element that already has text content
+              becomes its *description*, and the text content still wins the name
+              computation. */}
           <Badge
             status="inactive"
+            /* Outlined. A solid red pill is the loudest thing blue can paint, and a called-off
+               interview is a fact about a card that is already dimmed to 0.65 — the fill would
+               make the one card nobody has to act on the first one the eye lands on. */
+            outlined
+            size="s"
             aria-label={cancelledTooltip || undefined}
             data-testid={`board-card-cancelled-${cardId}`}
           >
             {cancelledLabel}
           </Badge>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

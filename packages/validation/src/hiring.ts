@@ -98,12 +98,23 @@ export const HIRING_MESSAGES = {
      * One set of words for one set of actions: a menu row that read `Copy link` in a list
      * and `Copy booking link` in a header would be two names for one act.
      *
-     * `Open board` was here until the board became the vacancy (01 §08.27). It is not a
-     * missing item: opening the row *is* opening the board, so a menu row offering it
-     * would have pointed at the page it was already on.
+     * `openBoard` was dropped when the board became the vacancy (01 §08.27), on the
+     * argument that opening the row *is* opening the board. **It is back.** The argument
+     * was about the destination and the menu is not: a kebab is where a row says
+     * everything it can do, and a reader who has opened one is asking to be told rather
+     * than to infer that the whole row is a link. It goes to the same address the row
+     * does, which is the point — a menu that omits the obvious action reads as a menu
+     * that cannot do it.
+     *
+     * `openBookingPage` is the one row that leaves the product: the candidate's own view,
+     * at the address `copyLink` copies. It is **not** disabled on a closed vacancy the way
+     * `copyLink` is — the page still exists and explains itself (02 §02.6), and what a
+     * closed vacancy cannot do is take a booking, not be looked at.
      */
     actions: {
+      openBoard: 'Open board',
       copyLink: 'Copy booking link',
+      openBookingPage: 'Open booking page',
       edit: 'Edit vacancy',
       close: 'Close vacancy',
       reopen: 'Reopen vacancy',
@@ -262,7 +273,19 @@ export const HIRING_MESSAGES = {
      * whether they meant Thursday 14:00, and the action is reversible at will
      * (07 §05.26).
      */
-    rescheduleAction: 'Reschedule',
+    rescheduleAction: 'Reschedule interview',
+    /** The kebab those two rows live in. A menu is a control, and a control is named. */
+    interviewActions: 'Interview actions',
+    /** Beside the status control in an application's header, not above it. */
+    statusLabel: 'Status',
+    /** The two places an application's header sends you. */
+    viewVacancyAction: 'View vacancy',
+    /**
+     * Primary, because during an interview it is what is most often reached for — and it
+     * does not exist yet, so pressing it says so (03 §10.55) rather than describing a
+     * navigation this product cannot make.
+     */
+    openInCalendarAction: 'Open in calendar',
     rescheduleSubmit: 'Move interview',
     rescheduleSubmitting: 'Moving',
     /** Not "Cancel": inside this feature that word already means calling the interview off. */
@@ -290,11 +313,13 @@ export const HIRING_MESSAGES = {
     cancelledByCandidate: 'Cancelled by candidate',
     historyLabel: 'Scheduling history',
     /**
-     * The team's control, and deliberately not the candidate's 'Cancel interview': it
-     * sits in an application section that already names the interview, where the longer
-     * label would restate its own heading (07 design, Copy).
+     * The team's control. It was `Cancel` while it was a button under an application
+     * section that already named the interview — the longer label would have restated its
+     * own heading. It is a **menu row** now (04 design §Layout), beside `Reschedule
+     * interview` and among rows about a candidate, where `Cancel` alone reads as
+     * *dismiss this menu*.
      */
-    cancelActionTeam: 'Cancel',
+    cancelActionTeam: 'Cancel interview',
     /**
      * Completed by `teamCancelConfirmMessage`. It names the candidate as well as the
      * time, because a member cancelling from My interviews is looking at a list of

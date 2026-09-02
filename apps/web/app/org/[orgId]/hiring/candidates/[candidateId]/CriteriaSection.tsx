@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   APPLICATION_LIMITS,
+  CANDIDATE_MESSAGES,
   HIRING_MESSAGES,
   MESSAGES,
   // The same rule the database row reads an assessment with, so `Yes` means the same
@@ -10,7 +11,7 @@ import {
   assessedValueLabel,
   type AssessmentInput,
 } from '@devscribed/validation';
-import { Button, Chip, Select, TextInput, type SelectOption } from '@/ds';
+import { Badge, CloseIcon, IconButton, Select, TextInput, type SelectOption } from '@/ds';
 import { focusByTestId } from '@/field-error';
 import { CriterionDialog } from '@/hiring/CriterionDialog';
 import { valueOf } from '@/hiring/select';
@@ -57,7 +58,6 @@ export function CriteriaSection({
   onChange: (criteria: CardCriterion[]) => void;
   onLibraryChange: () => void;
 }) {
-  const [adding, setAdding] = useState(false);
   /** A criterion chosen but not yet valued, so it has no row on the server. */
   const [pending, setPending] = useState<Criterion | null>(null);
   const [creating, setCreating] = useState<string | null>(null);
@@ -135,7 +135,6 @@ export function CriteriaSection({
     if (!criterion) return;
 
     setNote(null);
-    setAdding(false);
 
     // Already there: this edits the existing value rather than adding a second chip
     // (04 §05.24), so focus goes to the control that holds it and says so.
@@ -178,18 +177,38 @@ export function CriteriaSection({
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-5)' }}>
-        <SectionHeading>Criteria</SectionHeading>
-        <Button
-          onClick={() => setAdding(true)}
-          data-testid="card-criteria-add"
-          style={{ marginLeft: 'auto' }}
-        >
-          + Add criteria
-        </Button>
+      <SectionHeading>Criteria</SectionHeading>
+
+      {/*
+        The picker is **always there**, directly under the heading, rather than behind a
+        `+ Add criteria` button that swapped itself for it. This is the page a team works on
+        *during* an interview: recording a criterion is the thing the section exists for, and
+        putting it one press away made the common case two actions and left the section
+        reading as a list with an editor bolted on. 260px, because it holds one name.
+      */}
+      <div data-testid="card-criteria-add" style={{ marginTop: 'var(--space-3)', maxWidth: 260 }}>
+        {/*
+          `Select isSearchable allowCreate` — blue's own control with the capability prod
+          never switches on (§21) and the create row §29 added, not a second combobox. The
+          per-option test ids ride on the options themselves, which is the shape §21 gave
+          a listbox blue draws for itself.
+        */}
+        <Select
+          placeholder="Type a criterion…"
+          isSearchable
+          options={options}
+          allowCreate
+          onChange={(option) => choose(valueOf(option))}
+          // Nothing is written until the dialog is confirmed, so cancelling it leaves
+          // no half-made criterion in a library the whole team shares.
+          onCreate={(name) => setCreating(name)}
+          createTestId="card-criteria-create-option"
+          aria-label="Find or create a criterion"
+          data-testid="card-criteria-autocomplete"
+        />
       </div>
 
-      {chips.length === 0 && !adding ? (
+      {chips.length === 0 ? (
         <p
           data-testid="card-criteria-empty"
           style={{ margin: 'var(--space-3) 0 0', fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}
@@ -208,71 +227,48 @@ export function CriteriaSection({
             padding: 0,
           }}
         >
+          {/*
+              A **sunken row**, not blue's `Chip`. `Chip` is the token react-select draws
+              for a value chosen inside a field — white, with the 7px blue edge that marks
+              it as a selection — and this is a small form: a name, a control that writes a
+              value, and a cross that drops the whole assessment. Drawn as a `Chip` the blue
+              edge put the loudest mark on the page on a row that is only recording a fact.
+              It is the same object the candidate database's filter draws, deliberately, for
+              the same reason: the card records *English is B1*, the filter asks *whose
+              English is at least B1*.
+          */}
           {chips.map(({ criterion, assessment }) => (
-            <li key={criterion.id} className="card-criterion-chip">
-              {/*
-                `Chip`, not `Badge`. Blue's `Badge` is `ActivityBadge` — four status paints and
-                no neutral — and a criterion is not a status, which is the split §32 made when
-                it took the opposite view of an application's. `Chip` is what blue draws for a
-                chosen thing, and the value control goes in its `trailing` slot (§37) rather
-                than in the label, which ellipsises to one line and would clip the list this
-                control drops.
-
-                The pointer cursor `Chip` paints when it can be removed is turned off: on this
-                chip only the cross and the value control are clickable, and the name between
-                them promises nothing. That is §18's rule on `Table`'s rows, one level down.
-              */}
-              <Chip
-                data-testid={`card-criterion-${criterion.id}`}
-                onRemove={() => void remove(criterion.id)}
-                removeLabel={`Remove ${criterion.name}`}
-                removeTestId={`card-criterion-remove-${criterion.id}`}
-                style={{ cursor: 'default', margin: 0, minWidth: 0 }}
-                trailing={
-                  <ValueControl
-                    criterion={criterion}
-                    assessment={assessment}
-                    busy={saving === criterion.id}
-                    onSave={(value) => void save(criterion, value)}
-                  />
-                }
-              >
+            <li
+              key={criterion.id}
+              className="card-criterion-chip"
+              data-testid={`card-criterion-${criterion.id}`}
+            >
+              <span className="card-criterion-name">
                 {criterion.name}
-                {criterion.isArchived && (
-                  <span style={{ color: 'var(--text-secondary)' }}> (archived)</span>
-                )}
-              </Chip>
+              </span>
+              {criterion.isArchived && (
+                <Badge status="inactive" outlined size="s">
+                  {CANDIDATE_MESSAGES.archived}
+                </Badge>
+              )}
+              <ValueControl
+                criterion={criterion}
+                assessment={assessment}
+                busy={saving === criterion.id}
+                onSave={(value) => void save(criterion, value)}
+              />
+              <IconButton
+                label={`Remove ${criterion.name}`}
+                size={24}
+                onClick={() => void remove(criterion.id)}
+                data-testid={`card-criterion-remove-${criterion.id}`}
+                style={{ flexShrink: 0, color: 'var(--text-secondary)' }}
+              >
+                <CloseIcon width="10" height="10" />
+              </IconButton>
             </li>
           ))}
         </ul>
-      )}
-
-      {adding && (
-        <div style={{ marginTop: 'var(--space-5)', maxWidth: 320 }}>
-          {/*
-            `Select isSearchable allowCreate` — blue's own control with the capability prod
-            never switches on (§21) and the create row §29 added, not a second combobox. The
-            per-option test ids ride on the options themselves, which is the shape §21 gave
-            a listbox blue draws for itself.
-          */}
-          <Select
-            placeholder="Type to find or create…"
-            autoFocus
-            isSearchable
-            options={options}
-            allowCreate
-            onChange={(option) => choose(valueOf(option))}
-            // Nothing is written until the dialog is confirmed, so cancelling it leaves
-            // no half-made criterion in a library the whole team shares.
-            onCreate={(name) => {
-              setAdding(false);
-              setCreating(name);
-            }}
-            createTestId="card-criteria-create-option"
-            aria-label="Find or create a criterion"
-            data-testid="card-criteria-autocomplete"
-          />
-        </div>
       )}
 
       {/* Polite, because a failure here happens while somebody is mid-sentence. */}
@@ -491,25 +487,18 @@ function ReadOnlyCriteria({ criteria }: { criteria: CardCriterion[] }) {
           {criteria.map((assessment) => (
             <li key={assessment.criterionId}>
               {/*
-                The same chip without a cross — which is also what drops the pointer cursor
-                (§20). The value keeps the `trailing` slot it has in the editable form, so
-                the two states read as one thing with and without its controls, and the test
-                id lands on the same node either way.
+                Read-only, so there is no form left — only the fact, and the fact is a label
+                on a person. It is the neutral `Badge` (§59) the candidate list draws the
+                same rolled-up assessment with, split the same way: the criterion is the
+                context and the value is the answer. The test id lands on the same node it
+                does in the editable form.
               */}
-              <Chip
-                data-testid={`card-criterion-${assessment.criterionId}`}
-                style={{ margin: 0, minWidth: 0 }}
-                trailing={
-                  <span
-                    data-testid={`card-criterion-value-${assessment.criterionId}`}
-                    style={{ marginLeft: 'var(--space-2)', marginRight: 3, fontSize: 14 }}
-                  >
-                    {assessedValueLabel(assessment)}
-                  </span>
-                }
-              >
-                {assessment.name}
-              </Chip>
+              <Badge status="neutral" data-testid={`card-criterion-${assessment.criterionId}`}>
+                <span style={{ color: 'var(--text-secondary)' }}>{`${assessment.name}: `}</span>
+                <span data-testid={`card-criterion-value-${assessment.criterionId}`}>
+                  {assessedValueLabel(assessment)}
+                </span>
+              </Badge>
             </li>
           ))}
         </ul>

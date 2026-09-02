@@ -19,16 +19,24 @@ import { useCallback, useRef, useState } from 'react';
  *   two events — "Interview cancelled" twice means two interviews — and keying by text
  *   would silently collapse them into one.
  *
- * Nothing here times anything: each `Toast` withdraws itself and calls `dismiss` when its
- * exit has finished, which is what keeps the row in the document while it slides out.
+ * Nothing here times anything: `ToastHost` owns the clock (`autoClose`, paused while a
+ * pointer is over the column) and calls `dismiss` with the id of whatever it dropped.
  */
 
-export type ToastTone = 'info' | 'success' | 'error';
+/**
+ * The design system's own set, which is `react-toastify`'s (ledger §54). Most of what this
+ * app confirms is **untyped** — `default`, the white message with no mark — because that is
+ * what prod raises and because a status hue on "Vacancy updated" claims a significance the
+ * event does not have. The coloured types are kept for the case that earns one: a request
+ * that failed.
+ */
+export type ToastTone = 'default' | 'info' | 'success' | 'warning' | 'error';
 
 export interface QueuedToast {
   id: number;
   message: string;
-  tone: ToastTone;
+  /** Omitted is `default`, which is what a confirmation is. */
+  tone?: ToastTone;
   /** Names the announcement, not the component — the same rule the card's banners follow. */
   testId?: string;
 }
@@ -36,7 +44,8 @@ export interface QueuedToast {
 export interface Toasts {
   toasts: QueuedToast[];
   push: (toast: Omit<QueuedToast, 'id'>) => void;
-  dismiss: (id: number) => void;
+  /** Widened to the host's own id type, which allows a string. Ours are always numbers. */
+  dismiss: (id: string | number) => void;
 }
 
 export function useToasts(): Toasts {
@@ -49,7 +58,7 @@ export function useToasts(): Toasts {
     setToasts((current) => [...current, { ...toast, id }]);
   }, []);
 
-  const dismiss = useCallback((id: number) => {
+  const dismiss = useCallback((id: string | number) => {
     setToasts((current) => current.filter((toast) => toast.id !== id));
   }, []);
 

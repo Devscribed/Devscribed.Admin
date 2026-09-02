@@ -19,6 +19,24 @@ const FOCUSABLE = [
 export function useDialogFocus({ open, onClose, panelRef, initialFocusRef }) {
   const returnFocusTo = React.useRef(null);
 
+  /* §61 — the callback is read through a ref rather than depended on.
+   *
+   * Every dialog in the app is opened from a screen that owns its state, so `onClose` is an
+   * arrow rebuilt on each of that screen's renders — and a dialog with a field in it makes the
+   * screen render on **every keystroke**. With `onClose` in the dependency list this effect
+   * therefore tore down and re-ran between one letter and the next: the cleanup handed focus
+   * back to the opener, the body moved it to `panel.querySelector(FOCUSABLE)`, and that is the
+   * close button. Typing a name into "New category" put the caret on the × after the first
+   * letter, every time.
+   *
+   * The fix is not a stabler caller. What this effect *does* is entirely about `open` — move
+   * focus in, trap it, put it back — and none of that should happen again while the dialog
+   * stays open, whoever re-renders around it. So the identity of the handler is kept out of
+   * the dependency list and read at call time, which is the same shape as the `place()`
+   * callback §55 gave `Popover`. */
+  const closeRef = React.useRef(onClose);
+  closeRef.current = onClose;
+
   React.useEffect(() => {
     if (!open) return undefined;
 
@@ -36,7 +54,7 @@ export function useDialogFocus({ open, onClose, panelRef, initialFocusRef }) {
        anywhere near it. Tab still traps on capture, which is the phase that job needs. */
     function onEscape(event) {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
-      onClose && onClose();
+      if (closeRef.current) closeRef.current();
     }
 
     function onKeyDown(event) {
@@ -68,5 +86,7 @@ export function useDialogFocus({ open, onClose, panelRef, initialFocusRef }) {
       // something still in the document, or the page loses focus to <body> silently.
       if (restore && document.contains(restore)) restore.focus();
     };
-  }, [open, onClose, panelRef, initialFocusRef]);
+    /* §61 — `open` only. `panelRef` and `initialFocusRef` are refs, so their identity is
+       already stable, and naming them here only invites a caller to build one inline. */
+  }, [open]);
 }

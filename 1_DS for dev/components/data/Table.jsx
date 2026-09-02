@@ -1,15 +1,25 @@
 import React from 'react';
 
-/* Blue's positional rule: the first column reads left, the last reads right and is capped at
-   80px for the actions it holds in prod, everything between is centred. A column that says
-   otherwise says so itself. */
+/* Blue's positional rule: the first column reads left, the last reads right and is capped for
+   the actions it holds in prod, everything between is centred. A column that says otherwise
+   says so itself.
+
+   §60 — the cap is 96, where blue measured 80. Prod's actions column holds a 32px kebab under a
+   header that is never read, so 80px was measured off the *content* and the label was free to
+   clip behind it. Ours is a real column heading in blue's own 16px semibold, and `Actions` is
+   62px of it: at 80px, minus the 12px of padding on each side, every list screen in the app
+   drew `Actio…`. 96 is the first step that fits the word blue itself put there, and it is the
+   only column in the table whose width nothing else depends on — the flex share of every other
+   column is unchanged, because this one was already at its cap and still is. */
+const ACTIONS_MAX_WIDTH = 96;
+
 function geometry(col, i, count) {
   const last = i === count - 1;
   return {
     flex: col.flex != null ? `${col.flex} 1 0` : '1 1',
     display: 'flex', alignItems: 'center', paddingLeft: 12, minWidth: 0,
     justifyContent: col.align || (i === 0 ? 'flex-start' : last ? 'flex-end' : 'center'),
-    maxWidth: col.maxWidth != null ? col.maxWidth : (last ? 80 : 'none'),
+    maxWidth: col.maxWidth != null ? col.maxWidth : (last ? ACTIONS_MAX_WIDTH : 'none'),
     paddingRight: last ? 12 : 0,
   };
 }

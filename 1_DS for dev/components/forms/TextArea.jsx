@@ -1,4 +1,5 @@
 import React from 'react';
+import { RequiredMark } from './FormField.jsx';
 
 /* Blue's error message: absolute, 8px, 16px below the field — the same slot and geometry
    `TextInput` pins its own message into (§4), so the two fields never disagree about how far
@@ -43,6 +44,7 @@ export const TextArea = React.forwardRef(function TextArea({
       style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', marginBottom: trailing ? 0 : 7, padding: '10px 0 0 10px' }}
     >
       {label}
+      {rest.required && <RequiredMark />}
     </label>
   ) : null;
 

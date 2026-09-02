@@ -18,18 +18,18 @@ import {
   type BookingField,
 } from '@devscribed/validation';
 import {
+  Badge,
   BookingLayout,
   Button,
   Card,
   FileInput,
   InfoBanner,
-  PageTitle,
   Preloader,
   TextArea,
   TextInput,
 } from '@/ds';
 import { focusByTestId } from '@/field-error';
-import { detectTimeZone, formatDuration } from '@/hiring/format';
+import { detectTimeZone, formatDuration, formatFileSize } from '@/hiring/format';
 import { SlotPicker, readTimeFormat, writeTimeFormat } from '@/hiring/SlotPicker';
 import { useAvailability } from '@/hiring/useAvailability';
 import type { BookingConfirmation, PublicVacancy } from '@/hiring/types';
@@ -263,7 +263,7 @@ export function BookingScreen({ slug }: { slug: string }) {
   if (page.state === 'notFound' || page.state === 'failed') {
     return (
       <BookingLayout data-testid="booking-page">
-        <Card>
+        <Card variant="panel">
           <p data-testid="booking-not-found" style={{ margin: 0, textAlign: 'center' }}>
             {HIRING_MESSAGES.booking.notFound}
           </p>
@@ -280,22 +280,40 @@ export function BookingScreen({ slug }: { slug: string }) {
       wordmark={organizationName}
       wordmarkTestId="booking-org-wordmark"
     >
-      <header style={{ textAlign: 'center', marginBottom: 'var(--space-8)' }}>
-        {/* Meridian set this at 34px, which blue's scale has no counterpart for. It is the
-            page's title, so it is `PageTitle` — whose type steps 16 → 20 → 24 with the
-            viewport rather than holding one size, and which is already the `<h1>` on every
-            signed-in screen. */}
-        <PageTitle data-testid="booking-vacancy-title">{vacancy.title}</PageTitle>
-        <div
-          data-testid="booking-duration"
+      <header
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 'var(--space-5)',
+          textAlign: 'center',
+          marginBottom: 'var(--space-8)',
+        }}
+      >
+        {/* `PageTitle` is the *app page's* heading — 16px on a phone, 24px on a desktop,
+            sized to sit under a navbar in a 290px-railed shell. This page has no shell and
+            one thing on it, and its title is the largest type in the product: blue's
+            headline-4, held at one size because there is nothing here for it to step
+            with. */}
+        <h1
+          data-testid="booking-vacancy-title"
           style={{
-            marginTop: 'var(--space-1)',
-            fontSize: 'var(--font-size-base)',
-            color: 'var(--text-secondary)',
+            margin: 0,
+            fontSize: 'var(--headline-4-size)',
+            lineHeight: 'var(--headline-4-line)',
+            letterSpacing: 'var(--headline-4-tracking)',
+            fontWeight: 'var(--headline-4-weight)',
+            color: 'var(--text-primary)',
           }}
         >
+          {vacancy.title}
+        </h1>
+        {/* The length is a fact about the interview, not a caption under the title — the
+            same neutral label a vacancy's categories take (ledger §59), which is how the
+            rest of the product states a property of the thing above it. */}
+        <Badge status="neutral" data-testid="booking-duration">
           {formatDuration(vacancy.durationMinutes)}
-        </div>
+        </Badge>
         {vacancy.description && (
           <p
             data-testid="booking-description"
@@ -320,7 +338,7 @@ export function BookingScreen({ slug }: { slug: string }) {
       </div>
 
       {vacancy.status === 'closed' ? (
-        <Card>
+        <Card variant="panel">
           <p data-testid="booking-closed-message" style={{ margin: 0, textAlign: 'center' }}>
             {HIRING_MESSAGES.booking.vacancyClosed}.
           </p>
@@ -348,7 +366,7 @@ export function BookingScreen({ slug }: { slug: string }) {
           {/* The caption that led this panel was a `SectionLabel`; it is the Card's own
               title now (D4), which makes it a real `<h2>` in the outline under the vacancy
               title's `<h1>` rather than an uppercase decoration above a box. */}
-          <Card title="Your details">
+          <Card variant="panel" title="Your details">
             {banner && (
               <div style={{ marginBottom: 'var(--space-7)' }}>
                 <InfoBanner variant="error" role="alert" data-testid="booking-error-banner">
@@ -358,6 +376,7 @@ export function BookingScreen({ slug }: { slug: string }) {
             )}
 
             <form
+              id={FORM_ID}
               noValidate
               onSubmit={(event) => {
                 event.preventDefault();
@@ -370,6 +389,7 @@ export function BookingScreen({ slug }: { slug: string }) {
               <div className="booking-names">
                 <TextInput
                   label="First name"
+                  required
                   id={TEST_IDS.firstName}
                   placeholder="Jane"
                   value={values.firstName}
@@ -383,6 +403,7 @@ export function BookingScreen({ slug }: { slug: string }) {
                 />
                 <TextInput
                   label="Last name"
+                  required
                   id={TEST_IDS.lastName}
                   placeholder="Doe"
                   value={values.lastName}
@@ -398,6 +419,7 @@ export function BookingScreen({ slug }: { slug: string }) {
 
               <TextInput
                 label="Email"
+                required
                 id={TEST_IDS.email}
                 type="email"
                 placeholder="you@example.com"
@@ -413,10 +435,14 @@ export function BookingScreen({ slug }: { slug: string }) {
 
               <FileInput
                 label="CV"
+                required
                 id={TEST_IDS.cv}
                 accept={CV_ACCEPT}
                 fileName={cv?.name ?? null}
                 fileNameTestId="booking-cv-filename"
+                fileSize={cv ? formatFileSize(cv.size) : undefined}
+                onClear={cv ? () => selectCv(null) : undefined}
+                clearTestId="booking-cv-clear"
                 onSelect={selectCv}
                 error={errors.cv}
                 errorId="field-error-cv"
@@ -444,25 +470,36 @@ export function BookingScreen({ slug }: { slug: string }) {
                 data-testid={TEST_IDS.note}
               />
 
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  className="booking-submit"
-                  preloader={submitting}
-                  disabled={!ready}
-                  data-testid="booking-submit-button"
-                >
-                  {submitting ? 'Booking' : 'Book'}
-                </Button>
-              </div>
             </form>
           </Card>
+
+          {/*
+            **Outside the panel.** `Book` is not one of the form's fields — it is what the whole
+            page has been building toward, and inside the card it read as the last row of
+            `Your details`, level with a textarea, as though it submitted only the part it sat
+            in. On the page's own ground, centred at 320px under everything it acts on, it is
+            the one thing left to do.
+          */}
+          <div className="booking-submit">
+            <Button
+              type="submit"
+              form={FORM_ID}
+              variant="primary"
+              preloader={submitting}
+              disabled={!ready}
+              data-testid="booking-submit-button"
+            >
+              {submitting ? 'Booking' : 'Book'}
+            </Button>
+          </div>
         </div>
       )}
     </BookingLayout>
   );
 }
+
+/** The form the `Book` button submits from outside it. */
+const FORM_ID = 'booking-details-form';
 
 const SR_ONLY: CSSProperties = {
   position: 'absolute',

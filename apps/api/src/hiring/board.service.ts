@@ -119,7 +119,6 @@ export class BoardService {
             name: `${application.candidate.firstName} ${application.candidate.lastName}`,
             startUtc: application.start.toISOString(),
             position: application.position,
-            hasCv: application.cvKey !== null,
             isCancelled: application.isCancelled,
             /** Who cancelled, for the badge and its tooltip. Null when nobody did. */
             cancellation: cancellationOf(application),

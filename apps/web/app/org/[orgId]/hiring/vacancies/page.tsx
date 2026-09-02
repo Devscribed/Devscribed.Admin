@@ -16,18 +16,17 @@ import {
   Badge,
   Button,
   Card,
-  Chip,
   ConfirmDialog,
   EmptyState,
   Popover,
   Preloader,
   Table,
   TableToolbar,
-  Toast,
   ToastHost,
 } from '@/ds';
 import { PageHeader } from '@/layout/PageHeader';
 import { useToasts } from '@/hiring/useToasts';
+import { VacancyStatusBadge } from '@/hiring/StatusBadge';
 import type { Vacancy, VacancyList } from '@/hiring/types';
 import { VacancyDialog } from './VacancyDialog';
 
@@ -145,7 +144,6 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
           next === 'closed'
             ? HIRING_MESSAGES.toast.vacancyClosed
             : HIRING_MESSAGES.toast.vacancyReopened,
-        tone: 'success',
         testId: next === 'closed' ? 'toast-vacancy-closed' : 'toast-vacancy-reopened',
       });
     } catch {
@@ -176,7 +174,6 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
       } else {
         push({
           message: HIRING_MESSAGES.toast.vacancyDeleted,
-          tone: 'success',
           testId: 'toast-vacancy-deleted',
         });
       }
@@ -194,13 +191,16 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
    * only difference between this message and the detail page's: a row can point at the
    * vacancy, and the vacancy has nowhere further to point, so it says the link out loud.
    */
+  /** The candidate's own view of this vacancy — the address `copyLink` copies. */
+  const bookingUrl = (vacancy: Vacancy): string =>
+    `${window.location.origin}/book/${vacancy.publicSlug}`;
+
   async function copyLink(vacancy: Vacancy): Promise<void> {
-    const url = `${window.location.origin}/book/${vacancy.publicSlug}`;
+    const url = bookingUrl(vacancy);
     try {
       await navigator.clipboard.writeText(url);
       push({
         message: HIRING_MESSAGES.toast.linkCopied,
-        tone: 'success',
         testId: 'toast-link-copied',
       });
     } catch {
@@ -217,15 +217,39 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
     const { actions } = HIRING_MESSAGES.vacancy;
     return [
       {
+        // The row is a link to the same page, and the menu says so anyway: a kebab is
+        // where a row states what it can do, and a reader who opened one is asking to be
+        // told rather than to infer that the whole row is clickable.
+        key: 'board',
+        label: actions.openBoard,
+        testId: `vacancy-action-board-${vacancy.id}`,
+        onSelect: () => router.push(`/org/${orgId}/hiring/vacancies/${vacancy.id}`),
+      },
+      {
         key: 'copy',
         label: actions.copyLink,
         testId: `vacancy-action-copy-link-${vacancy.id}`,
         // Shown and disabled, never hidden: a closed vacancy still has a link, and the
         // reason it cannot be handed out is the thing worth saying.
         disabled: !open,
-        description: open ? undefined : HIRING_MESSAGES.vacancy.closedLinkNote,
-        descriptionTestId: `vacancy-copy-guard-message-${vacancy.id}`,
+        tooltip: open ? undefined : HIRING_MESSAGES.vacancy.closedLinkNote,
+        tooltipTestId: `vacancy-copy-guard-message-${vacancy.id}`,
         onSelect: () => void copyLink(vacancy),
+      },
+      {
+        /*
+          The one row that leaves the product. It is not disabled on a closed vacancy the
+          way `Copy booking link` is: the page still exists and explains itself (02 §02.6),
+          and what a closed vacancy cannot do is take a booking, not be looked at.
+
+          A new tab, because this is the candidate's view and not a place inside the app to
+          navigate to — coming back should not cost the list its scroll position or its
+          filters.
+        */
+        key: 'booking-page',
+        label: actions.openBookingPage,
+        testId: `vacancy-action-open-booking-${vacancy.id}`,
+        onSelect: () => window.open(bookingUrl(vacancy), '_blank', 'noopener,noreferrer'),
       },
       {
         key: 'edit',
@@ -254,10 +278,10 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
         testId: `vacancy-action-delete-${vacancy.id}`,
         danger: vacancy.deletable,
         disabled: !vacancy.deletable,
-        // Drawn in the row rather than hidden in a `title`, which no browser reaches
-        // from a keyboard (ledger §22).
-        description: vacancy.deletable ? undefined : HIRING_MESSAGES.vacancy.deleteBlocked,
-        descriptionTestId: `vacancy-delete-guard-message-${vacancy.id}`,
+        // In a bubble beside the menu, not a third line inside a 160px panel — and never
+        // a native `title`, which no browser opens from a keyboard (ledger §62).
+        tooltip: vacancy.deletable ? undefined : HIRING_MESSAGES.vacancy.deleteBlocked,
+        tooltipTestId: `vacancy-delete-guard-message-${vacancy.id}`,
         onSelect: () => setPending({ action: 'delete', vacancy }),
       },
     ];
@@ -342,20 +366,44 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
           columns={[
             {
               label: 'Title',
-              flex: 3,
+              // 2, not 3. The title carries a second line of category labels and needs the
+              // most room of any column — but at 3 it took it from `Interviewer`, whose
+              // names then ellipsised while the title cell ran half empty.
+              flex: 2,
               render: (row) => (
                 <div style={{ minWidth: 0 }}>
-                  <span data-testid={`vacancy-title-${row.id}`}>{row.title}</span>
-                  {/* Chips on a second line inside the title cell — read-only here,
+                  <span
+                    data-testid={`vacancy-title-${row.id}`}
+                    style={{
+                      display: 'block',
+                      minWidth: 0,
+                      overflowWrap: 'anywhere',
+                      fontWeight: 'var(--font-weight-medium)',
+                      lineHeight: '20px',
+                    }}
+                  >
+                    {row.title}
+                  </span>
+                  {/* Labels on a second line inside the title cell — read-only here,
                       editable only in the dialog (01 §UI Notes). */}
                   {row.categories.length > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', marginTop: 'var(--space-1)' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: 'var(--space-2)',
+                        marginTop: 'var(--space-3)',
+                      }}
+                    >
                       {row.categories.map((category) => (
-                        <Chip
+                        <Badge
                           key={category.id}
-                          label={category.name}
+                          status="neutral"
+                          size="s"
                           data-testid={`vacancy-category-chip-${category.id}`}
-                        />
+                        >
+                          {category.name}
+                        </Badge>
                       ))}
                     </div>
                   )}
@@ -364,7 +412,7 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
             },
             {
               label: 'Interviewer',
-              flex: 2,
+              flex: 1.3,
               render: (row) => (
                 <span data-testid={`vacancy-interviewer-${row.id}`}>{row.interviewer.fullName}</span>
               ),
@@ -389,14 +437,8 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
             {
               label: 'Status',
               flex: 1,
-              maxWidth: 120,
               render: (row) => (
-                <Badge
-                  status={row.status === 'open' ? 'active' : 'inactive'}
-                  data-testid={`vacancy-status-${row.id}`}
-                >
-                  {row.status === 'open' ? 'Open' : 'Closed'}
-                </Badge>
+                <VacancyStatusBadge status={row.status} testId={`vacancy-status-${row.id}`} />
               ),
             },
             {
@@ -456,7 +498,6 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
             void load();
             push({
               message: HIRING_MESSAGES.toast.vacancyUpdated,
-              tone: 'success',
               testId: 'toast-vacancy-updated',
             });
             return;
@@ -502,18 +543,7 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
         acceptTestId="vacancy-delete-confirm-button"
       />
 
-      <ToastHost>
-        {toasts.map((toast) => (
-          <Toast
-            key={toast.id}
-            tone={toast.tone}
-            data-testid={toast.testId}
-            onDismiss={() => dismiss(toast.id)}
-          >
-            {toast.message}
-          </Toast>
-        ))}
-      </ToastHost>
+      <ToastHost toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }

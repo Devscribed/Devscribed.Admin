@@ -87,8 +87,10 @@ viewport, the header stays put, and the columns scroll inside what is left of it
 
 ### 05. Cards
 
-15. A card shows the candidate's name, the interview date and time, a CV affordance, and the
-    cancelled mark when set.
+15. A card shows the candidate's name, the interview date and time, and the cancelled mark when
+    set. **No CV mark.** It was on every card, which is to say it distinguished nothing — a
+    booking cannot be made without a CV (02 §03.8) — and it cost a third line of height in a
+    column that scrolls. The CV itself is on the candidate card, where it can be opened.
 16. Times render in the **viewing member's** time zone (`Account.timezone`), falling back to the
     interviewer's mailbox zone when it is null. The zone is named on the board once, not on every
     card.
@@ -166,7 +168,6 @@ Drawn under the vacancy's header, on the vacancy's own route — see
 │ │┌───────────┐│ │┌────────────┐│ │┌───────────┐│ │┌───────────┐│ │┌─────────┐││
 │ ││Jane Doe   ││ ││Ann Lee   ⚑ ││ ││Ivan Petrov││ ││Mia Chen   ││ ││Lev Orlov│││
 │ ││26 Aug 14:00│ ││18 Aug 11:00││ ││20 Aug 09:00│ ││21 Aug 15:00│ ││22 Aug   │││
-│ ││📄 CV      ││ ││📄 CV       ││ ││📄 CV      ││ ││📄 CV      ││ ││📄 CV    │││
 │ │└───────────┘│ │└────────────┘│ │└───────────┘│ │└───────────┘│ │└─────────┘││
 │ │┌───────────┐│ │┌────────────┐│ │             │ │             │ │           ││
 │ ││Tom Fisher ││ ││Raj Kumar   ││ │             │ │             │ │           ││
@@ -224,7 +225,7 @@ Response `200`:
     { "status": "scheduled", "count": 4, "cards": [
       { "applicationId": "uuid", "candidateId": "uuid", "name": "Jane Doe",
         "startUtc": "2026-08-26T11:00:00.000Z", "position": 1000,
-        "hasCv": true, "isCancelled": false, "hasConclusion": false }
+        "isCancelled": false, "hasConclusion": false }
     ]},
     { "status": "didnt_pass", "count": 7, "cards": [] }
   ]
@@ -290,7 +291,7 @@ Errors:
   - `board`, `board-timezone`
   - `board-column-{status}`, `board-column-count-{status}`, `board-column-empty-{status}`
   - `board-card-{applicationId}`, `board-card-name-{applicationId}`,
-    `board-card-when-{applicationId}`, `board-card-cv-{applicationId}`,
+    `board-card-when-{applicationId}`,
     `board-card-cancelled-{applicationId}`, `board-card-no-conclusion-{applicationId}`
   - `board-empty-state`, `board-loading`, `board-load-error`, `board-load-retry`,
     `board-live-region`, `toast-move-failed`, `toast-board-stale`

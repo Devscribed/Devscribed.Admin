@@ -16,6 +16,7 @@ import {
   zoneLabel,
 } from '@devscribed/validation';
 import {
+  Badge,
   BookingLayout,
   Button,
   Card,
@@ -23,7 +24,6 @@ import {
   FormActions,
   InfoBanner,
   Modal,
-  PageTitle,
   Preloader,
 } from '@/ds';
 import { formatDuration, formatWhen } from '@/hiring/format';
@@ -374,7 +374,7 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
     return (
       <BookingLayout data-testid="manage-page">
         <div style={COLUMN}>
-          <Card>
+          <Card variant="panel">
             <p data-testid="manage-unknown-link" style={{ margin: 0, textAlign: 'center' }}>
               {HIRING_MESSAGES.booking.notFound}
             </p>
@@ -450,22 +450,36 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
       wordmark={organizationName}
       wordmarkTestId="manage-org-wordmark"
     >
-      <header style={{ textAlign: 'center', marginBottom: 'var(--space-8)' }}>
-        {/* The same `PageTitle` the booking page uses, for the same reason: this is the page
+      <header
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 'var(--space-5)',
+          textAlign: 'center',
+          marginBottom: 'var(--space-8)',
+        }}
+      >
+        {/* The same heading the booking page uses, for the same reason: this is the page
             they booked on, and a candidate arriving from their invite must recognise it. */}
-        <PageTitle data-testid="manage-vacancy-title">{vacancy.title}</PageTitle>
-        <div
-          data-testid="manage-duration"
+        <h1
+          data-testid="manage-vacancy-title"
           style={{
-            marginTop: 'var(--space-1)',
-            fontSize: 'var(--font-size-base)',
-            color: 'var(--text-secondary)',
+            margin: 0,
+            fontSize: 'var(--headline-4-size)',
+            lineHeight: 'var(--headline-4-line)',
+            letterSpacing: 'var(--headline-4-tracking)',
+            fontWeight: 'var(--headline-4-weight)',
+            color: 'var(--text-primary)',
           }}
         >
+          {vacancy.title}
+        </h1>
+        <Badge status="neutral" data-testid="manage-duration">
           {/* The booking's own length when there is one, which a later edit to the
               vacancy never moved (07 §13.61). */}
           {formatDuration(booking?.durationMinutes ?? vacancy.durationMinutes)}
-        </div>
+        </Badge>
         {picking && (
           // Stated, never rendered as a selected date or slot.
           <p
@@ -584,7 +598,7 @@ export function ManageScreen({ slug, token }: { slug: string; token: string }) {
 
             {/* The panel's caption is the Card's own title (D4), so "Your interview" is the
                 `<h2>` under the vacancy title rather than an uppercase caption above a box. */}
-            <Card title={HIRING_MESSAGES.manage.panelLabel}>
+            <Card variant="panel" title={HIRING_MESSAGES.manage.panelLabel}>
               <p
                 data-testid="manage-booking-when"
                 style={{
@@ -722,7 +736,7 @@ function DeadEnd({
       <InfoBanner variant={tone} data-testid={testId}>
         {message}
       </InfoBanner>
-      <Card style={{ textAlign: 'center' }}>
+      <Card variant="panel" style={{ textAlign: 'center' }}>
         {/* A real link, not a button with an onClick (§38): it is a navigation, and this
             keeps middle-click and copy-address working. */}
         <Button

@@ -33,6 +33,7 @@ export { EmptyState } from './components/feedback/EmptyState.jsx';
 export { InfoBanner } from './components/feedback/InfoBanner.jsx';
 export { Preloader } from './components/feedback/Preloader.jsx';
 export { Toast, ToastHost } from './components/feedback/Toast.jsx';
+export { Tooltip } from './components/feedback/Tooltip.jsx';
 
 export { Checkbox } from './components/forms/Checkbox.jsx';
 export { CheckboxRow } from './components/forms/CheckboxRow.jsx';
@@ -40,7 +41,12 @@ export { DateField } from './components/forms/DateField.jsx';
 export { DateRangePicker } from './components/forms/DateRangePicker.jsx';
 export { FileInput } from './components/forms/FileInput.jsx';
 export { FormActions } from './components/forms/FormActions.jsx';
-export { FieldLabel, FormField } from './components/forms/FormField.jsx';
+/* §75 — `fieldLabelStyle` joins the three components it belongs to. It is blue's own
+   measurement (the deploy's `padding: 10px 0 0 10px` on every `<label>`, 12px regular in
+   `--text-secondary`) and every system input already renders it; what was missing was a way
+   for a screen to put a *caption* on the same line as the field labels beside it without
+   copying four numbers into app code. */
+export { FieldLabel, fieldLabelStyle, FormField, RequiredMark } from './components/forms/FormField.jsx';
 export { MembersMultiField } from './components/forms/MembersMultiField.jsx';
 export { SearchInput } from './components/forms/SearchInput.jsx';
 export { Select } from './components/forms/Select.jsx';
@@ -60,6 +66,8 @@ export {
   PersonCircleIcon,
   MailOutlineIcon,
   TimeOutlineIcon,
+  CalendarIcon,
+  PersonOutlineIcon,
   InfoCircleIcon,
   CloudDownloadOutlineIcon,
   SettingsIcon,

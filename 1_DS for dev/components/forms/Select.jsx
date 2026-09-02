@@ -1,4 +1,5 @@
 import React from 'react';
+import { RequiredMark } from './FormField.jsx';
 import { CrossIcon } from '../icons/Icon.jsx';
 import { Chip } from '../core/Chip.jsx';
 
@@ -55,7 +56,11 @@ export function Select({
   error, errorMessage, errorId, hint, hintId, withDescription, formatOptionLabel, variant = 'dropdown',
   /* §21 — blue draws the chip, the create row and the listbox itself and gives no way to tag
      any of them; per-option `testId` covers the rows. Same shape as §4 and §16. */
-  chipTestId, createTestId, allowCreate, onCreate, id, wrapperStyle, onFocus, onBlur, ...rest
+  chipTestId, createTestId, allowCreate, onCreate, id, wrapperStyle, onFocus, onBlur,
+  /* §64 — there is no native control under this one to carry `required`, so it is a prop.
+     It draws the label's asterisk and sets `aria-required` on the combobox. */
+  required,
+  ...rest
 }) {
   const [open, setOpen] = React.useState(false);
   const [focused, setFocused] = React.useState(false);
@@ -174,6 +179,7 @@ export function Select({
     'aria-haspopup': 'listbox',
     'aria-activedescendant': activeId,
     'aria-disabled': isDisabled || undefined,
+    'aria-required': required || undefined,
     onKeyDown,
     onFocus: (e) => { setFocused(true); if (isSearchable) setOpen(true); if (onFocus) onFocus(e); },
     onBlur: (e) => { setFocused(false); if (onBlur) onBlur(e); },
@@ -183,7 +189,13 @@ export function Select({
     <div ref={ref} style={{ width: '100%', position: 'relative', fontFamily: 'var(--font-family-base)', pointerEvents: isDisabled ? 'none' : undefined, ...wrapperStyle }}>
       {label && (
         /* global .input-label */
-        <label htmlFor={controlId} style={{ display: 'inline-block', fontWeight: 400, fontSize: 'var(--font-size-xs)', lineHeight: '21px', whiteSpace: 'nowrap', color: 'var(--text-secondary)', marginBottom: 4, padding: '10px 0 0 10px' }}>{label}</label>
+        <label htmlFor={controlId} style={{ display: 'inline-block', fontWeight: 400, fontSize: 'var(--font-size-xs)', lineHeight: '21px', whiteSpace: 'nowrap', color: 'var(--text-secondary)', marginBottom: 4, padding: '10px 0 0 10px' }}>
+          {label}
+          {/* §64 — an explicit prop, unlike the three fields with a native control under
+              them: there is no `<input required>` here to read it off, and `aria-required`
+              on the combobox is set from the same flag. */}
+          {required && <RequiredMark />}
+        </label>
       )}
       <div
         ref={controlRef}

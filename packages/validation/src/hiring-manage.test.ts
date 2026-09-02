@@ -659,10 +659,15 @@ describe("the team's toasts", () => {
 });
 
 describe("the team's copy", () => {
-  it('uses the short label beside interview facts that already name the interview', () => {
-    expect(HIRING_MESSAGES.manage.cancelActionTeam).toBe('Cancel');
-    // The candidate's page has no surrounding context, so theirs stays long.
+  it('names the interview in a menu row, where the short label would read as "dismiss"', () => {
+    // It was `Cancel` while it was a button under a section that already named the
+    // interview. As a menu row among rows about a candidate, `Cancel` alone reads as
+    // dismissing the menu.
+    expect(HIRING_MESSAGES.manage.cancelActionTeam).toBe('Cancel interview');
+    // The candidate's own page says the same thing, and always did.
     expect(HIRING_MESSAGES.manage.cancelAction).toBe('Cancel interview');
+    // Its neighbour in the same menu is named the same way, for the same reason.
+    expect(HIRING_MESSAGES.manage.rescheduleAction).toBe('Reschedule interview');
   });
 
   it('says the reason is optional in the label rather than leaving it to be discovered', () => {

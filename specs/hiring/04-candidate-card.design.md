@@ -37,29 +37,29 @@ stops being a `Badge`, and [reversal 2](#the-cancelled-badge) gets its second of
   ┌──────────────────────────────────────────────────────────────────┐
   │ ⓘ Moved to Didn't pass                                        ×  │  ← InfoBanner, in flow
   └──────────────────────────────────────────────────────────────────┘
-  ┌──────────────────────────────────────────────────────────────────┐
-  │ Senior React Engineer · 60 minutes            [ Scheduled     ▾ ] │  ← <h2>, headline-6
-  │ Tue 26 Aug 2026, 14:00 Europe/Minsk · Pat Owner                   │
-  │ Applied as "Jane M. Doe"                                          │
-  │ [ Reschedule ]  [ Cancel interview ]                              │
-  ├───────────────────────────────────────────────────────────────────┤
-  │ [ ▸ Rescheduled once · booked 12 Aug 2026, 09:14 ]                │
-  │ 📄 jane-doe-cv.pdf  180 KB                  [ View ] [ Download ] │
-  │                                                                   │
-  │ Candidate's note                                                  │  ← <h3>
-  │ I'm available from September.                                     │
-  │                                                                   │
-  │ Criteria                                       [ + Add criteria ] │  ← <h3>
-  │ ▌English [ B2      ▾ ] ×    ▌Late hours [ Yes     ▾ ] ×           │  ← Chip + trailing
-  │                                                                   │
-  │ Interview notes                                    Saved 14:32    │  ← label row (§33)
-  │ ┌───────────────────────────────────────────────────────────────┐ │
-  │ └───────────────────────────────────────────────────────────────┘ │
-  │                                                          [ Save ] │
-  │ Conclusion                                                        │
-  │ ┌───────────────────────────────────────────────────────────────┐ │
-  │ └───────────────────────────────────────────────────────────────┘ │
-  │                                                          [ Save ] │
+  ┌───────────────────────────────────────────────────────────────────┐
+  │ Senior React Engineer  (Open)          Status [ Scheduled  ▾ ]  ⋮ │  ← <h2> + VacancyStatusBadge
+  │ [React] [Senior] [Full Stack]                                     │  ← Badge neutral s
+  │ 🗓 Thu, Aug 27 2026                                                │
+  │ 🕐 13:00 · 60 min · Europe/Minsk (GMT+3)   [View vacancy] [Open in │
+  │ 👤 Pat Owner                                            calendar] │
+  ├───────────────────────────────────────────────────────────────────┤  ← edge to edge
+  │ Criteria                          │ From the candidate            │
+  │ ┌───────────────────────────────┐ │ ┌───────────────────────────┐ │
+  │ │ Type a criterion…             │ │ │ PDF  jane-doe-cv.pdf      │ │
+  │ └───────────────────────────────┘ │ │      180 KB               │ │
+  │ ▌English [ B2      ▾ ] ×          │ └───────────────────────────┘ │
+  │                                   │ [        Download         ]   │
+  │ Interview notes      Saved 14:32  │                               │
+  │ ┌───────────────────────────────┐ │ Candidate's note              │
+  │ │                               │ │ I'm available from September. │
+  │ └───────────────────────────────┘ │                               │
+  │                        [  Save  ] │ Applied as "Jane M. Doe"      │
+  │ Conclusion                        │                               │
+  │ ┌───────────────────────────────┐ │                               │
+  │ └───────────────────────────────┘ │                               │
+  │                        [  Save  ] │                               │
+  │ [ ▸ Rescheduled once · booked 12 Aug 2026, 09:14 ]                │  ← spans both
   └───────────────────────────────────────────────────────────────────┘
   ┌ .NET Engineer · 45 minutes · 3 Jul 2026 · Didn't pass          ⌄ ┐   ← collapsed
 ```
@@ -85,7 +85,10 @@ stops being a `Badge`, and [reversal 2](#the-cancelled-badge) gets its second of
   is [`CopyIcon`](../design-system/ledger.md) at 16px.
 - One `Card` per application, gap `--space-6`. The most recent is expanded; the rest collapse to a
   single summary row with a chevron.
-- **Every application `Card` passes `clip={false}`.** The status `Select` in its header and every
+- **Every application panel is `Card variant="panel"`** ([§66](../design-system/ledger.md)) —
+  `--radius-xl` over `--shadow-card-soft`, no border, which is the treatment prod gives its large
+  white sections and the one the two public screens take. *Revised by `blue-fixes`.*
+- **Every application panel passes `clip={false}`.** The status `Select` in its header and every
   criterion's value control drop a list into the card, and a `Card` clips to its radius by default.
   This is the second of the four surfaces [reversal 6](../design-system/README.md) named, after the
   candidates filter bar Phase 4 proved it on.
@@ -93,12 +96,111 @@ stops being a `Badge`, and [reversal 2](#the-cancelled-badge) gets its second of
   pair: that pair is one title and one trailing node in a single row, and this header carries the
   interview's facts and its two schedule actions *under* the title, with a badge and a status
   control beside it.
-- Read-only facts sit in the header; everything editable sits in the body, in the order the
-  interview happens: history and CV first, criteria during, notes throughout, conclusion at the end.
+- Read-only facts sit in the header; everything else sits in the body.
+
+- **The body is two columns, and the split is the whole idea of the screen: what the team writes
+  on the left, what the candidate gave us on the right.** *Revised by `blue-fixes`.* It was one
+  column in the order the interview happens — history and CV first, criteria during, notes
+  throughout, conclusion at the end — which is a defensible reading of a page nobody scrolls. This
+  is a page somebody scrolls **while talking to a person**, and in one column the CV is above the
+  field being typed into, which is to say off screen exactly when it is wanted. Beside it, it stays
+  in view for the length of the call.
+
+  | Column | Holds | Width |
+  |---|---|---|
+  | Left | `Criteria`, `Interview notes`, `Conclusion` | `minmax(0, 1.7fr)` |
+  | Right | `From the candidate` (the CV row and `Download`), `Candidate's note`, `Applied as "…"` | `minmax(240px, 1fr)` |
+
+  Not halves: the left holds three text editors and the right holds a file row. The rule between
+  them belongs to the **right** column (`border-left`), so it is as tall as the taller of the two
+  rather than as tall as its own content.
+
+- **The scheduling log spans both columns, at the bottom.** It is the one thing on the card the
+  split has no side for — it is neither the team's writing nor the candidate's material, it is what
+  has happened to the booking — and it is the widest content here: each entry is four facts on a
+  line with its timestamp pushed to the right edge, which in a 300px column wraps three times.
+
+- **`Applied as "…"` is at the foot of the right column**, not under the vacancy's title. It is a
+  fact about what the candidate sent, and it now sits with the rest of what they sent; beside the
+  interview's own facts it read as one of them.
+
+- **The panel pads its two regions rather than itself** — `Card padded={false}`, `16px 20px` on the
+  header and `20px` on the body. That is what lets the rule between them run the full width of the
+  card. A divider inset 16px at each end reads as a box drawn around the header; one that reaches
+  the edges reads as the card being in two parts, which is what it is.
+
+- **The vacancy's own status and its category labels sit under its name** — `VacancyStatusBadge`
+  (outlined) and `Badge status="neutral" size="s"` ([§59](../design-system/ledger.md)). Both are
+  read live rather than frozen at booking ([04 §API](04-candidate-card.md)): what the vacancy *is
+  now* is what a member needs before they act on the interview.
+
+- **The header states three facts as a list, one glyph per line** — when it is, how long it runs,
+  who is taking it (`CalendarIcon` · `TimeOutlineIcon` · `PersonOutlineIcon`,
+  [§67](../design-system/ledger.md), all three outline so the row reads as one family). They were
+  one dot-separated run at `--font-size-s` in `--text-tertiary`, and this is the page a team works
+  on **during** an interview: a run of three facts is hardest to read off a screen at exactly the
+  moment one of them is being asked out loud.
+
+  | Line | Reads |
+  |---|---|
+  | Calendar | `Thu 27 Aug 2026` — the date alone |
+  | Clock | `13:00` in `--text-primary`, then `· 60 min · Europe/Minsk (GMT+3)` in `--text-secondary` |
+  | Person | the interviewer's full name |
+
+  The clock line carries three things because they are **one** fact — when it starts, for how long,
+  on whose clock — and the two that qualify the first recede a level. The zone carries its offset:
+  a bare IANA id answers *which* zone and not *what time that is*, which is the whole reason a zone
+  is printed beside a time at all. It is computed for the interview's own instant, never for now,
+  because an interview booked in July and read in December is an hour out otherwise. The length
+  leaves the heading with them — stated once, in the list — and returns to the heading only when
+  the section is collapsed, where a summary is the whole point.
+
+- **The interview's own actions are in a kebab, beside the status control.** `Reschedule interview`
+  and `Cancel interview` were two buttons under the facts they change, which put a destructive
+  control in the reading order of the header and kept `Cancel interview` permanently on screen
+  beside a control somebody is using. A kebab is one deliberate press away from either — the same
+  shape every list row in the module uses — and it is drawn only while there is something in it,
+  because a menu whose every row is gone is a trigger that opens nothing. Both rows are absent once
+  the interview is behind or called off ([07 §14.65](07-manage-booking.md)).
+
+- **The header ends in the two places this interview goes**: `View vacancy` and `Open in calendar`,
+  bottom-right, pushed to the header's baseline so a two-line title does not drag them up with it.
+  `Open in calendar` is the primary, because during an interview it is what is most often reached
+  for — and pressing it says `Not implemented yet` rather than describing a navigation this product
+  cannot make ([03 §10.55](03-candidate-database.md)).
+
+- **The status control is labelled beside itself**, not above. `Select`'s own `label` is the form
+  geometry — indented, 10px above and 4px below — which is right in a column of fields and wrong in
+  a header row, where it would push the control off the line the kebab sits on.
+
+- **The criteria picker is always there**, directly under its heading at 260px, rather than behind
+  a `+ Add criteria` button that swapped itself for it. Recording a criterion is what the section
+  exists for on the one screen where it is being done live; one press away made the common case two
+  actions and left the section reading as a list with an editor bolted on.
 - `Interview notes` is the tallest thing on the page — `rows={12}` — because it is what the page is
   for. Blue's `TextArea` pins itself at a flat 100px (prod's one textarea is a comment box), so the
   field passes `style={{ height: 'auto' }}` and hands sizing back to `rows`. That is a documented
   prop doing what it says, not a divergence.
+
+### The CV
+
+*Revised by `blue-fixes`.* It was a line of text led by a 📄 with `View` and `Download` beside
+it. It is the ordinary attachment row now — extension tile, name, weight — which is the shape a
+file has in every mail client and tracker, so it is recognised before it is read, and the geometry
+is the design system's own (card surface, `--border-default`, `--radius-l`, a `--surface-sunken`
+tile).
+
+It sits under a **`From the candidate`** caption at the top of the body's right column, which is
+where the rest of what the candidate sent already is, and `Download` takes the full width of that
+column — it is the only action in the aside, under a row that already spans it, so a shrink-to-fit
+button would leave a ragged edge for no reason.
+
+Two things follow from that. **The emoji goes**: blue draws icons and never emoji, and it was
+decoration beside a name that already said what it was — the same call [05](05-board.design.md)
+made on the board card's `CV` mark. And **`View` stops being a button**: a file row that opens the
+file is the whole affordance, so the row *is* the link and `Download` is left beneath it as the one
+action a click cannot express. Hover is the app's row tint, not a blue edge — a 1.5px blue border
+is the focus state of a field, and borrowing it here would say *this input is focused*.
 
 ## Headings
 
@@ -108,17 +210,27 @@ The page has a real outline now, which is what replacing `SectionLabel` with hea
 | Level | What | Type |
 |---|---|---|
 | `<h1>` | The candidate's name | `PageTitle` — 16 → 20 → 24px with the viewport |
-| `<h2>` | Each application, `{vacancy} · {length}` | blue's headline-6: 16px, `--font-weight-medium`, -0.32px |
-| `<h3>` | `Candidate's note`, `Criteria` | `--font-size-s` at `--font-weight-medium`, `--text-primary` |
+| `<h2>` | Each application: the vacancy's title, and the vacancy's own status beside it | blue's headline-6: 16px, `--font-weight-medium`, -0.32px |
+| `<h3>` | `Criteria`, `From the candidate`, `Candidate's note` | `fieldLabelStyle` ([§74](../design-system/ledger.md)) — 12px regular, `--text-secondary`, indented 10px |
 
 The `<h2>` is exactly what `Card` paints its own titles with, so a panel that composes its header
 by hand still looks like one that did not. Meridian drew it in `--font-display` at 600 and -.2px,
 which is the same idea in a family the app no longer has.
 
-Blue's headline scale bottoms out at headline-6, so the `<h3>` is composed from blue's body tokens
-rather than a scale step: body-s at medium weight is what blue uses everywhere small text is
-emphatic — nav links, `Badge`, `Table`'s header — and `--text-primary` is what keeps it reading as a
-heading rather than as the secondary ink a `FieldLabel` takes.
+**The `<h3>` takes the ink of a field label, and that is deliberate.** *Revised by `blue-fixes`.*
+It was body-s at medium weight in `--text-primary` — blue's own treatment for small emphatic text,
+and the right answer to the question *what is one step below headline-6*. It is the wrong answer to
+the question this card actually asks. Two of the four captions in the body are not captions at all:
+`Interview notes` and `Conclusion` are `TextArea`'s own labels, drawn by the design system in
+`fieldLabelStyle`. Painting the other two a size up and a shade darker made a column of four labels
+read as two kinds of thing, and there is nothing a member can do differently about a `Criteria` that
+is darker than an `Interview notes`. They are one kind of thing — the name of the block under it —
+so they are painted once, and the 10px indent comes with it, so every caption on the screen starts
+where every field label starts.
+
+The *element* does not follow the paint. `FieldLabel` is a `<label>` and belongs to a control;
+`From the candidate` names a file row and `Candidate's note` names a paragraph, so these stay real
+`<h3>`s and only borrow the geometry.
 
 **Sentence case, not the uppercase Meridian drew.** Blue's only uppercase treatment anywhere is
 `PageTabs`; this is the call Phase 4 made for spec 03's column headers and group labels.
@@ -135,7 +247,8 @@ and the control that opens it stays a control.
            Select                                       TextInput
 ```
 
-**`Chip`, not `Badge`.** Blue's `Badge` is `ActivityBadge` — four status paints and no neutral — and
+**A sunken row, not `Chip` and not `Badge`.** *(Revised by `blue-fixes`.)* Blue's `Badge` is
+`ActivityBadge` — four status paints and no neutral — and
 a criterion is not a status. That is the same split [§32](../design-system/ledger.md) made from the
 other direction when it gave `Badge` two more hues for the application funnel: an application's
 status *is* a status and wanted more paints; a criterion is a chosen thing and wanted a different
@@ -221,26 +334,33 @@ Neither surface ever draws the same event twice: no action on this page raises b
 |---|---|---|---|
 | Back link | **`BackTo`** | `label`, **`href`** + `onClick` ([§56](../design-system/ledger.md)) | `candidate-back-link` |
 | Page header | `PageHeader` → `PageTitle` | `title`, `subtitle`, **`action`** | `page-title` |
+| Vacancy status | **`VacancyStatusBadge`** — `Badge outlined` | — | `application-vacancy-status-{applicationId}` |
+| Category labels | **`Badge status="neutral" size="s"`** ([§59](../design-system/ledger.md)) | — | `application-category-chip-{applicationId}-{categoryId}` |
+| Interview facts | `CalendarIcon` · `TimeOutlineIcon` · `PersonOutlineIcon` ([§67](../design-system/ledger.md)) | `aria-hidden` | `application-when-{id}` · `application-interviewer-{id}` |
 | Copy email | `IconButton` + **`CopyIcon`** | `label`, `size={28}` ([§10](../design-system/ledger.md), [§57](../design-system/ledger.md)) | `candidate-email-copy` |
 | Page actions | **`Popover`** | `label`, `items` *(one, `danger`)* | `candidate-actions` · `candidate-action-delete` |
 | Delete confirmation | **`ConfirmDialog`** | `busy`, **`closeOnAccept={false}`** ([§41](../design-system/ledger.md)) | `candidate-delete-dialog` · `candidate-delete-confirm` |
+| Applied as | native `<p>` | `--font-size-xs`, `--text-secondary` | `application-submitted-as-{applicationId}` |
 | Announcement · application | `InfoBanner` | `variant="success"`, `onDismiss`, `role="status"` | `card-status-toast` · `toast-interview-rescheduled` · `toast-interview-cancelled` |
 | Announcement · header | **`ToastHost` > `Toast`** | `tone`, `onDismiss` ([§54](../design-system/ledger.md)) | `toast-email-copied` · `toast-email-copy-failed` · `card-delete-failed` |
-| Application panel | `Card` | **`clip={false}`** | `application-section-{applicationId}` |
+| Application panel | `Card variant="panel"` ([§66](../design-system/ledger.md)) | **`clip={false}`**, **`padded={false}`** | `application-section-{applicationId}` |
 | Panel heading | native `<h2>` (+ `<button aria-expanded>` when collapsible) | — | `application-toggle-{applicationId}` |
 | Status | `Select` | `options`, `value` *(the option, not the id)* | `application-status-select-{applicationId}` |
 | Cancelled mark | `Badge` | `status="inactive"`, `aria-label` | `application-cancelled-{applicationId}` |
-| Reschedule / Cancel | `Button` / `Button` | default · **`variant="delete"`** | `application-reschedule-{id}` · `application-cancel-{id}` |
+| Interview actions | `Popover` | `label`, `items` with `danger` — `Reschedule interview` · `Cancel interview` | `application-actions-{id}` · `application-reschedule-{id}` · `application-cancel-{id}` |
+| Header actions | `Button` / `Button` | default · **`variant="primary"`** | `application-open-vacancy-{id}` · `application-calendar-{id}` |
 | History toggle | `Button` | `aria-expanded`, `aria-controls` | `application-history-toggle-{id}` |
-| History log | `Card` | `--surface-sunken` | `application-history-{id}` |
-| CV row | `Button` ×2 | **`as="a"`**, `href`, `download` | `card-cv-view` · `card-cv-download` |
-| Section caption | native `<h3>` | — | — |
-| Criterion chip | **`Chip`** | `trailing`, `onRemove`, `removeTestId` | `card-criterion-{criterionId}` |
+| History log | `Card` | `--surface-sunken`; the row spans both body columns | `application-history-{id}` |
+| CV row | an `<a>` attachment row — 1px `--border-default`, `--radius-l`, a 36px `--surface-sunken` extension tile, the name at `--font-size-s` medium over its weight at `--font-size-xs`; hover is `--color-row-hover` | `href` | `card-cv-view` · `card-cv-name` |
+| Download | `Button` | **`as="a"`**, `href`, `download`; full width of the aside | `card-cv-download` |
+| Section caption | native `<h3>` painted with **`fieldLabelStyle`** ([§74](../design-system/ledger.md)) | — | — |
+| Criterion row (editable) | sunken row — `--surface-sunken`, 1px `--border-subtle`, `--radius-s` — with `Select`/`TextInput` and a 24px `IconButton` | — | `card-criterion-{criterionId}` · `card-criterion-value-{criterionId}` · `card-criterion-remove-{criterionId}` |
+| Criterion label (read-only) | **`Badge status="neutral"`** ([§59](../design-system/ledger.md)) | — | `card-criterion-{criterionId}` |
 | Criterion value · scale/boolean | `Select` | `options` | `card-criterion-value-{criterionId}` |
 | Criterion value · number/text | `TextInput` | `type`, `wrapperStyle` | `card-criterion-value-{criterionId}` |
 | Add criteria | **`Select`** | `isSearchable`, `allowCreate` | `card-criteria-autocomplete` |
 | Notes / conclusion | `TextArea` | `label`, `rows`, **`trailing`** | `card-notes-input` · `card-conclusion-input` |
-| Save | `Button` | — | `card-notes-save` · `card-conclusion-save` |
+| Save | `Button` | **`variant="primary"`**, `disabled` while there is nothing to save, `minWidth: 96` | `card-notes-save` · `card-conclusion-save` |
 | Saved indicator | native `<span>` in `TextArea trailing` | — | `card-notes-saved-at` |
 | Save failure | `InfoBanner` | `variant="error"`, `role="alert"` | `card-save-error` |
 | Loading | `Preloader` | — | `card-loading` |
@@ -248,7 +368,13 @@ Neither surface ever draws the same event twice: no action on this page raises b
 | Not found | `Card` | — | `candidate-not-found` |
 
 Every `Button` on this screen is blue's **default** — the neutral outlined one — except Cancel
-interview, which is `delete`. Meridian's `ghost`, `secondary` and `size="sm"` are gone: blue's
+interview, which is `delete`, and the two **`Save`**s, which are `primary`. *Revised by
+`blue-fixes`.* `Save` was neutral, which put the one button on the working half of the card in the
+same paint as `View vacancy` up in the header and left a member who does not trust an autosave with
+nothing on screen that looks like the thing that saves. It is also **disabled while there is nothing
+to save**, which states a rule the editor already had: `useAutosave` refuses a write for text the
+server already holds, so an always-lit `Save` was promising work that would not happen. A failed
+save leaves the editor dirty, so `Retry` is not the only way back. Meridian's `ghost`, `secondary` and `size="sm"` are gone: blue's
 `Button` has three paints and one height, and the quietest of the three is the neutral outline.
 
 `Cancel interview` takes `delete` here where the same pair on My interviews
@@ -301,7 +427,7 @@ ticking would be motion in the corner of the eye during a call.
 | **Notes · saving** | indicator reads "Saving…" in the label row's `--text-secondary`; the field stays fully editable |
 | **Notes · saved** | indicator reads the time, no colour change, no animation |
 | **Notes · failed** | `InfoBanner variant="error"` **below** the field with an inline retry; the field keeps its text and its focus |
-| **Criterion chip** | `Chip` — white, 1px `--border-default`, a 7px `--color-blue` left edge, `--radius-l`; the value control in `trailing`, the cross trailing that |
+| **Criterion row** | The sunken box ([§59](../design-system/ledger.md) settled the read-only half; this is the editable one): `--surface-sunken`, 1px `--border-subtle`, `--radius-s`, `6px 6px 6px 10px`. It was `Chip` until `blue-fixes` — and `Chip` is the token react-select draws for a value chosen *inside a field*, whose 7px `--color-blue` edge marks a selection. This is a small form recording a fact, and the blue edge put the loudest mark on the card on the quietest thing on it. Read-only, with no form left, it is the neutral `Badge` the database row already draws the same assessment with |
 | **Criterion · saving** | the value control is `aria-busy`; no spinner, no layout shift |
 | **Status · changed** | `InfoBanner variant="success"` under `PageHeader`; the `Select` does not animate |
 | **Collapsed application** | header row only, the same white `Card`; chevron rotating `--duration-hover` |
@@ -355,8 +481,8 @@ card floating inside a white card.
 | Width | Layout |
 |---|---|
 | ≥ 1024px | As drawn; criteria chips wrap in a flex row |
-| 768–1023px | The header's status control moves below the title |
-| < 768px | Criteria chips stack full width; textareas keep their row counts; the CV actions become full-width buttons |
+| 768–1023px | The header's status control moves below the title, **and the body's two columns become one** — the rule between them becomes a rule above the second, the same division turned through 90° rather than dropped |
+| < 768px | Criteria chips stack full width; textareas keep their row counts |
 | < 600px | Reschedule and Cancel stack full width, Cancel lower |
 
 Those four are media queries and therefore live in `globals.css` rather than inline, which is the
@@ -408,6 +534,8 @@ index.
 | `TextInput` cannot size its own box | [§35](../design-system/ledger.md) |
 | `Preloader` and `InfoBanner` forward nothing | [§23](../design-system/ledger.md) / [§6](../design-system/ledger.md) / [§24](../design-system/ledger.md) |
 | The icon set has no copy mark | [§57](../design-system/ledger.md) — `CopyIcon` |
+| A screen cannot reach the field-label geometry to paint a caption with it | [§74](../design-system/ledger.md) — `fieldLabelStyle` exported |
+| `Popover`'s panel clipped [§62](../design-system/ledger.md)'s bubble away entirely | Not a divergence — an `overflow: hidden` that was never blue's; see the ledger's note on §62 |
 | `BackTo` is a link with no destination | [§56](../design-system/ledger.md) — landed in desktop 8 |
 | No `Toast`, for the header's own outcomes | [§54](../design-system/ledger.md) — landed in desktop 5; the application-grain announcement stays in reversal 4's slot |
 | ~~`Badge` cannot host an interactive child~~ | Not composed in the app after all — `Chip` is the component, [§37](../design-system/ledger.md) is the slot |
@@ -415,4 +543,4 @@ index.
 | ~~`Skeleton`~~ | `Preloader`, with the announcement beside it |
 | ~~`SectionLabel`~~ | Headings — see [Headings](#headings) |
 | ~~`Combobox`~~ | `Select isSearchable allowCreate` |
-| ~~An outline `PersonIcon`~~ | Nothing draws one — the application header's facts are a dot-separated line, not a column of icon-and-value rows, so the interviewer's name has no glyph beside it to be missing |
+| ~~An outline `PersonIcon`~~ | **Reopened and closed by `blue-fixes` as [§67](../design-system/ledger.md).** This read: *nothing draws one — the header's facts are a dot-separated line, not a column of icon-and-value rows.* They are that column now, and the glyph the row needed was exactly the one this said nothing needed |

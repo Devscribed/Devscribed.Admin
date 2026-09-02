@@ -194,14 +194,27 @@ test.describe('Vacancies', () => {
     await expect(blocked).toHaveAttribute('aria-disabled', 'true');
 
     // Reachable by keyboard, and the reason is its accessible description. The menu opens
-    // on Edit and the three rows are Edit · Close · Delete, so Delete is two down.
+    // on its first row and the four are Open booking page · Edit · Close · Delete, so
+    // Delete is three down.
+    await page.keyboard.press('ArrowDown');
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('ArrowDown');
     await expect(blocked).toBeFocused();
     const tooltip = page.getByTestId('vacancy-delete-guard-message');
-    await expect(tooltip).toBeVisible();
     await expect(tooltip).toHaveText('Close this vacancy instead — it has candidates');
     expect(await blocked.getAttribute('aria-describedby')).toBe(await tooltip.getAttribute('id'));
+
+    /*
+      And it is on the screen. The assertion above is about the node `aria-describedby`
+      resolves to, which is visually hidden on purpose — a 1x1 clipped span, which is
+      "visible" as far as this runner is concerned. It stayed green for the whole time
+      `Popover`'s panel was clipping the drawn bubble out of existence (ledger, note on
+      §62), so the bubble is now asserted as itself: focus raises it, and it says the
+      same sentence the hidden copy does.
+    */
+    const bubble = page.getByRole('tooltip');
+    await expect(bubble).toBeVisible();
+    await expect(bubble).toHaveText('Close this vacancy instead — it has candidates');
 
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('vacancy-delete-confirm')).toBeHidden();

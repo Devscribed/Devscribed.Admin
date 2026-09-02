@@ -98,7 +98,6 @@ describe('Hiring — the board', () => {
     name: string;
     startUtc: string;
     position: number;
-    hasCv: boolean;
     isCancelled: boolean;
     hasConclusion: boolean;
   }
@@ -159,7 +158,6 @@ describe('Hiring — the board', () => {
       applicationId: first.applicationId,
       candidateId: first.candidateId,
       name: 'Cand0 Doe',
-      hasCv: true,
       isCancelled: false,
       hasConclusion: false,
     });

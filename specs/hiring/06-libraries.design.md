@@ -106,7 +106,10 @@ sharing mechanics.
 
 - `Modal style={{ width: 520 }}`, the width the vacancy dialog already uses. Actions are a
   `FormActions align="full"` row inside the body — blue's `Modal` has no `actions` slot, and does
-  not need one.
+  not need one. *`blue-fixes` fixed what `full` draws* ([§63](../design-system/ledger.md)): it
+  widened the row to 100% and stopped the slots stretching but never said where they go, so a flex
+  row packed `Cancel` and the primary against the **left** edge of a 520px dialog. They end right,
+  as blue's own `full` call site always implied.
 - Field labels are blue's own `FieldLabel`, in sentence case.
 - The type hint explains *why* the choice matters rather than restating the four options — it is
   the only place a member learns that a scale is what makes `at least` possible.
@@ -239,7 +242,7 @@ list follows.
 | **Loading** | Centred `Preloader`, announcement beside it |
 | **Refetch after an action** | Rows dim in place — `Table busy`, `aria-busy` (§34) |
 | **Load failure** | `InfoBanner variant="error"` with a retry `Button` inside, in the table's place |
-| **Delete · blocked** | Menu row `aria-disabled`, still focusable; the reason drawn under the label and wired as its `aria-describedby` (§22) |
+| **Delete · blocked** | Menu row `aria-disabled`, still focusable; the reason in a `Tooltip` bubble on hover and focus ([§62](../design-system/ledger.md)) over a hidden copy that is the row's permanent `aria-describedby` target. *The bubble was clipped away by an `overflow: hidden` on `Popover`'s panel until `blue-fixes` removed it — see the ledger's note on §62.* |
 | **Archived row** | content at `opacity: .7`, sorted last, "Archived" badge, Archive replaced by Restore; the Actions cell never fades |
 | **Value chip · dragging** | `--shadow-popover`, siblings shift |
 | **Value chip · held (keyboard)** | `1.5px solid --action-primary` outline, plus the same shadow |
@@ -269,7 +272,9 @@ on the screen to say the same thing better.
 
 ## Interactions
 
-- **Rename** is an inline `Modal` with the current value focused, so overwriting is immediate.
+- **Rename** is an inline `Modal` with the current value focused, so overwriting is immediate. It
+  stays focused while typing: `blue-fixes` found the dialog's focus effect re-running on every
+  keystroke and moving the caret to the close button ([§61](../design-system/ledger.md)).
 - **Delete a category** confirms with its usage count interpolated. There is no undo, and the copy
   does not pretend otherwise.
 - **Delete a criterion** is disabled in the menu once assessed, with the reason in the row; on an

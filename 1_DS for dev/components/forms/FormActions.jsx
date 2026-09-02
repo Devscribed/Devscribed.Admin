@@ -8,7 +8,22 @@ import React from 'react';
 export function FormActions({ children, leading, maxWidth = 240, align = 'right', gap = 10 }) {
   const full = align === 'full' || !!leading;
   return (
-    <div style={{ display: 'flex', width: '100%', maxWidth: full ? '100%' : maxWidth, marginLeft: align === 'left' ? 0 : 'auto', gap }}>
+    <div
+      style={{
+        display: 'flex', width: '100%', maxWidth: full ? '100%' : maxWidth,
+        marginLeft: align === 'left' ? 0 : 'auto', gap,
+        /* §63 — the row ends at the right edge.
+           `full` widens the box to 100% and stops the slots stretching, and with nothing
+           saying where they go a flex row packs them at the start: every dialog in the app
+           drew `Cancel` and its primary against the *left* edge of a 520px modal. That is
+           not what `full` was measured to mean — blue's own `full` call site pushes a
+           destructive button left with `marginRight: auto`, which only reads as "pushed
+           left" if everything beside it is otherwise right. `align="left"` is still the way
+           to ask for the other thing, and `right` already ended right by way of the 240 cap
+           plus `margin-left: auto`, so nothing that was correct moves. */
+        justifyContent: align === 'left' ? 'flex-start' : 'flex-end',
+      }}
+    >
       {leading && <div style={{ marginRight: 'auto' }}>{leading}</div>}
       {/* `display: grid` stretches the child to fill the slot, which is what Button's own
           `width: '100%'` did for it before §1 removed that. */}

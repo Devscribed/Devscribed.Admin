@@ -88,8 +88,54 @@ export function SlotPicker({
 
   return (
     <>
+      {/*
+        The zone and the clock format come **first**, above the two panels. They are the frame
+        every number below is read in — a slot list is meaningless until you know whose clock it
+        is on — and a control that qualifies what is above it has to be found after the reader
+        has already misread it once. The design puts them here; so does every booking product.
+      */}
+      <div className="booking-controls">
+        <div className="booking-zone">
+          <Select
+            label="All times in"
+            isSearchable
+            options={timeZoneOptions(timeZone)}
+            value={timeZone}
+            onChange={(option) => onTimeZoneChange(valueOf(option))}
+            aria-label="Time zone"
+            data-testid={testIds.timeZoneSelect}
+          />
+        </div>
+        <div className="booking-format">
+          {/*
+            One control with two answers, not two buttons: `ToggleButton` is a `radiogroup`
+            of two `radio` segments (ledger §31). Both values stay legible, which is what a
+            format control needs — a switch labelled only by its current state cannot say what
+            pressing it would do.
+
+            The root's `margin-bottom: 20px` is prod's, and it belongs to a stacked form rather
+            than to a control sharing a row with a zone picker.
+
+            The wrapper carries the 160px: §49 restored the control's own block behaviour, but a
+            block at `width: 100%` inside a **shrink-to-fit flex item** is 100% of nothing, and
+            the two segments collapsed on top of each other. The width has to be stated by
+            whatever the flex row is measuring, which is this.
+          */}
+          <ToggleButton
+            value1="24h"
+            value2="12h"
+            selectedValue={hour12 ? '12h' : '24h'}
+            onValue1Click={() => onFormatChange(false)}
+            onValue2Click={() => onFormatChange(true)}
+            aria-label="Time format"
+            data-testid={testIds.timeFormatToggle}
+            style={{ marginBottom: 0 }}
+          />
+        </div>
+      </div>
+
       <div className="booking-panels">
-        <Card title="Date">
+        <Card variant="panel" title="Date">
           {availability.status === 'failed' ? (
             <Failure
               testId="calendar-error"
@@ -124,7 +170,7 @@ export function SlotPicker({
           )}
         </Card>
 
-        <Card title="Time">
+        <Card variant="panel" title="Time">
           <SlotList
             status={availability.status}
             date={availability.selectedDate}
@@ -138,39 +184,6 @@ export function SlotPicker({
         </Card>
       </div>
 
-      <div className="booking-controls">
-        <div className="booking-zone">
-          <Select
-            isSearchable
-            options={timeZoneOptions(timeZone)}
-            value={timeZone}
-            onChange={(option) => onTimeZoneChange(valueOf(option))}
-            aria-label="Time zone"
-            data-testid={testIds.timeZoneSelect}
-          />
-        </div>
-        <div className="booking-format">
-          {/*
-            One control with two answers, not two buttons: `ToggleButton` is a `radiogroup`
-            of two `radio` segments (ledger §31). Both values stay legible, which is what a
-            format control needs — a switch labelled only by its current state cannot say what
-            pressing it would do.
-
-            The root's `margin-bottom: 20px` is prod's, and it belongs to a stacked form rather
-            than to a control sharing a row with a zone picker.
-          */}
-          <ToggleButton
-            value1="24h"
-            value2="12h"
-            selectedValue={hour12 ? '12h' : '24h'}
-            onValue1Click={() => onFormatChange(false)}
-            onValue2Click={() => onFormatChange(true)}
-            aria-label="Time format"
-            data-testid={testIds.timeFormatToggle}
-            style={{ marginBottom: 0 }}
-          />
-        </div>
-      </div>
     </>
   );
 }
@@ -236,10 +249,14 @@ export function SlotList({
         >
           {date ? formatLongDate(date) : ' '}
         </div>
-        <div
-          data-testid="slot-list-timezone"
-          style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}
-        >
+        {/*
+          Present to a reader, absent to everything else. The zone is named once on the page,
+          by the labelled control above the panels — `All times in Europe/Minsk` — and printing
+          it again under the date is the same sentence twice, eight inches apart. What it is
+          still needed for is the announcement: a slot list read out of context has to say whose
+          clock the times are on.
+        */}
+        <div data-testid="slot-list-timezone" style={SR_ONLY}>
           All times in {timeZone}
         </div>
       </div>
@@ -278,17 +295,17 @@ export function SlotList({
                 key={slot}
                 data-slot={slot}
                 data-testid={`slot-option-${slot}`}
-                aria-pressed={chosen}
                 // The name carries the time in the format on screen, plus the zone it
                 // is expressed in — a bare "14:00" means nothing on its own.
                 aria-label={`${label}, ${timeZone}`}
                 onClick={() => onSelect(slot)}
-                // Chosen is blue's own primary fill, the same solid `--color-blue` the
-                // Calendar paints its selected day with — one answer to "this is the one you
-                // picked" across both halves of the picker, rather than a style object here
-                // and a component treatment there.
-                variant={chosen ? 'primary' : undefined}
-                style={{ fontVariantNumeric: 'tabular-nums' }}
+                // `pressed`, not `primary` (ledger §71). A solid blue chip is the paint of
+                // the page's primary action, and `Book` — a few rows below — is that: two
+                // solid blue buttons, one of which submits. The chosen slot takes the 12%
+                // tint the Calendar's selected day takes (§72), so the two halves of the
+                // picker answer "this is the one you picked" the same way.
+                pressed={chosen}
+                style={{ minWidth: 92, fontVariantNumeric: 'tabular-nums' }}
               >
                 {label}
               </Button>
@@ -319,3 +336,13 @@ export function Failure({
     </div>
   );
 }
+
+/** Present to a screen reader, absent to everything else. */
+const SR_ONLY = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  whiteSpace: 'nowrap',
+} as const;

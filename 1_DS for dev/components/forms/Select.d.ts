@@ -15,6 +15,8 @@ export interface SelectOption {
 
 export interface SelectProps extends Omit<HTMLAttributes<HTMLElement>, 'onChange' | 'value' | 'defaultValue'> {
   label?: string;
+  /** §64 — draws the label's trailing asterisk and sets `aria-required` on the combobox. */
+  required?: boolean;
   /** Defaults to react-select's own `Select...`. */
   placeholder?: string;
   /** A single option, or an array when `isMulti`. */

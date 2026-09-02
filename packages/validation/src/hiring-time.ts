@@ -346,13 +346,50 @@ export function formatShortDate(instant: Date, timeZone: string): string {
 }
 
 /**
- * `Tue 26 Aug 2026, 14:00` — the interview line on an expanded application section
- * (04 §Screens). Internal screens are 24-hour, so there is no format flag here; the
- * public booking page owns the only 12-hour rendering in the product.
+ * `Tue 26 Aug 2026` — the date on its own, with the weekday that makes it readable at a
+ * glance during an interview.
+ *
+ * Split out of `formatShortWhen` when the candidate card's header became a **list of three
+ * facts** rather than one run: the date is its own line there, under its own glyph, and the
+ * time reads on the next one beside the length and the zone (04 design §Layout).
+ */
+export function formatShortWeekdayDate(instant: Date, timeZone: string): string {
+  const weekday = WEEKDAYS[zonedParts(instant, timeZone).weekday].slice(0, 3);
+  return `${weekday} ${formatShortDate(instant, timeZone)}`;
+}
+
+/**
+ * `Tue 26 Aug 2026, 14:00` — one line carrying both, for a collapsed application summary
+ * and for anywhere the two facts have to travel together. Internal screens are 24-hour, so
+ * there is no format flag here; the public booking page owns the only 12-hour rendering in
+ * the product.
  */
 export function formatShortWhen(instant: Date, timeZone: string): string {
-  const weekday = WEEKDAYS[zonedParts(instant, timeZone).weekday].slice(0, 3);
-  return `${weekday} ${formatShortDate(instant, timeZone)}, ${formatSlotTime(instant, timeZone)}`;
+  return `${formatShortWeekdayDate(instant, timeZone)}, ${formatSlotTime(instant, timeZone)}`;
+}
+
+/**
+ * `Europe/Minsk (GMT+3)` — a zone named the way a person reads one.
+ *
+ * An IANA id alone answers *which* zone and not *what time that is*, and the card states a
+ * time in it: `13:00 · 60 min · Europe/Minsk` leaves a reader in another country to work out
+ * the difference themselves. The offset is the whole reason the zone is printed at all.
+ *
+ * Computed for **the instant**, never for now, because an offset is not a property of a zone:
+ * an interview booked in July and read in December is an hour out if the clock the reader is
+ * shown is today's.
+ */
+export function formatZoneWithOffset(instant: Date, timeZone: string): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', { timeZone, timeZoneName: 'shortOffset' })
+      .formatToParts(instant);
+    const offset = parts.find((part) => part.type === 'timeZoneName')?.value;
+    return offset ? `${timeZone} (${offset})` : timeZone;
+  } catch {
+    // An engine without `shortOffset`, or a zone it does not know: the id alone is still
+    // true, and a header is not the place to throw.
+    return timeZone;
+  }
 }
 
 /**

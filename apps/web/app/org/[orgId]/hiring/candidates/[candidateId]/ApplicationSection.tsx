@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   APPLICATION_STATUS_LABELS,
@@ -9,7 +10,10 @@ import {
   cancelledTooltip,
   formatHistoryDate,
   formatShortDate,
+  formatShortWeekdayDate,
   formatShortWhen,
+  formatSlotTime,
+  formatZoneWithOffset,
   isLiveBooking,
   mergeTimeline,
   scheduleEntryAriaLabel,
@@ -18,10 +22,20 @@ import {
   type ApplicationStatus,
   type TimelineEntry,
 } from '@devscribed/validation';
-import { Badge, Button, Card, Select } from '@/ds';
+import {
+  Badge,
+  Button,
+  CalendarIcon,
+  Card,
+  PersonOutlineIcon,
+  Popover,
+  Select,
+  TimeOutlineIcon,
+} from '@/ds';
 import { CancelInterviewDialog } from '@/hiring/CancelInterviewDialog';
-import { formatDuration } from '@/hiring/format';
+import { formatDuration, formatFileSize } from '@/hiring/format';
 import { RescheduleDialog } from '@/hiring/RescheduleDialog';
+import { VacancyStatusBadge } from '@/hiring/StatusBadge';
 import { valueOf } from '@/hiring/select';
 import type { CardApplication } from '@/hiring/types';
 import { SectionHeading } from './SectionHeading';
@@ -47,6 +61,7 @@ export function ApplicationSection({
   onToggle,
   onStatusChange,
   onScheduleChange,
+  onOpenCalendar,
   criteria,
   children,
 }: {
@@ -73,11 +88,14 @@ export function ApplicationSection({
    * screen may reload the notes somebody is still typing.
    */
   onScheduleChange: (application: CardApplication, outcome: 'rescheduled' | 'cancelled') => void;
+  /** Raises the toast that says the calendar link does not exist yet (03 §10.55). */
+  onOpenCalendar: () => void;
   /** The criteria section, built by the page so it can share the library it fetched. */
   criteria: ReactNode;
   /** The editors, built by the page so the save closures stay in one place. */
   children: ReactNode;
 }) {
+  const router = useRouter();
   const section = useRef<HTMLDivElement>(null);
   const [rescheduling, setRescheduling] = useState(Boolean(openReschedule));
   const [cancelling, setCancelling] = useState(false);
@@ -108,6 +126,17 @@ export function ApplicationSection({
     new Date(),
   );
 
+  /*
+   * Two records, one list, merged here and only here — a CV version is not an event, and
+   * folding it into the log would have put a filename and a size in a row that has no place
+   * for either (07 §11.52). Read up here so the layout can ask whether there is anything to
+   * draw before it spends a grid row on the answer.
+   */
+  const timeline = mergeTimeline(application.scheduleEvents, application.cvVersions, {
+    submittedName: application.submittedName,
+    timeZone: application.bookedTimeZone,
+  });
+
   return (
     <div
       ref={section}
@@ -119,82 +148,97 @@ export function ApplicationSection({
         and the criteria value controls further down both drop a list into the card, and
         a clipped one is cut off at its edge.
       */}
-      <Card clip={false}>
-        <div className="card-section-head">
+      <Card variant="panel" clip={false} padded={false}>
+        {/*
+          The header pads itself so the rule under it can reach both edges of the card —
+          see `.card-section-head` in globals.css.
+        */}
+        <div className={`card-section-head${expanded ? ' card-section-head-divided' : ''}`}>
           <div style={{ minWidth: 0, flex: 1 }}>
             <Heading
               application={application}
-              minutes={minutes}
               expanded={expanded}
               collapsible={collapsible}
               onToggle={onToggle}
               summary={
-                expanded ? null : `${formatShortDate(start, viewerTimeZone)} · ${statusLabel}`
+                expanded
+                  ? null
+                  : `${formatDuration(minutes)} · ${formatShortDate(start, viewerTimeZone)} · ${statusLabel}`
               }
             />
 
             {expanded && (
               <>
-                <div
-                  data-testid={`application-when-${application.id}`}
-                  style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-tertiary)' }}
-                >
-                  {formatShortWhen(start, viewerTimeZone)} {viewerTimeZone} ·{' '}
-                  <span data-testid={`application-interviewer-${application.id}`}>
-                    {application.interviewer.fullName}
-                  </span>
-                  {/* The zone they booked in, when it is not the one being read in —
-                      it is what their invite says and what they agreed to. */}
-                  {bookedElsewhere && (
-                    <span style={{ color: 'var(--text-secondary)' }}>
-                      {' · booked '}
-                      {formatShortWhen(start, application.bookedTimeZone)}{' '}
-                      {application.bookedTimeZone}
-                    </span>
-                  )}
-                </div>
-
-                {application.submittedName !== candidateName && (
-                  <p
-                    data-testid={`application-submitted-as-${application.id}`}
-                    style={{ margin: '2px 0 0', fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}
-                  >
-                    Applied as &ldquo;{application.submittedName}&rdquo;
-                  </p>
+                {/* The vacancy's labels, under its name — the same neutral pill the list
+                    and the vacancy page draw them with (ledger §59). */}
+                {application.vacancy.categories.length > 0 && (
+                  <div className="application-categories">
+                    {application.vacancy.categories.map((category) => (
+                      <Badge
+                        key={category.id}
+                        status="neutral"
+                        size="s"
+                        data-testid={`application-category-chip-${application.id}-${category.id}`}
+                      >
+                        {category.name}
+                      </Badge>
+                    ))}
+                  </div>
                 )}
 
                 {/*
-                  Beside the interview facts they change and above the history they
-                  write — never inside the notes area, so a destructive control is never
-                  adjacent to a field that autosaves (07 §08.39, 07 design §UI Notes).
+                  One fact per line, each led by its own glyph: the three things asked out
+                  loud during an interview — when it is, how long it runs, who is taking it
+                  — read as a list rather than as a dot-separated run. During the interview
+                  is exactly when a run of three facts is hardest to read off a screen.
                 */}
-                {actionable && (
-                  <div className="application-schedule-actions">
-                    <Button
-                      onClick={() => setRescheduling(true)}
-                      data-testid={`application-reschedule-${application.id}`}
-                    >
-                      {HIRING_MESSAGES.manage.rescheduleAction}
-                    </Button>
-                    {/*
-                      `delete` here, unlike the same pair on My interviews, which takes the
-                      neutral outline for both: this is one interview under its own heading,
-                      not a fill repeated down a table of them, and calling an interview off
-                      is the one action on this page that cannot be undone.
-                    */}
-                    <Button
-                      variant="delete"
-                      onClick={() => setCancelling(true)}
-                      data-testid={`application-cancel-${application.id}`}
-                    >
-                      {HIRING_MESSAGES.manage.cancelActionTeam}
-                    </Button>
-                  </div>
-                )}
+                <div className="application-meta">
+                  {/* The date, alone on its line. */}
+                  <p
+                    className="application-meta-row"
+                    data-testid={`application-when-${application.id}`}
+                  >
+                    <CalendarIcon aria-hidden width="18" height="18" />
+                    <span>{formatShortWeekdayDate(start, viewerTimeZone)}</span>
+                  </p>
+                  {/*
+                    The clock, the length and the zone read as one fact — *when it starts,
+                    for how long, on whose clock* — so they share a line with the glyph that
+                    means time. The zone carries its offset, because a bare IANA id answers
+                    which zone and not what time that is.
+                  */}
+                  <p className="application-meta-row">
+                    <TimeOutlineIcon aria-hidden width="18" height="18" />
+                    <span>
+                      {formatSlotTime(start, viewerTimeZone)}
+                      <span className="application-meta-quiet">
+                        {` · ${minutes} min · ${formatZoneWithOffset(start, viewerTimeZone)}`}
+                      </span>
+                      {/* The zone they booked in, when it is not the one being read in —
+                          it is what their invite says and what they agreed to. */}
+                      {bookedElsewhere && (
+                        <span className="application-meta-quiet">
+                          {` · booked ${formatShortWhen(start, application.bookedTimeZone)} `}
+                          {formatZoneWithOffset(start, application.bookedTimeZone)}
+                        </span>
+                      )}
+                    </span>
+                  </p>
+                  <p
+                    className="application-meta-row"
+                    data-testid={`application-interviewer-${application.id}`}
+                  >
+                    <PersonOutlineIcon aria-hidden width="18" height="18" />
+                    <span>{application.interviewer.fullName}</span>
+                  </p>
+                </div>
+
               </>
             )}
           </div>
 
+          {/* The header's right-hand column: what this interview *is*, over where it goes. */}
+          <div className="card-section-aside">
           <div className="card-section-status">
             {/*
               Names who cancelled and when (04 §03.11). The mark says the interview did not
@@ -221,6 +265,63 @@ export function ApplicationSection({
               </Badge>
             )}
             {expanded && <StatusSelect application={application} onChange={onStatusChange} />}
+            {/*
+              The interview's own actions, in the kebab every other list row in the module
+              uses. They were two buttons under the facts they change — which put a
+              destructive control in the reading order of the header, and put `Cancel
+              interview` permanently on screen beside a status control somebody is using.
+              A kebab is one deliberate press away from either (04 design §Layout).
+
+              Rendered only while there is something in it: a menu whose every row is gone
+              is a trigger that opens nothing.
+            */}
+            {expanded && actionable && (
+              <Popover
+                label={HIRING_MESSAGES.manage.interviewActions}
+                data-testid={`application-actions-${application.id}`}
+                items={[
+                  {
+                    key: 'reschedule',
+                    label: HIRING_MESSAGES.manage.rescheduleAction,
+                    testId: `application-reschedule-${application.id}`,
+                    onSelect: () => setRescheduling(true),
+                  },
+                  {
+                    key: 'cancel',
+                    label: HIRING_MESSAGES.manage.cancelActionTeam,
+                    testId: `application-cancel-${application.id}`,
+                    // The one action on this page that cannot be undone.
+                    danger: true,
+                    onSelect: () => setCancelling(true),
+                  },
+                ]}
+              />
+            )}
+          </div>
+
+          {/*
+            Where the header ends: the two places this interview goes. `View vacancy` is
+            the record it belongs to; `Open in calendar` is the primary because during an
+            interview it is the thing most often reached for — and it is honest about not
+            existing yet (03 §10.55), rather than describing a navigation it cannot make.
+          */}
+          {expanded && (
+            <div className="application-header-actions">
+              <Button
+                onClick={() => router.push(`/org/${orgId}/hiring/vacancies/${application.vacancy.id}`)}
+                data-testid={`application-open-vacancy-${application.id}`}
+              >
+                {HIRING_MESSAGES.manage.viewVacancyAction}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={onOpenCalendar}
+                data-testid={`application-calendar-${application.id}`}
+              >
+                {HIRING_MESSAGES.manage.openInCalendarAction}
+              </Button>
+            </div>
+          )}
           </div>
         </div>
 
@@ -265,43 +366,69 @@ export function ApplicationSection({
 
         {expanded && (
           <div className="card-section-body">
-            <SchedulingHistory
-              applicationId={application.id}
-              /*
-               * Two records, one list, merged here and only here — a CV version is not
-               * an event, and folding it into the log would have put a filename and a
-               * size in a row that has no place for either (07 §11.52).
-               */
-              entries={mergeTimeline(application.scheduleEvents, application.cvVersions, {
-                submittedName: application.submittedName,
-                timeZone: application.bookedTimeZone,
-              })}
-              viewerTimeZone={viewerTimeZone}
-            />
+            {/* Everything the team writes during the interview. */}
+            <div className="card-section-main">
+              {criteria}
 
-            <CvRow orgId={orgId} application={application} />
+              {children}
+            </div>
 
-            {application.note && (
+            {/* Everything the candidate sent, in the order it is asked for. */}
+            <div className="card-section-side">
               <div>
-                <SectionHeading>Candidate&rsquo;s note</SectionHeading>
+                <SectionHeading>From the candidate</SectionHeading>
+                <CvRow orgId={orgId} application={application} />
+              </div>
+
+              {application.note && (
+                <div>
+                  <SectionHeading>Candidate&rsquo;s note</SectionHeading>
+                  <p
+                    data-testid={`application-note-${application.id}`}
+                    style={{
+                      margin: 'var(--space-3) 0 0',
+                      whiteSpace: 'pre-wrap',
+                      fontSize: 'var(--font-size-s)',
+                      lineHeight: '22px',
+                      color: 'var(--text-primary)',
+                    }}
+                  >
+                    {application.note}
+                  </p>
+                </div>
+              )}
+
+              {/*
+                The name on the application, when it is not the name of the record it was
+                filed under. It was in the header, beside the vacancy's own title, where it
+                read as a fact about the interview; it is a fact about what they sent, so it
+                sits at the bottom of what they sent.
+              */}
+              {application.submittedName !== candidateName && (
                 <p
-                  data-testid={`application-note-${application.id}`}
-                  style={{
-                    margin: 'var(--space-3) 0 0',
-                    whiteSpace: 'pre-wrap',
-                    fontSize: 'var(--font-size-base)',
-                    lineHeight: 'var(--line-height-base)',
-                    color: 'var(--text-tertiary)',
-                  }}
+                  className="application-submitted-as"
+                  data-testid={`application-submitted-as-${application.id}`}
                 >
-                  {application.note}
+                  Applied as &ldquo;{application.submittedName}&rdquo;
                 </p>
+              )}
+            </div>
+
+            {/*
+              The log spans both columns — it is neither the team's writing nor the
+              candidate's material — and the row is not drawn at all when there is nothing
+              in it. `SchedulingHistory` already returns null on an empty timeline; without
+              this the grid would still spend a row's gap on the nothing it returned.
+            */}
+            {timeline.length > 0 && (
+              <div className="card-section-log">
+                <SchedulingHistory
+                  applicationId={application.id}
+                  entries={timeline}
+                  viewerTimeZone={viewerTimeZone}
+                />
               </div>
             )}
-
-            {criteria}
-
-            {children}
           </div>
         )}
       </Card>
@@ -328,14 +455,12 @@ export function ApplicationSection({
  */
 function Heading({
   application,
-  minutes,
   expanded,
   collapsible,
   summary,
   onToggle,
 }: {
   application: CardApplication;
-  minutes: number;
   expanded: boolean;
   collapsible: boolean;
   summary: string | null;
@@ -351,15 +476,47 @@ function Heading({
   } as const;
 
   const title = (
-    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-      <span data-testid={`application-vacancy-${application.id}`}>
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 'var(--space-4)',
+        minWidth: 0,
+      }}
+    >
+      <span
+        data-testid={`application-vacancy-${application.id}`}
+        style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}
+      >
         {application.vacancy.title}
       </span>
-      <span style={{ color: 'var(--text-secondary)', fontWeight: 'var(--font-weight-regular)' }}>
-        {' · '}
-        {formatDuration(minutes)}
-        {summary ? ` · ${summary}` : ''}
-      </span>
+      {/*
+        The vacancy as it is **now**, beside its name — the one fact on this header that is
+        not frozen at booking, and the one a member most needs before they act: an offer on
+        a closed vacancy is a different conversation.
+      */}
+      <VacancyStatusBadge
+        status={application.vacancy.status}
+        testId={`application-vacancy-status-${application.id}`}
+      />
+      {/*
+        The length has left the title. It is one of the three facts stated with a glyph
+        below — when, how long, with whom — and stating it twice made the heading a run of
+        four things separated by dots, which is the shape a *summary* has. A collapsed
+        section still needs one, so `summary` keeps it.
+      */}
+      {summary && (
+        <span
+          style={{
+            fontSize: 'var(--font-size-s)',
+            color: 'var(--text-secondary)',
+            fontWeight: 'var(--font-weight-regular)',
+          }}
+        >
+          {summary}
+        </span>
+      )}
     </span>
   );
 
@@ -413,15 +570,26 @@ function StatusSelect({
     testId: `application-status-option-${application.id}-${option.value}`,
   }));
 
+  /*
+   * The label is beside the control, not above it. `Select`'s own `label` prop is the form
+   * geometry — indented, with 10px above and 4px below — which is right in a column of
+   * fields and wrong in a header row, where it would push the control off the line the
+   * kebab beside it sits on. So it is a plain span, at `FieldLabel`'s type and ink.
+   */
   return (
-    <Select
-      value={options.find((option) => option.value === application.status)}
-      options={options}
-      onChange={(option) => onChange(valueOf(option) as ApplicationStatus)}
-      aria-label={`Status for ${application.vacancy.title}`}
-      data-testid={`application-status-select-${application.id}`}
-      wrapperStyle={{ width: 170 }}
-    />
+    <span className="application-status-field">
+      <span className="application-status-label" id={`application-status-label-${application.id}`}>
+        {HIRING_MESSAGES.manage.statusLabel}
+      </span>
+      <Select
+        value={options.find((option) => option.value === application.status)}
+        options={options}
+        onChange={(option) => onChange(valueOf(option) as ApplicationStatus)}
+        aria-label={`Status for ${application.vacancy.title}`}
+        data-testid={`application-status-select-${application.id}`}
+        wrapperStyle={{ width: 170 }}
+      />
+    </span>
   );
 }
 
@@ -585,37 +753,42 @@ function CvRow({ orgId, application }: { orgId: string; application: CardApplica
 
   const href = `/api/organizations/${orgId}/hiring/applications/${application.id}/cv`;
 
+  const extension = (application.cv.fileName.split('.').pop() || 'file').toUpperCase();
+
   return (
-    <div className="card-cv-row">
-      <span
-        data-testid="card-cv-name"
-        style={{
-          flex: 1,
-          minWidth: 0,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          fontSize: 'var(--font-size-s)',
-          color: 'var(--text-primary)',
-        }}
+    <div className="card-cv">
+      {/*
+        The ordinary attachment row — an extension tile, the file's name, its weight — which
+        is the shape a file has in every mail client and tracker, so it is recognised before
+        it is read. It replaced a line of text led by a 📄: blue draws icons, never emoji,
+        and the emoji was decoration beside a name that already said what it was (the same
+        call 05 made on the board card's `CV` mark).
+
+        **The row is the link.** A file row that opens the file is the whole affordance, so
+        `View` is not a button any more — it is the object itself, and `Download` is left
+        beneath as the one action a click cannot express.
+      */}
+      <a
+        className="card-cv-file"
+        href={`${href}?disposition=inline`}
+        target="_blank"
+        rel="noreferrer"
+        aria-label={`View ${application.cv.fileName}`}
+        data-testid="card-cv-view"
       >
-        <span aria-hidden="true">📄 </span>
-        {application.cv.fileName}
-        {application.cv.sizeBytes !== null && (
-          <span style={{ color: 'var(--text-secondary)' }}> {fileSize(application.cv.sizeBytes)}</span>
-        )}
-      </span>
+        <span aria-hidden="true" className="card-cv-tile">
+          {extension}
+        </span>
+        <span className="card-cv-meta">
+          <span data-testid="card-cv-name" className="card-cv-filename">
+            {application.cv.fileName}
+          </span>
+          {application.cv.sizeBytes !== null && (
+            <span className="card-cv-size">{formatFileSize(application.cv.sizeBytes)}</span>
+          )}
+        </span>
+      </a>
       <div className="card-cv-actions">
-        <Button
-          as="a"
-          href={`${href}?disposition=inline`}
-          target="_blank"
-          rel="noreferrer"
-          aria-label={`View ${application.cv.fileName}`}
-          data-testid="card-cv-view"
-        >
-          View
-        </Button>
         <Button
           as="a"
           href={href}
@@ -630,11 +803,4 @@ function CvRow({ orgId, application }: { orgId: string; application: CardApplica
   );
 }
 
-const KB = 1024;
 
-/** `180 KB`, `1.4 MB` — enough to tell a real CV from an empty one. */
-function fileSize(bytes: number): string {
-  if (bytes < KB) return `${bytes} B`;
-  if (bytes < KB * KB) return `${Math.round(bytes / KB)} KB`;
-  return `${(bytes / (KB * KB)).toFixed(1)} MB`;
-}

@@ -9,20 +9,10 @@ import React from 'react';
    spans, borderRadius 100%, animation `${0.75 / speedMultiplier}s ${(i * 0.12) / speedMultiplier}s
    infinite cubic-bezier(0.2, 0.68, 0.18, 1.08)` with i = 1, 2, 3 (so the delays are .12/.24/.36s),
    animation-fill-mode both, and a wrapper span at `display: inherit`. */
-const kf = `@keyframes ds-pulse-loader {
-  0% { transform: scale(1); opacity: 1; }
-  45% { transform: scale(0.1); opacity: 0.7; }
-  80% { transform: scale(1); opacity: 1; }
-}`;
-
-/* Injected once into <head>, not rendered as a sibling: a sibling <style> is a real element
-   and breaks a consumer's adjacent-sibling rules and :nth-child counts. */
-if (typeof document !== 'undefined' && !document.getElementById('ds-pulse-loader-style')) {
-  const el = document.createElement('style');
-  el.id = 'ds-pulse-loader-style';
-  el.textContent = kf;
-  document.head.appendChild(el);
-}
+/* §69 — the keyframes live in `base.css`, not in a module-scope `document.head.appendChild`
+   here. A side effect that runs once on whichever page first imports this component fails
+   silently everywhere it does not run, and a loader whose dots do not move is
+   indistinguishable from a screen that has stopped. */
 
 export function Preloader({
   size = 12, margin = 7, overlay = false, speedMultiplier = 1,

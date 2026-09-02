@@ -99,6 +99,17 @@ export function AutosavingField({
         {editor.announced ?? ''}
       </span>
 
+      {/*
+        The explicit save, and it is the **primary** action of the block it closes. It was the
+        neutral variant, which put the one button on this half of the card in the same paint as
+        `View vacancy` up in the header — and left a member who does not trust an autosave with
+        nothing on the screen that looks like the thing that saves.
+
+        It is **disabled while there is nothing to save**, which is not a new rule: `useAutosave`
+        has always refused a write for text the server already holds, so the button was
+        promising work that would not happen. `dirty` is only that refusal, said out loud. A
+        failed save leaves the editor dirty, so `Retry` is not the only way back.
+      */}
       <div
         style={{
           display: 'flex',
@@ -106,7 +117,15 @@ export function AutosavingField({
           marginTop: 'var(--space-3)',
         }}
       >
-        <Button onClick={editor.save} data-testid={`${testId}-save`}>
+        <Button
+          variant="primary"
+          onClick={editor.save}
+          disabled={editor.state === 'saving' || !editor.dirty}
+          // The design's own floor, so the button closing the notes field and the one
+          // closing the conclusion are the same size rather than the width of their label.
+          style={{ minWidth: 96 }}
+          data-testid={`${testId}-save`}
+        >
           Save
         </Button>
       </div>

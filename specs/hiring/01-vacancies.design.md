@@ -76,7 +76,7 @@ the session before rendering anything, so a gated row never flashes into view an
   ┌───────────────────────────────────────────────────────────────┐
   │ Title            │ Interviewer │ Length │ Candidates │Status│⋮ │  ← Card > Table
   │ Senior React Eng.│ Pat Owner   │ 60 min │     12     │ Open │⋮ │
-  │ ▌React ▌Senior   │             │        │            │      │  │
+  │ [React] [Senior] │             │        │            │      │  │
   └───────────────────────────────────────────────────────────────┘
 ```
 
@@ -84,6 +84,10 @@ the session before rendering anything, so a gated row never flashes into view an
   ToDo, Policies and Holidays all share, and the one the candidate database took in Phase 4: the
   strip on the left, a 250px search and the actions on the right, 20px gaps, 20px down to the
   table. It gained nothing but the ability to be *addressed* ([§52](../design-system/ledger.md)).
+- **Tabs carry no shadow on click.** The strip's focus ring is keyboard-only
+  ([§68](../design-system/ledger.md)): `focus` fires on a pointer press as well, so a click used
+  to leave a glow on the chosen tab until something else was clicked. The ring is unchanged for
+  the case it was added for — arriving by `Tab` and moving with the arrow keys.
 - **The status filter is the strip.** It was a 160px `Select` beside the search: three choices,
   two clicks, and no way to learn how the library divides without making one. As tabs it is one
   click and the counts are on the labels. They are computed under the **search** and not under the
@@ -236,10 +240,11 @@ row — blue's own label, so the row matches the fields above it exactly.
 
 ### The blocked action
 
-`Tooltip` is gone, and [reversal 2](../design-system/README.md) warned that native `title` is
-free only for a pointer. **It is not used here.** The reason a delete is blocked is drawn in the
-menu row itself, under the label, at `--font-size-xs` in `--text-secondary`, and wired as that
-row's `aria-describedby` ([§22](../design-system/ledger.md)).
+[Reversal 2](../design-system/README.md) warned that native `title` is free only for a pointer.
+**It is not used here, and it never will be.** The reason a delete is blocked is a real
+`Tooltip` ([§62](../design-system/ledger.md)) on hover and focus, over a hidden copy of the same
+sentence that is the row's permanent `aria-describedby` target — see the amendment below for how
+this arrived at its third and final shape.
 
 Delete stays **disabled rather than hidden** — a missing action is indistinguishable from a bug —
 and the row stays **focusable** while disabled (`aria-disabled`, never the `disabled` attribute),
@@ -252,9 +257,46 @@ answer: a menu row has somewhere to put a sentence, an inline icon may not.
 > on a closed vacancy**. Hiding it would say the vacancy has no link, which is false — it has one,
 > it is on the detail page, and it simply will not take a booking. `This link is no longer
 > accepting bookings.` is the same sentence the detail page prints under the link itself, so the
-> two doors to the same fact read identically. The plan for this phase asked for a tooltip on the
-> blocked delete; §22 is what it gets, because a menu row has somewhere to put a sentence and
-> `Tooltip` is still a gap (Phase 10 owns it).
+> two doors to the same fact read identically.
+
+### `Open booking page`, and the row that has no second line
+
+The menu carries the candidate's own view of the vacancy, and it carries it as **one row with no
+subtitle**. The prototype draws a second line under it — *Prototype only — the candidate's view* —
+and that line is true of the prototype and false here: there, choosing it swaps the screen, because
+a prototype has no tabs to open. In the product it is a link to `/book/{slug}`, which is the same
+address `Copy booking link` puts on the clipboard, opened in a new tab. There is nothing about it
+to caveat.
+
+Which leaves `description` used by nothing in this menu, and that is the right outcome rather than
+a loss: the slot exists for a row whose destination needs explaining, and none of these six do.
+
+> **Amended by `blue-fixes`, and this is the settled answer.** The reason is now drawn in a
+> **`Tooltip`** bubble ([§62](../design-system/ledger.md)) opening to the left of the menu, and the
+> paragraph above is half-superseded: what is corrected is only *where the sentence is drawn*.
+>
+> §22's actual claim — that a reason reachable only by a pointer is a reason a keyboard user never
+> gets — is untouched and is now **enforced more strictly than before**: the sentence sits in a
+> visually-hidden node that is in the DOM at all times, which is what the row's `aria-describedby`
+> resolves to whether or not anything is hovering. A bubble alone could not do that; this is
+> `BoardCard`'s flag pattern ([§42](../design-system/ledger.md)), and it is why `tooltipTestId`
+> names the hidden copy rather than the bubble.
+>
+> What changes is the drawing. A sentence inside a 160px panel made one row twice the height of the
+> four around it, and put a paragraph in a list of verbs. `description` does not go away with it —
+> the two slots now mean different things, and the distinction is the durable version of this
+> argument: **`description` says what a row is about** (`Open booking page` / *the candidate's
+> view*), **`tooltip` says why a row cannot be used**. A row never carries both, because a row
+> that is blocked has nothing else to add.
+>
+> **Corrected, later in `blue-fixes`.** None of the above was on screen. `Popover`'s panel carried
+> an `overflow: hidden` that was never blue's and had never clipped anything, and a bubble hung at
+> `right: 100%` of a row is *entirely* outside that panel — so both blocked rows on this screen
+> drew their reason into a zero-width sliver from the day it shipped. The hidden node kept working
+> throughout, which is why a screen reader was told and a member with a mouse was not, and why the
+> test that asserts the reason `toBeVisible()` passed the whole time: the id it names is on the
+> hidden node, and a 1×1 clipped span is visible as far as Playwright is concerned. Reachable is
+> not legible. See the ledger's note on §62.
 
 ## Component map
 
@@ -269,26 +311,26 @@ answer: a menu row has somewhere to put a sentence, an inline icon may not.
 | Search | `SearchInput` (through `TableToolbar`) | `searchPlaceholder`, `searchLabel`, `searchTestId` | `vacancies-search-input` |
 | List surface | `Card` | `padded={false}` | `vacancies-list` |
 | List | `Table` | `columns`, `rows`, `rowHref`, `rowTestId`, `onRowClick`, `busy` | — |
-| Row actions | `Popover` | `label`, `items` with `disabled` + `description` | `vacancy-actions-menu-{id}` |
+| Row actions | `Popover` | `label`, `items` with `disabled` + `tooltip` ([§62](../design-system/ledger.md)) — six rows: Open board · Copy booking link · Open booking page · Edit vacancy · Close/Reopen vacancy · Delete vacancy | `vacancy-actions-menu-{id}` |
 | Row confirmations | `ConfirmDialog` | `busy`, `closeOnAccept={false}`, `acceptTestId` | `vacancy-close-confirm`, `vacancy-delete-confirm` |
-| Category chip | `Chip` | `label` (no `onRemove` — read-only) | `vacancy-category-chip-{id}` |
-| Status pill | `Badge` | `status="active"` open, `"inactive"` closed | `vacancy-status-{id}` |
+| Category label | **`Badge status="neutral" size="s"`** ([§59](../design-system/ledger.md)) | — | `vacancy-category-chip-{id}` |
+| Status pill | `Badge` | `status="active"` open, `"inactive"` closed, **`outlined` for both** | `vacancy-status-{id}` |
 | Loading | `Preloader` | default 12/7, centred in the card | `vacancies-loading` |
 | Empty state | `EmptyState` | — | `vacancies-empty-state` |
-| Meta line | `Chip` + text, `·` separators `aria-hidden` | — | `vacancy-detail-categories` |
+| Meta line | `Badge status="neutral"` + text, `·` separators `aria-hidden` | — | `vacancy-detail-categories` |
 | Description | plain `<div>`, `-webkit-line-clamp: 3` | — | `vacancy-description` |
 | Expand / collapse | text button, `--color-blue`, `aria-expanded` | — | `vacancy-description-toggle` |
 | Add a description | text button, opens the edit dialog | — | `vacancy-add-description` |
 | Closed note | plain `<p>`, `--font-size-xs` | — | `vacancy-closed-link-note` |
 | The board | see [05 design](05-board.design.md) | — | `board` |
-| New / Edit | `Modal` | `title`, `style={{ width: 520 }}` | `vacancy-dialog` |
+| New / Edit | `Modal` | `title`, `style={{ width: 520 }}`. Field order **Title · Categories · Interviewer · Interview length · Description** | `vacancy-dialog` |
 | Dialog footer | `FormActions` | `align="full"` | — |
-| Title field | `TextInput` | `label`, `id`, `error`, `errorId` | `vacancy-title-input` |
-| Interviewer | `Select` + **disabled options** | `hint`, `hintId`, option `disabled`/`hint` | `vacancy-interviewer-select` |
-| Length | native radios + `FieldLabel` | `role="radiogroup"` | `vacancy-duration-{minutes}` |
+| Title field | `TextInput` | `label`, **`required`**, `id`, `error`, `errorId` | `vacancy-title-input` |
+| Interviewer | `Select` + **disabled options** | **`required`**, `hint`, `hintId`, option `disabled`/`hint` | `vacancy-interviewer-select` |
+| Length | native radios + `FieldLabel` + `RequiredMark` | `role="radiogroup"` | `vacancy-duration-{minutes}` |
 | Categories | `Select` `isMulti isSearchable allowCreate` | `variant="formik"`, `chipTestId` | `vacancy-categories-input` |
 | Description | `TextArea` | `label`, `id`, `error`, `errorId` | `vacancy-description-input` |
-| Actions · vacancy screen | `Popover` | `label`, `items` with `disabled` + `description` | `vacancy-actions-menu` |
+| Actions · vacancy screen | `Popover` | the same rows less `Open board`, which is the page it is on | `vacancy-actions-menu` |
 | Copy link | `Button` | `variant="primary"`, `disabled` when closed | `vacancy-copy-link-button` |
 | Confirmations · vacancy screen | `ConfirmDialog` | `busy`, `closeOnAccept={false}`, `acceptTestId` | `vacancy-close-confirm`, `vacancy-delete-confirm` |
 | Reassign confirm | `Modal` + `FormActions` | — | `vacancy-reassign-confirm` |
@@ -372,7 +414,7 @@ than waiting for the visitor to discover it from a disabled row.
 |---|---|
 | **Status · open** | `Badge status="active"` — solid `--status-success`, white text |
 | **Status · closed** | `Badge status="inactive"` — solid `--status-error`, white text |
-| **Category chip** | `Chip` — white, 1px `--border-default`, a 7px `--color-blue` left border, 8px radius. Read-only on the list and the detail; removable inside the dialog, where it is what `Select isMulti` draws for itself |
+| **Category label** | `Badge status="neutral"` ([§59](../design-system/ledger.md)) — `--surface-sunken` hairlined in `--border-subtle`, `--radius-s`, regular weight; `size="s"` in a table row, `m` on the detail header. It was `Chip` until `blue-fixes`, and `Chip` is what `Select isMulti` draws for a value chosen **inside a field**: its 7px `--color-blue` left edge marks a *selection*, and on a table row it put the loudest mark on the screen on the quietest fact on it. Inside the dialog it is still a `Chip`, because there it really is a selection |
 | **Select option · eligible** | `rgba(0, 122, 255, 0.1)` under the pointer *and* under the arrow keys |
 | **Select option · ineligible** | `--text-secondary` ink, reason trailing at `--font-size-xs`, `aria-disabled`, no hover, not selectable — but still reachable by arrow key |
 | **Select option · selected** | `--color-blue` fill, white text (single-value only; a chosen chip leaves the list) |

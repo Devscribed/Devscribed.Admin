@@ -62,14 +62,22 @@ who, how to reach them, what for, when, where they got to, and what can be done 
   [reversal 6](../design-system/README.md) was written for and the only thing that ever exercised
   it. The prop stays on `Card`; the argument for it is unchanged, and the next list that opens a
   control inside a card will need it. Nothing on this screen does any more.
-- The count line now sits alone between the toolbar and the table — still the hinge between "what
-  I asked for" and "what I got", and still the only thing on the screen that announces itself.
+- **There is no count line.** `blue-fixes` removed it. Each scope tab already carries its own
+  count, computed under the filters that are applied — `All (12)` beside `Assigned to me (4)` — so
+  a line under the strip repeating the active tab's number was the same fact twice, and the one it
+  repeated is the one already in the reader's eye. What survives is the half a tab cannot show:
+  while a request is in flight the row holds a `Preloader` and the word `Counting…`, announced
+  politely, so a filter change is acknowledged before its rows arrive. It keeps
+  `candidates-count`, because what that id names is the announcement, not the number.
   `Clear all` left with the filters: it is `Clear filters` now, at the bottom of the drawer, beside
   the controls it clears.
-- The table is edge to edge inside a `Card padded={false}`, the same one surface at every state
-  that the vacancies list uses ([01](01-vacancies.design.md)): the card gives the table its border
-  and rounds its first and last rows, and the loader and both empty messages sit inside it rather
-  than replacing it. The page strip sits **outside** it, under the card — it is a control about
+- The table is edge to edge inside a `Card padded={false}`, the same surface the vacancies list
+  uses ([01](01-vacancies.design.md)): the card gives the table its border and rounds its first and
+  last rows, and the loader sits inside it rather than replacing it. **An empty state does not.**
+  The card is the *table's* — drawn around a sentence it is a bordered white slab the height of the
+  viewport with one line of grey text near the top — so when there are no rows the `EmptyState`
+  stands on the page's own ground, and the way out of it (`Clear filters`, 160px, inside the state
+  rather than under it) is part of what the state says ([§65](../design-system/ledger.md)). The page strip sits **outside** it, under the card — it is a control about
   the list rather than a part of it, and the last row keeps its own border either way.
 
 ## The columns
@@ -89,14 +97,14 @@ who, how to reach them, what for, when, where they got to, and what can be done 
 - The **interviewer** rides as a quieter second line under the vacancy title rather than taking a
   column of its own, because it is 1:1 with the vacancy and a column would only repeat it. It is
   absent in `Assigned to me`, where it is the viewer on every row ([03 §09.48](03-candidate-database.md)).
-- The chips under a name are **assessments**, not vacancy categories: `English: B1` — blue's `Chip`
+- The labels under a name are **assessments**, not vacancy categories: `English: B1` — the neutral `Badge` ([§59](../design-system/ledger.md))
   again, the same object the candidate card draws an assessment with, the same sentence in the
   other direction. The categories moved to the drawer with the rest of the filter machinery, and
   drawing them here as well said nothing the filter did not.
 - Both two-line cells need `Table`'s §48 row growth and CSS of their own for the stack: blue's cell
   is one line, `nowrap` and clipped, and `text-overflow` cannot be set on the anonymous flex item
   the component renders.
-- **Status is capped at 120px and Actions takes blue's 80px**, which is the cap `Table` puts on its
+- **Status is capped at 120px and Actions takes 96px** ([§60](../design-system/ledger.md)), which is the cap `Table` puts on its
   last column for exactly this — prod's own icon-only actions cell (§18). Before the kebab existed,
   Status was last and had to override the cap to fit `Didn't pass`; it no longer is, and blue's
   geometry is back where it was measured.
@@ -126,8 +134,9 @@ who, how to reach them, what for, when, where they got to, and what can be done 
   inside the trigger, and a row menu near the bottom of a scrolling list is then clipped by the
   scroller. It is `position: fixed` off the trigger's own rectangle now, flipping upward when it
   would run off the viewport.
-- The three interview actions are **absent** on a cancelled row rather than disabled — there is
-  nothing there to enable ([03 §10.54](03-candidate-database.md)).
+- The interview actions are **absent** on a cancelled row rather than disabled — there is nothing
+  there to enable — and `Reschedule` and `Cancel` are absent on a **past** one for the same reason
+  ([03 §10.54](03-candidate-database.md)). `View in calendar` stays either way.
 - `Delete candidate` is **absent** for a caller who may not manage hiring, on the same principle
   and for a different reason: it is not that there is nothing to delete, it is that this is not
   their decision ([03 §11.60](03-candidate-database.md)). A disabled row would advertise an
@@ -190,7 +199,7 @@ who, how to reach them, what for, when, where they got to, and what can be done 
 - The criterion is chosen **once**, in the autocomplete above the chips, and choosing it is what
   creates the chip. There is no criterion control on the chip itself, which is what removes the
   three-`Select` row that read as a query builder.
-- The chip is blue's `Chip`, and deliberately **the same object the candidate card draws for an
+- The row is the sunken box, and deliberately **the same object the candidate card draws for an
   assessment** (`card-criterion-*`): the criterion's name as the label, the controls in the
   `trailing` slot ([§37](../design-system/ledger.md)), a cross to drop it. It is the same thing
   said in the other direction — the card records *this candidate's English is B1*, the filter asks
@@ -225,18 +234,19 @@ who, how to reach them, what for, when, where they got to, and what can be done 
 | Filter surface | `MenuDrawer` | `open`, `onClose`, `closeLabel`, `role="dialog"` (§51) | `candidates-filters` · `candidates-filters-close` |
 | Status / position / category / interviewer | `Select` | `isMulti`, `label`, `isSearchable` (not on status) | `candidates-filter-status` · `candidates-filter-position` · `candidates-filter-category` · `candidates-filter-interviewer` |
 | Filter chip | `Chip` (inside `Select isMulti`) | — | `candidates-filter-chip-{id}` |
+| Criteria filter row | sunken row — `--surface-sunken`, 1px `--border-subtle`, `--radius-s` | — | `criteria-filter-row-{index}` |
 | Criterion picker | `Select` | `isSearchable`, `label`, per-option `hint` (§21) | `candidates-criteria-filter-add` · `candidates-criteria-option-{id}` |
-| Criterion chip | `Chip` | `trailing` (§37), `onRemove`, `removeTestId` | `criteria-filter-row-{index}` · `criteria-filter-criterion-{index}` · `criteria-filter-remove-{index}` |
+| Criterion controls | `Select` (op, 128px) · `Select`/`TextInput` (value, 112px) · `IconButton` (24px) | — | `criteria-filter-criterion-{index}` · `criteria-filter-op-{index}` · `criteria-filter-value-{index}` · `criteria-filter-remove-{index}` |
 | Operator | `Select` (inside the chip's `trailing`) | `options` | `criteria-filter-op-{index}` |
 | Value | `Select` \| `TextInput` | by type | `criteria-filter-value-{index}` |
 | Archived marker | `Badge` | `status="inactive"`, `outlined` | `criteria-filter-archived-{index}` |
 | Show results / Clear filters | `Button` | `variant="primary"` / default | `candidates-filters-apply` · `candidates-clear-filters` |
-| Count | native `<p>` + `Preloader size={8}` | `aria-live="polite"` | `candidates-count` |
+| Counting indicator | native `<p>` + `Preloader size={8}` — **only while a request is in flight** | `aria-live="polite"` | `candidates-count` |
 | List | `Card padded={false}` > `Table` | `columns`, `rows`, **`busy`** | `candidates-list` |
-| Assessed-criteria chips on a row | `Chip` | `label` | `candidate-criterion-{id}-{criterionId}` |
+| Assessed-criteria labels on a row | **`Badge status="neutral" size="s"`** ([§59](../design-system/ledger.md)), name in `--text-secondary` and value in `--text-primary` | — | `candidate-criterion-{id}-{criterionId}` |
 | Vacancy + interviewer | native two-line cell | — | `candidate-vacancy-{id}` · `candidate-interviewer-{id}` |
 | Interview date | native two-line cell | `align: 'center'` (§18) | `candidate-latest-{id}` |
-| Status | `Badge` | `status`, `outlined` | `candidate-status-{id}` |
+| Status | `Badge` | `status`, `outlined` — four of the five outlined, `Offer` alone filled | `candidate-status-{id}` |
 | Cancelled | `Badge` | `status="inactive"`, `outlined` | `candidate-status-{id}` |
 | **Row actions** | `Popover` | `label`, `items` with `danger` / `testId` (§22, §55) | `candidate-actions-{id}` · `candidate-action-{verb}-{id}` |
 | **Pagination** | `Pagination` | `page`, `pageCount`, `onChange`, `pageTestId` (§53) | `candidates-pagination` · `candidates-page-{n}` |
@@ -260,27 +270,34 @@ saying something false. So `Badge` gains blue's two remaining status hues
 > Status colors (green/yellow/red/cyan) are used sparingly and only for real state
 > (active/inactive badges, form errors, info banners).
 
-An application's status is real state. The rule the five then follow is **hue is direction, fill is
-finality**:
+An application's status is real state. The rule the five then follow is **hue is direction, and the
+fill is spent once**:
 
 | Status | `Badge` | Hue | Why |
 |---|---|---|---|
-| Scheduled | `status="info"` | cyan | Nothing has been decided yet |
-| Maybe | `status="warning"` | yellow | Decided to not decide |
+| Scheduled | `status="info" outlined`, ink and border overridden to `--color-blue` | primary blue | Nothing has been decided yet — the interview is simply ahead |
+| Maybe | `status="warning" outlined` | yellow | Decided to not decide |
 | Passed | `status="active" outlined` | green | Cleared a stage — the process continues |
-| Offer | `status="active"` | green | The settled good outcome |
-| Didn't pass | `status="inactive"` | red | The settled bad outcome |
+| Offer | `status="active"` | green | The settled good outcome, and the only fill |
+| Didn't pass | `status="inactive" outlined` | red | The settled bad outcome |
 
-Only the two terminal states are solid, which is what keeps "sparingly" true: a list of in-flight
-candidates is mostly outlined pills, and a filled one means the process ended. It also corrects an
-inversion Meridian had — `Offer` was the *outlined* variant of `Passed`, so the strongest status in
-the funnel was drawn with the least emphasis.
+*Revised by `blue-fixes`.* The rule was **hue is direction, fill is finality**, which made three of
+the five solid — `Scheduled`, `Maybe` and `Didn't pass` — and put a column of filled pills down a
+list that is mostly in-flight candidates. A list where most rows shout is a list where none of them
+do, and blue's readme scopes the palette with *"used sparingly"*. The funnel is drawn in the
+outlined idiom `Badge` already has, and the one fill is spent on `Offer`: the terminal good state,
+and the one genuinely worth the loudest ink the palette can produce. It still corrects the
+inversion Meridian had, where `Offer` was the *outlined* variant of `Passed` and the strongest
+status in the funnel was drawn with the least emphasis.
 
-`Maybe` is the one variant that does not take blue's solid treatment literally. Blue paints a solid
-badge as white on the status hue, which works on the green and the red; `#FFD02B` is light enough
-that white on it is not a legibility trade-off but an absence of text. The yellow therefore stays
-on the border and the label takes `--text-primary`. No colour is invented — see
-[§32](../design-system/ledger.md).
+`Scheduled` is the one row that overrides an ink. `outlinedInfo`'s cyan is the hue blue spends on a
+**notice**; primary blue is the hue it spends on *the thing being worked on*, which is what an
+interview that is still ahead is. The geometry is `Badge`'s, untouched — only the two colour stops
+move.
+
+`Maybe` takes blue's `outlinedWarning` unaltered: a `--status-warning` border with
+`--text-primary` ink. §32 already settled that `#FFD02B` carries no legible text of its own, and
+the alternative — mixing the token toward a dark orange — is a colour blue does not have.
 
 Status is carried by the badge's **text** on every screen that draws one. The hue repeats it.
 
@@ -319,7 +336,7 @@ card and the candidate card already use for the same mark.
 | Cancelled interview | Cancelled |
 | Row menu | View in calendar · Reschedule interview · Cancel interview · View candidate · Delete candidate |
 | Row menu name | Actions for {name} |
-| `View in calendar` toast | Opening the interview in the calendar… |
+| `View in calendar` toast | Not implemented yet |
 | Delete title | Delete {name}? |
 | Delete body | {n} applications and {m} assessments go with them. They come back, and all of it with them, if they book again with the same email. |
 | Delete body, nothing recorded | Nothing has been recorded against them yet. They come back if they book again with the same email. |
@@ -346,8 +363,10 @@ Page controls are back, and [reversal 1](../design-system/README.md) is what the
 
 The reversal read: *"the candidate database was paginated precisely because infinite scroll cannot
 answer «how many match?», and that question is this screen's whole purpose"* — and the answer, when
-the load-more row replaced them, was that the count line answers it and does not move. That was
-true, and it is still true: the count line is unchanged, and it is not what came back.
+the load-more row replaced them, was that the count answers it and does not move. That is still
+true, and `blue-fixes` only moved **where** the count is said: it is in each scope tab's own label
+now, computed under the applied filters, rather than on a line of its own. It is not what came
+back.
 
 What pagination carries is **position**, and the load-more row carried it badly on a list this
 long. *Which twenty-five of a hundred and twenty-eight am I looking at* has no answer in a scroll
@@ -435,9 +454,9 @@ because it `404`s the instant the flag is set. The name is handed across that on
   a portal and is not a descendant of the anchor at all.
 - **A page change is a request like any other**: the rows dim, the count holds its number, and the
   new page replaces the old one when it arrives.
-- **`View in calendar` raises a toast and does nothing else.** No navigation, no request. The
-  interview's entry is the interviewer's own mailbox event and there is no deep link into one to
-  offer ([03 §10.55](03-candidate-database.md)).
+- **`View in calendar` raises a toast and does nothing else** — and the toast says so, rather than
+  describing a navigation this product cannot make. The interview's entry is the interviewer's own
+  mailbox event and there is no deep link into one to offer ([03 §10.55](03-candidate-database.md)).
 
 ## Scope tabs
 
@@ -461,9 +480,14 @@ the old screen drew has an answer here.
   not drawn as links.
 - Uppercase, because `PageTabs` is the one place blue uppercases anything — which is also why the
   column headers below it are sentence case.
-- **The count lives in the label.** The count line above the table still reads
-  `12 of 128 candidates`, and in `Assigned to me` with nothing filtered it reads `4 of 128` — four
-  are mine, a hundred and twenty-eight exist, and neither number says the other.
+- **The count lives in the label, and only there.** Each tab counts what *it* would show under the
+  filters already applied, so `All (12)` beside `Assigned to me (4)` answers both "how many match"
+  and "and how many would the other one show?" before it is pressed. `blue-fixes` removed the
+  separate count line this used to sit beside: two places saying one number, and the tab was
+  already the one being read. What is lost with it is the org-wide total — a filter that matches
+  nobody now reads `All (0)` rather than `0 of 128`. That is the trade, taken deliberately: the
+  total answers a question nobody on this screen was asking, and the `Filters (n)` button already
+  says that something is narrowing the list.
 - **No strip at all** for a caller who may not see the whole database. Not a disabled tab, not a
   single-tab strip: a control offering one choice is not a choice, and a second tab would advertise
   a list they will never be shown. It is drawn only once the response has said so, so it never

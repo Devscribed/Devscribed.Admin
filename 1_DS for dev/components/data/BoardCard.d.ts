@@ -30,8 +30,6 @@ export interface BoardCardProps
    * card's `aria-describedby` — the colour is never the only signal.
    */
   flag?: string | null;
-  hasCv?: boolean;
-  cvLabel?: ReactNode;
   /** Accessible name — "{name}, {column}, {date}". Built by the caller, which knows the column. */
   label?: string;
   draggable?: boolean;

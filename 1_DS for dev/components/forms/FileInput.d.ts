@@ -9,6 +9,13 @@ export interface FileInputProps
   fileName?: string | null;
   /** §47 — test id for that node, drawn only when there is a name to tag. */
   fileNameTestId?: string;
+  /** §73 — the file's weight, already formatted. Drawn after the name, one ink quieter. */
+  fileSize?: string;
+  /** §73 — drops the chosen file. Omit and no cross is drawn. */
+  onClear?: () => void;
+  /** Accessible name for that cross. Defaults to `Remove {fileName}`. */
+  clearLabel?: string;
+  clearTestId?: string;
   /** Leading affordance's text. Default `Choose file`. */
   chooseLabel?: string;
   /** What the value slot reads before anything is chosen. Default `No file chosen`. */
@@ -17,7 +24,7 @@ export interface FileInputProps
   error?: ReactNode;
   /** §4's shape — id (and test id) for the error node, so it can be described by. */
   errorId?: string;
-  /** Persistent help text. Shares the error's slot; the error wins when both are given. */
+  /** Persistent help text, **in flow** under the row. The error replaces it when both exist. */
   hint?: ReactNode;
   /** §4's shape — id for the hint node. */
   hintId?: string;

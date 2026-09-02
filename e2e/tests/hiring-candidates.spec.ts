@@ -115,9 +115,10 @@ test.describe('Candidate database', () => {
     await signIn(page, org.email);
     await page.goto(path);
 
-    const count = page.getByTestId('candidates-count');
+    // The scope tab carries the count — there is no separate count line (03 §05.20).
+    const count = page.getByTestId('candidates-scope-all');
     const filters = page.getByTestId('candidates-filters-open');
-    await expect(count).toHaveText('3 candidates');
+    await expect(count).toHaveText('All (3)');
     await expect(page.getByTestId('candidates-list')).toBeVisible();
     // Nothing applied, so the button is a word rather than a count (03 §09.46).
     await expect(filters).toHaveText('Filters');
@@ -130,7 +131,7 @@ test.describe('Candidate database', () => {
       'candidates-filter-category',
       `candidates-filter-category-option-${react.id}`,
     );
-    await expect(count).toHaveText('2 of 3 candidates');
+    await expect(count).toHaveText('All (2)');
     await expect(filters).toHaveText('Filters (1)');
 
     // The criterion: of those two, one is at B1 and one is below it. Choosing it from the
@@ -145,23 +146,23 @@ test.describe('Candidate database', () => {
 
     // A chip with no value yet is half-built, not a filter that matches nobody — it
     // narrows nothing and is not counted (03 design §Interactions).
-    await expect(count).toHaveText('2 of 3 candidates');
+    await expect(count).toHaveText('All (2)');
     await expect(filters).toHaveText('Filters (1)');
 
     const b1 = english.values.find((value) => value.label === 'B1')!.id;
     await chooseInSelect(page, 'criteria-filter-value-0', `criteria-filter-value-0-option-${b1}`);
-    await expect(count).toHaveText('1 of 3 candidates');
+    await expect(count).toHaveText('All (1)');
     await expect(filters).toHaveText('Filters (2)');
     await expect(page.getByTestId('candidate-name-' + (await onlyRowId(page)))).toHaveText('Jane Doe');
 
     // Removing the chip widens the set in place — the criterion chip still holds.
     await page.getByTestId(`candidates-filter-chip-${react.id}`).getByRole('button').click();
-    await expect(count).toHaveText('1 of 3 candidates');
+    await expect(count).toHaveText('All (1)');
     await expect(filters).toHaveText('Filters (1)');
 
     // And removing the criterion chip restores the unfiltered list.
     await page.getByTestId('criteria-filter-remove-0').click();
-    await expect(count).toHaveText('3 candidates');
+    await expect(count).toHaveText('All (3)');
     await expect(filters).toHaveText('Filters');
   });
 
@@ -184,8 +185,8 @@ test.describe('Candidate database', () => {
     });
 
     await page.goto(path);
-    const count = page.getByTestId('candidates-count');
-    await expect(count).toHaveText('3 candidates');
+    const count = page.getByTestId('candidates-scope-all');
+    await expect(count).toHaveText('All (3)');
 
     await openFilters(page);
     await chooseInSelect(
@@ -193,14 +194,14 @@ test.describe('Candidate database', () => {
       'candidates-filter-category',
       `candidates-filter-category-option-${react.id}`,
     );
-    await expect(count).toHaveText('2 of 3 candidates');
+    await expect(count).toHaveText('All (2)');
 
     const before = queries.length;
     // Faster than the 300 ms window, so the whole word is one request.
     await page.getByTestId('candidates-search-input').pressSequentially('Jane', { delay: 40 });
     expect(queries.length).toBe(before);
 
-    await expect(count).toHaveText('1 of 3 candidates');
+    await expect(count).toHaveText('All (1)');
     expect(queries.length).toBe(before + 1);
 
     // One request carrying both: the term narrows the already-filtered set rather than
@@ -267,7 +268,7 @@ test.describe('Candidate database', () => {
     await page.goto(path);
 
     await page.getByTestId('candidates-search-input').fill('Tom');
-    await expect(page.getByTestId('candidates-count')).toHaveText('1 of 3 candidates');
+    await expect(page.getByTestId('candidates-scope-all')).toHaveText('All (1)');
 
     await page.getByTestId(`candidate-row-${await onlyRowId(page)}`).click();
     await expect(page.getByTestId('candidate-card')).toBeVisible();
@@ -292,10 +293,10 @@ test.describe('Candidate database', () => {
     await page.getByTestId('candidates-search-input').fill('nobody-by-that-name');
 
     await expect(page.getByTestId('candidates-no-results')).toBeVisible();
-    await expect(page.getByTestId('candidates-count')).toHaveText('0 of 3 candidates');
+    await expect(page.getByTestId('candidates-scope-all')).toHaveText('All (0)');
     // Clearing brings the list back rather than leaving a dead end.
     await page.getByTestId('candidates-clear-all').click();
-    await expect(page.getByTestId('candidates-count')).toHaveText('3 candidates');
+    await expect(page.getByTestId('candidates-scope-all')).toHaveText('All (3)');
   });
 
   /**
@@ -339,10 +340,9 @@ test.describe('Candidate database', () => {
     await signIn(page, org.email);
     await page.goto(`/org/${org.organizationId}/hiring/candidates`);
 
-    const count = page.getByTestId('candidates-count');
+    const count = page.getByTestId('candidates-scope-all');
     const filters = page.getByTestId('candidates-filters-open');
-    await expect(count).toHaveText('2 candidates');
-    await expect(page.getByTestId('candidates-scope-all')).toHaveText('All (2)');
+    await expect(count).toHaveText('All (2)');
     await expect(page.getByTestId('candidates-scope-mine')).toHaveText('Assigned to me (1)');
 
     await openFilters(page);
@@ -366,7 +366,7 @@ test.describe('Candidate database', () => {
 
     // A status applies at once — the count moves while the drawer is still open.
     await chooseInSelect(page, 'candidates-filter-status', 'candidates-filter-status-option-scheduled');
-    await expect(count).toHaveText('2 of 2 candidates');
+    await expect(count).toHaveText('All (2)');
     await expect(filters).toHaveText('Filters (1)');
 
     // `Show results` only dismisses; nothing is applied by it, and focus comes home.
@@ -375,9 +375,12 @@ test.describe('Candidate database', () => {
     await expect(filters).toHaveText('Filters (1)');
     await expect(filters).toBeFocused();
 
-    // The tab is navigation: it keeps every filter and returns to page 1.
+    // The tab is navigation: it keeps every filter and returns to page 1. Each tab counts
+    // what *it* would show under the filters that are applied, so the other one still
+    // answers "and how many would that show?" before it is pressed.
     await page.getByTestId('candidates-scope-mine').click();
-    await expect(count).toHaveText('1 of 2 candidates');
+    await expect(page.getByTestId('candidates-scope-mine')).toHaveText('Assigned to me (1)');
+    await expect(count).toHaveText('All (2)');
     await expect(filters).toHaveText('Filters (1)');
 
     await openFilters(page);
@@ -388,7 +391,7 @@ test.describe('Candidate database', () => {
     // And `Clear filters` empties the filters while leaving the tab exactly where it is.
     await page.getByTestId('candidates-clear-filters').click();
     await expect(filters).toHaveText('Filters');
-    await expect(count).toHaveText('1 of 2 candidates');
+    await expect(page.getByTestId('candidates-scope-mine')).toHaveText('Assigned to me (1)');
     await expect(page.getByTestId('candidates-scope-mine')).toHaveAttribute(
       'aria-selected',
       'true',
@@ -413,16 +416,16 @@ test.describe('Candidate database', () => {
     await signIn(page, org.email);
     await page.goto(path);
 
-    const count = page.getByTestId('candidates-count');
-    await expect(count).toHaveText('3 candidates');
+    const count = page.getByTestId('candidates-scope-all');
+    await expect(count).toHaveText('All (3)');
 
     await openFilters(page);
     await chooseInSelect(page, 'candidates-filter-category', `candidates-filter-category-option-${react.id}`);
-    await expect(count).toHaveText('2 of 3 candidates');
+    await expect(count).toHaveText('All (2)');
     await page.getByTestId('candidates-filters-apply').click();
 
     await page.getByTestId('candidates-search-input').fill('Jane');
-    await expect(count).toHaveText('1 of 3 candidates');
+    await expect(count).toHaveText('All (1)');
 
     // Written as they are applied, and the defaults stay out: no `scope`, no `page`.
     await expect(page).toHaveURL(new RegExp(`\\?(?=.*search=Jane)(?=.*categoryId=${react.id})`));
@@ -433,7 +436,7 @@ test.describe('Candidate database', () => {
     await page.reload();
     await expect(page.getByTestId('candidates-search-input')).toHaveValue('Jane');
     await expect(page.getByTestId('candidates-filters-open')).toHaveText('Filters (1)');
-    await expect(count).toHaveText('1 of 3 candidates');
+    await expect(count).toHaveText('All (1)');
   });
 
   /**
@@ -469,7 +472,7 @@ test.describe('Candidate database', () => {
     await page.goto(`/org/${org.organizationId}/hiring/candidates`);
 
     const rows = page.getByTestId('candidates-list').locator('[data-testid^="candidate-row-"]');
-    await expect(page.getByTestId('candidates-count')).toHaveText('26 candidates');
+    await expect(page.getByTestId('candidates-scope-all')).toHaveText('All (26)');
     await expect(rows).toHaveCount(25);
 
     // The strip states where it is rather than only painting it.
@@ -479,13 +482,13 @@ test.describe('Candidate database', () => {
     await page.getByTestId('candidates-page-2').click();
     await expect(rows).toHaveCount(1);
     await expect(page.getByTestId('candidates-page-2')).toHaveAttribute('aria-current', 'page');
-    // The count is org-wide and unfiltered, so it does not move with the page.
-    await expect(page.getByTestId('candidates-count')).toHaveText('26 candidates');
+    // The count is what matches, not what is on the page, so it does not move with it.
+    await expect(page.getByTestId('candidates-scope-all')).toHaveText('All (26)');
 
     // A filter is a new question: back to page 1, and the strip goes entirely when what
     // is left fits on it. A control offering one choice is not a choice.
     await page.getByTestId('candidates-search-input').fill('Candidate07');
-    await expect(page.getByTestId('candidates-count')).toHaveText('1 of 26 candidates');
+    await expect(page.getByTestId('candidates-scope-all')).toHaveText('All (1)');
     await expect(page.getByTestId('candidates-pagination')).toHaveCount(0);
   });
 
@@ -502,7 +505,7 @@ test.describe('Candidate database', () => {
     await page.goto(path);
 
     await page.getByTestId('candidates-search-input').fill('Tom');
-    await expect(page.getByTestId('candidates-count')).toHaveText('1 of 3 candidates');
+    await expect(page.getByTestId('candidates-scope-all')).toHaveText('All (1)');
     const id = await onlyRowId(page);
 
     // The kebab opens in place; the row it sits in does not navigate.
@@ -555,7 +558,7 @@ test.describe('Candidate database', () => {
     await page.goto(path);
 
     await page.getByTestId('candidates-search-input').fill('Tom');
-    await expect(page.getByTestId('candidates-count')).toHaveText('1 of 3 candidates');
+    await expect(page.getByTestId('candidates-scope-all')).toHaveText('All (1)');
     const id = await onlyRowId(page);
 
     await page.getByTestId(`candidate-actions-${id}`).click();
@@ -585,7 +588,7 @@ test.describe('Candidate database', () => {
     await page.goto(path);
 
     await page.getByTestId('candidates-search-input').fill('Jane');
-    await expect(page.getByTestId('candidates-count')).toHaveText('1 of 3 candidates');
+    await expect(page.getByTestId('candidates-scope-all')).toHaveText('All (1)');
     const id = await onlyRowId(page);
 
     await page.getByTestId(`candidate-actions-${id}`).click();
@@ -603,10 +606,9 @@ test.describe('Candidate database', () => {
     await page.getByTestId(`candidate-delete-confirm-${id}`).click();
 
     await expect(page.getByTestId('toast-candidate-deleted')).toHaveText('Jane Doe deleted');
-    // Every number moves with them: the org-wide total, the match count and both tabs.
-    await expect(page.getByTestId('candidates-count')).toHaveText('0 of 2 candidates');
+    // Every number moves with them, in the one place a number is now shown.
+    await expect(page.getByTestId('candidates-scope-all')).toHaveText('All (0)');
     await page.getByTestId('candidates-search-input').fill('');
-    await expect(page.getByTestId('candidates-count')).toHaveText('2 candidates');
     await expect(page.getByTestId('candidates-scope-all')).toHaveText('All (2)');
     // Their card is gone with them, however it is reached.
     await page.goto(`/org/${org.organizationId}/hiring/candidates/${id}`);

@@ -310,23 +310,35 @@ called for and which returns with the table's actions column.
 
     | Item | Drawn when | Does |
     |---|---|---|
-    | View in calendar | the row's interview stands | raises a toast, and nothing else (§10.55) |
-    | Reschedule interview | the row's interview stands | opens the card with the dialog up (§10.56) |
-    | Cancel interview | the row's interview stands | confirms, then calls it off (§10.57) |
+    | View in calendar | the row's interview stands | raises a toast saying it is not built (§10.55) |
+    | Reschedule interview | the interview is **still ahead** | opens the card with the dialog up (§10.56) |
+    | Cancel interview | the interview is **still ahead** | confirms, then calls it off (§10.57) |
     | View candidate | always | opens the candidate card |
     | Delete candidate | the caller may manage hiring | confirms, then removes the person (§11) |
 
-54. The three interview actions are **absent** on a row whose interview has been cancelled, or that
-    has no application at all — there is nothing left to move or call off. Absent rather than
-    disabled: the endpoints refuse either case anyway, so a disabled row would only invite somebody
-    to work out why. A **past** interview keeps them, unlike the candidate card's own pair
-    ([07 §14.65](07-manage-booking.md)): the card has the whole interview on screen to explain
-    itself with and this row has a date and a status, so hiding them here would leave a member
-    guessing which of two rows they were allowed to press.
-55. **View in calendar confirms and does nothing else** — no navigation, no request. The interview's
-    entry is the interviewer's own mailbox event and this product holds no deep link into one, so
-    the row says the request landed rather than claiming somewhere to go. If a deep link is ever
-    wanted it is its own decision, not a detail smuggled in with a column.
+54. The interview actions are **absent** on a row whose interview has been cancelled, or that has
+    no application at all — there is nothing left to move or call off. Absent rather than disabled:
+    the endpoints refuse either case anyway, so a disabled row would only invite somebody to work
+    out why.
+
+    **`Reschedule` and `Cancel` are absent on a past interview too**, which is the candidate card's
+    own rule ([07 §14.65](07-manage-booking.md)) arriving here. This used to argue the other way —
+    that the card has the whole interview on screen to explain itself with, and this row has a date
+    and a status, so hiding them would leave a member guessing which of two rows they were allowed
+    to press, and the endpoints could answer for themselves. That is the wrong way round: a row
+    offering a move the server will refuse ends in an error nobody could have predicted from the
+    menu, and the date the member would be guessing about is printed two columns to the left. One
+    interview now reads the same either side of a click.
+
+    `View in calendar` stays on every uncancelled row, because what it does is true whenever the
+    interview is.
+55. **View in calendar confirms and does nothing else** — no navigation, no request — and **says
+    so**. The interview's entry is the interviewer's own mailbox event and this product holds no
+    deep link into one, so the row cannot make the navigation it names. It answered
+    `Opening the interview in the calendar…`, which describes something happening; nothing was. It
+    says `Not implemented yet`. A row that cannot do its job says that plainly rather than in the
+    present continuous, and if a deep link is ever wanted it is its own decision, not a detail
+    smuggled in with a column.
 56. **Reschedule opens the candidate card with the reschedule dialog already up**, on the
     application the row speaks for. The team never sends the candidate's own manage link
     ([07 §01.5](07-manage-booking.md)), so the internal door is the card — and a row action that

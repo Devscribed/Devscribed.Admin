@@ -31,7 +31,6 @@ import {
   Table,
   TableToolbar,
   TextInput,
-  Toast,
   ToastHost,
 } from '@/ds';
 import { PageHeader } from '@/layout/PageHeader';
@@ -163,7 +162,6 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
         if (!renaming) {
           push({
             message: LIBRARY_MESSAGES.toast.created,
-            tone: 'success',
             testId: 'toast-library-created',
           });
         }
@@ -227,7 +225,6 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
           message: isArchived
             ? CRITERION_MESSAGES.toast.archived
             : CRITERION_MESSAGES.toast.restored,
-          tone: 'success',
           testId: isArchived ? 'toast-criteria-archived' : 'toast-criteria-restored',
         });
       }
@@ -295,9 +292,10 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
   }
 
   function criterionActions(criterion: Criterion) {
-    // Deleting an assessed criterion would destroy every judgement recorded against it,
-    // so it is disabled rather than hidden and archive is named as what to do instead —
-    // in the row, under the label, where a keyboard can reach it (ledger §22).
+    // Deleting an assessed criterion would destroy every judgement recorded against it, so
+    // it is disabled rather than hidden and archive is named as what to do instead — in a
+    // bubble beside the menu, over a hidden copy that is the row's permanent
+    // `aria-describedby` target, so a keyboard reaches it too (ledger §62).
     const blocked = criterion.assessmentCount > 0;
     return [
       {
@@ -324,10 +322,10 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
         label: 'Delete',
         danger: !blocked,
         disabled: blocked,
-        description: blocked
+        tooltip: blocked
           ? criterionDeleteBlockedMessage(criterion.assessmentCount)
           : undefined,
-        descriptionTestId: `criterion-delete-guard-${criterion.id}`,
+        tooltipTestId: `criterion-delete-guard-${criterion.id}`,
         testId: `criterion-delete-${criterion.id}`,
         onSelect: () => setDeletingCriterion(criterion),
       },
@@ -570,7 +568,6 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
           if (created) {
             push({
               message: LIBRARY_MESSAGES.toast.created,
-              tone: 'success',
               testId: 'toast-library-created',
             });
           }
@@ -667,18 +664,7 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
         data-testid="criterion-delete-confirm"
       />
 
-      <ToastHost>
-        {toasts.map((toast) => (
-          <Toast
-            key={toast.id}
-            tone={toast.tone}
-            data-testid={toast.testId}
-            onDismiss={() => dismiss(toast.id)}
-          >
-            {toast.message}
-          </Toast>
-        ))}
-      </ToastHost>
+      <ToastHost toasts={toasts} onDismiss={dismiss} />
     </div>
   );
 }

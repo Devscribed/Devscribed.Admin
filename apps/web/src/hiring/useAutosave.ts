@@ -20,6 +20,15 @@ export interface UseAutosave {
   save(): void;
   retry(): void;
   isDirty(): boolean;
+  /**
+   * The same question `isDirty()` answers, as a value a render can read.
+   *
+   * The loop is the authority on this and the unload guard asks it directly — but a guard is
+   * called at a moment, and a Save button has to *look* right between moments. Nothing here
+   * re-renders when the loop's own flag changes, so the fact is mirrored into state: the
+   * value the field holds against the last one the server accepted.
+   */
+  dirty: boolean;
 }
 
 /**
@@ -41,6 +50,10 @@ export function useAutosave(options: {
   save: (value: string) => Promise<{ savedAt: string }>;
 }): UseAutosave {
   const [value, setValue] = useState(options.initial);
+  // The last text the server took. Not the initial prop for the life of the editor: after
+  // an autosave the field and the server agree again, and a Save button that stayed lit
+  // would be offering a write that `run` below refuses to make.
+  const [accepted, setAccepted] = useState(options.initial);
   const [state, setState] = useState<AutosaveState>('idle');
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [announced, setAnnounced] = useState<string | null>(null);
@@ -64,6 +77,7 @@ export function useAutosave(options: {
 
         const result = await save.current(next);
         const at = new Date(result.savedAt);
+        setAccepted(next);
         setSavedAt(at);
         if (asked) setAnnounced(`Saved at ${timeOf(at)}`);
       },
@@ -103,7 +117,7 @@ export function useAutosave(options: {
   // keystroke.
   const isDirty = useCallback(() => loop.current!.isDirty(), []);
 
-  return { value, state, savedAt, announced, change, save: run, retry: run, isDirty };
+  return { value, state, savedAt, announced, change, save: run, retry: run, isDirty, dirty: value !== accepted };
 }
 
 const pad = (value: number): string => String(value).padStart(2, '0');

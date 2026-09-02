@@ -39,8 +39,12 @@ start time the server would reject.
 
 1. A self-contained component sitting after — or beside — the Calendar Control, driven by the date
    currently selected there.
-2. Two regions: a **header** naming the selected date and the active time zone, and a **slot list**
-   of selectable start times.
+2. Two regions: a **header** naming the selected date, and a **slot list** of selectable start
+   times. The header states the active time zone too, but **visually hidden**
+   (`blue-fixes`): the zone is named once on the page, by the labelled control above the two
+   panels, and printed again under the date it is the same sentence twice on one screen. It stays
+   in the accessible tree because a slot list read out of context has to say whose clock the times
+   are on.
 3. Times for **exactly one date at a time**. Never two dates at once.
 4. When no date is selected — possible only when the whole window has no availability — the control
    shows its empty state instead of a list.
@@ -73,7 +77,11 @@ start time the server would reject.
 ### 03. Slot States
 
 12. **Available** — free and bookable. Interactive.
-13. **Selected** — exactly one at a time.
+13. **Selected** — exactly one at a time. `Button pressed`
+    ([§71](../../design-system/ledger.md)): the emphasis colour at 12% behind ink and a border in
+    it, which is the tint the Calendar's selected day takes. It was `variant="primary"` — solid
+    blue — which is the paint of the page's own primary action, so the chosen slot and `Book` were
+    the same button three rows apart, one of which submits.
 14. **Hover** and **Focus** are distinct from each other and from Selected.
 15. **Unavailable times are not listed at all.** The picker renders only bookable starts, so there
     is no disabled or greyed slot state to represent.

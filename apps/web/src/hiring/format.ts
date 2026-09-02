@@ -67,3 +67,18 @@ function supportedTimeZones(): string[] {
   }
   return ['UTC'];
 }
+
+const KB = 1024;
+
+/**
+ * `180 KB`, `1.4 MB` — enough to tell a real CV from an empty one.
+ *
+ * Here rather than beside either caller: the candidate card states a stored CV's weight and
+ * the booking form states the weight of the one just chosen, and a person comparing the two
+ * is looking at the same file.
+ */
+export function formatFileSize(bytes: number): string {
+  if (bytes < KB) return `${bytes} B`;
+  if (bytes < KB * KB) return `${Math.round(bytes / KB)} KB`;
+  return `${(bytes / (KB * KB)).toFixed(1)} MB`;
+}

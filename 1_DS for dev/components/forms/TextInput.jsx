@@ -1,4 +1,5 @@
 import React from 'react';
+import { RequiredMark } from './FormField.jsx';
 
 /* ::placeholder can't be an inline style; injected once into <head> rather than rendered as a
    sibling element, which would break consumers' adjacent-sibling and :nth-child rules. */
@@ -71,6 +72,9 @@ export const TextInput = React.forwardRef(function TextInput({
       {label && (
         <label htmlFor={inputId} style={{ display: 'inline-block', fontWeight: 'var(--font-weight-regular)', fontSize: 'var(--font-size-xs)', lineHeight: '21px', color: 'var(--text-secondary)', marginBottom: 4, padding: '10px 0 0 10px' }}>
           {label}
+          {/* §64 — `required` also reaches the `<input>` through `...rest`, which is what a
+              reader is told; this is only what a reader is shown. */}
+          {rest.required && <RequiredMark />}
         </label>
       )}
       <div style={{ position: 'relative', display: description ? 'grid' : 'block', gridTemplateColumns: description ? '40% 60%' : undefined, alignItems: 'center' }}>

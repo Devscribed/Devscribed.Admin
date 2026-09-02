@@ -48,6 +48,23 @@ function base(variant, disabled) {
   return { ...common, backgroundColor: 'var(--surface-card)', borderColor: 'var(--border-default)', color: 'var(--action-neutral-text)' };
 }
 
+/* §71 — the chosen one of a set. Blue has no such state: prod's buttons all *do* something and
+   none of them stay down afterwards, so there was nothing to measure. A booking page is a grid
+   of times where exactly one is picked, and painting that with `variant="primary"` — the only
+   selected treatment available — made the chosen slot look like the page's primary action while
+   `Book`, a few rows below, looked the same. Two solid blue buttons, one of which submits.
+
+   The paint is the tint blue already uses for a chosen thing: the emphasis colour at 12% behind
+   ink and a border in the colour itself, which is exactly how a selected calendar day reads
+   (§30). It composes over the default variant, so the box, the height and the radius are
+   unchanged, and it sets `aria-pressed` — a control that says it is chosen has to say so to a
+   reader as well. */
+const pressedPaint = {
+  backgroundColor: 'color-mix(in oklch, var(--action-primary) 12%, transparent)',
+  borderColor: 'var(--action-primary)',
+  color: 'var(--action-primary)',
+};
+
 /**
  * Button — primary action control, recreated from components/shared/Button.
  * Variants: default (outlined neutral), primary (solid blue), delete (solid red).
@@ -58,6 +75,8 @@ export const Button = React.forwardRef(function Button(
      `className` and `style` were dropped on the floor. That is a measurement gap, not an API:
      prod never needed them because prod has no test ids. */
   { variant, icon, preloader, disabled, children, onClick, type = 'button', style, onMouseEnter, onMouseLeave,
+    /* §71 — chosen, for a button that is one of a set. Also sets `aria-pressed`. */
+    pressed,
     /* §38 — the element, so a control that *navigates* can be a real `<a>` wearing this paint.
        Prod has no such control — every download it offers is a row in a table — so blue measured
        a `<button>` and stopped. A `<button onClick={() => location.assign(...)}>` loses
@@ -71,6 +90,7 @@ export const Button = React.forwardRef(function Button(
   const [hover, setHover] = React.useState(false);
   const link = Tag === 'a';
   const painted = base(variant, disabled);
+  if (pressed) Object.assign(painted, pressedPaint);
   if (hover && !disabled) {
     if (variant === 'primary' || variant === 'delete') painted.filter = 'brightness(90%)';
     else painted.opacity = 0.6;
@@ -86,6 +106,8 @@ export const Button = React.forwardRef(function Button(
       /* §2 — a button that has swapped its label for "Signing in" and started a request is busy,
          and a screen reader has no other way to know. Prod never announced it. */
       aria-busy={preloader ? true : undefined}
+      /* §71 — the state the paint is only the picture of. */
+      aria-pressed={pressed === undefined ? undefined : Boolean(pressed)}
       onClick={onClick}
       onMouseEnter={(e) => { setHover(true); if (onMouseEnter) onMouseEnter(e); }}
       onMouseLeave={(e) => { setHover(false); if (onMouseLeave) onMouseLeave(e); }}

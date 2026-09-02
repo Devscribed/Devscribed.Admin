@@ -20,6 +20,36 @@ const badgeVariants = {
   warning: { backgroundColor: 'var(--status-warning)', color: 'var(--text-primary)' },
   outlinedInfo: { border: '1px solid var(--status-info)', color: 'var(--status-info)' },
   outlinedWarning: { border: '1px solid var(--status-warning)', color: 'var(--text-primary)' },
+
+  /* §59 — the tone that is not a status. Every paint above says something is *going* well or
+     badly, and a vacancy's categories, a candidate's assessed criteria and an interview's
+     length are none of those: they are labels on an object, and drawing `Middle` in the red
+     that means `inactive` says something false about it. This is the recessed ground blue
+     already puts behind a `Table`'s header and inside a board column, hairlined in the
+     border it uses for the quietest divisions — no new colour, and no second component. */
+  neutral: {
+    backgroundColor: 'var(--surface-sunken)',
+    border: '1px solid var(--border-subtle)',
+    color: 'var(--text-primary)',
+    /* A label is read, not announced: `medium` is the weight of a status shouting its state,
+       and a row of six categories set in it competes with the title above them. */
+    fontWeight: 'var(--font-weight-regular)',
+  },
+  outlinedNeutral: {
+    border: '1px solid var(--border-subtle)',
+    color: 'var(--text-secondary)',
+    fontWeight: 'var(--font-weight-regular)',
+  },
+};
+
+/* §59 — two densities. Blue's measured box is the `m` row exactly; `s` is what a label set
+   inside a table row needs, and its values are `Badge`'s own one step down blue's type scale
+   with the padding closed up to match. `neutral` carries 2px more side padding at `m`
+   because it is the only tone with a border on its solid form, and without it the ink sits
+   tighter to the edge than every status badge beside it. */
+const badgeSizes = {
+  m: { fontSize: 'var(--font-size-s)', lineHeight: '16px', padding: '4px 8px' },
+  s: { fontSize: 'var(--font-size-xs)', lineHeight: '16px', padding: '2px 8px' },
 };
 
 /** `active` → `outlinedActive`. Anything unrecognised falls back the way blue's did, to inactive. */
@@ -36,12 +66,16 @@ const variantKey = (status, outlined) => {
  */
 export function Badge({
   status = 'active', outlined,
+  /** §59 — `m` is blue's measured box; `s` is the density a label takes inside a table row. */
+  size = 'm',
   /* §19 — blue destructures three props and forwards nothing, so `data-testid` and every
      `aria-*` were dropped before the DOM. Prod never needed them; a badge whose text a test
      has to read does. */
   style, children, ...rest
 }) {
   const key = variantKey(status, outlined);
+  const box = badgeSizes[size] || badgeSizes.m;
+  const neutral = key === 'neutral';
   return (
     <span
       {...rest}
@@ -52,14 +86,27 @@ export function Badge({
         borderRadius: 'var(--radius-s)',
         fontFamily: 'var(--font-family-base)',
         fontWeight: 'var(--font-weight-medium)',
-        fontSize: 'var(--font-size-s)',
-        lineHeight: '16px',
-        padding: '4px 8px',
+        ...box,
+        ...(neutral && size === 'm' ? { padding: '4px 10px' } : null),
+        /* A label may be the longest thing in a narrow cell, and a pill that grew until the
+           column did is what pushed the row's own text out of it. */
+        maxWidth: '100%',
+        minWidth: 0,
         ...badgeVariants[key],
         ...style,
       }}
     >
-      {children ?? (status === 'active' ? 'Active' : 'Inactive')}
+      {/* §59 — the truncation sits on a child, not on the box. This is an `inline-flex`, so
+          its text is an anonymous flex item and never a line box: `text-overflow` on the
+          pill itself would clip hard with no ellipsis, which is exactly what §48 found on
+          `Table`'s header cells. */}
+      <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {/* §59 — only the two states blue drew have a name of their own to fall back to. A
+            neutral label with no text is not `Inactive`; it is a caller with nothing to say. */}
+        {children ?? (status === 'active' || status === 'inactive'
+          ? (status === 'active' ? 'Active' : 'Inactive')
+          : null)}
+      </span>
     </span>
   );
 }

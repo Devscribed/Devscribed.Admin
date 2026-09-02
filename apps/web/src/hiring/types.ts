@@ -12,6 +12,7 @@ import type {
   CriterionType,
   CvVersion,
   ScheduleEntry,
+  VacancyStatus,
 } from '@devscribed/validation';
 
 /** A library entry with the usage count that makes a delete decision answerable. */
@@ -182,7 +183,17 @@ export interface CardApplication {
   isCancelled: boolean;
   /** Frozen at booking; the candidate's display name may since have moved on. */
   submittedName: string;
-  vacancy: { id: string; title: string; durationMinutes: number };
+  /**
+   * `status` and `categories` are the vacancy **as it is now**, where everything else about
+   * the interview is frozen at booking: the header states what the reader can act on today.
+   */
+  vacancy: {
+    id: string;
+    title: string;
+    durationMinutes: number;
+    status: VacancyStatus;
+    categories: Array<{ id: string; name: string }>;
+  };
   interviewer: { accountId: string; fullName: string };
   startUtc: string;
   /** The booked end. A later change to the vacancy's length never moves it. */
@@ -243,7 +254,6 @@ export interface BoardCardData {
   name: string;
   startUtc: string;
   position: number;
-  hasCv: boolean;
   isCancelled: boolean;
   /** Names who cancelled, for the badge and its tooltip. Null when nobody did. */
   cancellation: CancellationFacts | null;

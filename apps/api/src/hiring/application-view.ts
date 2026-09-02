@@ -49,7 +49,18 @@ export const ASSESSMENT = {
  * schedule newest-first, which is the order the history expands into (07 §11.54).
  */
 export const CARD_APPLICATION = {
-  vacancy: { select: { id: true, title: true, durationMinutes: true } },
+  /*
+   * `status` and `categories` are read live, unlike everything else about the interview,
+   * and that is the point: what was booked is frozen (the length, the interviewer, the
+   * end), but *what the vacancy is now* is what the header states — a closed vacancy and
+   * the labels a recruiter filters by are facts about today, not about the booking.
+   */
+  vacancy: {
+    select: {
+      id: true, title: true, durationMinutes: true, status: true,
+      categories: { include: { category: { select: { id: true, name: true } } } },
+    },
+  },
   /*
    * The interviewer this application was **booked with**, read from its own column
    * rather than resolved live through `vacancy.interviewer`. Reassigning a vacancy used
@@ -108,7 +119,15 @@ export interface StoredCardApplication {
   cvSizeBytes: number | null;
   interviewNotes: string | null;
   conclusion: string | null;
-  vacancy: { id: string; title: string; durationMinutes: number };
+  vacancy: {
+    id: string;
+    title: string;
+    durationMinutes: number;
+    /* `string`, as the application's own status is above: Prisma types these columns as
+       strings and the narrowing happens at the edge, not in this row. */
+    status: string;
+    categories: Array<{ category: { id: string; name: string } }>;
+  };
   interviewer: { id: string; firstName: string; lastName: string; email: string };
   criteria: StoredAssessment[];
   scheduleEvents: StoredScheduleEvent[];
@@ -133,6 +152,12 @@ export function presentCardApplication(application: StoredCardApplication) {
       id: application.vacancy.id,
       title: application.vacancy.title,
       durationMinutes: application.vacancy.durationMinutes,
+      status: application.vacancy.status,
+      // Sorted here, as the vacancies list sorts them, so the same set of labels reads in
+      // the same order on both screens.
+      categories: application.vacancy.categories
+        .map((assignment) => assignment.category)
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
     },
     interviewer: {
       accountId: application.interviewer.id,

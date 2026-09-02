@@ -10,9 +10,15 @@ export interface PopoverItem {
   danger?: boolean;
   /** §22 — blocked rather than removed: `aria-disabled`, still focusable, not activatable. */
   disabled?: boolean;
-  /** §22 — the reason, drawn under the label and wired as the row's `aria-describedby`. */
+  /** §22 — a second line under the label, saying what the row is *about*. Wired as the row's
+   *  `aria-describedby`. For *why a row cannot be used*, see `tooltip`. */
   description?: ReactNode;
   descriptionTestId?: string;
+  /** §62 — why this row is blocked, in a `Tooltip` bubble to the left of the menu, on hover
+   *  and on focus. Also the row's `aria-describedby`; a row never carries both. */
+  tooltip?: ReactNode;
+  /** `data-testid` for the reason. It rides the always-present copy, not the bubble. */
+  tooltipTestId?: string;
   testId?: string;
 }
 

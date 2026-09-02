@@ -15,6 +15,7 @@ import {
   FormActions,
   InfoBanner,
   Modal,
+  RequiredMark,
   Select,
   TextArea,
   TextInput,
@@ -262,6 +263,7 @@ export function VacancyDialog({
 
           <TextInput
             label="Title"
+            required
             id="vacancy-title-input"
             name="title"
             placeholder="Senior React Engineer"
@@ -275,7 +277,29 @@ export function VacancyDialog({
           />
 
           <Select
+            label="Categories"
+            id="vacancy-categories-input"
+            placeholder="Type to add…"
+            isMulti
+            isSearchable
+            allowCreate
+            variant="formik"
+            value={selectedCategories}
+            options={categoryOptions}
+            // Nothing is written here: the name joins the selection as a pending entry
+            // and the submit creates it, so cancelling the dialog leaves no orphan.
+            onCreate={(name) => setCategories((prev) => [...prev, `${PENDING}${name}`])}
+            onChange={(option) => setCategories(asOptions(option).map((entry) => entry.value))}
+            createTestId="vacancy-category-create-option"
+            // Not `vacancy-category-chip-{id}` — that one names the read-only chips on
+            // the list, and the dialog opens on top of them.
+            chipTestId={(option) => `vacancy-category-selected-${asOption(option).value}`}
+            data-testid="vacancy-categories-input"
+          />
+
+          <Select
             label="Interviewer"
+            required
             id="vacancy-interviewer-select"
             placeholder="Choose an interviewer"
             value={interviewerOptions.find((option) => option.value === values.interviewerAccountId)}
@@ -305,6 +329,7 @@ export function VacancyDialog({
               >
                 Interview length
               </span>
+              <RequiredMark />
             </FieldLabel>
             <div style={{ display: 'flex', gap: 'var(--space-6)' }}>
               {VACANCY_DURATIONS.map((minutes) => (
@@ -339,27 +364,6 @@ export function VacancyDialog({
               </div>
             )}
           </div>
-
-          <Select
-            label="Categories"
-            id="vacancy-categories-input"
-            placeholder="Type to add…"
-            isMulti
-            isSearchable
-            allowCreate
-            variant="formik"
-            value={selectedCategories}
-            options={categoryOptions}
-            // Nothing is written here: the name joins the selection as a pending entry
-            // and the submit creates it, so cancelling the dialog leaves no orphan.
-            onCreate={(name) => setCategories((prev) => [...prev, `${PENDING}${name}`])}
-            onChange={(option) => setCategories(asOptions(option).map((entry) => entry.value))}
-            createTestId="vacancy-category-create-option"
-            // Not `vacancy-category-chip-{id}` — that one names the read-only chips on
-            // the list, and the dialog opens on top of them.
-            chipTestId={(option) => `vacancy-category-selected-${asOption(option).value}`}
-            data-testid="vacancy-categories-input"
-          />
 
           <TextArea
             label="Description"

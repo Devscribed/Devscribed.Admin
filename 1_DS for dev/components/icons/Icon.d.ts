@@ -11,6 +11,10 @@ export function UserIcon(props: GlyphProps): JSX.Element;
 export function PersonCircleIcon(props: GlyphProps): JSX.Element;
 export function MailOutlineIcon(props: GlyphProps): JSX.Element;
 export function TimeOutlineIcon(props: GlyphProps): JSX.Element;
+/** §67 — outline, to sit in a row with `TimeOutlineIcon` rather than beside it. */
+export function CalendarIcon(props: GlyphProps): JSX.Element;
+/** §67 — outline, where `PersonCircleIcon` and `UserIcon` are the filled marks. */
+export function PersonOutlineIcon(props: GlyphProps): JSX.Element;
 export function InfoCircleIcon(props: GlyphProps): JSX.Element;
 export function CloudDownloadOutlineIcon(props: GlyphProps): JSX.Element;
 export function SettingsIcon(props: GlyphProps): JSX.Element;

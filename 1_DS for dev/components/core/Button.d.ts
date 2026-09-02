@@ -5,6 +5,9 @@ import { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
 export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'type'> {
   /** Visual style. Omit for the default outlined neutral button. */
   variant?: 'primary' | 'delete';
+  /** §71 — chosen, for a button that is one of a set: the 12% tint of the emphasis colour,
+   *  a border in it, ink in it, and `aria-pressed`. Composes over the default variant. */
+  pressed?: boolean;
   /** Optional leading icon element. */
   icon?: ReactNode;
   /** Shows a spinning loader in place of the icon slot. Does not disable the button. */

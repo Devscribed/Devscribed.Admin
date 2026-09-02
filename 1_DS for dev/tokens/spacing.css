@@ -16,6 +16,14 @@
   --space-11: 36px;
   --space-12: 40px;
 
+  /* §70 — the height every interactive control in blue is, and the border width every one of
+     them draws. `Button`, `TextInput`, `TextArea` and `Select` each state 44 and 1.5 as raw
+     numbers, and so did the calendar cell, the slot chip and the file chooser that were built
+     to sit beside them. One name, so a control added later lands on the same line as the ones
+     already there instead of on a number somebody copied. */
+  --control-height: 44px;
+  --border-width-control: 1.5px;
+
   /* Layout constants pulled directly from AppLayout / Sidebar / Navbar */
   --layout-sidebar-width: 290px;
   --layout-navbar-height-mobile: 60px;
@@ -26,6 +34,11 @@
   --radius-s: 4px;    /* ActivityBadge */
   --radius-m: 6px;    /* popovers, tracker card, menu drawer top corners (implicit) */
   --radius-l: 8px;    /* buttons, inputs, cards, modal, ChapterNavigationCard */
+  /* §66 — the radius of the app's *large* white sections: the Timesheets calendar card and
+     the report tables. Numerically `--radius-pill`, and deliberately not it: that one is a
+     36px control rounded until it is a capsule, and this is a 880px panel. A section that
+     took the pill token would follow it the day a capsule stopped being 20px. */
+  --radius-xl: 20px;
   --radius-pill: 20px; /* ToggleButton segmented control */
   --radius-circle: 50%; /* tracker start/stop button, avatar chips */
 }

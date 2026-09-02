@@ -293,6 +293,13 @@ Additional application sections are collapsed by default; the most recent is exp
 
 ### GET /api/organizations/{orgId}/hiring/candidates/{candidateId}
 
+**`vacancy.status` and `vacancy.categories` are read live**, unlike everything else about the
+interview. What was booked is frozen — the length, the interviewer, the end — because a later edit
+to the vacancy must not rewrite the record of an interview that already happened. What the vacancy
+*is now* is a different kind of fact, and it is what the header states: an offer on a closed
+vacancy is a different conversation, and the labels are what the same person is filtered by one
+screen over.
+
 Response `200`:
 ```json
 {
@@ -302,7 +309,11 @@ Response `200`:
   "applications": [
     { "id": "uuid", "status": "scheduled", "isCancelled": false,
       "submittedName": "Jane M. Doe",
-      "vacancy": { "id": "uuid", "title": "Senior React Engineer", "durationMinutes": 60 },
+      "vacancy": {
+        "id": "uuid", "title": "Senior React Engineer", "durationMinutes": 60,
+        "status": "open",
+        "categories": [{ "id": "uuid", "name": "React" }]
+      },
       "interviewer": { "accountId": "uuid", "fullName": "Pat Owner" },
       "startUtc": "2026-08-26T11:00:00.000Z", "bookedTimeZone": "Europe/Minsk",
       "note": "I'm available from September.",

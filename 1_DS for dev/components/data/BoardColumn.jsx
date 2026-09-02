@@ -6,12 +6,19 @@ import React from 'react';
  * land in.
  *
  * **Designed, not measured**, like `BoardCard` (§42) — but the shape is one blue already
- * draws twice. The column is a `Card` (§12): white, a 1px `--border-default` hairline, the
- * 8px radius, no shadow. Its body is a `--surface-sunken` well holding white cards, which is
- * `AppShell`'s own arrangement one level down — blue's single answer to "a container of
+ * draws twice. The whole column is a `--surface-sunken` well holding white cards, which is
+ * `AppShell`'s own arrangement one level down: blue's single answer to "a container of
  * things" is a recessed ground with white panels on it, and a kanban column is exactly that.
- * The head is `Card`'s title row: a real heading at blue's headline-6, in sentence case,
- * because blue's one uppercase is `PageTabs` and the narrow board's tab strip is already it.
+ *
+ * **The head sits inside the well rather than above it in a card of its own.** The first
+ * version of this entry wrapped the well in a `Card` (§12) and gave it `Card`'s title row at
+ * blue's headline-6 over a hairline — five bordered white boxes each containing a grey box,
+ * with a 24px heading on top of a 14px card. That is a container drawn twice. A column is not
+ * a card; it is the ground the cards are on, and its name is a label on that ground: the
+ * label takes `--font-size-s` at `--font-weight-medium`, which is exactly the weight a
+ * `BoardCard`'s own name takes, and the count sits beside it rather than pushed to the far
+ * edge — five columns of one word each, and a count 200px away from what it counts reads as
+ * a column of its own.
  *
  * Presentational and drag-mechanical only. It converts a pointer position into a **slot
  * index** — how many cards sit above the pointer — and hands that back; what the slots mean,
@@ -29,6 +36,12 @@ export function BoardColumn({
   emptyLabel = 'Nothing here yet.',
   /** Heading level for the column name. The board's columns sit under a `PageTitle` `<h1>`. */
   nameAs: NameTag = 'h2',
+  /**
+   * Drops the head. Below the board's breakpoint the column *is* the panel a tab strip
+   * chose, and that strip's chosen tab already carries this column's name and count — a
+   * heading under it would be the same two facts twice, 8px apart.
+   */
+  hideHeader = false,
   /** Where the placeholder opens its gap, as a slot index. `null` renders none. */
   placeholderIndex = null,
   /** Measured from the card in flight, so its gap is exactly the size it will fill. */
@@ -70,7 +83,9 @@ export function BoardColumn({
         borderRadius: 'var(--radius-l)',
         /* The gap is the well showing through, outlined in the one emphasis colour blue has.
            A tinted fill would be a second object on a board that must only ever show one. */
+        backgroundColor: 'var(--surface-sunken)',
         border: '1px dashed var(--action-primary)',
+        boxSizing: 'border-box',
       }}
     />
   );
@@ -90,54 +105,56 @@ export function BoardColumn({
       style={{
         display: 'flex',
         flexDirection: 'column',
+        gap: 'var(--space-3)',
         minWidth: 0,
-        backgroundColor: 'var(--surface-card)',
-        border: '1px solid var(--border-default)',
+        /* The well *is* the column. The cards are the only white on the board. */
+        backgroundColor: 'var(--surface-sunken)',
         borderRadius: 'var(--radius-l)',
+        /* 2px at the sides, because the body inside it carries the real 8px: a column that
+           scrolls has to put its scrollbar against its own edge, not 8px in from it. */
+        padding: 'var(--space-4) 2px',
+        boxSizing: 'border-box',
         fontFamily: 'var(--font-family-base)',
-        overflow: 'hidden',
         ...style,
       }}
     >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 'var(--space-3)',
-          padding: 'var(--space-4) var(--space-5)',
-          backgroundColor: 'var(--surface-card)',
-          borderBottom: '1px solid var(--border-default)',
-        }}
-      >
-        <NameTag
+      {!hideHeader && (
+        <div
           style={{
-            minWidth: 0,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            fontWeight: 'var(--headline-6-weight)',
-            fontSize: 'var(--headline-6-size)',
-            lineHeight: 'var(--headline-6-line)',
-            letterSpacing: 'var(--headline-6-tracking)',
-            color: 'var(--text-primary)',
-          }}
-        >
-          {name}
-        </NameTag>
-        <span
-          data-testid={`board-column-count-${status}`}
-          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--space-3)',
+            padding: '0 var(--space-4)',
             flexShrink: 0,
-            fontWeight: 'var(--font-weight-medium)',
-            fontSize: 'var(--font-size-s)',
-            fontVariantNumeric: 'tabular-nums',
-            color: 'var(--text-secondary)',
           }}
         >
-          {count}
-        </span>
-      </div>
+          <NameTag
+            style={{
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              fontWeight: 'var(--font-weight-medium)',
+              fontSize: 'var(--font-size-s)',
+              lineHeight: '20px',
+              color: 'var(--text-primary)',
+            }}
+          >
+            {name}
+          </NameTag>
+          <span
+            data-testid={`board-column-count-${status}`}
+            style={{
+              flexShrink: 0,
+              fontSize: 'var(--font-size-xs)',
+              fontVariantNumeric: 'tabular-nums',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            {count}
+          </span>
+        </div>
+      )}
 
       <div
         ref={body}
@@ -158,20 +175,21 @@ export function BoardColumn({
           display: 'flex',
           flexDirection: 'column',
           gap: 'var(--space-3)',
-          padding: 'var(--space-3)',
-          backgroundColor: 'var(--surface-sunken)',
+          padding: 'var(--space-2) var(--space-3)',
           // One card's worth, so an empty column is still a target worth aiming at.
-          minHeight: 84,
+          minHeight: 76,
           overflowY: 'auto',
         }}
       >
         {slots.length === 0 ? (
+          /* Top-left and quiet, not centred: a centred sentence in an empty column is the
+             most prominent thing on a board whose other four columns have work in them. */
           <p
             data-testid={`board-column-empty-${status}`}
             style={{
-              margin: 'auto 0',
-              textAlign: 'center',
-              fontSize: 'var(--font-size-s)',
+              margin: 0,
+              padding: 2,
+              fontSize: 'var(--font-size-xs)',
               color: 'var(--text-secondary)',
             }}
           >

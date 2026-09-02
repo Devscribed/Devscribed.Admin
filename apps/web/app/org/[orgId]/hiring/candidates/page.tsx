@@ -14,11 +14,11 @@ import {
   candidateDeleteTitle,
   candidateDeletedToast,
   candidateFiltersLabel,
-  candidateResultLabel,
   candidateScopeTabLabel,
   formatShortDate,
   formatSlotTime,
   interviewerPickerLabel,
+  isLiveBooking,
   pageCount,
   type ApplicationStatus,
   type CandidateScope,
@@ -27,7 +27,6 @@ import {
   Badge,
   Button,
   Card,
-  Chip,
   ConfirmDialog,
   EmptyState,
   InfoBanner,
@@ -38,7 +37,6 @@ import {
   Select,
   Table,
   TableToolbar,
-  Toast,
   ToastHost,
   type SelectOption,
 } from '@/ds';
@@ -213,7 +211,6 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
     if (deleted === null) return;
     push({
       message: candidateDeletedToast(deleted),
-      tone: 'success',
       testId: 'toast-candidate-deleted',
     });
   }, [push]);
@@ -287,14 +284,6 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
    * from a typo is still something to undo.
    */
   const filtered = filterCount > 0 || query.trim().length > 0;
-  /**
-   * Whether anything at all narrows it, which is a different question and the one the
-   * count line asks. `Assigned to me` with no filters shows `3 of 128 candidates`: three
-   * are mine, and a hundred and twenty-eight exist — both of which are true and neither
-   * of which the other says.
-   */
-  const narrowed = filtered || scope === 'mine';
-
   /**
    * The whole question, in the one shape the request and the address bar share.
    *
@@ -548,7 +537,6 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
       }
       push({
         message: candidateDeletedToast(row.fullName),
-        tone: 'success',
         testId: 'toast-candidate-deleted',
       });
       void load();
@@ -564,15 +552,22 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
    * The row's kebab (03 §10.53).
    *
    * Split by what the item is *about*. `View candidate` is about the person and is always
-   * there; the three interview actions are drawn only while there is an interview to act
-   * on — one that has not been called off. Absent rather than disabled, which is the same
-   * rule the candidate card's own pair follows (07 §14.65): the API refuses a cancelled or
-   * past interview anyway, so a disabled row would only invite somebody to work out why.
+   * there; the interview actions are drawn only while there is an interview to act on.
+   * Absent rather than disabled, which is the same rule the candidate card's own pair
+   * follows (07 §14.65): the API refuses a cancelled or past interview anyway, so a
+   * disabled row would only invite somebody to work out why.
    *
-   * A past interview keeps them. `isLiveBooking` is the card's test because the card is
-   * where the whole interview is on screen; here the row carries a date and a status and
-   * nothing else, and hiding the actions on a list would leave a member wondering which of
-   * two rows they were allowed to press. The endpoints answer for themselves.
+   * **A past interview no longer keeps `Reschedule` and `Cancel`.** This used to argue that
+   * a list row carries a date and a status and nothing else, so hiding the actions would
+   * leave a member wondering which of two rows they were allowed to press — and let the
+   * endpoints answer for themselves. That is the wrong way round: a row offering a move the
+   * server will refuse ends in an error nobody could have predicted from the menu, and the
+   * date the row is wondering about is printed two columns to the left. `isLiveBooking` is
+   * the card's test and it is this one too, so one interview reads the same either side of
+   * a click.
+   *
+   * `View in calendar` stays on every uncancelled row, because what it does — say that the
+   * calendar link does not exist yet — is true whenever the interview is.
    */
   function rowActions(row: CandidateRow) {
     const application = row.latestApplication;
@@ -584,35 +579,44 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
         key: 'calendar',
         label: CANDIDATE_MESSAGES.actions.viewInCalendar,
         testId: `candidate-action-calendar-${row.id}`,
-        // Confirms and does nothing else — no navigation, no request. The interview's
-        // entry is the interviewer's own mailbox event and this product holds no deep
-        // link into it, so the row says the request landed rather than pretending to
-        // somewhere to go (03 §10.55).
+        // Confirms and does nothing else — no navigation, no request — and the message
+        // says so. The interview's entry is the interviewer's own mailbox event and this
+        // product holds no deep link into it (03 §10.55).
         onSelect: () =>
           push({
             message: CANDIDATE_MESSAGES.toast.viewInCalendar,
-            tone: 'info',
             testId: `toast-calendar-${row.id}`,
           }),
       });
-      items.push({
-        key: 'reschedule',
-        label: CANDIDATE_MESSAGES.actions.reschedule,
-        testId: `candidate-action-reschedule-${row.id}`,
-        // The team never sends the candidate's own manage link (07 §01.5), so the internal
-        // door is the card — opened on this application, with the dialog already up.
-        onSelect: () =>
-          router.push(
-            `/org/${orgId}/hiring/candidates/${row.id}?application=${application.id}&reschedule=1`,
-          ),
-      });
-      items.push({
-        key: 'cancel',
-        label: CANDIDATE_MESSAGES.actions.cancel,
-        testId: `candidate-action-cancel-${row.id}`,
-        danger: true,
-        onSelect: () => setCancelling(row),
-      });
+      /*
+       * Only while the interview is still ahead. An interview that has happened cannot be
+       * moved — the API refuses it (07 §14.65) — and a row offering the move is a row that
+       * ends in an error somebody had no way to predict. **Absent, not disabled**: the
+       * candidate card takes the same view of the same pair, because a disabled row invites
+       * a reader to work out why, and "it is in the past" is not a state worth a sentence.
+       *
+       * Cancelling keeps the same gate for the same reason.
+       */
+      if (isLiveBooking({ start: new Date(application.startUtc), isCancelled: false }, new Date())) {
+        items.push({
+          key: 'reschedule',
+          label: CANDIDATE_MESSAGES.actions.reschedule,
+          testId: `candidate-action-reschedule-${row.id}`,
+          // The team never sends the candidate's own manage link (07 §01.5), so the
+          // internal door is the card — opened on this application, with the dialog up.
+          onSelect: () =>
+            router.push(
+              `/org/${orgId}/hiring/candidates/${row.id}?application=${application.id}&reschedule=1`,
+            ),
+        });
+        items.push({
+          key: 'cancel',
+          label: CANDIDATE_MESSAGES.actions.cancel,
+          testId: `candidate-action-cancel-${row.id}`,
+          danger: true,
+          onSelect: () => setCancelling(row),
+        });
+      }
     }
 
     items.push({
@@ -936,24 +940,24 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
         </div>
       </MenuDrawer>
 
-      <div className="candidates-count-row">
-        {/*
-          The count is the feedback for every filter change, and the only thing on this
-          screen that announces itself. It is also the whole answer to what pagination used
-          to be here for. During a refetch it holds a loader rather than a stale number — a
-          number that was true one request ago is worse than no number.
-        */}
-        <p aria-live="polite" data-testid="candidates-count">
-          {pending && page === 1 ? (
-            // Named, but not a live region of its own: the `<p>` around it already is one,
-            // and a nested pair announces the same change twice.
+      {/*
+        No count line. Each scope tab carries its own count, computed under the filters
+        already applied, so a line under the strip repeating the active tab's number was
+        the same fact twice — and the one it repeated is the one already in the reader's
+        eye. What is left is the half a tab cannot show: that a request is in flight, said
+        where the number used to be and announced politely, so a filter change is still
+        acknowledged before its rows arrive.
+      */}
+      {pending && page === 1 && (
+        <div className="candidates-count-row">
+          <p aria-live="polite" data-testid="candidates-count">
+            {/* Named, but not a live region of its own: the `<p>` around it already is
+                one, and a nested pair announces the same change twice. */}
             <Preloader size={8} margin={5} aria-label="Counting candidates" />
-          ) : data ? (
-            candidateResultLabel(data.matched, data.total, narrowed)
-          ) : null}
-        </p>
-
-      </div>
+            <span>{CANDIDATE_MESSAGES.counting}</span>
+          </p>
+        </div>
+      )}
 
       {phase === 'failed' ? (
         <InfoBanner variant="error" data-testid="candidates-error">
@@ -962,11 +966,56 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
             Try again
           </Button>
         </InfoBanner>
+      ) : rows.length === 0 && phase === 'ready' ? (
+        /*
+          Nothing to put a surface around. The card is the *table's* — it gives the rows
+          their border and rounds the first and last of them — and drawn around a sentence
+          it is a bordered white slab the height of the viewport with one line of grey
+          text near the top of it. An empty state is the message and the way out of it,
+          on the page's own ground.
+        */
+        <EmptyState
+          data-testid={data?.total === 0 ? 'candidates-empty-state' : 'candidates-no-results'}
+        >
+          {/*
+            Three facts, one slot. An empty database names the only thing that would fill
+            it. Filters that match nobody is a thing to undo, and gets the action.
+            `Assigned to me` with nothing filtered is not a failed query at all — it is
+            the empty state My interviews had, and it inherits its wording rather than
+            accusing the member of over-filtering.
+          */}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 'var(--space-7)',
+            }}
+          >
+            <div>
+              {data?.total === 0
+                ? CANDIDATE_MESSAGES.empty
+                : filtered
+                  ? CANDIDATE_MESSAGES.noResults
+                  : INTERVIEW_MESSAGES.noUpcoming}
+            </div>
+            {(data?.total ?? 0) > 0 && filtered && (
+              // Inside the state, not under it: the way out of an empty list is part of
+              // what the empty list says, and 160px is what stops a two-word button
+              // reading as an afterthought beside a 20px sentence.
+              <div style={{ minWidth: 160 }}>
+                <Button onClick={clearAll} data-testid="candidates-clear-all">
+                  {CANDIDATE_MESSAGES.clearFilters}
+                </Button>
+              </div>
+            )}
+          </div>
+        </EmptyState>
       ) : (
         /*
-          One surface at every state, which is what blue's table screens do: the card gives
-          the edge-to-edge table its border and rounds its first and last rows, and the
-          loader and both empty messages sit inside it rather than replacing it.
+          The table's own surface: the card gives the edge-to-edge rows their border and
+          rounds the first and last of them, and the loader sits inside it rather than
+          replacing it.
         */
         <Card padded={false} data-testid="candidates-list">
           {rows.length > 0 && (
@@ -1029,18 +1078,27 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
                       {/*
                         What this person has been assessed as, rolled up to their most
                         recent interview that answered each criterion (03 §01.2). The same
-                        read-only `Chip` the candidate card draws an assessment with, and
-                        the same sentence in the other direction: the card records
-                        *English is B1*, this says *English: B1*.
+                        neutral label the candidate card draws a recorded assessment with
+                        (ledger §59), and the same sentence in the other direction: the
+                        card records *English is B1*, this says *English: B1*.
                       */}
                       {row.criteria.length > 0 && (
                         <span className="candidate-criteria">
                           {row.criteria.map((assessment) => (
-                            <Chip
+                            <Badge
                               key={assessment.criterionId}
-                              label={`${assessment.name}: ${assessment.value}`}
+                              status="neutral"
+                              size="s"
                               data-testid={`candidate-criterion-${row.id}-${assessment.criterionId}`}
-                            />
+                            >
+                              {/* One phrase, two things: the criterion is the context and
+                                  the value is the answer, so the name recedes a level and
+                                  a row of these scans down the values. */}
+                              <span style={{ color: 'var(--text-secondary)' }}>
+                                {`${assessment.name}: `}
+                              </span>
+                              {assessment.value}
+                            </Badge>
                           ))}
                         </span>
                       )}
@@ -1169,43 +1227,6 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
             </div>
           )}
 
-          {/*
-            Driven by `total` — org-wide and unfiltered — and never by a scoped count.
-            An interviewer whose own list is empty must not be told the database is, or
-            they are sent off to share a booking link while 35 candidates sit in it.
-          */}
-          {phase === 'ready' && rows.length === 0 && data?.total === 0 && (
-            <EmptyState data-testid="candidates-empty-state">
-              {CANDIDATE_MESSAGES.empty}
-            </EmptyState>
-          )}
-
-          {phase === 'ready' && rows.length === 0 && (data?.total ?? 0) > 0 && (
-            <>
-              {/*
-                Two facts, one slot. Filters that match nobody is a thing to undo, and
-                gets the action. `Assigned to me` with nothing filtered is not a failed
-                query at all — it is the empty state My interviews had, and it inherits
-                its wording rather than accusing the member of over-filtering.
-              */}
-              <EmptyState data-testid="candidates-no-results">
-                {filtered ? CANDIDATE_MESSAGES.noResults : INTERVIEW_MESSAGES.noUpcoming}
-              </EmptyState>
-              {filtered && (
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'center',
-                    padding: 'var(--space-6)',
-                  }}
-                >
-                  <Button onClick={clearAll} data-testid="candidates-clear-all">
-                    {CANDIDATE_MESSAGES.clearFilters}
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
         </Card>
       )}
 
@@ -1246,7 +1267,6 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
             setCancelling(null);
             push({
               message: HIRING_MESSAGES.toast.interviewCancelled,
-              tone: 'success',
               testId: 'toast-interview-cancelled',
             });
             // The row's badge, the status filter and both scope counts all move with it,
@@ -1285,18 +1305,7 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
         />
       )}
 
-      <ToastHost>
-        {toasts.map((toast) => (
-          <Toast
-            key={toast.id}
-            tone={toast.tone}
-            data-testid={toast.testId}
-            onDismiss={() => dismiss(toast.id)}
-          >
-            {toast.message}
-          </Toast>
-        ))}
-      </ToastHost>
+      <ToastHost toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }

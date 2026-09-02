@@ -146,18 +146,29 @@ whose link has not been shared is already private.
     read as data loss — the same rule the candidate database follows with `total`
     ([03 §05.20](03-candidate-database.md)).
 22. **Every row carries an actions menu**, so the common jobs do not require opening the vacancy
-    first. Four items, in this order:
+    first. Six items, in this order:
 
     | Item | Goes to | Blocked when |
     |---|---|---|
+    | Open board | the vacancy, where the board is (§08.27) | — |
     | Copy booking link | the clipboard | the vacancy is `closed` |
+    | Open booking page | `/book/{slug}`, in a new tab | — |
     | Edit vacancy | the create/edit dialog, over the list | — |
     | Close vacancy / Reopen vacancy | `PATCH status` | — |
     | Delete vacancy | `DELETE`, after a confirmation | the vacancy has applications (§03.11) |
 
-    `Open board` was a fifth until §08.27 made the board *be* the vacancy. It is not a missing
-    item: the row already opens the board, because opening the row is what opening the board now
-    means.
+    `Open board` was dropped when §08.27 made the board *be* the vacancy, on the argument that the
+    row already opens it. **It is back.** That argument is about the destination and a menu is not:
+    a kebab is where a row states everything it can do, and a reader who has opened one is asking
+    to be told rather than to infer that the whole row is a link. It goes to the same address the
+    row does, which is the point — a menu that omits the obvious action reads as a menu that
+    cannot perform it.
+
+    `Open booking page` is the one item that leaves the product: the candidate's own view, at the
+    address `Copy booking link` copies, opened in a **new tab** so returning costs the list neither
+    its filters nor its place. It is **not** blocked on a closed vacancy the way the copy is — the
+    page still exists and explains itself ([02 §02.6](02-booking-page.md)), and what a closed
+    vacancy cannot do is take a booking, not be looked at.
 
 23. **A blocked item is disabled and drawn, never hidden**, and carries its reason in the row —
     `This link is no longer accepting bookings.` for a closed vacancy's link, and
@@ -487,7 +498,8 @@ Errors:
     `vacancies-status-{all|open|closed}`, `vacancy-new-button`
   - `vacancy-row-{id}`, `vacancy-title-{id}`, `vacancy-interviewer-{id}`, `vacancy-duration-{id}`,
     `vacancy-count-{id}`, `vacancy-status-{id}`, `vacancy-category-chip-{id}`
-  - `vacancy-actions-menu-{id}` and its rows `vacancy-action-{copy-link|edit|close|reopen|delete}-{id}`,
+  - `vacancy-actions-menu-{id}` and its rows
+    `vacancy-action-{board|copy-link|open-booking|edit|close|reopen|delete}-{id}`,
     with `vacancy-copy-guard-message-{id}` and `vacancy-delete-guard-message-{id}` for the two
     blocked reasons
   - `vacancy-close-confirm`, `vacancy-close-confirm-button`
@@ -498,8 +510,8 @@ Errors:
   - `vacancy-detail`, `vacancy-back-link`, `vacancy-copy-link-button`, `vacancy-detail-categories`,
     `vacancy-description`, `vacancy-description-toggle`, `vacancy-add-description`,
     `vacancy-closed-link-note`,
-    `vacancy-actions-menu`, `vacancy-action-edit`, `vacancy-action-close`, `vacancy-action-reopen`,
-    `vacancy-action-delete`
+    `vacancy-actions-menu`, `vacancy-action-open-booking`, `vacancy-action-edit`,
+    `vacancy-action-close`, `vacancy-action-reopen`, `vacancy-action-delete`
   - `vacancy-reassign-confirm`, `vacancy-delete-confirm`, `vacancy-delete-confirm-button`,
     `vacancy-delete-guard-message`
   - `toast-vacancy-created`, `toast-vacancy-updated`, `toast-vacancy-closed`,

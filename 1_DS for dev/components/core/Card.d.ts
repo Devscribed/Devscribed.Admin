@@ -1,8 +1,17 @@
 import { HTMLAttributes, ReactNode } from 'react';
 
 export interface CardProps extends HTMLAttributes<HTMLDivElement> {
-  /** Header line, at the headline-6 step. Drawn only when `title` or `action` is given. */
+  /**
+   * Header line. Drawn only when `title` or `action` is given — at the headline-6 step on a
+   * `default` card, and as the small-caps micro label on a `panel`.
+   */
   title?: ReactNode;
+  /**
+   * §66 — `default` is blue's 8px hairline card, for a box among boxes. `panel` is the
+   * treatment its *large* white sections take (the Timesheets calendar card, the report
+   * tables): `--radius-xl` over `--shadow-card-soft`, no border, and a small-caps title.
+   */
+  variant?: 'default' | 'panel';
   /** §27 — element for that header line. A real heading by default, so a page whose captions
    *  are card titles has an outline under `PageTitle`'s `<h1>`. Paint is unaffected. */
   titleAs?: 'h2' | 'h3' | 'h4' | 'h5' | 'h6' | 'div';

@@ -11,9 +11,23 @@ import React from 'react';
  * Nothing here hovers. Blue's `--shadow-card-hover` and its `scale(1.01)` belong to
  * `NavigationCard`, which is a control; painting them on a static container would promise a
  * click that is not there.
+ *
+ * §66 — `variant="panel"` is the app's *other* white surface, and it is as measured as this
+ * one: the Timesheets calendar card and the report tables are not 8px-with-a-hairline, they
+ * are a 20px radius over a 120px-blur 5% lift with no border at all. The two are a scale
+ * decision, not a style one — a hairline is what separates a 300px box from the boxes beside
+ * it, and a section as wide as the column it is in has nothing beside it to be separated
+ * from, so the border becomes an outline drawn around the whole page. The public booking and
+ * manage screens are made of these, which is why the variant exists rather than three
+ * screens spelling the same three declarations.
+ *
+ * A panel's title is the small-caps micro label that leads a section in this app (the
+ * Timesheets day header) rather than headline-6: at this size the heading is not competing
+ * with the card next to it, it is competing with the page's own `<h1>` two rows up. It stays
+ * a real `<h2>` — prod draws it as a `<span>`, and that is §27's argument, not a decision.
  */
 export function Card({
-  title, action, padded = true, clip = true, style, children,
+  title, action, padded = true, clip = true, variant = 'default', style, children,
   /* §27 — prod's card headings are `<div>`s, because prod's card headings are `<div>`s. A
      screen that replaced its captions with card titles is relying on them to *be* the outline
      under `PageTitle`'s `<h1>`, and blue already renders that one as a real heading. Every
@@ -26,8 +40,9 @@ export function Card({
       {...rest}
       style={{
         backgroundColor: 'var(--surface-card)',
-        border: '1px solid var(--border-default)',
-        borderRadius: 'var(--radius-l)',
+        ...(variant === 'panel'
+          ? { borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-card-soft)' }
+          : { border: '1px solid var(--border-default)', borderRadius: 'var(--radius-l)' }),
         fontFamily: 'var(--font-family-base)',
         /* Clipping is what rounds an edge-to-edge `Table`'s square corners to the card's own
            radius — and it is also what cuts off any popover opened inside the card, since a
@@ -44,11 +59,16 @@ export function Card({
           }}
         >
           <TitleTag
-            style={{
-              fontWeight: 'var(--headline-6-weight)', fontSize: 'var(--headline-6-size)',
-              lineHeight: 'var(--headline-6-line)', letterSpacing: 'var(--headline-6-tracking)',
-              color: 'var(--text-primary)',
-            }}
+            style={variant === 'panel'
+              ? {
+                fontWeight: 'var(--font-weight-medium)', fontSize: 'var(--font-size-xs)',
+                lineHeight: '18px', textTransform: 'uppercase', color: 'var(--text-secondary)',
+              }
+              : {
+                fontWeight: 'var(--headline-6-weight)', fontSize: 'var(--headline-6-size)',
+                lineHeight: 'var(--headline-6-line)', letterSpacing: 'var(--headline-6-tracking)',
+                color: 'var(--text-primary)',
+              }}
           >
             {title}
           </TitleTag>

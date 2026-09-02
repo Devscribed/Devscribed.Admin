@@ -1,4 +1,5 @@
 import React from 'react';
+import { isKeyboardFocus } from '../core/focus-visible.js';
 
 /** A tab is a bare string, or an object carrying the parts prod never had to name. */
 const valueOf = (tab) => (typeof tab === 'object' && tab !== null ? tab.value : tab);
@@ -100,7 +101,9 @@ function TabButton({ value, isActive, testId, controls, onSelect, children }) {
       tabIndex={isActive ? 0 : -1}
       data-testid={testId}
       onClick={onSelect}
-      onFocus={() => setFocused(true)}
+      /* §68 — a keyboard's ring, not a pointer's. A click focuses the button too, and the
+         glow it left sat on the tab until something else was clicked. */
+      onFocus={(event) => setFocused(isKeyboardFocus(event.currentTarget))}
       onBlur={() => setFocused(false)}
       style={{
         /* Prod's `<a>` carried no background, border or padding of its own; a button does, so
@@ -113,6 +116,14 @@ function TabButton({ value, isActive, testId, controls, onSelect, children }) {
         paddingTop: 4,
         marginRight: 20,
         cursor: 'pointer',
+        /* §58 — a column, so the label sits at the top of the box and the bar under it.
+           A `<button>` centres its content, and blue's active tab is 16px taller than an
+           inactive one, so every inactive label was pushed 8px down and every label in the
+           row moved when the choice changed. Both halves are fixed here: the column stops
+           the centring, and the bar below is always rendered. */
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'stretch',
         /* §45 — the source declares no `:focus` state, which is survivable while nothing is
            expected to arrive by keyboard. A tablist is not. `--shadow-focus-input` is the ring
            every other blue control takes. */
@@ -133,17 +144,21 @@ function TabButton({ value, isActive, testId, controls, onSelect, children }) {
       >
         {children}
       </span>
-      {isActive && (
-        <div
-          style={{
-            marginTop: 12,
-            backgroundColor: 'var(--color-blue)',
-            height: 4,
-            borderTopLeftRadius: 6,
-            borderTopRightRadius: 6,
-          }}
-        />
-      )}
+      {/* §58 — drawn on every tab and only *painted* on the chosen one. Rendering it
+          conditionally is what made the strip 16px taller the moment a tab was picked, so
+          the labels in it moved; a bar that is always there and sometimes transparent
+          costs one element and holds the row still. `aria-hidden` because `aria-selected`
+          on the button already says which tab this is. */}
+      <div
+        aria-hidden
+        style={{
+          marginTop: 12,
+          backgroundColor: isActive ? 'var(--color-blue)' : 'transparent',
+          height: 4,
+          borderTopLeftRadius: 6,
+          borderTopRightRadius: 6,
+        }}
+      />
     </button>
   );
 }

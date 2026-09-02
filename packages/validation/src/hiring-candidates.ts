@@ -43,6 +43,8 @@ export const CANDIDATE_MESSAGES = {
   empty: 'No candidates yet. Share a booking link to start.',
   /** Filters that match nobody. A different fact from an empty database, and never conflated. */
   noResults: 'No candidates match these filters',
+  /** Said where the count used to be, while a filter change is in flight (03 §05.20). */
+  counting: 'Counting…',
   /** Server-side only: the row is not submitted until it is complete, so nothing in the UI sends it. */
   invalidFilter: "That filter isn't valid for this criterion",
   loadFailed: "We couldn't load candidates. Try again.",
@@ -98,10 +100,12 @@ export const CANDIDATE_MESSAGES = {
    * and are therefore drawn only on a row that still has one; the other two are about
    * the person and are always there.
    *
-   * `viewInCalendar` confirms and does nothing else. The interview's calendar entry is
-   * the interviewer's own mailbox event, and this product holds no deep link into it —
-   * so the row acknowledges the request rather than pretending to a navigation it cannot
-   * make. If a link is ever wanted it is its own decision (03 §10.55).
+   * `viewInCalendar` confirms and does nothing else, and **says so**. The interview's
+   * calendar entry is the interviewer's own mailbox event and this product holds no deep
+   * link into it, so the row cannot make the navigation it names. It used to answer
+   * `Opening the interview in the calendar…`, which describes something happening; nothing
+   * was. A row that cannot do its job says that plainly rather than in the present
+   * continuous (03 §10.55).
    */
   actions: {
     viewInCalendar: 'View in calendar',
@@ -131,7 +135,7 @@ export const CANDIDATE_MESSAGES = {
    * These two the list raises alone.
    */
   toast: {
-    viewInCalendar: 'Opening the interview in the calendar\u2026',
+    viewInCalendar: 'Not implemented yet',
     /** Completed by `candidateDeletedToast`: the person is what was deleted. */
     deleted: '{name} deleted',
   },

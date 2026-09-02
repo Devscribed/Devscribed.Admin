@@ -27,7 +27,6 @@ import {
   InfoBanner,
   Popover,
   Preloader,
-  Toast,
   ToastHost,
 } from '@/ds';
 import { focusByTestId } from '@/field-error';
@@ -449,7 +448,6 @@ export default function CandidateCardPage({
       await navigator.clipboard.writeText(candidate.email);
       push({
         message: HIRING_MESSAGES.toast.emailCopied,
-        tone: 'success',
         testId: 'toast-email-copied',
       });
     } catch {
@@ -604,6 +602,12 @@ export default function CandidateCardPage({
               }
               onStatusChange={(status) => void changeStatus(application.id, status)}
               onScheduleChange={applyScheduleChange}
+              onOpenCalendar={() =>
+                push({
+                  message: CANDIDATE_MESSAGES.toast.viewInCalendar,
+                  testId: `toast-calendar-${application.id}`,
+                })
+              }
               criteria={
                 <CriteriaSection
                   orgId={orgId}
@@ -672,18 +676,7 @@ export default function CandidateCardPage({
         The header's own outcomes, which change nothing in the body — see the queue's own
         note above. They float rather than push, because the body is being typed into.
       */}
-      <ToastHost>
-        {toasts.map((toast) => (
-          <Toast
-            key={toast.id}
-            tone={toast.tone}
-            data-testid={toast.testId}
-            onDismiss={() => dismiss(toast.id)}
-          >
-            {toast.message}
-          </Toast>
-        ))}
-      </ToastHost>
+      <ToastHost toasts={toasts} onDismiss={dismiss} />
     </div>
   );
 }

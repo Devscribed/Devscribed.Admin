@@ -1,4 +1,5 @@
 import React from 'react';
+import { isKeyboardFocus } from './focus-visible.js';
 
 /**
  * ToggleButton — two-value segmented control recreated from components/shared/ToggleButton.
@@ -65,7 +66,8 @@ export function ToggleButton({
         value={value}
         onClick={onClick}
         data-testid={testId}
-        onFocus={() => setFocused(value)}
+        /* §68 — a keyboard's ring, not a pointer's. */
+        onFocus={(event) => setFocused(isKeyboardFocus(event.currentTarget) ? value : null)}
         onBlur={() => setFocused((current) => (current === value ? null : current))}
         style={{
           ...(on ? active : seg),

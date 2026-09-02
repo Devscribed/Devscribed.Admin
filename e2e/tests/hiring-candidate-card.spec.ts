@@ -393,8 +393,9 @@ test.describe('Candidate card', () => {
     await signIn(page, org.email);
     await page.goto(`/org/${org.organizationId}/hiring/candidates`);
 
-    const count = page.getByTestId('candidates-count');
-    await expect(count).toHaveText('2 candidates');
+    // The scope tab is where the count lives now (03 §05.20).
+    const count = page.getByTestId('candidates-scope-all');
+    await expect(count).toHaveText('All (2)');
 
     // A filter from the drawer and a search in the toolbar — two different homes, and
     // both have to survive the round trip.
@@ -403,7 +404,7 @@ test.describe('Candidate card', () => {
     await page.getByTestId('candidates-filter-status-option-scheduled').click();
     await page.getByTestId('candidates-filters-apply').click();
     await page.getByTestId('candidates-search-input').fill('Jane');
-    await expect(count).toHaveText('1 of 2 candidates');
+    await expect(count).toHaveText('All (1)');
 
     const row = page.getByTestId('candidates-list').locator('[data-testid^="candidate-row-"]');
     await expect(row).toHaveCount(1);
@@ -419,7 +420,7 @@ test.describe('Candidate card', () => {
     await back.click();
     await expect(page.getByTestId('candidates-search-input')).toHaveValue('Jane');
     await expect(page.getByTestId('candidates-filters-open')).toHaveText('Filters (1)');
-    await expect(page.getByTestId('candidates-count')).toHaveText('1 of 2 candidates');
+    await expect(count).toHaveText('All (1)');
 
     // And the list rewrites its address onto its **own** path. The screen mounts before
     // the browser's location has caught up with a client-side navigation, so a query

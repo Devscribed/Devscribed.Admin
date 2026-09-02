@@ -183,12 +183,27 @@ input, textarea, select { font: inherit; }
    in a fixed-width popover and this one is inline in a card that flexes. */
 .ds-calendar-day {
   display: block;
-  height: 1.7rem;
-  line-height: 1.7rem;
-  margin: 0.166rem 0;
+  /* §72 — `--control-height`, where react-datepicker's cell is 1.7rem (27px). Prod draws this
+     grid inside a fixed-width **popover**, where 27px is a reasonable mouse target and the
+     whole control is a secondary way to type a date. This one is the primary control on a
+     public page a candidate books an interview from, half of it reached on a phone — and the
+     touch-target rule underneath was already conceding the point one media query at a time.
+     One height, every pointer: the same 44px every other control in the system is. */
+  height: var(--control-height);
+  line-height: var(--control-height);
+  margin: 1px 0;
 }
 
-/* calendar-control §09.39 — a 27px cell is a comfortable mouse target and a poor thumb one. */
-@media (pointer: coarse) {
-  .ds-calendar-day { height: 2.75rem; line-height: 2.75rem; }
+/* Preloader — react-spinners' PulseLoader, read from node_modules/react-spinners@0.13.6.
+   §69 — here rather than injected into `<head>` from `Preloader.jsx`. A module-scope
+   `document.head.appendChild` is a side effect that runs once, on whichever page first
+   imports the component, and it fails silently everywhere it does not: under a strict CSP,
+   in a document the module was evaluated against before hydration, or in any consumer that
+   renders the markup without evaluating the module. A loader whose dots do not move is
+   indistinguishable from a screen that has stopped, which is the one thing a loader exists
+   to rule out — so the animation belongs in the stylesheet that is always loaded. */
+@keyframes ds-pulse-loader {
+  0% { transform: scale(1); opacity: 1; }
+  45% { transform: scale(0.1); opacity: 0.7; }
+  80% { transform: scale(1); opacity: 1; }
 }

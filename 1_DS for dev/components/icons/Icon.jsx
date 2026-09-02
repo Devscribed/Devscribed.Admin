@@ -83,6 +83,42 @@ export function TimeOutlineIcon(props) {
   );
 }
 
+/**
+ * §67 — `CalendarIcon` and `PersonOutlineIcon`, drawn as **outlines**.
+ *
+ * §44 and §57 both refused this family for a new glyph, and both were right about the glyph
+ * they were deciding: a lone mark joins blue's filled main set, because that is what the
+ * readme licenses and the four Ionicons outlines here are only what prod happened to import.
+ *
+ * This is the case those entries did not cover. The candidate card states three facts about
+ * an interview as a **list, one glyph per line** — when it is, how long, with whom — and the
+ * middle line is already `TimeOutlineIcon`, which came from prod. A filled calendar over an
+ * outline clock over a filled person is not a list of three facts; it is three marks, two of
+ * which read as active states. The set is what is being drawn here, not the glyph, so the
+ * two new members take the geometry of the one that was measured: 512 viewBox,
+ * `fill: none`, `strokeWidth="32"`, round joins.
+ */
+export function CalendarIcon(props) {
+  return (
+    <svg viewBox="0 0 512 512" stroke="currentColor" fill="currentColor" strokeWidth="0" width="1em" height="1em" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <rect width="416" height="384" x="48" y="80" fill="none" strokeLinejoin="round" strokeWidth="32" rx="48" />
+      <path fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="32" d="M128 48v32M384 48v32M48 176h416" />
+    </svg>
+  );
+}
+
+/* The head and the shoulders, and nothing else — the filled `PersonCircleIcon` and `UserIcon`
+   already in the set are marks *for a person*, and in a row of three facts a filled one reads
+   as the current state rather than as another fact. */
+export function PersonOutlineIcon(props) {
+  return (
+    <svg viewBox="0 0 512 512" stroke="currentColor" fill="currentColor" strokeWidth="0" width="1em" height="1em" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <path fill="none" strokeMiterlimit="10" strokeWidth="32" d="M344 144c-3.92 52.87-44 96-88 96s-84.15-43.12-88-96c-4-55 35-96 88-96s92 42 88 96z" />
+      <path fill="none" strokeLinecap="round" strokeMiterlimit="10" strokeWidth="32" d="M256 304c-87 0-175.3 48-191.64 138.6-1.97 10.94 4.31 21.4 16.64 21.4h350c12.34 0 18.62-10.46 16.65-21.4C431.3 352 343 304 256 304z" />
+    </svg>
+  );
+}
+
 export function InfoCircleIcon(props) {
   return (
     <svg viewBox="0 0 1024 1024" stroke="currentColor" fill="currentColor" strokeWidth="0" width="1em" height="1em" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -246,7 +282,8 @@ export { EyeIcon as Eye, EyeOffIcon as EyeOff };
    instead of importing each glyph. Unknown names render nothing. */
 const ICONS = {
   ArrowIcon, CloseIcon, MagnifyIcon, TrashIcon, ThreeDotsIcon, UserIcon, PersonCircleIcon,
-  MailOutlineIcon, TimeOutlineIcon, InfoCircleIcon, CloudDownloadOutlineIcon, SettingsIcon,
+  MailOutlineIcon, TimeOutlineIcon, CalendarIcon, PersonOutlineIcon, InfoCircleIcon,
+  CloudDownloadOutlineIcon, SettingsIcon,
   CheckIcon, MenuIcon, TimesheetsIcon, ProjectManagementIcon, PeopleIcon, ReportsIcon,
   TimeOffIcon, OrgIcon, EyeIcon, EyeOffIcon, FlagIcon, CrossIcon, CopyIcon,
 };

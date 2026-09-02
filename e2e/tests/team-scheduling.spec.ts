@@ -92,6 +92,8 @@ test.describe('Hiring — the team reschedules and cancels', () => {
       (window as unknown as { __noReload: boolean }).__noReload = true;
     });
 
+    // Both interview actions live in the header's kebab now (04 design §Layout).
+    await page.getByTestId(`application-actions-${invite.applicationId}`).click();
     await page.getByTestId(`application-reschedule-${invite.applicationId}`).click();
 
     const dialog = page.getByTestId(`application-reschedule-dialog-${invite.applicationId}`);
@@ -170,6 +172,7 @@ test.describe('Hiring — the team reschedules and cancels', () => {
     const notes = page.getByTestId('card-notes-input');
     await notes.fill('Strong on React.');
 
+    await page.getByTestId(`application-actions-${invite.applicationId}`).click();
     await page.getByTestId(`application-cancel-${invite.applicationId}`).click();
 
     const dialog = page.getByTestId(`application-cancel-dialog-${invite.applicationId}`);
@@ -185,6 +188,7 @@ test.describe('Hiring — the team reschedules and cancels', () => {
     await expect(dialog).toBeHidden();
     await expect(page.getByTestId(`application-cancelled-${invite.applicationId}`)).toHaveCount(0);
 
+    await page.getByTestId(`application-actions-${invite.applicationId}`).click();
     await page.getByTestId(`application-cancel-${invite.applicationId}`).click();
     await page
       .getByTestId(`application-cancel-reason-${invite.applicationId}`)
@@ -202,7 +206,9 @@ test.describe('Hiring — the team reschedules and cancels', () => {
     await expect(page.getByTestId('toast-interview-cancelled')).toHaveText('Interview cancelled');
     expect(page.url()).toContain(invite.path);
 
-    // Both actions are gone from a cancelled interview — absent, not disabled.
+    // Both actions are gone from a cancelled interview — absent, not disabled — and with
+    // nothing left in it the kebab that held them is gone too.
+    await expect(page.getByTestId(`application-actions-${invite.applicationId}`)).toHaveCount(0);
     await expect(page.getByTestId(`application-cancel-${invite.applicationId}`)).toHaveCount(0);
     await expect(page.getByTestId(`application-reschedule-${invite.applicationId}`)).toHaveCount(0);
 
@@ -235,6 +241,7 @@ test.describe('Hiring — the team reschedules and cancels', () => {
 
     await signIn(page, org.email);
     await page.goto(invite.path);
+    await page.getByTestId(`application-actions-${invite.applicationId}`).click();
     await page.getByTestId(`application-cancel-${invite.applicationId}`).click();
 
     const confirm = page.getByTestId(`application-cancel-confirm-${invite.applicationId}`);

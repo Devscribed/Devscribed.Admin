@@ -103,15 +103,28 @@ it may navigate between.
 Mutually exclusive, except that **Today** may combine with Available or Unavailable, and with
 Selected.
 
-Blue draws three of these already, and they are adopted as measured: an ordinary cell is
-untinted with `--text-primary`; a **selected** cell is `--color-blue` filled, white, 13px/600; a
-**disabled** cell is `--color-gray-light` filled at `opacity: .5` with `not-allowed`. All three
-take the 3px radius react-datepicker uses for a day, which is smaller than blue's 8px workhorse
-radius because a 1.7rem cell is smaller than a button.
+*Revised by `blue-fixes`, [§72](../../design-system/ledger.md).* Blue draws three of these, and
+they were adopted as measured: an ordinary cell untinted with `--text-primary`, a **selected** cell
+`--color-blue` filled in white at 13px/600, a **disabled** cell `--color-gray-light` filled at
+`opacity: .5`. Every one of those is correct **in a popover attached to a date field**, which is
+the only place prod draws this grid. This one is the primary control on a public page, and the
+three repaint:
 
-Unavailable, Past and Beyond-the-window therefore share one paint — blue has one treatment for
-"you cannot pick this", and the three differ in *why* rather than in what the candidate may do.
-Their accessible names still distinguish them (§10.42).
+| State | Now | Why |
+|---|---|---|
+| Available | untinted, `--text-primary`, hover `--color-row-hover` | unchanged |
+| **Selected** | `--color-blue` at 12% behind `--color-blue` ink, with a `--border-width-control` border in the same hue | Solid blue is right for a **range**, where ten days have to read as one block. A single chosen date beside a list of times is one mark, and filled it became the loudest thing on a page whose primary action is a button below it. It is the tint a `pressed` slot chip takes ([§71](../../design-system/ledger.md)), so both halves of the picker agree |
+| **Unavailable** | faint ink on the panel's own ground — **no fill** | `--color-gray-light` put a block on every weekend, so a month with four bookable days read as mostly blocks. "Nothing here" is an absence, and absence is what it should look like |
+| **Today** | a border at 45% of `--color-blue` | Present, and never mistaken for the selection |
+
+The cell takes `--radius-s` and `--control-height` — 44px at **every** pointer, where the height
+was 1.7rem with a `@media (pointer: coarse)` rule conceding the point one query at a time. The
+selected day no longer changes size or weight either: a grid of tabular figures where one is
+13px/600 is a grid that twitches the instant a date is picked.
+
+Unavailable, Past and Beyond-the-window still share one paint — blue has one treatment for "you
+cannot pick this", and the three differ in *why* rather than in what the candidate may do. Their
+accessible names still distinguish them (§10.42).
 
 17. **Available** — at least one bookable slot exists on this date. Interactive: clickable,
     focusable, selectable.

@@ -11,6 +11,10 @@
   --shadow-modal: 0 0 2px rgba(0, 0, 0, 0.12), 0 20px 20px rgba(0, 0, 0, 0.08);
   --shadow-tracker: 0 4px 12px rgba(0, 0, 0, 0.2);
   --shadow-drawer: -4px 4px 16px rgb(0 0 0 / 10%);
+  /* §66 — the lift on those same large sections. A 120px blur at 5% is not a shadow that
+     reads as depth; it is the faint settling that keeps a big white panel from cutting out
+     of the `#f8fafc` field it sits on. Measured off the Timesheets card. */
+  --shadow-card-soft: 0 60px 120px rgba(38, 51, 77, 0.05);
   --shadow-toggle-active: 0 2px 4px 0 rgb(0 0 0 / 18%);
   --shadow-focus-input: inset 0 2px 2px rgb(0 0 0 / 5%), 0 0 7px rgb(1 104 250 / 50%);
   --shadow-error-glow: 0 0 7px var(--color-error);

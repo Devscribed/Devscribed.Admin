@@ -9,21 +9,28 @@ import {
   type FilterOperator,
   type FilterOperatorOption,
 } from '@devscribed/validation';
-import { Badge, Chip, Select, TextInput, type SelectOption } from '@/ds';
+import { Badge, CloseIcon, IconButton, Select, TextInput, type SelectOption } from '@/ds';
 import { valueOf } from '@/hiring/select';
 import type { Criterion } from '@/hiring/types';
 
 /**
- * One criteria filter, as the drawer draws it: a **chip** carrying the criterion's name,
- * the operator and the value, reading as the sentence *English · at least · B1*
+ * One criteria filter, as the drawer draws it: a **sunken row** carrying the criterion's
+ * name, the operator and the value, reading as the sentence *English · at least · B1*
  * (03 §09.49).
  *
- * It is deliberately the same object the candidate card draws for an assessment — blue's
- * `Chip`, the criterion as plain text, the controls in its `trailing` slot (ledger §37) —
- * because it is the same thing said in the other direction: the card records *this
+ * It is deliberately the same object the candidate card draws for an assessment — the
+ * `--surface-sunken` ground, the criterion as plain text, its controls inline, a × to drop
+ * it — because it is the same thing said in the other direction: the card records *this
  * candidate's English is B1*, and this asks *whose English is at least B1*. The filter
  * needs one control the card does not, and the operator sits between the name and the
  * value, where it reads as part of that sentence.
+ *
+ * It is **not** blue's `Chip`. That is the token react-select draws for a value chosen
+ * *inside a field* — white, with the 7px blue edge that marks it as a selection — and this
+ * is not inside a field and is not a selection: it is a small form, holding two controls
+ * of its own. Drawn as a `Chip` it read as a chosen value that happened to contain
+ * dropdowns, and the blue edge put emphasis on the one thing in the drawer that is
+ * already the most emphatic.
  *
  * The three-`Select` row it replaces was a query builder in the middle of a list screen.
  * The criterion is no longer chosen here at all: it is chosen once, in the autocomplete
@@ -138,57 +145,67 @@ export function CriteriaFilterRow({
   }));
 
   return (
-    <li className="candidates-criteria-chip">
-      {/*
-        The pointer cursor `Chip` paints when it can be removed is turned off, and for the
-        card's own reason: only the cross and the two controls are clickable, and the name
-        between them promises nothing.
-      */}
-      <Chip
-        role="group"
-        aria-label={`Criteria filter ${index + 1}`}
-        data-testid={`criteria-filter-row-${index}`}
-        onRemove={onRemove}
-        removeLabel={`Remove ${criterion.name}`}
-        removeTestId={`criteria-filter-remove-${index}`}
-        style={{ cursor: 'default', margin: 0, minWidth: 0, flexWrap: 'wrap' }}
-        trailing={
-          <span className="candidates-criteria-controls">
-            <Select
-              value={operatorOptions.find((option) => option.value === row.operatorKey)}
-              options={operatorOptions}
-              onChange={(option) => onChange({ ...row, operatorKey: valueOf(option), value: '' })}
-              placeholder="Operator"
-              aria-label={`Operator for ${criterion.name}`}
-              data-testid={`criteria-filter-op-${index}`}
-              wrapperStyle={{ flex: '1 1 110px', minWidth: 0 }}
-            />
+    <li
+      className="candidates-criteria-chip"
+      role="group"
+      aria-label={`Criteria filter ${index + 1}`}
+      data-testid={`criteria-filter-row-${index}`}
+    >
+      <span data-testid={`criteria-filter-criterion-${index}`} className="candidates-criteria-name">
+        {criterion.name}
+      </span>
 
-            {/* A boolean's answer travelled with its operator, so there is nothing to ask. */}
-            {control !== 'none' && (
-              <ValueControl
-                index={index}
-                control={control}
-                criterion={criterion}
-                value={row.value}
-                onChange={(value) => onChange({ ...row, value })}
-              />
-            )}
-          </span>
-        }
-      >
-        <span data-testid={`criteria-filter-criterion-${index}`}>{criterion.name}</span>
-      </Chip>
       {/*
-        Outside the chip's label, which ellipsises to one line. An archived criterion is
-        still filterable — that is the whole difference from deleting one (03 §04.19) — and
-        the badge is what says the library no longer offers it.
+        Beside the name, not after the controls. An archived criterion is still filterable —
+        that is the whole difference from deleting one (03 §04.19) — and what the badge
+        qualifies is which criterion this is, so it reads with the name.
       */}
       {criterion.isArchived && (
-        <Badge status="inactive" outlined data-testid={`criteria-filter-archived-${index}`}>
+        <Badge
+          status="inactive"
+          outlined
+          size="s"
+          data-testid={`criteria-filter-archived-${index}`}
+        >
           {CANDIDATE_MESSAGES.archived}
         </Badge>
       )}
+
+      <Select
+        value={operatorOptions.find((option) => option.value === row.operatorKey)}
+        options={operatorOptions}
+        onChange={(option) => onChange({ ...row, operatorKey: valueOf(option), value: '' })}
+        placeholder="Operator"
+        aria-label={`Operator for ${criterion.name}`}
+        data-testid={`criteria-filter-op-${index}`}
+        wrapperStyle={{ flex: '1 1 128px', minWidth: 128 }}
+      />
+
+      {/* A boolean's answer travelled with its operator, so there is nothing to ask. */}
+      {control !== 'none' && (
+        <ValueControl
+          index={index}
+          control={control}
+          criterion={criterion}
+          value={row.value}
+          onChange={(value) => onChange({ ...row, value })}
+        />
+      )}
+
+      {/*
+        A 24px target, which is the one the candidate card's own copy control takes. It
+        sits last because it removes the whole row, and a control that undoes everything
+        beside it belongs at the end of what it undoes.
+      */}
+      <IconButton
+        label={`Remove ${criterion.name}`}
+        size={24}
+        onClick={onRemove}
+        data-testid={`criteria-filter-remove-${index}`}
+        style={{ flexShrink: 0, color: 'var(--text-secondary)' }}
+      >
+        <CloseIcon width="10" height="10" />
+      </IconButton>
     </li>
   );
 }
@@ -208,7 +225,7 @@ function ValueControl({
   onChange: (value: string) => void;
 }) {
   const testId = `criteria-filter-value-${index}`;
-  const wrapperStyle = { flex: '1 1 100px', minWidth: 0 };
+  const wrapperStyle = { flex: '1 1 112px', minWidth: 112 };
 
   if (control === 'scale') {
     // Worst to best, the order the scale itself is stored in — and the order every

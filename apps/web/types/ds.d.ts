@@ -37,6 +37,7 @@ declare module '@ds' {
   export * from '@ds/components/feedback/InfoBanner';
   export * from '@ds/components/feedback/Preloader';
   export * from '@ds/components/feedback/Toast';
+  export * from '@ds/components/feedback/Tooltip';
 
   export * from '@ds/components/forms/Checkbox';
   export * from '@ds/components/forms/CheckboxRow';

@@ -1,6 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { ThreeDotsIcon } from '../icons/Icon.jsx';
+import { Tooltip } from '../feedback/Tooltip.jsx';
 
 /**
  * Popover — click-to-open menu list recreated from ActionsPopover (row kebab menu) and
@@ -39,6 +40,15 @@ import { ThreeDotsIcon } from '../icons/Icon.jsx';
 
 /** Blue's own offset: `top: 42` under a 32px trigger is 10px of gap, kept as the gap. */
 const GAP = 10;
+
+/* §62 — present to a screen reader, absent to everything else. `BoardCard`'s flag uses the
+   same pair and for the same reason: the *meaning* has to be in the tree at all times so
+   `aria-describedby` always resolves, and the bubble is only what a pointer or a focus ring
+   brings to the surface. This is the half §22 was right about — a reason that exists only on
+   hover is a reason a reader never gets — kept, while the drawn half moves into a bubble. */
+const VISUALLY_HIDDEN = {
+  position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)',
+};
 
 export function Popover({
   trigger, items = [], align = 'right', disabled, label, portal = true, style, ...rest
@@ -171,12 +181,19 @@ export function Popover({
           : { position: 'absolute', [align]: 0, top: 42 }),
         minWidth: 160,
         padding: '5px 0', backgroundColor: '#fff', borderRadius: 'var(--radius-m)',
-        boxShadow: 'var(--shadow-popover)', zIndex: 3001, overflow: 'hidden',
+        boxShadow: 'var(--shadow-popover)', zIndex: 3001,
+        /* §74 — **no `overflow: hidden`**. It was ours, not blue's: prod's `.popover` is
+           `radius: 6px` with `padding: 5px 0` and rows inset `margin: 0 5px`, so no row ever
+           reaches a rounded corner and there has never been anything here to clip. What it did
+           clip was §62's bubble, which hangs at `right: 100%` of a row and is therefore
+           *entirely* outside this box — so every blocked row in the product drew its reason
+           into a zero-width sliver and nobody saw one. */
       }}
     >
       {entries.map((item, i) => {
         const describedBy = item.description ? `${menuId}-desc-${i}` : undefined;
-        return (
+        const tipId = item.tooltip ? `${menuId}-tip-${i}` : undefined;
+        const row = (
           <div
             key={item.key || item.label}
             ref={(node) => { itemRefs.current[i] = node; }}
@@ -186,7 +203,10 @@ export function Popover({
             /* `aria-disabled`, not `disabled`: the row has to stay focusable, or the reason
                it is blocked can be seen and never read. */
             aria-disabled={item.disabled || undefined}
-            aria-describedby={describedBy}
+            /* §62 — the reason, whichever slot it is in. A row never has both: `description`
+               is a second line the row is *about* (what a destination is), `tooltip` is why
+               the row cannot be used, and a row that is blocked has nothing else to add. */
+            aria-describedby={describedBy || tipId}
             onClick={(e) => select(item, e)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(item, e); }
@@ -230,8 +250,37 @@ export function Popover({
                 {item.description}
               </div>
             )}
+            {/* §62 — the reason itself, always in the tree. The bubble around this row is
+                what draws it; this is what a reader is told, and what the row's
+                `aria-describedby` points at whether or not anything is hovering. */}
+            {item.tooltip && (
+              <span id={tipId} data-testid={item.tooltipTestId} style={VISUALLY_HIDDEN}>
+                {item.tooltip}
+              </span>
+            )}
           </div>
         );
+        /* §62 — a blocked row's reason goes in a bubble beside the menu rather than as a
+           third line inside a 160px panel. It opens to the **left**: the menu is already
+           pinned to the right edge of its trigger, so a bubble above or below the row would
+           be the only thing on screen deciding whether it clears the viewport. */
+        return item.tooltip ? (
+          <Tooltip
+            key={item.key || item.label}
+            /* Its own id: the row is described by the hidden copy above, which is in the
+               tree at all times, so the bubble must not claim the same one. */
+            id={`${tipId}-bubble`}
+            content={item.tooltip}
+            placement="left"
+            /* Transparent to the accessibility tree, so the `menu` still owns its
+               `menuitem`s directly — the same reason a `ul > li` wrapping a `menuitem`
+               takes `role="none"`. */
+            role="none"
+            style={{ display: 'block' }}
+          >
+            {row}
+          </Tooltip>
+        ) : row;
       })}
     </div>
   );
