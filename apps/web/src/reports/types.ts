@@ -67,3 +67,47 @@ export interface FilterOption {
 
 /** Owner scope selector value (spec §Owner scope). */
 export type OwnerScope = 'all' | 'my';
+
+/**
+ * Time & Activity row (spec §API Contracts — Time & Activity 200 shape). Every
+ * field except `member` is optional because the server projects only the
+ * columns the caller is authorised to see + explicitly picked (spec §Column
+ * permission filter). Consumers must read `response.headers` to decide which
+ * columns to render; they never assume a field is present.
+ */
+export interface TimeAndActivityRow {
+  member: string;
+  client?: string | null;
+  time?: string;
+  billableTime?: string;
+  nonBillableTime?: string;
+  billedAmount?: string;
+  spent?: string;
+  notes?: string | null;
+}
+
+export interface TimeAndActivityResponse {
+  headers: ReportHeader[];
+  groups: ReportGroup<TimeAndActivityRow>[];
+  summary: ReportSummaryItem[];
+  meta: ReportMeta;
+}
+
+/**
+ * The full set of Time & Activity columns (spec §Column permission filter).
+ * `Project`, `Time`, and `Member` are always-shown defaults; the rest are
+ * request-selectable and gated by column-specific capabilities.
+ */
+export type ReportColumn =
+  | 'Project'
+  | 'Time'
+  | 'Member'
+  | 'Client'
+  | 'Billable Time'
+  | 'Non-Billable Time'
+  | 'Billed Amount'
+  | 'Spent'
+  | 'Notes';
+
+/** Row-level billable filter (spec Validation Rules 10; §Filter bar). */
+export type BillableFilter = 'all' | 'billable' | 'non-billable';
