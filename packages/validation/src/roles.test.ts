@@ -64,6 +64,16 @@ describe('ROLE_CAPABILITIES matrix', () => {
         'DeleteHolidays',
         // Spec user-management/16: toggle billable on any member's entry.
         'EditOthersBillable',
+        // Spec reports/01: full reporting rights, including the Spent column.
+        'ViewAmountsOwed',
+        'ViewMyAmountsOwed',
+        'ViewTimeAndActivity',
+        'ViewMyTimeAndActivity',
+        'ViewTimeOff',
+        'ViewMyTimeOff',
+        'ViewTimeAndActivityBilled',
+        'ViewTimeAndActivitySpent',
+        'ExportReports',
       ],
       manager: [
         'ViewDocumentTemplates',
@@ -84,10 +94,21 @@ describe('ROLE_CAPABILITIES matrix', () => {
         'ManageHolidays',
         // Spec user-management/16: manager may also cross-edit the billable flag.
         'EditOthersBillable',
+        // Spec reports/01: every All variant plus Billed Amount; Spent stays admin only.
+        'ViewAmountsOwed',
+        'ViewMyAmountsOwed',
+        'ViewTimeAndActivity',
+        'ViewMyTimeAndActivity',
+        'ViewTimeOff',
+        'ViewMyTimeOff',
+        'ViewTimeAndActivityBilled',
+        'ExportReports',
       ],
       // Spec 03's "user (own)" column is not a row here — see `canReadProfile` below.
-      user: [],
-      viewer: [],
+      // Spec reports/01: a regular user sees their own three reports and can PDF them.
+      user: ['ViewMyAmountsOwed', 'ViewMyTimeAndActivity', 'ViewMyTimeOff', 'ExportReports'],
+      // Spec reports/01: a viewer sees only their own time-off calendar; no export.
+      viewer: ['ViewMyTimeOff'],
     });
   });
 });
@@ -138,6 +159,15 @@ describe('capabilitiesFor', () => {
       'ManageHolidays',
       'DeleteHolidays',
       'EditOthersBillable',
+      'ViewAmountsOwed',
+      'ViewMyAmountsOwed',
+      'ViewTimeAndActivity',
+      'ViewMyTimeAndActivity',
+      'ViewTimeOff',
+      'ViewMyTimeOff',
+      'ViewTimeAndActivityBilled',
+      'ViewTimeAndActivitySpent',
+      'ExportReports',
     ]);
     expect(capabilitiesFor('manager')).toEqual([
       'ViewDocumentTemplates',
@@ -153,9 +183,23 @@ describe('capabilitiesFor', () => {
       'ViewHolidays',
       'ManageHolidays',
       'EditOthersBillable',
+      'ViewAmountsOwed',
+      'ViewMyAmountsOwed',
+      'ViewTimeAndActivity',
+      'ViewMyTimeAndActivity',
+      'ViewTimeOff',
+      'ViewMyTimeOff',
+      'ViewTimeAndActivityBilled',
+      'ExportReports',
     ]);
-    expect(capabilitiesFor('member')).toEqual([]);
-    expect(capabilitiesFor(null)).toEqual([]);
+    // `member` normalises to `user`, which now carries the four My-side rows.
+    expect(capabilitiesFor('member')).toEqual([
+      'ViewMyAmountsOwed',
+      'ViewMyTimeAndActivity',
+      'ViewMyTimeOff',
+      'ExportReports',
+    ]);
+    expect(capabilitiesFor(null)).toEqual(['ViewMyTimeOff']);
   });
 });
 
@@ -202,8 +246,10 @@ describe('TC-02-UNIT-06: Capability map', () => {
     expect(capabilitiesFor('member')).toEqual(capabilitiesFor('user'));
   });
 
-  it('grants an unknown role nothing, because normalization lands on viewer', () => {
-    expect(capabilitiesFor('superadmin')).toEqual([]);
+  it('grants an unknown role nothing beyond the viewer floor', () => {
+    // Reports/01 gave `viewer` one capability (ViewMyTimeOff), so an unknown
+    // role that normalises to viewer inherits exactly that floor and no more.
+    expect(capabilitiesFor('superadmin')).toEqual(['ViewMyTimeOff']);
   });
 
   it('leaves the spec 01 capabilities exactly as they were', () => {
@@ -266,7 +312,11 @@ describe('spec 03 profile capabilities', () => {
   it('never invents a `self` role — the table only holds values the column can hold', () => {
     expect(Object.keys(ROLE_CAPABILITIES)).toEqual(['admin', 'manager', 'user', 'viewer']);
     expect(normalizeRole('self')).toBe('viewer');
-    expect(capabilitiesFor('self')).toEqual([]);
+    // Reports/01: `viewer` now holds ViewMyTimeOff — the profile-capability
+    // block below (canReadProfile / canReadProfilePii / canEditProfile) is
+    // authorised via `isSelf`, so this narrow reports capability does not
+    // widen the profile surface for anyone.
+    expect(capabilitiesFor('self')).toEqual(['ViewMyTimeOff']);
   });
 });
 

@@ -588,7 +588,25 @@ export type MemberCapability =
    * `manage-own-time-entries`; this capability lets a future role hold
    * `manage-all-time-entries` while still being locked out of billable changes.
    */
-  | 'edit-others-billable';
+  | 'edit-others-billable'
+  /**
+   * Spec reports/01 additions — the nine reporting capabilities. Duplicated in
+   * `Capability` (PascalCase, packages/validation/src/roles.ts) so
+   * `RequireCapability` decorators and `can(role, ...)` call sites can both
+   * name them, matching the pattern used by clients and holidays. Owner-scope
+   * is expressed as paired (All, My) capabilities; the column-permission pair
+   * shapes the Time & Activity projection; `export-reports` gates every PDF
+   * endpoint independently of the JSON view.
+   */
+  | 'view-amounts-owed'
+  | 'view-my-amounts-owed'
+  | 'view-time-and-activity'
+  | 'view-my-time-and-activity'
+  | 'view-time-off'
+  | 'view-my-time-off'
+  | 'view-time-and-activity-billed'
+  | 'view-time-and-activity-spent'
+  | 'export-reports';
 
 /**
  * Pure lookup against spec 04's Roles & Permission Matrix (TC-04-UNIT-05), widened by
@@ -628,6 +646,15 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-holidays': true,
     'delete-holidays': true,
     'edit-others-billable': true,
+    'view-amounts-owed': true,
+    'view-my-amounts-owed': true,
+    'view-time-and-activity': true,
+    'view-my-time-and-activity': true,
+    'view-time-off': true,
+    'view-my-time-off': true,
+    'view-time-and-activity-billed': true,
+    'view-time-and-activity-spent': true,
+    'export-reports': true,
   },
   manager: {
     'view-list': true,
@@ -659,6 +686,16 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-holidays': true,
     'delete-holidays': false,
     'edit-others-billable': true,
+    'view-amounts-owed': true,
+    'view-my-amounts-owed': true,
+    'view-time-and-activity': true,
+    'view-my-time-and-activity': true,
+    'view-time-off': true,
+    'view-my-time-off': true,
+    // Manager sees the Billed Amount column but not Spent — pay rate is admin only.
+    'view-time-and-activity-billed': true,
+    'view-time-and-activity-spent': false,
+    'export-reports': true,
   },
   user: {
     'view-list': true,
@@ -690,6 +727,16 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-holidays': false,
     'delete-holidays': false,
     'edit-others-billable': false,
+    // A regular user gets the three My variants and PDF export of their own.
+    'view-amounts-owed': false,
+    'view-my-amounts-owed': true,
+    'view-time-and-activity': false,
+    'view-my-time-and-activity': true,
+    'view-time-off': false,
+    'view-my-time-off': true,
+    'view-time-and-activity-billed': false,
+    'view-time-and-activity-spent': false,
+    'export-reports': true,
   },
   viewer: {
     'view-list': true,
@@ -721,6 +768,16 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'manage-holidays': false,
     'delete-holidays': false,
     'edit-others-billable': false,
+    // A viewer sees only their own time-off calendar; no export.
+    'view-amounts-owed': false,
+    'view-my-amounts-owed': false,
+    'view-time-and-activity': false,
+    'view-my-time-and-activity': false,
+    'view-time-off': false,
+    'view-my-time-off': true,
+    'view-time-and-activity-billed': false,
+    'view-time-and-activity-spent': false,
+    'export-reports': false,
   },
 };
 
@@ -3482,3 +3539,15 @@ export * from './signing-providers';
 
 export * from './holiday-messages';
 export * from './holidays';
+
+/* ------------------------------------------------------------------ *
+ * Reports area — specs/reports
+ *
+ * `reports.ts` imports `zonedWallClockToUtc` from this file, so the
+ * `reports` re-export sits AFTER that helper's definition above. All
+ * consumption inside `reports.ts` happens in function bodies, so the
+ * circular is safe under CJS.
+ * ------------------------------------------------------------------ */
+
+export * from './reports-messages';
+export * from './reports';
