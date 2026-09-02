@@ -907,7 +907,7 @@ the rig. Every other section is covered below.
 
 - **Level:** Integration
 - **Steps:** Invite a client user; read the mail sink for `client_invitation`; accept.
-- **Expected Result:** 201; the mail names the organization, the client and the inviter and
+- **Expected Result:** 200; the mail names the organization, the client and the inviter and
   carries the link; a `ClientMembership` exists with `status = 'active'`; the invitation is
   `used`.
 
@@ -930,7 +930,7 @@ the rig. Every other section is covered below.
 - **Level:** Integration
 - **Steps:** Invite an address that is already an active staff member as a client user of an
   active client, then accept that invitation.
-- **Expected Result:** the invitation is minted, 201, and not refused with 400
+- **Expected Result:** the invitation is minted, 200, and not refused with 400
   `INVITE_MESSAGES.alreadyMember` (requirement 19a); accepting it answers 409 `accountIsStaff`;
   no `ClientMembership`; the invitation is still `pending`.
 
