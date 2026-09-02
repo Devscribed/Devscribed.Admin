@@ -1,0 +1,1238 @@
+{
+  "runId": "2026-09-01T16-08-11_requests-01-requests",
+  "spec": "specs/requests/01-requests.md",
+  "specSha": "3906ab320f1ea6ad2bb690a46c96ce8ffbd6755b77648e8700c06878cf19d0dc",
+  "task": "requests-01-requests",
+  "branch": "spec/requests",
+  "baseRef": "f06c7d844daeba66bc0f2545c5071600e6cb4037",
+  "headAtInit": "b1a0a70a308dfdc3e262960f24f06dc45d787f4a",
+  "status": "aborted",
+  "createdAt": "2026-09-01T16:08:11.455Z",
+  "updatedAt": "2026-09-02T06:10:00.584Z",
+  "stages": {
+    "preflight": {
+      "status": "passed",
+      "attempts": 1
+    },
+    "pre_implement": {
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-01T16:08:11.608Z",
+      "endedAt": "2026-09-01T16:19:57.183Z",
+      "lastVerdict": "pass"
+    },
+    "implement": {
+      "status": "aborted",
+      "attempts": 3,
+      "startedAt": "2026-09-01T17:23:43.815Z",
+      "endedAt": "2026-09-02T06:10:00.584Z",
+      "lastVerdict": "pass"
+    },
+    "static_gate": {
+      "status": "passed",
+      "attempts": 3,
+      "startedAt": "2026-09-01T16:46:26.882Z",
+      "lastVerdict": "blocked",
+      "endedAt": "2026-09-01T16:46:30.215Z"
+    },
+    "review": {
+      "status": "blocked",
+      "attempts": 4,
+      "startedAt": "2026-09-01T17:13:22.721Z",
+      "lastVerdict": "blocked",
+      "endedAt": "2026-09-01T17:23:43.719Z"
+    },
+    "qa": {
+      "status": "pending",
+      "attempts": 0
+    }
+  },
+  "budget": {
+    "codeAttempts": 2,
+    "handoffReplans": 0,
+    "infra": 0
+  },
+  "findingHistory": {
+    "CLAUDE.md/design-system@apps/web/app/org/[orgId]/requests/page.tsx#RequestsPage error banner": 1,
+    "specs/requests/01-requests.md requirement 42@specs/user-management/10-organization-requests-page.md#Flow: Manager reviews requests from Requests page": 1,
+    "CLAUDE.md/agent-prompts-are-rules-only@scripts/ship.mjs#promptFor": 1,
+    "pipeline/spec-immutable@specs/user-management/10-organization-requests-page.md#-": 1,
+    ".claude/skills/code-review/SKILL.md#10 Predicate sweep — \"**For each**, write two things — the rule it is there to enforce, and the exact question the code asks. **Blocks when those are not the same question.** ... the invariant spans two facts and the write constrains one of them\"@scripts/wf.mjs#cmdResume": 1
+  },
+  "carriedFindings": [
+    {
+      "id": "F1",
+      "target": "code",
+      "severity": "blocker",
+      "rule": "CLAUDE.md, \"Watch out for\": \"**Role values are in transition.** The database holds `admin` / `member`; the specs target `admin | manager | user | viewer`. New authorization code must handle both\"",
+      "file": "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx",
+      "symbol": "RequestDetailPage",
+      "line": 46,
+      "claim": "the request detail page casts the raw session role instead of normalizing it, so every capability read on this new screen is made against a value the capability matrix does not contain when the database holds the legacy `member`",
+      "witness": {
+        "kind": "rule",
+        "detail": "`const role = session.role as Role` at line 46. `session.role` is typed `string` and carries `Membership.role` verbatim. `can()` is a bare table lookup with a false fallback (`CAPABILITY_MATRIX[role]?.[capability] ?? false`, packages/validation/src/index.ts:716-718), so `CAPABILITY_MATRIX['member']` is undefined and every capability silently reads false instead of being mapped to `user`. The two sibling files written in the same task normalize first and say why: apps/web/app/org/[orgId]/requests/page.tsx:93 `const role: Role = normalizeRole(session.role)` and apps/web/src/layout/requests-badge-context.tsx:41. The server does the same, once, in requireCaller (apps/api/src/requests/requests.service.ts:861). The cast also asserts a falsehood to the type system: `Role` is 'admin'|'manager'|'user'|'viewer' and the value may be 'member'.",
+        "source": "CLAUDE.md:99"
+      },
+      "suggestedFix": "`const role: Role = normalizeRole(session.role);`, matching page.tsx:93. Today the only capability read here is `view-all-requests`, which both `user` and `member` lack, so the wrong answer and the right answer coincide — that coincidence is what makes this a trap for the next capability added to the screen rather than a visible bug now."
+    },
+    {
+      "id": "F6",
+      "target": "code",
+      "severity": "blocker",
+      "rule": ".claude/skills/code-review/SKILL.md, sweep 9 Boundary sweep: \"Enumerate every pair that must agree across a file boundary: ... a documented value and the code that reads it. ... **Blocks when** they do not.\"",
+      "file": "scripts/ship.mjs",
+      "symbol": "main",
+      "line": 388,
+      "claim": "`--no-carry` is documented in ship.mjs's header and usage string and is read by wf.mjs, but ship.mjs never forwards it, so the flag silently does the opposite of what it says",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Run `node scripts/ship.mjs specs/requests/01-requests.md --no-carry` in a tree holding an earlier non-`ready` run of that spec with code blockers. ship.mjs:387-392 builds the init call from `opt('from')` and `opt('carry')` only; `--no-carry` appears in ship.mjs at just two places, the usage comment at :25 and the usage string at :384, and is read nowhere. wf.mjs:393 therefore never sees `args['no-carry']`, falls through to `findCarrySource(specRel)` at :395, and the run initialises with carriedFindings populated — the exact opposite of the documented \"start clean, inheriting nothing\". This run is the proof the path is live: run.json carries carriedFrom \"2026-09-01T14-44-29_requests-01-requests#review\" and two carried findings, both found automatically.",
+        "source": "scripts/ship.mjs:25"
+      },
+      "suggestedFix": "`...(flag('no-carry') ? ['--no-carry'] : [])` alongside the `--carry` spread at :390. Everything else in the carry mechanism checks out: carried findings reach pre_implement and implement only, are spent once, and no gate is weakened."
+    }
+  ],
+  "carriedFrom": "2026-09-01T15-33-10_requests-01-requests#review",
+  "contested": [],
+  "notes": [
+    {
+      "stage": "pre_implement",
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "State Machine invariant 8",
+      "claim": "invariant 8 enumerates the writers of a Request row exhaustively and omits the message handler, which requirements 19 and 32 require to write Request.lastActivityAt",
+      "witness": {
+        "kind": "rule",
+        "detail": "State Machine invariant 8: 'Writers of a `Request` row are exactly: the create handler, the four transition handlers, the edit handler and the reassign handler.' Requirement 19: 'Every message writes a `RequestEvent` with `action = 'message_posted'` in the same transaction as the `RequestMessage` row, and updates `Request.lastActivityAt`.' Requirement 32: '`lastActivityAt` is updated by any message, any status change and any reassignment. It is the sort key of the list.' A message handler that updates lastActivityAt is a seventh writer of the Request row; one that does not violates 19 and 32, and the observable difference is whether a request rises to the top of the list after somebody posts on it (requirement 43's last sort key). The shipped code takes the requirement-19 reading and writes it under the same row lock as every other writer - apps/api/src/requests/requests.service.ts:448, inside the transaction that locks at :419.",
+        "source": "specs/requests/01-requests.md, State Machine invariant 8 against requirements 19 and 32"
+      },
+      "suggestedFix": "add the message handler to invariant 8's enumeration - 'and the message handler, which writes lastActivityAt' - so the exhaustive list stays exhaustive. A note and not a blocker: only one of the two readings survives requirement 43 making lastActivityAt the sort key, the code already takes it, and no implementer would build the other."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P2",
+      "target": "self",
+      "severity": "note",
+      "rule": "self/unverified-coverage-claim",
+      "file": ".workflow/runs/2026-09-01T16-08-11_requests-01-requests/handoff.json",
+      "symbol": "testCases",
+      "claim": "handoff-coverage's live-case check is blind on this spec because the file is CRLF, so its `pass` says nothing about the testCases block; I verified those 41 ids directly instead",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Run `node scripts/handoff-coverage.mjs --run 2026-09-01T16-08-11_requests-01-requests`: it prints `pass  requirements 47/47  cases 0/0  sections 21/21`. The spec has 41 `### TC-` headings. Commit 3d46cb3 rewrote specs/requests/01-requests.md with CRLF (`node -e` over the file: 1320 CRLF pairs, 0 bare LF), and the script's case regex at scripts/handoff-coverage.mjs:85 requires `[: \\n]` immediately after the id - a `\\r` sits there, so the match set is empty and `live.length` is 0, which makes `missingCases` empty and the check pass vacuously. The requirement check (`/^(\\d+)\\. /gm`) and the section check survive CRLF because `\\r` lands at end-of-line for the first and the heading is `.trim()`ed in the second. Hand check instead: 41 headings, none carrying `- **Retired.**`, and handoff.testCases claims exactly those 41 - set difference empty in both directions.",
+        "source": "scripts/handoff-coverage.mjs:85"
+      },
+      "suggestedFix": "tolerate CRLF in the case regex - `[: \\r\\n]` after the id, and `\\r?\\n` in the lookahead - so the check that exists to catch a dropped case cannot itself be dropped by a line ending. Until then, a `cases 0/0` line in any verdict should be read as 'not checked', never as 'nothing to check'."
+    },
+    {
+      "stage": "static_gate",
+      "id": "S1",
+      "severity": "note",
+      "target": "code",
+      "rule": "spec/message-duplicated",
+      "file": "apps/api/src/requests/requests.controller.ts",
+      "symbol": "Create without capability",
+      "claim": "\"Create without capability\" is in packages/validation and also written out in 1 file(s) under apps",
+      "witness": {
+        "kind": "command",
+        "detail": "git grep -lF -- \"`createForbidden`\" -- apps\napps/api/src/requests/requests.controller.ts",
+        "source": "specs/requests/01-requests.md"
+      },
+      "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
+    },
+    {
+      "stage": "static_gate",
+      "id": "S2",
+      "severity": "note",
+      "target": "code",
+      "rule": "spec/message-duplicated",
+      "file": "apps/api/src/requests/requests.controller.ts",
+      "symbol": "`scope=all` without capability",
+      "claim": "\"`scope=all` without capability\" is in packages/validation and also written out in 1 file(s) under apps",
+      "witness": {
+        "kind": "command",
+        "detail": "git grep -lF -- \"`scopeForbidden`\" -- apps\napps/api/src/requests/requests.controller.ts",
+        "source": "specs/requests/01-requests.md"
+      },
+      "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
+    },
+    {
+      "stage": "review",
+      "id": "N1",
+      "target": "spec",
+      "severity": "note",
+      "rule": ".claude/skills/spec/references/checklist.md:78 (a rubric, not one of the three blocking sources, so this cannot block)",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "Test Cases preamble",
+      "line": 910,
+      "claim": "This diff adds a new `## DS gaps` section at :718 and does not account for it in the Test Cases preamble, which lists the sections that have no case of their own and then enumerates the ten that are covered. DS gaps appears in neither list.",
+      "witness": {
+        "kind": "rule",
+        "detail": "checklist.md:78 — 'Every `##` section has at least one test case, or an explicit note saying it has none and why. Verification Plan is the standing exception.' The section exists at specs/requests/01-requests.md:718; the exhaustive preamble is at :910-917.",
+        "source": ".claude/skills/spec/references/checklist.md:78"
+      },
+      "suggestedFix": "One sentence in the preamble adding **DS gaps** to the no-case list: it records two absent `@ds` primitives and the token contract their native replacements carry, which is a design-system record rather than a behaviour."
+    },
+    {
+      "stage": "review",
+      "id": "N2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md requirement 45",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "requirement 36",
+      "line": 184,
+      "claim": "Requirement 36's new wording rests twice on 'requirement 45 enumerates its contents exhaustively'. It does not: the spec's own inbox wireframe at :411-418 draws type, priority and needed-by on each row, and RequestRow.tsx:110-115 renders them. The conclusion requirement 36 draws is right and the code matches it; only the exhaustiveness premise is false, and a later reader taking it literally would read the shipped row as non-compliant.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Requirement 45 (specs/requests/01-requests.md:259) lists six things. The wireframe at :411-418 shows 'access · blocked · needed by 2 Sep (overdue)'. apps/web/app/org/[orgId]/requests/RequestRow.tsx:110 renders type, accessKind, priority and neededBy in addition.",
+        "source": "specs/requests/01-requests.md:259"
+      },
+      "suggestedFix": "Reword requirement 36 to say requirement 45 enumerates the row's contents and names no control among them — the claim the argument actually needs — or widen requirement 45 to name what the wireframe already draws."
+    },
+    {
+      "stage": "review",
+      "id": "N3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md UI Description state table",
+      "file": "apps/web/app/org/[orgId]/requests/page.tsx",
+      "symbol": "RequestsPage project filter",
+      "line": 351,
+      "claim": "The project filter renders only for a holder of `list-assigned-projects`, which `viewer` does not hold, so a viewer sees a third control absent that the spec's permission-limited row does not name.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Sign in as a viewer and open /org/{orgId}/requests: requests-type-filter and requests-status-filter render, the project Select does not, because canListProjects is false at page.tsx:96. The spec's viewer row (01-requests.md:714) predicts only two absences: 'requests-new-btn absent; scope control absent'.",
+        "source": "specs/requests/01-requests.md:714"
+      },
+      "suggestedFix": "Add 'project filter absent' to the viewer row, with the reason — `list-assigned-projects` is not granted, so the choices cannot be fetched."
+    },
+    {
+      "stage": "review",
+      "id": "N4",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement",
+      "file": "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx",
+      "symbol": "load",
+      "line": 172,
+      "claim": "load() distinguishes only 200 and 404. Any other failure leaves detail null and notFound false, and the screen renders a bare back link with no message and no retry, indefinitely — the same DOM as the pre-load state, so a reader cannot tell a failure from a slow load. The list screen was given a banner and a retry control for exactly this case.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "With the API returning 500 for GET /api/organizations/{orgId}/requests/{requestId}, the browser shows request-detail-page containing only the '← Requests' link. The spec's UI Description has an 'Error (list)' row and no detail-screen equivalent, so no rule is broken.",
+        "source": "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx:76"
+      },
+      "suggestedFix": "Give the detail screen the list's banner-and-retry treatment and add its row to the UI Description state table, or state deliberately in the spec that a non-404 failure there renders nothing."
+    },
+    {
+      "stage": "review",
+      "id": "N5",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement",
+      "file": "apps/api/src/requests/vacation-request-feed.service.ts",
+      "symbol": "countAll",
+      "line": 123,
+      "claim": "countAll is the lifted spec-10 totalCount and has no caller anywhere: `grep -rn countAll apps packages e2e` returns only the declaration. Spec 10 as amended says the retired counter appears nowhere in the codebase; the identifier is gone from the envelope but the query that produced it still ships.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "The only call site of VacationRequestFeedService in apps/ is requests.service.ts:252 (listFeed). No route reaches countAll.",
+        "source": "apps/api/src/requests/vacation-request-feed.service.ts:123"
+      },
+      "suggestedFix": "Delete countAll, or say in the comment why an uncalled counter is kept."
+    },
+    {
+      "stage": "review",
+      "id": "N6",
+      "target": "code",
+      "severity": "note",
+      "rule": "CLAUDE.md/testing (demoted: no testid exists to use, so the fix is a design-system change, not a change to this diff)",
+      "file": "e2e/tests/requests.spec.ts",
+      "symbol": "chooseOption",
+      "line": 186,
+      "claim": "Four selections reach a control by ARIA role rather than by testid — requests.spec.ts:186, :626, :657 and requests-page.spec.ts:147. The @ds Select renders its options with role='option' and no data-testid, so no id exists to select by; eight pre-existing suites already do this.",
+      "witness": {
+        "kind": "rule",
+        "detail": "CLAUDE.md:71 — 'Selectors are `data-testid` only, and the ids are named in the specs.' The DS Select's options carry none, which is why every existing suite does the same.",
+        "source": "CLAUDE.md:71"
+      },
+      "suggestedFix": "Give @ds Select options a testid derived from the field's, recorded as a DS gap, or carve out DS listbox options in CLAUDE.md — which is what the tree already assumes."
+    },
+    {
+      "stage": "review",
+      "id": "N7",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement",
+      "file": "packages/validation/src/requests.ts",
+      "symbol": "validateRequestDescription",
+      "line": 113,
+      "claim": "A non-string description is reported with descriptionTooLong, so POST …/requests with {\"description\": 42} answers 400 'Description must be 5000 characters or fewer' about a value that is not too long. The spec's Error Messages table has no key for a malformed type.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "validateRequestDescription(42) returns { valid: false, error: REQUEST_MESSAGES.descriptionTooLong } at requests.ts:113, copied into fields.description at :306.",
+        "source": "packages/validation/src/requests.ts:113"
+      },
+      "suggestedFix": "Treat a non-string description as absent, matching validateRequestMessageBody at :235, or add a spec message for a malformed value."
+    },
+    {
+      "stage": "review",
+      "id": "N8",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement against requirement 9's three legal answers",
+      "file": "packages/validation/src/requests.ts",
+      "symbol": "validateNewRequest",
+      "line": 317,
+      "claim": "A non-string projectId is silently coerced to null: POST with {\"projectId\": 42} returns 201 with project null and the caller is never told the project was dropped. Requirement 9 makes three answers legal for a project id — accepted, 400 archived, 404 foreign; forgetting it is a fourth.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "validateNewRequest({type:'question',title:'…',assigneeKind:'member',assigneeMembershipId:'m-1',projectId:42}, today) returns valid:true with value.projectId === null (requests.ts:317-320). The same body with a string id would have been resolved and could have answered 404.",
+        "source": "packages/validation/src/requests.ts:317"
+      },
+      "suggestedFix": "Let a present-but-non-string projectId fall through to the server lookup so it answers 404 like any unknown id."
+    },
+    {
+      "stage": "review",
+      "id": "N9",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement",
+      "file": "apps/api/src/requests/request-events.service.ts",
+      "symbol": "record",
+      "line": 40,
+      "claim": "record(tx: Prisma.TransactionClient, …) cannot enforce the invariant its comment states: PrismaService extends PrismaClient, which is structurally assignable to Prisma.TransactionClient, so a future caller passing this.prisma compiles and writes the event outside any transaction. All six current call sites pass a real tx, so nothing is wrong today.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/requests/01-requests.md:390 (State Machine invariant 4) — 'Every transition writes exactly one `RequestEvent` with `action = \\'status_changed\\'` in the same transaction as the status column.' Call sites requests.service.ts:389, 455, 538, 563, 673, 761 all comply.",
+        "source": "specs/requests/01-requests.md:390"
+      },
+      "suggestedFix": "Nothing required now; if the seam is worth closing it needs a nominal wrapper type or a lint rule, and the comment should say the type is documentation rather than a guard."
+    },
+    {
+      "stage": "review",
+      "id": "N10",
+      "target": "code",
+      "severity": "note",
+      "rule": "CLAUDE.md/validation (raised only so the next reader does not mistake it for copy)",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "listRequests",
+      "line": 175,
+      "claim": "The 400 for an unknown scope/status/type carries fields: { status: 'unknown_value' }, a literal defined in the service rather than in packages/validation. It is a machine code and not user-facing copy — the spec's Error Messages table has no key for it, and an unknown value can only arrive from a hand-edited URL — so no message escaped the package.",
+      "witness": {
+        "kind": "rule",
+        "detail": "CLAUDE.md:58 — 'Rules and message text live in `packages/validation` ... Never write a user-facing validation message inline.' The literal is pinned as the contract by apps/api/test/requests-page.spec.ts:435.",
+        "source": "CLAUDE.md:58"
+      },
+      "suggestedFix": "None needed; if the codes multiply, export them from packages/validation as a codes object rather than as copy."
+    },
+    {
+      "stage": "review",
+      "id": "N11",
+      "target": "spec",
+      "severity": "note",
+      "rule": "none — scope observation from sweep 5",
+      "file": "scripts/wf.mjs",
+      "symbol": "carriedBlockers",
+      "line": 318,
+      "claim": "The --carry / --no-carry feature (wf.mjs +71, ship.mjs +52) answers no requirement of this spec, no task in the handoff and no row in the area README's blast radius, yet it sits in this spec's diff and every review pass must judge it against a spec that says nothing about it. It deploys nothing — CLAUDE.md's deploy note puts scripts/ among the paths copied into no image — so the cost is review, not release.",
+      "witness": {
+        "kind": "rule",
+        "detail": "handoff.json tasks T1-T10 name files under apps/web, packages/validation, apps/api and e2e only; the summary says the open work is 'the delta between commit 3d46cb3's corrections and the code, plus the one carried code blocker'.",
+        "source": ".workflow/runs/2026-09-01T16-08-11_requests-01-requests/handoff.json"
+      },
+      "suggestedFix": "Land pipeline tooling on its own branch, or record it as a deliberate out-of-band change so the next reviewer is not asked to judge it against requests/01."
+    },
+    {
+      "stage": "review",
+      "id": "N12",
+      "target": "spec",
+      "severity": "note",
+      "rule": "CLAUDE.md/testing",
+      "file": "apps/api/test/requests.spec.ts",
+      "symbol": "narrows by project and by a case-insensitive title match, leaving the counters alone",
+      "line": 1003,
+      "claim": "This integration case carries no TC id and no numbered case in the spec covers it; its own comment concedes as much. It covers requirement 42's projectId and q filters, which the spec's Test Cases section assigns to no case, so the spec and the suite disagree about what is covered.",
+      "witness": {
+        "kind": "test",
+        "detail": "CLAUDE.md:72 — 'Test cases are numbered in the specs (`TC-01-E2E-03`) and the code references those ids.' TC-01-INT-22 (specs/requests/01-requests.md:1150) is the last numbered integration case and covers status and type only.",
+        "source": "CLAUDE.md:72"
+      },
+      "suggestedFix": "A person adds TC-01-INT-23 covering requirement 42's projectId and q filters and the counters' immunity to them, and the test references it."
+    },
+    {
+      "stage": "review",
+      "id": "N13",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "requireCaller",
+      "line": 859,
+      "claim": "requireCaller throws a bare ForbiddenException when the session's membership is missing, inactive, or in another organization — the one refusal in this service with no { error, message } envelope behind it, and a 403 where the surrounding convention for 'not yours to see' is 404. Reachable only if a membership is soft-deleted or moved mid-session before SessionGuard revokes, which no edge case in the spec covers.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "requests.service.ts:859 throws `new ForbiddenException()` with no body, while :184, :309, :506 and :607 all throw { error: 'forbidden', message: REQUEST_MESSAGES.* }. The spec's Error Messages table has no row for 'caller has no active membership'.",
+        "source": "apps/api/src/requests/requests.service.ts:859"
+      },
+      "suggestedFix": "Confirm SessionGuard makes it unreachable and say so, or give it the envelope and a named message so no route answers with a body the spec does not describe."
+    },
+    {
+      "stage": "review",
+      "id": "N14",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — internal consistency of a string this change edits",
+      "file": "scripts/ship.mjs",
+      "symbol": "promptFor, case 'review'",
+      "line": 178,
+      "claim": "The review-ledger to review-slice rename was applied at :152 and :174 but not to the prose at :178, which still reads 'The ledger has already confirmed with git diff that it has not moved'. The reviewer is told to run one tool and then told what a differently-named one already did.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Run a review stage with attempts > 0: the prompt says 'Run `node scripts/review-slice.mjs`' at :174 and 'The ledger has already confirmed...' at :178. `ls scripts/` shows review-slice.mjs and no review-ledger.mjs.",
+        "source": "scripts/ship.mjs:178"
+      },
+      "suggestedFix": "Replace 'The ledger' with 'The worklist' at :178."
+    },
+    {
+      "stage": "static_gate",
+      "id": "S2",
+      "severity": "note",
+      "target": "code",
+      "rule": "spec/message-duplicated",
+      "file": "apps/api/src/requests/requests.controller.ts",
+      "symbol": "Create without capability",
+      "claim": "\"Create without capability\" is in packages/validation and also written out in 1 file(s) under apps",
+      "witness": {
+        "kind": "command",
+        "detail": "git grep -lF -- \"`createForbidden`\" -- apps\napps/api/src/requests/requests.controller.ts",
+        "source": "specs/requests/01-requests.md"
+      },
+      "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
+    },
+    {
+      "stage": "static_gate",
+      "id": "S3",
+      "severity": "note",
+      "target": "code",
+      "rule": "spec/message-duplicated",
+      "file": "apps/api/src/requests/requests.controller.ts",
+      "symbol": "`scope=all` without capability",
+      "claim": "\"`scope=all` without capability\" is in packages/validation and also written out in 1 file(s) under apps",
+      "witness": {
+        "kind": "command",
+        "detail": "git grep -lF -- \"`scopeForbidden`\" -- apps\napps/api/src/requests/requests.controller.ts",
+        "source": "specs/requests/01-requests.md"
+      },
+      "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
+    },
+    {
+      "stage": "static_gate",
+      "id": "S1",
+      "severity": "note",
+      "target": "code",
+      "rule": "spec/message-duplicated",
+      "file": "apps/api/src/requests/requests.controller.ts",
+      "symbol": "Create without capability",
+      "claim": "\"Create without capability\" is in packages/validation and also written out in 1 file(s) under apps",
+      "witness": {
+        "kind": "command",
+        "detail": "git grep -lF -- \"`createForbidden`\" -- apps\napps/api/src/requests/requests.controller.ts",
+        "source": "specs/requests/01-requests.md"
+      },
+      "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
+    },
+    {
+      "stage": "static_gate",
+      "id": "S2",
+      "severity": "note",
+      "target": "code",
+      "rule": "spec/message-duplicated",
+      "file": "apps/api/src/requests/requests.controller.ts",
+      "symbol": "`scope=all` without capability",
+      "claim": "\"`scope=all` without capability\" is in packages/validation and also written out in 1 file(s) under apps",
+      "witness": {
+        "kind": "command",
+        "detail": "git grep -lF -- \"`scopeForbidden`\" -- apps\napps/api/src/requests/requests.controller.ts",
+        "source": "specs/requests/01-requests.md"
+      },
+      "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
+    },
+    {
+      "stage": "review",
+      "id": "N1",
+      "target": "code",
+      "severity": "note",
+      "rule": "CLAUDE.md/agent-prompts-are-rules-only (demoted: the line is pre-existing, not added by this diff, so it cannot block this change)",
+      "file": "scripts/ship.mjs",
+      "symbol": "promptFor",
+      "line": 176,
+      "claim": "Two lines below the sentence pass 1 blocked and this diff removed, the same rule is broken by a line the diff leaves standing: \"A previous pass is not proof of absence — on the first run of this spec, four passes named 55, 46, 50 and 44 files of a diff that grew to 84, and nine files were never opened by any of them.\" That is measurements from this project and what happened on an earlier run, emitted verbatim into every review prompt after the first - including the one that produced this verdict. Raised as a note because `git show f06c7d84:scripts/ship.mjs` line 154 carries it identically, so it is outside this change.",
+      "witness": {
+        "kind": "rule",
+        "detail": "CLAUDE.md:160-163 - \"Never put in a prompt: measurements, counts, timings or costs from this project; what happened on an earlier run, or what some agent did last time\". ship.mjs:176 is inside the template literal promptFor returns for stage `review` when `done > 0`.",
+        "source": "CLAUDE.md:163"
+      },
+      "suggestedFix": "Reduce it to the rule - \"A previous pass is not proof of absence.\" - and move the figures to docs/research/, which is where CLAUDE.md puts the evidence for a rule."
+    },
+    {
+      "stage": "review",
+      "id": "N2",
+      "target": "code",
+      "severity": "note",
+      "rule": "none - internal consistency of a string this change edits (carried from pass 1 N14, still open)",
+      "file": "scripts/ship.mjs",
+      "symbol": "promptFor",
+      "line": 177,
+      "claim": "The review-ledger to review-slice rename was applied at :151, :156 and :170 but not to the prose at :177, which still reads \"The ledger has already confirmed with `git diff` that it has not moved\". `scripts/review-ledger.mjs` no longer exists - `ls scripts/` shows only review-slice.mjs, and docs/adr/0004 records the deletion - so the reviewer is told to run one tool and then told what a differently-named, absent one already did.",
+      "witness": {
+        "kind": "rule",
+        "detail": "scripts/ship.mjs:151 emits \"Run `node scripts/review-slice.mjs` first\"; :177 in the same string refers to \"The ledger\". `ls scripts/ | grep -i ledger` returns nothing.",
+        "source": "scripts/ship.mjs:177"
+      },
+      "suggestedFix": "\"The slice has already confirmed with `git diff` that it has not moved.\""
+    },
+    {
+      "stage": "review",
+      "id": "N3",
+      "target": "code",
+      "severity": "note",
+      "rule": "none - judgement",
+      "file": "scripts/wf.mjs",
+      "symbol": "cmdResume",
+      "line": 613,
+      "claim": "The success banner prints \"spec sha matches the one recorded at init — handoff.json still describes this spec\" unconditionally, including on the one path where the sha demonstrably does not match: a resume into pre_implement after a spec correction, which is the path the failure message at :570 recommends. The operator is told the opposite of what happened. Closely related to F2 and probably fixed by the same edit.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Edit the spec, run `node scripts/wf.mjs resume --stage pre_implement`. The guard at :566 is skipped because the stage index is not greater than pre_implement's, and :613 prints the match claim while sha !== run.specSha.",
+        "source": "scripts/wf.mjs:611-615"
+      },
+      "suggestedFix": "Print the sha line only when sha === run.specSha; otherwise say the plan is being rebuilt because the spec moved."
+    },
+    {
+      "stage": "review",
+      "id": "N4",
+      "target": "code",
+      "severity": "note",
+      "rule": "none - judgement (state written but never read)",
+      "file": "scripts/wf.mjs",
+      "symbol": "cmdResume",
+      "line": 604,
+      "claim": "Three residues in the resume path. (a) `run.resumes` is written here and read nowhere - cmdStatus does not print it and scripts/run-report.mjs does not open it - so the comment's promise that a run reaching `ready` still shows who overruled what holds only for someone opening run.json by hand. (b) The reset loop deletes endedAt and sets status='pending' for stages at and after the resume point but leaves startedAt and lastVerdict, so `wf status` shows a pending stage carrying the verdict of a pass that was discarded. (c) The new stage-closing loop covers STAGES.slice(0, indexOf(stage)) only, so the most common abandoned-run case - the killed stage is itself the resume target - gets no stage-end event, and the board keeps that attempt growing.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "The orchestrator dies mid-implement; `wf resume --stage implement` writes no stage-end for implement, because slice(0,2) covers preflight and pre_implement only. `npm run board` then shows the killed attempt still counting upward toward Date.now(). Separately `wf status` prints a pending stage alongside the lastVerdict of the pass the resume threw away.",
+        "source": "scripts/wf.mjs:595-607, scripts/run-report.mjs:174-180"
+      },
+      "suggestedFix": "Close a running stage at the resume point too, delete lastVerdict and startedAt along with endedAt in the reset loop, and surface `resumes` in cmdStatus so the record is read by something."
+    },
+    {
+      "stage": "review",
+      "id": "N5",
+      "target": "spec",
+      "severity": "note",
+      "rule": ".claude/skills/spec/references/checklist.md - Consistency (a rubric, not one of the three blocking sources)",
+      "file": "specs/user-management/10-organization-requests-page.md",
+      "symbol": "Functional Requirements 2",
+      "line": 71,
+      "claim": "The mapping restated here is partial. It gives open->pending, granted->approved and declined->rejected but omits requirement 42's other two rows: `cancelled` selects vacation `cancelled`, and `answered` has no counterpart and therefore selects no vacation rows while the section still renders - empty, not absent. A reader of spec 10 alone cannot tell what `answered` does to the vacation section.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/requests/01-requests.md requirement 42 - \"`answered` has no vacation counterpart and therefore selects **no** vacation rows — the section renders empty, not absent, because the caller may still hold `view-requests`.\" The code agrees with requirement 42: packages/validation/src/requests.ts:491-492 returns [] for 'answered'.",
+        "source": "specs/requests/01-requests.md:218"
+      },
+      "suggestedFix": "Add the two missing rows at :71, or replace the restatement with a pointer to requirement 42 so the mapping has one home."
+    },
+    {
+      "stage": "review",
+      "id": "N6",
+      "target": "spec",
+      "severity": "note",
+      "rule": "none - the spec is silent (independently raised by pass 1 as N3 and by shard 1 as S1-F7)",
+      "file": "apps/web/app/org/[orgId]/requests/page.tsx",
+      "symbol": "RequestsPage",
+      "line": 351,
+      "claim": "The project filter is drawn only for a holder of `list-assigned-projects`, which `viewer` does not hold. Requirement 42 enumerates projectId as a filter with no capability attached, and the spec's UI Description enumerates what a viewer loses as exactly two controls - requests-new-btn and the scope control. Hiding a third is defensible under CLAUDE.md's navigation rule, but the spec does not say it and the code argues its own exception in a comment.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/requests/01-requests.md UI Description - \"Permission-limited (`viewer`) | `requests-new-btn` absent; scope control absent.\" The project filter is not named, and requirement 42 lists projectId among the filters unconditionally.",
+        "source": "specs/requests/01-requests.md:714"
+      },
+      "suggestedFix": "Add a row to the UI Description state table saying the project filter is absent for a caller without list-assigned-projects."
+    },
+    {
+      "stage": "review",
+      "id": "N7",
+      "target": "code",
+      "severity": "note",
+      "rule": "none - judgement, and the spec is short a string",
+      "file": "apps/web/app/org/[orgId]/requests/page.tsx",
+      "symbol": "RequestsPage",
+      "line": 290,
+      "claim": "Requirement 46 says the empty-state copy depends on the active scope and filters, but the choice reads counts.total alone. An admin on scope `all` in an organization with no requests sees emptyMine - \"Nothing is waiting on you.\" - which is a statement about their own inbox on a view that is not their inbox. The spec defines only two strings, so this is a gap in the spec as much as in the code.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Admin, fresh organization, no Request rows. GET .../requests?scope=all returns requests: [], counts: { waitingOnMe: 0, total: 0 }. emptyMessage at page.tsx:289-290 evaluates total > 0 as false and renders REQUEST_MESSAGES.emptyMine under the All tab.",
+        "source": "specs/requests/01-requests.md:262 (requirement 46)"
+      },
+      "suggestedFix": "Either add a third string for the `all` scope to the Error Messages table and select on scope, or amend requirement 46 to say the copy depends on the filters only."
+    },
+    {
+      "stage": "review",
+      "id": "N8",
+      "target": "spec",
+      "severity": "note",
+      "rule": "none - two spec statements disagree, but the safety property both protect holds in the code",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "State Machine invariant 8",
+      "line": 397,
+      "claim": "Invariant 8 says \"Writers of a `Request` row are exactly: the create handler, the four transition handlers, the edit handler and the reassign handler.\" The word `exactly` makes the list closed, and it omits an eighth writer that requirement 32 mandates: the message handler, which updates Request.lastActivityAt. No code change follows - the message handler does take the row lock, which is what invariant 8 is really protecting - but a future reader reasoning from the closed list would conclude posting a message needs no lock.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/requests/01-requests.md:166 (requirement 32) - \"`lastActivityAt` is updated by any message, any status change and any reassignment.\" apps/api/src/requests/requests.service.ts:449 is that write, inside the postMessage transaction, after lockRequest at :419.",
+        "source": "specs/requests/01-requests.md:397"
+      },
+      "suggestedFix": "Add the message handler to invariant 8's list, or drop the word `exactly`."
+    },
+    {
+      "stage": "review",
+      "id": "N9",
+      "target": "code",
+      "severity": "note",
+      "rule": "none - blast-radius observation, capability granted but gating nothing",
+      "file": "packages/validation/src/roles.ts",
+      "symbol": "ROLE_CAPABILITIES",
+      "line": 147,
+      "claim": "`ViewOwnRequests` and its lowercase twin `view-own-requests` are added to both capability unions, granted to all four roles, and asserted by three unit tests - and consumed by nothing. `grep -rn \"ViewOwnRequests\\|view-own-requests\" apps/api/src apps/web` returns only the spec's own prose in comments; no @RequireCapability decorator and no can() call reads it. Party-ness is computed by identity in requests.service.ts instead, which matches the spec's design. Recorded so a future reader does not gate on it believing it narrows anything: held by every role, it is always true.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/requests/01-requests.md Roles & Permission Matrix - \"`view-own-requests` — raised by me or addressed to me | admin yes | manager yes | user yes | viewer yes\" - so the capability is required by the spec to exist, and is true for every role that can reach the code.",
+        "source": "specs/requests/01-requests.md:58"
+      },
+      "suggestedFix": "Leave it, but note in the roles.ts comment that it is a matrix entry rather than a gate - the way the `self` note above canReadProfile already does for the other non-gate."
+    },
+    {
+      "stage": "review",
+      "id": "N10",
+      "target": "code",
+      "severity": "note",
+      "rule": "none - blast-radius observation, outside the diff",
+      "file": "apps/api/test/member-profile.spec.ts",
+      "symbol": "reads a colleague's profile",
+      "line": 160,
+      "claim": "This diff makes ROLE_CAPABILITIES.user non-empty for the first time, which falsifies a comment in a test file the diff does not touch: \"Authorization by identity, not by role: `ROLE_CAPABILITIES.user` is empty.\" The assertions around it are unaffected - they gate on identity and on ReadMemberProfile, neither of which moved - so nothing fails; only the explanation is now wrong.",
+      "witness": {
+        "kind": "test",
+        "detail": "apps/api/test/member-profile.spec.ts:159-160 states ROLE_CAPABILITIES.user is empty; packages/validation/src/roles.ts:147 now reads `user: ['CreateRequest', 'ViewOwnRequests']`. The test itself still passes - the point it makes (self-access is by identity) survives - so this is a stale comment, not a broken case.",
+        "source": "apps/api/test/member-profile.spec.ts:160"
+      },
+      "suggestedFix": "Reword to \"`ROLE_CAPABILITIES.user` holds nothing that grants this\", which is what the case actually relies on."
+    },
+    {
+      "stage": "review",
+      "id": "N1",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement; the file's own comment is the counter-evidence (raised by pass 2 as N3, unaddressed)",
+      "file": "scripts/wf.mjs",
+      "symbol": "cmdResume",
+      "line": 641,
+      "claim": "The success banner prints \"spec sha matches the one recorded at init — handoff.json still describes this spec\" unconditionally, and this commit makes it false on the path it just created. On a resume into pre_implement after a spec correction the sha did not match, :610 has just overwritten the record the sentence claims to be comparing against, and :616 writes `specSha: {from, to}` into the run at the same moment the operator is told the two are equal. The comment at :605 states the opposite of the banner in the same function: specSha means \"the sha the current plan was built from\", not \"the sha at init\".",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Edit the spec, run `wf resume --stage pre_implement --accept-spec-edits`. :569 is skipped because replans is true; :610 assigns run.specSha = sha; :616 records the from/to pair; :641 prints the match claim. The run's own record and the sentence printed to the operator disagree, one line apart.",
+        "source": "scripts/wf.mjs:605, 610, 616, 641"
+      },
+      "suggestedFix": "Print the replan case separately: when priorSha !== run.specSha, say the spec moved, that the plan is being rebuilt from it, and that resuming past pre_implement before that rebuild finishes is not safe."
+    },
+    {
+      "stage": "review",
+      "id": "N2",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement; the same field is read defensively one file over",
+      "file": "scripts/wf.mjs",
+      "symbol": "cmdResume",
+      "line": 581,
+      "claim": "The new spec-edit sweep passes `run.headAtInit` straight to git without checking it exists, on a command whose whole purpose is recovering runs that are already in a bad state. Four of the fifteen run.json files on disk predate the field and two of those are `halted` — exactly the state resume exists for — so resume on them dies with a Node argument-type stack trace instead of a `wf: …` message.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "`.workflow/runs/2026-08-28T13-28-44_documents-04-signature-providers/run.json` and `.workflow/runs/2026-08-28T13-48-53_documents-04-signature-providers/run.json` are both `\"status\": \"halted\"` and carry no `headAtInit` key. With either as `.workflow/current`, `node scripts/wf.mjs resume --stage implement` reaches :581 and calls git with `undefined` as the diff base, which throws before any of the run's own guards report anything. static-gate.mjs:59 reads the same field as `run?.headAtInit ?? base`, so one file defends against the absence and the other does not.",
+        "source": "scripts/wf.mjs:581 against scripts/static-gate.mjs:59"
+      },
+      "suggestedFix": "Fall back to `run.baseRef` the way static-gate.mjs:59 already does, or fail with a sentence: \"this run predates the spec-edit baseline — start a new run\"."
+    },
+    {
+      "stage": "review",
+      "id": "N3",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement",
+      "file": "scripts/wf.mjs",
+      "symbol": "cmdResume",
+      "line": 583,
+      "claim": "`--accept-spec-edits` is used as a boolean but parseArgs assigns the following non-`--` token as its value, so the paths-taking spelling a reader would naturally try — `wf resume --stage review --accept-spec-edits specs/user-management/10-organization-requests-page.md` — sets a truthy string and accepts every spec edit in the diff, including the ones the operator did not name. The refusal message does not say the flag takes no argument, and the usage line at :29 shows it bare without saying so either.",
+      "witness": {
+        "kind": "rule",
+        "detail": "parseArgs at scripts/wf.mjs:104-116: `if (next === undefined || next.startsWith('--')) out[key] = true; else { out[key] = next; i++; }`. The guard at :583 tests `!args['accept-spec-edits']`, which is truthiness only, so any following path satisfies it.",
+        "source": "scripts/wf.mjs:111-112 and :583"
+      },
+      "suggestedFix": "Reject a non-boolean value outright, or implement the paths form and accept only the files named, reporting the rest."
+    },
+    {
+      "stage": "review",
+      "id": "N4",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement about the router, raised because it decides what happens to F1",
+      "file": "scripts/wf.mjs",
+      "symbol": "route",
+      "line": 280,
+      "claim": "`run.findingHistory` is only ever incremented and is initialised empty at cmdInit; nothing clears an entry when the finding under that key is confirmed closed. The key is `rule@file#symbol`, so a genuinely new defect at a site that has already had two different ones fixed inherits their count and is declared \"stuck — the requirement is ambiguous or the finding is wrong\" on its first appearance. That is this verdict's own situation: `.claude/skills/code-review/SKILL.md#10 Predicate sweep@scripts/wf.mjs#cmdResume` stands at 2 for two findings I have just confirmed closed, and F1 is a third and different defect. The 4e158cc commit fixed the neighbouring version of this — two findings in one verdict sharing a key — by deduplicating within the verdict, which leaves the across-verdicts case untouched.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "run.json findingHistory holds `\".claude/skills/code-review/SKILL.md#10 Predicate sweep@scripts/wf.mjs#cmdResume\": 2`, and priorBlockers above record both of those findings as closed against their witnesses. With cfg.convergence.autoContestAfter = 2 (.claude/ai-workflow.config.json), route() at :281 will read 3 for F1 and halt with 'stuck-finding' rather than routing it to the implementer — a correct outcome here, since a person should decide whether this resume design is worth another cycle, but reached by counting two fixed defects as attempts at a third.",
+        "source": "scripts/wf.mjs:280-282, and findingHistory in .workflow/runs/2026-09-01T16-08-11_requests-01-requests/run.json"
+      },
+      "suggestedFix": "Clear a key when a later verdict's priorBlockers report it closed, or key the counter on the finding's witness rather than on `rule@file#symbol`, so \"the same finding twice\" means the same defect twice."
+    },
+    {
+      "stage": "review",
+      "id": "N5",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement (pass 2 N4c, still open)",
+      "file": "scripts/wf.mjs",
+      "symbol": "cmdResume",
+      "line": 622,
+      "claim": "The loop that closes a killed stage covers `STAGES.slice(0, STAGES.indexOf(stage))` only, so the commonest abandoned-run case — the stage that was killed is the one being resumed — emits no `stage-end` event. The reset loop that follows sets it to `pending`, which fixes `wf status`, but the board reads the attempt's artefacts and not run.json: run-report.mjs:177-179 marks any attempt with a `startedAt` and no `.log` and no end event as `running` with `endedAt = Date.now()`, so the killed attempt keeps counting upward for as long as the record exists — the exact thing the comment at :618-621 says this loop exists to prevent.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "The orchestrator dies mid-implement and `wf resume --stage implement` is run. STAGES.slice(0, 2) covers preflight and pre_implement, so implement gets no stage-end event; run-report.mjs:167 finds a startedAt, :172 finds no `.log`, :177-179 sets state='running' and endedAt=Date.now(). `npm run board` shows that attempt still growing.",
+        "source": "scripts/wf.mjs:622 against scripts/run-report.mjs:167-179"
+      },
+      "suggestedFix": "Close a `running` stage at the resume point as well as before it — it is over either way, and the resume is the moment a person confirms that."
+    },
+    {
+      "stage": "review",
+      "id": "N6",
+      "target": "spec",
+      "severity": "note",
+      "rule": "none — the restatement is partial rather than wrong (pass 2 N5, unaddressed)",
+      "file": "specs/user-management/10-organization-requests-page.md",
+      "symbol": "Functional Requirements 2",
+      "line": 77,
+      "claim": "The status mapping restated here still gives three of requirement 42's five rows: open->pending, granted->approved, declined->rejected. It omits that `cancelled` selects vacation `cancelled`, and that `answered` has no counterpart and therefore selects no vacation rows while the section still renders — empty, not absent. A reader of spec 10 alone cannot tell what `answered` does to the vacation section, and the code answers it (packages/validation/src/requests.ts returns [] for 'answered').",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/requests/01-requests.md requirement 42: \"`open` selects vacation `pending`, `granted` selects `approved`, `declined` selects `rejected`, `cancelled` selects `cancelled`, and `all` selects every row. `answered` has no vacation counterpart and therefore selects **no** vacation rows — the section renders empty, not absent, because the caller may still hold `view-requests`.\"",
+        "source": "specs/requests/01-requests.md:215"
+      },
+      "suggestedFix": "Add the two missing rows, or replace the restatement with a pointer to requirement 42 so the mapping has one home."
+    },
+    {
+      "stage": "review",
+      "id": "N7",
+      "target": "spec",
+      "severity": "note",
+      "rule": "none — judgement about the banner's own promise",
+      "file": "specs/user-management/10-organization-requests-page.md",
+      "symbol": "amendment banner",
+      "line": 26,
+      "claim": "Of the 21 statements the banner enumerates as \"marked in place, each beside the text it corrects\", 18 now carry an explicit amendment marker and 3 do not: the permission matrix at :57-61, the screen heading at :96 and the screen mock's filter control at :103 were rewritten to the new rule outright. Rewriting is defensible and arguably better, but the banner's whole history is of items it lists and does not mark, and two conventions under one sentence promising a single one is what makes the list uncheckable.",
+      "witness": {
+        "kind": "rule",
+        "detail": "\"Every statement this overrules is marked in place, each beside the text it corrects: the actors line, the permission matrix, … the screen mock's filter control, … the screen heading, …\" — the matrix rows at :59-60 read \"View Requests page ✅ ✅ ✅ ✅\" with no marker, the heading at :96 reads \"Requests Page — every member sees it; the vacation section needs `view-requests`\" with no marker, and the mock at :103 draws \"[ All statuses ▾ ]\" with no marker.",
+        "source": "specs/user-management/10-organization-requests-page.md:26"
+      },
+      "suggestedFix": "Split the sentence into the statements corrected in place with a marker and the ones rewritten outright, so every entry in the list is findable by the convention the list claims."
+    },
+    {
+      "stage": "review",
+      "id": "N8",
+      "target": "spec",
+      "severity": "note",
+      "rule": "none — two statements in one spec disagree, but no implementation is blocked (pass 1 N2, still open)",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "Functional requirement 36",
+      "line": 184,
+      "claim": "Requirement 36's new wording rests on \"requirement 45 enumerates its contents exhaustively\", and requirement 45 does not: it names the number, title, status, addressee, project and two flags, while the spec's own inbox wireframe at :409-417 draws type, priority and needed-by on every row and RequestRow.tsx renders them. The conclusion requirement 36 draws — that no reassign control appears on the list row — is right and the code matches it; only the premise is false, and a later reader taking it literally would conclude the shipped row is over-drawn.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/requests/01-requests.md:184 — \"requirement 45 enumerates its contents exhaustively and neither control is among them\". Requirement 45 at :255 lists six things and two flags. The wireframe at :412 draws \"access · blocked · needed by 2 Sep (overdue)\" beneath the title, and RequestRow.tsx renders the same three.",
+        "source": "specs/requests/01-requests.md:255"
+      },
+      "suggestedFix": "Say what requirement 36 means — that requirement 45 names no reassign control and none is drawn — rather than resting it on an exhaustiveness the section does not have."
+    },
+    {
+      "stage": "review",
+      "id": "N9",
+      "target": "spec",
+      "severity": "note",
+      "rule": "none — a mock disagreeing with a numbered requirement of the same spec",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "the inbox wireframe",
+      "line": 409,
+      "claim": "The wireframe draws the status control as `Status [ Open ▾ ]` while requirement 42 says both `type` and `status` default to `all`, and the retirement of the pending-by-default view is one of this spec's headline changes — the amendment it forced in spec 10 is enumerated in that file's banner. The code follows requirement 42 (page.tsx:103 and :106 both fall back to 'all', and parseRequestStatusQuery returns 'all' for an absent value), so nothing is wrong in the implementation; the mock is the one artefact still drawing the retired default.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/requests/01-requests.md:212 (requirement 42) — \"Both `type` and `status` default to `all`.\" The wireframe one section later at :409 draws \"( Mine | All )   Type [ All ▾ ]  Status [ Open ▾ ]  Project [ Any ▾ ]\", giving type the new default and status the old one.",
+        "source": "specs/requests/01-requests.md:212"
+      },
+      "suggestedFix": "Draw `Status [ All ▾ ]` in the mock."
+    },
+    {
+      "stage": "review",
+      "id": "N10",
+      "target": "spec",
+      "severity": "note",
+      "rule": "none — the spec is short a string (raised by passes 1 and 2, still open)",
+      "file": "apps/web/app/org/[orgId]/requests/page.tsx",
+      "symbol": "RequestsPage",
+      "line": 290,
+      "claim": "Requirement 46 says the empty-state copy depends on the active scope and filters, and the wireframe's caption scopes `emptyMine` explicitly to \"Empty, `mine` scope, no filters\". The code chooses on counts.total alone, so an admin on scope `all` in an organization with no requests reads \"Nothing is waiting on you.\" under the All tab — a statement about their own inbox on a view that is not their inbox. The GET contract prescribes exactly this two-way choice on `total`, so the spec is short a third string rather than the code being wrong against a rule.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Admin, fresh organization, no Request rows. GET .../requests?scope=all returns requests: [], counts: { waitingOnMe: 0, total: 0 }. The selection at page.tsx:289-290 evaluates total > 0 as false and renders REQUEST_MESSAGES.emptyMine while the scope control reads All.",
+        "source": "specs/requests/01-requests.md:262 (requirement 46) and :424 (the wireframe's caption)"
+      },
+      "suggestedFix": "Add a third string for the `all` scope to the Error Messages table and select on scope as well as total, or narrow requirement 46 to say the copy depends on the filters alone."
+    },
+    {
+      "stage": "review",
+      "id": "N11",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — the server is the gate and it does answer 400",
+      "file": "apps/web/app/org/[orgId]/requests/page.tsx",
+      "symbol": "RequestsPage",
+      "line": 103,
+      "claim": "Requirement 42 makes an unknown `status` or `type` a 400 \"never a silent fallback\", reasoning that \"the closed set is only a contract if breaking it is observable\". The page reads `parseRequestStatusQuery(...) ?? 'all'` and `parseRequestTypeQuery(...) ?? 'all'`, so a hand-typed `?status=bogus` renders the unfiltered view rather than surfacing anything, and because :135 omits a status of 'all' from the URL the parameter simply disappears. The server does answer 400 for the same value, and CLAUDE.md makes the client a convenience and never a gate, so this is not a rule violation — but the observability the requirement argues for is not reachable through the UI.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Open /org/{orgId}/requests?status=bogus. parseRequestStatusQuery returns null (packages/validation/src/requests.ts:456-461), page.tsx:103 substitutes 'all', the request goes out with no status parameter, and the URL is rewritten without it. The 400 the requirement describes is never emitted on this path.",
+        "source": "specs/requests/01-requests.md:222"
+      },
+      "suggestedFix": "Leave the behaviour and say so in requirement 42 — that the 400 is the endpoint's and the page normalises — or have the page keep the unparsable value and let the server refuse it."
+    },
+    {
+      "stage": "review",
+      "id": "N12",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — internal consistency of a string this change renamed (pass 1 N14, pass 2 N2, still open)",
+      "file": "scripts/ship.mjs",
+      "symbol": "promptFor",
+      "line": 177,
+      "claim": "The review-ledger to review-slice rename this diff made was applied at :151, :156 and :170 but not to the prose at :177, which still reads \"The ledger has already confirmed with `git diff` that it has not moved\". No `review-ledger.mjs` exists in scripts/, so the reviewer is told to run one tool and then told what a differently-named, absent one already did.",
+      "witness": {
+        "kind": "rule",
+        "detail": "scripts/ship.mjs:173 emits \"Run `node scripts/review-slice.mjs`\"; :177 in the same template literal refers to \"The ledger\". `ls scripts/ | grep -i ledger` returns nothing.",
+        "source": "scripts/ship.mjs:177"
+      },
+      "suggestedFix": "\"The slice has already confirmed with `git diff` that it has not moved.\""
+    },
+    {
+      "stage": "review",
+      "id": "N13",
+      "target": "code",
+      "severity": "note",
+      "rule": "CLAUDE.md/agent-prompts-are-rules-only — demoted because the line is byte-identical in the base commit and so is outside this diff (pass 2 N1)",
+      "file": "scripts/ship.mjs",
+      "symbol": "promptFor",
+      "line": 176,
+      "claim": "Two lines above the prose N12 names, and immediately below the sentence pass 1 blocked and this diff removed, the same rule is still broken by a line the diff leaves standing: \"A previous pass is not proof of absence — on the first run of this spec, four passes named 55, 46, 50 and 44 files of a diff that grew to 84, and nine files were never opened by any of them.\" Those are measurements from this project and an account of an earlier run, emitted into every review prompt after the first — including the one that produced this verdict.",
+      "witness": {
+        "kind": "rule",
+        "detail": "CLAUDE.md: \"Never put in a prompt: measurements, counts, timings or costs from this project; what happened on an earlier run, or what some agent did last time\". The sentence is inside the template literal promptFor returns for stage `review` when `done > 0`.",
+        "source": "CLAUDE.md — \"Agent prompts are rules only\""
+      },
+      "suggestedFix": "Reduce it to the rule — \"A previous pass is not proof of absence.\" — and put the figures in docs/research/, which is where CLAUDE.md sends the evidence for a rule."
+    },
+    {
+      "stage": "review",
+      "id": "N14",
+      "target": "spec",
+      "severity": "note",
+      "rule": "none — scope observation from sweep 5 (pass 1 N11, still open)",
+      "file": "scripts/wf.mjs",
+      "symbol": "cmdResume",
+      "line": 562,
+      "claim": "The resume work — 186 changed lines across wf.mjs and 51 across ship.mjs — answers no numbered requirement of specs/requests/01-requests.md, no task in handoff.json and no row in the area README's blast radius, yet it sits in this spec's diff and every review pass must judge it against a spec that says nothing about it. Two of this pass's three prior blockers and this pass's only blocker are all in it. It deploys nothing, so the cost is review passes rather than risk to the product.",
+      "witness": {
+        "kind": "rule",
+        "detail": "CLAUDE.md: a push that moves only `.claude/`, `docs/`, `specs/`, `scripts/`, `e2e/` or any `*.md` \"is copied into no image and deploys nothing\". Sweep 5 walked all 47 requirements and 172 named artefacts; none of them is in scripts/.",
+        "source": "CLAUDE.md — \"Watch out for\", the deploy note"
+      },
+      "suggestedFix": "Carry pipeline changes on their own branch and their own run, so a spec's diff contains the spec's work and a review pass spends its attention there."
+    },
+    {
+      "at": "2026-09-01T17:13:15.980Z",
+      "by": "operator",
+      "note": "Reset findingHistory for .claude/skills/code-review/SKILL.md#10 Predicate sweep@scripts/wf.mjs#cmdResume (was 3). The count was produced by two faults, not by a finding surviving: the counter incremented per occurrence within one verdict rather than per attempt (fixed), and findingKey is rule@file#symbol, so three distinct defects in one function collapse to one key. Each of the three was addressed in the attempt that followed it; none survived."
+    },
+    {
+      "stage": "review",
+      "id": "N1",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement; raised by pass 2 as N3 and pass 3 as N1, still open and now describing a branch that did not exist then",
+      "file": "scripts/wf.mjs",
+      "symbol": "cmdResume",
+      "line": 651,
+      "claim": "The success line \"spec sha matches the one recorded at init — handoff.json still describes this spec\" is printed unconditionally, including on the branch this commit creates: a replanning resume where :620 has just set pendingSpecSha precisely because the sha does not match and handoff.json does not describe this spec. The operator is told the plan is current at the one moment the code knows it is not, and :626 writes {from, pendingUntilReplan} into the same run.json in the same breath.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "`wf resume --stage pre_implement --accept-spec-edits` after correcting the spec S0->S1 prints the line verbatim while run.json records pendingSpecSha=S1 against specSha=S0. Not blocking: no rule in CLAUDE.md, SKILL.md or the spec requires a success message to be true."
+      },
+      "suggestedFix": "Branch on run.pendingSpecSha: when set, print that the spec has moved and handoff.json will be rebuilt by pre_implement before the sha is recorded; otherwise keep the current text."
+    },
+    {
+      "stage": "review",
+      "id": "N2",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement (shard 1 S1-F3, demoted: it cites no rule from the closed list)",
+      "file": "scripts/wf.mjs",
+      "symbol": "route",
+      "line": 266,
+      "claim": "The stamp fires on \"pre_implement produced a verdict with no blockers\", not on \"handoff.json was written\", and nothing anywhere verifies the file. The only existence check in the repository is scripts/handoff-coverage.mjs:45, which the pre-implementer is asked to run itself (.claude/agents/pre-implementer.md:96) and which ship.mjs's stage loop never calls. The comment at :262-265 asserts a coupling the code does not enforce.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "A pre-implementer that emits {status:'pass', findings:[]} without rewriting handoff.json — or that is killed after its verdict is recorded and before ship.mjs finishes — has run.specSha advanced to the new sha while handoff.json is still the old plan, and every later resume guard at :579 then passes. Strictly better than the pre-commit behaviour and the window is small, which is why it is a note."
+      },
+      "suggestedFix": "Before routing a pre_implement pass, require that .workflow/runs/<id>/handoff.json exists and its mtime is at or after run.stages.pre_implement.startedAt; treat the absence as an infra error rather than a pass."
+    },
+    {
+      "stage": "review",
+      "id": "N3",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement",
+      "file": "scripts/wf.mjs",
+      "symbol": "cmdResume",
+      "line": 626,
+      "claim": "The resumes[] record reads `run.pendingSpecSha` — the field's value at the end of the function, not what this call did to it — so a resume that set nothing still writes a specSha entry attributing an earlier resume's pending value to itself. Conversely a resume where the sha genuinely moved back to the recorded one records nothing, so the audit trail run.resumes exists to provide cannot be replayed. Same root cause as F1 and fixed by the same edit.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Step 3 of F1's scenario: a resume that leaves pendingSpecSha untouched at S1 nevertheless appends {specSha:{from:S0, pendingUntilReplan:S1}} to run.resumes, as if this resume had requested that replan."
+      },
+      "suggestedFix": "Capture what this call wrote into a local and record that."
+    },
+    {
+      "stage": "review",
+      "id": "N4",
+      "target": "code",
+      "severity": "note",
+      "rule": ".claude/skills/code-review/SKILL.md sweep 9 — demoted because the line is byte-identical in f06c7d84 (base line 155) and is not a +/- line in this diff (pass 1 N14, pass 2 N2, pass 3 N12 — fourth pass, still open)",
+      "file": "scripts/ship.mjs",
+      "symbol": "promptFor",
+      "line": 177,
+      "claim": "The review-ledger to review-slice rename this diff made was applied at :151, :156 and :170 but not to the prose at :177, which still reads \"The ledger has already confirmed with `git diff` that it has not moved\". No review-ledger.mjs exists in scripts/, so every review prompt after the first tells the reviewer to run one tool and then tells it what a differently-named, absent one already did.",
+      "witness": {
+        "kind": "rule",
+        "detail": "The pair that must agree is the prose and the tool it names. `ls scripts/` shows review-slice.mjs and no review-ledger.mjs; the same prompt names review-slice.mjs at :151, :156 and :170.",
+        "source": ".claude/skills/code-review/SKILL.md:143"
+      },
+      "suggestedFix": "Rename it in the prose too, or drop the sentence — the instruction above it already says what to do."
+    },
+    {
+      "stage": "review",
+      "id": "N5",
+      "target": "code",
+      "severity": "note",
+      "rule": "CLAUDE.md:162-163 — demoted for the same reason as N4: `git show f06c7d84:scripts/ship.mjs` carries this line identically at 154 and the diff does not touch it (pass 2 N1, pass 3 N13)",
+      "file": "scripts/ship.mjs",
+      "symbol": "promptFor",
+      "line": 176,
+      "claim": "One line above N4, and immediately below the prose pass 1 blocked and this diff removed, the same rule is still broken by a line the diff leaves standing: \"A previous pass is not proof of absence — on the first run of this spec, four passes named 55, 46, 50 and 44 files of a diff that grew to 84, and nine files were never opened by any of them.\" CLAUDE.md forbids exactly this in a prompt: measurements from this project, and what happened on an earlier run. It is emitted into every review prompt after the first, including the one that produced this verdict.",
+      "witness": {
+        "kind": "rule",
+        "detail": "\"Never put in a prompt: - measurements, counts, timings or costs from this project; - what happened on an earlier run, or what some agent did last time\"",
+        "source": "CLAUDE.md:160-163"
+      },
+      "suggestedFix": "Keep the rule — 'A previous pass is not proof of absence' — and delete the clause after the dash. The numbers belong in docs/."
+    },
+    {
+      "stage": "review",
+      "id": "N6",
+      "target": "spec",
+      "severity": "note",
+      "rule": "none — the restatement is partial rather than wrong (pass 2 N5, pass 3 N6, still open)",
+      "file": "specs/user-management/10-organization-requests-page.md",
+      "symbol": "Functional Requirements 2",
+      "line": 77,
+      "claim": "The status mapping restated here gives three of requirement 42's five rows: open->pending, granted->approved, declined->rejected. It omits that `cancelled` selects vacation `cancelled`, and that `answered` has no vacation counterpart and therefore selects no rows while the section still renders — empty, not absent. A reader of spec 10 alone cannot tell what `answered` does to the vacation section; the code answers it (vacationStatusesFor returns [] for 'answered').",
+      "witness": {
+        "kind": "rule",
+        "detail": "Two rows of a five-row mapping are missing from the restatement.",
+        "source": "specs/requests/01-requests.md:212"
+      }
+    },
+    {
+      "stage": "review",
+      "id": "N7",
+      "target": "spec",
+      "severity": "note",
+      "rule": "none — two statements in one spec disagree, but no implementation is blocked (pass 1 N2, pass 2, pass 3 N8, still open)",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "Functional requirement 36",
+      "line": 184,
+      "claim": "Requirement 36 rests twice on \"requirement 45 enumerates its contents exhaustively\", and requirement 45 does not: it names the number, title, status, addressee, project and two flags, while the spec's own inbox wireframe at :409-417 draws type, priority and needed-by on every row and RequestRow.tsx renders them. The conclusion requirement 36 draws is right and the code matches it; only the premise is false, and a later reader taking it literally would read the shipped row as over-drawn.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Requirement 45's list and the wireframe at :409-417 disagree about what a row contains.",
+        "source": "specs/requests/01-requests.md:184"
+      }
+    },
+    {
+      "stage": "review",
+      "id": "N8",
+      "target": "spec",
+      "severity": "note",
+      "rule": "none — a mock disagreeing with a numbered requirement of the same spec (pass 3 N9, still open)",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "the inbox wireframe",
+      "line": 409,
+      "claim": "The wireframe draws the status control as `Status [ Open ▾ ]` while requirement 42 says both `type` and `status` default to `all`, and retiring the pending-by-default view is one of this spec's headline changes — the amendment it forced in spec 10 is enumerated in that file's banner. The code follows requirement 42; the mock is the one artefact still drawing the retired default.",
+      "witness": {
+        "kind": "rule",
+        "detail": "The mock and requirement 42 state different defaults for the same control.",
+        "source": "specs/requests/01-requests.md:212"
+      }
+    },
+    {
+      "stage": "review",
+      "id": "N9",
+      "target": "spec",
+      "severity": "note",
+      "rule": "none — the spec is short a string (passes 1, 2 and 3, still open)",
+      "file": "apps/web/app/org/[orgId]/requests/page.tsx",
+      "symbol": "RequestsPage",
+      "line": 290,
+      "claim": "Requirement 46 says the empty-state copy depends on the active scope and filters, and the wireframe scopes emptyMine explicitly to \"Empty, `mine` scope, no filters\". The code chooses on counts.total alone, so an admin on scope `all` in an empty organization reads \"Nothing is waiting on you.\" under the All tab — a statement about their own inbox on a view that is not their inbox. The GET contract prescribes exactly this two-way choice on `total`, so the spec is short a third string rather than the code being wrong against a rule.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Requirement 46 names two strings and a three-way condition.",
+        "source": "specs/requests/01-requests.md:246"
+      }
+    },
+    {
+      "stage": "review",
+      "id": "N10",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement (pass 3 N2, still open)",
+      "file": "scripts/wf.mjs",
+      "symbol": "cmdResume",
+      "line": 585,
+      "claim": "The spec-edit sweep passes run.headAtInit straight to git without checking it exists, on a command whose whole purpose is recovering runs already in a bad state. Run records written before the field was introduced die here with a Node argument-type stack trace instead of a `wf: ...` message. scripts/static-gate.mjs:59 reads the same field defensively as `run?.headAtInit ?? base`.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "`wf resume --stage review` against a run.json predating headAtInit throws from git('diff','--name-only',undefined,'HEAD','--','specs') rather than failing with a message."
+      }
+    },
+    {
+      "stage": "review",
+      "id": "N11",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement (pass 3 N3, still open)",
+      "file": "scripts/wf.mjs",
+      "symbol": "cmdResume",
+      "line": 591,
+      "claim": "--accept-spec-edits is used as a boolean but parseArgs assigns the following non-`--` token as its value, so the paths-taking spelling a reader would naturally try — `wf resume --stage review --accept-spec-edits specs/user-management/10-organization-requests-page.md` — sets a truthy string and accepts every spec edit in the diff, including ones the operator did not name. Neither the refusal message nor the usage line at :29 says the flag takes no argument.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "The operator names one file intending to accept only that edit; the guard at :593 sees a truthy value and waves through all of them, and run.resumes records the whole list as theirs."
+      }
+    },
+    {
+      "stage": "review",
+      "id": "N12",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement about the router (pass 3 N4, still open, and this run's own history is the evidence)",
+      "file": "scripts/wf.mjs",
+      "symbol": "route",
+      "line": 288,
+      "claim": "run.findingHistory is only ever incremented and is initialised empty at cmdInit; nothing clears an entry when the finding under that key is confirmed closed. The key is `rule@file#symbol`, so successive distinct defects in one function accumulate under one counter and the third is halted as \"stuck — the requirement is ambiguous or the finding is wrong\" on its first appearance. run.json's resumes array shows this happening twice in this run, at 16:58:44 and 17:13:16, both on the key `.claude/skills/code-review/SKILL.md#10 Predicate sweep@scripts/wf.mjs#cmdResume`, the second resume reason recorded as \"poisoned finding key reset\" — a person editing findingHistory by hand to keep the run moving. F1 is the fourth distinct defect under that key and would be the third strike again were the counter not reset.",
+      "witness": {
+        "kind": "scenario",
+        "detail": ".workflow/runs/2026-09-01T16-08-11_requests-01-requests/run.json resumes[3] and resumes[5], both from 'stuck-finding' on that key, with autoContestAfter=2 (.claude/ai-workflow.config.json:59)."
+      },
+      "suggestedFix": "Key on the finding's identity rather than its location — include a hash of the claim — or clear an entry when a later verdict reports the finding closed."
+    },
+    {
+      "stage": "review",
+      "id": "N13",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement (pass 2 N4c, pass 3 N5, still open)",
+      "file": "scripts/wf.mjs",
+      "symbol": "cmdResume",
+      "line": 633,
+      "claim": "The loop that closes a killed stage covers STAGES.slice(0, indexOf(stage)) only, so the commonest abandoned-run case — the stage that was killed is the one being resumed — emits no stage-end event. The reset loop that follows sets it to pending, which fixes `wf status`, but run-report.mjs:177-179 reads the attempt's artefacts and marks any attempt with a startedAt, no .log and no end event as running with endedAt = Date.now(), so the killed attempt counts upward for as long as the record exists — the exact thing the comment at :629-632 says the loop exists to prevent.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "`resume --stage review` after review was killed leaves review's attempt without a stage-end event, and `npm run board` shows it still running."
+      }
+    },
+    {
+      "stage": "review",
+      "id": "N14",
+      "target": "spec",
+      "severity": "note",
+      "rule": "none — scope observation from sweep 5 (pass 1 N11, pass 3 N14, still open and now the whole cost of this pass)",
+      "file": "scripts/wf.mjs",
+      "symbol": "cmdResume",
+      "line": 562,
+      "claim": "The resume work answers no numbered requirement of specs/requests/01-requests.md, no task in handoff.json and no row in the area README's blast radius, yet it sits in this spec's diff and every review pass must judge it against a spec that says nothing about it. Sweep 5 over 47 requirements and 197 artefacts finds the product half of this change complete and consistent; four consecutive review passes have now blocked, and all four blockers plus this pass's only blocker live in cmdResume. The slice this pass was one file and 14 lines, none of it product code. It deploys nothing — CLAUDE.md's deploy note puts scripts/ among the paths copied into no image — so the cost is review cycles on the requests spec, not risk to the release.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "`node scripts/review-slice.mjs` reports pass 4's slice as one file, scripts/wf.mjs; grep for wf.mjs, ship.mjs or 'resume' across specs/requests/01-requests.md and handoff.json returns nothing."
+      },
+      "suggestedFix": "For a person, not the pipeline: land the wf.mjs/ship.mjs work on its own branch so the requests spec can converge on its own merits."
+    }
+  ],
+  "preflight": {
+    "at": "2026-09-01T16:08:11.561Z",
+    "checks": [
+      {
+        "name": "branch-not-protected",
+        "ok": true,
+        "detail": "on \"spec/requests\""
+      },
+      {
+        "name": "spec-unchanged",
+        "ok": true,
+        "detail": "spec sha256 matches the one recorded at init"
+      },
+      {
+        "name": "api-env-present",
+        "ok": true,
+        "detail": "apps/api/.env exists (untracked — a fresh worktree does not get one)"
+      },
+      {
+        "name": "node-modules-present",
+        "ok": true,
+        "detail": "dependencies installed"
+      },
+      {
+        "name": "e2e-ports-free",
+        "ok": true,
+        "detail": "3000 and 4000 are free for the e2e suite"
+      },
+      {
+        "name": "prisma-client-generated",
+        "ok": true,
+        "detail": "prisma client generated (postinstall runs it from apps/api)"
+      },
+      {
+        "name": "migration-baseline",
+        "ok": true,
+        "detail": "18 migrations recorded as the baseline"
+      },
+      {
+        "name": "worktree-clean",
+        "ok": true,
+        "detail": "nothing in flight outside .workflow/"
+      }
+    ],
+    "migrations": [
+      "20260724114549_init",
+      "20260824080000_documents_templates",
+      "20260824090000_documents_envelopes",
+      "20260824100000_documents_member_profile",
+      "20260826121829_add_invitations_and_job_title",
+      "20260827090541_spec_06_account_settings",
+      "20260827093348_spec_07_member_financials",
+      "20260827120241_spec_08_vacation_reserve",
+      "20260827123444_spec_09_vacation_requests",
+      "20260827145447_spec_11_projects",
+      "20260827153333_spec_12_time_tracking",
+      "20260828120000_spec_13_kanban",
+      "20260828140000_spec_04_signature_providers",
+      "20260828140000_spec_14_collaboration",
+      "20260831130000_activity_label_snapshot",
+      "20260831140000_spec_15_time_task_link",
+      "20260901120000_spec_org_01_clients",
+      "20260901140000_requests_01_requests"
+    ]
+  },
+  "resumes": [
+    {
+      "at": "2026-09-01T16:42:06.280Z",
+      "stage": "static_gate",
+      "from": "spec-defect",
+      "detail": "review found a defect in the spec: specs/requests/01-requests.md requirement 42 (specs/user-management/10-organization-requests-page.md)",
+      "reason": "spec 10 Flow marked; prompt prose removed; border token applied"
+    },
+    {
+      "at": "2026-09-01T16:44:42.965Z",
+      "stage": "static_gate",
+      "from": "abandoned",
+      "detail": "orchestrator stopped during implement",
+      "reason": "human spec-10 fix committed; gate baseline must move past it",
+      "headAtInit": {
+        "from": "3d46cb39d0a7fdaf47347665fe40d158cd8c302f",
+        "to": "669c1927c7db3c49c52d329c952700434e93fc2c"
+      }
+    },
+    {
+      "at": "2026-09-01T16:46:13.320Z",
+      "stage": "static_gate",
+      "from": "abandoned",
+      "detail": "orchestrator stopped during static_gate",
+      "reason": "re-applied after fixing the baseline and stale-stage handling",
+      "headAtInit": {
+        "from": "669c1927c7db3c49c52d329c952700434e93fc2c",
+        "to": "96c064820ab39cff377808c6ce072ec2e23b670c"
+      }
+    },
+    {
+      "at": "2026-09-01T16:58:44.794Z",
+      "stage": "review",
+      "from": "stuck-finding",
+      "detail": "\".claude/skills/code-review/SKILL.md#10 Predicate sweep@scripts/wf.mjs#cmdResume\" survived 2 attempts — the requirement is ambiguous or the finding is wrong",
+      "reason": null,
+      "headAtInit": {
+        "from": "96c064820ab39cff377808c6ce072ec2e23b670c",
+        "to": "96c064820ab39cff377808c6ce072ec2e23b670c"
+      }
+    },
+    {
+      "at": "2026-09-01T16:59:41.058Z",
+      "stage": "review",
+      "from": "abandoned",
+      "detail": "orchestrator stopped during review",
+      "reason": "spec 10 Summary and requirement 1, mine",
+      "headAtInit": {
+        "from": "96c064820ab39cff377808c6ce072ec2e23b670c",
+        "to": "4e158cc29ddbd3948d381eccf6ef47a198dfffa4"
+      },
+      "specEdits": [
+        "specs/user-management/10-organization-requests-page.md"
+      ]
+    },
+    {
+      "at": "2026-09-01T17:13:16.138Z",
+      "stage": "review",
+      "from": "stuck-finding",
+      "detail": "\".claude/skills/code-review/SKILL.md#10 Predicate sweep@scripts/wf.mjs#cmdResume\" survived 3 attempts — the requirement is ambiguous or the finding is wrong",
+      "reason": "specSha promotion fixed; poisoned finding key reset",
+      "headAtInit": {
+        "from": "4e158cc29ddbd3948d381eccf6ef47a198dfffa4",
+        "to": "b1a0a70a308dfdc3e262960f24f06dc45d787f4a"
+      }
+    }
+  ],
+  "halt": {
+    "reason": "abandoned",
+    "detail": "Branch rebuilt to take pipeline changes out of this spec run. Superseded."
+  }
+}

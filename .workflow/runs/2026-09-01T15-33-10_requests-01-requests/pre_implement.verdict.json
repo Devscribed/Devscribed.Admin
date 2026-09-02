@@ -1,0 +1,67 @@
+{
+  "stage": "pre_implement",
+  "status": "pass",
+  "spec": "specs/requests/01-requests.md",
+  "handoff": ".workflow/runs/2026-09-01T15-33-10_requests-01-requests/handoff.json",
+  "report": ".workflow/runs/2026-09-01T15-33-10_requests-01-requests/stages/pre_implement.md",
+  "coverage": {
+    "requirements": "47/47",
+    "cases": "41/41",
+    "sections": "20/20"
+  },
+  "carriedFindings": [
+    {
+      "id": "F1",
+      "from": "2026-09-01T14-44-29_requests-01-requests#review",
+      "disposition": "already fixed",
+      "verifiedAt": "commit 9afbcb4 'docs(specs): finish the spec-10 amendment, all thirteen statements'. Each of the nine unmarked statements now carries an in-place amendment, checked individually against specs/user-management/10-organization-requests-page.md at HEAD: :50 the matrix row now reads 'View Requests page | yes | yes | yes | yes' with the org-wide vacation row split out beneath it; :43 the actors line; requirement 2 at :62 states the default 'all' and the six-value vocabulary with 400 on unknown; requirement 7 at :70 is the counts.waitingOnMe-plus-vacation badge; requirement 8 at :71-74 renders the row for every member; requirement 9 at :75-78 retires the redirect; the query contract at :151 carries the new status set; the response envelope at :190-202 is {requests, vacation:{requests,pendingCount}, counts:{waitingOnMe,total}} and names totalCount as gone from the codebase; the Error Messages row at :221 is struck through and names REQUEST_MESSAGES.scopeForbidden as the refusal that survives, with REQUESTS_PAGE_MESSAGES.viewForbidden (packages/validation/src/index.ts:1983 — confirmed still there, and confirmed emitted by no route in apps/api/src) kept deliberately; :230 the sidebar line; :237 the filter options, which now list All statuses/Open/Answered/Granted/Declined/Cancelled and match apps/web/app/org/[orgId]/requests/page.tsx and e2e/tests/requests-page.spec.ts:146-147.",
+      "plannedAs": "T9, which records the bookkeeping rule and states that no work remains"
+    },
+    {
+      "id": "F2",
+      "from": "2026-09-01T14-44-29_requests-01-requests#review",
+      "disposition": "already fixed",
+      "verifiedAt": "same commit. specs/user-management/10-organization-requests-page.md:308 now reads: 'HTTP 200. vacation.requests holds the 3 rows across M1 and M2, each with member info, balance and dates, and vacation.pendingCount is 3. requests is [] and counts is { waitingOnMe: 0, total: 0 }' with the amendment note naming requirements 41 and 42. That is the shape apps/api/test/requests-page.spec.ts asserts under the TC-10-INT-01 label (res.body.vacation.requests toHaveLength 3, res.body.vacation.pendingCount 3, res.body.requests toEqual []). Steps and Expected Result now describe the same response.",
+      "plannedAs": "T9 — no further work owed"
+    }
+  ],
+  "findings": [
+    {
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/README.md",
+      "symbol": "Cross-Spec Side Effects, row 1",
+      "claim": "the area README promises a reassignment filter that spec 01 requirement 36 says does not exist and that requirement 42's closed filter sets could not express",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/requests/README.md:84 — 'Member soft-deleted | user-management/04 | Requests they raised or hold are retained and readable; open requests **addressed to** them are flagged `assigneeInactive` and surface in the reassignment filter | 01'. Against specs/requests/01-requests.md requirement 36 — 'There is no reassignment **filter**: requirement 42 enumerates the filters exhaustively and this is not one of them, so a request needing reassignment is found by its banner and not by narrowing the list.' Requirement 42's filters are type (all|access|question|vacation), status (all|open|answered|granted|declined|cancelled), projectId and q, and an unknown value in either closed set is a 400 rather than a fallback (apps/api/src/requests/requests.service.ts:170-176), so a caller could not send the filter the README promises even if one were built. The README is the stale side: specs/requests/02-client-participants.md:160 defers to 'spec 01 requirement 36' for this exact behaviour.",
+        "source": "specs/requests/README.md:84 against specs/requests/01-requests.md requirement 36"
+      },
+      "suggestedFix": "replace 'and surface in the reassignment filter' with 'and draw the reassign banner and control on the row and the detail screen' — the behaviour requirement 36 and edge case 11 actually specify. Raised as a note, not a blocker: requirement 36 settles it in writing, so nothing in the plan is undecidable, but a human should correct the README before the next spec in this area is written against it.",
+      "haltsRun": false
+    },
+    {
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-premise",
+      "file": "specs/requests/README.md",
+      "symbol": "Blast Radius, packages/validation",
+      "claim": "the README says spec 01 adds 30 new keys to REQUEST_MESSAGES; the spec's own Error Messages table lists 31 and 31 are present in the code",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/requests/README.md:135 — 'plus **30 new keys on the existing `REQUEST_MESSAGES`** (`packages/validation/src/index.ts:1746`, which already holds spec 09's 21 vacation keys)'. specs/requests/01-requests.md Error Messages lists 31 rows (createForbidden through emptyFiltered), and packages/validation/src/index.ts:1803-1833 defines exactly those 31. The cited line 1746 is REQUEST_MESSAGES' position at the base commit f06c7d8; it is 1771 at HEAD because this branch's own additions moved it.",
+        "source": "specs/requests/README.md:135 against packages/validation/src/index.ts:1803-1833"
+      },
+      "suggestedFix": "say 31, and drop the line number in favour of the symbol name — a count and a line in a document that no test reads will drift again. No behaviour depends on either, which is why this is a note.",
+      "haltsRun": false
+    }
+  ],
+  "notesForImplementer": [
+    "The branch already carries a complete implementation of this spec (481a165, 6f2dbb5, e17de7a, 2d802e9, 9afbcb4). Every task in the handoff names the file that holds the work under `state`; do not rewrite what is there because the plan lists it.",
+    "Two behaviours are unasserted by any case and are the likeliest place for a defect to hide: the vacation section under type=access or type=question (currently empty, apps/api/src/requests/requests.service.ts:251), and the 400 body for an unknown scope value. Both are in handoff.risks with the reasoning that settles them.",
+    "Run tests targeted, never whole. Jest here is 29, so the file filter is a positional path. An E2E run takes its own port pair."
+  ]
+}

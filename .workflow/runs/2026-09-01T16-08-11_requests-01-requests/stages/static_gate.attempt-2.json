@@ -1,0 +1,51 @@
+{
+  "stage": "static_gate",
+  "status": "blocked",
+  "base": "f06c7d844daeba66bc0f2545c5071600e6cb4037",
+  "findings": [
+    {
+      "id": "S1",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "pipeline/spec-immutable",
+      "file": "specs/user-management/10-organization-requests-page.md",
+      "claim": "the implementation stage modified a specification file",
+      "witness": {
+        "kind": "rule",
+        "detail": "CLAUDE.md: \"When behaviour and spec disagree, the spec wins — change the spec first, deliberately.\" A run that edits its own contract can no longer be checked against it.",
+        "source": "CLAUDE.md"
+      },
+      "suggestedFix": "revert the spec edit and raise a finding with target \"spec\" instead — that halts the run for a human, which is the intended path"
+    },
+    {
+      "id": "S2",
+      "severity": "note",
+      "target": "code",
+      "rule": "spec/message-duplicated",
+      "file": "apps/api/src/requests/requests.controller.ts",
+      "symbol": "Create without capability",
+      "claim": "\"Create without capability\" is in packages/validation and also written out in 1 file(s) under apps",
+      "witness": {
+        "kind": "command",
+        "detail": "git grep -lF -- \"`createForbidden`\" -- apps\napps/api/src/requests/requests.controller.ts",
+        "source": "specs/requests/01-requests.md"
+      },
+      "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
+    },
+    {
+      "id": "S3",
+      "severity": "note",
+      "target": "code",
+      "rule": "spec/message-duplicated",
+      "file": "apps/api/src/requests/requests.controller.ts",
+      "symbol": "`scope=all` without capability",
+      "claim": "\"`scope=all` without capability\" is in packages/validation and also written out in 1 file(s) under apps",
+      "witness": {
+        "kind": "command",
+        "detail": "git grep -lF -- \"`scopeForbidden`\" -- apps\napps/api/src/requests/requests.controller.ts",
+        "source": "specs/requests/01-requests.md"
+      },
+      "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
+    }
+  ]
+}

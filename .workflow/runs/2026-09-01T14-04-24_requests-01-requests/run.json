@@ -1,0 +1,152 @@
+{
+  "runId": "2026-09-01T14-04-24_requests-01-requests",
+  "spec": "specs/requests/01-requests.md",
+  "specSha": "803c20d8f2d19413398819dcdecc1fa8fc791997b883e1b57e304c7fc4e8931e",
+  "task": "requests-01-requests",
+  "branch": "spec/requests",
+  "baseRef": "ffa814d52d251fc6ea1795124f0469280281b847",
+  "headAtInit": "ffa814d52d251fc6ea1795124f0469280281b847",
+  "status": "aborted",
+  "createdAt": "2026-09-01T14:04:24.581Z",
+  "updatedAt": "2026-09-01T14:40:17.937Z",
+  "stages": {
+    "preflight": {
+      "status": "passed",
+      "attempts": 1
+    },
+    "pre_implement": {
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-01T14:04:24.741Z",
+      "endedAt": "2026-09-01T14:15:42.573Z",
+      "lastVerdict": "pass"
+    },
+    "implement": {
+      "status": "running",
+      "attempts": 1,
+      "startedAt": "2026-09-01T14:15:42.671Z"
+    },
+    "static_gate": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "review": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "qa": {
+      "status": "pending",
+      "attempts": 0
+    }
+  },
+  "budget": {
+    "codeAttempts": 0,
+    "handoffReplans": 0,
+    "infra": 0
+  },
+  "findingHistory": {},
+  "contested": [],
+  "notes": [
+    {
+      "stage": "pre_implement",
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/missing-ds-gaps-table",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "UI Description",
+      "claim": "the spec's UI Description demands that anything missing from the design system be recorded in a DS-gaps table, and the spec contains no such table, while the feature needs a multiline text control that @ds does not export",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/requests/01-requests.md:694-696 states: 'Components come from @ds via apps/web/src/ds.ts. No hardcoded colour or size; tokens only. Anything missing goes into the design system and is recorded in a DS-gaps table, not improvised here.' The spec has no '## DS gaps' heading and no DS-gaps table under any heading — the 20 '##' sections are enumerated in the handoff's sections block and none is one. Meanwhile 1_DS for dev/components/forms/ exports Input, Select, Checkbox, Radio and SearchField and nothing multiline, and apps/web/src/ds.ts:11-32 re-exports none, so the three controls the spec's own data-testid list names — request-new-description, request-detail-composer and request-detail-decline-reason — are raw <textarea> elements hand-styled with a literal 12px mixed into a token-valued padding at NewRequestModal.tsx:337, [requestId]/page.tsx:386 and DeclineRequestModal.tsx:146. CLAUDE.md states the same rule as a repository rule: 'Anything missing goes *into* the design system and is recorded in that spec's \"DS gaps\" table, never improvised per screen.'",
+        "source": "specs/requests/01-requests.md:694-696; 1_DS for dev/components/forms/; apps/web/src/ds.ts:11-32"
+      },
+      "suggestedFix": "add a DS gaps table to specs/requests/01-requests.md with one row for the multiline text control, naming the three ids that need it and stating that it is added to the design system rather than per screen. Planned meanwhile as task T7 and recorded in the handoff's dsGaps; this note does not block, because the work is plannable without an answer."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/message-not-in-table",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "Error Messages",
+      "claim": "the UI Description names an error banner on the list screen and this run adds the same banner to the detail screen, but the Error Messages table names no row for the copy either one renders",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/requests/01-requests.md:703 requires 'Error (list) | requests-error-banner with requests-error-retry-btn; the last good list stays on screen behind it'. The Error Messages table at :658-690 has 32 rows and none of them is the banner's copy; its opening sentence says 'Every string below lives in packages/validation and is exported from REQUEST_MESSAGES, so web and API cannot disagree.' The shipped banner renders REQUEST_MESSAGES.genericError at apps/web/app/org/[orgId]/requests/page.tsx:385, which is spec 09's key on the same object (packages/validation/src/index.ts:1794, sitting above the '/* Requests spec 01 */' block that begins at :1796). The repository rule is not broken — the string is in packages/validation and is not inline — but the spec's table does not account for a user-facing string this feature emits, and handoff task T6 adds a second emitter of it on the detail screen, where a load failure currently leaves a screen with no message and no retry ([requestId]/page.tsx:61-76 sets notFound only for a 404 and swallows every other outcome).",
+        "source": "specs/requests/01-requests.md:658-690, :703; apps/web/app/org/[orgId]/requests/page.tsx:385; packages/validation/src/index.ts:1794"
+      },
+      "suggestedFix": "add a row to the Error Messages table for the list and detail load-failure banner, naming REQUEST_MESSAGES.genericError as the export and both screens as the emitters, and name a data-testid for the decline modal's field error so TC-01-E2E-05 can assert it rather than the textarea's visibility. Planned meanwhile as task T6 (reusing genericError) and task T9 (asserting the status half of TC-01-E2E-05 against a spec-named id); this note does not block."
+    }
+  ],
+  "halt": {
+    "reason": "abandoned",
+    "detail": "Orchestrator stopped; agent process killed. Superseded by a later run."
+  },
+  "preflight": {
+    "at": "2026-09-01T14:04:24.688Z",
+    "checks": [
+      {
+        "name": "branch-not-protected",
+        "ok": true,
+        "detail": "on \"spec/requests\""
+      },
+      {
+        "name": "spec-unchanged",
+        "ok": true,
+        "detail": "spec sha256 matches the one recorded at init"
+      },
+      {
+        "name": "api-env-present",
+        "ok": true,
+        "detail": "apps/api/.env exists (untracked — a fresh worktree does not get one)"
+      },
+      {
+        "name": "node-modules-present",
+        "ok": true,
+        "detail": "dependencies installed"
+      },
+      {
+        "name": "e2e-ports-free",
+        "ok": true,
+        "detail": "3000 and 4000 are free for the e2e suite"
+      },
+      {
+        "name": "prisma-client-generated",
+        "ok": true,
+        "detail": "prisma client generated (postinstall runs it from apps/api)"
+      },
+      {
+        "name": "migration-baseline",
+        "ok": true,
+        "detail": "18 migrations recorded as the baseline"
+      },
+      {
+        "name": "worktree-clean",
+        "ok": true,
+        "detail": "nothing in flight outside .workflow/"
+      }
+    ],
+    "migrations": [
+      "20260724114549_init",
+      "20260824080000_documents_templates",
+      "20260824090000_documents_envelopes",
+      "20260824100000_documents_member_profile",
+      "20260826121829_add_invitations_and_job_title",
+      "20260827090541_spec_06_account_settings",
+      "20260827093348_spec_07_member_financials",
+      "20260827120241_spec_08_vacation_reserve",
+      "20260827123444_spec_09_vacation_requests",
+      "20260827145447_spec_11_projects",
+      "20260827153333_spec_12_time_tracking",
+      "20260828120000_spec_13_kanban",
+      "20260828140000_spec_04_signature_providers",
+      "20260828140000_spec_14_collaboration",
+      "20260831130000_activity_label_snapshot",
+      "20260831140000_spec_15_time_task_link",
+      "20260901120000_spec_org_01_clients",
+      "20260901140000_requests_01_requests"
+    ]
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "stage": "static_gate",
+  "status": "blocked",
+  "base": "65e00fc609ab6b885295e0b8165dc376e2387939",
+  "findings": [
+    {
+      "id": "S1",
+      "severity": "note",
+      "target": "code",
+      "rule": "spec/message-duplicated",
+      "file": "apps/api/src/requests/requests.controller.ts",
+      "symbol": "Create without capability",
+      "claim": "\"Create without capability\" is in packages/validation and also written out in 1 file(s) under apps",
+      "witness": {
+        "kind": "command",
+        "detail": "git grep -lF -- \"`createForbidden`\" -- apps\napps/api/src/requests/requests.controller.ts",
+        "source": "specs/requests/01-requests.md"
+      },
+      "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
+    },
+    {
+      "id": "S2",
+      "severity": "note",
+      "target": "code",
+      "rule": "spec/message-duplicated",
+      "file": "apps/api/src/requests/requests.controller.ts",
+      "symbol": "`scope=all` without capability",
+      "claim": "\"`scope=all` without capability\" is in packages/validation and also written out in 1 file(s) under apps",
+      "witness": {
+        "kind": "command",
+        "detail": "git grep -lF -- \"`scopeForbidden`\" -- apps\napps/api/src/requests/requests.controller.ts",
+        "source": "specs/requests/01-requests.md"
+      },
+      "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
+    }
+  ]
+}

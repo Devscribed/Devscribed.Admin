@@ -1,0 +1,218 @@
+{
+  "runId": "2026-09-01T12-44-23_requests-01-requests",
+  "spec": "specs/requests/01-requests.md",
+  "specSha": "5fe4c35e5092c74298ecf9bba6578e49de68910bcf58b2833b763767c4a707d2",
+  "task": "requests-01-requests",
+  "branch": "spec/requests",
+  "baseRef": "f06c7d844daeba66bc0f2545c5071600e6cb4037",
+  "headAtInit": "f06c7d844daeba66bc0f2545c5071600e6cb4037",
+  "status": "halted",
+  "createdAt": "2026-09-01T12:44:23.498Z",
+  "updatedAt": "2026-09-01T14:40:17.936Z",
+  "stages": {
+    "preflight": {
+      "status": "ok",
+      "attempts": 1
+    },
+    "pre_implement": {
+      "status": "ok",
+      "attempts": 1,
+      "outcome": "pass"
+    },
+    "implement": {
+      "status": "ok",
+      "attempts": 2,
+      "outcome": "pass"
+    },
+    "static_gate": {
+      "status": "ok",
+      "attempts": 2,
+      "outcome": "blocked"
+    },
+    "review": {
+      "status": "blocked",
+      "attempts": 1,
+      "outcome": "blocked"
+    },
+    "qa": {
+      "status": "pending",
+      "attempts": 0
+    }
+  },
+  "budget": {
+    "codeAttempts": 1,
+    "handoffReplans": 0,
+    "infra": 0
+  },
+  "findingHistory": {
+    "pipeline/no-detector-weakening@apps/api/test/requests-page.spec.ts#-": 1,
+    "pipeline/no-detector-weakening@apps/web/app/org/[orgId]/requests/page.tsx#-": 1
+  },
+  "contested": [],
+  "notes": [
+    {
+      "stage": "pre_implement",
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/incomplete-blast-radius",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "req-42",
+      "claim": "requirement 42 says three callers assume the retired vocabulary and all three change with this spec, but apps/api/test/requests-page.spec.ts breaks in three further places, one of them because of requirement 37 rather than 42",
+      "witness": {
+        "kind": "rule",
+        "detail": "TC-10-INT-03 asserts `expect(uRes.status).toBe(403)` and `message: REQUESTS_PAGE_MESSAGES.viewForbidden` for a `user` and a `viewer` calling GET /api/organizations/{orgId}/requests. Requirement 37 (\"renders for every signed-in member of the organization, regardless of role\") and TC-01-INT-18 (\"200 with only their own rows\") reverse it. Two further cases in the same file, 'defaults to pending when no status param is given' and 'sorts pending requests oldest requestedAt first', read `body.requests`, `body.pendingCount` and `body.totalCount` at the top level, which the new GET contract moves under `vacation.requests` and `vacation.pendingCount`.",
+        "source": "apps/api/test/requests-page.spec.ts:323-340, :342-368, :370-400"
+      },
+      "suggestedFix": "name TC-10-INT-03 in requirement 37 as retired by TC-01-INT-18 and TC-01-E2E-08, record the retirement in specs/user-management/10 as `- **Retired.**`, and say in the blast radius that the whole of apps/api/test/requests-page.spec.ts moves onto the new envelope rather than only lines 301-320. Planned meanwhile as task T9."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/incomplete-blast-radius",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "New Capabilities",
+      "claim": "granting view-own-requests to all four roles makes ROLE_CAPABILITIES.user and .viewer non-empty, which falsifies seven assertions in a live unit suite the spec does not mention",
+      "witness": {
+        "kind": "rule",
+        "detail": "roles.test.ts asserts `expect(capabilitiesFor('member')).toEqual([])` (:139), `capabilitiesFor(null)).toEqual([])` (:140), `capabilitiesFor('superadmin')).toEqual([])` (:188), `capabilitiesFor('self')).toEqual([])` (:251), and the exact admin and manager arrays at :111 and :127. ROLE_CAPABILITIES.user and .viewer are both `[]` today (packages/validation/src/roles.ts:136-138). The spec's New Capabilities section grants ViewOwnRequests to all four roles, so every one of those assertions becomes false.",
+        "source": "packages/validation/src/roles.test.ts:111,127,139,140,184,188,251"
+      },
+      "suggestedFix": "add a line to the blast radius naming packages/validation/src/roles.test.ts alongside CAPABILITY_MATRIX, and say that the 'unknown role gets nothing' assertions become 'unknown role gets exactly what viewer gets' rather than being deleted. Planned meanwhile as task T2."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/unstated-precondition",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "TC-01-E2E-04",
+      "claim": "TC-01-E2E-04 asks for an overdue request seeded through the API, and the only route to one is a PATCH the spec permits by omission rather than by statement",
+      "witness": {
+        "kind": "scenario",
+        "detail": "TC-01-E2E-04 seeds three requests through the API, one of them overdue, and asserts the overdue row sorts second and shows request-row-{id}-overdue-flag. Requirement 8 and validation rule 6 reject a past neededBy at creation with 400 neededByPast. E2E has no database handle — no file under e2e/ imports PrismaClient — and apps/api/src/test-support/ exposes only envelope-expiry and the SignWell stub, so no fixture route can write the row. No timezone pair helps either: the UTC-12..UTC+14 spread cannot make a date created as 'today or later' by one account be strictly before today for another on demand. That leaves PATCH, which requirement 34 lists neededBy under and whose legality rests on two indirect statements: requirement 8's 'rejected at creation' and the Error Messages table listing neededByPast under `POST …/requests` alone while every other shared field says `POST/PATCH`. An implementer who re-applies validation rule 6 on PATCH — a defensible reading of 'the server re-validates every rule' — makes TC-01-E2E-04 unreachable.",
+        "detail_source": "specs/requests/01-requests.md TC-01-E2E-04, requirement 8, Validation Rules row 6, Error Messages row 'Needed-by in the past'"
+      },
+      "suggestedFix": "state in requirement 34 that neededBy may be set to a past date after creation, and say so in TC-01-E2E-04's steps. Planned meanwhile in task T5, which pins the reading, and recorded as a risk in the handoff."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P4",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/unspecified-response-body",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "GET /api/organizations/{orgId}/requests",
+      "claim": "the 400 for an unknown status or type value names no message and no packages/validation export, while every other error in the spec names one",
+      "witness": {
+        "kind": "rule",
+        "detail": "The GET contract says only \"`400` for an unknown `status` or `type` value — including the retired spec-10 values `pending`, `approved` and `rejected`\", and TC-01-INT-22 asserts only that each of pending, approved, rejected and nonsense \"answers 400\". The Error Messages table maps typeUnknown to `POST …/requests` and lists nothing for the GET, so the response body is chosen by the implementer while every other refusal in this spec has its text pinned in packages/validation.",
+        "source": "specs/requests/01-requests.md, `### GET /api/organizations/{orgId}/requests` Errors paragraph and the Error Messages table"
+      },
+      "suggestedFix": "either add a row to the Error Messages table or state that the body is the shared 400 {\"error\":\"validation_error\",\"fields\":{…}} with no user-facing copy, since the value can only come from a hand-edited URL. Planned meanwhile as the latter, in task T3."
+    },
+    {
+      "stage": "static_gate",
+      "id": "S3",
+      "severity": "note",
+      "target": "code",
+      "rule": "spec/message-duplicated",
+      "file": "apps/api/src/requests/requests.controller.ts",
+      "symbol": "Create without capability",
+      "claim": "\"Create without capability\" is in packages/validation and also written out in 1 file(s) under apps",
+      "witness": {
+        "kind": "command",
+        "detail": "git grep -lF -- \"`createForbidden`\" -- apps\napps/api/src/requests/requests.controller.ts",
+        "source": "specs/requests/01-requests.md"
+      },
+      "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
+    },
+    {
+      "stage": "static_gate",
+      "id": "S4",
+      "severity": "note",
+      "target": "code",
+      "rule": "spec/message-duplicated",
+      "file": "apps/api/src/requests/requests.controller.ts",
+      "symbol": "`scope=all` without capability",
+      "claim": "\"`scope=all` without capability\" is in packages/validation and also written out in 1 file(s) under apps",
+      "witness": {
+        "kind": "command",
+        "detail": "git grep -lF -- \"`scopeForbidden`\" -- apps\napps/api/src/requests/requests.controller.ts",
+        "source": "specs/requests/01-requests.md"
+      },
+      "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
+    }
+  ],
+  "halt": {
+    "reason": "spec-defect",
+    "detail": "review found a defect in the spec: requirement 36 names a reassignment filter requirement 42 does not contain"
+  },
+  "preflight": {
+    "at": "2026-09-01T12:44:23.601Z",
+    "checks": [
+      {
+        "name": "branch-not-protected",
+        "ok": true,
+        "detail": "on \"spec/requests\""
+      },
+      {
+        "name": "spec-unchanged",
+        "ok": true,
+        "detail": "spec sha256 matches the one recorded at init"
+      },
+      {
+        "name": "api-env-present",
+        "ok": true,
+        "detail": "apps/api/.env exists (untracked — a fresh worktree does not get one)"
+      },
+      {
+        "name": "node-modules-present",
+        "ok": true,
+        "detail": "dependencies installed"
+      },
+      {
+        "name": "e2e-ports-free",
+        "ok": true,
+        "detail": "3000 and 4000 are free for the e2e suite"
+      },
+      {
+        "name": "prisma-client-generated",
+        "ok": true,
+        "detail": "prisma client generated (postinstall runs it from apps/api)"
+      },
+      {
+        "name": "migration-baseline",
+        "ok": true,
+        "detail": "17 migrations recorded as the baseline"
+      },
+      {
+        "name": "worktree-clean",
+        "ok": true,
+        "detail": "nothing in flight outside .workflow/"
+      }
+    ],
+    "migrations": [
+      "20260724114549_init",
+      "20260824080000_documents_templates",
+      "20260824090000_documents_envelopes",
+      "20260824100000_documents_member_profile",
+      "20260826121829_add_invitations_and_job_title",
+      "20260827090541_spec_06_account_settings",
+      "20260827093348_spec_07_member_financials",
+      "20260827120241_spec_08_vacation_reserve",
+      "20260827123444_spec_09_vacation_requests",
+      "20260827145447_spec_11_projects",
+      "20260827153333_spec_12_time_tracking",
+      "20260828120000_spec_13_kanban",
+      "20260828140000_spec_04_signature_providers",
+      "20260828140000_spec_14_collaboration",
+      "20260831130000_activity_label_snapshot",
+      "20260831140000_spec_15_time_task_link",
+      "20260901120000_spec_org_01_clients"
+    ]
+  }
+}

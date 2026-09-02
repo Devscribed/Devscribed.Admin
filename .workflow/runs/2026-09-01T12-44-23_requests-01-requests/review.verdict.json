@@ -1,0 +1,420 @@
+{
+  "status": "blocked",
+  "reviewedUpTo": "6f2dbb5c91bc3fe346cb196b563d03ee8c577bb7",
+  "covered": {
+    "slice": 29,
+    "read": [
+      "apps/api/test/requests.spec.ts",
+      "apps/api/src/requests/requests.service.ts",
+      "e2e/tests/requests.spec.ts",
+      "packages/validation/src/requests.ts",
+      "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx",
+      "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx",
+      "apps/web/app/org/[orgId]/requests/page.tsx",
+      "packages/validation/src/requests.test.ts",
+      "apps/api/prisma/schema.prisma",
+      "apps/api/src/requests/vacation-request-feed.service.ts",
+      "apps/web/app/org/[orgId]/requests/[requestId]/DeclineRequestModal.tsx",
+      "apps/api/src/requests/requests.controller.ts",
+      "apps/web/app/org/[orgId]/requests/[requestId]/ReassignRequestModal.tsx",
+      "apps/api/test/requests-page.spec.ts",
+      "apps/web/app/org/[orgId]/requests/RequestRow.tsx",
+      "apps/api/src/requests/requests.serializer.ts",
+      "apps/api/prisma/migrations/20260901140000_requests_01_requests/migration.sql",
+      "apps/api/src/requests/requests.dto.ts",
+      "apps/web/app/org/[orgId]/requests/types.ts",
+      "apps/web/app/org/[orgId]/requests/[requestId]/RequestHistory.tsx",
+      "packages/validation/src/index.ts",
+      "apps/web/app/org/[orgId]/requests/[requestId]/RequestThread.tsx",
+      "apps/web/src/layout/requests-badge-context.tsx",
+      "apps/api/src/requests/request-events.service.ts",
+      "packages/validation/src/roles.ts",
+      "packages/validation/src/roles.test.ts",
+      "apps/web/src/layout/Sidebar.tsx",
+      "e2e/tests/requests-page.spec.ts",
+      "apps/api/src/app.module.ts"
+    ],
+    "unreached": []
+  },
+  "shards": [
+    {
+      "shard": 1,
+      "files": 14,
+      "findings": 7,
+      "kept": 7,
+      "note": "1 blocker kept after I re-read the decline branch myself; 2 notes elevated to spec blockers (F6, F7); 4 notes kept as notes. Spot-checked and agreed with its dismissals of requireCaller's 403 (matches projects.service.ts:685 and clients.service.ts:343) and of the TRANSITIONS actor table against requirements 23-26.",
+      "sweeps": {
+        "1": 5,
+        "2": 8,
+        "3": 39,
+        "4": 6,
+        "6": 9,
+        "7": 5,
+        "8": 24,
+        "10": 16,
+        "11": 7
+      }
+    },
+    {
+      "shard": 2,
+      "files": 15,
+      "findings": 10,
+      "kept": 9,
+      "note": "2 blockers kept after I re-read both e2e cases myself (F5 narrowed: only the vacation-section half is vacuous, since the scope-toggle absence is a synchronous render and does not depend on the response). 1 finding (S2-F7) merged into F7 as a duplicate of shard 1's S1-F5 - two shards reached it independently, which is why it is elevated rather than dropped.",
+      "sweeps": {
+        "1": 0,
+        "2": 10,
+        "3": 13,
+        "4": 13,
+        "6": 8,
+        "7": 1,
+        "8": 59,
+        "10": 17,
+        "11": 6
+      }
+    }
+  ],
+  "sweep5": {
+    "requirements": 47,
+    "artefacts": 143,
+    "missing": [],
+    "sectionsWalked": [
+      "Summary - context only, contributes no artefact (the spec says so)",
+      "Actors & Preconditions - Organization.nextRequestNumber (schema.prisma:169); SessionGuard on every route (requests.controller.ts:34)",
+      "Roles & Permission Matrix - 3 capabilities in both unions; normalizeRole honoured on the API (requests.service.ts:846) and NOT on the web (finding F2)",
+      "Functional Requirements 1-47 - all 47 have an artefact; 10/28 (FOR UPDATE), 11/19/29 (events in-transaction), 31 (write-once), 33 (derived overdue), 43 (comparator), 44 (unfiltered counters) each verified at source",
+      "Data Model - 3 tables + 1 defaulted column + 4 Request indexes + 1 unique index + 2 child indexes, all present and matching column-for-column",
+      "New Enums - 'None' honoured: every value set is a String column, no Prisma enum added",
+      "New Capabilities - MemberCapability x3 (index.ts:582-584) and Capability x3 (roles.ts:76-78) with the matrix's grants; view-requests unchanged",
+      "State Machine - 8 invariants; 1-7 verified, 8 satisfied in substance (create cannot FOR UPDATE a row it is inserting; it holds the Organization lock plus the unique index instead)",
+      "Screens - inactive-addressee banner copy verbatim ([requestId]/page.tsx:276); both empty-state copies; Clear-filters control (page.tsx:416)",
+      "Flows - the main flow and all three alt flows land in TC-01-E2E-01, INT-09, INT-17 and the error paths",
+      "API Contracts - 10 routes; response keys requests/vacation/counts match the sample; 400 for retired status values",
+      "Edge Cases 1-21 - each has an integration or e2e case; 4a, 18a and 20 verified at source",
+      "Validation Rules 1-11 - all shared in packages/validation and re-run server-side; the client imports the same validateNewRequest",
+      "Error Messages - all 31 keys exist in REQUEST_MESSAGES with the spec's exact copy, and each is emitted from the route the table names",
+      "UI Description - 9 state rows all rendered; submit disabled only on in-flight guards (saving/busy), never for validation",
+      "Required data-testid - all 44 present where the spec puts them (40 fixed + 4 request-row-{id} shapes)",
+      "Security - 404-not-403 on every cross-scope path; no unauthenticated surface; no markup rendering; RequestEvent stores display names only",
+      "Out of Scope / Known Gaps - non-goals; MailService untouched, MAIL_MESSAGE_TYPES unchanged (requirement 47 / AC-13)",
+      "Acceptance Criteria AC-1..AC-17 - each maps to a case; AC-12 verified by diffing the vacation card shape against f06c7d8 (identical)",
+      "Verification Plan - the rig, the standing exception",
+      "Test Cases - all 41 ids (6 UNIT / 22 INT / 13 E2E) exist in the file the spec assigns them to; 4 of them cannot fail or do not execute their steps (F4, F5, F6, F12, F13)"
+    ]
+  },
+  "sweep9": {
+    "pairs": 18,
+    "disagreeing": [
+      "web can(session.role) vs API normalizeRole(membership.role) - F2",
+      "specs/user-management/10 TC-10-INT-03 (403) vs apps/api/test/requests-page.spec.ts:368 (200) - F3",
+      "requirement 36's 'reassignment filter' vs requirement 42's exhaustive filter list - F7",
+      "spec UI Description's demanded DS-gaps table vs the spec containing none - F15"
+    ],
+    "agreeing": [
+      "requests.serializer.ts toRequestRow <-> apps/web/.../requests/types.ts RequestRowData",
+      "migration.sql <-> schema.prisma (and `tr -s ' '` diff of schema vs base is empty: no semantic removal, only formatter realignment)",
+      "vacationStatusesFor <-> VacationRequestFeedService.listFeed (requirement 42's fixed mapping)",
+      "counts.waitingOnMe + vacation.pendingCount <-> requests-badge-context badgeCount (requirement 44)",
+      "usePendingRequests pendingCount->badgeCount rename <-> all three consumers updated",
+      "REQUEST_MESSAGES <-> every emitting route, and <-> the spec's Error Messages copy",
+      "web STATUS_OPTIONS/TYPE_OPTIONS <-> parseRequestStatusQuery/parseRequestTypeQuery closed sets",
+      "e2e requests-page.spec.ts 'Open' option <-> STATUS_OPTIONS label 'Open' (requirement 42 bullet 3)",
+      "@RequireCapability('ViewAllRequests') <-> Capability union and the matrix's admin/manager grants",
+      "todayInTimeZone <-> Account.timezone read through membership.account.timezone",
+      "spec data-testid list <-> rendered nodes <-> e2e queries",
+      "vacation card JSON <-> its shape at f06c7d8 (AC-12)",
+      "counts.total <-> the emptyMine/emptyFiltered choice (page.tsx:283)",
+      "app.module.ts providers <-> the two new injected services"
+    ]
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "target": "code",
+      "severity": "blocker",
+      "rule": "specs/requests/01-requests.md:126 requirement 19: \"Every message writes a `RequestEvent` with `action = 'message_posted'` in the same transaction as the `RequestMessage` row, and updates `Request.lastActivityAt`.\"",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "transition (decline branch)",
+      "line": 522,
+      "claim": "the decline branch creates a RequestMessage without the message_posted RequestEvent that requirement 19 makes unconditional, so the audit mechanism is present at one of the two RequestMessage call sites and absent at the other",
+      "witness": {
+        "kind": "scenario",
+        "detail": "POST /api/organizations/{orgId}/requests/{id}/decline as the addressee with reason 'No budget'. requests.service.ts:522 writes the RequestMessage; the only events.record call in the block is the status_changed one at :548. Afterwards requestMessage.count({where:{requestId}}) === 1 but requestEvent.count({where:{requestId, action:'message_posted'}}) === 0. The identical body sent through POST .../messages does write the event (requests.service.ts:453). Requirement 25 makes the decline reason a RequestMessage 'posted in the same transaction', so requirement 19 applies to it; requirement 21 ('A message never appears in the history except as the fact that one was posted') makes the omission observable - the History panel of a declined request shows the status change and never records that the reason message exists. TC-01-INT-11 (apps/api/test/requests.spec.ts:658) queries only action:'status_changed', so nothing in the suite catches it.",
+        "source": "specs/requests/01-requests.md:126"
+      },
+      "suggestedFix": "After tx.requestMessage.create in the decline branch, call this.events.record(tx, { requestId, actorKind: 'member', actorMembershipId: caller.membershipId, action: 'message_posted', newLabel: caller.displayName }) - the same call postMessage makes at :453 - and extend TC-01-INT-11 to assert both events."
+    },
+    {
+      "id": "F2",
+      "target": "code",
+      "severity": "blocker",
+      "rule": "CLAUDE.md (Watch out for): \"**Role values are in transition.** The database holds `admin` / `member`; the specs target `admin | manager | user | viewer`. New authorization code must handle both\" - restated by specs/requests/01-requests.md:50: \"Capability checks run against `normalizeRole()` (`packages/validation/src/roles.ts`), so the legacy `member` value maps to `user` and the matrix holds against today's data.\"",
+      "file": "apps/web/app/org/[orgId]/requests/page.tsx",
+      "symbol": "RequestsPage",
+      "line": 88,
+      "claim": "the new page passes the raw Membership.role into can(), which does not normalize, so a legacy `member` is treated as having no capabilities at all and loses controls the server grants them",
+      "witness": {
+        "kind": "scenario",
+        "detail": "An organization whose memberships still hold the legacy role `member`, which CLAUDE.md states is what the database holds. That member signs in; /api/me returns role: 'member' unnormalized (apps/api/src/members/me.controller.ts:39) and it reaches the client verbatim (session-context.tsx:33 types it `string`). At page.tsx:88, can('member' as Role, 'create-request') evaluates CAPABILITY_MATRIX['member'], which is undefined, so `?? false` returns false (packages/validation/src/index.ts:717). requests-new-btn is not rendered. The same account's POST /api/organizations/{orgId}/requests returns 201, because the service normalizes first (requests.service.ts:846). Requirement 1 withholds the control from `viewer` only. page.tsx:89's can(role,'list-assigned-projects') fails the same way, so the project filter and the modal's project picker are not drawn either. The repository already ships the normalizing helper for exactly this and uses it at Sidebar.tsx:120 and documents/page.tsx:114. No test catches it: e2e helpers.ts:164 types setMembershipRole to the four target values only, so `member` is never exercised.",
+        "source": "CLAUDE.md (Watch out for, role-enum note)"
+      },
+      "suggestedFix": "Use hasCapability(session.role, 'CreateRequest') / hasCapability(session.role, 'ViewAllRequests') - which normalize internally (roles.ts:154) and are why the spec requires the capability in both unions - or normalize once with normalizeRole(session.role) before every can() in page.tsx and requests-badge-context.tsx. The detail page needs no change: its isAdmin test is role === 'admin', which is spelled identically in both vocabularies."
+    },
+    {
+      "id": "F3",
+      "target": "code",
+      "severity": "blocker",
+      "rule": "CLAUDE.md (Conventions that matter, Testing): \"retiring a case is recorded in its spec as `- **Retired.**` naming what covers the rule now.\" Handoff task T9 names the file: files: [\"apps/api/test/requests-page.spec.ts\", \"e2e/tests/requests-page.spec.ts\", \"specs/user-management/10-*.md\"]",
+      "file": "specs/user-management/10-organization-requests-page.md",
+      "symbol": "TC-10-INT-03",
+      "line": 270,
+      "claim": "T9 was executed on its two test files and not on the spec it was reversing: spec 10 still states 403 for user and viewer where the shipped endpoint now answers 200, and a second case's retirement note is justified by that now-false rule",
+      "witness": {
+        "kind": "test",
+        "detail": "specs/user-management/10-organization-requests-page.md:270-278 - 'TC-10-INT-03: Requests page - forbidden for user/viewer ... Expected Result: 1-2. HTTP 403 with { \"error\": \"forbidden\" }'. apps/api/test/requests-page.spec.ts:368 now asserts expect(uRes.status).toBe(200) for the same call, because requests/01 requirement 37 reverses it. `git diff --name-only f06c7d8...HEAD -- specs/` is empty, so no spec file was touched at all. Worse, spec 10:297 retires an E2E case with '- **Retired.** Covered by TC-10-INT-03 (a user and a viewer are forbidden)' - a replacement rule that no longer exists, so the retired case's coverage claim is now unbacked. The handoff's own risk register (handoff.json:449-451) predicted this and prescribed the mitigation: 'record the retirement in specs/user-management/10 as `- **Retired.**` naming TC-01-INT-18 and TC-01-E2E-08'.",
+        "source": "specs/user-management/10-organization-requests-page.md:278"
+      },
+      "suggestedFix": "Mark TC-10-INT-03 in specs/user-management/10-organization-requests-page.md as `- **Retired.**` naming TC-01-INT-18 and TC-01-E2E-08 as what covers the rule now, and repair the retirement note at :297 so it points at the surviving rule rather than at TC-10-INT-03. Routed to `code` and not `spec` because requests/01 requirement 37 already authorizes the amendment in writing ('This amends the page-level `view-requests` gate of spec 10'); no human ruling is needed, only the bookkeeping the handoff assigned."
+    },
+    {
+      "id": "F4",
+      "target": "code",
+      "severity": "blocker",
+      "rule": ".claude/skills/code-review/SKILL.md sweep 8: \"**A test nothing can break is a finding**: an assertion about a value nothing produces, a selector nothing renders, a query that resolves to the wrong element, a mechanism that throws before the assertion runs\"",
+      "file": "e2e/tests/requests.spec.ts",
+      "symbol": "TC-01-E2E-11",
+      "line": 553,
+      "claim": "the closing assertion of the spec's designated badge regression witness cannot fail, so the half of requirement 44 that says the badge empties when the work is done is unproven",
+      "witness": {
+        "kind": "test",
+        "detail": "requests.spec.ts:551 reloads the page. The shell remounts with badgeCount initialised to 0 (requests-badge-context.tsx:39 useState(0)) and Sidebar.tsx:88 renders the badge only when badgeCount is truthy, so the node is absent before the GET /requests it depends on has resolved. toHaveCount(0) at :553 therefore passes on its first poll. The preceding anchor at :552 is sidebar-requests-link, which renders synchronously from the session and says nothing about the fetch. If the server returned waitingOnMe: 2 for two granted requests, or the client summed the wrong counters, this assertion would still pass. The spec calls this case 'the regression witness for the change proven absent at spec time'.",
+        "source": "specs/requests/01-requests.md:1254"
+      },
+      "suggestedFix": "Anchor the final check on the response: await page.waitForResponse on the requests list before asserting, or assert a post-response node first (a row, or requests-empty-state), then toHaveCount(0). requests-page.spec.ts:182 shows the genuine shape - there the badge is showing '2' in the same DOM when the check begins."
+    },
+    {
+      "id": "F5",
+      "target": "code",
+      "severity": "blocker",
+      "rule": ".claude/skills/code-review/SKILL.md sweep 8: \"**A test nothing can break is a finding**: ... a selector nothing renders ... or a mechanism that throws before the assertion runs\"",
+      "file": "e2e/tests/requests.spec.ts",
+      "symbol": "TC-01-E2E-08",
+      "line": 473,
+      "claim": "the `user` half's vacation-section assertion cannot fail, leaving the UI half of AC-2 and AC-3 unproven at the only level that can observe it",
+      "witness": {
+        "kind": "test",
+        "detail": "openRequestsPage (requests.spec.ts:157-163) waits only for requests-page, the outer div rendered before any fetch (page.tsx:287). requests-vacation-section is rendered only from data.vacation (page.tsx:439), so it is absent at mount and toHaveCount(0) at :473 passes on the first poll while the list request is still in flight - the assertion holds even if the server wrongly returned a vacation block to a `user`. The admin half at :468 is anchored by toBeVisible and is sound. Narrowed from the shard's claim: the requests-scope-toggle assertion at :474 is fine, because canScopeAll is a synchronous render from the session (page.tsx:89) and does not depend on the response.",
+        "source": "specs/requests/01-requests.md:1224"
+      },
+      "suggestedFix": "Before the absence assertion, wait for something only the response can draw - await expect(page.getByTestId('requests-empty-state')).toBeVisible() for that user, or a seeded row - then assert requests-vacation-section is absent."
+    },
+    {
+      "id": "F6",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "specs/requests/01-requests.md:1035 TC-01-INT-13 Steps: \"Create a request with `neededBy` = tomorrow, then read it as an account whose timezone makes that date past.\" - and .claude/skills/code-review/SKILL.md (Clearing an item): \"When a rule is unconditional as written and the code gives a reason it should not apply, that is a contradiction between the code and the spec. Report it, with `\"target\": \"spec\"`, and let a human rule on it. Never settle it yourself by preferring the code.\"",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "TC-01-INT-13",
+      "line": 1035,
+      "claim": "the case as written is unsatisfiable, so no implementation can execute its steps; the implementation substitutes two different routes and argues the exception in a code comment",
+      "witness": {
+        "kind": "test",
+        "detail": "The widest UTC offset spread is 26 hours (UTC-12 to UTC+14), so two readers' calendar dates differ by at most one day and the furthest-ahead reader's today is an upper bound on every reader's today. A neededBy strictly after the creator's today is therefore after every reader's today and cannot be past for any of them. apps/api/test/requests.spec.ts:702 accordingly does not create with neededBy = tomorrow; it uses the western reader's today plus a PATCH to '2020-01-01', and explains the substitution in a comment at :697-701. AC-8 is still reached by those two routes, so this is a spec defect rather than missing coverage - but the spec's numbered steps are executed nowhere, and a code comment is not a source that can clear them.",
+        "source": "specs/requests/01-requests.md:1035"
+      },
+      "suggestedFix": "Amend TC-01-INT-13's steps to the two routes that are actually reachable and that the spec itself already describes - the timezone boundary day of edge case 10, and a neededBy moved into the past after creation (requirement 8: 'it may become past afterwards, which is what makes a request overdue') - so the case and the spec agree. Routed to spec because no implementation satisfies the steps as written; sending it to code would loop the implementer forever."
+    },
+    {
+      "id": "F7",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "specs/requests/01-requests.md:181 requirement 36: \"It is flagged `assigneeInactive` on read and appears under the reassignment filter.\" contradicted by specs/requests/01-requests.md:204 requirement 42: \"Filters: `type` (`all` | `access` | `question` | `vacation`), `status` (...), `projectId`, and a free-text `q` matched against `title` case-insensitively.\"",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "requirement 36",
+      "line": 181,
+      "claim": "two numbered requirements contradict: 36 names a reassignment filter that 42's exhaustive list does not contain, that no test id is named for, and that no test case exercises",
+      "witness": {
+        "kind": "rule",
+        "detail": "Requirement 42 enumerates the filters exhaustively and names four. The Required data-testid list (specs/requests/01-requests.md:709-712) names requests-type-filter and requests-status-filter and no fifth control. parseRequestScope/parseRequestStatusQuery/parseRequestTypeQuery (packages/validation/src/requests.ts:450-469) accept nothing else, and page.tsx:327-365 renders exactly the four. The implementable half of requirement 36 - the flag on read, nothing cancelled, the banner, the reassign control - is implemented and covered by TC-01-INT-17 and TC-01-E2E-09. Both review shards reached this independently.",
+        "source": "specs/requests/01-requests.md:181"
+      },
+      "suggestedFix": "Resolve in the spec: either drop the 'and appears under the reassignment filter' clause from requirement 36, or add the filter to requirement 42 with a test id and a case. Do not settle it in code - a requirement with no artefact is invisible to every other sweep."
+    },
+    {
+      "id": "F8",
+      "target": "code",
+      "severity": "note",
+      "rule": "no written rule forbids a no-op write; filed as judgement",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "reassignRequest",
+      "line": 737,
+      "claim": "reassigning to the member who already holds the request writes an assignee_changed event whose oldValue equals its newValue and bumps lastActivityAt, where the sibling PATCH path deliberately suppresses no-op writes",
+      "witness": {
+        "kind": "scenario",
+        "detail": "POST .../reassign twice with the same assigneeMembershipId produces two assignee_changed rows, the second with oldValue === newValue, and moves lastActivityAt, which reorders the row under requirement 43. patchRequest at :626-652 compares each field against the current value and writes nothing when unchanged; reassignRequest makes no comparison against locked.assigneeMembershipId.",
+        "source": "apps/api/src/requests/requests.service.ts:737"
+      },
+      "suggestedFix": "Return the current row unchanged when the new assignee equals the locked one, mirroring patchRequest's no-op suppression."
+    },
+    {
+      "id": "F9",
+      "target": "code",
+      "severity": "note",
+      "rule": "no written rule forbids an unused export; filed as judgement",
+      "file": "apps/api/src/requests/vacation-request-feed.service.ts",
+      "symbol": "countAll",
+      "line": 123,
+      "claim": "countAll is dead - it is the lifted totalCount of the retired spec-10 envelope and has no caller anywhere in apps/ or packages/",
+      "witness": {
+        "kind": "rule",
+        "detail": "grep for countAll across apps/ and packages/ returns exactly one hit, its own definition. The response envelope no longer carries totalCount; the vacation block is { requests, pendingCount }.",
+        "source": "apps/api/src/requests/vacation-request-feed.service.ts:123"
+      },
+      "suggestedFix": "Delete the method, or name the caller it is for."
+    },
+    {
+      "id": "F10",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md:536 GET Errors: \"`400` for an unknown `status` or `type` value\"",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "listRequests",
+      "line": 175,
+      "claim": "an unknown `scope` also answers 400 with fields.scope = 'unknown_value', which the spec's error list does not name",
+      "witness": {
+        "kind": "rule",
+        "detail": "The GET contract lists the 400 for status and type only; requests.service.ts:175 adds scope. It is stricter than the spec rather than looser, and no case pins it either way.",
+        "source": "specs/requests/01-requests.md:536"
+      },
+      "suggestedFix": "Add the scope row to the spec's GET Errors list, or document that the strictness is deliberate."
+    },
+    {
+      "id": "F11",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md Validation Rules row 2: \"`description` | Optional, <= 5000 chars, plain text | `descriptionTooLong`\"",
+      "file": "packages/validation/src/requests.ts",
+      "symbol": "validateRequestDescription",
+      "line": 113,
+      "claim": "a non-string description is reported as descriptionTooLong, a message that describes a different failure",
+      "witness": {
+        "kind": "scenario",
+        "detail": "POST .../requests with \"description\": 42 returns 400 fields.description = 'Description must be 5000 characters or fewer'. The Error Messages table names no key for a malformed value, so the code borrows one. The rendered form cannot produce this input, so the user-facing impact is nil.",
+        "source": "packages/validation/src/requests.ts:113"
+      },
+      "suggestedFix": "Coerce a non-string to null, or add a key for a malformed value to the spec's Error Messages table first."
+    },
+    {
+      "id": "F12",
+      "target": "code",
+      "severity": "note",
+      "rule": ".claude/skills/code-review/SKILL.md sweep 8: \"Blocks when ... a check was weakened - ... a relaxed assertion\"",
+      "file": "e2e/tests/requests.spec.ts",
+      "symbol": "TC-01-E2E-05",
+      "line": 369,
+      "claim": "the spec's expected result for the empty decline is 'shows the field error and changes no status'; the test asserts only that the reason textarea is still visible",
+      "witness": {
+        "kind": "test",
+        "detail": "DeclineRequestModal.tsx:162-173 renders the error in a node with no data-testid; requests.spec.ts:367-369 asserts visibility of the textarea instead, so it cannot distinguish the validation refusal from a silent no-op. Demoted to a note because CLAUDE.md permits data-testid selectors only and the spec names no id for this node, so asserting properly needs a spec change first.",
+        "source": "specs/requests/01-requests.md:1194"
+      },
+      "suggestedFix": "Give the decline error node a test id, record it in the spec's id list, and assert on it."
+    },
+    {
+      "id": "F13",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md:1274 TC-01-E2E-13 Steps: \"Apply a status filter that matches nothing, then clear it on an account with no requests at all.\" Selectors: \"requests-status-filter, requests-type-filter, requests-empty-state\"",
+      "file": "e2e/tests/requests.spec.ts",
+      "symbol": "TC-01-E2E-13",
+      "line": 618,
+      "claim": "the case never clears the filter and never touches requests-type-filter, reaching the second copy by switching accounts instead; requests-type-filter is queried by no test anywhere in e2e/",
+      "witness": {
+        "kind": "test",
+        "detail": "The spec's steps say 'then clear it'; requests.spec.ts:625 does switchUi(page, userEmail) and asserts the unfiltered copy on a different account. The expected result (two different strings) is still asserted, so the rule is covered and the route deviates. Consequence: the Clear-filters control at page.tsx:416 has no coverage at any level, and a grep for requests-type-filter across e2e/ returns nothing while every other spec-named list id appears at least once.",
+        "source": "specs/requests/01-requests.md:1281"
+      },
+      "suggestedFix": "Click the Clear-filters control (or reset the status filter) before the second assertion, and touch requests-type-filter as the selector list intends."
+    },
+    {
+      "id": "F14",
+      "target": "code",
+      "severity": "note",
+      "rule": ".claude/skills/code-review/SKILL.md sweep 8: \"**A test nothing can break is a finding**: an assertion about a value nothing produces\"",
+      "file": "e2e/tests/requests.spec.ts",
+      "symbol": "TC-01-E2E-01",
+      "line": 243,
+      "claim": "expect(admin.id.length).toBeGreaterThan(0) asserts a helper's return value the case never otherwise uses, and reads as a placeholder left where an addressee assertion was meant to go",
+      "witness": {
+        "kind": "test",
+        "detail": "requests.spec.ts:184 declares admin; its only other reference is the assertion at :243. Nothing in the case depends on the value.",
+        "source": "e2e/tests/requests.spec.ts:243"
+      },
+      "suggestedFix": "Use admin.id for what it was fetched for - assert the created row's addressee - or drop both the binding and the assertion."
+    },
+    {
+      "id": "F15",
+      "target": "spec",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md:692: \"Anything missing goes into the design system and is recorded in a DS-gaps table, not improvised here.\" - restating CLAUDE.md: \"Anything missing goes *into* the design system and is recorded in that spec's \\\"DS gaps\\\" table, never improvised per screen.\"",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "UI Description",
+      "line": 692,
+      "claim": "the spec demands a DS-gaps table and contains none, while the change ships five primitives that have no @ds export",
+      "witness": {
+        "kind": "rule",
+        "detail": "grep -i 'ds gap' over specs/requests/01-requests.md finds the demand at :692 and no table anywhere in the file. The change ships three token-carrying native textareas (NewRequestModal:318, [requestId]/page.tsx:365, DeclineRequestModal:127), a native date input (NewRequestModal:406), a hand-rolled skeleton (page.tsx:685) and a hand-rolled empty state (page.tsx:403). handoff.json:440-446 carries the five rows that were meant to land in that table. Each element copies an existing shipped precedent rather than inventing a spelling, so the missing artefact is the table, not discipline in the code.",
+        "source": "specs/requests/01-requests.md:692"
+      },
+      "suggestedFix": "Add the DS-gaps table to specs/requests/01-requests.md with the five rows from handoff.dsGaps (textarea, date field, skeleton, segmented control, empty state), naming the interim precedent for each."
+    },
+    {
+      "id": "F16",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md Data Model, RequestEvent: \"`oldLabel` / `newLabel` - Display-name snapshots at write time, so the trail survives a removed member.\" No rule states the actor fallback, so this is judgement",
+      "file": "apps/web/app/org/[orgId]/requests/[requestId]/RequestHistory.tsx",
+      "symbol": "describe",
+      "line": 20,
+      "claim": "the actor fallback conflates two different people: on an assignee_changed row newLabel is the new addressee, not the actor",
+      "witness": {
+        "kind": "scenario",
+        "detail": "RequestHistory.tsx:20 reads `const actor = event.actor.displayName ?? event.newLabel ?? 'Former member'`, and :29-31 renders `${actor} reassigned it from ${oldLabel} to ${newLabel}`. An event whose actorMembershipId was SetNull therefore renders 'Robin Ops reassigned it from Pat Member to Robin Ops', naming the new addressee as the person who performed the reassignment. Reachable only after a hard delete of the membership, since removal is a soft delete - which is why this is a note.",
+        "source": "apps/web/app/org/[orgId]/requests/[requestId]/RequestHistory.tsx:20"
+      },
+      "suggestedFix": "Fall back to 'Former member' directly for the actor, and use newLabel only where the event's own semantics define it as the actor (message_posted's author snapshot, requirement 20)."
+    },
+    {
+      "id": "F17",
+      "target": "code",
+      "severity": "note",
+      "rule": "CLAUDE.md (Conventions that matter, Design system): \"**No hardcoded colors or sizes** - use tokens (`var(--sp-8)`, `var(--fs-14)`, `var(--text-muted)`).\"",
+      "file": "apps/web/app/org/[orgId]/requests/page.tsx",
+      "symbol": "container and filter widths",
+      "line": 303,
+      "claim": "raw pixel layout sizes are introduced: maxWidth 820 (page.tsx:303 and [requestId]/page.tsx:201), minWidth 170 three times and 200 once, the skeleton's block dimensions, Modal width 520/440, and `padding: 'var(--sp-4) 12px'` mixing a token with a literal",
+      "witness": {
+        "kind": "rule",
+        "detail": "CLAUDE.md forbids hardcoded sizes without qualification and page.tsx:303 sets maxWidth: 820 literally. Every colour, spacing and typography value in the diff is a token; only layout widths and the input-chrome pixels are literal, and those copy shipped precedent byte-for-byte (members/[memberId]/RejectRequestModal.tsx:198, time-tracking/page.tsx:278). Filed as a note rather than a blocker because it is the repository-wide spelling rather than this diff's regression, and the only conforming fix is a design-system change this spec does not own.",
+        "source": "CLAUDE.md (Conventions that matter, Design system)"
+      },
+      "suggestedFix": "Add a container-width token to the design system and record the gap in the table F15 asks for, or have a human rule that layout widths sit outside the rule and say so there."
+    },
+    {
+      "id": "F18",
+      "target": "code",
+      "severity": "note",
+      "rule": "no written rule covers a read failure on the detail screen - the spec's UI Description error row is scoped to the list ('Error (list)'), so this is judgement",
+      "file": "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx",
+      "symbol": "load",
+      "line": 72,
+      "claim": "any detail-load failure other than 404 is swallowed, leaving a screen with no message, no retry and nothing distinguishing it from a slow load",
+      "witness": {
+        "kind": "scenario",
+        "detail": "GET /api/organizations/{orgId}/requests/{id} answers 500, or the fetch throws. detail stays null and notFound stays false, so /org/{orgId}/requests/{id} renders request-detail-page containing only the back link, indefinitely; a reload is the only recovery and nothing on screen says so. The list screen was given a banner and a retry for exactly this case.",
+        "source": "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx:72"
+      },
+      "suggestedFix": "Track a load error alongside notFound and render the same banner plus retry shape the list uses, with REQUEST_MESSAGES.genericError."
+    }
+  ]
+}

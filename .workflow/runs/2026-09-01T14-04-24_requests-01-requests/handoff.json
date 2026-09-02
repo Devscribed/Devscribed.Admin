@@ -1,0 +1,445 @@
+{
+  "spec": {
+    "path": "specs/requests/01-requests.md",
+    "sha256": "803c20d8f2d19413398819dcdecc1fa8fc791997b883e1b57e304c7fc4e8931e",
+    "dependsOn": ["user-management/04", "user-management/10", "user-management/11"]
+  },
+  "summary": "Requests between members of an organization: one record with an addressee, a project, a deadline, a thread and an append-only trail, and the /org/{orgId}/requests page turned from a manager-only vacation feed into everyone's inbox. The branch already carries an implementation of this spec (commits 481a165 and 6f2dbb5) and the additive migration 20260901140000_requests_01_requests is in the preflight baseline; ffa814d then amended the spec in the human's answer to two spec blockers review raised. So this is not a green field. The work is the delta: the decline path writes a RequestMessage with no message_posted event, four web capability checks pass the raw Membership.role into can() which does not normalize, @ds has no multiline text control while three raw <textarea> elements are hand-styled, the detail screen swallows every load error that is not a 404, and four E2E assertions either cannot fail or do not follow the steps the spec names. Each task below says what already exists at which path and what the delta on it is; do not rewrite what is there.",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Create path: validation, per-organization number, org scoping — verify against the spec and fix the description validator",
+      "files": [
+        "apps/api/src/requests/requests.service.ts",
+        "apps/api/src/requests/requests.dto.ts",
+        "packages/validation/src/requests.ts",
+        "packages/validation/src/requests.test.ts",
+        "apps/api/test/requests.spec.ts"
+      ],
+      "requirements": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+      "dependsOn": [],
+      "migration": {
+        "additive": true,
+        "note": "No new migration. Requests spec 01's migration is already applied as 20260901140000_requests_01_requests and is in the preflight baseline; one migration per run means this run adds none. If anything here forces a schema change, it must stay additive, because infra/deploy.sh:175-190 registers the migrate task definition, runs infra/migrate.sh, and only then tf applies the services at :187 — the schema is live while the previous image is still serving."
+      },
+      "allCallSites": [
+        "apps/api/src/requests/requests.service.ts#createRequest",
+        "packages/validation/src/requests.ts#validateNewRequest",
+        "packages/validation/src/requests.ts#validateRequestDescription"
+      ],
+      "concurrency": {
+        "rows": ["Organization", "Request"],
+        "lock": "SELECT \"nextRequestNumber\" FROM \"Organization\" WHERE \"id\" = $1 FOR UPDATE, already at requests.service.ts:355-358, inside the same $transaction as the Request insert and the created event",
+        "reread": ["nextRequestNumber"]
+      },
+      "notes": "Exists and is correct: the FOR UPDATE allocation (:353-361), the created event in the same transaction (requirement 11), the 404-for-a-cross-organization project or membership versus 400 projectUnavailable / assigneeInactive for an in-organization one (requirements 9 and 13, edge cases 18a and 7), and assigneeKind = 'member' as the only accepted value (requirement 12). The one delta: packages/validation/src/requests.ts#validateRequestDescription reports a non-string description as descriptionTooLong, a message that names a different failure. Validation rule 2 gives no key for a malformed value, so coerce a non-string to null rather than inventing a message — the rendered form cannot produce the input and the Error Messages table must not gain a key the spec does not name. Do not touch the numbering, the locks, or the 404/400 split."
+    },
+    {
+      "id": "T2",
+      "title": "The thread and its audit trail: write the message_posted event on the decline path",
+      "files": [
+        "apps/api/src/requests/requests.service.ts",
+        "apps/api/src/requests/request-events.service.ts",
+        "apps/api/test/requests.spec.ts"
+      ],
+      "requirements": [16, 17, 18, 19, 20, 21],
+      "dependsOn": [],
+      "migration": {
+        "additive": true,
+        "note": "No schema change. RequestEvent already carries action, actorMembershipId and newLabel (schema.prisma:1152-1174); this task writes one more row of an existing shape."
+      },
+      "allCallSites": [
+        "apps/api/src/requests/requests.service.ts#postMessage",
+        "apps/api/src/requests/requests.service.ts#transition (the decline branch, tx.requestMessage.create at :522)"
+      ],
+      "concurrency": {
+        "rows": ["Request", "RequestMessage", "RequestEvent"],
+        "lock": "the decline branch already runs inside transition()'s $transaction after lockRequest() takes SELECT … FROM \"Request\" … FOR UPDATE (requests.service.ts:778-792); the new event is written in that same transaction, never after it",
+        "reread": ["status", "requesterMembershipId", "assigneeMembershipId", "answeredAt", "resolvedAt"]
+      },
+      "notes": "Requirement 19 is unconditional — 'Every message writes a RequestEvent with action = message_posted in the same transaction as the RequestMessage row'. There are exactly two RequestMessage call sites. postMessage (:438-465) writes the event and bumps lastActivityAt; the decline branch (:522-529) writes the message and no event. Requirement 25 makes the decline reason a RequestMessage, so requirement 19 governs it. This does not breach state-machine invariant 4, which counts status_changed events only: a declined request ends with one message_posted and one status_changed. Snapshot the author's display name into newLabel exactly as postMessage does (requirement 20), so the thread and history survive the author's removal. Extend TC-01-INT-11 to assert both events; do not add a case id the spec does not name. Requirement 17 stays scoped to the POST …/messages endpoint, as its own sentence scopes it — the decline's message is written while the locked row is still non-terminal and that is not a violation."
+    },
+    {
+      "id": "T3",
+      "title": "Lifecycle: keep the locked guards intact, and stop reassignment writing a no-op event",
+      "files": [
+        "apps/api/src/requests/requests.service.ts",
+        "apps/api/test/requests.spec.ts"
+      ],
+      "requirements": [22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36],
+      "dependsOn": ["T2"],
+      "migration": {
+        "additive": true,
+        "note": "No schema change. answeredAt, resolvedAt and resolvedByAccountId are already nullable columns of the applied migration; the deploy order that made them safe is infra/deploy.sh:183-190, migrate then tf apply."
+      },
+      "allCallSites": [
+        "apps/api/src/requests/requests.service.ts#transition (answer, grant, decline, cancel)",
+        "apps/api/src/requests/requests.service.ts#patchRequest",
+        "apps/api/src/requests/requests.service.ts#reassignRequest"
+      ],
+      "concurrency": {
+        "rows": ["Request"],
+        "lock": "SELECT \"id\", \"status\", \"requesterMembershipId\", \"assigneeMembershipId\", \"answeredAt\", \"resolvedAt\" FROM \"Request\" WHERE \"id\" = $1 AND \"organizationId\" = $2 FOR UPDATE (requests.service.ts#lockRequest, :783-789), taken by every one of the three writers above",
+        "reread": ["status", "requesterMembershipId", "assigneeMembershipId", "answeredAt", "resolvedAt"]
+      },
+      "notes": "Authorization work: every actor guard here runs against normalizeRole() via requireCaller (requests.service.ts:846), which is what makes the matrix hold against today's admin/member data — do not replace it with a raw role read. Exists and is correct: the terminal guard before the transition guard (409 alreadyTerminal, then 409 invalidTransition, then 403 notYoursTo*), the party-versus-non-party split that gives a party 403 and a non-party 404 (requirement 23, edge case 4a, AC-16), write-once answeredAt/resolvedAt (requirement 31), and the five editable fields with a field_changed event each and no-op suppression (requirement 34, :626-656). Requirement 36 no longer names a reassignment filter — ffa814d removed that clause — so add none; the banner is the mechanism. The one delta: reassignRequest (:686-763) makes no comparison against locked.assigneeMembershipId, so reassigning to the member who already holds the request writes an assignee_changed event whose oldValue equals its newValue and moves lastActivityAt, reordering the row under requirement 43. Mirror patchRequest's no-op suppression and return the row unchanged. Also update the comment above TC-01-INT-13 in apps/api/test/requests.spec.ts:691-701: it argues against the spec's old steps, which ffa814d replaced with the two routes that test already takes, and a comment arguing an exception to text that no longer says it will be read as a live dissent."
+    },
+    {
+      "id": "T4",
+      "title": "List endpoint: scope, the retired vocabulary, the two unfiltered counters and the default order",
+      "files": [
+        "apps/api/src/requests/requests.service.ts",
+        "apps/api/src/requests/vacation-request-feed.service.ts",
+        "apps/api/src/requests/requests.serializer.ts",
+        "packages/validation/src/requests.ts",
+        "apps/api/test/requests.spec.ts",
+        "apps/api/test/requests-page.spec.ts"
+      ],
+      "requirements": [39, 40, 42, 43, 44],
+      "dependsOn": [],
+      "migration": {
+        "additive": true,
+        "note": "No schema change — this is a read path. VacationRequest gains no column and no write; only its read query gains requirement 42's status mapping."
+      },
+      "allCallSites": [
+        "apps/api/src/requests/requests.service.ts:238 — toRequestRow in listRequests",
+        "apps/api/src/requests/requests.service.ts:402 — toRequestRow in createRequest",
+        "apps/api/src/requests/requests.service.ts:564 — toRequestRow in transition",
+        "apps/api/src/requests/requests.service.ts:677 — toRequestRow in patchRequest",
+        "apps/api/src/requests/requests.service.ts:763 — toRequestRow in reassignRequest",
+        "apps/api/src/requests/requests.serializer.ts:132 — toRequestRow in the detail serializer"
+      ],
+      "concurrency": {
+        "rows": [],
+        "lock": "none — every path here is a read. The two counters are separate count() queries issued before the filters are applied (requests.service.ts:203-213) and are deliberately not a count of the returned array; do not fold them into the findMany.",
+        "reread": []
+      },
+      "notes": "Requirement 33 is the 'every read' rule and the six call sites above are its complete list — overdue is derived per reading account from Account.timezone (schema.prisma:37) at each of them and stored nowhere. Exists and is correct: 400 on an unknown status or type rather than the retired fallback to pending (requirement 42, AC-17), the fixed open→pending / granted→approved / declined→rejected / answered→none mapping (vacationStatusesFor), type=vacation as a choice of section, waitingOnMe and total computed before the filters, vacation.pendingCount always the unfiltered pending count, the vacation block present only for a view-requests holder, and compareRequestRows putting non-terminal before terminal as the first key (requirement 43). The delta: vacation-request-feed.service.ts#countAll (:123) has no caller anywhere in apps/ or packages/ — it is the lifted totalCount of the retired spec-10 envelope, which is now { requests, pendingCount }. Delete it. Note for the record and do not change: listRequests also answers 400 for an unknown scope (:175), which the spec's GET Errors list names for status and type only; it is stricter than the spec rather than looser and is recorded as a risk."
+    },
+    {
+      "id": "T5",
+      "title": "Web: every capability check this feature added runs through normalizeRole()",
+      "files": [
+        "apps/web/app/org/[orgId]/requests/page.tsx",
+        "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx",
+        "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx",
+        "apps/web/src/layout/requests-badge-context.tsx",
+        "apps/web/src/layout/Sidebar.tsx"
+      ],
+      "requirements": [37, 38, 41],
+      "dependsOn": [],
+      "migration": {
+        "additive": true,
+        "note": "No schema change; this task is client-side authorization only. A web-only deploy skips the migration step entirely (infra/deploy.sh:175)."
+      },
+      "allCallSites": [
+        "apps/web/app/org/[orgId]/requests/page.tsx:87-90 — role cast, then can(role,'create-request'), can(role,'view-all-requests'), can(role,'list-assigned-projects')",
+        "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx:46-48 — role cast, then can(role,'view-all-requests') and role === 'admin'",
+        "apps/web/src/layout/requests-badge-context.tsx:38 — can(session.role as Role,'view-requests')",
+        "apps/web/src/layout/Sidebar.tsx:82-90 — the Requests row, deliberately unconditional (requirement 38) and taking no capability check"
+      ],
+      "concurrency": {
+        "rows": [],
+        "lock": "none — no write.",
+        "reread": []
+      },
+      "notes": "This task touches authorization, so it must name normalizeRole() (packages/validation/src/roles.ts): the database holds admin/member while the spec's matrix is admin|manager|user|viewer, and the spec's Roles & Permission Matrix states 'Capability checks run against normalizeRole(), so the legacy member value maps to user and the matrix holds against today's data'. can() at packages/validation/src/index.ts:716 reads CAPABILITY_MATRIX[role] directly and does not normalize, so a legacy member resolves to undefined and gets every capability denied — the New Request control disappears for a role the server grants create-request to (requirement 1). Wrap each call site above as can(normalizeRole(session.role), …). Normalize at these call sites, not inside can(): can() is read by clients, members, projects and time-tracking screens as well and changing it moves those without a spec. The detail screen's role === 'admin' comparison must normalize too. Sidebar's Requests row stays unconditional — that is requirement 38, and it is what makes the 'no dead links' rule hold, since every role can now reach the destination. Requirement 41's vacation section is server-decided (the vacation key is absent for a non-holder), and the client must keep rendering the section only when the key is present rather than deciding it itself."
+    },
+    {
+      "id": "T6",
+      "title": "Web screens: the row, the flags, the two empty states, and a load-error state on the detail screen",
+      "files": [
+        "apps/web/app/org/[orgId]/requests/page.tsx",
+        "apps/web/app/org/[orgId]/requests/RequestRow.tsx",
+        "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx",
+        "apps/web/app/org/[orgId]/requests/[requestId]/RequestHistory.tsx"
+      ],
+      "requirements": [45, 46],
+      "dependsOn": ["T5"],
+      "migration": {
+        "additive": true,
+        "note": "No schema change; web only, and a web-only deploy runs no migration (infra/deploy.sh:175)."
+      },
+      "allCallSites": [
+        "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx:61-76 — load()",
+        "apps/web/app/org/[orgId]/requests/page.tsx:368-395 — the list's error banner and retry"
+      ],
+      "concurrency": {
+        "rows": [],
+        "lock": "none — no write.",
+        "reread": []
+      },
+      "notes": "Exists and is correct: the row's number, title, status, addressee, project and the two flags (requirement 45); requests-empty-state carrying emptyMine unfiltered and emptyFiltered with filters (requirement 46); the list's requests-error-banner with requests-error-retry-btn keeping the last good rows behind it. Two deltas. (a) The detail screen's load() (:61-76) sets notFound only for a 404 and swallows everything else, so a 500 or a thrown fetch leaves request-detail-page containing a back link and nothing else, indefinitely, with no message and no retry — the list screen was given a banner for exactly this. Track a load error alongside notFound and render the same banner-and-retry shape, reusing REQUEST_MESSAGES.genericError, which is what the list already renders (page.tsx:385). Do not invent copy and do not write it inline. (b) RequestHistory.tsx:20 reads `event.actor.displayName ?? event.newLabel ?? 'Former member'`, so an assignee_changed row whose actorMembershipId was SetNull renders the new addressee as the person who did the reassigning. Fall back to 'Former member' directly for the actor, and read newLabel as the actor only where the event's own semantics define it that way — message_posted's author snapshot, requirement 20."
+    },
+    {
+      "id": "T7",
+      "title": "Design system: a multiline text control in @ds, replacing the three hand-styled textareas",
+      "files": [
+        "1_DS for dev/components/forms/**",
+        "apps/web/src/ds.ts",
+        "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx",
+        "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx",
+        "apps/web/app/org/[orgId]/requests/[requestId]/DeclineRequestModal.tsx"
+      ],
+      "requirements": [],
+      "dependsOn": [],
+      "migration": {
+        "additive": true,
+        "note": "No schema change; design system and web only."
+      },
+      "allCallSites": [
+        "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx:337 — request-new-description, padding 'var(--sp-4) 12px'",
+        "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx:386 — request-detail-composer, padding 'var(--sp-4) 12px'",
+        "apps/web/app/org/[orgId]/requests/[requestId]/DeclineRequestModal.tsx:146 — request-detail-decline-reason, padding 'var(--sp-4) 12px'"
+      ],
+      "concurrency": {
+        "rows": [],
+        "lock": "none — no write.",
+        "reread": []
+      },
+      "notes": "1_DS for dev/components/forms/ exports Input, Select, Checkbox, Radio and SearchField and no multiline control, and apps/web/src/ds.ts re-exports none. The three raw <textarea> elements above are each hand-styled with a literal 12px mixed into a token-valued padding, which is the improvisation CLAUDE.md forbids: anything missing goes into the design system, never per screen. Add the control to the design system, export it through the @ds barrel and apps/web/src/ds.ts, and use it at all three call sites — all three, not one, or the next screen copies whichever was left. Keep every existing data-testid on the rendered element: request-new-description, request-detail-composer and request-detail-decline-reason are named in the spec's Required data-testid list and are queried by TC-01-E2E-01, -02 and -05. No new colour and no new size — tokens only. The gap is recorded in this handoff's dsGaps; the spec's UI Description demands a DS-gaps table and has none, which is filed as note P1."
+    },
+    {
+      "id": "T8",
+      "title": "Pin the two guarantees this change is measured by: no outbound effect, and an unchanged vacation row shape",
+      "files": [
+        "apps/api/test/requests.spec.ts",
+        "apps/api/src/mail/mail.service.ts"
+      ],
+      "requirements": [47],
+      "dependsOn": [],
+      "migration": {
+        "additive": true,
+        "note": "No schema change. MailService is not touched, which is what keeps this change off the four transports that implement it."
+      },
+      "allCallSites": [
+        "apps/api/test/requests.spec.ts — TC-01-INT-21, the overrideProvider(MailService) recording double",
+        "apps/api/test/requests.spec.ts — TC-01-INT-20, the vacation row shape comparison"
+      ],
+      "concurrency": {
+        "rows": ["VacationRequest"],
+        "lock": "none — VacationRequest is read and never written by this spec (README Backward Compatibility 3). The only other writers of that row are the vacation submit, review and cancel handlers of user-management spec 09, which take their own transactions in apps/api/src/vacation/ and are untouched here.",
+        "reread": []
+      },
+      "notes": "Both cases exist in apps/api/test/requests.spec.ts. Keep them honest rather than rewriting them: TC-01-INT-21 must exercise create, message, answer, grant, decline, cancel and reassign against the double and assert both zero sends and that MAIL_MESSAGE_TYPES (apps/api/src/mail/mail.service.ts:127) holds exactly the nine entries it held before (requirement 47, AC-13). TC-01-INT-20 must compare every key and value type of each vacation.requests[] object against the shape the existing E2E asserts, so AC-12's byte-identical claim has a witness. Adding a mail message type in this run would fail AC-13 by construction — this spec sends nothing."
+    },
+    {
+      "id": "T9",
+      "title": "E2E: make the four assertions that cannot fail, or that skip the steps, able to fail",
+      "files": [
+        "e2e/tests/requests.spec.ts"
+      ],
+      "requirements": [],
+      "dependsOn": ["T5", "T6"],
+      "migration": {
+        "additive": true,
+        "note": "No schema change; tests only. A change under e2e/ ships in no image and deploys nothing (deploy.yml)."
+      },
+      "allCallSites": [
+        "e2e/tests/requests.spec.ts TC-01-E2E-11 — the closing sidebar-requests-badge absence assertion",
+        "e2e/tests/requests.spec.ts TC-01-E2E-08 — the `user` half's requests-vacation-section absence assertion",
+        "e2e/tests/requests.spec.ts TC-01-E2E-05 — the empty decline reason",
+        "e2e/tests/requests.spec.ts TC-01-E2E-13 — clearing the filter"
+      ],
+      "concurrency": {
+        "rows": [],
+        "lock": "none — tests only.",
+        "reread": []
+      },
+      "notes": "Run these targeted, never the whole suite: from e2e, E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/requests.spec.ts tests/regressions.spec.ts. Four fixes. (a) TC-01-E2E-11: after the final reload, the badge node is absent before the GET it depends on resolves — Sidebar renders it only when badgeCount is truthy and requests-badge-context.tsx initialises it to 0 — so toHaveCount(0) passes on its first poll and would pass even if the server returned waitingOnMe: 2. Anchor on the response (waitForResponse on the list call, or assert a post-response node first) before asserting absence. The spec calls this case the regression witness for requirement 44, so it has to be able to fail. (b) TC-01-E2E-08: openRequestsPage waits only for requests-page, the outer div drawn before any fetch, while requests-vacation-section is drawn only from data.vacation — the `user` half's absence assertion therefore passes while the list request is still in flight. Wait for something only the response can draw (the empty state, or a seeded row) before asserting the section is absent; this is the only level that observes the UI half of AC-2 and AC-3. The requests-scope-toggle assertion in the same case is sound and needs no change — it renders synchronously from the session. (c) TC-01-E2E-05: the spec's expected result is 'shows the field error and changes no status'; the test asserts only that the reason textarea is still visible. Assert the 'changes no status' half against request-detail-status, which is a spec-named id. Do not invent a testid for the decline error node — CLAUDE.md permits data-testid selectors only and the ids are named in the specs, so that assertion waits on note P2. (d) TC-01-E2E-13: the spec's steps say to clear the filter and its selector list names requests-type-filter, which no test in e2e/ queries; the case switches accounts instead, leaving the Clear-filters control (page.tsx:416) with no coverage at any level. Clear the filter as the steps say. While in this file, TC-01-E2E-01 binds admin and then asserts only admin.id.length > 0 — use it for what it was fetched for, the created row's addressee, or drop both."
+    }
+  ],
+  "reuse": [
+    { "what": "org scoping and 404-not-403 on a path/session mismatch", "where": "apps/api/src/auth/org-scope.guard.ts, applied by apps/api/src/requests/requests.controller.ts:34" },
+    { "what": "session attachment and securityStamp re-read on every request", "where": "apps/api/src/auth/session.guard.ts" },
+    { "what": "capability decorator for the one route whose refusal message the spec leaves unnamed (reassign)", "where": "apps/api/src/auth/capability.guard.ts with apps/api/src/auth/require-capability.decorator.ts" },
+    { "what": "role normalization — the legacy member value maps to user", "where": "packages/validation/src/roles.ts#normalizeRole" },
+    { "what": "party-to-a-request composed from capability plus identity, the way canReadProfile composes", "where": "packages/validation/src/roles.ts (Requests spec 01 block, from :209)" },
+    { "what": "all 32 user-facing strings, extended in place on the existing const rather than a second export", "where": "packages/validation/src/index.ts:1771-1834 (REQUEST_MESSAGES)" },
+    { "what": "the shared error-banner copy the list already renders and the detail screen will reuse", "where": "packages/validation/src/index.ts:1794 (REQUEST_MESSAGES.genericError)" },
+    { "what": "every validator, query parser, the overdue derivation and the default comparator", "where": "packages/validation/src/requests.ts" },
+    { "what": "the per-organization counter allocated under a row lock, the pattern Project.nextTaskNumber set", "where": "apps/api/prisma/schema.prisma:169 with apps/api/src/requests/requests.service.ts:353-361" },
+    { "what": "the append-only event writer, taking the transaction client so the event cannot escape its transaction", "where": "apps/api/src/requests/request-events.service.ts:41" },
+    { "what": "the spec-10 vacation feed, lifted intact so the existing behaviour keeps one owner", "where": "apps/api/src/requests/vacation-request-feed.service.ts" },
+    { "what": "the recording MailService double, the pattern 27 integration specs already use", "where": "apps/api/test/clients.spec.ts (overrideProvider(MailService))" },
+    { "what": "role, member, project, vacation and removal helpers every E2E case needs", "where": "e2e/tests/helpers.ts (setMembershipRole, removeMember, createProjectViaApi, submitVacationRequestViaApi, inviteAndAcceptViaApi, signupOrg)" },
+    { "what": "the applied additive migration for all three tables and the counter column", "where": "apps/api/prisma/migrations/20260901140000_requests_01_requests/migration.sql" }
+  ],
+  "buildFromZero": [
+    "The message_posted RequestEvent on the decline path — the second of the two RequestMessage call sites writes none (apps/api/src/requests/requests.service.ts:522).",
+    "Role normalization on the four web capability checks this feature added — can() does not normalize, so a legacy member loses controls the server grants.",
+    "A multiline text control in the design system — 1_DS for dev/components/forms/ has none, and three raw <textarea> elements are hand-styled with a literal 12px.",
+    "A load-error state on the request detail screen — every failure that is not a 404 is swallowed today.",
+    "Four E2E assertions that can fail: the badge's closing absence check, the user's vacation-section absence check, the empty-decline status check, and the cleared filter."
+  ],
+  "testCases": {
+    "unit": [
+      "TC-01-UNIT-01",
+      "TC-01-UNIT-02",
+      "TC-01-UNIT-03",
+      "TC-01-UNIT-04",
+      "TC-01-UNIT-05",
+      "TC-01-UNIT-06"
+    ],
+    "int": [
+      "TC-01-INT-01",
+      "TC-01-INT-02",
+      "TC-01-INT-03",
+      "TC-01-INT-04",
+      "TC-01-INT-05",
+      "TC-01-INT-06",
+      "TC-01-INT-07",
+      "TC-01-INT-08",
+      "TC-01-INT-09",
+      "TC-01-INT-10",
+      "TC-01-INT-11",
+      "TC-01-INT-12",
+      "TC-01-INT-13",
+      "TC-01-INT-14",
+      "TC-01-INT-15",
+      "TC-01-INT-16",
+      "TC-01-INT-17",
+      "TC-01-INT-18",
+      "TC-01-INT-19",
+      "TC-01-INT-20",
+      "TC-01-INT-21",
+      "TC-01-INT-22"
+    ],
+    "e2e": [
+      "TC-01-E2E-01",
+      "TC-01-E2E-02",
+      "TC-01-E2E-03",
+      "TC-01-E2E-04",
+      "TC-01-E2E-05",
+      "TC-01-E2E-06",
+      "TC-01-E2E-07",
+      "TC-01-E2E-08",
+      "TC-01-E2E-09",
+      "TC-01-E2E-10",
+      "TC-01-E2E-11",
+      "TC-01-E2E-12",
+      "TC-01-E2E-13"
+    ]
+  },
+  "testIds": [
+    "requests-page",
+    "requests-scope-toggle",
+    "requests-type-filter",
+    "requests-status-filter",
+    "requests-new-btn",
+    "requests-empty-state",
+    "requests-loading-skeleton",
+    "requests-error-banner",
+    "requests-error-retry-btn",
+    "requests-vacation-section",
+    "request-row-{id}",
+    "request-row-{id}-status",
+    "request-row-{id}-blocking-flag",
+    "request-row-{id}-overdue-flag",
+    "request-new-modal",
+    "request-new-type",
+    "request-new-access-kind",
+    "request-new-title",
+    "request-new-description",
+    "request-new-project",
+    "request-new-assignee-member",
+    "request-new-priority",
+    "request-new-blocking",
+    "request-new-needed-by",
+    "request-new-submit",
+    "request-new-error-title",
+    "request-new-error-accessKind",
+    "request-detail-page",
+    "request-detail-title",
+    "request-detail-status",
+    "request-detail-assignee",
+    "request-detail-assignee-inactive-banner",
+    "request-detail-thread",
+    "request-detail-composer",
+    "request-detail-composer-submit",
+    "request-detail-answer-btn",
+    "request-detail-grant-btn",
+    "request-detail-decline-btn",
+    "request-detail-decline-reason",
+    "request-detail-decline-confirm",
+    "request-detail-cancel-btn",
+    "request-detail-reassign-btn",
+    "request-detail-history",
+    "sidebar-requests-link",
+    "sidebar-requests-badge"
+  ],
+  "sections": {
+    "Summary": "no task — states the shape of the change and the one structural decision (answered and granted are different states, and only the requester writes granted), which T3 encodes and TC-01-INT-08 pins. Nothing here is separately buildable.",
+    "Actors & Preconditions": "T3, T5 — every actor holds a session and every route sits behind SessionGuard; the admin acting for either side is the actor rule T3's guards carry, and the preconditions are satisfied by e2e/tests/helpers.ts with no fixture owed.",
+    "Roles & Permission Matrix": "T3, T5 — the server half runs through normalizeRole() in requireCaller, the client half is T5's whole subject, and TC-01-UNIT-06 pins the matrix including that view-requests grants are unchanged.",
+    "Functional Requirements": "T1 (1-15), T2 (16-21), T3 (22-36), T5 (37, 38, 41), T4 (39, 40, 42, 43, 44), T6 (45, 46), T8 (47)",
+    "Data Model": "T1, T2, T3 — the three tables, the indexes and Organization.nextRequestNumber are already applied by migration 20260901140000_requests_01_requests and match the table column for column; this run adds no migration and changes no column. TC-01-INT-02 and TC-01-INT-03 pin the unique index.",
+    "State Machine": "T3 — the five statuses, the terminal set, and invariants 1-8. Invariant 4 counts status_changed events only, which is what lets T2 add the decline's message_posted alongside it. Invariant 8's enumeration of writers is T3's concurrency block.",
+    "Screens": "T6, T7 — the two wireframes are already realised in apps/web/app/org/[orgId]/requests/; T6 owns the row and empty states drawn there and T7 replaces the improvised textareas. No new screen is added.",
+    "Flows": "T3, T9 — the main flow and the three alt flows are TC-01-E2E-01's journey and TC-01-INT-09's concurrency; the alt flow for a network error is the in-flight guard the UI Description restates, already implemented and unchanged.",
+    "API Contracts": "T1, T2, T3, T4 — one task per route group: T4 the GET list with its counters and errors, T1 the POST, T3 the PATCH and the five transition routes, T2 the messages route. The 404-not-403 rule and 'the path orgId is checked, never used as a selector' hold in the controller as written and must stay.",
+    "Edge Cases": "T1 (5, 6, 7, 8, 18a, 19), T3 (1, 2, 3, 4, 4a, 9, 10, 11, 12, 13, 14, 21), T4 (15, 17, 18, 20), T5 (16). Every row already has a case; the sweep found no row without an owner.",
+    "Validation Rules": "T1 — rules 1-9 at creation and rule 10 on the message body live in packages/validation/src/requests.ts, rule 11's decline reason is validated inside the decline transaction (T2's neighbour in T3). The one delta is rule 2's non-string handling. Rules 8 and 9 are server-only by construction, as the section says.",
+    "Error Messages": "T1, T2, T3, T4, T6 — all 32 rows exist on REQUEST_MESSAGES at packages/validation/src/index.ts:1803-1833 with the exact text, each emitted by the route the table names; the handoff's messages block records the module and the emitter for each context. The list and detail error banner copy is genericError, which the table does not name — filed as note P2.",
+    "UI Description": "T6, T7 — the state table's rows are the list and detail screens' loading, empty, error, saving, invalid, read-only and permission-limited states. The missing DS-gaps table the section demands is note P1, and the gap itself is T7.",
+    "Required `data-testid` Attributes": "T6, T7, T9 — every id is listed in testIds and rendered today; T7 must keep the three textarea ids on the new control and T9 must query requests-type-filter, which no test touches.",
+    "Security": "T3, T4, T5 — every query scopes by session.organizationId as a required argument with no default, cross-organization access answers 404 not 403, a non-party in the caller's own organization also gets 404, no unauthenticated surface is added, and descriptions and messages are plain text on write and rendered as text so nothing is sanitized because nothing is markup. TC-01-INT-19 is the witness.",
+    "Out of Scope": "no task — client-addressed requests, vacation as Request rows, mail, a grant registry, a notification centre, attachments, message editing and templates are all explicitly not built. T8 is the guard that the mail half stays out.",
+    "Known Gaps": "no task — the one-value assigneeKind and authorKind columns are deliberate seams for spec 02 and stay as they are; the viewer and manager paths unproven at spec time are closed by TC-01-E2E-03 and TC-01-E2E-11, which T9 makes able to fail.",
+    "Acceptance Criteria": "T1 (AC-4, AC-14, AC-15), T2 (AC-7), T3 (AC-5, AC-6, AC-8, AC-9, AC-16), T4 (AC-2, AC-11, AC-17), T5 (AC-1, AC-3), T6 (AC-10), T8 (AC-12, AC-13). Every criterion has an observer named in the spec's own table and a task here.",
+    "Verification Plan": "no task — this is the rig the cases run on, and the section states that every state the cases need is reachable and that the spec owes no fixture. Verified: signupOrg, inviteAndAcceptViaApi, setMembershipRole, createProjectViaApi, removeMember and submitVacationRequestViaApi are all present in e2e/tests/helpers.ts, so no helper, fixture route or environment value is a task.",
+    "Test Cases": "T1, T2, T3, T4, T5, T6, T8, T9 — all 41 cases exist today; T9 owns the four that cannot fail or that skip their steps, and the other tasks own the cases their code changes touch."
+  },
+  "messages": [
+    { "context": "Create without capability", "module": "packages/validation/src/index.ts#REQUEST_MESSAGES.createForbidden", "emittedBy": "apps/api/src/requests/requests.service.ts#createRequest" },
+    { "context": "scope=all without capability", "module": "packages/validation/src/index.ts#REQUEST_MESSAGES.scopeForbidden", "emittedBy": "apps/api/src/requests/requests.service.ts#listRequests" },
+    { "context": "Unknown type", "module": "packages/validation/src/index.ts#REQUEST_MESSAGES.typeUnknown", "emittedBy": "packages/validation/src/requests.ts#validateRequestKind via POST …/requests" },
+    { "context": "Title missing / too short / too long", "module": "packages/validation/src/index.ts#REQUEST_MESSAGES.titleRequired, titleTooShort, titleTooLong", "emittedBy": "packages/validation/src/requests.ts#validateRequestTitle via POST and PATCH …/requests" },
+    { "context": "Description too long", "module": "packages/validation/src/index.ts#REQUEST_MESSAGES.descriptionTooLong", "emittedBy": "packages/validation/src/requests.ts#validateRequestDescription via POST and PATCH …/requests" },
+    { "context": "Access kind missing / on a question / unknown", "module": "packages/validation/src/index.ts#REQUEST_MESSAGES.accessKindRequired, accessKindNotAllowed, accessKindUnknown", "emittedBy": "packages/validation/src/requests.ts#validateRequestKind via POST …/requests" },
+    { "context": "Priority unknown", "module": "packages/validation/src/index.ts#REQUEST_MESSAGES.priorityUnknown", "emittedBy": "packages/validation/src/requests.ts#validateRequestPriority via POST and PATCH …/requests" },
+    { "context": "Needed-by invalid / in the past", "module": "packages/validation/src/index.ts#REQUEST_MESSAGES.neededByInvalid, neededByPast", "emittedBy": "packages/validation/src/requests.ts#validateRequestNeededBy via POST …/requests (neededByPast at creation only, requirement 8)" },
+    { "context": "Addressee malformed / inactive", "module": "packages/validation/src/index.ts#REQUEST_MESSAGES.assigneeInvalid, assigneeInactive", "emittedBy": "apps/api/src/requests/requests.service.ts#createRequest and #reassignRequest" },
+    { "context": "Project unavailable", "module": "packages/validation/src/index.ts#REQUEST_MESSAGES.projectUnavailable", "emittedBy": "apps/api/src/requests/requests.service.ts#createRequest (an archived project in the caller's own organization; one outside it is a 404 with no fields key)" },
+    { "context": "Message missing / too long", "module": "packages/validation/src/index.ts#REQUEST_MESSAGES.messageRequired, messageTooLong", "emittedBy": "apps/api/src/requests/requests.service.ts#postMessage" },
+    { "context": "Thread closed", "module": "packages/validation/src/index.ts#REQUEST_MESSAGES.threadClosed", "emittedBy": "apps/api/src/requests/requests.service.ts#postMessage" },
+    { "context": "Already terminal", "module": "packages/validation/src/index.ts#REQUEST_MESSAGES.alreadyTerminal", "emittedBy": "apps/api/src/requests/requests.service.ts#transition (every transition route) and #patchRequest" },
+    { "context": "Invalid transition", "module": "packages/validation/src/index.ts#REQUEST_MESSAGES.invalidTransition", "emittedBy": "apps/api/src/requests/requests.service.ts#transition" },
+    { "context": "Not yours to answer / grant / decline / cancel", "module": "packages/validation/src/index.ts#REQUEST_MESSAGES.notYoursToAnswer, notYoursToGrant, notYoursToDecline, notYoursToCancel", "emittedBy": "apps/api/src/requests/requests.service.ts#transition via TRANSITIONS[action].forbiddenMessage — each emitted only by the route named for it" },
+    { "context": "Edit forbidden / immutable field", "module": "packages/validation/src/index.ts#REQUEST_MESSAGES.editForbidden, fieldImmutable", "emittedBy": "apps/api/src/requests/requests.service.ts#patchRequest" },
+    { "context": "Decline reason missing / too long", "module": "packages/validation/src/index.ts#REQUEST_MESSAGES.declineReasonRequired, declineReasonTooLong", "emittedBy": "apps/api/src/requests/requests.service.ts#transition, the decline branch" },
+    { "context": "Empty inbox, no filters / with filters", "module": "packages/validation/src/index.ts#REQUEST_MESSAGES.emptyMine, emptyFiltered", "emittedBy": "apps/web/app/org/[orgId]/requests/page.tsx, chosen from counts.total" },
+    { "context": "List and detail load failure (not named in the spec's Error Messages table — note P2)", "module": "packages/validation/src/index.ts:1794#REQUEST_MESSAGES.genericError", "emittedBy": "apps/web/app/org/[orgId]/requests/page.tsx:385, and apps/web/app/org/[orgId]/requests/[requestId]/page.tsx once T6 lands" }
+  ],
+  "premises": [
+    { "claim": "migrations run as a one-off task on the new image before the services roll out, which is what makes an additive migration safe", "verifiedAt": "infra/deploy.sh:175-190" },
+    { "claim": "the migration step is skipped entirely on a web-only deploy", "verifiedAt": "infra/deploy.sh:175" },
+    { "claim": "this spec's migration is already applied and this run adds none", "verifiedAt": "apps/api/prisma/migrations/20260901140000_requests_01_requests/migration.sql, and run.json preflight.migrations (18 recorded)" },
+    { "claim": "the migration is strictly additive — three new tables, one defaulted column, no rename, no drop, no new NOT NULL on an existing table", "verifiedAt": "apps/api/prisma/migrations/20260901140000_requests_01_requests/migration.sql:11" },
+    { "claim": "Organization.nextRequestNumber defaults to 1, so organizations predating the column need no backfill", "verifiedAt": "apps/api/prisma/schema.prisma:169" },
+    { "claim": "the retired spec-10 status parser exists and is the vocabulary requirement 42 retires (the spec cites index.ts:1878; the symbol moved to :1957 when the implementation landed)", "verifiedAt": "packages/validation/src/index.ts:1957" },
+    { "claim": "REQUEST_MESSAGES already holds spec 09's vacation keys and this spec's 32 keys are extended in place rather than exported a second time", "verifiedAt": "packages/validation/src/index.ts:1771 and :1803-1833" },
+    { "claim": "the badge call sends no scope, type or status and reads counts.waitingOnMe plus vacation.pendingCount", "verifiedAt": "apps/web/src/layout/requests-badge-context.tsx:41-56" },
+    { "claim": "MAIL_MESSAGE_TYPES is the single list all four transports read, and nothing under apps/api/src/requests/ imports MailService", "verifiedAt": "apps/api/src/mail/mail.service.ts:127" },
+    { "claim": "Account.timezone exists, which is what makes overdue derivable per reading account", "verifiedAt": "apps/api/prisma/schema.prisma:37" },
+    { "claim": "OrgScopeGuard answers 404 and not 403 on a path/session mismatch, and the controller never passes the path orgId to the service", "verifiedAt": "apps/api/src/auth/org-scope.guard.ts, apps/api/src/requests/requests.controller.ts:34-55" },
+    { "claim": "can() reads CAPABILITY_MATRIX[role] directly and does not normalize, so the legacy member value resolves to no capabilities", "verifiedAt": "packages/validation/src/index.ts:716" },
+    { "claim": "@ds exports no multiline text control", "verifiedAt": "1_DS for dev/components/forms/ and apps/web/src/ds.ts:11-32" },
+    { "claim": "every helper the Verification Plan names exists", "verifiedAt": "e2e/tests/helpers.ts (signupOrg, inviteAndAcceptViaApi, setMembershipRole, createProjectViaApi, removeMember, submitVacationRequestViaApi)" },
+    { "claim": "the spec-10 assertions this spec reverses were amended rather than left standing", "verifiedAt": "specs/user-management/10-organization-requests-page.md:303-332, apps/api/test/requests-page.spec.ts:318-325, e2e/tests/requests-page.spec.ts:106-115" }
+  ],
+  "doubleBehaviours": [
+    { "behaviour": "MailService records every send and performs none, injected with overrideProvider(MailService) in the Nest testing module", "whyItMatters": "requirement 47 and AC-13 are negative claims — that nothing is sent — and a negative claim needs a recorder to be observable at all. The spec's own Verification Plan names no third-party system, no API key and no MCP server, so this is the only double the change needs; there is no External Contracts row marked Assumed to plan another from." }
+  ],
+  "dsGaps": [
+    { "missing": "a multiline text control (textarea) — 1_DS for dev/components/forms/ exports Input, Select, Checkbox, Radio and SearchField and nothing multiline, while this feature needs three: request-new-description, request-detail-composer and request-detail-decline-reason", "resolution": "add it to the design system and export it through @ds and apps/web/src/ds.ts, then use it at all three call sites — never a hand-styled <textarea> per screen. The three current instances each mix a literal 12px into a token-valued padding, which is exactly the improvisation the rule forbids. T7 owns this. The spec's UI Description demands a DS-gaps table and contains none, which is note P1." }
+  ],
+  "risks": [
+    { "risk": "The branch already contains an implementation of this spec, so an implementer who reads the plan as a green field will rewrite working code and lose the review's accepted parts.", "mitigation": "Every task names the file and the line of what exists and states its delta in one sentence. Nothing in this plan asks for a new module, a new table or a new route." },
+    { "risk": "Fixing the role normalization inside can() rather than at the call sites would silently move the clients, members, projects and time-tracking screens, none of which is in this spec.", "mitigation": "T5 states the four call sites explicitly and forbids changing can()." },
+    { "risk": "listRequests answers 400 for an unknown scope, which the spec's GET Errors list names for status and type only. It is stricter than the spec rather than looser, and no case pins it either way.", "mitigation": "Recorded here rather than changed. Removing it would make a hand-edited scope fall back silently, which is the failure mode requirement 42 rejects for the sibling parameters. The spec should gain the row." },
+    { "risk": "T2 adds a second RequestEvent to the decline transaction, and a case asserting 'exactly one event' on that path would start failing.", "mitigation": "State-machine invariant 4 counts status_changed events only. T2 says so, and TC-01-INT-11 asserts one status_changed plus one message_posted rather than one event." },
+    { "risk": "T7 replaces the element that carries three spec-named data-testids; losing one silently breaks TC-01-E2E-01, -02 and -05.", "mitigation": "T7 names all three ids and requires the new control to forward data-testid to the rendered element." },
+    { "risk": "The E2E fixes in T9 tempt a whole-suite run to confirm them.", "mitigation": "T9 gives the exact targeted command with its own ports; an agent runs the files its diff touches and never the whole suite." }
+  ]
+}

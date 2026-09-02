@@ -1,0 +1,432 @@
+{
+  "runId": "2026-09-02T06-12-40_requests-01-requests",
+  "spec": "specs/requests/01-requests.md",
+  "specSha": "3906ab320f1ea6ad2bb690a46c96ce8ffbd6755b77648e8700c06878cf19d0dc",
+  "task": "requests-01-requests",
+  "branch": "spec/requests-v2",
+  "baseRef": "65e00fc609ab6b885295e0b8165dc376e2387939",
+  "headAtInit": "986e0e4f511b37a9ed0086438cdab8ec76985819",
+  "status": "ready",
+  "createdAt": "2026-09-02T06:12:40.191Z",
+  "updatedAt": "2026-09-02T06:33:28.293Z",
+  "stages": {
+    "preflight": {
+      "status": "passed",
+      "attempts": 1
+    },
+    "pre_implement": {
+      "status": "passed",
+      "attempts": 1,
+      "lastVerdict": "pass",
+      "carriedFrom": "2026-09-01T16-08-11_requests-01-requests"
+    },
+    "implement": {
+      "status": "passed",
+      "attempts": 1,
+      "lastVerdict": "pass",
+      "carriedFrom": "2026-09-01T16-08-11_requests-01-requests"
+    },
+    "static_gate": {
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-02T06:13:01.681Z",
+      "endedAt": "2026-09-02T06:13:24.481Z",
+      "lastVerdict": "blocked"
+    },
+    "review": {
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-02T06:13:24.566Z",
+      "endedAt": "2026-09-02T06:24:51.088Z",
+      "lastVerdict": "pass"
+    },
+    "qa": {
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-02T06:24:51.201Z",
+      "endedAt": "2026-09-02T06:33:28.242Z",
+      "lastVerdict": "pass"
+    }
+  },
+  "budget": {
+    "codeAttempts": 0,
+    "handoffReplans": 0,
+    "infra": 0
+  },
+  "findingHistory": {},
+  "carriedFindings": [],
+  "carriedFrom": null,
+  "contested": [],
+  "notes": [
+    {
+      "at": "2026-09-02T06:12:55.894Z",
+      "by": "operator",
+      "note": "Branch rebuilt to take the pipeline changes out of this spec run. handoff.json and the implementation are carried unchanged from run 2026-09-01T16-08-11, whose specSha is identical to this one; pre_implement and implement are recorded as passed because their work is on the branch and was not redone."
+    },
+    {
+      "stage": "static_gate",
+      "id": "S1",
+      "severity": "note",
+      "target": "code",
+      "rule": "spec/message-duplicated",
+      "file": "apps/api/src/requests/requests.controller.ts",
+      "symbol": "Create without capability",
+      "claim": "\"Create without capability\" is in packages/validation and also written out in 1 file(s) under apps",
+      "witness": {
+        "kind": "command",
+        "detail": "git grep -lF -- \"`createForbidden`\" -- apps\napps/api/src/requests/requests.controller.ts",
+        "source": "specs/requests/01-requests.md"
+      },
+      "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
+    },
+    {
+      "stage": "static_gate",
+      "id": "S2",
+      "severity": "note",
+      "target": "code",
+      "rule": "spec/message-duplicated",
+      "file": "apps/api/src/requests/requests.controller.ts",
+      "symbol": "`scope=all` without capability",
+      "claim": "\"`scope=all` without capability\" is in packages/validation and also written out in 1 file(s) under apps",
+      "witness": {
+        "kind": "command",
+        "detail": "git grep -lF -- \"`scopeForbidden`\" -- apps\napps/api/src/requests/requests.controller.ts",
+        "source": "specs/requests/01-requests.md"
+      },
+      "suggestedFix": "import the shared constant, or contest if the literal is an internal Error string rather than a user-facing message"
+    },
+    {
+      "stage": "review",
+      "id": "F1",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md Validation Rules row 2 (`descriptionTooLong`)",
+      "file": "packages/validation/src/requests.ts",
+      "symbol": "validateRequestDescription",
+      "line": 113,
+      "claim": "A non-string description is refused with `descriptionTooLong` — copy asserting the value is too long when it is the wrong type. Nothing written is contradicted (the table names no wrong-type message), but the message is false.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "POST /api/organizations/{orgId}/requests with description: 42 answers 400 {fields:{description:'Description must be 5000 characters or fewer'}}.",
+        "source": "packages/validation/src/requests.ts:113"
+      },
+      "suggestedFix": "Return the same outcome a missing optional gets, or add a wrong-type message to the table first."
+    },
+    {
+      "stage": "review",
+      "id": "F2",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md requirement 9 (`projectId` is optional; archived → 400, cross-org → 404)",
+      "file": "packages/validation/src/requests.ts",
+      "symbol": "validateNewRequest",
+      "line": 317,
+      "claim": "A non-string projectId is coerced to null rather than refused, so the request is created with no project and no error. It is the one create input that fails open; requirement 9 does not cover the type, so this is unspecified rather than wrong.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "POST with projectId: 123 answers 201 with project: null — neither the 400 of an archived project nor the 404 of a foreign one.",
+        "source": "packages/validation/src/requests.ts:317"
+      },
+      "suggestedFix": "Treat a present-but-not-a-string projectId as a validation error."
+    },
+    {
+      "stage": "review",
+      "id": "F3",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md requirement 44: the badge counts 'non-terminal requests where the caller is the addressee'",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "listRequests",
+      "line": 209,
+      "claim": "`waitingOnMe` encodes non-terminal by enumeration — `status: { in: ['open','answered'] }` — rather than from TERMINAL_REQUEST_STATUSES, which the same file already reads through isTerminalRequestStatus. The Data Model makes a sixth status additive, and such a status would drop out of the badge with no test failing.",
+      "witness": {
+        "kind": "rule",
+        "detail": "'the sidebar badge counts requests waiting on the caller — non-terminal requests where the caller is the addressee'; the query names the two current non-terminal values instead of the complement of the terminal set.",
+        "source": "specs/requests/01-requests.md:252"
+      },
+      "suggestedFix": "Filter with `status: { notIn: TERMINAL_REQUEST_STATUSES }`."
+    },
+    {
+      "stage": "review",
+      "id": "F4",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md GET contract: 'Its rows honour `status` through the mapping in requirement 42; `scope`, `projectId` and `q` never touch them'",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "listRequests",
+      "line": 251,
+      "claim": "`type=access` or `type=question` empties the vacation section. The contract enumerates what does and does not reach vacation rows and is silent on `type` for the two Request types; the behaviour is a defensible inference from `type=vacation` selecting a section, but it is written nowhere and no case covers it.",
+      "witness": {
+        "kind": "test",
+        "detail": "No TC-01-INT-* asserts the vacation block for `?type=access`; the only type assertion is apps/api/test/requests.spec.ts:1295 for `?type=vacation`.",
+        "source": "apps/api/test/requests.spec.ts:1295"
+      },
+      "suggestedFix": "Add the case, or have the spec state what `type=access` does to the section."
+    },
+    {
+      "stage": "review",
+      "id": "F5",
+      "target": "spec",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md GET contract Errors: '400 for an unknown `status` or `type` value'",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "listRequests",
+      "line": 175,
+      "claim": "An unknown `scope` also answers 400. That is stricter than the contract and consistent with the closed-set argument, but `scope` is absent from the spec's 400 list and no case sends `?scope=nonsense`.",
+      "witness": {
+        "kind": "rule",
+        "detail": "The Errors block names 403 for scope=all without the capability and 400 for an unknown status or type; scope is not among the 400 cases.",
+        "source": "specs/requests/01-requests.md:545"
+      },
+      "suggestedFix": "Add `scope` to the spec's 400 list."
+    },
+    {
+      "stage": "review",
+      "id": "F6",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md requirement 21 (the history is what happened) and requirement 19",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "transition",
+      "line": 538,
+      "claim": "A decline writes `message_posted` and `status_changed` in one transaction, and RequestEvent.createdAt defaults to CURRENT_TIMESTAMP — the transaction start time in PostgreSQL — so both rows carry identical timestamps while getRequest orders events by createdAt alone (requests.service.ts:279). Their order in the History panel is whatever the planner returns. No requirement fixes an intra-transaction order and no case compares two events written in one transaction, so nothing asserted is at risk.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Decline a request, then GET the detail: events[] holds message_posted and status_changed with equal createdAt, and repeated reads may return them in either order.",
+        "source": "apps/api/prisma/migrations/20260901140000_requests_01_requests/migration.sql:64"
+      },
+      "suggestedFix": "Add id (or a sequence) as a tiebreaker in the events order-by."
+    },
+    {
+      "stage": "review",
+      "id": "F7",
+      "target": "code",
+      "severity": "note",
+      "rule": "CLAUDE.md, Conventions that matter — Auth: 'queries always scope by `session.organizationId`, never by the path parameter'",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "createRequest",
+      "line": 325,
+      "claim": "The assignee and project lookups use findUnique({where:{id}}) and compare organizationId on the following line, rather than scoping the query itself. The observable answers are right (404 with no fields key — TC-01-INT-06 and TC-01-INT-15 both assert it) and reassignRequest:728 uses the same shape, so this is defence-in-depth: the scope check is a separate statement a future edit could drop with no query-level backstop.",
+      "witness": {
+        "kind": "rule",
+        "detail": "The rule is unconditional; these two queries scope by neither the session nor the path and rely on a following comparison.",
+        "source": "CLAUDE.md:57"
+      },
+      "suggestedFix": "findFirst({ where: { id, organizationId } }) and 404 on a null."
+    },
+    {
+      "stage": "review",
+      "id": "F8",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md requirement 42 (the retired vocabulary is enumerated and each caller changed with it)",
+      "file": "apps/api/src/requests/vacation-request-feed.service.ts",
+      "symbol": "countAll",
+      "line": 123,
+      "claim": "`countAll` has no caller in apps/ or e2e/. It served spec 10's retired top-level totalCount, which `counts.total` replaced. Unlike `parseRequestStatusFilter`, which requirement 42 deliberately leaves exported, this is a module-private method with no published-surface argument for keeping it.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "grep -rn countAll over apps/ and e2e/ returns only the definition at vacation-request-feed.service.ts:123.",
+        "source": "apps/api/src/requests/vacation-request-feed.service.ts:123"
+      },
+      "suggestedFix": "Delete it, or state in the spec that it is kept for spec 02."
+    },
+    {
+      "stage": "review",
+      "id": "F9",
+      "target": "spec",
+      "severity": "note",
+      "rule": "specs/requests/README.md Blast Radius — every row names a mitigation; the migration row names deploy order, the response-shape change names none",
+      "file": "apps/api/src/requests/requests.controller.ts",
+      "symbol": "listRequests",
+      "line": 39,
+      "claim": "GET /api/organizations/{orgId}/requests changes its response shape on an endpoint that already ships — {requests, pendingCount, totalCount} becomes {requests, vacation:{requests,pendingCount}, counts:{waitingOnMe,total}}. infra/deploy.sh:188 applies api and web in one tf apply, so the two services roll independently and there is a window in which the previous web image reads pendingCount off the top level (blank badge) and renders `requests` as vacation cards when they are now Request rows. The schema half of the deploy story is stated; this half is not.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "During a dev deploy of both services, a browser holding the previous web bundle calls the new API: `data.pendingCount` is undefined so the sidebar badge disappears, and `data.requests` holds Request rows fed to the vacation card renderer.",
+        "source": "infra/deploy.sh:188"
+      },
+      "suggestedFix": "Record the window and its mitigation in the spec's blast radius, as the migration row does."
+    },
+    {
+      "stage": "review",
+      "id": "F10",
+      "target": "spec",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md TC-01-E2E-13 Steps ('Apply a status filter that matches nothing, then clear it') versus its own Selectors list",
+      "file": "e2e/tests/requests.spec.ts",
+      "symbol": "TC-01-E2E-13",
+      "line": 640,
+      "claim": "`requests-type-filter` is named in TC-01-E2E-13's selector list but appears in no E2E case; the case's Steps never mention the type filter, so the implementation matches the Steps and the spec's own two lists disagree. The control is drawn at page.tsx:338 and is exercised by no E2E, so a regression that dropped its testid would be caught by nothing at that level. Reported as a note, not a blocker: the blocking condition in .claude/skills/code-review/SKILL.md sweep 8 is 'an id the spec names exists nowhere', and this id exists.",
+      "witness": {
+        "kind": "test",
+        "detail": "TC-01-E2E-13 declares requests-type-filter among its selectors; the case touches only requests-status-filter (requests.spec.ts:656) and requests-empty-state (:658, :665), and no other e2e file references the id.",
+        "source": "specs/requests/01-requests.md:1320"
+      },
+      "suggestedFix": "Either drive the filtered empty state through the type filter in TC-01-E2E-13, or drop the selector from the case's list."
+    },
+    {
+      "stage": "review",
+      "id": "F11",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md TC-01-E2E-07 Expected Result: 'the reassignment row names both the old and the new addressee'",
+      "file": "e2e/tests/requests.spec.ts",
+      "symbol": "TC-01-E2E-07",
+      "line": 467,
+      "claim": "The old-label half is asserted against the whole history panel, where 'Pat Member' already appears from the answered line written earlier in the same case. If the API wrote assignee_changed with oldLabel null, the panel would read 'reassigned it from nobody to Robin Ops' and the case would still pass. Only 'Robin Ops' is uniquely pinned. The rule itself is separately covered by TC-01-INT-17.",
+      "witness": {
+        "kind": "test",
+        "detail": "e2e/tests/requests.spec.ts:464-468 — toContainText('Pat Member') is satisfied by the status_changed line at :448 regardless of what the reassignment row renders.",
+        "source": "e2e/tests/requests.spec.ts:467"
+      },
+      "suggestedFix": "Assert the single reassignment line, e.g. /reassigned it from Pat Member to Robin Ops/."
+    },
+    {
+      "stage": "review",
+      "id": "F12",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md Data Model, RequestEvent: oldLabel/newLabel are 'display-name snapshots at write time, so the trail survives a removed member'; requirement 20 puts the author's name in newLabel for a message",
+      "file": "apps/web/app/org/[orgId]/requests/[requestId]/RequestHistory.tsx",
+      "symbol": "describe",
+      "line": 20,
+      "claim": "The actor fallback `event.actor.displayName ?? event.newLabel ?? 'Former member'` is only correct for message_posted. For assignee_changed and field_changed, newLabel is the subject of the change, so a lost actor renders 'Robin Ops reassigned it from Pat Member to Robin Ops'. Reachable only through a hard delete of the membership, not the product's soft delete.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "An assignee_changed event whose actorMembershipId was set null, oldLabel 'Pat Member', newLabel 'Robin Ops': the history line names Robin Ops as the person who performed the reassignment.",
+        "source": "apps/web/app/org/[orgId]/requests/[requestId]/RequestHistory.tsx:20"
+      },
+      "suggestedFix": "Restrict the newLabel fallback to the message_posted branch."
+    },
+    {
+      "stage": "review",
+      "id": "F13",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md requirement 42 (the filters, enumerated) and the UI Description's permission rows, which name only requests-new-btn, the scope control and the vacation section as absent",
+      "file": "apps/web/app/org/[orgId]/requests/page.tsx",
+      "symbol": "RequestsPage",
+      "line": 351,
+      "claim": "The projectId filter is gated on `list-assigned-projects`, which a viewer does not hold, so a viewer sees three of the spec's four filters. The spec enumerates the filters exhaustively and gates only the scope control and the vacation section by capability.",
+      "witness": {
+        "kind": "rule",
+        "detail": "'Filters: `type`, `status`, `projectId`, and a free-text `q`' and 'Permission-limited (viewer) | requests-new-btn absent; scope control absent' — the project filter is not among what a viewer loses.",
+        "source": "specs/requests/01-requests.md:209"
+      },
+      "suggestedFix": "Draw the filter for every role, or record the extra gate in the spec."
+    },
+    {
+      "stage": "review",
+      "id": "F14",
+      "target": "code",
+      "severity": "note",
+      "rule": "CLAUDE.md, Conventions that matter — Design system: 'No hardcoded colors or sizes — use tokens'",
+      "file": "apps/web/app/org/[orgId]/requests/page.tsx",
+      "symbol": "RequestsPage / RequestsSkeleton / VacationCard",
+      "line": 309,
+      "claim": "Numeric sizes remain outside the two DS-gap controls T3 fixed: maxWidth 820 (page.tsx:309, [requestId]/page.tsx:206), minWidth 170/200 (:333,:342,:352,:365), the skeleton's block sizes and radius (:692-710), and border '1px solid var(--divider)' (:613). Not raised as a blocker: the same idioms are carried verbatim from the base file, spec 10's amended UI section states the 820px width explicitly, and @ds ships no width or skeleton token — so closing this is a design-system change, which the DS-gaps table is the place for.",
+      "witness": {
+        "kind": "rule",
+        "detail": "The design-system rule is unconditional as written; these are sizes expressed as numbers and one literal border width.",
+        "source": "CLAUDE.md:67"
+      },
+      "suggestedFix": "If the DS gains layout-width and skeleton tokens, sweep these together with the precedent files rather than only here."
+    },
+    {
+      "stage": "review",
+      "id": "F15",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md requirement 42: 'An unknown status or type value is a 400, never a silent fallback … the closed set is only a contract if breaking it is observable'",
+      "file": "apps/web/app/org/[orgId]/requests/page.tsx",
+      "symbol": "RequestsPage",
+      "line": 102,
+      "claim": "The page swallows an unknown URL value before it reaches the endpoint: parseRequestStatusQuery(...) ?? 'all' turns ?status=pending into the unfiltered view and the URL-sync effect rewrites the address bar, so a person who follows a stale link never sees the 400. The normative sentence governs the endpoint, which does answer 400 (TC-01-INT-22), and the client lands on the default rather than on a wrong filter — hence a note.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Open /org/{orgId}/requests?status=pending: the status control reads 'All statuses', every status is listed and the URL becomes '?'. No error is shown.",
+        "source": "apps/web/app/org/[orgId]/requests/page.tsx:102"
+      },
+      "suggestedFix": "Send the raw URL value and let the 400 surface in requests-error-banner."
+    }
+  ],
+  "preflight": {
+    "at": "2026-09-02T06:12:40.316Z",
+    "checks": [
+      {
+        "name": "branch-not-protected",
+        "ok": true,
+        "detail": "on \"spec/requests-v2\""
+      },
+      {
+        "name": "spec-unchanged",
+        "ok": true,
+        "detail": "spec sha256 matches the one recorded at init"
+      },
+      {
+        "name": "api-env-present",
+        "ok": true,
+        "detail": "apps/api/.env exists (untracked — a fresh worktree does not get one)"
+      },
+      {
+        "name": "node-modules-present",
+        "ok": true,
+        "detail": "dependencies installed"
+      },
+      {
+        "name": "e2e-ports-free",
+        "ok": true,
+        "detail": "3000 and 4000 are free for the e2e suite"
+      },
+      {
+        "name": "prisma-client-generated",
+        "ok": true,
+        "detail": "prisma client generated (postinstall runs it from apps/api)"
+      },
+      {
+        "name": "migration-baseline",
+        "ok": true,
+        "detail": "18 migrations recorded as the baseline"
+      },
+      {
+        "name": "worktree-clean",
+        "ok": true,
+        "detail": "nothing in flight outside .workflow/"
+      }
+    ],
+    "migrations": [
+      "20260724114549_init",
+      "20260824080000_documents_templates",
+      "20260824090000_documents_envelopes",
+      "20260824100000_documents_member_profile",
+      "20260826121829_add_invitations_and_job_title",
+      "20260827090541_spec_06_account_settings",
+      "20260827093348_spec_07_member_financials",
+      "20260827120241_spec_08_vacation_reserve",
+      "20260827123444_spec_09_vacation_requests",
+      "20260827145447_spec_11_projects",
+      "20260827153333_spec_12_time_tracking",
+      "20260828120000_spec_13_kanban",
+      "20260828140000_spec_04_signature_providers",
+      "20260828140000_spec_14_collaboration",
+      "20260831130000_activity_label_snapshot",
+      "20260831140000_spec_15_time_task_link",
+      "20260901120000_spec_org_01_clients",
+      "20260901140000_requests_01_requests"
+    ]
+  },
+  "resumes": [
+    {
+      "at": "2026-09-02T06:12:55.976Z",
+      "stage": "static_gate",
+      "from": "abandoned",
+      "detail": "orchestrator stopped during pre_implement",
+      "reason": "branch rebuilt; pipeline moved to build/wf-resume; handoff carried from run 16-08-11",
+      "headAtInit": {
+        "from": "986e0e4f511b37a9ed0086438cdab8ec76985819",
+        "to": "986e0e4f511b37a9ed0086438cdab8ec76985819"
+      }
+    }
+  ]
+}

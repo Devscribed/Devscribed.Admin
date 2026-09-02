@@ -1,0 +1,11 @@
+{
+  "stage": "review",
+  "attempt": 1,
+  "agent": "code-reviewer",
+  "model": "opus",
+  "resumedSession": null,
+  "fuseMin": 20,
+  "startedAt": "2026-09-01T15:52:46.179Z",
+  "baseRef": "f06c7d844daeba66bc0f2545c5071600e6cb4037",
+  "head": "37b27c4fcf9d6d099870a1c05d01a13ca4918d18"
+}

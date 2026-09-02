@@ -1,0 +1,116 @@
+{
+  "runId": "2026-09-01T14-33-08_requests-01-requests",
+  "spec": "specs/requests/01-requests.md",
+  "specSha": "803c20d8f2d19413398819dcdecc1fa8fc791997b883e1b57e304c7fc4e8931e",
+  "task": "requests-01-requests",
+  "branch": "spec/requests",
+  "baseRef": "f06c7d844daeba66bc0f2545c5071600e6cb4037",
+  "headAtInit": "ffa814d52d251fc6ea1795124f0469280281b847",
+  "status": "aborted",
+  "createdAt": "2026-09-01T14:33:08.201Z",
+  "updatedAt": "2026-09-01T14:40:17.938Z",
+  "stages": {
+    "preflight": {
+      "status": "passed",
+      "attempts": 1
+    },
+    "pre_implement": {
+      "status": "running",
+      "attempts": 1,
+      "startedAt": "2026-09-01T14:33:08.352Z"
+    },
+    "implement": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "static_gate": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "review": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "qa": {
+      "status": "pending",
+      "attempts": 0
+    }
+  },
+  "budget": {
+    "codeAttempts": 0,
+    "handoffReplans": 0,
+    "infra": 0
+  },
+  "findingHistory": {},
+  "contested": [],
+  "notes": [],
+  "halt": {
+    "reason": "abandoned",
+    "detail": "Orchestrator stopped; agent process killed. Superseded by a later run."
+  },
+  "preflight": {
+    "at": "2026-09-01T14:33:08.308Z",
+    "checks": [
+      {
+        "name": "branch-not-protected",
+        "ok": true,
+        "detail": "on \"spec/requests\""
+      },
+      {
+        "name": "spec-unchanged",
+        "ok": true,
+        "detail": "spec sha256 matches the one recorded at init"
+      },
+      {
+        "name": "api-env-present",
+        "ok": true,
+        "detail": "apps/api/.env exists (untracked — a fresh worktree does not get one)"
+      },
+      {
+        "name": "node-modules-present",
+        "ok": true,
+        "detail": "dependencies installed"
+      },
+      {
+        "name": "e2e-ports-free",
+        "ok": true,
+        "detail": "3000 and 4000 are free for the e2e suite"
+      },
+      {
+        "name": "prisma-client-generated",
+        "ok": true,
+        "detail": "prisma client generated (postinstall runs it from apps/api)"
+      },
+      {
+        "name": "migration-baseline",
+        "ok": true,
+        "detail": "18 migrations recorded as the baseline"
+      },
+      {
+        "name": "worktree-clean",
+        "ok": true,
+        "detail": "nothing in flight outside .workflow/"
+      }
+    ],
+    "migrations": [
+      "20260724114549_init",
+      "20260824080000_documents_templates",
+      "20260824090000_documents_envelopes",
+      "20260824100000_documents_member_profile",
+      "20260826121829_add_invitations_and_job_title",
+      "20260827090541_spec_06_account_settings",
+      "20260827093348_spec_07_member_financials",
+      "20260827120241_spec_08_vacation_reserve",
+      "20260827123444_spec_09_vacation_requests",
+      "20260827145447_spec_11_projects",
+      "20260827153333_spec_12_time_tracking",
+      "20260828120000_spec_13_kanban",
+      "20260828140000_spec_04_signature_providers",
+      "20260828140000_spec_14_collaboration",
+      "20260831130000_activity_label_snapshot",
+      "20260831140000_spec_15_time_task_link",
+      "20260901120000_spec_org_01_clients",
+      "20260901140000_requests_01_requests"
+    ]
+  }
+}

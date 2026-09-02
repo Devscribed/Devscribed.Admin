@@ -1,0 +1,378 @@
+{
+  "status": "pass",
+  "reviewedUpTo": "986e0e4f511b37a9ed0086438cdab8ec76985819",
+  "covered": {
+    "slice": 29,
+    "read": [
+      "apps/api/test/requests.spec.ts",
+      "apps/api/src/requests/requests.service.ts",
+      "e2e/tests/requests.spec.ts",
+      "packages/validation/src/requests.ts",
+      "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx",
+      "apps/web/app/org/[orgId]/requests/page.tsx",
+      "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx",
+      "packages/validation/src/requests.test.ts",
+      "apps/api/src/requests/vacation-request-feed.service.ts",
+      "apps/web/app/org/[orgId]/requests/[requestId]/DeclineRequestModal.tsx",
+      "apps/api/src/requests/requests.controller.ts",
+      "apps/web/app/org/[orgId]/requests/[requestId]/ReassignRequestModal.tsx",
+      "apps/api/test/requests-page.spec.ts",
+      "apps/web/app/org/[orgId]/requests/RequestRow.tsx",
+      "apps/api/src/requests/requests.serializer.ts",
+      "apps/api/prisma/schema.prisma",
+      "apps/api/prisma/migrations/20260901140000_requests_01_requests/migration.sql",
+      "apps/api/src/requests/requests.dto.ts",
+      "apps/web/app/org/[orgId]/requests/types.ts",
+      "apps/web/app/org/[orgId]/requests/[requestId]/RequestHistory.tsx",
+      "packages/validation/src/index.ts",
+      "apps/web/src/layout/requests-badge-context.tsx",
+      "apps/web/app/org/[orgId]/requests/[requestId]/RequestThread.tsx",
+      "apps/api/src/requests/request-events.service.ts",
+      "packages/validation/src/roles.ts",
+      "packages/validation/src/roles.test.ts",
+      "apps/web/src/layout/Sidebar.tsx",
+      "e2e/tests/requests-page.spec.ts",
+      "apps/api/src/app.module.ts"
+    ],
+    "unreached": []
+  },
+  "shards": [
+    {
+      "shard": 1,
+      "files": 15,
+      "findings": 10,
+      "kept": 9,
+      "dropped": [
+        "S1-N8 — TC-01-INT-13's boundary assertion is not self-referential as claimed: Pacific/Honolulu (UTC-10) and Pacific/Kiritimati (UTC+14) are exactly 24 hours apart, so `westToday < eastToday` is true at every instant and the assertion is effectively `overdue === true`. An inverted comparison in isRequestOverdue would fail it."
+      ],
+      "sweeps": {
+        "files-read": 15,
+        "requirements-1-47": 47,
+        "TC-01-INT-01..22": 22,
+        "AC-1..AC-17": 17,
+        "error-messages": 31,
+        "edge-cases": 21,
+        "state-machine-invariants": 8,
+        "request-row-writers": 6,
+        "migration-statements": 13
+      }
+    },
+    {
+      "shard": 2,
+      "files": 14,
+      "findings": 6,
+      "kept": 6,
+      "demoted": [
+        "S2-F1 — proposed as a blocker citing `.claude/skills/spec/references/checklist.md:73`. That file is the rubric for a spec, not one of the three sources a blocking finding may cite, and code-review SKILL.md sweep 8 blocks only when 'an id the spec names exists nowhere' — `requests-type-filter` exists at apps/web/app/org/[orgId]/requests/page.tsx:338. Demoted to a note and re-addressed to `spec`, because the defect is the spec's own selector list disagreeing with its own Steps."
+      ],
+      "sweeps": {
+        "required-testids": 46,
+        "e2e-cases": 14,
+        "unit-cases": 10,
+        "control-gating": 9,
+        "T1-T2-T3-open-items": 3,
+        "validation-copy-and-scoping": 8
+      }
+    }
+  ],
+  "sweep5": {
+    "requirements": 47,
+    "artefacts": 144,
+    "missing": [],
+    "bySection": {
+      "Creating a request (1-15)": "POST route requests.controller.ts:57; createRequest requests.service.ts:302; FOR UPDATE on Organization :355; created event :391; validators REQUEST_TYPES/ACCESS_KINDS/priority/neededBy in packages/validation/src/requests.ts",
+      "The thread (16-21)": "postMessage requests.service.ts:410; POST …/messages controller:87; message_posted event :459; RequestThread.tsx and RequestHistory.tsx render the two views separately",
+      "Lifecycle (22-36)": "transition requests.service.ts:479 behind /answer /grant /decline /cancel (controller:101,117,133,149); lockRequest :793; patchRequest :587; reassignRequest :701; isRequestOverdue + todayInTimeZone in packages/validation/src/requests.ts:505,527",
+      "The Requests page (37-46)": "apps/web/app/org/[orgId]/requests/page.tsx; Sidebar.tsx unconditional Requests row; requests-badge-context.tsx badgeCount; listRequests requests.service.ts:153; compareRequestRows requests.ts:564; emptyMine/emptyFiltered page.tsx:290",
+      "What this spec does not send (47)": "no change under apps/api/src/mail (git diff --stat empty); MAIL_MESSAGE_TYPES untouched at mail.service.ts:127; TC-01-INT-21 present",
+      "Data Model": "3 tables + Organization.nextRequestNumber + 6 indexes in migration.sql; schema.prisma models Request:1076, RequestMessage:1133, RequestEvent:1152, nextRequestNumber:169",
+      "New Capabilities": "MemberCapability create-request/view-own-requests/view-all-requests index.ts:582-584 with grants at :620,:650,:680,:710; Capability CreateRequest/ViewOwnRequests/ViewAllRequests roles.ts:82-84 with ROLE_CAPABILITIES :114,:139,:147,:150",
+      "Error Messages": "all 31 keys present on the in-place REQUEST_MESSAGES (index.ts:1771ff), text verbatim, no duplicate key shadowing a spec-09 message",
+      "Required data-testid Attributes": "42 literal ids each found in apps/web; the 4 row-scoped ids at RequestRow.tsx:66,94,120,129",
+      "Test Cases": "TC-01-UNIT-01..06 in packages/validation/src/requests.test.ts and roles.test.ts; TC-01-INT-01..22 in apps/api/test/requests.spec.ts; TC-01-E2E-01..13 in e2e/tests/requests.spec.ts; TC-10-E2E-01 edited at e2e/tests/requests-page.spec.ts:146"
+    }
+  },
+  "sweep9": {
+    "pairs": 20,
+    "disagreeing": [
+      "specs/requests/01-requests.md TC-01-E2E-13 selector list names `requests-type-filter` ↔ e2e/tests/requests.spec.ts:640 never touches it (finding F10)"
+    ],
+    "checked": [
+      "controller routes ↔ the 8 request URLs built in apps/web (all agree)",
+      "requests.serializer.ts row/message/event shape ↔ apps/web/.../requests/types.ts (key-for-key)",
+      "requests-badge-context.tsx badgeCount ↔ Sidebar.tsx:176 and the two refresh consumers",
+      "counts.waitingOnMe + vacation.pendingCount ↔ requirement 44's badge sum (context:52-59)",
+      "REQUEST_MESSAGES keys and text ↔ the spec's Error Messages table (31 rows)",
+      "Capability PascalCase union ↔ @RequireCapability('ViewAllRequests') at controller:168",
+      "MemberCapability lowercase union ↔ can() call sites in service and web",
+      "parseRequestScope/StatusQuery/TypeQuery ↔ the URL parsing on page.tsx:100-104",
+      "vacationStatusesFor ↔ VacationRequestFeedService.listFeed(statuses)",
+      "schema.prisma models ↔ migration.sql columns, indexes and FK actions",
+      "spec testid table ↔ e2e selectors (one gap, above)",
+      "STATUS_OPTIONS labels ↔ requests-page.spec.ts:147 getByRole('option', {name:'Open'})",
+      "REQUEST_STATUS_META labels ↔ e2e toHaveText('Open'/'Declined') assertions",
+      "var(--sp-6)/var(--border-crisp) ↔ 1_DS for dev/tokens/spacing.css:8 and radii.css:14",
+      "vacation card shape ↔ spec 10's amended contract and TC-01-INT-20's key set",
+      "client validators ↔ the server's re-validation of the same functions",
+      "parseRequestStatusFilter retirement ↔ its callers (none left in apps/ or e2e/, as requirement 42 states)",
+      "usePendingRequests pendingCount→badgeCount rename ↔ every consumer in apps/web",
+      "spec 10's amended text ↔ spec 01 (amendment landed in the base commit 65e00fc)",
+      "e2e/tests/requests.spec.ts imports ↔ e2e/tests/helpers.ts exports (local helpers defined in-file)"
+    ]
+  },
+  "blastRadius": {
+    "sharedFilesTouched": [
+      "apps/api/prisma/schema.prisma — additive only",
+      "apps/api/src/app.module.ts — two providers registered",
+      "apps/web/src/layout/Sidebar.tsx — Requests row unconditional; other rows untouched",
+      "packages/validation/src/index.ts — union and REQUEST_MESSAGES extended in place, no key renamed or removed",
+      "packages/validation/src/roles.ts — Capability union and ROLE_CAPABILITIES extended; user/viewer rows go from empty to two and one entry"
+    ],
+    "verified": "No e2e or integration test outside this feature asserts the Requests sidebar row absent for user/viewer; no consumer of the retired top-level totalCount/pendingCount remains; MailService and MAIL_MESSAGE_TYPES untouched (AC-13)."
+  },
+  "roleTransition": {
+    "verified": "Server normalizes once in requireCaller (requests.service.ts:861) and passes the normalized role to can(); hasCapability and canReadRequest normalize internally. All three web capability call sites normalize: page.tsx:93, [requestId]/page.tsx:51 (T1's fix), requests-badge-context.tsx:41. Legacy `member` therefore maps to `user` on every path this change adds."
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md Validation Rules row 2 (`descriptionTooLong`)",
+      "file": "packages/validation/src/requests.ts",
+      "symbol": "validateRequestDescription",
+      "line": 113,
+      "claim": "A non-string description is refused with `descriptionTooLong` — copy asserting the value is too long when it is the wrong type. Nothing written is contradicted (the table names no wrong-type message), but the message is false.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "POST /api/organizations/{orgId}/requests with description: 42 answers 400 {fields:{description:'Description must be 5000 characters or fewer'}}.",
+        "source": "packages/validation/src/requests.ts:113"
+      },
+      "suggestedFix": "Return the same outcome a missing optional gets, or add a wrong-type message to the table first."
+    },
+    {
+      "id": "F2",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md requirement 9 (`projectId` is optional; archived → 400, cross-org → 404)",
+      "file": "packages/validation/src/requests.ts",
+      "symbol": "validateNewRequest",
+      "line": 317,
+      "claim": "A non-string projectId is coerced to null rather than refused, so the request is created with no project and no error. It is the one create input that fails open; requirement 9 does not cover the type, so this is unspecified rather than wrong.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "POST with projectId: 123 answers 201 with project: null — neither the 400 of an archived project nor the 404 of a foreign one.",
+        "source": "packages/validation/src/requests.ts:317"
+      },
+      "suggestedFix": "Treat a present-but-not-a-string projectId as a validation error."
+    },
+    {
+      "id": "F3",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md requirement 44: the badge counts 'non-terminal requests where the caller is the addressee'",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "listRequests",
+      "line": 209,
+      "claim": "`waitingOnMe` encodes non-terminal by enumeration — `status: { in: ['open','answered'] }` — rather than from TERMINAL_REQUEST_STATUSES, which the same file already reads through isTerminalRequestStatus. The Data Model makes a sixth status additive, and such a status would drop out of the badge with no test failing.",
+      "witness": {
+        "kind": "rule",
+        "detail": "'the sidebar badge counts requests waiting on the caller — non-terminal requests where the caller is the addressee'; the query names the two current non-terminal values instead of the complement of the terminal set.",
+        "source": "specs/requests/01-requests.md:252"
+      },
+      "suggestedFix": "Filter with `status: { notIn: TERMINAL_REQUEST_STATUSES }`."
+    },
+    {
+      "id": "F4",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md GET contract: 'Its rows honour `status` through the mapping in requirement 42; `scope`, `projectId` and `q` never touch them'",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "listRequests",
+      "line": 251,
+      "claim": "`type=access` or `type=question` empties the vacation section. The contract enumerates what does and does not reach vacation rows and is silent on `type` for the two Request types; the behaviour is a defensible inference from `type=vacation` selecting a section, but it is written nowhere and no case covers it.",
+      "witness": {
+        "kind": "test",
+        "detail": "No TC-01-INT-* asserts the vacation block for `?type=access`; the only type assertion is apps/api/test/requests.spec.ts:1295 for `?type=vacation`.",
+        "source": "apps/api/test/requests.spec.ts:1295"
+      },
+      "suggestedFix": "Add the case, or have the spec state what `type=access` does to the section."
+    },
+    {
+      "id": "F5",
+      "target": "spec",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md GET contract Errors: '400 for an unknown `status` or `type` value'",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "listRequests",
+      "line": 175,
+      "claim": "An unknown `scope` also answers 400. That is stricter than the contract and consistent with the closed-set argument, but `scope` is absent from the spec's 400 list and no case sends `?scope=nonsense`.",
+      "witness": {
+        "kind": "rule",
+        "detail": "The Errors block names 403 for scope=all without the capability and 400 for an unknown status or type; scope is not among the 400 cases.",
+        "source": "specs/requests/01-requests.md:545"
+      },
+      "suggestedFix": "Add `scope` to the spec's 400 list."
+    },
+    {
+      "id": "F6",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md requirement 21 (the history is what happened) and requirement 19",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "transition",
+      "line": 538,
+      "claim": "A decline writes `message_posted` and `status_changed` in one transaction, and RequestEvent.createdAt defaults to CURRENT_TIMESTAMP — the transaction start time in PostgreSQL — so both rows carry identical timestamps while getRequest orders events by createdAt alone (requests.service.ts:279). Their order in the History panel is whatever the planner returns. No requirement fixes an intra-transaction order and no case compares two events written in one transaction, so nothing asserted is at risk.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Decline a request, then GET the detail: events[] holds message_posted and status_changed with equal createdAt, and repeated reads may return them in either order.",
+        "source": "apps/api/prisma/migrations/20260901140000_requests_01_requests/migration.sql:64"
+      },
+      "suggestedFix": "Add id (or a sequence) as a tiebreaker in the events order-by."
+    },
+    {
+      "id": "F7",
+      "target": "code",
+      "severity": "note",
+      "rule": "CLAUDE.md, Conventions that matter — Auth: 'queries always scope by `session.organizationId`, never by the path parameter'",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "createRequest",
+      "line": 325,
+      "claim": "The assignee and project lookups use findUnique({where:{id}}) and compare organizationId on the following line, rather than scoping the query itself. The observable answers are right (404 with no fields key — TC-01-INT-06 and TC-01-INT-15 both assert it) and reassignRequest:728 uses the same shape, so this is defence-in-depth: the scope check is a separate statement a future edit could drop with no query-level backstop.",
+      "witness": {
+        "kind": "rule",
+        "detail": "The rule is unconditional; these two queries scope by neither the session nor the path and rely on a following comparison.",
+        "source": "CLAUDE.md:57"
+      },
+      "suggestedFix": "findFirst({ where: { id, organizationId } }) and 404 on a null."
+    },
+    {
+      "id": "F8",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md requirement 42 (the retired vocabulary is enumerated and each caller changed with it)",
+      "file": "apps/api/src/requests/vacation-request-feed.service.ts",
+      "symbol": "countAll",
+      "line": 123,
+      "claim": "`countAll` has no caller in apps/ or e2e/. It served spec 10's retired top-level totalCount, which `counts.total` replaced. Unlike `parseRequestStatusFilter`, which requirement 42 deliberately leaves exported, this is a module-private method with no published-surface argument for keeping it.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "grep -rn countAll over apps/ and e2e/ returns only the definition at vacation-request-feed.service.ts:123.",
+        "source": "apps/api/src/requests/vacation-request-feed.service.ts:123"
+      },
+      "suggestedFix": "Delete it, or state in the spec that it is kept for spec 02."
+    },
+    {
+      "id": "F9",
+      "target": "spec",
+      "severity": "note",
+      "rule": "specs/requests/README.md Blast Radius — every row names a mitigation; the migration row names deploy order, the response-shape change names none",
+      "file": "apps/api/src/requests/requests.controller.ts",
+      "symbol": "listRequests",
+      "line": 39,
+      "claim": "GET /api/organizations/{orgId}/requests changes its response shape on an endpoint that already ships — {requests, pendingCount, totalCount} becomes {requests, vacation:{requests,pendingCount}, counts:{waitingOnMe,total}}. infra/deploy.sh:188 applies api and web in one tf apply, so the two services roll independently and there is a window in which the previous web image reads pendingCount off the top level (blank badge) and renders `requests` as vacation cards when they are now Request rows. The schema half of the deploy story is stated; this half is not.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "During a dev deploy of both services, a browser holding the previous web bundle calls the new API: `data.pendingCount` is undefined so the sidebar badge disappears, and `data.requests` holds Request rows fed to the vacation card renderer.",
+        "source": "infra/deploy.sh:188"
+      },
+      "suggestedFix": "Record the window and its mitigation in the spec's blast radius, as the migration row does."
+    },
+    {
+      "id": "F10",
+      "target": "spec",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md TC-01-E2E-13 Steps ('Apply a status filter that matches nothing, then clear it') versus its own Selectors list",
+      "file": "e2e/tests/requests.spec.ts",
+      "symbol": "TC-01-E2E-13",
+      "line": 640,
+      "claim": "`requests-type-filter` is named in TC-01-E2E-13's selector list but appears in no E2E case; the case's Steps never mention the type filter, so the implementation matches the Steps and the spec's own two lists disagree. The control is drawn at page.tsx:338 and is exercised by no E2E, so a regression that dropped its testid would be caught by nothing at that level. Reported as a note, not a blocker: the blocking condition in .claude/skills/code-review/SKILL.md sweep 8 is 'an id the spec names exists nowhere', and this id exists.",
+      "witness": {
+        "kind": "test",
+        "detail": "TC-01-E2E-13 declares requests-type-filter among its selectors; the case touches only requests-status-filter (requests.spec.ts:656) and requests-empty-state (:658, :665), and no other e2e file references the id.",
+        "source": "specs/requests/01-requests.md:1320"
+      },
+      "suggestedFix": "Either drive the filtered empty state through the type filter in TC-01-E2E-13, or drop the selector from the case's list."
+    },
+    {
+      "id": "F11",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md TC-01-E2E-07 Expected Result: 'the reassignment row names both the old and the new addressee'",
+      "file": "e2e/tests/requests.spec.ts",
+      "symbol": "TC-01-E2E-07",
+      "line": 467,
+      "claim": "The old-label half is asserted against the whole history panel, where 'Pat Member' already appears from the answered line written earlier in the same case. If the API wrote assignee_changed with oldLabel null, the panel would read 'reassigned it from nobody to Robin Ops' and the case would still pass. Only 'Robin Ops' is uniquely pinned. The rule itself is separately covered by TC-01-INT-17.",
+      "witness": {
+        "kind": "test",
+        "detail": "e2e/tests/requests.spec.ts:464-468 — toContainText('Pat Member') is satisfied by the status_changed line at :448 regardless of what the reassignment row renders.",
+        "source": "e2e/tests/requests.spec.ts:467"
+      },
+      "suggestedFix": "Assert the single reassignment line, e.g. /reassigned it from Pat Member to Robin Ops/."
+    },
+    {
+      "id": "F12",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md Data Model, RequestEvent: oldLabel/newLabel are 'display-name snapshots at write time, so the trail survives a removed member'; requirement 20 puts the author's name in newLabel for a message",
+      "file": "apps/web/app/org/[orgId]/requests/[requestId]/RequestHistory.tsx",
+      "symbol": "describe",
+      "line": 20,
+      "claim": "The actor fallback `event.actor.displayName ?? event.newLabel ?? 'Former member'` is only correct for message_posted. For assignee_changed and field_changed, newLabel is the subject of the change, so a lost actor renders 'Robin Ops reassigned it from Pat Member to Robin Ops'. Reachable only through a hard delete of the membership, not the product's soft delete.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "An assignee_changed event whose actorMembershipId was set null, oldLabel 'Pat Member', newLabel 'Robin Ops': the history line names Robin Ops as the person who performed the reassignment.",
+        "source": "apps/web/app/org/[orgId]/requests/[requestId]/RequestHistory.tsx:20"
+      },
+      "suggestedFix": "Restrict the newLabel fallback to the message_posted branch."
+    },
+    {
+      "id": "F13",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md requirement 42 (the filters, enumerated) and the UI Description's permission rows, which name only requests-new-btn, the scope control and the vacation section as absent",
+      "file": "apps/web/app/org/[orgId]/requests/page.tsx",
+      "symbol": "RequestsPage",
+      "line": 351,
+      "claim": "The projectId filter is gated on `list-assigned-projects`, which a viewer does not hold, so a viewer sees three of the spec's four filters. The spec enumerates the filters exhaustively and gates only the scope control and the vacation section by capability.",
+      "witness": {
+        "kind": "rule",
+        "detail": "'Filters: `type`, `status`, `projectId`, and a free-text `q`' and 'Permission-limited (viewer) | requests-new-btn absent; scope control absent' — the project filter is not among what a viewer loses.",
+        "source": "specs/requests/01-requests.md:209"
+      },
+      "suggestedFix": "Draw the filter for every role, or record the extra gate in the spec."
+    },
+    {
+      "id": "F14",
+      "target": "code",
+      "severity": "note",
+      "rule": "CLAUDE.md, Conventions that matter — Design system: 'No hardcoded colors or sizes — use tokens'",
+      "file": "apps/web/app/org/[orgId]/requests/page.tsx",
+      "symbol": "RequestsPage / RequestsSkeleton / VacationCard",
+      "line": 309,
+      "claim": "Numeric sizes remain outside the two DS-gap controls T3 fixed: maxWidth 820 (page.tsx:309, [requestId]/page.tsx:206), minWidth 170/200 (:333,:342,:352,:365), the skeleton's block sizes and radius (:692-710), and border '1px solid var(--divider)' (:613). Not raised as a blocker: the same idioms are carried verbatim from the base file, spec 10's amended UI section states the 820px width explicitly, and @ds ships no width or skeleton token — so closing this is a design-system change, which the DS-gaps table is the place for.",
+      "witness": {
+        "kind": "rule",
+        "detail": "The design-system rule is unconditional as written; these are sizes expressed as numbers and one literal border width.",
+        "source": "CLAUDE.md:67"
+      },
+      "suggestedFix": "If the DS gains layout-width and skeleton tokens, sweep these together with the precedent files rather than only here."
+    },
+    {
+      "id": "F15",
+      "target": "code",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md requirement 42: 'An unknown status or type value is a 400, never a silent fallback … the closed set is only a contract if breaking it is observable'",
+      "file": "apps/web/app/org/[orgId]/requests/page.tsx",
+      "symbol": "RequestsPage",
+      "line": 102,
+      "claim": "The page swallows an unknown URL value before it reaches the endpoint: parseRequestStatusQuery(...) ?? 'all' turns ?status=pending into the unfiltered view and the URL-sync effect rewrites the address bar, so a person who follows a stale link never sees the 400. The normative sentence governs the endpoint, which does answer 400 (TC-01-INT-22), and the client lands on the default rather than on a wrong filter — hence a note.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Open /org/{orgId}/requests?status=pending: the status control reads 'All statuses', every status is listed and the URL becomes '?'. No error is shown.",
+        "source": "apps/web/app/org/[orgId]/requests/page.tsx:102"
+      },
+      "suggestedFix": "Send the raw URL value and let the 400 surface in requests-error-banner."
+    }
+  ]
+}
