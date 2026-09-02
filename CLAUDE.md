@@ -26,9 +26,10 @@ npm run test:unit      # Vitest, packages/validation
 npm run test:int       # Jest + Supertest against devscribed_test (wiped each run)
 npm run test:e2e       # Playwright; starts both dev servers itself
 
-npm run spec -- <what to spec>     # opens Claude Code on /spec
-npm run bug  -- <what is broken>   # /bug
-npm run ship -- <spec path>        # /ship — the skill, which checks the branch and reads the outcome
+npm run spec   -- <what to spec>   # opens Claude Code on /spec
+npm run refine -- <spec path>      # /refine — a stranger judges the spec, before a run is paid for
+npm run bug    -- <what is broken> # /bug
+npm run ship   -- <spec path>      # /ship — the skill, which checks the branch and reads the outcome
 npm run ship:run -- <spec path>    # scripts/ship.mjs alone, no model either side
 npm run board                      # the run report, opened in a browser — pick the run in the page
 npm run watch                      # the same, without opening anything
@@ -142,6 +143,22 @@ suite unrunnable because a port was taken. `npm run reap:dry` says what the reap
 Use the `spec` skill (`/spec`). Every spec covers edge cases, blast radius, backward compatibility,
 acceptance criteria, test cases through E2E, and a verification route walked before those cases
 were written. Specs are written in English.
+
+**A spec is judged by somebody who did not write it.** `/spec` ends by dispatching the
+`spec-refiner` agent on a clean context — it is given the spec path and the request, and nothing
+else — which asks three questions the author cannot ask of their own work: is every claim about
+this repository still true, do two clear statements disagree, and what has this spec just made
+false in the documents around it. `npm run refine -- <spec path>` runs the same judgement on any
+spec at any time, which is what a spec that has sat while the code moved needs.
+
+**Two statements that disagree block, even when you can tell which one is right.** Neither the
+refiner nor the reviewer settles a contradiction by preferring one side; that decision is a
+person's, and it is made in the document. A contradiction resolved silently upstream is
+implemented, and then found by the gate that is forbidden to resolve it.
+
+**A spec that overrules another spec amends it, statement by statement.** Marked beside each
+statement, naming the requirement that overrules it. A banner at the top of a document is a
+promise about the document, not an amendment to it.
 
 Investigate a defect with the `bug` skill (`/bug`). It writes `specs/bugs/BUG-NNN-slug.md` and
 ends in one of three verdicts — the code is wrong, the spec is wrong, or the spec is silent —

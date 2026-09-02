@@ -123,9 +123,20 @@ depends on.
 Follow `references/spec-template.md` for section order and content. Specs are written in English,
 including in Russian-language conversations.
 
-### 6. Self-check
+### 6. Refine — a stranger judges it, not you
 
-Run every item in `references/checklist.md` before presenting the spec.
+**Dispatch `spec-refiner` and fix what it returns, before presenting the spec.** Use the
+`refine` skill; the dispatch is one `Task`, given the spec path and the request in one line and
+nothing else.
+
+You do not check your own spec. You know which sentence you meant, so you read the sentence you
+meant, and `references/checklist.md` in your own hands becomes a list of topics you already had
+in mind. It is the refiner's rubric now. The refiner reads every `depends-on` spec in full,
+which you did not, and it is the only pass that asks what this spec has just made false in the
+documents around it.
+
+Fix the blockers, dispatch a fresh agent, and repeat until the verdict is `pass` or every
+finding left is a note. Present the spec with the notes.
 
 ## Principles
 
@@ -295,4 +306,5 @@ second as something not to reproduce.
 ## Reference files
 
 - `references/spec-template.md` — section order, frontmatter, and what belongs in each section.
-- `references/checklist.md` — the pre-presentation self-check.
+- `references/checklist.md` — the rubric `spec-refiner` judges against, and the standard to
+  write to. Not a self-check: step 6 hands it to somebody who has not read your spec.
