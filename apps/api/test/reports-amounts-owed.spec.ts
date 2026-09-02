@@ -1002,14 +1002,37 @@ describe('Reports · Amounts Owed (spec reports/01)', () => {
   });
 
   // TC-01-INT-31
-  it('PDF filename matches the sanitizer (org name with slashes and unicode)', async () => {
+  it('PDF filename shape: display name + range (org name is intentionally NOT included)', async () => {
+    // Multi-day range: `Amounts Owed 2026-08-01_to_2026-08-31.pdf`. The org
+    // name is not in the filename (spec req 35) — a Foo/Bar Ltd. org name that
+    // used to sanitise to `Foo_Bar_Ltd.` no longer appears in the download.
     const admin = await signupAdmin('admin@acme.com', 'Foo/Bar Ltd.');
     await seedFinancials(admin, admin.membershipId, { clientHourlyRate: 50 });
 
     const res = await getAmountsOwedPdf(admin.cookies, admin.organizationId, rangeQuery());
     expect(res.status).toBe(200);
     expect(res.headers['content-disposition']).toBe(
-      'attachment; filename="Foo_Bar_Ltd._AmountsOwed_2026-08-01_to_2026-08-31.pdf"',
+      'attachment; filename="Amounts Owed 2026-08-01_to_2026-08-31.pdf"',
+    );
+  });
+
+  it('PDF filename — single-day range collapses `_to_` (`Amounts Owed 2026-09-02.pdf`)', async () => {
+    const admin = await signupAdmin('admin@acme.com', 'Acme Inc');
+    await seedFinancials(admin, admin.membershipId, { clientHourlyRate: 50 });
+    await seedEntry(admin, {
+      membershipId: admin.membershipId,
+      projectId: (await seedProject(admin, 'Website')).id,
+      date: '2026-09-02',
+      durationMinutes: 60,
+    });
+    const res = await getAmountsOwedPdf(
+      admin.cookies,
+      admin.organizationId,
+      rangeQuery('2026-09-02', '2026-09-02'),
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers['content-disposition']).toBe(
+      'attachment; filename="Amounts Owed 2026-09-02.pdf"',
     );
   });
 

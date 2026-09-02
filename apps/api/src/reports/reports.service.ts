@@ -209,8 +209,7 @@ export class ReportsService {
     });
     const buffer = await this.pdf.render(html);
     const filename = pdfReportFilename(
-      caller.organizationName,
-      'AmountsOwed',
+      scope === 'my' ? 'My Amounts Owed' : 'Amounts Owed',
       query.startDate,
       query.endDate,
     );
