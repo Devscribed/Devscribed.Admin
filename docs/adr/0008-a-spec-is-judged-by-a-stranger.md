@@ -93,11 +93,55 @@ and then took two more review passes to finish marking.
 That restriction is right for the pre-implementer, which is compiling a plan and does not need
 another document's prose. It is wrong for a judge asking what this document has invalidated.
 
+## It was run against the spec as it was, before any of it was known
+
+`specs/` restored to `ec97c8f` — the tree the first run was initialised on, before any repair —
+and the agent given the spec path, `no request given`, and a clean context. It knew nothing of
+the eleven runs. 865s, 42 tool calls, **18 blockers and 8 notes**; verdict at
+`.workflow/refine/requests-01.verdict.json`.
+
+Against the **seven** defects some run actually blocked on, each verified present in the
+`ec97c8f` text beforehand: **five caught**, four of which had cost a full run each. Where
+`implement` found eleven overruled statements in spec 10 across two passes, the refiner
+enumerated **twenty-four**, each with its line and the requirement overruling it, and named the
+one that is live as a passing test.
+
+**Two missed**, and neither for want of a rule. `notYoursToAnswer`: the obligations sweep walked
+the Error Messages table and found three missing rows, but a different three — it enumerated the
+table rather than the set of refusals the transition contract implies. The reassignment filter:
+the contradiction sweep cleared requirement 42's closed set as consistent, because requirement
+36's promise sits in prose four sections away and a rule's own neighbourhood does not contain
+what was promised elsewhere.
+
+**Three of its blockers had been filed as notes** by `pre_implement` in earlier runs — AC-3
+against requirements 37–38, invariant 8 omitting the message handler, requirement 43's comparator
+against TC-01-UNIT-04. That is the severity rule doing the one thing it was added to do. A fourth,
+raised as a note, is the spec ambiguity whose downstream form was run `12-44-23`'s review blocker
+F1: whether the decline reason's message writes a `message_posted` event. One sentence in the
+spec; 80 minutes and a branch, found the other way.
+
+**Seven blockers no run ever raised**, verified against `ec97c8f`: two further design documents
+and an area README carrying the overruled nav rule; a Known Gaps row resting on a helper use that
+does not exist; a `CAPABILITY_MATRIX` the spec asserts on and nothing exports; a reassign route
+with no errors at all. And the one worth pausing on — **the Verification Plan records a run
+against a database port `docker-compose.yml` does not publish.** ADR 0006 makes proving that route
+the spec stage's job, and four runs read past it.
+
+**16 of 18 blockers stand.** The two that do not are the harness: the specs came from `ec97c8f`
+and the code from `main`, and the currency sweep correctly reported schema citations that were
+true when written and false against the tree in front of it. At one commit they do not fire.
+
 ## What is not settled
 
-**No held-out spec.** Every measurement behind this record comes from one spec's eleven runs. The
-sweeps, the six-rule closed list and the severity rule are fitted to defects that spec actually
-produced, and a defect of a shape those runs did not contain is one nothing here can see.
+**One spec, and a broken one.** Whether a sound spec comes back `pass` is unmeasured. So is
+whether the sweeps generalise: they are fitted to defects this spec produced, and a defect of a
+shape these runs did not contain is one nothing here can see.
+
+**Two sweeps have a known blind spot each**, named by the misses above: an obligations sweep that
+enumerates the table it is given rather than the obligations the prose implies, and a
+contradiction sweep that searches outward from an absolute rule and not inward from a promise.
+Both are fixable in the agent definition and neither is fixed here, because one run is not enough
+to know whether the fix costs more than it finds.
 
 **The refiner is not cheap.** It reads every dependency in full, which on an area like
 `user-management` is eleven documents. Whether that is worth an opus pass on a spec touching one

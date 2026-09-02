@@ -190,3 +190,114 @@ The three changes the artefacts support, in order of measured return:
 
 And fix `handoff-coverage.mjs:85` before any of them, because the gate that is supposed to catch a
 missing case currently reports success at seeing none.
+
+## Held-out run: the refiner against the spec as it was, before any of it was known
+
+**Ground truth:** `specs/` restored to `ec97c8f` — the tree run `12-17-50` was initialised on,
+before any repair. The agent was given the spec path and `no request given`, on a clean context,
+and knew nothing of the eleven runs. Its verdict is
+`.workflow/refine/requests-01.verdict.json`, written 2026-09-02, 865s, 42 tool calls,
+193k tokens.
+
+Its own enumerations: currency 44 statements, contradiction 31 absolute rules, consequence 31
+statements across 4 documents, obligations 129 items, scope 0 (skipped, no request). **18
+blockers, 8 notes.**
+
+### The seven defects that were known
+
+Each one is a defect some run actually blocked on, and each was verified present in the
+`ec97c8f` text before the agent ran.
+
+| # | Defect | Blocked which stage, then | Refiner |
+|---|---|---|---|
+| 1 | Cross-org `projectId`: requirement 9 (:97) says 400 `projectUnavailable`, the POST contract (:487) says 404 never 403 | `pre_implement` P1 | **R1** |
+| 2 | Requirement 42's `status` vocabulary retires the one the shipped page sends | `pre_implement` P2 | **R3**, R7, R8 |
+| 3 | Requirement 23 restricts `answered`; no status, no message, no `notYoursToAnswer` row | `pre_implement` P3 | **miss** |
+| 4 | TC-01-INT-13 (:948) unsatisfiable — `neededBy` = tomorrow is past for no reader | `review` F6, after the code | **R6** |
+| 5 | Reassignment filter: :174 and README:84 against requirement 42's closed set | `review` F7, after the code | **miss** |
+| 6 | DS-gaps obligation (:614) with no table | `review` F4, after the code | **R17** |
+| 7 | Spec 10 unamended — zero marks, `totalCount` live | `implement` I1, three runs in | **R8** |
+
+**Five of seven.** Four of those five had cost a full run each.
+
+Where it went further than the runs did: `implement` I1 found **eleven** statements in spec 10
+over two passes; R8 enumerates **twenty-four**, each with its line and the requirement that
+overrules it, and names the one that is live as a passing test
+(`apps/api/test/requests-page.spec.ts:324`).
+
+### The two misses
+
+Both are real defects the agent did not raise, and neither is explained by a missing rule — the
+closed list has a slot for each.
+
+- **`notYoursToAnswer`.** Its obligations sweep did check the Error Messages table and did report
+  three missing rows — but a different three (the reassign route has no `Errors` block at all;
+  the inactive-addressee banner copy has no export). It enumerated the table and not the set of
+  refusals the transition contract implies.
+- **The reassignment filter.** Its contradiction sweep enumerated 31 absolute rules and cleared
+  requirement 42's closed filter set as consistent. Requirement 36's clause sits in prose four
+  sections earlier; the sweep reads the absolute rule and looks for what violates it, and a
+  promise made elsewhere is not something the rule's own neighbourhood contains.
+
+### What it found that no run ever did
+
+Verified against `ec97c8f`, so none of these is an artefact of the setup:
+
+| Finding | What |
+|---|---|
+| R9 | `10-organization-requests-page.design.md` — 4 statements still specifying the role gate, the badge fetch and the filter default |
+| R10 | `00-app-shell.design.md:56,:67` — the nav table still records Requests as admin/manager only |
+| R11 | `user-management/README.md:51` cites `TC-01-INT-24`; the integration cases stop at 21 |
+| R13 | The Known Gaps row rests on `setMembershipRole` being "used by members-list.spec.ts". At `ec97c8f` its users are `field-autofill.spec.ts` and `helpers.ts` |
+| R14 | The Verification Plan records a run against `devscribed_e2e at localhost:5434`. `docker-compose.yml` at `ec97c8f` publishes `5433:5432` and nothing else |
+| R16 | TC-01-UNIT-06 asserts on `CAPABILITY_MATRIX`, which is `const` at `index.ts:580` and exported by nothing |
+| R18 | The reassign route (:520) states a capability and lists no errors; the inactive-addressee banner copy (:396) is user-facing text with no `packages/validation` export |
+
+R14 is the one worth pausing on. ADR 0006 makes proving the verification route the spec stage's
+job, and the route this spec recorded names a port the repository does not publish. Nothing
+downstream of `/spec` reads that section closely enough to notice; four runs did not.
+
+### Three notes became blockers, which is the whole point
+
+The severity rule was the change this ADR is about. It fired, and it is checkable:
+
+| Refiner | Same defect, filed earlier as a **note** |
+|---|---|
+| R2 — AC-3 forbids exactly what requirements 37 and 38 require | `12-17-50` pre_implement **N1** |
+| R4 — invariant 8 enumerates the writers of a `Request` row and omits the message handler | `16-08-11` pre_implement **P1** |
+| R5 — requirement 43's comparator does not demote terminal rows; TC-01-UNIT-04 says it does | `12-17-50` pre_implement **N3** |
+
+And one more, in the other direction. R22 is a **note**: requirement 25 stores the decline reason
+as a `RequestMessage`, requirement 19 says every message writes a `message_posted` event, and the
+spec never says whether the decline's does. That ambiguity is what run `12-44-23` met as review
+**F1** — a `code` blocker, found after the implementation, on the branch, at 80 minutes. Settled
+in the spec it is one sentence.
+
+### The false positives, and whose fault they are
+
+Three findings are artefacts of the setup, not of the agent: the specs on disk came from
+`ec97c8f` and the code from `main`, 49 lines apart in `schema.prisma` alone.
+
+| Finding | Claimed | At `ec97c8f` |
+|---|---|---|
+| R12 (blocker) | `TaskComment` is at :1046, not :997 | `model TaskComment` **is** at 997; `TaskActivity` **is** at 1030 |
+| R15 (blocker) | four schema citations in the README are wrong | `VacationRequest` 680, `Project` 719, `Client` 763 — as cited |
+| R19 (note) | 19 migrations, not 17 | 17 |
+| R21 (note) | 36 sites / 17 files, and `Sidebar.tsx:73` | 16 files, as claimed — but `nav-members` **is** at :73 against the README's :71, so half of this one is real |
+
+**16 of 18 blockers stand. Precision 89%, and the two failures are the harness, not the judge** —
+against a spec and a tree at the same commit, the currency sweep would have cleared all three.
+That is the sweep behaving correctly: it reported claims that were false against the files in
+front of it.
+
+### The hypothesis that died: that a spec judge would drown the author in findings
+
+18 blockers on one spec sounds like a judge with no threshold. It is not what happened. Every
+blocker carries a witness with a `file:line` or a command, 16 of 18 survive checking, and the
+distribution is lopsided in a way that matters: **four of the blockers are contradictions inside
+the spec, four are documents this spec silently invalidated, and six are claims about the
+repository that were simply false.** None of them is a matter of taste, and the closed rule list
+is what makes that true — the agent could not have raised a style objection if it wanted to.
+
+What is genuinely unmeasured: whether a spec that is *not* broken comes back `pass`. Every
+measurement here is one spec, and it is a spec eleven runs had already proven defective.
