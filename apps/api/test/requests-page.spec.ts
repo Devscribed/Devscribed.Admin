@@ -1,6 +1,5 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { REQUESTS_PAGE_MESSAGES } from '@devscribed/validation';
 import * as bcrypt from 'bcryptjs';
 import cookieParser from 'cookie-parser';
 import request from 'supertest';
@@ -58,6 +57,17 @@ const futureWorkingRange = (
 /** Parse a 'YYYY-MM-DD' string to midnight UTC (for @db.Date columns). */
 const toDbDate = (s: string): Date => new Date(`${s}T00:00:00.000Z`);
 
+/**
+ * Spec 10 - the organization-wide vacation feed, as it is read after requests spec 01.
+ *
+ * The feed itself is unchanged: the same query, the same balance math, the same card.
+ * Two things around it moved, and every case here follows them rather than pinning what
+ * they replaced. The response envelope now carries the vacation rows under `vacation`
+ * (requests spec 01's API contract), and the `status` vocabulary on this endpoint is that
+ * spec's - `open` selects `pending`, `granted` selects `approved`, `declined` selects
+ * `rejected` - with the retired `pending`/`approved`/`rejected` values answering 400
+ * (requirement 42, pinned by TC-01-INT-22).
+ */
 describe('Organization Requests page (spec 10)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
@@ -219,15 +229,22 @@ describe('Organization Requests page (spec 10)', () => {
     await submitRequest(m2.cookies, admin.organizationId, m2.membershipId, futureWorkingRange(3, 2));
     await submitRequest(m2.cookies, admin.organizationId, m2.membershipId, futureWorkingRange(2, 4));
 
-    const res = await getRequests(admin.cookies, admin.organizationId, '?status=pending');
+    const res = await getRequests(admin.cookies, admin.organizationId, '?status=open');
     expect(res.status).toBe(200);
-    expect(res.body.requests).toHaveLength(3);
-    expect(res.body.pendingCount).toBe(3);
+    expect(res.body.vacation.requests).toHaveLength(3);
+    expect(res.body.vacation.pendingCount).toBe(3);
 
-    const memberIds = new Set(res.body.requests.map((r: any) => r.member.membershipId));
+    // The two sections are separate arrays and are not to be confused: nobody raised a
+    // spec-01 request here, so that half is empty while the vacation half is full.
+    expect(res.body.requests).toEqual([]);
+    expect(res.body.counts).toEqual({ waitingOnMe: 0, total: 0 });
+
+    const memberIds = new Set(
+      res.body.vacation.requests.map((r: any) => r.member.membershipId),
+    );
     expect(memberIds).toEqual(new Set([m1.membershipId, m2.membershipId]));
 
-    for (const r of res.body.requests) {
+    for (const r of res.body.vacation.requests) {
       expect(r.member).toMatchObject({ firstName: expect.any(String), initials: expect.any(String) });
       expect(r.startDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect(r.endDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -238,12 +255,14 @@ describe('Organization Requests page (spec 10)', () => {
         totalDaysPerYear: 20,
       });
     }
-    const alex = res.body.requests.find((r: any) => r.member.membershipId === m1.membershipId);
+    const alex = res.body.vacation.requests.find(
+      (r: any) => r.member.membershipId === m1.membershipId,
+    );
     expect(alex.member.initials).toBe('AK');
   });
 
-  // TC-10-INT-02
-  it('filters by status (all / approved / pending)', async () => {
+  // TC-10-INT-02 - the same filtering, read through this page's vocabulary.
+  it('filters by status (all / granted / open / declined)', async () => {
     const admin = await signupAdmin('admin@acme.com', 'Acme Inc');
     const m = await createMember(admin.organizationId, {
       email: 'm@acme.com',
@@ -299,47 +318,85 @@ describe('Organization Requests page (spec 10)', () => {
 
     const all = await getRequests(admin.cookies, admin.organizationId, '?status=all');
     expect(all.status).toBe(200);
-    expect(all.body.requests).toHaveLength(3);
-    expect(all.body.totalCount).toBe(3);
-    expect(all.body.pendingCount).toBe(1);
+    expect(all.body.vacation.requests).toHaveLength(3);
+    expect(all.body.vacation.pendingCount).toBe(1);
+    expect(all.body.vacation.requests.map((r: any) => r.status).sort()).toEqual([
+      'approved',
+      'pending',
+      'rejected',
+    ]);
 
-    const approvedRes = await getRequests(admin.cookies, admin.organizationId, '?status=approved');
-    expect(approvedRes.body.requests).toHaveLength(1);
-    expect(approvedRes.body.requests[0].status).toBe('approved');
+    const grantedRes = await getRequests(admin.cookies, admin.organizationId, '?status=granted');
+    expect(grantedRes.body.vacation.requests).toHaveLength(1);
+    expect(grantedRes.body.vacation.requests[0].status).toBe('approved');
 
-    const pendingRes = await getRequests(admin.cookies, admin.organizationId, '?status=pending');
-    expect(pendingRes.body.requests).toHaveLength(1);
-    expect(pendingRes.body.requests[0].status).toBe('pending');
+    const openRes = await getRequests(admin.cookies, admin.organizationId, '?status=open');
+    expect(openRes.body.vacation.requests).toHaveLength(1);
+    expect(openRes.body.vacation.requests[0].status).toBe('pending');
 
-    const rejectedRes = await getRequests(admin.cookies, admin.organizationId, '?status=rejected');
-    expect(rejectedRes.body.requests).toHaveLength(1);
-    expect(rejectedRes.body.requests[0].reviewerComment).toBe('Team availability conflict');
+    const declinedRes = await getRequests(admin.cookies, admin.organizationId, '?status=declined');
+    expect(declinedRes.body.vacation.requests).toHaveLength(1);
+    expect(declinedRes.body.vacation.requests[0].status).toBe('rejected');
+    expect(declinedRes.body.vacation.requests[0].reviewerComment).toBe(
+      'Team availability conflict',
+    );
 
-    // Badge counts are filter-independent — ?status=approved still reports the true pendingCount.
-    expect(approvedRes.body.pendingCount).toBe(1);
-    expect(approvedRes.body.totalCount).toBe(3);
+    // Every counter is filter-independent, which is the fact the retired `totalCount`
+    // used to pin and which `counts` + `vacation.pendingCount` carry now. A number that
+    // moved when someone narrowed a filter would be reporting the view, not the work.
+    expect(grantedRes.body.vacation.pendingCount).toBe(1);
+    expect(openRes.body.vacation.pendingCount).toBe(1);
+    expect(declinedRes.body.vacation.pendingCount).toBe(1);
+    expect(grantedRes.body.counts).toEqual(all.body.counts);
+    expect(openRes.body.counts).toEqual(all.body.counts);
+    expect(declinedRes.body.counts).toEqual(all.body.counts);
   });
 
-  // TC-10-INT-03
-  it('forbids user and viewer from viewing the requests page', async () => {
+  // TC-10-INT-03 - reversed by requests spec 01 requirement 37, which opens the page to
+  // every signed-in member and moves the `view-requests` gate inward to the vacation
+  // section. What used to be a 403 for `user` and `viewer` is now a 200 carrying their
+  // own requests and no `vacation` key at all. The whole rule, including the `scope=all`
+  // refusal that replaced the page-level one, belongs to TC-01-INT-18 and TC-01-E2E-08;
+  // this keeps a guard on this file's own route against the page-level refusal coming
+  // back.
+  it('lets user and viewer read the endpoint, with no vacation section and no All scope', async () => {
     const admin = await signupAdmin('admin@acme.com', 'Acme Inc');
     const u = await createMember(admin.organizationId, { email: 'u@acme.com', role: 'user' });
     const v = await createMember(admin.organizationId, { email: 'v@acme.com', role: 'viewer' });
 
     const uRes = await getRequests(u.cookies, admin.organizationId);
-    expect(uRes.status).toBe(403);
-    expect(uRes.body).toEqual({
-      error: 'forbidden',
-      message: REQUESTS_PAGE_MESSAGES.viewForbidden,
-    });
+    expect(uRes.status).toBe(200);
+    expect(uRes.body.vacation).toBeUndefined();
+    expect(uRes.body.requests).toEqual([]);
+    expect(uRes.body.counts).toEqual({ waitingOnMe: 0, total: 0 });
 
     const vRes = await getRequests(v.cookies, admin.organizationId);
-    expect(vRes.status).toBe(403);
-    expect(vRes.body.error).toBe('forbidden');
+    expect(vRes.status).toBe(200);
+    expect(vRes.body.vacation).toBeUndefined();
+    expect(vRes.body.requests).toEqual([]);
+    expect(vRes.body.counts).toEqual({ waitingOnMe: 0, total: 0 });
+
+    // The refusal did not disappear, it moved: the page-level 403 becomes the `All`
+    // scope's, which is the only 403 this route may still emit. Asserted with the spec's
+    // literal copy rather than the constant the code imports.
+    const uScopeAll = await getRequests(u.cookies, admin.organizationId, '?scope=all');
+    expect(uScopeAll.status).toBe(403);
+    expect(uScopeAll.body).toEqual({
+      error: 'forbidden',
+      message: "You do not have permission to view other people's requests",
+    });
+
+    const vScopeAll = await getRequests(v.cookies, admin.organizationId, '?scope=all');
+    expect(vScopeAll.status).toBe(403);
+    expect(vScopeAll.body.error).toBe('forbidden');
+    expect(vScopeAll.body.message).toBe(
+      "You do not have permission to view other people's requests",
+    );
   });
 
-  // Default filter (no status param) behaves as pending.
-  it('defaults to pending when no status param is given', async () => {
+  // Default filter (no status param) is `all` since requests spec 01 requirement 42 -
+  // both sections default to every row rather than to the pending-only view.
+  it('defaults to all when no status param is given', async () => {
     const admin = await signupAdmin('admin@acme.com', 'Acme Inc');
     const m = await createMember(admin.organizationId, { email: 'm@acme.com', role: 'user' });
     await configureAndFund(admin, m, 3000);
@@ -361,10 +418,22 @@ describe('Organization Requests page (spec 10)', () => {
 
     const res = await getRequests(admin.cookies, admin.organizationId);
     expect(res.status).toBe(200);
-    expect(res.body.requests).toHaveLength(1);
-    expect(res.body.requests[0].status).toBe('pending');
-    expect(res.body.pendingCount).toBe(1);
-    expect(res.body.totalCount).toBe(2);
+    expect(res.body.vacation.requests).toHaveLength(2);
+    expect(res.body.vacation.requests.map((r: any) => r.status).sort()).toEqual([
+      'pending',
+      'rejected',
+    ]);
+    expect(res.body.vacation.pendingCount).toBe(1);
+    expect(res.body.counts).toEqual({ waitingOnMe: 0, total: 0 });
+
+    // The value this case used to send by default is now refused outright: a closed set
+    // is only a contract if breaking it is observable.
+    const retired = await getRequests(admin.cookies, admin.organizationId, '?status=pending');
+    expect(retired.status).toBe(400);
+    expect(retired.body).toEqual({
+      error: 'validation_error',
+      fields: { status: 'unknown_value' },
+    });
   });
 
   // Sorting — two pending requests come back oldest-first.
@@ -398,7 +467,7 @@ describe('Organization Requests page (spec 10)', () => {
       },
     });
 
-    const res = await getRequests(admin.cookies, admin.organizationId, '?status=pending');
-    expect(res.body.requests.map((r: any) => r.id)).toEqual([older.id, newer.id]);
+    const res = await getRequests(admin.cookies, admin.organizationId, '?status=open');
+    expect(res.body.vacation.requests.map((r: any) => r.id)).toEqual([older.id, newer.id]);
   });
 });

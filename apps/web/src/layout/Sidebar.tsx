@@ -36,8 +36,10 @@ interface NavGroup {
  *  - **Time Tracking** (spec 12) needs `view-time-tracking` and leads the menu — it is the
  *    daily-driver surface, so it sits above PEOPLE. Omitted for `viewer`, who therefore
  *    sees PEOPLE first.
- *  - **Requests** (spec 10) needs `view-requests`, so `user` and `viewer` never see it.
- *    Its badge carries the shared pending count and disappears at 0.
+ *  - **Requests** (requests spec 01 requirement 38) is drawn for every signed-in member:
+ *    the page behind it is now everyone's inbox, so the "no dead links" rule is satisfied
+ *    by the destination rather than by hiding the row. Its badge carries the work waiting
+ *    on the caller and disappears at 0.
  *  - **Projects** (spec 11) needs `manage-projects` (admin/manager).
  *  - **Documents** and **Templates** are separately gated because the two capabilities
  *    are separately granted: spec 02 gives a `manager` the full envelope set while spec
@@ -49,7 +51,7 @@ interface NavGroup {
 function navigation(
   orgId: string,
   role: string,
-  pendingCount: number,
+  badgeCount: number,
   features: SessionFeatures,
 ): NavGroup[] {
   const groups: NavGroup[] = [];
@@ -77,16 +79,15 @@ function navigation(
     },
   ];
 
-  if (can(role as Role, 'view-requests')) {
-    people.push({
-      testId: 'sidebar-requests-link',
-      label: 'Requests',
-      href: `/org/${orgId}/requests`,
-      icon: <InboxIcon />,
-      badge: pendingCount || undefined,
-      badgeTestId: 'sidebar-requests-badge',
-    });
-  }
+  // Unconditional since requests spec 01: every role has an inbox of its own.
+  people.push({
+    testId: 'sidebar-requests-link',
+    label: 'Requests',
+    href: `/org/${orgId}/requests`,
+    icon: <InboxIcon />,
+    badge: badgeCount || undefined,
+    badgeTestId: 'sidebar-requests-badge',
+  });
 
   groups.push({ label: 'People', entries: people });
 
@@ -186,8 +187,8 @@ export function Sidebar({ orgId }: { orgId: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const { role, features } = useSession();
-  const { pendingCount } = usePendingRequests();
-  const groups = navigation(orgId, role, pendingCount, features);
+  const { badgeCount } = usePendingRequests();
+  const groups = navigation(orgId, role, badgeCount, features);
 
   /**
    * `/documents` is a prefix of `/documents/templates`, so a plain `startsWith` would

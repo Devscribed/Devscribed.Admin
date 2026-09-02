@@ -1,19 +1,23 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { use, useCallback, useEffect, useState } from 'react';
-import { Badge, Button, Card, Select } from '@/ds';
+import { Badge, Button, Card, SearchField, Select, Tabs } from '@/ds';
 import { PageHeader } from '@/layout/PageHeader';
 import { useSession } from '@/layout/session-context';
 import { usePendingRequests } from '@/layout/requests-badge-context';
 import { useToast } from '@/toast';
 import {
   REQUEST_MESSAGES,
-  REQUESTS_PAGE_MESSAGES,
   can,
-  parseRequestStatusFilter,
-  type RequestStatusFilter,
+  normalizeRole,
+  parseRequestScope,
+  parseRequestStatusQuery,
+  parseRequestTypeQuery,
+  type RequestScope,
+  type RequestStatusQuery,
+  type RequestTypeQuery,
   type Role,
   type VacationRequestStatus,
 } from '@devscribed/validation';
@@ -21,20 +25,30 @@ import { AvatarInitials } from '../members/[memberId]/AvatarInitials';
 import { RejectRequestModal } from '../members/[memberId]/RejectRequestModal';
 import { formatCurrency, formatDateRange } from '../members/[memberId]/vacation-format';
 import { CancelRequestDialog } from './CancelRequestDialog';
-import type { OrgRequest, OrgRequestsResponse } from './types';
+import { NewRequestModal } from './NewRequestModal';
+import { RequestRow } from './RequestRow';
+import type { OrgRequest, OrgRequestsResponse, RequestRowData } from './types';
 
 /** Payload carries no currency field; USD is the app default (matches VacationPanel). */
 const CURRENCY = 'USD';
 
-const FILTER_OPTIONS: { value: RequestStatusFilter; label: string }[] = [
-  { value: 'pending', label: 'Pending' },
-  { value: 'approved', label: 'Approved' },
-  { value: 'rejected', label: 'Rejected' },
+const STATUS_OPTIONS: { value: RequestStatusQuery; label: string }[] = [
+  { value: 'all', label: 'All statuses' },
+  { value: 'open', label: 'Open' },
+  { value: 'answered', label: 'Answered' },
+  { value: 'granted', label: 'Granted' },
+  { value: 'declined', label: 'Declined' },
   { value: 'cancelled', label: 'Cancelled' },
-  { value: 'all', label: 'All' },
 ];
 
-/** Status → DS `Badge` tone + label — spec 09's map, reused unchanged. */
+const TYPE_OPTIONS: { value: RequestTypeQuery; label: string }[] = [
+  { value: 'all', label: 'All types' },
+  { value: 'access', label: 'Access' },
+  { value: 'question', label: 'Question' },
+  { value: 'vacation', label: 'Vacation' },
+];
+
+/** Vacation status → DS `Badge` tone + label — spec 09's map, reused unchanged. */
 const STATUS_META: Record<
   VacationRequestStatus,
   { tone: 'warning' | 'active' | 'inactive' | 'neutral'; label: string }
@@ -46,76 +60,174 @@ const STATUS_META: Record<
 };
 
 /**
- * Org-wide Requests page (spec 10). A reviewer-only surface: admin/manager see every
- * vacation request across the organization as a centered card stack, filter by status,
- * and act on each in place. `user`/`viewer` are redirected — the API's 403 is the real
- * boundary, this is just so they never glimpse the frame.
+ * The Requests page (requests spec 01). Everyone's inbox: it renders for every signed-in
+ * member of the organization regardless of role, and the capabilities that used to gate
+ * the whole page now gate two things inside it — the `All` scope (`view-all-requests`)
+ * and the organization-wide vacation section (`view-requests`, spec 10, unchanged).
  *
- * After an action, the acted-on card is patched IN PLACE (its status flips, its action
- * buttons update) rather than refetching the filtered list — a full refetch would drop
- * the card from a filtered view (e.g. an approved request no longer matches the Pending
- * filter), but the spec requires the card to update in place. The sidebar badge is the
- * one value refetched from the server (`refreshBadge()`); it is authoritative and any
- * filter change or reload refreshes the whole list from the server.
+ * Filter state lives in the URL, so a reload and a shared link both survive. The server
+ * is the gate for every one of them: the scope control is simply not drawn for a caller
+ * who cannot use it, and `scope=all` from a hand-edited URL answers 403 regardless.
+ *
+ * On a failed reload the last good list stays on screen behind the error banner rather
+ * than being replaced by nothing — an empty screen would say "you have no requests",
+ * which is a different and false statement.
+ *
+ * The vacation section below keeps spec 10's behaviour exactly, including the in-place
+ * card patch after an action: a full refetch would drop the acted-on card out of a
+ * narrowed view, and the card is required to stay and show its new status.
  */
 export default function RequestsPage({ params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const session = useSession();
   const { showToast } = useToast();
   const { refresh: refreshBadge } = usePendingRequests();
 
-  const canView = can(session.role as Role, 'view-requests');
+  // `/api/me` returns `Membership.role` verbatim and the database still holds the legacy
+  // `member`, which `can()` does not know: `CAPABILITY_MATRIX['member']` is undefined and
+  // every capability comes back false. Normalizing first is what makes the matrix hold
+  // against today's data, so the controls this page draws match the ones the server
+  // grants the same account.
+  const role: Role = normalizeRole(session.role);
+  const canCreate = can(role, 'create-request');
+  const canScopeAll = can(role, 'view-all-requests');
+  const canListProjects = can(role, 'list-assigned-projects');
 
-  const [filter, setFilter] = useState<RequestStatusFilter>('pending');
-  const [requests, setRequests] = useState<OrgRequest[] | null>(null);
+  // A `scope=all` arriving in the URL for a caller without the capability is read as
+  // `mine`: the server would refuse it, and there is nothing to be gained by asking.
+  const urlScope = parseRequestScope(searchParams.get('scope') ?? undefined) ?? 'mine';
+  const [scope, setScope] = useState<RequestScope>(canScopeAll ? urlScope : 'mine');
+  const [status, setStatus] = useState<RequestStatusQuery>(
+    parseRequestStatusQuery(searchParams.get('status') ?? undefined) ?? 'all',
+  );
+  const [type, setType] = useState<RequestTypeQuery>(
+    parseRequestTypeQuery(searchParams.get('type') ?? undefined) ?? 'all',
+  );
+  const [projectId, setProjectId] = useState<string>(searchParams.get('projectId') ?? '');
+  const [q, setQ] = useState<string>(searchParams.get('q') ?? '');
+  const [debouncedQ, setDebouncedQ] = useState<string>(searchParams.get('q') ?? '');
+
+  const [data, setData] = useState<OrgRequestsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [newOpen, setNewOpen] = useState(false);
 
   const [rejectTarget, setRejectTarget] = useState<OrgRequest | null>(null);
   const [cancelTarget, setCancelTarget] = useState<OrgRequest | null>(null);
   const [cancelSaving, setCancelSaving] = useState(false);
   const [approvingId, setApprovingId] = useState<string | null>(null);
 
-  // user/viewer never see this page — redirect to Members (TC-10-E2E-03). The sidebar
-  // row was already omitted for them; this covers direct navigation.
-  useEffect(() => {
-    if (!canView) router.replace(`/org/${orgId}/members`);
-  }, [canView, orgId, router]);
+  const filtersActive =
+    status !== 'all' || type !== 'all' || projectId.length > 0 || debouncedQ.trim().length > 0;
 
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    try {
-      const response = await fetch(
-        `/api/organizations/${orgId}/requests?status=${parseRequestStatusFilter(filter)}`,
-        { credentials: 'same-origin' },
-      );
-      if (response.ok) {
-        const data = (await response.json()) as OrgRequestsResponse;
-        setRequests(data.requests);
-      } else {
-        setRequests([]);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(q), 250);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  // Keep the URL in step with the active view.
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (scope !== 'mine') next.set('scope', scope);
+    if (status !== 'all') next.set('status', status);
+    if (type !== 'all') next.set('type', type);
+    if (projectId.length > 0) next.set('projectId', projectId);
+    if (debouncedQ.trim().length > 0) next.set('q', debouncedQ.trim());
+    const qs = next.toString();
+    router.replace(qs.length > 0 ? `?${qs}` : '?', { scroll: false });
+    // `router` is in the list because it is referenced here. The App Router's instance is
+    // stable across renders, so naming it costs no extra run and the effect still fires
+    // only when one of the five filter values moves.
+  }, [scope, status, type, projectId, debouncedQ, router]);
+
+  const load = useCallback(
+    async (signal?: AbortSignal): Promise<void> => {
+      setLoading(true);
+      const query = new URLSearchParams({ scope, status, type });
+      if (projectId.length > 0) query.set('projectId', projectId);
+      if (debouncedQ.trim().length > 0) query.set('q', debouncedQ.trim());
+      try {
+        const response = await fetch(
+          `/api/organizations/${orgId}/requests?${query.toString()}`,
+          { credentials: 'same-origin', signal },
+        );
+        if (signal?.aborted) return;
+        if (response.ok) {
+          const body = (await response.json()) as OrgRequestsResponse;
+          if (signal?.aborted) return;
+          setData(body);
+          setError(false);
+        } else {
+          // The last good list stays on screen behind the banner.
+          setError(true);
+        }
+      } catch (err) {
+        if ((err as Error)?.name === 'AbortError') return;
+        setError(true);
       }
-    } catch {
-      setRequests([]);
-    }
-    setLoading(false);
-  }, [orgId, filter]);
+      if (signal?.aborted) return;
+      setLoading(false);
+    },
+    [orgId, scope, status, type, projectId, debouncedQ],
+  );
 
   useEffect(() => {
-    if (canView) void load();
-  }, [canView, load]);
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
-  /** Update one request's fields in place (keeps the card visible under the active filter). */
-  const patchRequest = useCallback((id: string, changes: Partial<OrgRequest>): void => {
-    setRequests((prev) => (prev ? prev.map((r) => (r.id === id ? { ...r, ...changes } : r)) : prev));
+  // The project filter and picker need the organization's projects. A `viewer` has no
+  // access to any project surface, so the control is not drawn for them and the request
+  // the API would refuse is never sent.
+  useEffect(() => {
+    if (!canListProjects) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(`/api/organizations/${orgId}/projects?status=active`, {
+          credentials: 'same-origin',
+        });
+        if (!response.ok) return;
+        const body = (await response.json()) as {
+          projects: { id: string; name: string }[];
+        };
+        if (!cancelled) setProjects(body.projects.map((p) => ({ id: p.id, name: p.name })));
+      } catch {
+        // No project choices; the filter simply has nothing to offer.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, canListProjects]);
+
+  /** Update one vacation card's fields in place (keeps it visible under the filter). */
+  const patchVacation = useCallback((id: string, changes: Partial<OrgRequest>): void => {
+    setData((prev) =>
+      prev && prev.vacation
+        ? {
+            ...prev,
+            vacation: {
+              ...prev.vacation,
+              requests: prev.vacation.requests.map((r) =>
+                r.id === id ? { ...r, ...changes } : r,
+              ),
+            },
+          }
+        : prev,
+    );
   }, []);
 
-  async function handleApprove(request: OrgRequest): Promise<void> {
+  async function handleApprove(vacationRequest: OrgRequest): Promise<void> {
     if (approvingId) return;
-    setApprovingId(request.id);
+    setApprovingId(vacationRequest.id);
     try {
       const response = await fetch(
-        `/api/organizations/${orgId}/members/${request.member.membershipId}/vacation/requests/${request.id}/review`,
+        `/api/organizations/${orgId}/members/${vacationRequest.member.membershipId}/vacation/requests/${vacationRequest.id}/review`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -125,7 +237,7 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
       );
       if (response.ok) {
         showToast('toast-request-approved', REQUEST_MESSAGES.toastApproved);
-        patchRequest(request.id, {
+        patchVacation(vacationRequest.id, {
           status: 'approved',
           reviewedAt: new Date().toISOString(),
           reviewedBy: session.account.id,
@@ -143,19 +255,19 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
   }
 
   async function handleCancelConfirm(): Promise<void> {
-    const request = cancelTarget;
-    if (!request || cancelSaving) return;
+    const vacationRequest = cancelTarget;
+    if (!vacationRequest || cancelSaving) return;
     setCancelSaving(true);
     try {
       const response = await fetch(
-        `/api/organizations/${orgId}/members/${request.member.membershipId}/vacation/requests/${request.id}/cancel`,
+        `/api/organizations/${orgId}/members/${vacationRequest.member.membershipId}/vacation/requests/${vacationRequest.id}/cancel`,
         { method: 'PUT', credentials: 'same-origin' },
       );
       if (response.ok) {
         setCancelTarget(null);
         setCancelSaving(false);
         showToast('toast-request-cancelled', REQUEST_MESSAGES.toastCancelledApproved);
-        patchRequest(request.id, {
+        patchVacation(vacationRequest.id, {
           status: 'cancelled',
           cancelledAt: new Date().toISOString(),
           cancelledBy: session.account.id,
@@ -171,62 +283,209 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
     setCancelSaving(false);
   }
 
-  // Nothing renders for a caller being redirected.
-  if (!canView) return null;
-
+  const requests: RequestRowData[] = data?.requests ?? [];
+  const vacation = data?.vacation ?? null;
+  const showEmpty = data !== null && requests.length === 0;
   const emptyMessage =
-    filter === 'pending'
-      ? REQUESTS_PAGE_MESSAGES.emptyPending
-      : filter === 'all'
-        ? 'No requests.'
-        : REQUESTS_PAGE_MESSAGES.emptyOther(filter);
+    data && data.counts.total > 0 ? REQUEST_MESSAGES.emptyFiltered : REQUEST_MESSAGES.emptyMine;
 
   return (
     <div data-testid="requests-page">
-      <PageHeader title="Requests" />
+      <PageHeader
+        title="Requests"
+        action={
+          canCreate ? (
+            <Button
+              variant="primary"
+              onClick={() => setNewOpen(true)}
+              data-testid="requests-new-btn"
+            >
+              New request
+            </Button>
+          ) : undefined
+        }
+      />
 
-      <div style={{ maxWidth: 700, margin: '0 auto', width: '100%' }}>
-        <div style={{ marginBottom: 'var(--sp-8)', maxWidth: 220 }}>
-          <Select
-            value={filter}
-            options={FILTER_OPTIONS}
-            onChange={(value) => setFilter(parseRequestStatusFilter(value))}
-            data-testid="requests-status-filter"
-          />
+      <div style={{ maxWidth: 820, margin: '0 auto', width: '100%' }}>
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'flex-end',
+            gap: 'var(--sp-5)',
+            marginBottom: 'var(--sp-8)',
+          }}
+        >
+          {/* The scope control is not drawn at all for a caller who cannot use it. */}
+          {canScopeAll && (
+            <div data-testid="requests-scope-toggle">
+              <Tabs
+                items={[
+                  { value: 'mine', label: 'Mine' },
+                  { value: 'all', label: 'All' },
+                ]}
+                value={scope}
+                onChange={(value) => setScope(value === 'all' ? 'all' : 'mine')}
+              />
+            </div>
+          )}
+
+          <div style={{ minWidth: 170 }}>
+            <Select
+              value={type}
+              options={TYPE_OPTIONS}
+              onChange={(value) => setType(parseRequestTypeQuery(value) ?? 'all')}
+              data-testid="requests-type-filter"
+            />
+          </div>
+
+          <div style={{ minWidth: 170 }}>
+            <Select
+              value={status}
+              options={STATUS_OPTIONS}
+              onChange={(value) => setStatus(parseRequestStatusQuery(value) ?? 'all')}
+              data-testid="requests-status-filter"
+            />
+          </div>
+
+          {canListProjects && (
+            <div style={{ minWidth: 170 }}>
+              <Select
+                value={projectId}
+                placeholder="Any project"
+                options={[
+                  { value: '', label: 'Any project' },
+                  ...projects.map((project) => ({ value: project.id, label: project.name })),
+                ]}
+                onChange={setProjectId}
+              />
+            </div>
+          )}
+
+          <div style={{ minWidth: 200, flex: 1 }}>
+            <SearchField
+              value={q}
+              placeholder="Search titles"
+              onChange={(event) => setQ(event.target.value)}
+            />
+          </div>
         </div>
 
-        {loading || requests === null ? (
-          <RequestsSkeleton />
-        ) : requests.length === 0 ? (
+        {error && (
           <div
-            data-testid="requests-empty-state"
+            data-testid="requests-error-banner"
             style={{
-              padding: 'var(--sp-12) var(--sp-8)',
-              textAlign: 'center',
-              fontFamily: 'var(--font-display)',
-              fontSize: 'var(--fs-16)',
-              color: 'var(--text-faint)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--sp-5)',
+              padding: 'var(--sp-5)',
+              marginBottom: 'var(--sp-6)',
+              border: 'var(--border-hair) solid var(--error-500)',
+              borderRadius: 'var(--radius-lg)',
+              fontFamily: 'var(--font-text)',
+              fontSize: 'var(--fs-14)',
+              color: 'var(--text)',
             }}
           >
-            {emptyMessage}
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-6)' }}>
-            {requests.map((request) => (
-              <RequestCard
-                key={request.id}
-                orgId={orgId}
-                request={request}
-                approving={approvingId === request.id}
-                actionsBusy={approvingId !== null || cancelSaving}
-                onApprove={handleApprove}
-                onReject={setRejectTarget}
-                onCancel={setCancelTarget}
-              />
-            ))}
+            <span>{REQUEST_MESSAGES.genericError}</span>
+            <span style={{ marginLeft: 'auto' }}>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void load()}
+                data-testid="requests-error-retry-btn"
+              >
+                Retry
+              </Button>
+            </span>
           </div>
         )}
+
+        {loading && data === null ? (
+          <RequestsSkeleton />
+        ) : (
+          <>
+            {showEmpty ? (
+              <div
+                data-testid="requests-empty-state"
+                style={{
+                  padding: 'var(--sp-12) var(--sp-8)',
+                  textAlign: 'center',
+                  fontFamily: 'var(--font-display)',
+                  fontSize: 'var(--fs-16)',
+                  color: 'var(--text-faint)',
+                }}
+              >
+                <div>{emptyMessage}</div>
+                {filtersActive && (
+                  <div style={{ marginTop: 'var(--sp-6)' }}>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setStatus('all');
+                        setType('all');
+                        setProjectId('');
+                        setQ('');
+                      }}
+                    >
+                      Clear filters
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-5)' }}>
+                {requests.map((request) => (
+                  <RequestRow key={request.id} orgId={orgId} request={request} />
+                ))}
+              </div>
+            )}
+
+            {vacation && (
+              <div data-testid="requests-vacation-section" style={{ marginTop: 'var(--sp-10)' }}>
+                <div
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 'var(--fs-11)',
+                    letterSpacing: 'var(--ls-wider)',
+                    textTransform: 'uppercase',
+                    color: 'var(--text-muted)',
+                    marginBottom: 'var(--sp-5)',
+                  }}
+                >
+                  Vacation
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-6)' }}>
+                  {vacation.requests.map((vacationRequest) => (
+                    <VacationCard
+                      key={vacationRequest.id}
+                      orgId={orgId}
+                      request={vacationRequest}
+                      approving={approvingId === vacationRequest.id}
+                      actionsBusy={approvingId !== null || cancelSaving}
+                      onApprove={handleApprove}
+                      onReject={setRejectTarget}
+                      onCancel={setCancelTarget}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
+
+      <NewRequestModal
+        orgId={orgId}
+        open={newOpen}
+        projects={projects}
+        onClose={() => setNewOpen(false)}
+        onCreated={() => {
+          void load();
+          void refreshBadge();
+        }}
+      />
 
       <RejectRequestModal
         orgId={orgId}
@@ -238,7 +497,7 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
         onClose={() => setRejectTarget(null)}
         onRejected={(comment) => {
           if (rejectTarget) {
-            patchRequest(rejectTarget.id, {
+            patchVacation(rejectTarget.id, {
               status: 'rejected',
               reviewerComment: comment || null,
               reviewedAt: new Date().toISOString(),
@@ -261,7 +520,8 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
   );
 }
 
-function RequestCard({
+/** One organization-wide vacation row — spec 10's card, unchanged. */
+function VacationCard({
   orgId,
   request,
   approving,

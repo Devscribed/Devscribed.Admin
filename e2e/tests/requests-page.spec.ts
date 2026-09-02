@@ -105,8 +105,13 @@ test.describe('10 — Organization Requests Page', () => {
   //
   // Regression guard for the in-place-update fix: approve/reject patch the acted-on card's
   // status in local state (only the sidebar badge is refetched), so the card STAYS in view
-  // with its new status even though it no longer matches the active "Pending" filter. The
-  // actions therefore run on the DEFAULT Pending view — no filter switch.
+  // with its new status even though it no longer matches the active filter.
+  //
+  // The filter is now SELECTED rather than relied on. Requests spec 01 requirement 42
+  // makes `all` the default and retires the `pending` vocabulary on this endpoint, so the
+  // case picks `Open` — which maps onto vacation `pending` — before acting. Under the
+  // `all` default an approved card would match the filter anyway and the case would keep
+  // passing while guarding nothing.
   test('manager reviews requests from the Requests page', async ({ page, request }) => {
     const adminEmail = uniqueEmail('admin');
     const org = await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
@@ -136,7 +141,13 @@ test.describe('10 — Organization Requests Page', () => {
 
     await openRequestsPage(page);
 
-    // Both cards render with avatar, linked name, and Approve/Reject on the default pending view.
+    // Narrow to the rows this case is about, so the assertion below still means what it
+    // meant: an acted-on card stays in view after it stops matching the active filter.
+    await page.getByTestId('requests-status-filter').click();
+    await page.getByRole('option', { name: 'Open', exact: true }).click();
+    await expect(page.getByTestId('requests-vacation-section')).toBeVisible();
+
+    // Both cards render with avatar, linked name, and Approve/Reject on the open view.
     await expect(page.getByTestId(`requests-card-${r1.id}`)).toBeVisible();
     await expect(page.getByTestId(`requests-card-${r2.id}`)).toBeVisible();
     await expect(page.getByTestId(`requests-card-avatar-${r1.id}`)).toBeVisible();
@@ -146,7 +157,7 @@ test.describe('10 — Organization Requests Page', () => {
     await expect(page.getByTestId(`requests-card-approve-${r1.id}`)).toBeVisible();
     await expect(page.getByTestId(`requests-card-reject-${r2.id}`)).toBeVisible();
 
-    // Approve R1 on the Pending view → toast, and the card stays put with its status flipped
+    // Approve R1 on the Open view → toast, and the card stays put with its status flipped
     // to Approved in place (no refetch-drop).
     await page.getByTestId(`requests-card-approve-${r1.id}`).click();
     await expect(page.getByTestId('toast-request-approved')).toBeVisible();
@@ -154,7 +165,7 @@ test.describe('10 — Organization Requests Page', () => {
     await expect(page.getByTestId(`requests-card-status-${r1.id}`)).toHaveText('Approved');
 
     // Reject R2 via the reused spec-09 modal → toast, card stays with status Rejected +
-    // reviewer comment, still on the Pending view.
+    // reviewer comment, still on the Open view.
     await page.getByTestId(`requests-card-reject-${r2.id}`).click();
     await expect(page.getByTestId('vacation-reject-modal')).toBeVisible();
     await page.getByTestId('vacation-reject-comment-input').fill('Team availability conflict');
