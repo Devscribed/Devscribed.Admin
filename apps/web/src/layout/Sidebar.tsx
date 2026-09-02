@@ -4,7 +4,15 @@ import { usePathname, useRouter } from 'next/navigation';
 import { can, hasCapability, type Role } from '@devscribed/validation';
 import { NavItem, SectionLabel } from '@/ds';
 import { DocumentsIcon } from '@/documents/icons';
-import { BriefcaseIcon, CalendarIcon, ClockIcon, FolderIcon, InboxIcon, PeopleIcon } from './icons';
+import {
+  BriefcaseIcon,
+  CalendarIcon,
+  ClockIcon,
+  FolderIcon,
+  InboxIcon,
+  PeopleIcon,
+  ReportsIcon,
+} from './icons';
 import { useSession, type SessionFeatures } from './session-context';
 import { usePendingRequests } from './requests-badge-context';
 
@@ -114,6 +122,34 @@ function navigation(
     groups.push({ label: 'Projects', entries: projects });
   }
 
+  // Spec reports/01 §Sidebar integration — one Reports entry, no sub-rows.
+  // The three reports (Amounts Owed, Time & Activity, Time Off) live as cards
+  // on the landing page rather than the sidebar; the templates + descriptions
+  // there carry more context than a nav row could. The entry appears when the
+  // caller holds any of the eight `View*` capabilities. Sits between Projects
+  // and Documents — reports read the work projects produce, and are checked
+  // more often than either Documents or Settings.
+  const hasAnyReport =
+    hasCapability(role, 'ViewAmountsOwed') ||
+    hasCapability(role, 'ViewMyAmountsOwed') ||
+    hasCapability(role, 'ViewTimeAndActivity') ||
+    hasCapability(role, 'ViewMyTimeAndActivity') ||
+    hasCapability(role, 'ViewTimeOff') ||
+    hasCapability(role, 'ViewMyTimeOff');
+  if (hasAnyReport) {
+    groups.push({
+      label: 'Reports',
+      entries: [
+        {
+          testId: 'nav-reports',
+          label: 'Reports',
+          href: `/org/${orgId}/reports`,
+          icon: <ReportsIcon />,
+        },
+      ],
+    });
+  }
+
   const documents: NavEntry[] = [];
 
   if (hasCapability(role, 'ViewEnvelopes')) {
@@ -199,6 +235,17 @@ export function Sidebar({ orgId }: { orgId: string }) {
     .filter((entry) => pathname === entry.href || pathname.startsWith(`${entry.href}/`))
     .sort((a, b) => b.href.length - a.href.length)[0]?.href;
 
+  /**
+   * Spec reports/01 §Sidebar integration — the parent `Reports` row is active
+   * when the current path is `/org/{orgId}/reports` or any of its children, in
+   * addition to the sub-row that leads to the current sub-report. This is the
+   * only nav entry in the shell that lights up alongside a longer match; kept
+   * as an explicit predicate here rather than a flag on `NavEntry` so the
+   * general "longest wins" rule above continues to hold for every other row.
+   */
+  const reportsRoot = `/org/${orgId}/reports`;
+  const reportsRootActive = pathname === reportsRoot || pathname.startsWith(`${reportsRoot}/`);
+
   return (
     <nav className="shell-sidebar" data-testid="app-sidebar" aria-label="Main">
       <div className="shell-sidebar-head">
@@ -213,7 +260,9 @@ export function Sidebar({ orgId }: { orgId: string }) {
             </SectionLabel>
 
             {group.entries.map((entry) => {
-              const active = matched === entry.href;
+              const active =
+                matched === entry.href ||
+                (entry.testId === 'nav-reports' && reportsRootActive);
               return (
                 // `NavItem` renders its own <a> and takes no `as`/component prop, so it
                 // cannot host a next/link. Passing `href` keeps the row a real link

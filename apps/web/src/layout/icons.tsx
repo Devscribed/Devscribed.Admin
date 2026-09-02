@@ -333,3 +333,62 @@ export function CalendarIcon({ size = 19 }: { size?: number }) {
     </svg>
   );
 }
+
+/**
+ * Reports parent-row glyph (spec reports/01 §Sidebar integration). A stroked
+ * bar chart — mirrors the mockup's `M3 17V4M3 17h14M6 14V9M10 14V6M14 14v-3`
+ * icon on the parent Reports row.
+ */
+export function ReportsIcon({ size = 19 }: { size?: number }) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.6}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M3 17V4M3 17h14M6 14V9M10 14V6M14 14v-3" />
+    </svg>
+  );
+}
+
+/**
+ * Money glyph — the Amounts Owed sidebar sub-row. A filled coin with a `$`
+ * cutout, drawn from `currentColor` so the row's accent color tints it.
+ */
+export function MoneyIcon({ size = 19 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 20 20" width={size} height={size} fill="currentColor" aria-hidden>
+      <path d="M10 1.75a8.25 8.25 0 1 0 0 16.5 8.25 8.25 0 0 0 0-16.5Zm.75 3.5v.9c1.28.18 2.25.98 2.25 2.1a.75.75 0 0 1-1.5 0c0-.28-.42-.75-1.5-.75s-1.5.47-1.5.75c0 .28.42.75 1.5.75 1.6 0 3 .93 3 2.25 0 1.12-.97 1.92-2.25 2.1v.9a.75.75 0 0 1-1.5 0v-.9c-1.28-.18-2.25-.98-2.25-2.1a.75.75 0 0 1 1.5 0c0 .28.42.75 1.5.75s1.5-.47 1.5-.75c0-.28-.42-.75-1.5-.75-1.6 0-3-.93-3-2.25 0-1.12.97-1.92 2.25-2.1v-.9a.75.75 0 0 1 1.5 0Z" />
+    </svg>
+  );
+}
+
+/**
+ * Chart / trendline glyph — the Time & Activity sidebar sub-row. Stroked
+ * upward line + points, in `currentColor` for parity with the other stroked
+ * icons in the shell.
+ */
+export function ChartIcon({ size = 19 }: { size?: number }) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.6}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M3 15l4-4 3 3 6-7" />
+      <path d="M14 7h3v3" />
+    </svg>
+  );
+}
