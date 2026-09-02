@@ -846,7 +846,7 @@ function ReportTable({
             background: 'var(--bg-panel)',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius-2xl)',
-            overflow: 'hidden',
+            overflowX: 'auto',
           }}
         >
           <div role="row">
@@ -885,7 +885,7 @@ function ReportTable({
                 color: 'var(--text-muted)',
                 alignItems: 'center',
                 gap: 8,
-                width: '100%',
+                minWidth: 680,
               }}
             >
               {TIME_OFF_COLUMNS.map((h) => (
@@ -905,6 +905,7 @@ function ReportTable({
                 display: 'flex',
                 padding: '0 20px',
                 minHeight: 52,
+                minWidth: 680,
                 borderTop: '1px solid var(--divider)',
                 alignItems: 'center',
                 fontSize: 'var(--fs-14)',
@@ -928,6 +929,7 @@ function ReportTable({
               style={{
                 display: 'flex',
                 padding: '10px 20px',
+                minWidth: 680,
                 background: 'var(--bg-panel-2)',
                 borderTop: '1px solid var(--divider)',
                 fontFamily: 'var(--font-display)',
@@ -957,6 +959,7 @@ function ReportTable({
           background: 'var(--bg-panel-2)',
           border: '1px solid var(--border)',
           borderRadius: 'var(--radius-2xl)',
+          overflowX: 'auto',
           fontFamily: 'var(--font-display)',
           fontWeight: 600,
           fontSize: 'var(--fs-14)',
@@ -965,34 +968,36 @@ function ReportTable({
           alignItems: 'center',
         }}
       >
-        {TIME_OFF_COLUMNS.map((h, i) => (
-          <div key={h.value} style={bodyCellStyle(h.value)}>
-            {i === 0 ? (
-              <span
-                style={{
-                  color: 'var(--text-sub)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '.6px',
-                  fontSize: 'var(--fs-11)',
-                }}
-              >
-                Total
-              </span>
-            ) : h.value === 'days' ? (
-              <span style={{ fontFamily: 'var(--font-mono)' }}>
-                {formatNumber(grandTotal.days)}
-              </span>
-            ) : h.value === 'workingDays' ? (
-              <span style={{ fontFamily: 'var(--font-mono)' }}>
-                {formatNumber(grandTotal.workingDays)}
-              </span>
-            ) : h.value === 'deduction' ? (
-              <span style={{ fontFamily: 'var(--font-mono)' }}>
-                {formatMoney(grandTotal.deduction, currency)}
-              </span>
-            ) : null}
-          </div>
-        ))}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 680, flex: 1 }}>
+          {TIME_OFF_COLUMNS.map((h, i) => (
+            <div key={h.value} style={bodyCellStyle(h.value)}>
+              {i === 0 ? (
+                <span
+                  style={{
+                    color: 'var(--text-sub)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '.6px',
+                    fontSize: 'var(--fs-11)',
+                  }}
+                >
+                  Total
+                </span>
+              ) : h.value === 'days' ? (
+                <span style={{ fontFamily: 'var(--font-mono)' }}>
+                  {formatNumber(grandTotal.days)}
+                </span>
+              ) : h.value === 'workingDays' ? (
+                <span style={{ fontFamily: 'var(--font-mono)' }}>
+                  {formatNumber(grandTotal.workingDays)}
+                </span>
+              ) : h.value === 'deduction' ? (
+                <span style={{ fontFamily: 'var(--font-mono)' }}>
+                  {formatMoney(grandTotal.deduction, currency)}
+                </span>
+              ) : null}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

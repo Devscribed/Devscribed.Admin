@@ -1138,7 +1138,7 @@ function ReportTable({
             background: 'var(--bg-panel)',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius-2xl)',
-            overflow: 'hidden',
+            overflowX: 'auto',
           }}
         >
           <div role="row">
@@ -1177,7 +1177,7 @@ function ReportTable({
                 color: 'var(--text-muted)',
                 alignItems: 'center',
                 gap: 8,
-                width: '100%',
+                minWidth: 720,
               }}
             >
               {headers.map((h) => (
@@ -1197,6 +1197,7 @@ function ReportTable({
                 display: 'flex',
                 padding: '0 20px',
                 minHeight: 52,
+                minWidth: 720,
                 borderTop: '1px solid var(--divider)',
                 alignItems: 'center',
                 fontSize: 'var(--fs-14)',
@@ -1225,6 +1226,7 @@ function ReportTable({
               style={{
                 display: 'flex',
                 padding: '10px 20px',
+                minWidth: 720,
                 background: 'var(--bg-panel-2)',
                 borderTop: '1px solid var(--divider)',
                 fontFamily: 'var(--font-display)',
@@ -1254,6 +1256,7 @@ function ReportTable({
           background: 'var(--bg-panel-2)',
           border: '1px solid var(--border)',
           borderRadius: 'var(--radius-2xl)',
+          overflowX: 'auto',
           fontFamily: 'var(--font-display)',
           fontWeight: 600,
           fontSize: 'var(--fs-14)',
@@ -1262,28 +1265,30 @@ function ReportTable({
           alignItems: 'center',
         }}
       >
-        {headers.map((h, i) => (
-          <div key={h.value} style={bodyCellStyle(h.value)}>
-            {i === 0 ? (
-              <span
-                style={{
-                  color: 'var(--text-sub)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '.6px',
-                  fontSize: 'var(--fs-11)',
-                }}
-              >
-                Total
-              </span>
-            ) : NUMERIC_COLUMN_KEYS.has(h.value) ? (
-              <span style={{ fontFamily: 'var(--font-mono)' }}>
-                {MONEY_COLUMN_KEYS.has(h.value)
-                  ? formatMoney(grandTotal[h.value] ?? 0, currency)
-                  : formatHours(grandTotal[h.value] ?? 0)}
-              </span>
-            ) : null}
-          </div>
-        ))}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 720, flex: 1 }}>
+          {headers.map((h, i) => (
+            <div key={h.value} style={bodyCellStyle(h.value)}>
+              {i === 0 ? (
+                <span
+                  style={{
+                    color: 'var(--text-sub)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '.6px',
+                    fontSize: 'var(--fs-11)',
+                  }}
+                >
+                  Total
+                </span>
+              ) : NUMERIC_COLUMN_KEYS.has(h.value) ? (
+                <span style={{ fontFamily: 'var(--font-mono)' }}>
+                  {MONEY_COLUMN_KEYS.has(h.value)
+                    ? formatMoney(grandTotal[h.value] ?? 0, currency)
+                    : formatHours(grandTotal[h.value] ?? 0)}
+                </span>
+              ) : null}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -728,7 +728,12 @@ function ReportTable({
             background: 'var(--bg-panel)',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius-2xl)',
-            overflow: 'hidden',
+            // Horizontal scroll on narrow viewports so the fixed-width numeric
+            // columns (Hours/Rate/Amount) stay legible instead of overlapping
+            // the text columns; spec §Responsive Behavior calls for a full
+            // per-group card layout on mobile — deferred, this is the
+            // pragmatic minimum that keeps the report usable at 375px.
+            overflowX: 'auto',
           }}
         >
           <div role="row">
@@ -767,7 +772,7 @@ function ReportTable({
                 color: 'var(--text-muted)',
                 alignItems: 'center',
                 gap: 8,
-                width: '100%',
+                minWidth: 640,
               }}
             >
               {headers.map((h) => (
@@ -787,6 +792,7 @@ function ReportTable({
                 display: 'flex',
                 padding: '0 20px',
                 minHeight: 52,
+                minWidth: 640,
                 borderTop: '1px solid var(--divider)',
                 alignItems: 'center',
                 fontSize: 'var(--fs-14)',
@@ -815,6 +821,7 @@ function ReportTable({
               style={{
                 display: 'flex',
                 padding: '10px 20px',
+                minWidth: 640,
                 background: 'var(--bg-panel-2)',
                 borderTop: '1px solid var(--divider)',
                 fontFamily: 'var(--font-display)',
@@ -844,14 +851,17 @@ function ReportTable({
           background: 'var(--bg-panel-2)',
           border: '1px solid var(--border)',
           borderRadius: 'var(--radius-2xl)',
+          overflowX: 'auto',
           fontFamily: 'var(--font-display)',
           fontWeight: 600,
           fontSize: 'var(--fs-14)',
           color: 'var(--text)',
           gap: 8,
           alignItems: 'center',
+          minWidth: 0,
         }}
       >
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 640, flex: 1 }}>
         {headers.map((h, i) => (
           <div key={h.value} style={bodyCellStyle(h.value)}>
             {i === 0 ? (
@@ -876,6 +886,7 @@ function ReportTable({
             ) : null}
           </div>
         ))}
+        </div>
       </div>
     </div>
   );
