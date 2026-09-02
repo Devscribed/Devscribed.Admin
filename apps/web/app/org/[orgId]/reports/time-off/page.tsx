@@ -832,28 +832,32 @@ function ReportTable({
       role="table"
       aria-label="Time off"
       style={{
-        background: 'var(--bg-panel)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius-2xl)',
-        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 'var(--sp-6)',
       }}
     >
       {groups.map((group) => (
-        <div key={group.id} role="rowgroup" data-testid={`reports-group-${group.id}`}>
+        <div
+          key={group.id}
+          role="rowgroup"
+          data-testid={`reports-group-${group.id}`}
+          style={{
+            background: 'var(--bg-panel)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-2xl)',
+            overflow: 'hidden',
+          }}
+        >
           <div role="row">
             <div
               role="rowheader"
               data-testid={`reports-group-${group.id}-band`}
               style={{
-                position: 'sticky',
-                top: 0,
-                zIndex: 1,
                 display: 'flex',
-                justifyContent: 'space-between',
                 alignItems: 'center',
                 padding: '12px 20px',
                 background: 'var(--bg-header)',
-                borderTop: '1px solid var(--divider)',
                 fontFamily: 'var(--font-display)',
                 fontWeight: 600,
                 fontSize: 'var(--fs-13)',
@@ -861,12 +865,6 @@ function ReportTable({
               }}
             >
               <span>{group.title}</span>
-              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text)' }}>
-                {formatNumber(group.total?.workingDays)} working days
-                {group.total?.deduction !== null && group.total?.deduction !== undefined
-                  ? ` · ${formatMoney(group.total.deduction, currency)}`
-                  : ''}
-              </span>
             </div>
           </div>
 
@@ -957,7 +955,8 @@ function ReportTable({
           display: 'flex',
           padding: '14px 20px',
           background: 'var(--bg-panel-2)',
-          borderTop: '2px solid var(--divider)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-2xl)',
           fontFamily: 'var(--font-display)',
           fontWeight: 600,
           fontSize: 'var(--fs-14)',
