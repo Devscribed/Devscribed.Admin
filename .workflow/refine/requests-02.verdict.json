@@ -1,252 +1,113 @@
 {
   "status": "blocked",
+  "mode": "diff",
+  "range": "a009c65..10abb07 on specs/requests/02-client-participants.md — a .fix.json for this spec exists, so the sweeps ran over the added and modified lines and the rules they touch, and every rule that changed was checked against the whole document for contradiction",
   "spec": "specs/requests/02-client-participants.md",
   "request": "Client participants: let a client contact hold a principal in an organization and take part in requests raised for their client, without becoming a member of the organization.",
   "read": {
-    "specs": [
-      "specs/requests/02-client-participants.md",
-      "specs/requests/README.md",
-      "CLAUDE.md",
-      ".claude/skills/spec/references/checklist.md"
-    ],
+    "specs": ["specs/requests/02-client-participants.md"],
     "files": [
-      "apps/api/src/auth/session.service.ts",
-      "apps/api/src/auth/session.guard.ts",
-      "apps/api/src/auth/org-scope.guard.ts",
       "apps/api/src/auth/capability.guard.ts",
+      "apps/api/src/auth/session.service.ts",
       "apps/api/src/auth/login.service.ts",
       "apps/api/src/members/me.controller.ts",
-      "apps/api/src/members/members.controller.ts",
       "apps/api/src/members/members.service.ts",
       "apps/api/src/projects/projects.service.ts",
-      "apps/api/src/clients/clients.controller.ts",
-      "apps/api/src/clients/clients.service.ts",
       "apps/api/src/time-tracking/time-tracking.service.ts",
       "apps/api/src/vacation/vacation.service.ts",
+      "apps/api/src/vacation/vacation-requests.service.ts",
+      "apps/api/src/clients/clients.service.ts",
+      "apps/api/src/clients/clients.controller.ts",
+      "apps/api/src/invitations/invitations.controller.ts",
+      "apps/api/src/invitations/invitations.service.ts",
       "apps/api/src/requests/requests.controller.ts",
       "apps/api/src/requests/requests.service.ts",
       "apps/api/src/requests/requests.serializer.ts",
+      "apps/api/src/requests/request-events.service.ts",
+      "apps/api/src/documents/envelopes.controller.ts",
+      "apps/api/src/documents/document-templates.controller.ts",
+      "apps/api/src/mail/outbox.controller.ts",
+      "apps/api/src/organizations/signing-settings.controller.ts",
       "apps/api/prisma/schema.prisma",
+      "apps/web/src/layout/Sidebar.tsx",
+      "apps/web/app/org/[orgId]/requests",
       "packages/validation/src/index.ts",
       "packages/validation/src/roles.ts",
-      "packages/validation/src/requests.ts",
       "packages/validation/src/documents.ts",
-      "apps/web/src/layout/Sidebar.tsx",
-      "apps/web/app/login/LoginForm.tsx",
-      "apps/web/app/accept-invite/AcceptInviteScreen.tsx",
-      "apps/web/app/org/[orgId]/members/page.tsx",
-      "apps/web/app/org/[orgId]/requests/page.tsx",
-      "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx",
-      "e2e/tests/helpers.ts",
       "e2e/environment.ts",
       "docker-compose.yml",
-      "docker-compose.override.yml"
+      ".workflow/refine/requests-02.fix.json"
     ]
   },
   "sweeps": {
-    "currency": 58,
+    "currency": 34,
     "contradiction": 24,
-    "selfSufficiency": 46,
-    "testability": 41,
-    "selfDescription": 11,
-    "obligations": 52,
+    "selfSufficiency": 28,
+    "testability": 28,
+    "selfDescription": 8,
+    "obligations": 46,
     "scope": 7
   },
   "findings": [
     {
       "id": "R1",
       "severity": "blocker",
-      "rule": "spec/stale-statement",
+      "rule": "spec/untestable-case",
       "file": "specs/requests/02-client-participants.md",
-      "symbol": "TC-02-INT-08",
-      "line": 869,
-      "claim": "five of the seven routes the case calls carry no CapabilityGuard, so they do not answer the fixed forbidden body the case asserts",
+      "symbol": "TC-02-INT-16",
+      "line": 979,
+      "claim": "the case's steps cannot reach the state its expected result needs — minting two invitations for one address invalidates the first token, so no ordering of the two acceptances produces 'a ClientMembership, then 409 accountIsClient'",
       "witness": {
-        "kind": "command",
-        "detail": "The case (:866) calls 'every capability-gated staff route (members, projects, time tracking, vacation, documents, clients, signing settings)' and expects (:869) '403 with the fixed forbidden message for each capability-gated route'. `grep -rln \"RequireCapability\" apps/api/src --include=*.controller.ts` returns only documents/autofill.controller.ts, documents/document-templates.controller.ts, documents/envelopes.controller.ts, mail/outbox.controller.ts, organizations/signing-settings.controller.ts and requests/requests.controller.ts. members.controller.ts:25 is '@UseGuards(SessionGuard, OrgScopeGuard)' and the same holds for projects, time-tracking, vacation and clients. Those services refuse a caller with no active Membership from their own requireCaller: members.service.ts:274 'throw new ForbiddenException(forbiddenBody)' with forbiddenBody undefined at the list call site (:102), projects.service.ts:688 'throw new ForbiddenException()', clients.service.ts:343 'throw new ForbiddenException()' — Nest's default body {\"message\":\"Forbidden\",\"statusCode\":403}, which is not TEMPLATE_MESSAGES.generic.forbidden ('You do not have permission to manage templates', packages/validation/src/documents.ts:125).",
-        "source": "specs/requests/02-client-participants.md:869 against apps/api/src/members/members.controller.ts:25 and apps/api/src/members/members.service.ts:274"
+        "kind": "rule",
+        "detail": "TC-02-INT-16 (:979): 'Mint two client invitations for the same address and client, keeping both tokens - the state two simultaneous invites can leave (edge case 21). Accept one token, then the other.' Expected (:981): 'the first acceptance creates exactly one ClientMembership; the second answers 409 accountIsClient and creates nothing.' Requirement 19 (:222): 'at most one live pending invitation per (email, organization), whichever kind it is.' TC-02-INT-15 (:971) spells out what that does to the earlier token: 'the staff invitation's status is invalidated and the client one is pending; accepting the staff token answers 400 INVITE_MESSAGES.tokenInvalid and writes no membership of either kind.' So after the second mint the first token is invalidated, and neither ordering works: accepting the invalidated token first answers 400 tokenInvalid and creates no ClientMembership, and accepting the surviving token first leaves the invalidated one to answer 400 tokenInvalid rather than 409 accountIsClient. Edge case 21 (:580) says the two-live-pending state arises only because 'nothing serializes the two writes' — a race the steps neither describe nor stage. The code is the same: apps/api/src/invitations/invitations.service.ts:106-111 runs invitation.updateMany({ where: { email, organizationId, status: 'pending' }, data: { status: 'invalidated' } }) in the same transaction as every create, for any role.",
+        "source": "specs/requests/02-client-participants.md:979 against :222 and :971"
       },
-      "suggestedFix": "split the case: assert the fixed forbidden body only on the routes that carry CapabilityGuard, and state separately what a client principal must receive from members, projects, time tracking, vacation and clients — status and body — since those refuse from their own caller lookup."
+      "suggestedFix": "say in the steps how two live pending rows are reached — the only mechanism this spec describes is edge case 21's unserialized race, so either the case seeds the second pending row directly and says so, or it becomes the sequence it can actually run (mint, re-mint, accept the surviving token, then accept the superseded one for 400 tokenInvalid) and the acceptance guarantee edge case 21 rests on is observed instead by accepting a second live token for an address that already holds an active ClientMembership"
     },
     {
       "id": "R2",
-      "severity": "blocker",
+      "severity": "note",
       "rule": "spec/missing-artefact",
       "file": "specs/requests/02-client-participants.md",
-      "symbol": "requirement 29",
-      "line": 242,
-      "claim": "six of the answers requirement 29 states for a client principal have no test case, while the Error Messages table introduces them as messages this spec's cases assert",
+      "symbol": "requirement 23",
+      "line": 240,
+      "claim": "the clause added to requirement 23 — that a request left with a removed client user may be reassigned to another active client user of the project's client — is observed by no case; every reassignment in the cases targets a member",
       "witness": {
         "kind": "rule",
-        "detail": "Requirement 29 states: '409 REQUEST_MESSAGES.threadClosed' for a message posted in a terminal status (:233); '409 REQUEST_MESSAGES.invalidTransition' for a second answer (:236); '409 REQUEST_MESSAGES.alreadyTerminal' for any transition from a terminal status (:243); '403 …notYoursToCancel' (:246); 'PATCH …/requests/{id} answers 403 …editForbidden' (:247); reassign 'answers 403 with the guard's fixed body' (:248). The only client-principal transition case, TC-02-INT-11 (:892), covers a message, answer, grant and decline and nothing else; no other case names a client user acting on a request. The Error Messages preamble (:576) says the table below lists 'Messages this spec's requirements and test cases assert without changing them' and then carries rows for exactly those six (:582, :586, :587, :590, :591, :592).",
-        "source": "specs/requests/02-client-participants.md:242 against :892 and :576"
+        "detail": "Requirement 23 (:240): 'An admin or manager may then reassign it - to a member, or to another active client user of the project's client - and the reassignment writes a RequestEvent with action = assignee_changed carrying both display names in oldLabel / newLabel.' TC-02-INT-12 (:947), the only reassignment case, asserts only 'reassigning it to a member succeeds and writes assignee_changed with both display-name snapshots'. TC-02-INT-10 exercises assigneeKind 'client' on POST .../requests alone, and TC-02-INT-18 only asserts that a client principal cannot call reassign. Nothing observes assigneeKind: 'client' on POST .../requests/{id}/reassign, although the API Contracts section (:549-554) states that route accepts it and adds projectRequiredForClient, contactProjectMismatch and clientUserUnavailable to it.",
+        "source": "specs/requests/02-client-participants.md:240 against :947"
       },
-      "suggestedFix": "extend TC-02-INT-11, or add one case, covering: post to a terminal request (409 threadClosed), a second answer (409 invalidTransition), a transition from a terminal status (409 alreadyTerminal), cancel (403 notYoursToCancel), edit (403 editForbidden) and reassign (403, fixed body)."
+      "suggestedFix": "extend TC-02-INT-12 with a second reassignment, to another active client user of the same client, asserting 200, assigneeKind 'client' on the row, and the assignee_changed event carrying both labels"
     },
     {
       "id": "R3",
-      "severity": "blocker",
-      "rule": "spec/missing-artefact",
-      "file": "specs/requests/02-client-participants.md",
-      "symbol": "requirement 9a",
-      "line": 120,
-      "claim": "two of the three routes that must emit manageForbidden have no case, and the People list contract has no case at all",
-      "witness": {
-        "kind": "rule",
-        "detail": "Requirement 9a (:120) names three routes that check manage-client-users in the service and 'refuse a staff caller who lacks it with 403 and CLIENT_USER_MESSAGES.manageForbidden', and the Error Messages row (:570) names all three: 'GET …/clients/{clientId}/users, POST /api/invitations with role = client, PATCH …/users/{id}/remove'. TC-02-INT-02 (:816) asserts '403 manageForbidden' for the invitation route only. No case calls GET …/clients/{clientId}/users at any level, so the contract at :449-466 — the 200 body with `users` and `pendingInvitations`, the 403 and the 404 — has no observer, and no case asserts the remove route's 403 (TC-02-INT-06 removes as an admin who holds the capability).",
-        "source": "specs/requests/02-client-participants.md:120 against :816 and :449"
-      },
-      "suggestedFix": "add an integration case for GET …/clients/{clientId}/users covering its 200 body, its 403 manageForbidden for a staff caller without the capability and its 404 for a client of another organization, and assert the same 403 on the remove route."
-    },
-    {
-      "id": "R4",
-      "severity": "blocker",
-      "rule": "spec/incomplete-decision",
-      "file": "specs/requests/02-client-participants.md",
-      "symbol": "edge case 8",
-      "line": 528,
-      "claim": "the screen a client principal reaches on a staff URL is named but never stated, and nothing in the repository defines it",
-      "witness": {
-        "kind": "command",
-        "detail": "Edge case 8 (:528): 'The API answers 403; the screen shows the standard forbidden state and offers Requests.' This document defines no such state: the UI Description table (:602-611) has no row for it, the Required data-testid list (:613-628) carries no id for it, and no case asserts it. Nor is there one to inherit — `grep -rln forbidden apps/web/app apps/web/src` returns only apps/web/app/org/[orgId]/projects/[projectId]/board/BoardScreen.tsx, .../list/ListScreen.tsx, apps/web/app/org/[orgId]/time-tracking/TimeEntryModal.tsx and apps/web/src/members/ContractDetails.tsx, i.e. per-screen states, and apps/web/app/org/[orgId]/members/page.tsx has no 403 branch at all (its only error handling is the two remove/restore toasts at :92-117).",
-        "source": "specs/requests/02-client-participants.md:528 against apps/web/app/org/[orgId]/members/page.tsx"
-      },
-      "suggestedFix": "state what a client principal sees on a staff URL — the text, the control back to Requests and its data-testid — with a row in the UI Description table and a case, or delete the screen half of edge case 8 and let requirement 14's server answer be the whole rule."
-    },
-    {
-      "id": "R5",
-      "severity": "blocker",
-      "rule": "spec/untestable-case",
-      "file": "specs/requests/02-client-participants.md",
-      "symbol": "TC-02-E2E-05",
-      "line": 1014,
-      "claim": "the `user` half of the case cannot reach the screen it asserts on, so it passes whether or not the People section is gated",
-      "witness": {
-        "kind": "command",
-        "detail": "The steps (:1014) say 'Then open the same client's detail as a `user`' and the expected result (:1018) 'for the `user` neither the People section nor the invite control is drawn'. A `user` cannot open that screen: packages/validation/src/index.ts:706-707 gives the user role 'manage-clients': false and 'view-clients': false, and apps/api/src/clients/clients.service.ts getClient (:189) calls requireViewCapability, which is 'if (!can(caller.role, \"view-clients\")) { throw new NotFoundException(); }' (:371-372). The detail request answers 404, so both selectors are absent no matter how the People section is implemented.",
-        "source": "specs/requests/02-client-participants.md:1014 against apps/api/src/clients/clients.service.ts:371"
-      },
-      "suggestedFix": "drop the `user` half, or replace it with an observation that can fail — a direct call to GET …/clients/{clientId}/users as a `user` answering 403 manageForbidden, which is the rule the UI decision at :608 rests on."
-    },
-    {
-      "id": "R6",
-      "severity": "blocker",
-      "rule": "spec/stale-statement",
-      "file": "specs/requests/02-client-participants.md",
-      "symbol": "Verification Plan / Bringing it up",
-      "line": 707,
-      "claim": "the database the plan tells the next agent to use is on a port no tracked file publishes",
-      "witness": {
-        "kind": "command",
-        "detail": "The plan (:707): 'database `devscribed_e2e` at `localhost:5434`'. e2e/environment.ts:81 is `return 'postgresql://devscribed:devscribed@localhost:5433/devscribed_e2e';` and docker-compose.yml publishes one mapping, \"- '5433:5432'\". The only 5434 mapping is docker-compose.override.yml, which is ignored (`git check-ignore -v docker-compose.override.yml` -> '.gitignore:46') and untracked (`git ls-files docker-compose.override.yml` prints nothing), and its own header says 'Local-only port remap. Untracked'. A fresh checkout following this plan connects to nothing.",
-        "source": "specs/requests/02-client-participants.md:707 against e2e/environment.ts:81"
-      },
-      "suggestedFix": "state `devscribed_e2e` at `localhost:5433`, which is what the tracked harness defaults to."
-    },
-    {
-      "id": "R7",
-      "severity": "note",
-      "rule": "spec/stale-statement",
-      "file": "specs/requests/02-client-participants.md",
-      "symbol": "Error Messages closing sentence",
-      "line": 597,
-      "claim": "the sentence says the login refusal message is not restated here, and the document restates it three times",
-      "witness": {
-        "kind": "rule",
-        "detail": ":597 'The login refusal message is spec 02 of user-management's and is **not** restated, changed, or duplicated here.' Requirement 6 (:98) quotes it: '400 {\"message\":\"Your account has been deactivated. Contact your administrator.\"}', the login contract repeats it (:506) and the verification plan a third time (:717) — and AC-11 (:691) requires a case to assert that body byte for byte, which only works because the bytes are here.",
-        "source": "specs/requests/02-client-participants.md:597 against :98"
-      },
-      "suggestedFix": "delete the sentence; the body is stated where a case author needs it and that is the right outcome."
-    },
-    {
-      "id": "R8",
-      "severity": "note",
-      "rule": "spec/stale-statement",
-      "file": "specs/requests/02-client-participants.md",
-      "symbol": "Verification Plan, 'The refusal shape with no session at all'",
-      "line": 718,
-      "claim": "a caller holding a session that cannot resolve a principal is not answered 401 by those routes",
-      "witness": {
-        "kind": "command",
-        "detail": "The row (:718) records 401 for an empty cookie jar and adds 'identical to a caller holding a session that cannot resolve a principal'. A caller with a valid cookie passes SessionGuard, which reads only Account.securityStamp (apps/api/src/auth/session.guard.ts:22-28); members and projects then refuse from their own lookup with 403, not 401 (apps/api/src/members/members.service.ts:274, apps/api/src/projects/projects.service.ts:688).",
-        "source": "specs/requests/02-client-participants.md:718 against apps/api/src/auth/session.guard.ts:22"
-      },
-      "suggestedFix": "delete the trailing clause and keep the observed empty-jar result, which is what the row was walked for."
-    },
-    {
-      "id": "R9",
-      "severity": "note",
-      "rule": "spec/stale-statement",
-      "file": "specs/requests/02-client-participants.md",
-      "symbol": "requirement 24",
-      "line": 211,
-      "claim": "requirement 24 points at requirement 26 for the rule that lives in requirement 27",
-      "witness": {
-        "kind": "rule",
-        "detail": ":211 'the client is simply no longer offered for new work (requirement 26)'. Requirement 26 (:219) is the project/client match and the projectRequiredForClient refusal; the rule that an archived client's users may not be chosen is requirement 27 (:224): 'Only an active client user of an active client may be chosen … a user of an archived client, is 400 with REQUEST_MESSAGES.clientUserUnavailable.' The Actors table gets it right at :43 ('requirement 27').",
-        "source": "specs/requests/02-client-participants.md:211 against :224"
-      },
-      "suggestedFix": "point at requirement 27, or drop the parenthetical."
-    },
-    {
-      "id": "R10",
       "severity": "note",
       "rule": "spec/missing-artefact",
       "file": "specs/requests/02-client-participants.md",
       "symbol": "UI Description, 'Client user, sidebar'",
-      "line": 604,
-      "claim": "the list of nav ids that must be absent for a client principal omits two the sidebar draws",
+      "line": 641,
+      "claim": "the enumeration of nav ids that must be absent for a client principal is still short by one of the rows the sidebar draws",
       "witness": {
         "kind": "command",
-        "detail": ":604 names 'nav-members, nav-projects, nav-clients, nav-time-tracking, nav-envelopes, nav-documents all absent'. `grep -n \"testId: 'nav-\" apps/web/src/layout/Sidebar.tsx` returns eight ids: nav-time-tracking (:64), nav-members (:75), nav-projects (:97), nav-clients (:108), nav-envelopes (:122), nav-documents (:131), nav-outbox (:140) and nav-settings (:159). nav-outbox is drawn wherever mail is simulated, which is every E2E run.",
-        "source": "specs/requests/02-client-participants.md:604 against apps/web/src/layout/Sidebar.tsx:140"
+        "detail": "grep -n \"testId: '\" apps/web/src/layout/Sidebar.tsx returns ten navigation entries: nav-time-tracking (:64), nav-members (:75), sidebar-requests-link (:84), nav-projects (:97), nav-clients (:108), nav-envelopes (:122), nav-documents (:131), nav-outbox (:140), nav-settings (:159) and settings-tab-holidays (:171) — the last is the Holidays row, pushed into the same Settings group as nav-settings and gated on ViewHolidays. The spec's row (:641) names nav-members, nav-projects, nav-clients, nav-time-tracking, nav-envelopes, nav-documents, nav-outbox and nav-settings and stops. Requirement 12 ('exactly one row') still governs, so nothing wrong is drawn; the enumeration is simply incomplete.",
+        "source": "apps/web/src/layout/Sidebar.tsx:169-176"
       },
-      "suggestedFix": "add nav-outbox and nav-settings to the absent list; requirement 12's 'exactly one row' already implies them, but a case author writes from this list."
+      "suggestedFix": "add settings-tab-holidays to the absent list"
     },
     {
-      "id": "R11",
-      "severity": "note",
-      "rule": "spec/missing-artefact",
-      "file": "specs/requests/02-client-participants.md",
-      "symbol": "UI Description, 'Pending invitation row'",
-      "line": 609,
-      "claim": "the pending-invitation row is drawn but nothing addresses it",
-      "witness": {
-        "kind": "rule",
-        "detail": "The client detail mock (:392) draws 'R. Ops … invited' and :609 requires the row 'Shown with status `invited`'. The People payload gives a pending invitation only '{ \"email\": …, \"expiresAt\": … }' (:464) — the same absence :609 itself records ('would need … an id on the pending payload') — and the Required data-testid list (:615-618) offers only client-user-row-{id} and client-user-row-{id}-status, keyed by an id a pending invitation does not have. No selector can assert the invited row.",
-        "source": "specs/requests/02-client-participants.md:609 against :464"
-      },
-      "suggestedFix": "give the pending row its own id — client-user-pending-row-{email} or equivalent — in the Required list, or say the invited row is not asserted."
-    },
-    {
-      "id": "R12",
-      "severity": "note",
-      "rule": "spec/incomplete-decision",
-      "file": "specs/requests/02-client-participants.md",
-      "symbol": "requirement 9a",
-      "line": 122,
-      "claim": "what a client principal receives from the three client-user routes is not stated",
-      "witness": {
-        "kind": "rule",
-        "detail": "Requirement 9a (:122) and the contracts (:455, :473, :482) state the refusal only for 'a staff caller' without the capability. A client principal passes SessionGuard and OrgScopeGuard on their own organization and these three routes carry no CapabilityGuard, so requirement 14's 'the API answers 403 for a capability-gated route' does not reach them; the permission matrix (:55) refuses the client user the capability but names no status or body.",
-        "source": "specs/requests/02-client-participants.md:122 against :171"
-      },
-      "suggestedFix": "say in requirement 9a that the service check refuses any caller who does not hold manage-client-users, whichever principal they are, with the same 403 and manageForbidden."
-    },
-    {
-      "id": "R13",
+      "id": "R4",
       "severity": "note",
       "rule": "spec/divergence",
       "file": "specs/requests/02-client-participants.md",
-      "symbol": "GET /api/organizations/{orgId}/clients/{clientId}/users",
-      "line": 455,
-      "claim": "a clients-scoped route now answers a named 403 to a staff caller who lacks the capability, where the clients routes today answer 404 so the resource is not revealed",
+      "symbol": "POST /api/invitations (extended), Errors",
+      "line": 509,
+      "claim": "the refusal a caller without the capability receives from POST /api/invitations changes for role = 'client', from the message that route answers today to this spec's own",
       "witness": {
         "kind": "rule",
-        "detail": "The contract (:455) refuses a staff caller without manage-client-users with '403 CLIENT_USER_MESSAGES.manageForbidden'. apps/api/src/clients/clients.service.ts:365-373 collapses a missing client capability to NotFoundException instead, with the comment 'A missing capability collapses to 404 rather than 403 … so a distinctive 403 body would leak the fact that the resource exists.' A `user` calling the new route learns the client exists; calling the client detail they do not.",
-        "source": "specs/requests/02-client-participants.md:455"
+        "detail": "The contract (:509): '403 CLIENT_USER_MESSAGES.manageForbidden when role = client and the caller lacks the capability, staff or client principal.' apps/api/src/invitations/invitations.service.ts:66-73 refuses every caller who is not an active admin or manager of the session's organization with 403 { message: INVITE_MESSAGES.permissionDenied } ('You do not have permission to invite members'), and does so before the body is validated at all — so the same caller sending role='client' is answered a different message after this spec than before it. manage-client-users and the invite permission are held by exactly the same two roles, so nothing about who may invite changes; only what the refused caller is told.",
+        "source": "specs/requests/02-client-participants.md:509"
       },
-      "suggestedFix": "none required — recorded so a person can confirm the change of discipline on clients-scoped URLs was meant."
+      "suggestedFix": "none — the spec states its rule in full; this is recorded so a person can confirm the changed message on an existing route was meant"
     }
   ]
 }

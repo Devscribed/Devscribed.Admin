@@ -221,7 +221,17 @@ an actor rule of spec 01 (being the addressee), not a capability.
     transaction shape spec 03 already uses.
 19. The supersession rule of spec 03 is inherited unchanged: at most one live `pending`
     invitation per (email, organization), whichever kind it is. Inviting an address that already
-    has a pending staff invitation supersedes it, and the reverse also holds.
+    has a pending staff invitation supersedes it, and the reverse also holds. A superseded token
+    is no longer live: presenting it answers `400 INVITE_MESSAGES.tokenInvalid`.
+
+19a. **Invitation time inspects no `ClientMembership`.** Spec 03's `alreadyMember` refusal —
+    `400 INVITE_MESSAGES.alreadyMember` — reads active `Membership` rows only, and this spec adds
+    no counterpart for `ClientMembership`. So an address that already holds an active
+    `ClientMembership` can be minted a client invitation and a staff invitation alike, each
+    succeeding, and the refusal comes at acceptance: `409 accountIsClient` (requirement 2).
+    **Decided:** the one-active-principal guarantee is enforced only in the accept transaction;
+    rejected: a mirror refusal at invitation time, which would need a message this spec does not
+    define and would make edge cases 2 and 21 unreachable.
 20. A `client_invitation` mail type is added. It names the organization, the client, and who
     invited, and carries the accept link. It does not name any project, any request, or any
     member's email address.
@@ -511,6 +521,17 @@ lacks the capability, staff or client principal; `400 …invitationShapeInvalid`
 role/clientId mismatch;
 `400 …clientArchived`; everything else exactly as spec 03 defines it.
 
+**Decided:** the refusal a caller without permission meets is chosen by the `role` in the body,
+which is read before the refusal is chosen. `role = 'client'` answers
+`403 CLIENT_USER_MESSAGES.manageForbidden`; any body that does not carry `role = 'client'` —
+another role, an invalid one, or none at all — keeps spec 03's refusal unchanged,
+`403 INVITE_MESSAGES.permissionDenied` ("You do not have permission to invite members").
+Rejected: answering `permissionDenied` for a client invitation too, which
+would leave `manageForbidden` unreachable on this route and name the wrong permission. **Who may
+invite does not change**: `manage-client-users` is held by admin and manager, and this route
+already admits only an active admin or manager of the session's organization. Only what a refused
+caller sending `role = 'client'` is told changes, and TC-02-INT-02 observes both branches.
+
 ### `PATCH …/clients/{clientId}/users/{clientMembershipId}/remove`
 
 `SessionGuard` → `OrgScopeGuard`, then a **service-level** `manage-client-users` check
@@ -577,7 +598,7 @@ client principal can now be party to a request and therefore pass spec 01's part
 | 18 | A client user is removed while a request addressed to them is open | The request stays open, reads `assignee.inactive: true`, and is offered for reassignment. |
 | 19 | An account with neither kind of membership attempts to log in | `400` with the existing message, byte-identical to the removed-membership case, so the answer distinguishes nothing. |
 | 20 | A staff member's `Membership` is removed but a `ClientMembership` is later created for the same account | Permitted: rule 2 forbids holding **both active**, and the accept handler re-reads for an *active* row of the other kind. A person who left the agency and now works for a client is a real case. |
-| 21 | Two managers invite the same address to the same client at once | Nothing serializes the two writes, and both may leave a `pending` invitation: the supersession rule is last-writer-wins and this spec adds no lock and no unique constraint. **Decided:** the guarantee lives at acceptance, not at invitation — whichever token is accepted first creates the `ClientMembership`, and accepting a second token for that address afterwards answers `409 accountIsClient` (requirement 2), so at most one principal exists whatever the order. Rejected: claiming exactly one `pending` invitation survives, which no mechanism in this spec provides. |
+| 21 | Two managers invite the same address to the same client at once | Nothing serializes the two writes, and both may leave a `pending` invitation: the supersession rule is last-writer-wins and this spec adds no lock and no unique constraint. **Decided:** the guarantee lives at acceptance, not at invitation — whichever token is accepted first creates the `ClientMembership`, and accepting a second **live** token for that address afterwards answers `409 accountIsClient` (requirement 2), so at most one principal exists whatever the order. A token the supersession rule invalidated is not live and answers `400 INVITE_MESSAGES.tokenInvalid` instead (requirement 19). Rejected: claiming exactly one `pending` invitation survives, which no mechanism in this spec provides. |
 | 22 | A client user's account holds a `ClientMembership` in an archived client, and they log in | Login succeeds while the membership is `active` (requirement 24); they see their existing requests and can be addressed no new ones. |
 
 ## Validation Rules
@@ -632,13 +653,15 @@ case author asserting a body never leaves this document.
 | Decline reason missing / too long | `REQUEST_MESSAGES.declineReasonRequired` / `…declineReasonTooLong` | `POST …/decline` | Say why you cannot provide this / Reason must be 1000 characters or fewer |
 | Invitation role not one of the five | `MESSAGES.role.invalid` | `POST /api/invitations` | Invalid role |
 | A superseded or used invitation token | `INVITE_MESSAGES.tokenInvalid` | `POST /api/invitations/accept` | This invitation is no longer valid |
+| Invite attempted without permission, for a body that is not a client invitation | `INVITE_MESSAGES.permissionDenied` | `POST /api/invitations` | You do not have permission to invite members |
+| An address that already holds an active `Membership` is invited as staff | `INVITE_MESSAGES.alreadyMember` | `POST /api/invitations` | This person is already a member of your organization |
 | Login with no active principal of either kind | `AUTH_MESSAGES.deactivated` | `POST /api/login` | Your account has been deactivated. Contact your administrator. |
 
 ## UI Description
 
 | State | Behaviour |
 |---|---|
-| Client user, sidebar | Exactly one row, Requests. `nav-members`, `nav-projects`, `nav-clients`, `nav-time-tracking`, `nav-envelopes`, `nav-documents`, `nav-outbox`, `nav-settings` all absent. |
+| Client user, sidebar | Exactly one row, Requests: `sidebar-requests-link` is the only navigation `data-testid` in the sidebar, and every other navigation id the sidebar can draw is absent from the DOM — `nav-members`, `nav-projects`, `nav-clients`, `nav-time-tracking`, `nav-envelopes`, `nav-documents`, `nav-outbox`, `nav-settings` and `settings-tab-holidays` among them. Nothing is drawn from a role lookup for this caller (requirement 12), so a navigation row added later is absent here without this row being edited. |
 | Client user, request list | No scope control, no New Request; status filter only. |
 | Client user, request detail | No History panel; Answer and Decline only; Grant, Reassign, Cancel and Edit absent. |
 | Client user, terminal request | Composer absent, both action controls absent, thread readable. |
@@ -855,9 +878,12 @@ the rig. Every other section is covered below.
 
 - **Level:** Integration
 - **Steps:** Invite with `role=client` and no `clientId`; with `role=user` and a `clientId`; for
-  an archived client; without `manage-client-users`.
+  an archived client; as a `user`, with `role=client`; as the same `user`, with `role=user` and no
+  `clientId`.
 - **Expected Result:** 400 `invitationShapeInvalid`; 400 `invitationShapeInvalid`; 400
-  `clientArchived`; 403 `manageForbidden`. No invitation row written in any case.
+  `clientArchived`; 403 `manageForbidden`; 403 `INVITE_MESSAGES.permissionDenied`, spec 03's
+  refusal unchanged for a body that is not a client invitation. No invitation row written in any
+  case.
 
 ### TC-02-INT-03
 
@@ -943,9 +969,16 @@ the rig. Every other section is covered below.
 ### TC-02-INT-12
 
 - **Level:** Integration
-- **Steps:** Address a request to a client user, then remove that user.
-- **Expected Result:** the request stays `open`, reads `assignee.inactive: true`, and reassigning
-  it to a member succeeds and writes `assignee_changed` with both display-name snapshots.
+- **Steps:** On one client holding two active client users, address a request to the first on a
+  project of that client, then remove that user. Reassign the request to a member. Then repeat on
+  a second request in the same state, reassigning it instead to the client's other active client
+  user.
+- **Expected Result:** each request stays `open` and reads `assignee.inactive: true` while its
+  addressee is removed. Reassigning to a member answers 200, leaves the row with
+  `assigneeKind = 'member'`, and writes `assignee_changed` with both display-name snapshots.
+  Reassigning to the other active client user answers 200, leaves the row with
+  `assigneeKind = 'client'` and `assigneeClientMembershipId` that user's, and writes
+  `assignee_changed` carrying both display names in `oldLabel` / `newLabel` (requirement 23).
 
 ### TC-02-INT-13
 
@@ -976,11 +1009,16 @@ the rig. Every other section is covered below.
 ### TC-02-INT-16
 
 - **Level:** Integration
-- **Steps:** Mint two client invitations for the same address and client, keeping both tokens —
-  the state two simultaneous invites can leave (edge case 21). Accept one token, then the other.
-- **Expected Result:** the first acceptance creates exactly one `ClientMembership`; the second
-  answers 409 `accountIsClient` and creates nothing. The number of `pending` rows left behind is
-  not asserted — this spec makes no serialization guarantee at invitation time.
+- **Steps:** Mint a client invitation for an address and client, then mint a second for the same
+  address and client, keeping both tokens — the second supersedes the first (requirement 19).
+  Accept the surviving token, then the superseded one. Then mint a third client invitation for
+  the same address, now an active client user (requirement 19a), and accept that token too.
+- **Expected Result:** the first acceptance creates exactly one `ClientMembership` and marks its
+  invitation `used`; the superseded token answers 400 `INVITE_MESSAGES.tokenInvalid` and creates
+  nothing; the third invitation is created, and accepting its token answers 409 `accountIsClient`
+  and creates nothing. Exactly one `ClientMembership` exists for that address at the end — the
+  acceptance guarantee edge case 21 rests on. The number of `pending` rows left behind is not
+  asserted — this spec makes no serialization guarantee at invitation time.
 
 ### TC-02-INT-17
 

@@ -65,9 +65,17 @@ the sentence, not to correct it.
 
 ## A re-pass judges the change, not the document
 
-Before you sweep, look for `.workflow/refine/<area>-<nn>.fix.json` and for `git diff` on the spec.
-If a fix file exists, this document has already been judged in full. What has **not** been judged
-is what changed since.
+Before you sweep, check whether `.workflow/refine/<area>-<nn>.fix.json` exists. If it does, this
+document has already been judged in full, and what has **not** been judged is what a repair
+changed since.
+
+**Its existence is all you take from it. Do not read it, and do not read the verdict beside it.**
+What an earlier judge concluded and what a repair decided are exactly the context you are kept
+out of: a decision recorded there is not a decision you may accept, and a finding filed there is
+not one you may assume is gone. Everything you assert still comes from a file you opened.
+
+Find that change: `git log --oneline -- <spec>` for the commit a refine pass produced, then
+`git show <commit> -- <spec>`, plus `git diff HEAD -- <spec>` for anything not yet committed.
 
 Then your sweeps run over the added and modified lines, and over the rules those lines touch —
 not over the whole document. **A statement you did not sweep is a statement an earlier pass
