@@ -111,3 +111,54 @@ export type ReportColumn =
 
 /** Row-level billable filter (spec Validation Rules 10; §Filter bar). */
 export type BillableFilter = 'all' | 'billable' | 'non-billable';
+
+/**
+ * Time Off row (spec §API Contracts — Time Off 200 shape). Fixed column set:
+ * the report's shape is not driven by capability projection like Time & Activity,
+ * so every row carries every field. `status` is only present on vacation rows
+ * (holidays are org-wide informational, no lifecycle). `deduction` is `null`
+ * on holiday rows (org-wide, not a per-member liability).
+ */
+export interface TimeOffRow {
+  type: string;
+  period: string;
+  status?: 'approved' | 'pending' | 'rejected' | 'cancelled';
+  days: string;
+  workingDays: string;
+  deduction: string | null;
+  kind: 'vacation' | 'holiday';
+}
+
+export interface TimeOffGroup {
+  id: string;
+  title: string;
+  rows: TimeOffRow[];
+  total: {
+    days: string;
+    workingDays: string;
+    deduction: string | null;
+  };
+}
+
+export interface TimeOffResponse {
+  /**
+   * Informational — the Time Off table renders a hardcoded column set per
+   * spec §API Contracts · Time Off. The field is on the wire for symmetry
+   * with the other two reports.
+   */
+  headers: ReportHeader[];
+  groups: TimeOffGroup[];
+  summary: ReportSummaryItem[];
+  meta: ReportMeta;
+}
+
+/** Time Off row-kind filter (spec Validation Rules 11; §Filter bar). */
+export type TimeOffTypeFilter = 'all' | 'vacation' | 'holiday';
+
+/** Time Off vacation-status filter (spec Validation Rules 12; §Filter bar). */
+export type TimeOffStatusFilter =
+  | 'all'
+  | 'approved'
+  | 'pending'
+  | 'rejected'
+  | 'cancelled';
