@@ -17,6 +17,14 @@ The Reports feature ported from Teammerly.API needs primitives that Devscribed.A
 
 *(Spec 02 was reserved for Organization Currency and has been dropped — see §Why this area exists. The number is intentionally left as a gap so a future currency spec can slot in without a renumber.)*
 
+## Related Areas
+
+[`specs/requests/`](../requests/README.md) — access requests and questions. It depends on spec 01
+for `Client` and `Project.clientId`, and it **closes this area's "client contact fields" known
+gap** in a stronger form than that gap anticipated: a person at a client is not a contact record
+but a signed-in participant, an `Account` plus a `ClientMembership` bound to a `Client`
+(requests spec 02). That spec owns the person; this one keeps owning `Client` itself.
+
 ## Product decisions
 
 | Decision | Choice | Rationale |
@@ -80,4 +88,4 @@ Specs 01 and 03 have no dependencies on each other and can be implemented in par
 | No per-project rate overrides | Reports v1 uses `MemberFinancials` as the sole rate source. Client rates and project-specific rate overrides are a Teammerly parity item deferred by design. | A future spec `specs/organization/04-project-rates.md` adds `Project.billRateOverride` and `Project.payRateOverride`, plus per-`ProjectMember` overrides. |
 | Holidays do not exclude from `workingDays` | Vacation math (spec 09) freezes `workingDays` at approval; retroactively excluding holidays would break the frozen contract. | An amendment to spec 09 that (a) resolves the holiday set at submit time, (b) stores which holidays were counted on the request, (c) updates unit tests for Mon-holiday-in-range. |
 | No multi-currency | Every member is de-facto in USD. When the first non-USD member lands, `MemberFinancials.currency` is still on the row but reports do not read it. | A future spec introduces `Organization.currencyCode`, the picker, the FX-rate strategy, and the migration in one deliberate step. |
-| Client contact fields (email, phone, address) | Reports need only the name to group by; contact management belongs to a CRM concern, not the admin surface. | A follow-up spec if a CRM-lite need emerges. |
+| Client contact fields (email, phone, address) | Reports need only the name to group by; contact management belongs to a CRM concern, not the admin surface. | **Partly closed** by [requests/02](../requests/02-client-participants.md), which gives a client people rather than contact fields: an `Account` plus a `ClientMembership`, so the email is an identity rather than a stored attribute. Phone and postal address remain open and still wait on a CRM-lite need. |
