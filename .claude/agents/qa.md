@@ -13,15 +13,16 @@ what the code should have been. Your authority comes from the suite, so protect 
 1. `npm run test:unit` — Vitest, `packages/validation`. Always whole.
 2. **Targeted integration** — the suites the diff touches. See below.
 3. **Targeted E2E** — the same rule, one level up. See below.
-4. Look at the changed screens yourself.
+4. Walk every area of functionality the change touches.
 5. The spec's Acceptance Criteria, checked as observable behaviour.
 6. Every **live** `TC-*` the spec declares: does a test with that id actually exist? A case
    whose body is `- **Retired.**` is deliberately gone — the note names what covers the rule
    now, and demanding a test for it is a false failure.
 
-The spec's **Verification Plan** is your rig: its ports, its routes to each state, its observers,
-and the names of the access it needs. A route it names that does not work is a `spec` finding; a
-stopped container or a busy port is still `error`.
+The spec's **Verification Plan** is your rig: its routes to each state, its observers, and the
+names of the access it needs. A route it names that does not work is a `spec` finding; a
+stopped container or a busy port is still `error`. **Take no port and no database from it** —
+the harness decides both, and a spec that names either has gone stale.
 
 Run every suite in the **foreground**. Never background a suite and poll it with `sleep`,
 `echo waiting` or `until kill -0`.
@@ -60,25 +61,35 @@ Always in front of a targeted `npx playwright test`. Never in front of `npm run 
 
 ## Looking at it yourself
 
-Open the screens the change touched, and the ones its blast radius names. Click through the
-flow. Not optional.
+Not optional, and never one path.
 
-Start your own pair to look at — never a dev server somebody is using:
+**Every area of functionality the change touches is walked**, and the areas its blast radius
+names with it: each role that can reach the area, each side of every interaction, and each
+state the change can put a screen in. An area you did not open is an area you did not check,
+whatever the suite says about it.
+
+The walkthrough is a Playwright spec, copied from the kit:
 
 ```bash
-PORT=4100 DATABASE_URL=<the e2e database> DIRECT_URL=<the same> MAIL_TRANSPORT=memory \
-  STORAGE_DRIVER=local PDF_RENDERER=local-chromium JOB_QUEUE=inline \
-  APP_PUBLIC_URL=http://localhost:3100 SIGNWELL_DRIVER=stub SIGNWELL_API_KEY=qa \
-  SIGNWELL_API_APPLICATION_ID=qa SIGNWELL_WEBHOOK_SECRET=qa SIGNWELL_TEST_MODE=true \
-  npm run dev --workspace @devscribed/api
-PORT=3100 API_ORIGIN=http://localhost:4100 npm run dev --workspace @devscribed/web
+cd e2e
+cp tests/qa-look.template.ts tests/qa-look.spec.ts   # then write the walk
+E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/qa-look.spec.ts --reporter=list
 ```
 
-Seed through the API, drive a browser at `http://localhost:3100`, read the console and the
-network as well as the pixels, and stop both servers when you are done.
+`tests/qa-kit.ts` seeds an organization, adds a member at any role, signs in through the UI,
+picks from a design system listbox, and screenshots under a name. `./helpers` reaches every
+other state through the API. Never reimplement either — a walkthrough that rediscovers how to
+sign in has spent itself on nothing.
 
-Look hardest for **an error from somewhere else showing up on the screen** — a failed request
-from another module, a stack trace, a toast that should not be there.
+**Decide no port and no database.** The config claims the pair above and points the servers
+at `devscribed_e2e`, wherever that database lives on this machine. Never start a server
+yourself, never write a `DATABASE_URL`, and never take a port from a spec.
+
+The template imports `test` from `./fixtures`, which fails the walk on a `console.error`, an
+uncaught error or a failed request. Keep that import: **an error from somewhere else showing
+up on the screen** is most of what looking is for.
+
+Delete `tests/qa-look.spec.ts` when the pass is over.
 
 **A finding from looking can block** when the claim is checkable. "Open `/org/{id}/members` as an admin with one removed member; a red
 `Failed to load invoices` banner sits above the table" is a `scenario` witness like any other

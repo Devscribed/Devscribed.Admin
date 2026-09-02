@@ -182,7 +182,9 @@ You may not write a verdict while the worklist is non-empty. A review that only 
     }
     case 'qa':
       return `${head}\nRun unit in full, then the integration and E2E suites the diff touches — never either one whole; `
-        + `both already run on the deploy gate. Run E2E with \`CI=1\`, targeted. Then check the spec's acceptance criteria.${back}`;
+        + `both already run on the deploy gate. Run E2E with \`CI=1\`, targeted. `
+        + `Then walk every area of functionality the change touches, from every side that can reach it. `
+        + `Then check the spec's acceptance criteria.${back}`;
     default:
       throw new Error(`no prompt for stage ${stage}`);
   }
