@@ -1206,28 +1206,33 @@ function ReportTable({
             </div>
           ))}
 
-          <div
-            role="row"
-            data-testid={`reports-group-${group.id}-total`}
-            style={{
-              display: 'flex',
-              padding: '10px 20px',
-              background: 'var(--bg-panel-2)',
-              borderTop: '1px solid var(--divider)',
-              fontFamily: 'var(--font-display)',
-              fontWeight: 600,
-              fontSize: 'var(--fs-13)',
-              color: 'var(--text)',
-              gap: 8,
-              alignItems: 'center',
-            }}
-          >
-            {headers.map((h) => (
-              <div key={h.value} style={bodyCellStyle(h.value)}>
-                {renderTotalCell(h.value, group.total, currency)}
-              </div>
-            ))}
-          </div>
+          {/* Per-group total row — hidden when there is only ONE group so it
+              doesn't duplicate the grand-total footer below. With multiple
+              day-groups it is the day-total and reads meaningfully. */}
+          {groups.length > 1 && (
+            <div
+              role="row"
+              data-testid={`reports-group-${group.id}-total`}
+              style={{
+                display: 'flex',
+                padding: '10px 20px',
+                background: 'var(--bg-panel-2)',
+                borderTop: '1px solid var(--divider)',
+                fontFamily: 'var(--font-display)',
+                fontWeight: 600,
+                fontSize: 'var(--fs-13)',
+                color: 'var(--text)',
+                gap: 8,
+                alignItems: 'center',
+              }}
+            >
+              {headers.map((h) => (
+                <div key={h.value} style={bodyCellStyle(h.value)}>
+                  {renderTotalCell(h.value, group.total, currency)}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       ))}
 
