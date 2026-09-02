@@ -23,6 +23,11 @@ export const REPORTS_MESSAGES = {
   invalidProjectRef: 'Invalid project reference.',
   invalidClientRef: 'Invalid client reference.',
 
+  // Per-report row filters (spec Validation Rules 10–12).
+  invalidBillableFilter: 'Invalid billable filter.',
+  invalidTypeFilter: 'Invalid type filter.',
+  invalidStatusFilter: 'Invalid status filter.',
+
   // PDF backpressure (spec §Error Messages).
   pdfTooLarge: 'This report is too large to export as PDF. Please narrow the range or filters.',
 

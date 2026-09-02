@@ -213,6 +213,71 @@ export function coerceQueryBoolean(input: unknown, fallback = false): boolean {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// Per-report row filters (spec Validation Rules 10–12)
+//
+// Each validator returns `{valid, value}` on success (with the string coerced
+// to lowercase, whitespace trimmed) or `{valid: false, error}` on an unknown
+// input. Missing / undefined / null defaults to `'all'` — the sole reason
+// these are exports and not one-liners: the API and the client compute the
+// same default without either side inventing it.
+// ────────────────────────────────────────────────────────────────────────────
+
+export const REPORT_BILLABLE_FILTERS = ['all', 'billable', 'non-billable'] as const;
+export type ReportBillableFilter = (typeof REPORT_BILLABLE_FILTERS)[number];
+
+export const REPORT_TIME_OFF_TYPE_FILTERS = ['all', 'vacation', 'holiday'] as const;
+export type ReportTimeOffTypeFilter = (typeof REPORT_TIME_OFF_TYPE_FILTERS)[number];
+
+export const REPORT_TIME_OFF_STATUS_FILTERS = [
+  'all',
+  'approved',
+  'pending',
+  'rejected',
+  'cancelled',
+] as const;
+export type ReportTimeOffStatusFilter = (typeof REPORT_TIME_OFF_STATUS_FILTERS)[number];
+
+function validateEnumFilter<T extends string>(
+  input: unknown,
+  allowed: readonly T[],
+  message: string,
+): { valid: true; value: T } | { valid: false; error: string } {
+  if (input === undefined || input === null || input === '') {
+    return { valid: true, value: allowed[0] };
+  }
+  if (typeof input !== 'string') return { valid: false, error: message };
+  const normalised = input.trim().toLowerCase();
+  if ((allowed as readonly string[]).includes(normalised)) {
+    return { valid: true, value: normalised as T };
+  }
+  return { valid: false, error: message };
+}
+
+export function validateBillableFilter(input: unknown) {
+  return validateEnumFilter<ReportBillableFilter>(
+    input,
+    REPORT_BILLABLE_FILTERS,
+    REPORTS_MESSAGES.invalidBillableFilter,
+  );
+}
+
+export function validateTimeOffTypeFilter(input: unknown) {
+  return validateEnumFilter<ReportTimeOffTypeFilter>(
+    input,
+    REPORT_TIME_OFF_TYPE_FILTERS,
+    REPORTS_MESSAGES.invalidTypeFilter,
+  );
+}
+
+export function validateTimeOffStatusFilter(input: unknown) {
+  return validateEnumFilter<ReportTimeOffStatusFilter>(
+    input,
+    REPORT_TIME_OFF_STATUS_FILTERS,
+    REPORTS_MESSAGES.invalidStatusFilter,
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Column intersection (spec §Column permission filter — requirements 8–11)
 // ────────────────────────────────────────────────────────────────────────────
 

@@ -10,8 +10,11 @@ import {
   isZeroTotal,
   pdfReportFilename,
   resolveRateAtDate,
+  validateBillableFilter,
   validateCuidList,
   validateReportRange,
+  validateTimeOffStatusFilter,
+  validateTimeOffTypeFilter,
   weightedAverageRate,
 } from './index';
 import { hasCapability } from './roles';
@@ -409,6 +412,44 @@ describe('validateCuidList (spec Validation Rules 5–6)', () => {
   it('undefined / null → empty list (spec: absent filter means "all")', () => {
     expect(validateCuidList(undefined, 'x')).toEqual({ valid: true, value: [] });
     expect(validateCuidList(null, 'x')).toEqual({ valid: true, value: [] });
+  });
+});
+
+describe('Per-report row filters (spec Validation Rules 10–12)', () => {
+  it('billable filter: default `all`; accepts all|billable|non-billable; rejects others', () => {
+    expect(validateBillableFilter(undefined)).toEqual({ valid: true, value: 'all' });
+    expect(validateBillableFilter(null)).toEqual({ valid: true, value: 'all' });
+    expect(validateBillableFilter('')).toEqual({ valid: true, value: 'all' });
+    expect(validateBillableFilter('billable')).toEqual({ valid: true, value: 'billable' });
+    expect(validateBillableFilter(' Non-Billable ')).toEqual({ valid: true, value: 'non-billable' });
+    expect(validateBillableFilter('maybe')).toEqual({
+      valid: false,
+      error: REPORTS_MESSAGES.invalidBillableFilter,
+    });
+    expect(validateBillableFilter(42)).toEqual({
+      valid: false,
+      error: REPORTS_MESSAGES.invalidBillableFilter,
+    });
+  });
+
+  it('time-off type filter: default `all`; accepts all|vacation|holiday; rejects others', () => {
+    expect(validateTimeOffTypeFilter(undefined)).toEqual({ valid: true, value: 'all' });
+    expect(validateTimeOffTypeFilter('holiday')).toEqual({ valid: true, value: 'holiday' });
+    expect(validateTimeOffTypeFilter('weekend')).toEqual({
+      valid: false,
+      error: REPORTS_MESSAGES.invalidTypeFilter,
+    });
+  });
+
+  it('time-off status filter: default `all`; accepts approved|pending|rejected|cancelled', () => {
+    expect(validateTimeOffStatusFilter(undefined)).toEqual({ valid: true, value: 'all' });
+    for (const s of ['approved', 'pending', 'rejected', 'cancelled']) {
+      expect(validateTimeOffStatusFilter(s)).toEqual({ valid: true, value: s });
+    }
+    expect(validateTimeOffStatusFilter('draft')).toEqual({
+      valid: false,
+      error: REPORTS_MESSAGES.invalidStatusFilter,
+    });
   });
 });
 
