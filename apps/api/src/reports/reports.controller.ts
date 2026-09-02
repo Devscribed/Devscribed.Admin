@@ -3,7 +3,11 @@ import type { Response } from 'express';
 import { OrgScopeGuard } from '../auth/org-scope.guard';
 import type { AuthenticatedRequest } from '../auth/session.guard';
 import { SessionGuard } from '../auth/session.guard';
-import { ReportsService, type AmountsOwedQueryInput } from './reports.service';
+import {
+  ReportsService,
+  type AmountsOwedQueryInput,
+  type TimeAndActivityQueryInput,
+} from './reports.service';
 
 /**
  * Spec reports/01 — Amounts Owed endpoints. Guard order copied from
@@ -52,6 +56,60 @@ export class ReportsController {
     @Res() res: Response,
   ) {
     const { buffer, filename } = await this.reports.renderAmountsOwedPdf(
+      req.session!,
+      'my',
+      query,
+    );
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.status(200).send(buffer);
+  }
+
+  /* -------------------------------------------------------------- *
+   * Time & Activity — spec reports/01 second slice
+   * -------------------------------------------------------------- */
+
+  @Get('reports/time-and-activity')
+  async timeAndActivity(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: TimeAndActivityQueryInput,
+  ) {
+    return this.reports.runTimeAndActivity(req.session!, 'all', query);
+  }
+
+  @Get('reports/time-and-activity/my')
+  async timeAndActivityMy(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: TimeAndActivityQueryInput,
+  ) {
+    return this.reports.runTimeAndActivity(req.session!, 'my', query);
+  }
+
+  @Get('reports/time-and-activity/pdf')
+  async timeAndActivityPdf(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: TimeAndActivityQueryInput,
+    @Res() res: Response,
+  ) {
+    const { buffer, filename } = await this.reports.renderTimeAndActivityPdf(
+      req.session!,
+      'all',
+      query,
+    );
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.status(200).send(buffer);
+  }
+
+  @Get('reports/time-and-activity/pdf/my')
+  async timeAndActivityPdfMy(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: TimeAndActivityQueryInput,
+    @Res() res: Response,
+  ) {
+    const { buffer, filename } = await this.reports.renderTimeAndActivityPdf(
       req.session!,
       'my',
       query,
