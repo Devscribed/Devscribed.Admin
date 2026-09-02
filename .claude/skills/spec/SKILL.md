@@ -1,6 +1,6 @@
 ---
 name: spec
-description: Write a functional specification for this repository — a numbered spec file in specs/<area>/ covering behaviour, API contracts, edge cases, blast radius, backward compatibility, acceptance criteria, and unit/integration/E2E test cases. Use when asked to spec a feature, write a specification, design a new area, or extend an existing spec. Also use before implementing anything non-trivial that has no spec yet.
+description: Write a functional specification for this repository — a three-file bundle in specs/<area>/ (NN-name.md for EARS rules with stable ids, NN-name.contracts.md for routes, messages and testids, NN-name.cases.md for the verification plan and test cases) covering behaviour, API contracts, edge cases, blast radius, backward compatibility, acceptance criteria, and unit/integration/E2E test cases. Use when asked to spec a feature, write a specification, design a new area, or extend an existing spec. Also use before implementing anything non-trivial that has no spec yet.
 ---
 
 # Writing specifications
@@ -111,32 +111,63 @@ Everything this step establishes goes into the spec's `## Verification Plan` sec
 
 ### 4. Choose the shape
 
-One spec per coherent surface. Past roughly 900 lines, split into numbered specs with an area
-`README.md` index — see `specs/user-management/` (eleven files) and `specs/documents/` (three plus
-an index). A single 2000-line file is not more thorough, it is less readable.
+One spec per coherent surface. A spec is a **bundle of three files** sharing a base path:
+
+```
+specs/<area>/NN-name.md             behaviour  — EARS rules with stable REQ ids, decision tables
+specs/<area>/NN-name.contracts.md   contracts  — routes, messages, data model, testids, screens
+specs/<area>/NN-name.cases.md       cases      — the verification plan and the test cases
+```
+
+They are one document. The split is not tidiness: the three are checked by different means, and
+keeping the tables out of the behaviour file is what lets a script decide most of what used to
+need a judge. The behaviour file is budgeted at `120 + 7 × requirements` lines — over that, the
+reasoning has grown around the rules.
+
+Past roughly 900 lines of behaviour, split into numbered specs with an area `README.md` index —
+see `specs/user-management/` and `specs/documents/`.
 
 New area → create `specs/<area>/README.md` too, and add a "Related Areas" pointer from any area it
 depends on.
 
 ### 5. Write
 
-Follow `references/spec-template.md` for section order and content. Specs are written in English,
-including in Russian-language conversations.
+Follow `references/spec-template.md`. It gives the file split, the EARS patterns, the decision-table
+directive, and the exact table headers the lint parses — keep those verbatim. Specs are written in
+English, including in Russian-language conversations.
 
-### 6. Refine — a stranger judges it, not you
+**Run the lint as you write, not at the end:**
 
-**Dispatch `spec-refiner` and fix what it returns, before presenting the spec.** Use the
-`refine` skill; the dispatch is one `Task`, given the spec path and the request in one line and
-nothing else.
+```bash
+npm run spec:lint -- specs/<area>/NN-name.md
+```
+
+It decides everything mechanical — a rule that matches no EARS pattern, a requirement stating two
+outcomes, a decision table with an empty cell, a status a case expects that no contract declares, a
+message asserted on a route its own row does not list, a testid in one place and not the other, a
+requirement no case covers, a rule carried by reference to another spec, a count in prose about a
+table, a line number into code, a path that does not exist.
+
+**Every one of those repairs deletes or corrects text.** That is why they belong to a script: a
+gate whose findings are answered with new prose makes work for the next pass.
+
+### 6. Refine — one command, and a stranger judges what is left
+
+```bash
+npm run refine:loop -- specs/<area>/NN-name.md --request "<the request, in one line>"
+```
+
+The loop runs three gates — the lint, then `pre-implement` compiling the spec into a plan, then
+`spec-refiner` — repairs what the judge finds, commits the round, and judges the next round against
+that commit. Read `.claude/skills/refine/SKILL.md` for how to read the outcome; the important part
+is that **you do not drive the agents and do not decide whether a finding deserves another round.**
 
 You do not check your own spec. You know which sentence you meant, so you read the sentence you
-meant, and `references/checklist.md` in your own hands becomes a list of topics you already had
-in mind. It is the refiner's rubric now. The refiner reads every `depends-on` spec in full,
-which you did not, and it is the only pass that asks what this spec has just made false in the
-documents around it.
+meant. The refiner reads what you did not and asks what this spec has just made false around it.
 
-Fix the blockers, dispatch a fresh agent, and repeat until the verdict is `pass` or every
-finding left is a note. Present the spec with the notes.
+Present the spec when the loop passes, or when it stops and you have carried its remaining findings
+to the person. A stop at `needs-a-person` is a fork the fixer refused to take for you — bring it,
+with the trade-off, and let them choose.
 
 ## Principles
 
