@@ -1,55 +1,24 @@
 {
   "spec": "specs/requests/02-client-participants.md",
-  "verdict": ".workflow/refine/requests-02.verdict.json",
-  "fixed": [
-    {
-      "id": "R2",
-      "rule": "spec/incomplete-decision",
-      "edited": ["specs/requests/02-client-participants.md"],
-      "change": "requirement 2 now states the accept-time refusal in full as a three-row table: a client invitation meets 409 accountIsStaff against an active Membership and 409 accountIsClient against an active ClientMembership, and a staff invitation meets 409 accountIsClient against an active ClientMembership; a second client principal is refused by that read and never by a bare unique-constraint error. TC-02-INT-16 already observes the same-kind refusal.",
-      "verifiedBy": "specs/requests/02-client-participants.md, requirement 19a and TC-02-INT-16, which asserted the same-kind 409 accountIsClient the mechanism sentence omitted"
-    },
-    {
-      "id": "R3",
-      "rule": "spec/untestable-case",
-      "edited": ["specs/requests/02-client-participants.md"],
-      "change": "TC-02-INT-12's steps now create both requests while the first client user is still active and remove that user only afterwards, then reassign one to a member and the other to the client's second active client user; the step names requirement 27 as the reason the order is forced.",
-      "verifiedBy": "specs/requests/02-client-participants.md, requirement 27 and edge case 15 (a removed client user is 400 clientUserUnavailable) and state-machine invariant 2 (no restore path)"
-    }
-  ],
+  "verdict": ".workflow/runs/2026-09-02T17-01-18_requests-02-client-participants/pre_implement.verdict.json",
+  "fixed": [],
   "decided": [
     {
-      "id": "R1",
-      "rule": "spec/ambiguous-requirement",
+      "id": "P1",
+      "rule": "spec/contradiction",
       "edited": ["specs/requests/02-client-participants.md"],
-      "question": "does the inherited alreadyMember refusal fire when an invitation carries role = 'client' for an address that holds an active Membership",
-      "chose": "it does not fire: the client invitation is minted, stored and mailed (201), and the refusal is the accept transaction's 409 accountIsStaff",
-      "rejected": "letting alreadyMember fire for a client invitation too, answering 400 INVITE_MESSAGES.alreadyMember at mint time",
-      "why": "the rejected reading makes it impossible ever to mint a client invitation for a staff address, which would leave edge case 1 and TC-02-INT-03 unreachable and would contradict the Error Messages row that already scopes alreadyMember to an address 'invited as staff'; repairing it the other way would mean retiring a case, which is not available",
-      "recordedAt": "requirement 19a, the second paragraph ('The alreadyMember refusal does not fire for role = client'), with TC-02-INT-03 rewritten to mint the invitation first and assert 201 rather than 400 alreadyMember"
-    },
-    {
-      "id": "R4",
-      "rule": "spec/ambiguous-requirement",
-      "edited": ["specs/requests/02-client-participants.md"],
-      "question": "does the Requests row carry its pending badge for a client principal, or does the sidebar absolute suppress it",
-      "chose": "the badge is drawn, counting the non-terminal requests addressed to that client user and nothing else, absent at zero; the sidebar absolute is scoped to navigation destinations",
-      "rejected": "suppressing the badge for a client principal by reading the absolute as covering every data-testid the sidebar draws",
-      "why": "rule 1 — the shell already draws that badge for every signed-in caller from GET /api/organizations/{orgId}/requests, a route requirement 30 lets a client user call, and the spec took no contrary position; suppressing it would hide the work waiting on the one caller whose whole surface is that inbox",
-      "recordedAt": "the UI Description row 'Client user, Requests badge' (the absolute in the row above it now says 'navigation destination'), requirement 30's new sentence about counts.waitingOnMe and the absent vacation key, the sidebar-requests-badge entry in the Required data-testid list and the paragraph below it, and the assertions added to TC-02-INT-14, TC-02-E2E-01 and TC-02-E2E-03"
-    },
-    {
-      "id": "R5",
-      "rule": "spec/ambiguous-requirement",
-      "edited": ["specs/requests/02-client-participants.md"],
-      "question": "for a caller without permission sending role = 'client' with no clientId, is the answer the 403 or the 400 shape refusal",
-      "chose": "the permission refusal is chosen and returned before the body's shape is validated, so that caller meets 403 manageForbidden whether or not the body carries a clientId",
-      "rejected": "validating the shape first and answering 400 invitationShapeInvalid to a caller who may not invite",
-      "why": "rules 1 and 3 — POST /api/invitations already throws its permission refusal before validateInviteCreate runs, and shape-first would tell a caller who may invite nothing which bodies the route accepts",
-      "recordedAt": "the second Decided block under the POST /api/invitations contract, carried into requirement 16, edge case 4 and a new fifth step in TC-02-INT-02 that sends role = 'client' with no clientId as a `user` and expects 403 manageForbidden",
-      "verifiedBy": "grep -n \"permissionDenied\\|validateInviteCreate\" apps/api/src/invitations/invitations.service.ts — the ForbiddenException is thrown at :72, validateInviteCreate is called at :75"
+      "question": "what does accepting a role = 'client' invitation do when the account already holds a removed ClientMembership, given accountId is unique, requirement 18 says the accept creates one, requirement 2's refusal table names only active rows, and State Machine invariant 2 called removed terminal",
+      "chose": "the accept restores that row when the invitation names the client the row is already bound to — same id, status active, removedAt and removedByAccountId null, joinedAt the acceptance time, invitedByMembershipId the new inviter — and refuses with 409 CLIENT_USER_MESSAGES.accountLinkedToAnotherClient (\"This email address is already linked to a different client\") when the invitation names any other client, in this organization or another, leaving the row removed and the invitation pending; removed is no longer terminal and the state diagram draws the transition back",
+      "rejected": "inserting a second ClientMembership (the unique accountId makes it a 500 requirement 2 forbids by name); refusing every re-admission (no message exists for it and Out of Scope states a fresh invitation is the re-admission path); and rebinding the row's clientId to the newly invited client (it would move a row the old client's requests, messages and events still resolve through, and leave a request whose project belongs to one client addressed to a membership of another, which requirement 26 exists to prevent)",
+      "why": "rule 2 — user-management spec 03 requirement 5 gives the same shape for staff: a removed membership in the inviting organization is restored to active on acceptance with the joined date reset. Spec 03's other half, hard-deleting a prior membership of a different organization, cannot be copied here because requirement 22 keeps the client row alive so historical requests resolve through it, so the different-client case falls to rule 3 and refuses",
+      "recordedAt": "requirement 2 — the third and fourth rows of its outcome table and the two Decided paragraphs beneath it; carried into requirement 18, State Machine invariant 1, invariant 2 and the diagram, the ClientMembership Data Model rows for status/invitedByMembershipId/joinedAt/removedAt/removedByAccountId, the new Alt Flow \"a removed client contact comes back\", the new API Contracts section for POST /api/invitations/accept, edge cases 23 and 24, the Error Messages row for accountLinkedToAnotherClient, the Out of Scope bullets on a restore route and on moving a removed client user, the Known Gaps row on the second email address, AC-14 with its observer row, and TC-02-INT-20"
     }
   ],
   "left": [],
-  "filesTouched": ["specs/requests/02-client-participants.md"]
+  "filesTouched": ["specs/requests/02-client-participants.md"],
+  "claimsVerified": [
+    "specs/user-management/03-user-invitation.md requirement 5, \"Removed member of the same org\" — accepting restores the membership to active and resets the joined date; requirement 6 hard-deletes a prior membership of a different organization",
+    "apps/api/src/invitations/invitations.controller.ts — accept is POST 'invitations/accept', carries no guard, and issues the session cookie on success",
+    "specs/requests/01-requests.md — the request payload carries assignee.inactive, false for an active addressee, which TC-02-INT-20 asserts after the restore"
+  ]
 }

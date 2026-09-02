@@ -10,6 +10,7 @@ api:
   - "GET /api/organizations/{orgId}/clients/{clientId}/users"
   - "PATCH /api/organizations/{orgId}/clients/{clientId}/users/{clientMembershipId}/remove"
   - "POST /api/invitations (extended: role=client, clientId)"
+  - "POST /api/invitations/accept (extended: creates or restores a ClientMembership)"
   - "POST /api/login (extended: resolves a client principal)"
   - "GET /api/me (extended: resolves a client principal)"
 entities: [ClientMembership, Invitation, Request, RequestMessage, RequestEvent]
@@ -76,14 +77,23 @@ an actor rule of spec 01 (being the addressee), not a capability.
    `status` is `active` or `removed`; removal is soft, mirroring `Membership`.
 2. **An account holds either an active `Membership` or an active `ClientMembership`, never
    both.** Both tables carry `accountId @unique`, and the accept-invitation handler re-reads
-   both inside its transaction and refuses with 409 when an **active** row of **either** kind
-   already exists for that account:
+   both inside its transaction and decides on that read alone. The table below decides every
+   case this spec touches — a client invitation whatever the account holds, and a staff
+   invitation over a `ClientMembership`. A staff invitation over an account that holds no
+   `ClientMembership` is spec 03's and is unchanged. **The rows are read in order and the first
+   whose condition matches decides**, so an account holding both a `removed` `Membership` and a
+   `removed` `ClientMembership` is decided by its client row:
 
-   | Invitation being accepted | Active row already held | Refusal |
+   | Invitation being accepted | Row already held by that account | Outcome |
    |---|---|---|
-   | `role = 'client'` | `Membership` | `409 CLIENT_USER_MESSAGES.accountIsStaff` |
-   | `role = 'client'` | `ClientMembership` | `409 CLIENT_USER_MESSAGES.accountIsClient` |
-   | any staff role | `ClientMembership` | `409 CLIENT_USER_MESSAGES.accountIsClient` |
+   | `role = 'client'` | an **active** `Membership` | `409 CLIENT_USER_MESSAGES.accountIsStaff` |
+   | `role = 'client'` | an **active** `ClientMembership` | `409 CLIENT_USER_MESSAGES.accountIsClient` |
+   | `role = 'client'` | a **`removed`** `ClientMembership` bound to the same `Client` the invitation names | that row is **restored** to `active` — no second row (requirement 18) |
+   | `role = 'client'` | a **`removed`** `ClientMembership` bound to any other `Client`, whichever organization it belongs to | `409 CLIENT_USER_MESSAGES.accountLinkedToAnotherClient` |
+   | `role = 'client'` | a **`removed`** `Membership` and no `ClientMembership` | the `ClientMembership` is created; the removed staff row is untouched (edge case 20) |
+   | `role = 'client'` | no row of either kind | the `ClientMembership` is created |
+   | any staff role | an **active** `ClientMembership` | `409 CLIENT_USER_MESSAGES.accountIsClient` |
+   | any staff role | a **`removed`** `ClientMembership` | the staff accept proceeds as spec 03 defines it; the removed client row is untouched (edge case 20) |
 
    A second client principal is refused by that read like any other, and never by a bare unique
    constraint error on `ClientMembership.accountId`. **Decided:**
@@ -92,6 +102,23 @@ an actor rule of spec 01 (being the addressee), not a capability.
    would permanently bar a person who left the agency and now works for a client. Staff and
    client are different kinds of relationship to the organization, and an account that is both
    **active** makes every capability question ambiguous.
+
+   **Decided:** a `removed` `ClientMembership` of the **same** kind never refuses and never
+   produces a second row for the same client — accepting a fresh `role = 'client'` invitation
+   for the client that row is already bound to restores it, which is the re-admission path
+   user-management spec 03 gives a removed staff member. Rejected: inserting a second
+   `ClientMembership`, which `accountId @unique` turns into a unique-constraint failure and a
+   500 the row above forbids by name; and rejected: refusing every re-admission, which would
+   leave a removed client user with no way back into the product at all.
+
+   **Decided:** when the fresh invitation names a **different** `Client` from the one the
+   `removed` row is bound to, the accept refuses with
+   `409 CLIENT_USER_MESSAGES.accountLinkedToAnotherClient` and changes nothing. Rejected:
+   rebinding the row's `clientId` to the newly invited client, which would move a row that the
+   old client's requests, messages and events still resolve through (requirement 22) and would
+   leave a request whose project belongs to one client addressed to a membership of another,
+   the state requirement 26 exists to prevent. That person is re-admitted under a second email
+   address, as the Known Gaps table records.
 3. `SessionPayload` (`apps/api/src/auth/session.service.ts`) is unchanged —
    `{ accountId, organizationId, securityStamp }`. The principal kind is **not** in the cookie: it
    is resolved from the database on each request, for the same reason `CapabilityGuard` reads
@@ -228,9 +255,17 @@ an actor rule of spec 01 (being the addressee), not a capability.
     has.
 17. Inviting a client user requires `manage-client-users` (admin, manager) and an **active**
     `Client`. An archived client is rejected with 400 and `CLIENT_USER_MESSAGES.clientArchived`.
-18. Accepting a `role = 'client'` invitation creates the `Account` (when new) and a
-    `ClientMembership`, in one transaction with the invitation's transition to `used` — the same
-    transaction shape spec 03 already uses.
+18. Accepting a `role = 'client'` invitation creates the `Account` (when new) and, in one
+    transaction with the invitation's transition to `used` — the same transaction shape spec 03
+    already uses — either creates a `ClientMembership` or restores the one the account already
+    holds, as requirement 2's table decides.
+
+    **A restore keeps the row and its `id`**, so every request, message and event that resolves
+    through it keeps resolving (requirement 22). In the same transaction the row's `status`
+    becomes `active`, `removedAt` and `removedByAccountId` become `null`, `joinedAt` becomes the
+    acceptance time, and `invitedByMembershipId` becomes the staff member who sent the accepted
+    invitation. `clientId` and `organizationId` are never written by a restore: the only row that
+    can be restored is one already bound to the client the invitation names.
 19. The supersession rule of spec 03 is inherited unchanged: at most one live `pending`
     invitation per (email, organization), whichever kind it is. Inviting an address that already
     has a pending staff invitation supersedes it, and the reverse also holds. A superseded token
@@ -340,11 +375,11 @@ an actor rule of spec 01 (being the addressee), not a capability.
 | `accountId` | `String` **`@unique`** FK → `Account`, **Cascade** | Mirrors `Membership.accountId @unique`. Half of the "staff or client, never both" rule (requirement 2). |
 | `clientId` | `String` FK → `Client`, **Cascade** | |
 | `organizationId` | `String` FK → `Organization`, **Cascade** | Denormalized from the client so every scoping query has the key without a join. |
-| `status` | `String` `@default("active")` | `active` \| `removed`. |
-| `invitedByMembershipId` | `String?` FK → `Membership`, **SetNull** | The staff member who invited them. |
-| `joinedAt` | `DateTime` `@default(now())` | |
-| `removedAt` | `DateTime?` | |
-| `removedByAccountId` | `String?` FK → `Account`, **SetNull** | |
+| `status` | `String` `@default("active")` | `active` \| `removed`. A restore returns a `removed` row to `active` (requirement 18). |
+| `invitedByMembershipId` | `String?` FK → `Membership`, **SetNull** | The staff member who invited them; a restore rewrites it to the sender of the accepted invitation. |
+| `joinedAt` | `DateTime` `@default(now())` | A restore resets it to the acceptance time. |
+| `removedAt` | `DateTime?` | Cleared to `null` by a restore. |
+| `removedByAccountId` | `String?` FK → `Account`, **SetNull** | Cleared to `null` by a restore. |
 
 Indexes: `@@index([organizationId, status])`, `@@index([clientId, status])`.
 
@@ -395,18 +430,26 @@ role-keyed table (requirement 10).
    (invitation accepted)            (admin removes)
             │                              │
             ▼                              ▼
-        active ─────────────────────────► removed ■
-            │                              ▲
-            │  client archived             │  (no automatic transition —
-            └── stays active ──────────────┘   requirement 24)
+        active ─────────────────────────► removed
+            ▲                                │
+            │   a fresh `role = 'client'`    │
+            └─── invitation for the SAME ────┘
+                 client, accepted
+
+   the Client is archived: no transition — the row stays active (requirement 24)
+   a fresh invitation for a DIFFERENT client: refused, the row stays removed
 ```
 
 Invariants:
 
-1. A `ClientMembership` is created only by accepting a `role = 'client'` invitation, in the same
-   transaction that marks the invitation `used`.
-2. `removed` is terminal in this spec; there is no restore path, and re-admitting a person is a
-   fresh invitation, which is how spec 03 already handles a removed member.
+1. A `ClientMembership` is created — or restored from `removed` — only by accepting a
+   `role = 'client'` invitation, in the same transaction that marks the invitation `used`.
+2. `removed` is **not** terminal. The one transition out of it is accepting a fresh
+   `role = 'client'` invitation for the client that row is bound to, which restores it in the
+   accept transaction (requirements 2 and 18); a fresh invitation naming any other client
+   refuses and leaves the row `removed`. There is no restore route and no restore control: the
+   restore is performed only by the accept-invitation handler, which invariant 5 already names
+   as a writer.
 3. The transition to `removed` rotates `Account.securityStamp` in the same transaction, so no
    live session survives it.
 4. Archiving the `Client` changes no `ClientMembership` row.
@@ -471,9 +514,9 @@ No History panel, no Grant, no Reassign, no Cancel, no Edit.
    stored, and any live pending invitation for that address in this organization is superseded.
 3. `client_invitation` is sent after commit.
 4. The recipient opens the accept screen from spec 03, sets a name and a password, and submits.
-5. The accept handler re-reads both membership tables inside its transaction, finds no active
-   row of either kind, creates the `Account` and the `ClientMembership`, and marks the
-   invitation `used`. The response sets the session cookie.
+5. The accept handler re-reads both membership tables inside its transaction, finds no row of
+   either kind, creates the `Account` and the `ClientMembership`, and marks the invitation
+   `used`. The response sets the session cookie.
 6. The accept screen resolves `GET /api/me`, reads `principalKind: "client"`, and lands them on
    `/org/{orgId}/requests` (requirement 13a). Signing in later at the ordinary login screen
    lands them on the same route — the only row they have.
@@ -502,6 +545,14 @@ mistake is recoverable by inviting a different address.
 transaction. Their next request — including one already in flight from an open tab — fails
 `SessionGuard` with 401 and they are returned to the login screen, where login now refuses with
 the existing message.
+
+### Alt Flow: a removed client contact comes back (branches from flow 1, step 5)
+
+The manager invites the same address again for the same client. The transaction finds no active
+row of either kind and a `removed` `ClientMembership` bound to that client, so it restores that
+row instead of inserting one (requirement 18) and marks the invitation `used`. The person signs
+in to the requests that were always theirs. Had the invitation named a different client, the
+transaction would have written nothing and answered `409 accountLinkedToAnotherClient`.
 
 ### Alt Flow: mail fails on either type
 
@@ -574,6 +625,20 @@ staff or client principal, and checked before the row is read, so that 403 is th
 `clientMembershipId` that does not exist (requirement 9a); `404` when the row is not in the
 caller's organization — never 403.
 
+### `POST /api/invitations/accept` (extended)
+
+No guard — the token is the credential, as spec 03 defines it. Unchanged request shape. What
+changes is that a `role = 'client'` token creates or restores a `ClientMembership` in the same
+transaction that marks the invitation `used`, and that the transaction re-reads both membership
+tables first (requirements 2 and 18). The response is spec 03's and sets the session cookie.
+
+**Errors:** `409 CLIENT_USER_MESSAGES.accountIsStaff`;
+`409 CLIENT_USER_MESSAGES.accountIsClient`;
+`409 CLIENT_USER_MESSAGES.accountLinkedToAnotherClient` when the account's `removed`
+`ClientMembership` is bound to a client other than the one the token names — each of them
+leaving the invitation `pending` and writing no membership row; everything else exactly as spec
+03 defines it, including `400 INVITE_MESSAGES.tokenInvalid`.
+
 ### `GET /api/me` (extended)
 
 `SessionGuard`. Unchanged request. The response gains `principalKind` and resolves a client
@@ -632,6 +697,8 @@ client principal can now be party to a request and therefore pass spec 01's part
 | 20 | A staff member's `Membership` is removed but a `ClientMembership` is later created for the same account | Permitted: rule 2 forbids holding **both active**, and the accept handler re-reads for an *active* row of the other kind. A person who left the agency and now works for a client is a real case. |
 | 21 | Two managers invite the same address to the same client at once | Nothing serializes the two writes, and both may leave a `pending` invitation: the supersession rule is last-writer-wins and this spec adds no lock and no unique constraint. **Decided:** the guarantee lives at acceptance, not at invitation — whichever token is accepted first creates the `ClientMembership`, and accepting a second **live** token for that address afterwards answers `409 accountIsClient` (requirement 2), so at most one principal exists whatever the order. A token the supersession rule invalidated is not live and answers `400 INVITE_MESSAGES.tokenInvalid` instead (requirement 19). Rejected: claiming exactly one `pending` invitation survives, which no mechanism in this spec provides. |
 | 22 | A client user's account holds a `ClientMembership` in an archived client, and they log in | Login succeeds while the membership is `active` (requirement 24); they see their existing requests and can be addressed no new ones. |
+| 23 | A removed client user is invited again to the **same** client and accepts | The invitation is minted (requirement 19a inspects no `ClientMembership`) and the accept restores their existing row: same `id`, `status = 'active'`, `removedAt` and `removedByAccountId` `null`, `joinedAt` the acceptance time, and the invitation `used`. Exactly one `ClientMembership` exists for that account, and every request, message and event addressed through the old row still resolves (requirement 18). |
+| 24 | A removed client user is invited to a **different** client and accepts | `409 accountLinkedToAnotherClient`. Nothing is written: the row stays `removed` and bound to its original client, and the invitation stays `pending`. The same answer whether that removed row belongs to this organization or another, so the refusal tells the caller nothing about another organization. |
 
 ## Validation Rules
 
@@ -657,6 +724,7 @@ New strings live in `CLIENT_USER_MESSAGES`; the three request-side additions ext
 |---|---|---|---|
 | Account is already staff | `CLIENT_USER_MESSAGES.accountIsStaff` | `POST /api/invitations/accept` | This email address already belongs to a team member |
 | Account is already a client user | `CLIENT_USER_MESSAGES.accountIsClient` | `POST /api/invitations/accept` | This email address already belongs to a client user |
+| Account's removed client row belongs to another client | `CLIENT_USER_MESSAGES.accountLinkedToAnotherClient` | `POST /api/invitations/accept` | This email address is already linked to a different client |
 | Invitation shape invalid | `CLIENT_USER_MESSAGES.invitationShapeInvalid` | `POST /api/invitations` | Choose a client for a client invitation, and none for a team invitation |
 | Client archived | `CLIENT_USER_MESSAGES.clientArchived` | `POST /api/invitations` | You cannot invite people for an archived client |
 | Manage without capability | `CLIENT_USER_MESSAGES.manageForbidden` | `GET …/clients/{clientId}/users`, `POST /api/invitations` with `role = 'client'`, `PATCH …/users/{id}/remove` — emitted by the service check of requirement 9a, never by `CapabilityGuard` | You do not have permission to manage client users |
@@ -758,7 +826,13 @@ assert present for a client principal.
   no reports.
 - **More than one client per client user.** `accountId` is unique in both membership tables, the
   same single-org constraint staff live under.
-- **Restoring a removed client user.** A fresh invitation is the path, as it is for staff.
+- **A restore route, or a restore control on the People section.** Re-admitting a removed client
+  user is done by inviting them again to the same client and having them accept, which restores
+  their row inside the accept transaction (requirements 2 and 18) — as it is for staff. No screen
+  and no endpoint moves a `ClientMembership` from `removed` to `active` directly.
+- **Moving a removed client user to a different client.** The accept refuses it
+  (`409 accountLinkedToAnotherClient`, requirement 2); a second email address is the path, as the
+  Known Gaps table records.
 - **Per-client branding** on the login screen or in mail.
 - **Vacation, time tracking or any staff feature for a client principal.** They are not staff and
   the schema is what says so.
@@ -769,6 +843,7 @@ assert present for a client principal.
 |---|---|---|
 | **Every state that needs a request addressed to a client user is `not run` below.** | The principal, the invitation and the guards are provable today and were proved; what is unprovable is unprovable because the column and the table it hangs off are this spec's own work, not because it was skipped. | Walking those rows at the start of this spec's implementation, once `ClientMembership` and `Request.assigneeClientMembershipId` exist, and filling them in before the cases that need them are trusted. |
 | Login refuses an account with no active principal with a different message than it refuses a wrong password on an account that has one, which is an account-existence oracle. The principal is checked **before** the password, so a valid and a wrong password on such an account are answered identically — that ordering is the property requirement 6 preserves. | **Pre-existing**, observed while probing this spec and not introduced by it. Narrowing it changes a message user-management spec 02 owns. | An amendment to user-management spec 02 making the two refusals identical. Named here so it is not rediscovered as this spec's defect. |
+| A removed client user who is later invited to a **different** client must use a second email address | `accountId` is unique in `ClientMembership`, so the one row an account can hold is bound to one client for its whole life, and requirement 2 refuses the rebind rather than moving a row that the old client's requests still resolve through. A removed contact returning to the client they were removed from is restored on that row instead | A spec that makes `accountId` non-unique in `ClientMembership`, or that gives a removed row a rebind with the historical resolution rewritten alongside it |
 | A person who is both staff and a client contact must use two email addresses | Rule 2 forbids two active principals for one account, and the alternative — a principal switcher — is a product decision nobody has asked for | A spec that makes `accountId` non-unique in both tables and adds an organization/principal switcher, which is also what multi-org would need |
 | No audit record of an invitation being sent to a client | `Invitation` rows carry their own history and spec 03 owns that surface | Whatever closes it for staff invitations closes it here |
 
@@ -789,6 +864,7 @@ assert present for a client principal.
 | AC-11 | The login refusal body for an account with no active principal is byte-identical to the one observed before this spec. |
 | AC-12 | Neither new mail type contains a request description or a member email address. |
 | AC-13 | Accepting a client invitation and marking it `used` happen in one transaction; a failure leaves no `ClientMembership` and a still-`pending` invitation. |
+| AC-14 | A removed client user who accepts a fresh invitation to the same client is restored on their original row, and one who accepts an invitation to a different client is refused and left `removed`. |
 
 ## Verification Plan
 
@@ -820,6 +896,7 @@ Identical to spec 01's, including the two environment repairs (`prisma generate`
 | A request addressed to a client user | — | no | **not run** — nothing can be addressed to a client user until `Request.assigneeClientMembershipId` exists, which is this spec's column |
 | A request in each status, addressed to a client user | — | no | **not run** — same reason |
 | A removed client user holding a live session | — | no | **not run** — depends on this spec's own remove route |
+| A removed client user and a fresh client invitation for the same address | this spec's remove route, then `POST /api/invitations` again | no | **not run** — depends on this spec's own remove route |
 
 ### Access this needs
 
@@ -844,6 +921,7 @@ Identical to spec 01's, including the two environment repairs (`prisma generate`
 | AC-11 | TC-02-INT-07 | Integration | **the exact body is recorded above and is what the case asserts** |
 | AC-12 | TC-02-INT-13 | Integration | mail sink proven |
 | AC-13 | TC-02-INT-05 | Integration | not run |
+| AC-14 | TC-02-INT-20 | Integration | not run |
 
 ### Rehearsal
 
@@ -1099,6 +1177,22 @@ the rig. Every other section is covered below.
   byte-identical to the previous answer, so the absent client is not distinguishable
   (requirement 9a); 404; 403 `manageForbidden`; 404. No `ClientMembership` changes status in any
   refused call.
+
+### TC-02-INT-20
+
+- **Level:** Integration
+- **Steps:** With a client user of client A holding a request addressed to them, note their
+  `ClientMembership.id`, then remove them. Invite the same address again as a client user of a
+  **second** client B of the same organization and accept that token. Then invite the same
+  address again for client A and accept that token. Read the row and the request both times.
+- **Expected Result:** the invitation for B is minted and accepting it answers
+  `409 accountLinkedToAnotherClient`, writes nothing — the row keeps its original `clientId`
+  and `status = 'removed'` and that invitation stays `pending`. Accepting the invitation for A
+  answers 200 and leaves **exactly one** `ClientMembership` for that account: the original `id`,
+  `status = 'active'`, `removedAt` and `removedByAccountId` `null`, `joinedAt` later than the
+  removal, `invitedByMembershipId` the second inviter, and its invitation `used`. The request
+  addressed to them still resolves through that same id and reads `assignee.inactive: false`
+  again (AC-14, edge cases 23 and 24).
 
 ### TC-02-E2E-01
 
