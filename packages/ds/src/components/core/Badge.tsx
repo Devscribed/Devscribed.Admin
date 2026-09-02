@@ -23,10 +23,10 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
 }
 
 const badgeVariants: Record<string, React.CSSProperties> = {
-  active: { backgroundColor: 'var(--status-success)', color: '#fff' },
-  inactive: { backgroundColor: 'var(--status-error)', color: '#fff' },
-  outlinedActive: { border: '1px solid var(--status-success)', color: 'var(--status-success)' },
-  outlinedInactive: { border: '1px solid var(--color-error-outline)', color: 'var(--status-error)' },
+  active: { backgroundColor: 'var(--status-success)', color: 'var(--text-on-accent)' },
+  inactive: { backgroundColor: 'var(--status-error)', color: 'var(--text-on-accent)' },
+  outlinedActive: { border: 'var(--border-width-hairline) solid var(--status-success)', color: 'var(--status-success)' },
+  outlinedInactive: { border: 'var(--border-width-hairline) solid var(--color-error-outline)', color: 'var(--status-error)' },
 
   /* §32 — the two hues beyond a person's active/inactive. Someone is one or the other, so two
      is all that pair ever needed; a workflow with five states cannot be painted in two without
@@ -39,10 +39,10 @@ const badgeVariants: Record<string, React.CSSProperties> = {
      white is not a legibility trade-off but an absence of text. The hue stays and the ink
      becomes `--text-primary`, which is the same reading its outlined form takes. No colour is
      invented either way. */
-  info: { backgroundColor: 'var(--status-info)', color: '#fff' },
+  info: { backgroundColor: 'var(--status-info)', color: 'var(--text-on-accent)' },
   warning: { backgroundColor: 'var(--status-warning)', color: 'var(--text-primary)' },
-  outlinedInfo: { border: '1px solid var(--status-info)', color: 'var(--status-info)' },
-  outlinedWarning: { border: '1px solid var(--status-warning)', color: 'var(--text-primary)' },
+  outlinedInfo: { border: 'var(--border-width-hairline) solid var(--status-info)', color: 'var(--status-info)' },
+  outlinedWarning: { border: 'var(--border-width-hairline) solid var(--status-warning)', color: 'var(--text-primary)' },
 
   /* §59 — the tone that is not a status. Every paint above says something is *going* well or
      badly, and a vacancy's categories, a candidate's assessed criteria and an interview's
@@ -52,14 +52,14 @@ const badgeVariants: Record<string, React.CSSProperties> = {
      border the quietest divisions take — no new colour, and no second component. */
   neutral: {
     backgroundColor: 'var(--surface-sunken)',
-    border: '1px solid var(--border-subtle)',
+    border: 'var(--border-width-hairline) solid var(--border-subtle)',
     color: 'var(--text-primary)',
     /* A label is read, not announced: `medium` is the weight of a status shouting its state,
        and a row of six categories set in it competes with the title above them. */
     fontWeight: 'var(--font-weight-regular)',
   },
   outlinedNeutral: {
-    border: '1px solid var(--border-subtle)',
+    border: 'var(--border-width-hairline) solid var(--border-subtle)',
     color: 'var(--text-secondary)',
     fontWeight: 'var(--font-weight-regular)',
   },
@@ -70,9 +70,11 @@ const badgeVariants: Record<string, React.CSSProperties> = {
    to match. `neutral` carries 2px more side padding at `m`
    because it is the only tone with a border on its solid form, and without it the ink sits
    tighter to the edge than every status badge beside it. */
+/* @literal the pill's compact line box and its tightest inset are both below the scale: a
+   badge is the one thing set tighter than page rhythm. */
 const badgeSizes: Record<string, React.CSSProperties> = {
-  m: { fontSize: 'var(--font-size-s)', lineHeight: '16px', padding: '4px 8px' },
-  s: { fontSize: 'var(--font-size-xs)', lineHeight: '16px', padding: '2px 8px' },
+  m: { fontSize: 'var(--font-size-s)', lineHeight: '16px', padding: 'var(--space-1) var(--space-3)' },
+  s: { fontSize: 'var(--font-size-xs)', lineHeight: '16px', padding: '2px var(--space-3)' },
 };
 
 /** `active` → `outlinedActive`. Anything unrecognised falls back to inactive. */

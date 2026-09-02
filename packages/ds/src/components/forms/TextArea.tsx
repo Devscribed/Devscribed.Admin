@@ -21,6 +21,7 @@ export interface TextAreaProps extends React.TextareaHTMLAttributes<HTMLTextArea
    `TextInput` pins its own message into (§4), so the two fields never disagree about how far
    below them anything else may sit. */
 const messageSlot: React.CSSProperties = {
+  /* @literal 8px, off the type scale on purpose — `TextInput`'s note. */
   position: 'absolute', fontSize: 8, bottom: -16, left: 0, whiteSpace: 'nowrap',
 };
 
@@ -54,7 +55,7 @@ export const TextArea = React.forwardRef<HTMLTextAreaElement, TextAreaProps>(fun
   const labelNode = label ? (
     <label
       htmlFor={fieldId}
-      style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', marginBottom: trailing ? 0 : 7, padding: '10px 0 0 10px' }}
+      style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', /* @literal 7px, below the scale: the gap a label leaves a block-level field. */ marginBottom: trailing ? 0 : 7, padding: 'var(--space-4) 0 0 var(--space-4)' }}
     >
       {label}
       {rest.required && <RequiredMark />}
@@ -81,11 +82,11 @@ export const TextArea = React.forwardRef<HTMLTextAreaElement, TextAreaProps>(fun
         onFocus={(e) => { setFocused(true); if (onFocus) onFocus(e); }}
         onBlur={(e) => { setFocused(false); if (onBlur) onBlur(e); }}
         style={{
-          display: 'block', width: '100%', height: 100, minHeight: 44, resize: 'none',
+          display: 'block', width: '100%', height: 100, minHeight: 'var(--control-height)', resize: 'none',
           fontFamily: 'var(--font-family-base)', fontSize: 'var(--font-size-s)',
-          color: 'var(--text-primary)', caretColor: 'var(--text-primary)', backgroundColor: '#fff',
-          border: `1.5px solid ${error ? 'var(--status-error)' : focused ? 'var(--color-blue)' : 'var(--border-default)'}`,
-          borderRadius: 'var(--radius-l)', padding: 10, outline: 'none',
+          color: 'var(--text-primary)', caretColor: 'var(--text-primary)', backgroundColor: 'var(--surface-card)',
+          border: `var(--border-width-control) solid ${error ? 'var(--status-error)' : focused ? 'var(--color-blue)' : 'var(--border-default)'}`,
+          borderRadius: 'var(--radius-l)', padding: 'var(--space-4)', outline: 'none',
           boxShadow: error ? 'var(--shadow-error-glow)' : focused ? 'var(--shadow-focus-input)' : 'none',
           transition: 'var(--transition-border-focus)', boxSizing: 'border-box',
           ...style,

@@ -21,8 +21,18 @@
   --font-size-s: 14px;    /* fontSizeBodyS */
   --font-size-base: 16px; /* fontSizeBody */
   --font-size-l: 18px;    /* fontSizeBodyL */
+  --font-size-xl: 20px;   /* dialog titles, and the one size an empty state is set in */
 
   --line-height-base: 1.5;
+  /* Two fixed line heights, for the two places 12px text has to occupy a known height rather
+     than a ratio: a field label, whose block must measure 35px so every field in a column
+     starts at the same y, and the small print under or beside a control. */
+  --line-height-label: 21px;
+  --line-height-xs: 18px;
+  /* The line box 16px text sits in — a button's label, a table heading, a dialog title. It is
+     `--line-height-base` applied to `--font-size-base`, written as a length because these are
+     boxes whose height must not move when the text inside them does. */
+  --line-height-m: 24px;
 
   /* Headline scale. Each step is a size, a line height, a tracking and a weight together —
      a heading that takes the size without the tracking is not on the scale. */

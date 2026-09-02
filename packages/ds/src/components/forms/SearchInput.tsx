@@ -55,7 +55,7 @@ export function SearchInput({
     if (inputRef.current) inputRef.current.focus();
   };
   return (
-    <div style={{ position: 'relative', width: '100%', height: 44, ...wrapperStyle }}>
+    <div style={{ position: 'relative', width: '100%', height: 'var(--control-height)', ...wrapperStyle }}>
       <span style={{ position: 'absolute', left: outlined ? 10 : 0, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, color: 'var(--text-secondary)' }}>
         <MagnifyIcon width="16" height="16" />
       </span>
@@ -73,12 +73,12 @@ export function SearchInput({
         style={{
           width: '100%', height: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-family-base)',
           fontSize: 'var(--font-size-s)', color: 'var(--text-primary)', caretColor: 'var(--text-primary)',
-          backgroundColor: outlined ? '#fff' : 'transparent', cursor: 'text', outline: 'none',
+          backgroundColor: outlined ? 'var(--surface-card)' : 'transparent', cursor: 'text', outline: 'none',
           borderRadius: outlined ? 'var(--radius-l)' : 0,
-          border: outlined ? `1.5px solid ${focused ? 'var(--color-blue)' : 'var(--border-default)'}` : 'none',
+          border: outlined ? `var(--border-width-control) solid ${focused ? 'var(--color-blue)' : 'var(--border-default)'}` : 'none',
           /* 10px, not the 7px every other field takes — see the note above. */
           boxShadow: outlined ? (focused ? 'inset 0 2px 2px rgb(0 0 0 / 5%), 0 0 10px rgb(1 104 250 / 50%)' : hover ? 'inset 0 0 3px 0 rgba(0, 0, 0, 0.1)' : 'none') : 'none',
-          padding: outlined ? '10px 30px 10px 40px' : '10px 30px',
+          padding: outlined ? 'var(--space-4) var(--space-10) var(--space-4) var(--space-12)' : 'var(--space-4) var(--space-10)',
           transition: 'var(--transition-border-focus)',
           ...style,
         }}

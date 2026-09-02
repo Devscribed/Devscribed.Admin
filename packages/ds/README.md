@@ -48,6 +48,14 @@ gap you want, the answer is not `--space-9-and-a-half`.
 
 The scale is deliberately not a 4/8 grid; see `tokens/spacing.css`.
 
+**`npm run ds:check` reports all of this**, and reports rather than gates — a lint that fails the
+build the day it is written is a lint somebody turns off. It reads only values inside style
+objects, because a component's own dimensions (a 320px column, a 360px floor) belong to that
+component and naming them would put words in the vocabulary one call site will ever read. A
+literal that is deliberately not a token carries `@literal <reason>`, and those are counted
+separately so the exemption is visible rather than silent. It also fails outright on a deep
+import and on a negated token string, which are bugs rather than style.
+
 ### 3. The accessibility floor
 
 Three things every component owes, whatever else it does:

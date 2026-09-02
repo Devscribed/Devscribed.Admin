@@ -92,6 +92,8 @@ const Chevron = ({ back }: { back?: boolean }) => (
     aria-hidden
     style={{
       display: 'block', width: 9, height: 9, borderColor: 'currentColor', borderStyle: 'solid',
+      /* @literal the chevron is drawn from two borders rather than a path; 3px and the 3px
+         nudge are the glyph's geometry, not the layout's. */
       borderWidth: '3px 3px 0 0', transform: back ? 'rotate(225deg)' : 'rotate(45deg)',
       marginLeft: back ? 3 : -3,
     }}
@@ -226,8 +228,8 @@ export function Calendar({
           same fact about the grid below — which month, and which column is which day. */}
       <div
         style={{
-          position: 'relative', textAlign: 'center', padding: '8px 0',
-          borderBottom: '1px solid var(--color-gray)', marginBottom: '0.4rem',
+          position: 'relative', textAlign: 'center', padding: 'var(--space-3) 0',
+          borderBottom: 'var(--border-width-hairline) solid var(--color-gray)', marginBottom: '0.4rem',
         }}
       >
         <IconButton
@@ -262,7 +264,7 @@ export function Calendar({
           <Chevron />
         </IconButton>
 
-        <div style={{ ...row, marginTop: 4 }}>
+        <div style={{ ...row, marginTop: 'var(--space-1)' }}>
           {WEEKDAYS.map((initial, index) => (
             <span
               key={index}

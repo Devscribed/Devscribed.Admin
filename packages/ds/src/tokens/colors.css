@@ -37,6 +37,13 @@
 
   /* Semantic aliases */
   --surface-page: var(--color-white);
+  /* The ground the app frame paints behind its content, and the same ground the signed-out
+     and public shells use. It is the one surface that is not white, and naming it is what
+     keeps three shells agreeing about what "the page" looks like. */
+  --surface-well: #F8FAFC;
+  /* A menu row under the pointer. Lighter than `--color-row-hover`, which tints a 70px table
+     row: a 32px menu row tinted that heavily reads as selected rather than as hovered. */
+  --surface-row-hover: #F8F8F8;
   --surface-card: var(--color-white);
   --surface-sunken: var(--color-gray-table-header);
   --surface-disabled: var(--color-gray-disabled-bg);

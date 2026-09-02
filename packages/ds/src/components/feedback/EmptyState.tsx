@@ -26,7 +26,7 @@ export function EmptyState({
 }: EmptyStateProps) {
   return (
     <div {...rest} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', ...style }}>
-      <div style={{ marginTop: 150, fontFamily: 'var(--font-family-base)', fontSize: 20, color: 'var(--text-secondary)', letterSpacing: '0.8px', textAlign: 'center' }}>
+      <div style={{ /* @literal 150px drops the message into the space a list would have filled; 0.8px is this one line's tracking */ marginTop: 150, fontFamily: 'var(--font-family-base)', fontSize: 'var(--font-size-xl)', color: 'var(--text-secondary)', letterSpacing: '0.8px', textAlign: 'center' }}>
         {children != null && children !== '' ? children : message}
       </div>
     </div>

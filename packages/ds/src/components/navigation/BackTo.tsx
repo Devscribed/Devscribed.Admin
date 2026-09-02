@@ -32,7 +32,7 @@ export function BackTo({ label = 'Back', href, onClick, style, ...rest }: BackTo
       }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '6px 12px 6px 0', marginBottom: 20, fontFamily: 'var(--font-family-base)', fontWeight: 'var(--font-weight-medium)', fontSize: 16, color: hover ? 'var(--color-blue)' : 'var(--text-primary)', cursor: 'pointer', ...style }}
+      style={{ /* @literal 3px, below the scale: a chevron sits closer to its word than two words do */ display: 'inline-flex', alignItems: 'center', gap: 3, padding: 'var(--space-2) var(--space-5) var(--space-2) 0', marginBottom: 'var(--space-7)', fontFamily: 'var(--font-family-base)', fontWeight: 'var(--font-weight-medium)', fontSize: 'var(--font-size-base)', color: hover ? 'var(--color-blue)' : 'var(--text-primary)', cursor: 'pointer', ...style }}
     >
       <span style={{ display: 'flex', transform: 'rotate(-90deg)', width: 10 }}><ArrowIcon /></span>
       {label}

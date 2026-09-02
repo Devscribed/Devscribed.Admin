@@ -23,6 +23,10 @@
      instead of on a number somebody copied out of a neighbour. */
   --control-height: 44px;
   --border-width-control: 1.5px;
+  /* The other border width: the hairline that separates one thing from the next, where
+     `--border-width-control` draws the edge of something you can type in. Two widths is the
+     whole set — a third would be a border nobody can place. */
+  --border-width-hairline: 1px;
 
   /* The app frame's fixed dimensions, and the one breakpoint between them. See `base.css`. */
   --layout-sidebar-width: 290px;

@@ -73,8 +73,8 @@ export function Pagination({
     justifyContent: 'center',
     minWidth: 36,
     height: 36,
-    padding: '0 8px',
-    border: '1px solid var(--border-default)',
+    padding: '0 var(--space-3)',
+    border: 'var(--border-width-hairline) solid var(--border-default)',
     borderRadius: 'var(--radius-s)',
     backgroundColor: 'var(--surface-card)',
     fontFamily: 'var(--font-family-base)',
@@ -116,7 +116,7 @@ export function Pagination({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 6,
+        gap: 'var(--space-2)',
         padding: 'var(--space-5) 0',
         ...style,
       }}
@@ -127,7 +127,7 @@ export function Pagination({
           <span
             key={`gap-${index}`}
             aria-hidden="true"
-            style={{ padding: '0 4px', color: 'var(--text-secondary)' }}
+            style={{ padding: '0 var(--space-1)', color: 'var(--text-secondary)' }}
           >
             …
           </span>

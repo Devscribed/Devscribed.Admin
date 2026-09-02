@@ -90,13 +90,13 @@ export function MenuDrawer({
         inert={!open}
         style={{ ...(top === undefined ? null : { top }), ...style }}
       >
-        <div style={{ padding: '25px 30px', flexGrow: 1, overflowY: 'auto' }}>
+        <div style={{ padding: 'var(--space-9) var(--space-10)', flexGrow: 1, overflowY: 'auto' }}>
           <button
             type="button"
             aria-label={closeLabel}
             data-testid={closeTestId}
             onClick={onClose}
-            style={{ display: 'flex', width: 13, height: 13, marginBottom: 20, color: 'var(--text-secondary)' }}
+            style={{ display: 'flex', width: 13, height: 13, marginBottom: 'var(--space-7)', color: 'var(--text-secondary)' }}
           >
             <CloseIcon aria-hidden />
           </button>

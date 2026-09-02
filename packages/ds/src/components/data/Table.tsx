@@ -51,10 +51,10 @@ function geometry(col: TableColumn, i: number, count: number): React.CSSProperti
   const last = i === count - 1;
   return {
     flex: col.flex != null ? `${col.flex} 1 0` : '1 1',
-    display: 'flex', alignItems: 'center', paddingLeft: 12, minWidth: 0,
+    display: 'flex', alignItems: 'center', paddingLeft: 'var(--space-5)', minWidth: 0,
     justifyContent: col.align || (i === 0 ? 'flex-start' : last ? 'flex-end' : 'center'),
     maxWidth: col.maxWidth != null ? col.maxWidth : (last ? ACTIONS_MAX_WIDTH : 'none'),
-    paddingRight: last ? 12 : 0,
+    paddingRight: last ? 'var(--space-5)' : 0,
   };
 }
 
@@ -102,9 +102,9 @@ export function Table<Row = any>({
   return (
     <div {...rest} aria-busy={busy || undefined} style={{ width: '100%', color: 'var(--text-primary)', fontFamily: 'var(--font-family-base)', ...style }}>
       {!hideHeader && (
-        <div style={{ display: 'flex', width: '100%', height: 70, padding: '0 16px', backgroundColor: 'var(--surface-sunken)', borderBottom: '1px solid var(--color-gray-lighter)', position: 'sticky', top: 0, zIndex: 1 }}>
+        <div style={{ display: 'flex', width: '100%', height: 70, padding: '0 var(--space-6)', backgroundColor: 'var(--surface-sunken)', borderBottom: 'var(--border-width-hairline) solid var(--color-gray-lighter)', position: 'sticky', top: 0, zIndex: 1 }}>
           {cols.map((col, i) => (
-            <div key={i} style={{ ...geometry(col, i, cols.length), fontWeight: 'var(--font-weight-semibold)', fontSize: 16, lineHeight: '24px' }}>
+            <div key={i} style={{ ...geometry(col, i, cols.length), fontWeight: 'var(--font-weight-semibold)', fontSize: 'var(--font-size-base)', lineHeight: 'var(--line-height-m)' }}>
               {/* §48 — the heading truncates, as every body cell already does. The cell is a
                   flex box, so `text-overflow` has to sit on the child rather than on the cell:
                   an anonymous flex item is not a line box and never ellipsises. Without this a
@@ -136,8 +136,8 @@ export function Table<Row = any>({
               /* The 8px is only ever visible on a row that has grown: `box-sizing: border-box`
                  means a one-line row is still exactly 70px, padding included. Without it a
                  wrapped cell sits flush against both borders. */
-              display: 'flex', width: '100%', minHeight: 70, padding: '8px 16px', alignItems: 'center',
-              borderBottom: '1px solid var(--color-gray-lighter)', backgroundColor: disabled ? 'var(--surface-disabled)' : '#fff',
+              display: 'flex', width: '100%', minHeight: 70, padding: 'var(--space-3) var(--space-6)', alignItems: 'center',
+              borderBottom: 'var(--border-width-hairline) solid var(--color-gray-lighter)', backgroundColor: disabled ? 'var(--surface-disabled)' : 'var(--surface-card)',
               filter: disabled ? 'grayscale(1)' : 'none',
               /* §34 — a busy row is still a row: dimmed, still readable, still clickable. Only
                  `disabled` takes the heavier grayscale, because that one is not coming back. */
@@ -149,10 +149,10 @@ export function Table<Row = any>({
               pointerEvents: disabled ? 'none' : undefined,
             }}
             onMouseEnter={(e: React.MouseEvent<HTMLElement>) => { if (!disabled) e.currentTarget.style.backgroundColor = 'var(--color-row-hover)'; }}
-            onMouseLeave={(e: React.MouseEvent<HTMLElement>) => { if (!disabled) e.currentTarget.style.backgroundColor = '#fff'; }}
+            onMouseLeave={(e: React.MouseEvent<HTMLElement>) => { if (!disabled) e.currentTarget.style.backgroundColor = 'var(--surface-card)'; }}
           >
             {cells.map((cell: React.ReactNode, ci: number) => (
-              <div key={ci} style={{ ...geometry(cols[ci] || {}, ci, cols.length), fontSize: 14, overflow: ci === cols.length - 1 ? 'visible' : 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+              <div key={ci} style={{ ...geometry(cols[ci] || {}, ci, cols.length), fontSize: 'var(--font-size-s)', overflow: ci === cols.length - 1 ? 'visible' : 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
                 {cell}
               </div>
             ))}

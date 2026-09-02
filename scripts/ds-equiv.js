@@ -64,15 +64,25 @@ function normalise(source, ext, { tokens }) {
     const unknown = unknownTokens(text);
     if (unknown.length) throw new Error(`unknown token(s): ${unknown.map((n) => '--' + n).join(', ')}`);
     text = resolve(text, undefined, { forJs: true });
-    // What is being compared here is resolved values, not quoting. `--font-family-base` is
-    // `'Poppins', sans-serif`, so the same font arrives as `'Poppins, sans-serif'` from the
-    // token and as `"'Poppins', sans-serif"` from a literal — the same pixels, different
-    // quotes. Dropping quote characters on both sides is what makes those meet.
+    // What is being compared here is resolved *values*, not how they were spelled. Three
+    // normalisations make the two sides meet, and each one is a spelling difference the token
+    // substitution necessarily introduces:
     //
-    // The cost: in this mode a string and a bare identifier of the same spelling compare
-    // equal. Phase 4 only ever swaps one string for another, and Gate A — which is strict
-    // about quoting — is what guards the phases that move code.
-    return normaliseSpecifiers(strip(text, ext)).replace(/\\?['"]/g, '');
+    //   quotes   `--font-family-base` is `'Poppins', sans-serif`, so the same font arrives as
+    //            `'Poppins, sans-serif'` from the token and `"'Poppins', sans-serif"` from a
+    //            literal.
+    //   hex      `#fff` becomes `var(--color-white)`, which resolves to `#FFFFFF`.
+    //   px       `padding: 8` becomes `padding: 'var(--space-3)'`, which resolves to `'8px'` —
+    //            and a bare number on a length property *is* px, which is why React adds it.
+    //
+    // The cost is that this mode cannot tell `1.5` from `'1.5px'`, or a string from an
+    // identifier of the same spelling. Gate A is strict about all of it and is what guards the
+    // phases that move code; this one is only ever asked whether two sets of values agree.
+    return normaliseSpecifiers(strip(text, ext))
+      .replace(/\\?['"]/g, '')
+      .replace(/#([0-9a-fA-F])([0-9a-fA-F])([0-9a-fA-F])\b/g, (_, r, g, b) => `#${r}${r}${g}${g}${b}${b}`)
+      .replace(/#[0-9a-fA-F]{6}\b/g, (h) => h.toLowerCase())
+      .replace(/(\d)px\b/g, '$1');
   }
   return normaliseSpecifiers(strip(text, ext));
 }

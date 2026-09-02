@@ -15,7 +15,7 @@ export interface CheckboxProps {
 export function Checkbox({ label, checked, onChange, id }: CheckboxProps) {
   const inputId = id || label;
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', fontFamily: 'var(--font-family-base)', fontWeight: 'var(--font-weight-regular)', fontSize: 'var(--font-size-s)', lineHeight: '21px', color: '#4f4f4f', cursor: 'pointer', userSelect: 'none' }}>
+    <div style={{ display: 'inline-flex', alignItems: 'center', fontFamily: 'var(--font-family-base)', fontWeight: 'var(--font-weight-regular)', fontSize: 'var(--font-size-s)', lineHeight: 'var(--line-height-label)', /* @literal a step off `--text-tertiary` (#54595E); reconciling them is a visual decision. */ color: '#4f4f4f', cursor: 'pointer', userSelect: 'none' }}>
       <input
         type="checkbox"
         id={inputId}
@@ -23,12 +23,12 @@ export function Checkbox({ label, checked, onChange, id }: CheckboxProps) {
         onChange={onChange}
         /* Deliberately unstyled: 13x13 in the browser's own accent colour, not the system's
            blue. The box is the platform's, and the label beside it is ours. */
-        style={{ marginRight: 10, cursor: 'pointer' }}
+        style={{ marginRight: 'var(--space-4)', cursor: 'pointer' }}
       />
       {/* 20px from box to text: the input's own 10px margin plus this 10px. A checkbox label
           sits further from its control than a field label sits from its field, because here
           the two are on one line and the gap is the only thing separating them. */}
-      <label htmlFor={inputId} style={{ cursor: 'pointer', paddingLeft: 10 }}>{label}</label>
+      <label htmlFor={inputId} style={{ cursor: 'pointer', paddingLeft: 'var(--space-4)' }}>{label}</label>
     </div>
   );
 }

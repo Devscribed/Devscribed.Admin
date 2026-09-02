@@ -49,11 +49,11 @@ export function TableToolbar({
   ...rest
 }: TableToolbarProps) {
   return (
-    <div {...rest} style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: 20, marginBottom: 20, ...style }}>
+    <div {...rest} style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--space-7)', marginBottom: 'var(--space-7)', ...style }}>
       {tabs && tabs.length
         ? <PageTabs tabs={tabs} active={activeTab} onChange={onTab} label={tabsLabel} data-testid={tabsTestId} />
         : <div />}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, marginLeft: 'auto' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-7)', marginLeft: 'auto' }}>
         {showSearch && (
           <div style={{ width: searchWidth }}>
             <SearchInput

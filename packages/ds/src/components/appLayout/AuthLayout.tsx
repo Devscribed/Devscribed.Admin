@@ -43,7 +43,7 @@ export function AuthLayout({ title, subtitle, footer, style, children, ...rest }
       {...rest}
       style={{
         minHeight: '100vh', width: '100%', boxSizing: 'border-box',
-        background: '#f8fafc',
+        background: 'var(--surface-well)',
         padding: 'var(--space-12) var(--space-6)',
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         gap: 'var(--space-10)',
@@ -56,7 +56,7 @@ export function AuthLayout({ title, subtitle, footer, style, children, ...rest }
         style={{
           width: '100%', maxWidth: 480, boxSizing: 'border-box',
           background: 'var(--surface-card)',
-          border: '1px solid var(--border-default)',
+          border: 'var(--border-width-hairline) solid var(--border-default)',
           borderRadius: 'var(--radius-l)',
           padding: 'var(--space-10)',
         }}

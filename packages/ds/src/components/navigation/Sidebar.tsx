@@ -138,7 +138,7 @@ function TopLink({ Icon, title, href, testId, active, onClick, onNavigate }: Top
   const [hover, setHover] = React.useState(false);
   const color = active || hover ? 'var(--color-blue)' : 'var(--text-secondary)';
   return (
-    <li style={{ marginBottom: 36 }}>
+    <li style={{ marginBottom: 'var(--space-11)' }}>
       <a href={href || '#'} onClick={rowClick(href, onNavigate, onClick, title)}
         data-testid={testId}
         /* §13 — the paint says which row is current to anyone looking at it; `aria-current`
@@ -146,7 +146,7 @@ function TopLink({ Icon, title, href, testId, active, onClick, onNavigate }: Top
         aria-current={active ? 'page' : undefined}
         onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
         style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'flex-start', fontFamily: 'var(--font-family-base)', fontWeight: 500, fontSize: 'var(--font-size-base)', color, transition: 'color 0.3s' }}>
-        <span style={{ display: 'flex', marginRight: 12, color, transition: 'color 0.3s' }}><Icon /></span>
+        <span style={{ display: 'flex', marginRight: 'var(--space-5)', color, transition: 'color 0.3s' }}><Icon /></span>
         <span>{title}</span>
       </a>
     </li>
@@ -156,7 +156,7 @@ function TopLink({ Icon, title, href, testId, active, onClick, onNavigate }: Top
 function SubItem({ label, href, testId, active, last, onClick, onNavigate, parent }: SubItemProps) {
   const [hover, setHover] = React.useState(false);
   return (
-    <li style={{ marginBottom: last ? 0 : 16 }}>
+    <li style={{ marginBottom: last ? 0 : 'var(--space-6)' }}>
       {/* A sub-row: 14px/500 in `--text-secondary`, turning blue on hover. The current one
          takes `--color-blue-tint` behind blue ink — it is already blue, so hover leaves it
          alone. */}
@@ -164,7 +164,7 @@ function SubItem({ label, href, testId, active, last, onClick, onNavigate, paren
         data-testid={testId}
         aria-current={active ? 'page' : undefined}
         onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-        style={{ padding: '4px 12px', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', fontSize: 'var(--font-size-s)', fontWeight: 500, backgroundColor: active ? 'var(--color-blue-tint)' : 'transparent', color: active || hover ? 'var(--color-blue)' : 'var(--text-secondary)' }}>
+        style={{ padding: 'var(--space-1) var(--space-5)', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', fontSize: 'var(--font-size-s)', fontWeight: 500, backgroundColor: active ? 'var(--color-blue-tint)' : 'transparent', color: active || hover ? 'var(--color-blue)' : 'var(--text-secondary)' }}>
         {label}
       </a>
     </li>
@@ -189,16 +189,16 @@ function SubMenu({ Icon, title, subs, active, defaultOpen, defaultSub, onSelectS
     <React.Fragment>
       {/* §13 — the section title is a real `<button>` with `aria-expanded`. A `<li onClick>` is
          not focusable, not announced, and cannot be opened without a pointer. */}
-      <li onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} style={{ marginBottom: 36 }}>
+      <li onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} style={{ marginBottom: 'var(--space-11)' }}>
         <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
           style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'flex-start', fontWeight: 500, cursor: 'pointer', color: titleColor, fontFamily: 'var(--font-family-base)', fontSize: 'var(--font-size-base)', transition: 'color 0.3s' }}>
-          <span style={{ display: 'flex', marginRight: 12, color: titleIconColor, transition: 'color 0.3s' }}><Icon /></span>
+          <span style={{ display: 'flex', marginRight: 'var(--space-5)', color: titleIconColor, transition: 'color 0.3s' }}><Icon /></span>
           <span>{title}</span>
           <span aria-hidden style={{ marginLeft: 'auto', display: 'flex', transform: open ? 'rotate(0deg)' : 'rotate(180deg)', color: titleIconColor }}><ArrowIcon /></span>
         </button>
       </li>
       {open && (
-        <ul style={{ marginTop: -20, marginLeft: 8, marginBottom: 28, paddingLeft: 12, borderLeft: '1px solid var(--text-secondary)', listStyle: 'none' }}>
+        <ul style={{ /* @literal the pull-up under a section title and the gap after it are this list's own overlap, not scale steps */ marginTop: -20, marginLeft: 'var(--space-3)', marginBottom: 28, paddingLeft: 'var(--space-5)', borderLeft: 'var(--border-width-hairline) solid var(--text-secondary)', listStyle: 'none' }}>
           {subs.map((s, i) => (
             <SubItem key={s.label} label={s.label} href={s.href} testId={s.testId} parent={title}
               active={s.active != null ? s.active : s.label === clickedSub} last={i === subs.length - 1}
@@ -226,8 +226,8 @@ export function Sidebar({
 }: SidebarProps) {
   return (
     <aside {...rest} className={['ds-sidebar', className].filter(Boolean).join(' ')}
-      style={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#fff', ...style }}>
-      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 80, padding: '0 24px', backgroundColor: '#fff', borderBottom: '1px solid var(--border-subtle)' }}>
+      style={{ height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--surface-card)', ...style }}>
+      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: 80, padding: '0 var(--space-8)', backgroundColor: 'var(--surface-card)', borderBottom: 'var(--border-width-hairline) solid var(--border-subtle)' }}>
         {/* The wordmark is the route to the start page, so it is a real link with a name. */}
         <a href={logoHref || '#'} aria-label="Main page link"
           onClick={rowClick(logoHref, onNavigate, onLogoClick ? () => onLogoClick() : undefined)}
@@ -237,7 +237,7 @@ export function Sidebar({
            is the rule that reveals it, because a breakpoint cannot be an inline style. */}
         <button type="button" className="ds-sidebar-close" aria-label="Close sidebar" onClick={onClose} style={{ color: 'var(--text-secondary)' }}><MenuIcon /></button>
       </div>
-      <nav aria-label={label} style={{ flexGrow: 1, padding: '36px 24px', backgroundColor: '#fff', overflowY: 'auto' }}>
+      <nav aria-label={label} style={{ flexGrow: 1, padding: 'var(--space-11) var(--space-8)', backgroundColor: 'var(--surface-card)', overflowY: 'auto' }}>
         <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
           {items.map((item) => {
             const isActive = item.active != null ? item.active : item.title === active;

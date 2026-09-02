@@ -129,6 +129,9 @@ export function Toast({
       {...rest}
       onClick={onClick}
       style={{
+        /* @literal every value on this plate is deliberately a literal — see the note above.
+           The plate floats over whatever page is underneath and must not move when the app's
+           surface vocabulary does. */
         position: 'relative', boxSizing: 'border-box', minHeight: 64, marginBottom: '1rem',
         padding: 8, borderRadius: 4, display: 'flex', justifyContent: 'space-between',
         maxHeight: 800, overflow: 'hidden', direction: 'ltr', zIndex: 0,
@@ -144,7 +147,7 @@ export function Toast({
         ...style,
       }}
     >
-      <div role="alert" style={{ margin: 'auto 0', flex: '1 1 auto', padding: 6, display: 'flex', alignItems: 'center' }}>
+      <div role="alert" style={{ /* @literal the plate's own; see above */ margin: 'auto 0', flex: '1 1 auto', padding: 6, display: 'flex', alignItems: 'center' }}>
         {path && (
           <div style={{ marginInlineEnd: 10, width: 20, flexShrink: 0, display: 'flex' }}>
             <svg viewBox="0 0 24 24" width="100%" height="100%" fill="currentColor" aria-hidden="true">
@@ -162,6 +165,7 @@ export function Toast({
         onMouseLeave={() => setCloseHover(false)}
         style={{
           background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', outline: 'none',
+          /* @literal the plate's own ink; see above. */
           color: tone === 'default' ? '#000' : '#fff',
           opacity: closeHover ? 1 : restingOpacity,
           transition: '0.3s ease', alignSelf: 'flex-start',
@@ -225,6 +229,7 @@ export function ToastHost({
       onMouseEnter={() => pauseOnHover && setPaused(true)}
       onMouseLeave={() => pauseOnHover && setPaused(false)}
       style={{
+        /* @literal the column's own geometry and ink; see the note above. */
         position: 'fixed', zIndex: 9999, boxSizing: 'border-box', padding: 4, width: 320,
         top: '1em', right: '1em', color: '#fff',
         ...style,

@@ -54,13 +54,13 @@ export function InfoBanner({
     <div
       {...rest}
       style={{
-        padding: 6,
+        padding: 'var(--space-2)',
         display: 'flex',
         alignItems: 'center',
         borderRadius: 'var(--radius-l)',
-        border: `1px solid ${paint.line}`,
+        border: `var(--border-width-hairline) solid ${paint.line}`,
         backgroundColor: paint.fill,
-        gap: 6,
+        gap: 'var(--space-2)',
         flexWrap: 'nowrap',
         overflow: 'hidden',
         ...style,

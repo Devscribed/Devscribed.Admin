@@ -48,14 +48,14 @@ export function Modal({
         onClick={(e) => e.stopPropagation()}
         style={{
           position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-          backgroundColor: '#fff', boxShadow: 'var(--shadow-modal)', padding: 24,
-          border: '1px solid var(--border-default)', borderRadius: 'var(--radius-l)',
+          backgroundColor: 'var(--surface-overlay)', boxShadow: 'var(--shadow-modal)', padding: 'var(--space-8)',
+          border: 'var(--border-width-hairline) solid var(--border-default)', borderRadius: 'var(--radius-l)',
           maxWidth: '70%', minWidth: 360, maxHeight: '98%', overflow: 'auto', outline: 'none',
           ...style,
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <div id={titleId} style={{ fontFamily: 'var(--font-family-base)', fontWeight: 'var(--font-weight-semibold)', fontSize: 20, lineHeight: '24px', color: 'var(--text-tertiary)' }}>{title}</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-7)' }}>
+          <div id={titleId} style={{ fontFamily: 'var(--font-family-base)', fontWeight: 'var(--font-weight-semibold)', fontSize: 'var(--font-size-xl)', lineHeight: 'var(--line-height-m)', color: 'var(--text-tertiary)' }}>{title}</div>
           {/* The close mark scales rather than filling on hover — `IconButton`'s rule (§10),
               inline here because this shell draws its own. */}
           <button type="button" aria-label="Close dialog" onClick={onClose} onMouseEnter={() => setCloseHover(true)} onMouseLeave={() => setCloseHover(false)}

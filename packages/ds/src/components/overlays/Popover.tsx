@@ -209,7 +209,9 @@ export function Popover({
             }
           : ({ position: 'absolute', [align]: 0, top: 42 } as React.CSSProperties)),
         minWidth: 160,
-        padding: '5px 0', backgroundColor: '#fff', borderRadius: 'var(--radius-m)',
+        /* @literal 5px end caps and the 5px row inset, below the scale: together they are why
+           no row ever reaches a rounded corner, which is what §74 relies on. */
+        padding: '5px 0', backgroundColor: 'var(--surface-overlay)', borderRadius: 'var(--radius-m)',
         boxShadow: 'var(--shadow-popover)', zIndex: 3001,
         /* §74 — **no `overflow: hidden`**. There is nothing here to clip: the panel is 6px
            round with 5px of vertical padding and its rows inset 5px, so no row ever reaches a
@@ -240,13 +242,14 @@ export function Popover({
               if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(item, e); }
             }}
             style={{
-              textAlign: 'left', margin: '0 5px', cursor: item.disabled ? 'default' : 'pointer',
+              textAlign: 'left', margin: '0 5px', /* @literal see the panel's note */ cursor: item.disabled ? 'default' : 'pointer',
               color: item.disabled ? 'var(--text-secondary)' : item.danger ? 'var(--status-error)' : 'var(--text-primary)',
-              borderRadius: 4,
+              borderRadius: 'var(--radius-s)',
               /* A row inherits its size from whatever the menu is opened in — 14px in a table
                  cell, 16px in the navbar. A portalled panel inherits `document.body`'s instead,
                  so the size the row would have taken from its trigger is carried across. */
-              padding: '8px 14px', fontFamily: 'var(--font-family-base)', fontSize: portal ? 14 : 'inherit',
+              /* @literal 14px, between two steps — `AccountMenu`'s rows take the same inset. */
+              padding: 'var(--space-3) 14px', fontFamily: 'var(--font-family-base)', fontSize: portal ? 'var(--font-size-s)' : 'inherit',
               /* §50 — the *label* never wraps. Letting the row go `normal` so its
                  description could wrap took the label with it, and "Delete vacancy" broke
                  across two lines in a 160px menu. Only the description wraps now. */
@@ -255,7 +258,7 @@ export function Popover({
             onFocus={() => setActive(i)}
             onMouseEnter={(e) => {
               if (item.disabled) return;
-              e.currentTarget.style.backgroundColor = '#f8f8f8';
+              e.currentTarget.style.backgroundColor = 'var(--surface-row-hover)';
               if (!item.danger) e.currentTarget.style.color = 'var(--color-blue)';
             }}
             onMouseLeave={(e) => {
@@ -273,7 +276,7 @@ export function Popover({
               <div
                 id={describedBy}
                 data-testid={item.descriptionTestId}
-                style={{ marginTop: 2, maxWidth: 220, fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', whiteSpace: 'normal' }}
+                style={{ /* @literal 2px, below the scale: a description belongs to the label above it */ marginTop: 2, maxWidth: 220, fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)', whiteSpace: 'normal' }}
               >
                 {item.description}
               </div>
@@ -314,7 +317,7 @@ export function Popover({
   );
 
   return (
-    <div ref={ref} style={{ position: 'relative', display: 'inline-block', marginRight: trigger ? 0 : 8 }}>
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block', marginRight: trigger ? 0 : 'var(--space-3)' }}>
       {trigger ? (
         <button
           {...rest}
@@ -347,7 +350,7 @@ export function Popover({
             display: 'flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32,
             borderRadius: '50%', cursor: disabled ? 'not-allowed' : 'pointer',
             backgroundColor: lit ? 'var(--color-blue)' : 'rgba(0, 0, 0, 0.08)',
-            color: lit ? '#fff' : 'var(--text-primary)',
+            color: lit ? 'var(--text-on-accent)' : 'var(--text-primary)',
             transition: 'background-color 0.2s, color 0.2s',
             ...style,
           }}

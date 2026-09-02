@@ -46,6 +46,8 @@ export function Preloader({
         <span
           key={i}
           style={{
+            /* @literal a second blue, one step off `--color-blue`. Reconciling the two is a
+               visual decision, not a substitution. */
             display: 'inline-block', backgroundColor: '#0168fa', width: size, height: size,
             margin, borderRadius: '100%',
             animation: `ds-pulse-loader ${0.75 / speedMultiplier}s ${(i * 0.12) / speedMultiplier}s infinite cubic-bezier(0.2, 0.68, 0.18, 1.08)`,

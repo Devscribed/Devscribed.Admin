@@ -252,7 +252,7 @@ export function Select({
     <div ref={ref} style={{ width: '100%', position: 'relative', fontFamily: 'var(--font-family-base)', pointerEvents: isDisabled ? 'none' : undefined, ...wrapperStyle }}>
       {label && (
         /* The system's field-label treatment, inline because this control draws its own. */
-        <label htmlFor={controlId} style={{ display: 'inline-block', fontWeight: 400, fontSize: 'var(--font-size-xs)', lineHeight: '21px', whiteSpace: 'nowrap', color: 'var(--text-secondary)', marginBottom: 4, padding: '10px 0 0 10px' }}>
+        <label htmlFor={controlId} style={{ display: 'inline-block', fontWeight: 400, fontSize: 'var(--font-size-xs)', lineHeight: 'var(--line-height-label)', whiteSpace: 'nowrap', color: 'var(--text-secondary)', marginBottom: 'var(--space-1)', padding: 'var(--space-4) 0 0 var(--space-4)' }}>
           {label}
           {/* §64 — an explicit prop, unlike the three fields with a native control under
               them: there is no `<input required>` here to read it off, and `aria-required`
@@ -270,17 +270,17 @@ export function Select({
         }}
         style={{
           display: 'flex', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'space-between',
-          position: 'relative', minHeight: 44, boxSizing: 'border-box', background: '#fff',
-          borderWidth: 1.5, borderStyle: 'solid',
+          position: 'relative', minHeight: 'var(--control-height)', boxSizing: 'border-box', background: 'var(--surface-card)',
+          borderWidth: 'var(--border-width-control)', borderStyle: 'solid',
           borderColor: error ? 'var(--status-error)' : lit ? 'var(--color-blue)' : 'var(--border-default)',
-          borderRadius: formik ? 8 : 4, cursor: 'default', outline: 0, fontSize: 'var(--font-size-s)',
+          borderRadius: formik ? 'var(--radius-l)' : 'var(--radius-s)', cursor: 'default', outline: 0, fontSize: 'var(--font-size-s)',
           transition: 'all 100ms',
           boxShadow: error ? 'var(--shadow-error-glow)' : lit ? 'var(--shadow-focus-input)' : 'none',
         }}
       >
         {/* The value area carries the padding; the control itself has none, so the gap at the
            right edge comes only from the indicator's own padding below. */}
-        <span style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', padding: '2px 8px', overflow: 'hidden', flex: 1, position: 'relative' }}>
+        <span style={{ /* @literal 2px, below the scale: the value area's own inset, so a chip sits clear of the border */ display: 'flex', flexWrap: 'wrap', alignItems: 'center', padding: '2px var(--space-3)', overflow: 'hidden', flex: 1, position: 'relative' }}>
           {isMulti && selectedList.map((o) => (
             <Chip
               key={keyOf(o)}
@@ -291,12 +291,12 @@ export function Select({
           ))}
           {!isMulti && hasValue && !query && (
             /* The chosen value's ink, one step lighter when the control is disabled. */
-            <span style={{ marginLeft: 2, marginRight: 2, maxWidth: 'calc(100% - 8px)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: isDisabled ? N.n40 : N.n80 }}>
+            <span style={{ /* @literal 2px matches the chips beside it; the 8px is the arrow's own clearance */ marginLeft: 2, marginRight: 2, maxWidth: 'calc(100% - 8px)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: isDisabled ? N.n40 : N.n80 }}>
               {formatOptionLabel ? formatOptionLabel(value as SelectOptionLike, { context: 'value' }) : labelOf(value)}
             </span>
           )}
           {/* The placeholder takes `--text-secondary`: it is not a value. */}
-          {!hasValue && !isSearchable && <span style={{ marginLeft: 2, marginRight: 2, color: 'var(--text-secondary)' }}>{placeholder}</span>}
+          {!hasValue && !isSearchable && <span style={{ /* @literal 2px, matching the value it stands in for */ marginLeft: 2, marginRight: 2, color: 'var(--text-secondary)' }}>{placeholder}</span>}
           {isSearchable && (
             <input
               {...comboProps}
@@ -311,7 +311,7 @@ export function Select({
               onChange={(e) => { setQuery(e.target.value); setOpen(true); setActive(-1); }}
               /* No border, no background: the control around it is the field. It inherits the
                  type and grows to fill whatever the value and the chips leave. */
-              style={{ flex: '1 1 auto', minWidth: 2, margin: 2, border: 0, padding: 0, outline: 0, background: 'transparent', font: 'inherit', color: N.n80, boxSizing: 'border-box' }}
+              style={{ /* @literal 2px, matching the chips it grows between */ flex: '1 1 auto', minWidth: 2, margin: 2, border: 0, padding: 0, outline: 0, background: 'transparent', font: 'inherit', color: N.n80, boxSizing: 'border-box' }}
             />
           )}
         </span>
@@ -327,17 +327,17 @@ export function Select({
               onClick={(e) => { e.stopPropagation(); onChange && onChange([]); }}
               onMouseEnter={() => setClearHover(true)}
               onMouseLeave={() => setClearHover(false)}
-              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 8, color: clearHover ? N.n40 : N.n20, transition: 'color 150ms' }}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-3)', color: clearHover ? N.n40 : N.n20, transition: 'color 150ms' }}
             >
               <CrossIcon width="20" height="20" />
             </button>
           )}
-          <span style={{ alignSelf: 'stretch', width: 1, backgroundColor: isDisabled ? N.n10 : N.n20, marginTop: 8, marginBottom: 8 }} />
+          <span style={{ alignSelf: 'stretch', width: 1, backgroundColor: isDisabled ? N.n10 : N.n20, marginTop: 'var(--space-3)', marginBottom: 'var(--space-3)' }} />
           <span
             aria-hidden="true"
             onMouseEnter={(e) => { e.stopPropagation(); setArrowHover(true); }}
             onMouseLeave={() => setArrowHover(false)}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 8, color: arrowColor, transition: 'color 150ms' }}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--space-3)', color: arrowColor, transition: 'color 150ms' }}
           >
             <svg height="20" width="20" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" style={{ display: 'inline-block', lineHeight: 1 }}>
               <path d="M4.516 7.548c0.436-0.446 1.043-0.481 1.576 0l3.908 3.747 3.908-3.747c0.533-0.481 1.141-0.446 1.574 0 0.436 0.445 0.408 1.197 0 1.615-0.406 0.418-4.695 4.502-4.695 4.502-0.217 0.223-0.502 0.335-0.787 0.335s-0.57-0.112-0.789-0.335c0 0-4.287-4.084-4.695-4.502s-0.436-1.17 0-1.615z" />
@@ -353,11 +353,11 @@ export function Select({
         id={listId}
         role="listbox"
         aria-label={label}
-        style={{ position: 'absolute', top: '100%', left: 0, right: 0, boxSizing: 'border-box', marginTop: formik ? 8 : 10, minWidth: formik ? undefined : 150, paddingTop: 5, paddingBottom: 5, background: '#fff', borderRadius: 8, boxShadow: '0 6px 12px rgb(0 0 0 / 18%)', zIndex: 1000 }}
+        style={{ position: 'absolute', top: '100%', left: 0, right: 0, boxSizing: 'border-box', marginTop: formik ? 'var(--space-3)' : 'var(--space-4)', minWidth: formik ? undefined : 150, /* @literal 5px end caps, below the scale — `AccountMenu`'s panel takes the same. */ paddingTop: 5, paddingBottom: 5, background: 'var(--surface-overlay)', borderRadius: 'var(--radius-l)', boxShadow: '0 6px 12px rgb(0 0 0 / 18%)', zIndex: 1000 }}
       >
         {/* The list scrolls at 300px rather than growing: a menu taller than that runs off
             whatever it was opened from. */}
-        <div style={{ paddingTop: 4, paddingBottom: 4, maxHeight: 300, overflowY: 'auto', position: 'relative', boxSizing: 'border-box' }}>
+        <div style={{ paddingTop: 'var(--space-1)', paddingBottom: 'var(--space-1)', maxHeight: 300, overflowY: 'auto', position: 'relative', boxSizing: 'border-box' }}>
           {rows.map((opt, i) => {
             const l = labelOf(opt);
             const disabled = isDisabledRow(opt);
@@ -384,12 +384,12 @@ export function Select({
                 /* A form's menu is 14px, matching the fields around it; a standalone filter's
                    is the inherited 16px body size. */
                 style={{
-                  display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8,
-                  width: '100%', boxSizing: 'border-box', padding: '8px 12px',
+                  display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--space-3)',
+                  width: '100%', boxSizing: 'border-box', padding: 'var(--space-3) var(--space-5)',
                   fontSize: formik ? 'var(--font-size-s)' : 'var(--font-size-base)',
                   cursor: 'default', userSelect: 'none',
                   backgroundColor: selected ? 'var(--color-blue)' : tinted ? 'rgba(0, 122, 255, 0.1)' : 'transparent',
-                  color: selected ? '#fff' : disabled ? 'var(--text-secondary)' : 'var(--text-primary)',
+                  color: selected ? 'var(--text-on-accent)' : disabled ? 'var(--text-secondary)' : 'var(--text-primary)',
                 }}
               >
                 <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -398,14 +398,14 @@ export function Select({
                 {/* §21 — the reason a row is unavailable, drawn beside it and *inside* it, so it
                     is part of the option's accessible name rather than something only seen. */}
                 {typeof opt !== 'string' && opt.hint && (
-                  <span style={{ flexShrink: 0, fontSize: 'var(--font-size-xs)', color: selected ? '#fff' : 'var(--text-secondary)' }}>{opt.hint}</span>
+                  <span style={{ flexShrink: 0, fontSize: 'var(--font-size-xs)', color: selected ? 'var(--text-on-accent)' : 'var(--text-secondary)' }}>{opt.hint}</span>
                 )}
               </div>
             );
           })}
           {/* NoOptionsMessage: neutral40, 8px 12px, centred. */}
           {rows.length === 0 && (
-            <div style={{ padding: '8px 12px', textAlign: 'center', fontSize: formik ? 'var(--font-size-s)' : 'var(--font-size-base)', color: N.n40 }}>No options</div>
+            <div style={{ padding: 'var(--space-3) var(--space-5)', textAlign: 'center', fontSize: formik ? 'var(--font-size-s)' : 'var(--font-size-base)', color: N.n40 }}>No options</div>
           )}
         </div>
       </div>
@@ -414,9 +414,9 @@ export function Select({
           call on `TextInput`, for §4's reason: a hint drawn anywhere else would move the field
           every time an error replaced it. One slot, error wins when both are given. */}
       {error && errorMessage
-        ? <div style={{ ...messageSlot, fontSize: formik ? 8 : 10, bottom: formik ? -16 : -20, color: 'var(--status-error)' }}><span id={errorId} data-testid={errorId}>{errorMessage}</span></div>
+        ? <div style={{ /* @literal 8px and 10px are the message slot's two sizes, deliberately off the type scale — see `TextInput`'s `messageSlot`. The looser pair belongs to the standalone filter, which has room under it that a field in a form does not. */ ...messageSlot, fontSize: formik ? 8 : 10, bottom: formik ? -16 : -20, color: 'var(--status-error)' }}><span id={errorId} data-testid={errorId}>{errorMessage}</span></div>
         : hint
-          ? <div style={{ ...messageSlot, fontSize: formik ? 8 : 10, bottom: formik ? -16 : -20, color: 'var(--text-secondary)' }}><span id={hintId}>{hint}</span></div>
+          ? <div style={{ /* @literal 8px and 10px are the message slot's two sizes, deliberately off the type scale — see `TextInput`'s `messageSlot`. The looser pair belongs to the standalone filter, which has room under it that a field in a form does not. */ ...messageSlot, fontSize: formik ? 8 : 10, bottom: formik ? -16 : -20, color: 'var(--text-secondary)' }}><span id={hintId}>{hint}</span></div>
           : null}
     </div>
   );

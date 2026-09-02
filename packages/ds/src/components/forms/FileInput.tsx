@@ -88,13 +88,13 @@ export const FileInput = React.forwardRef<HTMLInputElement, FileInputProps>(func
 
   const message = error
     ? (
-      <div style={{ marginTop: 6, fontSize: 'var(--font-size-xs)', lineHeight: '18px', color: 'var(--status-error)' }}>
+      <div style={{ marginTop: 'var(--space-2)', fontSize: 'var(--font-size-xs)', lineHeight: 'var(--line-height-xs)', color: 'var(--status-error)' }}>
         *<span id={errorId} data-testid={errorId}>{error}</span>
       </div>
     )
     : hint
       ? (
-        <div style={{ marginTop: 6, fontSize: 'var(--font-size-xs)', lineHeight: '18px', color: 'var(--text-secondary)' }}>
+        <div style={{ marginTop: 'var(--space-2)', fontSize: 'var(--font-size-xs)', lineHeight: 'var(--line-height-xs)', color: 'var(--text-secondary)' }}>
           <span id={hintId}>{hint}</span>
         </div>
       )
@@ -103,7 +103,7 @@ export const FileInput = React.forwardRef<HTMLInputElement, FileInputProps>(func
   return (
     <div style={wrapperStyle}>
       {label && (
-        <label htmlFor={inputId} style={{ display: 'inline-block', fontWeight: 'var(--font-weight-regular)', fontSize: 'var(--font-size-xs)', lineHeight: '21px', color: 'var(--text-secondary)', marginBottom: 4, padding: '10px 0 0 10px' }}>
+        <label htmlFor={inputId} style={{ display: 'inline-block', fontWeight: 'var(--font-weight-regular)', fontSize: 'var(--font-size-xs)', lineHeight: 'var(--line-height-label)', color: 'var(--text-secondary)', marginBottom: 'var(--space-1)', padding: 'var(--space-4) 0 0 var(--space-4)' }}>
           {label}
           {rest.required && <RequiredMark />}
         </label>
@@ -138,12 +138,13 @@ export const FileInput = React.forwardRef<HTMLInputElement, FileInputProps>(func
           onMouseLeave={() => setHover(false)}
           style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            /* @literal the chooser's side inset, between two steps of the scale. */
             height: 'var(--control-height)', padding: '0 18px',
             backgroundColor: 'var(--surface-card)',
             border: `var(--border-width-control) solid ${error ? 'var(--status-error)' : 'var(--border-default)'}`,
             borderRadius: 'var(--radius-l)',
-            fontFamily: 'var(--font-family-base)', fontSize: 16,
-            fontWeight: 'var(--font-weight-button)', lineHeight: '24px',
+            fontFamily: 'var(--font-family-base)', fontSize: 'var(--font-size-base)',
+            fontWeight: 'var(--font-weight-button)', lineHeight: 'var(--line-height-m)',
             color: 'var(--action-neutral-text)',
             boxShadow: focused ? 'var(--shadow-focus-input)' : 'none',
             cursor: disabled ? 'not-allowed' : 'pointer',

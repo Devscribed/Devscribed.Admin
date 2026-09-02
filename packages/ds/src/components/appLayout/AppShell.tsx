@@ -73,7 +73,7 @@ export function AppShell({
   }, [menuOpen]);
 
   return (
-    <div {...rest} style={{ display: 'flex', height: '100vh', fontFamily: 'var(--font-family-base)', background: '#fff', ...style }}>
+    <div {...rest} style={{ display: 'flex', height: '100vh', fontFamily: 'var(--font-family-base)', background: 'var(--surface-page)', ...style }}>
       <div ref={drawer} className="ds-app-shell-nav" data-open={menuOpen ? '' : undefined}>
         {sidebar !== undefined ? sidebar : (
           <Sidebar active={section} activeSub={sub} onSelect={onSelect} onLogoClick={onLogoClick} onClose={onMenuClose} />
@@ -85,8 +85,8 @@ export function AppShell({
         {navbar !== undefined ? navbar : (
           <Navbar trackerCounter={trackerCounter} onOpenTracker={onOpenTracker} userName={userName} onAccountNavigate={onAccountNavigate} />
         )}
-        <div style={{ flexGrow: 1, overflowY: 'auto', background: '#f8fafc' }}>
-          <div style={{ height: '100%', marginLeft: 'auto', marginRight: 'auto', width: '100%', padding: 25, boxSizing: 'border-box' }}>
+        <div style={{ flexGrow: 1, overflowY: 'auto', background: 'var(--surface-well)' }}>
+          <div style={{ height: '100%', marginLeft: 'auto', marginRight: 'auto', width: '100%', padding: 'var(--space-9)', boxSizing: 'border-box' }}>
             {children}
           </div>
         </div>

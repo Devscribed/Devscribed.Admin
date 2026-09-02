@@ -175,7 +175,7 @@ export function BoardCard({
         gap: 'var(--space-2)',
         padding: 'var(--space-5)',
         backgroundColor: 'var(--surface-card)',
-        border: '1px solid',
+        border: 'var(--border-width-hairline) solid',
         borderRadius: 'var(--radius-l)',
         fontFamily: 'var(--font-family-base)',
         transform: lifted && !reducedMotion ? 'translateY(-1px)' : hover && !reducedMotion ? 'scale(1.01)' : 'none',

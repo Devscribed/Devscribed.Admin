@@ -14,6 +14,7 @@
     "dev": "npm run dev --workspace @devscribed/api & npm run dev --workspace @devscribed/web",
     "build": "npm run build --workspaces --if-present",
     "ds:equiv": "node scripts/ds-equiv.js",
-    "ds:tokens": "node scripts/ds-token-resolve.js"
+    "ds:tokens": "node scripts/ds-token-resolve.js",
+    "ds:check": "node scripts/ds-adherence.js"
   }
 }

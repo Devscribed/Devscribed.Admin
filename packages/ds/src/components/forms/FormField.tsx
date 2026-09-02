@@ -22,8 +22,8 @@ export interface FormFieldProps {
    above it, so a label block measures 35px. `TextInput`, `TextArea` and `Select` each render
    this inline because they draw their own label; anything else reaches for it here. */
 export const fieldLabelStyle: React.CSSProperties = {
-  display: 'inline-block', fontWeight: 400, fontSize: 12, lineHeight: '21px',
-  color: 'var(--text-secondary)', marginBottom: 4, whiteSpace: 'nowrap', padding: '10px 0 0 10px',
+  display: 'inline-block', fontWeight: 400, fontSize: 'var(--font-size-xs)', lineHeight: 'var(--line-height-label)',
+  color: 'var(--text-secondary)', marginBottom: 'var(--space-1)', whiteSpace: 'nowrap', padding: 'var(--space-4) 0 0 var(--space-4)',
 };
 
 /**

@@ -38,7 +38,7 @@ export function BookingLayout({ wordmark, wordmarkTestId, style, children, ...re
       {...rest}
       style={{
         minHeight: '100vh', width: '100%', boxSizing: 'border-box',
-        background: '#f8fafc',
+        background: 'var(--surface-well)',
         padding: 'var(--space-12) var(--space-6)',
         /* Top-aligned, where `AuthLayout` centres: a login card is short and a booking page is
            taller than the viewport, so centring would push the vacancy title off the top. */

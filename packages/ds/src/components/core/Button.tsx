@@ -63,14 +63,14 @@ function base(variant: ButtonProps['variant'], disabled: boolean | undefined): R
        sit next to anything, and a control's own paint is the wrong place to decide how much of
        a row it takes. The two compositions that want a full-width button say so themselves:
        `ConfirmDialog` passes the width, `FormActions` stretches its slot with a grid. */
-    padding: '0 8px',
-    height: 44,
-    border: '1.5px solid transparent',
+    padding: '0 var(--space-3)',
+    height: 'var(--control-height)',
+    border: 'var(--border-width-control) solid transparent',
     borderRadius: 'var(--radius-l)',
     fontFamily: 'var(--font-family-base)',
-    fontSize: 16,
+    fontSize: 'var(--font-size-base)',
     fontWeight: 'var(--font-weight-button)',
-    lineHeight: '24px',
+    lineHeight: 'var(--line-height-m)',
     cursor: disabled ? 'not-allowed' : 'pointer',
     opacity: disabled ? 0.6 : 1,
     transition: 'var(--transition-opacity-hover), var(--transition-filter-hover)',
@@ -153,7 +153,7 @@ export const Button: React.ForwardRefExoticComponent<
       style={{ ...painted, ...(link ? { textDecoration: 'none' } : null), ...style }}
     >
       {(icon || preloader) && <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, flexShrink: 0 }}>{icon}</span>}
-      <span className="ds-btn-title" style={{ margin: '0 10px' }}>{children}</span>
+      <span className="ds-btn-title" style={{ margin: '0 var(--space-4)' }}>{children}</span>
       {(icon || preloader) && (
         <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, flexShrink: 0 }}>
           {preloader && (

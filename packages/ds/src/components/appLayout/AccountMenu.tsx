@@ -67,20 +67,20 @@ export function AccountMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', userSelect: 'none', color: 'var(--text-primary)', ...style }}
+        style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-5)', cursor: 'pointer', userSelect: 'none', color: 'var(--text-primary)', ...style }}
       >
-        <span data-testid={nameTestId} style={{ fontWeight: 500, fontSize: 'var(--font-size-s)', lineHeight: '20px', textAlign: 'right', fontFamily: 'var(--font-family-base)' }}>{name}</span>
+        <span data-testid={nameTestId} style={{ /* @literal the name's own line box, so the trigger is one height whatever the type does */ fontWeight: 500, fontSize: 'var(--font-size-s)', lineHeight: '20px', textAlign: 'right', fontFamily: 'var(--font-family-base)' }}>{name}</span>
         <UserIcon aria-hidden />
         <span aria-hidden style={{ width: 14, display: 'flex', transform: 'rotate(180deg)', color: hover ? 'var(--color-blue)' : 'var(--text-secondary)' }}><ArrowIcon /></span>
       </button>
       {open && (
-        <div role="menu" data-testid={menuTestId} style={{ position: 'absolute', right: 0, top: 50, minWidth: 160, padding: '5px 0', backgroundColor: '#fff', borderRadius: 6, boxShadow: 'var(--shadow-popover)', zIndex: 1000 }}>
+        <div role="menu" data-testid={menuTestId} style={{ /* @literal 5px is below the scale's first step: the panel's end caps, sized so no row reaches a rounded corner */ position: 'absolute', right: 0, top: 50, minWidth: 160, padding: '5px 0', backgroundColor: 'var(--surface-overlay)', borderRadius: 'var(--radius-m)', boxShadow: 'var(--shadow-popover)', zIndex: 1000 }}>
           <ul style={{ margin: 0, padding: 0, listStyle: 'none', overflow: 'hidden' }}>
             {/* Hover paints the row, not the label: the background lifts to #f8f8f8 and the
                ink turns blue together. The size is inherited from the navbar's 16px body. */}
             {entries.map((entry) => (
-              <li key={entry.label} style={{ margin: '0 5px', borderRadius: 4, textAlign: 'left', whiteSpace: 'nowrap' }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = '#f8f8f8'; (e.currentTarget.firstElementChild as HTMLElement).style.color = 'var(--color-blue)'; }}
+              <li key={entry.label} style={{ /* @literal the row's inset from the panel edge, below the scale — see the panel's own padding */ margin: '0 5px', borderRadius: 'var(--radius-s)', textAlign: 'left', whiteSpace: 'nowrap' }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-row-hover)'; (e.currentTarget.firstElementChild as HTMLElement).style.color = 'var(--color-blue)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; (e.currentTarget.firstElementChild as HTMLElement).style.color = 'var(--text-primary)'; }}>
                 <button type="button" role="menuitem" data-testid={entry.testId}
                   onClick={() => {
@@ -88,7 +88,7 @@ export function AccountMenu({
                     if (entry.onSelect) entry.onSelect();
                     else if (onNavigate) onNavigate(entry.label);
                   }}
-                  style={{ display: 'block', width: '100%', padding: '8px 14px', textAlign: 'left', cursor: 'pointer', fontFamily: 'var(--font-family-base)', fontSize: 'var(--font-size-base)', color: 'var(--text-primary)' }}>
+                  style={{ /* @literal 14px sits between two steps of the scale; either one moves the row */ display: 'block', width: '100%', padding: 'var(--space-3) 14px', textAlign: 'left', cursor: 'pointer', fontFamily: 'var(--font-family-base)', fontSize: 'var(--font-size-base)', color: 'var(--text-primary)' }}>
                   {entry.label}
                 </button>
               </li>

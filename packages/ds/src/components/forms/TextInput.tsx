@@ -37,6 +37,9 @@ if (typeof document !== 'undefined' && !document.getElementById('ds-text-input-s
    the field below it every time an error replaced it, and a hint drawn larger than the error it
    swaps with would make the swap jump. One slot, one geometry, error wins when both are given. */
 const messageSlot: React.CSSProperties = {
+  /* @literal 8px is deliberately off the type scale. It is the smallest text in the product and
+     the only thing set at this size; putting it on the scale would invite something else to
+     reach for it. */
   position: 'absolute', fontSize: 8, bottom: -16, left: 0, whiteSpace: 'nowrap',
 };
 
@@ -64,20 +67,22 @@ export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(func
   const inputStyle: React.CSSProperties = {
     display: 'block',
     width: '100%',
-    minHeight: 44,
+    minHeight: 'var(--control-height)',
     fontFamily: 'var(--font-family-base)',
     fontSize: 'var(--font-size-s)',
     color: 'var(--text-primary)',
-    backgroundColor: '#fff',
-    border: `1.5px solid ${error ? 'var(--status-error)' : focused ? 'var(--color-blue)' : 'var(--border-default)'}`,
+    backgroundColor: 'var(--surface-card)',
+    border: `var(--border-width-control) solid ${error ? 'var(--status-error)' : focused ? 'var(--color-blue)' : 'var(--border-default)'}`,
     borderRadius: description ? 0 : 'var(--radius-l)',
     borderTopLeftRadius: 'var(--radius-l)',
     borderBottomLeftRadius: 'var(--radius-l)',
     borderTopRightRadius: description ? 0 : 'var(--radius-l)',
     borderBottomRightRadius: description ? 0 : 'var(--radius-l)',
-    padding: 10,
+    padding: 'var(--space-4)',
     /* §5 — room for the trailing control, so a long value never runs under it. */
-    paddingRight: trailing ? 44 : 10,
+    /* @literal 44 is `--control-height` used as a width — the trailing slot is square — and is
+       written as a number because it is a clearance, not a height. */
+    paddingRight: trailing ? 44 : 'var(--space-4)',
     outline: 'none',
     boxShadow: error ? 'var(--shadow-error-glow)' : focused ? 'var(--shadow-focus-input)' : 'none',
     transition: 'var(--transition-border-focus)',
@@ -92,7 +97,7 @@ export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(func
   return (
     <div style={wrapperStyle}>
       {label && (
-        <label htmlFor={inputId} style={{ display: 'inline-block', fontWeight: 'var(--font-weight-regular)', fontSize: 'var(--font-size-xs)', lineHeight: '21px', color: 'var(--text-secondary)', marginBottom: 4, padding: '10px 0 0 10px' }}>
+        <label htmlFor={inputId} style={{ display: 'inline-block', fontWeight: 'var(--font-weight-regular)', fontSize: 'var(--font-size-xs)', lineHeight: 'var(--line-height-label)', color: 'var(--text-secondary)', marginBottom: 'var(--space-1)', padding: 'var(--space-4) 0 0 var(--space-4)' }}>
           {label}
           {/* §64 — `required` also reaches the `<input>` through `...rest`, which is what a
               reader is told; this is only what a reader is shown. */}
@@ -114,7 +119,7 @@ export const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(func
           style={inputStyle}
         />
         {description && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minWidth: 50, fontSize: 12, color: '#4f4f4f', backgroundColor: 'var(--color-gray-light)', borderTopRightRadius: 'var(--radius-l)', borderBottomRightRadius: 'var(--radius-l)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minWidth: 50, fontSize: 'var(--font-size-xs)', /* @literal see `Checkbox` */ color: '#4f4f4f', backgroundColor: 'var(--color-gray-light)', borderTopRightRadius: 'var(--radius-l)', borderBottomRightRadius: 'var(--radius-l)' }}>
             {description}
           </div>
         )}

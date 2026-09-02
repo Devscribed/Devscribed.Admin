@@ -148,8 +148,8 @@ function TabButton({ value, isActive, testId, controls, onSelect, children }: Ta
         paddingLeft: 0,
         paddingRight: 0,
         paddingBottom: 0,
-        paddingTop: 4,
-        marginRight: 20,
+        paddingTop: 'var(--space-1)',
+        marginRight: 'var(--space-7)',
         cursor: 'pointer',
         /* §58 — a column, so the label sits at the top of the box and the bar under it.
            A `<button>` centres its content, and a chosen tab is 16px taller than an unchosen
@@ -173,7 +173,7 @@ function TabButton({ value, isActive, testId, controls, onSelect, children }: Ta
           fontWeight: 'var(--font-weight-medium)',
           color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
           fontSize: 'var(--font-size-base)',
-          lineHeight: '24px',
+          lineHeight: 'var(--line-height-m)',
         }}
       >
         {children}
@@ -186,11 +186,11 @@ function TabButton({ value, isActive, testId, controls, onSelect, children }: Ta
       <div
         aria-hidden
         style={{
-          marginTop: 12,
+          marginTop: 'var(--space-5)',
           backgroundColor: isActive ? 'var(--color-blue)' : 'transparent',
           height: 4,
-          borderTopLeftRadius: 6,
-          borderTopRightRadius: 6,
+          borderTopLeftRadius: 'var(--radius-m)',
+          borderTopRightRadius: 'var(--radius-m)',
         }}
       />
     </button>

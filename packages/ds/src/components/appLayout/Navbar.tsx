@@ -36,7 +36,7 @@ export function Navbar({
 }: NavbarProps) {
   return (
     <nav {...rest} className={['ds-navbar', className].filter(Boolean).join(' ')}
-      style={{ width: '100%', flexShrink: 0, padding: '0 25px', display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border-subtle)', background: '#fff', ...style }}>
+      style={{ width: '100%', flexShrink: 0, padding: '0 var(--space-9)', display: 'flex', alignItems: 'center', borderBottom: 'var(--border-width-hairline) solid var(--border-subtle)', background: 'var(--surface-card)', ...style }}>
       {/* The drawer's opener. Hidden above the breakpoint by `.ds-navbar-menu`, where the rail
           is already in view — the counterpart to the sidebar's own close button. */}
       {onMenuClick && (
@@ -45,7 +45,7 @@ export function Navbar({
           <MenuIcon />
         </button>
       )}
-      {tracker && <div style={{ marginLeft: -15 }}><MiniTracker counter={trackerCounter} onClick={onOpenTracker} /></div>}
+      {tracker && <div style={{ /* @literal cancels the pill's own leading offset; the pair is one measurement */ marginLeft: -15 }}><MiniTracker counter={trackerCounter} onClick={onOpenTracker} /></div>}
       {children}
       <div style={{ marginLeft: 'auto' }}>
         {account !== undefined ? account : <AccountMenu name={userName} onNavigate={onAccountNavigate} />}

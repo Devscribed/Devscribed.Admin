@@ -45,8 +45,10 @@ export function ToggleButton({
   value1TestId, value2TestId,
   style, ...rest
 }: ToggleButtonProps) {
-  const seg: React.CSSProperties = { flex: '1 1 0', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--color-gray-light)', borderRadius: 'var(--radius-pill)', fontSize: 12, color: 'var(--text-primary)', fontFamily: 'var(--font-family-base)', cursor: 'pointer', border: 0 };
-  const active: React.CSSProperties = { ...seg, height: 36, fontSize: 13, fontWeight: 'var(--font-weight-medium)', lineHeight: 1, backgroundColor: '#fff', boxShadow: 'var(--shadow-toggle-active)', marginTop: -2, outline: 0 };
+  const seg: React.CSSProperties = { flex: '1 1 0', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--color-gray-light)', borderRadius: 'var(--radius-pill)', fontSize: 'var(--font-size-xs)', color: 'var(--text-primary)', fontFamily: 'var(--font-family-base)', cursor: 'pointer', border: 0 };
+  /* @literal 13px and the -2px lift are the chosen segment's own: it steps out of the track it
+     sits in, and neither number is a scale step anything else uses. */
+  const active: React.CSSProperties = { ...seg, height: 36, fontSize: 13, fontWeight: 'var(--font-weight-medium)', lineHeight: 1, backgroundColor: 'var(--surface-card)', boxShadow: 'var(--shadow-toggle-active)', marginTop: -2, outline: 0 };
   const [focused, setFocused] = React.useState<string | null | undefined>(null);
   const generatedId = React.useId();
   const labelId = label ? `${generatedId}-label` : undefined;
@@ -100,10 +102,10 @@ export function ToggleButton({
        both segments are `flex-basis: 0`, so the control shrinks to the width of "24h12h" with
        the chosen segment painting over its neighbour. Filling the line first and capping second
        costs nothing in a stacked form — the cap still decides the width there. */
-    <div {...rest} style={{ position: 'relative', marginBottom: 20, width: '100%', maxWidth: 160, ...style }}>
+    <div {...rest} style={{ position: 'relative', marginBottom: 'var(--space-7)', width: '100%', maxWidth: 160, ...style }}>
       {label && (
         /* The system's field-label treatment, inline because this control draws its own. */
-        <label id={labelId} style={{ display: 'inline-block', padding: '10px 0 0 10px', fontWeight: 'var(--font-weight-regular)', fontSize: 'var(--font-size-xs)', lineHeight: '21px', color: 'var(--text-secondary)', marginBottom: 'var(--space-1)', whiteSpace: 'nowrap', fontFamily: 'var(--font-family-base)' }}>{label}</label>
+        <label id={labelId} style={{ display: 'inline-block', padding: 'var(--space-4) 0 0 var(--space-4)', fontWeight: 'var(--font-weight-regular)', fontSize: 'var(--font-size-xs)', lineHeight: 'var(--line-height-label)', color: 'var(--text-secondary)', marginBottom: 'var(--space-1)', whiteSpace: 'nowrap', fontFamily: 'var(--font-family-base)' }}>{label}</label>
       )}
       <div
         role="radiogroup"

@@ -83,7 +83,7 @@ export function Card({
             style={variant === 'panel'
               ? {
                 fontWeight: 'var(--font-weight-medium)', fontSize: 'var(--font-size-xs)',
-                lineHeight: '18px', textTransform: 'uppercase', color: 'var(--text-secondary)',
+                lineHeight: 'var(--line-height-xs)', textTransform: 'uppercase', color: 'var(--text-secondary)',
               }
               : {
                 fontWeight: 'var(--headline-6-weight)', fontSize: 'var(--headline-6-size)',

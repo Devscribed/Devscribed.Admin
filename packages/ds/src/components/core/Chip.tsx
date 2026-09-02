@@ -68,9 +68,13 @@ export function Chip({
     <div
       {...rest}
       style={{
-        display: 'flex', minWidth: 0, margin: 2, background: '#fff',
-        border: '1px solid var(--border-default)', borderLeft: '7px solid var(--color-blue)',
-        borderRadius: 8, padding: onRemove ? '4px 0 4px 4px' : '4px 7px 4px 4px', color: '#000',
+        /* @literal the chip's own micro-geometry: a 2px gap between chips, the 7px accent edge,
+           3px of breathing room around the label, and a 12px cross. All below the scale, and
+           all measured against each other rather than against the page. */
+        display: 'flex', minWidth: 0, margin: 2, background: 'var(--surface-card)',
+        border: 'var(--border-width-hairline) solid var(--border-default)', borderLeft: '7px solid var(--color-blue)',
+        borderRadius: 'var(--radius-l)', padding: onRemove ? 'var(--space-1) 0 var(--space-1) var(--space-1)' : 'var(--space-1) 7px var(--space-1) var(--space-1)', /* @literal pure black, where the system's ink is `--text-primary` (#1B1B1B).
+           Reconciling the two is a visual decision, not a substitution. */ color: '#000',
         cursor: onRemove && !removeDisabled ? 'pointer' : 'default', boxSizing: 'border-box',
         /* §37 — with one line of 14px text `stretch` and `center` paint identically, so the
            choice only exists once something taller than the label is in the row. */
@@ -79,7 +83,7 @@ export function Chip({
       }}
     >
       {leading && <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{leading}</span>}
-      <span style={{ fontSize: 14, fontWeight: 400, padding: '0 3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{text}</span>
+      <span style={{ /* @literal see the chip's micro-geometry note above */ fontSize: 'var(--font-size-s)', fontWeight: 400, padding: '0 3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{text}</span>
       {trailing && <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{trailing}</span>}
       {onRemove && (
         <button
@@ -92,7 +96,7 @@ export function Chip({
           onMouseDown={(e) => e.stopPropagation()}
           onMouseEnter={() => setHover(true)}
           onMouseLeave={() => setHover(false)}
-          style={{ display: 'flex', alignItems: 'center', paddingLeft: 4, paddingRight: 4, background: '#fff', borderRadius: 12, color: hover && !removeDisabled ? 'var(--border-default)' : 'var(--text-secondary)', fontWeight: 400, cursor: removeDisabled ? 'default' : 'pointer', opacity: removeDisabled ? 0.5 : 1 }}
+          style={{ /* @literal a 12px radius on a 24px cross is a circle in all but name; see the note above */ display: 'flex', alignItems: 'center', paddingLeft: 'var(--space-1)', paddingRight: 'var(--space-1)', background: 'var(--surface-card)', borderRadius: 12, color: hover && !removeDisabled ? 'var(--border-default)' : 'var(--text-secondary)', fontWeight: 400, cursor: removeDisabled ? 'default' : 'pointer', opacity: removeDisabled ? 0.5 : 1 }}
         >
           <CrossIcon />
         </button>

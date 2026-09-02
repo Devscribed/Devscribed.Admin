@@ -119,7 +119,7 @@ export function BoardColumn({
            has. A tinted fill would be a second object on a board that must only ever show
            one. */
         backgroundColor: 'var(--surface-sunken)',
-        border: '1px dashed var(--action-primary)',
+        border: 'var(--border-width-hairline) dashed var(--action-primary)',
         boxSizing: 'border-box',
       }}
     />
@@ -147,6 +147,8 @@ export function BoardColumn({
         borderRadius: 'var(--radius-l)',
         /* 2px at the sides, because the body inside it carries the real 8px: a column that
            scrolls has to put its scrollbar against its own edge, not 8px in from it. */
+        /* @literal 2px, below the scale: a column that scrolls puts its scrollbar against its
+           own edge, and the body inside carries the real inset. */
         padding: 'var(--space-4) 2px',
         boxSizing: 'border-box',
         fontFamily: 'var(--font-family-base)',
@@ -171,6 +173,7 @@ export function BoardColumn({
               whiteSpace: 'nowrap',
               fontWeight: 'var(--font-weight-medium)',
               fontSize: 'var(--font-size-s)',
+              /* @literal the column name's line box, so the head is one height. */
               lineHeight: '20px',
               color: 'var(--text-primary)',
             }}
@@ -223,6 +226,7 @@ export function BoardColumn({
             data-testid={`board-column-empty-${status}`}
             style={{
               margin: 0,
+              /* @literal below the scale — the empty line sits where a card's border would be. */
               padding: 2,
               fontSize: 'var(--font-size-xs)',
               color: 'var(--text-secondary)',

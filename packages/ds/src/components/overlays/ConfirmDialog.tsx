@@ -77,20 +77,20 @@ export function ConfirmDialog({
         tabIndex={-1}
         style={{
           position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-          backgroundColor: '#fff', boxShadow: 'var(--shadow-modal)', padding: 20,
-          border: '1px solid var(--border-default)', borderRadius: 'var(--radius-l)',
+          backgroundColor: 'var(--surface-overlay)', boxShadow: 'var(--shadow-modal)', padding: 'var(--space-7)',
+          border: 'var(--border-width-hairline) solid var(--border-default)', borderRadius: 'var(--radius-l)',
           width: '100%', maxWidth: 600, zIndex: 2001, outline: 'none',
           ...style,
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <div id={titleId} style={{ width: '100%', fontFamily: 'var(--font-family-base)', fontWeight: 'var(--font-weight-semibold)', fontSize: 20, lineHeight: '24px', color: 'var(--text-tertiary)' }}>{title}</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-7)' }}>
+          <div id={titleId} style={{ width: '100%', fontFamily: 'var(--font-family-base)', fontWeight: 'var(--font-weight-semibold)', fontSize: 'var(--font-size-xl)', lineHeight: 'var(--line-height-m)', color: 'var(--text-tertiary)' }}>{title}</div>
           {/* The close mark scales rather than filling on hover — `IconButton`'s rule (§10). */}
           <button type="button" onClick={onClose} disabled={busy} aria-label="Close dialog." onMouseEnter={() => setCloseHover(true)} onMouseLeave={() => setCloseHover(false)} style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 13, height: 13, color: 'var(--text-secondary)', transform: closeHover ? 'scale(1.1)' : 'none', transition: 'transform 0.3s' }}><CloseIcon /></button>
         </div>
         <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ width: '100%', color: 'var(--text-primary)', marginBottom: 20, fontFamily: 'var(--font-family-base)', fontSize: 'var(--font-size-base)' }}>{description}</div>
-          <div style={{ display: 'flex', alignSelf: 'flex-end', gap: 10 }}>
+          <div style={{ width: '100%', color: 'var(--text-primary)', marginBottom: 'var(--space-7)', fontFamily: 'var(--font-family-base)', fontSize: 'var(--font-size-base)' }}>{description}</div>
+          <div style={{ display: 'flex', alignSelf: 'flex-end', gap: 'var(--space-4)' }}>
             {/* The composition owns the width, which is §1: a `Button` does not decide how
                 much of a row it takes, so these two are told to fill their 100px slots. */}
             <div style={{ minWidth: 100 }}><Button style={{ width: '100%' }} disabled={busy} onClick={onClose} data-testid={declineTestId}>{declineBtnText}</Button></div>
