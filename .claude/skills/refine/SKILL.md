@@ -1,111 +1,111 @@
 ---
 name: refine
-description: Judge whether a written specification can be delivered on its own — free of self-contradiction, current with the code, complete from itself alone, and testable — by dispatching the spec-refiner agent with a clean context. Use after writing a spec, before shipping one, or when an existing spec has drifted from the code.
+description: Judge whether a written specification can be delivered on its own — free of self-contradiction, current with the code, complete from itself alone, and testable — by running the refine loop. Use after writing a spec, before shipping one, or when an existing spec has drifted from the code.
 ---
 
 # Refining a spec
 
-A spec is judged by a stranger. You dispatch one, you fix what it returns, you dispatch again.
+One command. The orchestrator is `scripts/refine-loop.mjs`, not you:
 
+```bash
+node scripts/refine-loop.mjs specs/<area>/NN-name.md --request "<the request the spec answers>"
 ```
-Task(subagent_type: "spec-refiner", prompt: "<spec path>\n\n<the request the spec answers, or: no request given>")
+
+It runs three gates, cheapest first, repairs what the last one finds, commits the round, and
+judges the next round against **that commit** rather than the document again — until the verdict
+is clean or the loop stops and says why.
+
+| Gate | What it is | What it costs |
+|---|---|---|
+| **T0** `spec-lint` | a script — pointers, joins, cross-product completeness | nothing |
+| **T1** `pre-implement` | the spec compiled into a plan, by the agent the pipeline itself runs | one pass |
+| **T2** `spec-refiner` | one judge, on what T0 and T1 cannot decide | one pass |
+
+Then `spec-fixer` repairs T2's verdict and the round is committed.
+
+Useful variants:
+
+```bash
+node scripts/refine-loop.mjs <spec> --rounds 1      # one judged round, then stop
+node scripts/refine-loop.mjs <spec> --skip t1       # skip the plan gate
+node scripts/refine-loop.mjs <spec> --no-fix        # stop at the verdict, repair by hand
+node scripts/refine-loop.mjs <spec> --dry-run       # print what each gate would run
+npm run spec:lint -- <spec>                          # T0 alone, while writing
 ```
-
-That is the whole of the dispatch. **Give it the spec path and the request, and nothing else** —
-no summary of what you wrote, no explanation of a decision, no "I already checked X". Every
-sentence of context you add is a sentence it will not go and verify, and the reason it is a
-separate agent is that it has not read what you have read.
-
-Dispatch **one** agent. This is a judgement about one document; splitting it produces shards
-that each see half a contradiction.
 
 ## Your part
 
-**Before** — the spec file exists, and you can state the request in one line. An existing spec
-that nobody is currently writing has no request: say `no request given` and the scope sweep is
-skipped rather than invented.
+**Do not run the agents by hand and do not judge whether a finding deserves another round.**
+That decision is arithmetic and it is written down: a round that does not shrink the blocker
+count, or a finding that survives a repair, stops the loop. Overriding it turns the loop back
+into the conversation it was built to end.
 
-**After** — the verdict is in `.workflow/refine/<area>-<nn>.verdict.json`. Blockers are fixed
-before the spec is presented or shipped; notes go to the person with the spec.
+What you do is either side of the run:
 
-## Fixing what comes back
+- **Before** — the bundle exists (`NN-name.md`, and `.contracts.md` / `.cases.md` beside it if the
+  spec has them), the tree is clean, and you can state the request in one line. An existing spec
+  nobody is currently writing has no request: leave `--request` off and the Summary is the request.
+- **While** — it prints each gate as it goes. Let it run.
+- **After** — read the outcome and explain it.
 
-You may edit the spec. The refiner may not, which is why it hands you `suggestedFix` rather
-than a diff.
+## Reading the outcome
 
-**Hand the verdict to `spec-fixer` rather than repairing it yourself.**
+The ledger is `.workflow/refine/<area>-<nn>.loop.json`: every round, what each gate found, and the
+commit it produced.
 
-```
-Task(subagent_type: "spec-fixer", prompt: "<spec path>\n<verdict path>")
-```
+`pass` means the spec is deliverable. Say what the rounds changed and hand over any notes — notes
+reach the person and stop nothing.
 
-Two paths, nothing else — the same clean-context rule the refiner runs under. **It repairs the
-whole verdict**, including the contradictions and the ambiguities: those it settles by deciding,
-and it writes the choice and the alternative it rejected into the document itself, so no
-decision is taken out of sight. `.workflow/refine/<area>-<nn>.fix.json` records each one under
-`decided`, with `recordedAt` naming where in the spec it landed.
+A stop is not a crash. Most stops are the loop working:
 
-Two things still come back in `left`: a repair that would need a route, a capability, a column or
-a screen the spec does not have, and a question only the product owner can answer. Those are
-yours — settle them in the document before the next dispatch.
+| Stop | What it means | What helps |
+|---|---|---|
+| `lint` | T0 found something decidable | Fix it and run again. Every one has a mechanical repair and no judgement in it — never send these to a model |
+| `spec-defect` | `pre-implement` cannot compile the spec | The same finding that would halt a ship run, met before the run was paid for. Repair it in the document |
+| `needs-a-person` | The fixer met a fork it may not settle | A repair needing a route, a column or a screen the spec does not have, or a product question. `AskUserQuestion`, one fork, with the trade-off — never pick the cheaper side yourself |
+| `stuck-finding` | A finding survived a repair | The requirement is ambiguous or the finding is wrong. Show both sides and let the person choose |
+| `not-converging` | A round found as many blockers as the one before | The loop is judging the document again rather than the repair. Check that the round committed |
+| `budget` | Rounds spent, findings remain | Ship with them or spend another round deliberately. Both are a person's call |
 
-**Read the `decided` entries.** They are choices somebody made on your behalf, and reversing one
-is cheap now and expensive after it ships.
+## What each gate is for, and why the order
 
-**Whoever writes the fix — you or the fixer — every sentence added about this repository is
-checked by the next pass.** Open the file before writing the claim, prefer a symbol to a line
-number, and run the command before quoting its count. A repair written from memory costs the
-pass that finds it.
+**T0 is free and its repairs delete text rather than add it.** That is what keeps the loop from
+growing the thing it is refining. A gate that only a model can run costs a pass and answers with
+prose the next pass then has to judge.
 
-**Every fix lands in the spec being refined, and in no other.** Older specs are records of
-decisions taken then, and are not edited to stay current — the newest spec that speaks about a
-behaviour governs it. `spec/incomplete-decision` says this spec changed something described
-elsewhere and did not state the new rule in full; the repair is to state it here, completely
-enough that a reader never opens the other document. A sentence pointing at what it overrules
-is not a repair — it sends the reader away instead of answering them.
+**T1 is the pipeline's own gate, run early.** `pre-implement` blocks with a `spec` finding when it
+cannot compile a document — the same finding that halts a ship run, except a halt there burns a
+whole run and a halt here costs one pass.
 
-**A contradiction is settled by deciding, not by reading it the right way.** Two clear rules
-that disagree get one of them changed. If which one wins is a product question, ask it —
-`AskUserQuestion`, one fork, with the trade-off — rather than picking the one that costs less
-to write.
+**T2 is what neither can decide**: a declared domain that is wrong rather than incomplete, a rule
+with two readings, business logic walked as a system, a claim the code refutes. It is dispatched
+with the spec path, the request, and — from round two — the commit range to judge. The range is an
+argument, never something the judge infers, because a judge that re-sweeps a document it has
+already accepted returns a different subset every time and the loop never ends.
 
-**When you disagree with a finding, check it before you dismiss it.** Open the file the witness
-names. A witness that is wrong is worth saying so plainly; a witness you did not open is not
-one you have answered.
+## Fixing, and the two things the fixer may not do
 
-## Dispatch again
+`spec-fixer` repairs the whole verdict, settling contradictions and ambiguities **by deciding**,
+and writes each choice and the alternative it rejected into the document. Two things come back in
+`left` instead: a repair needing scope the spec does not have, and a question only the product
+owner answers. Those stop the loop for you.
 
-**Commit the repair before dispatching.** One pass, one commit — that commit boundary is what
-the next agent judges against, and without it a diff pass has nothing to bound itself to. It
-also leaves the loop a history, which the verdict file does not: `.workflow/refine/` is
-overwritten every pass.
+**Read the `decided` entries in `.workflow/refine/<area>-<nn>.fix.json`.** They are choices
+somebody made on your behalf, and reversing one is cheap now and expensive after it ships.
 
-Fix, then dispatch a fresh agent. Not the same one — it has seen your fix in its context and
-will read the document through it. The second pass costs a fraction of the first, because a
-run that halts on a spec defect costs a run.
+**Every sentence added about this repository is checked by the next pass.** Open the file before
+writing the claim, prefer a symbol to a line number, and run the command before quoting its count.
+A repair written from memory costs the pass that finds it.
 
-Stop when the verdict is `pass`, or when every remaining finding is a note and the person with
-the spec has seen them.
-
-**The first pass judges the document; every pass after it judges the change.** A document of this
-size holds more enumerable detail than one pass samples, so a second full sweep does not re-find
-the first one's list — it returns a different subset, and there is always one more. Judging the
-diff is what makes the loop terminate: the surface shrinks with each repair instead of being
-redrawn at full size.
-
-So the loop ends when **a pass over the last repair finds nothing that changes what gets built**
-— not when a pass over the whole spec comes back empty, which it never does. Notes go to the
-person with the spec; they do not buy another pass.
-
-**A spec that grows over a pass is a warning.** The repairs state rules; they do not add feature,
-and they do not copy the code into the document. If the spec is materially longer than it was,
-read what was added before dispatching again.
+**Every fix lands in the bundle being refined, and in no other.** Older specs record decisions
+taken then and are not edited to stay current; the newest spec that speaks about a behaviour
+governs it. A pointer at what it overrules is not a repair — it sends the reader away instead of
+answering them, and T0 rejects it.
 
 ## Where this sits
 
-Outside the pipeline, before it. `/spec` step 6 dispatches this; `npm run refine -- <spec>`
-runs it on any spec at any time, which is what an already-written spec that has drifted needs.
+Outside the pipeline, before it. `/spec` ends by running it; `npm run refine:loop -- <spec>` runs
+it on any spec at any time, which is what an already-written spec that has drifted needs.
 
-It is not a `ship` stage. `pre-implement` compiles a spec into a plan and blocks when it cannot;
-this asks whether the document is true, which is a different question and is not worth an opus
-pass on every attempt of every run.
+It is not a `ship` stage. `ship` asks whether the code matches the spec; this asks whether the
+document is true, and it is not worth an opus pass on every attempt of every run.

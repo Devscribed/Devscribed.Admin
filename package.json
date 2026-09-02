@@ -28,7 +28,9 @@
     "gate": "node scripts/static-gate.mjs",
     "reap": "node scripts/reap-stale-servers.mjs",
     "reap:dry": "node scripts/reap-stale-servers.mjs --dry-run",
-    "coverage": "node scripts/handoff-coverage.mjs"
+    "coverage": "node scripts/handoff-coverage.mjs",
+    "spec:lint": "node scripts/spec-lint.mjs",
+    "refine:loop": "node scripts/refine-loop.mjs"
   },
   "devDependencies": {
     "release-it": "21.0.2"

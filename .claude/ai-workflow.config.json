@@ -80,5 +80,12 @@
   "protectedBranches": [
     "main"
   ],
-  "branchPrefix": "spec/"
+  "branchPrefix": "spec/",
+  "refine": {
+    "$comment": "The pre-pipeline gate. T0 is a script, T1 is the same pre-implementer the pipeline runs, T2 is one judge. Rounds are judged rounds; the loop also stops when a round does not shrink the blocker count or a finding survives a repair.",
+    "rounds": 2,
+    "judgeModel": "opus",
+    "fixerModel": "opus",
+    "timeoutMin": 45
+  }
 }

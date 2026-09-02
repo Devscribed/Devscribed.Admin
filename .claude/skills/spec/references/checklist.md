@@ -2,6 +2,16 @@
 
 Run this before showing a spec to anyone. A "no" is a defect, not a style preference.
 
+**Run `npm run spec:lint -- <spec>` first.** It decides, mechanically and for free, everything on
+this page that is a join or a pattern: every requirement in EARS with one outcome and a stable id,
+every requirement covered by a case, every acceptance criterion naming an observer that exists,
+every status and message a case asserts declared by the contract, every `data-testid` in both
+places, every decision table complete over its declared domains, no rule carried by reference to
+another document, no count in prose about a table, no line number into code, no path that does not
+exist. A clean lint is the precondition for reading this list, not a substitute for it.
+
+What is left below is judgement — the part no script reaches.
+
 ## Coverage
 
 - [ ] Edge cases are a numbered table with exact behaviour per row, not prose.
