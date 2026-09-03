@@ -10,7 +10,7 @@ that was deleted afterwards. Every cell is what happened.
 | Step | Command | Observed |
 |---|---|---|
 | 1 | `docker ps` | `devscribed-postgres` up 3 days (healthy), publishing the development and E2E database ports. |
-| 2 | `cd e2e && E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 PW_WORKERS=1 npx playwright test tests/<file> --reporter=list` | The suite claimed its own pair, `globalSetup` migrated the E2E database, Next.js reported `Ready in 1781ms`, and `/login`, `/org/[orgId]/members`, `/org/[orgId]/requests` and `/org/[orgId]/settings/holidays` each compiled and served. |
+| 2 | `cd e2e && CI=1 PW_WORKERS=1 npx playwright test tests/<file> --reporter=list` | The suite claimed its own port pair, `globalSetup` migrated the E2E database, Next.js reported `Ready in 1781ms`, and `/login`, `/org/[orgId]/members`, `/org/[orgId]/requests` and `/org/[orgId]/settings/holidays` each compiled and served. |
 | 3 | The same run, API calls only | `GET /api/me` → `200` with `account`, `organization`, `role: "admin"` and `features.mailOutbox: true`. |
 
 No environment repair was needed: the Prisma client and the validation package's build were
@@ -67,7 +67,7 @@ reached the requests screens and opened the Settings destination. It was deleted
 the command and what came back are kept here.
 
 ```
-cd e2e && E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 PW_WORKERS=1 \
+cd e2e && CI=1 PW_WORKERS=1 \
   npx playwright test tests/_probe-requests-topics-clients.spec.ts --reporter=list
 
 [probe] POST requests => 201 {"id":"…","number":1,"type":"access","accessKind":"vpn",
@@ -168,8 +168,10 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
   predating this spec is in. Execute the backfill migration's SQL file by its path under
   `apps/api/prisma/migrations/`, then read the catalogue for that organization.
 - **Expected Result:** The organization has the full seeded catalogue again. The request
-  raised earlier still has its `type`, its `topicLabel` and no `topicId`. No request row is
-  written by the backfill.
+  raised earlier still has its `type`, its `topicLabel` and no `topicId`, and reads back with a
+  `topic` member whose `name` is the label and whose `id`, `audience`, `type` and `status` are
+  `null` — the member is keyed on the label, so a request that has one is never served
+  `topic: null`. No request row is written by the backfill.
 
 ### TC-02-INT-03
 
@@ -216,12 +218,17 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
 - **Covers:** REQ-02-004
 - **Asserts:** `PATCH /api/organizations/{orgId}/request-topics/{topicId}` → 200;
   `PATCH /api/organizations/{orgId}/request-topics/{topicId}` → 400
-  REQUEST_TOPIC_MESSAGES.audienceImmutable
-- **Steps:** As an admin, rename a seeded staff topic. Then send the same route
-  `audience: "staff"`, then `audience: "client"`.
+  REQUEST_TOPIC_MESSAGES.audienceImmutable;
+  `PATCH /api/organizations/{orgId}/request-topics/{topicId}` → 400
+  REQUEST_TOPIC_MESSAGES.typeImmutable
+- **Steps:** As an admin, rename a seeded staff topic of type `access`. Then send the same
+  route `audience: "staff"`, then `audience: "client"`, then `type: "access"`, then
+  `type: "question"`.
 - **Expected Result:** The rename succeeds and `updatedAt` moves. Sending the stored audience
-  succeeds and changes nothing. Sending the other audience answers `400` and leaves the row
-  untouched.
+  and sending the stored type each succeed and change nothing. Sending the other audience
+  answers `400` with `audienceImmutable`, and sending the other type answers `400` with
+  `typeImmutable`; each leaves the row untouched, so a kind is refused rather than dropped in
+  silence.
 
 ### TC-02-INT-07
 
@@ -278,11 +285,16 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
 - **Level:** Integration
 - **Covers:** REQ-02-021, REQ-02-023
 - **Asserts:** `POST /api/organizations/{orgId}/requests` → 201
-- **Steps:** As an admin, raise a request choosing the seeded `VPN` topic and sending no
-  `type`. Read the created row, then rename the topic to `VPN access` and read the row again.
-- **Expected Result:** The stored `type` is `access`, taken from the topic. `topicLabel` is
-  `VPN`, written in the same transaction as the request. After the rename the request still
-  reads `VPN` while the catalogue reads `VPN access`.
+- **Steps:** As an admin, raise a request choosing the seeded `VPN` topic and sending neither
+  `type` nor `accessKind`. Read the created row, then rename the topic to `VPN access` and read
+  the row again.
+- **Expected Result:** The `201` arrives: a body carrying neither classifier is valid, and the
+  route emits none of `REQUEST_MESSAGES.typeUnknown`, `REQUEST_MESSAGES.accessKindRequired`,
+  `REQUEST_MESSAGES.accessKindUnknown` or `REQUEST_MESSAGES.accessKindNotAllowed`. The stored
+  `type` is `access`, taken from the topic, and the stored `accessKind` is `null` although the
+  topic's kind is `access`. `topicLabel` is `VPN`, written in the same transaction as the
+  request. After the rename the request still reads `VPN` while the catalogue reads
+  `VPN access`.
 
 ### TC-02-INT-11
 
@@ -424,6 +436,20 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
 - **Expected Result:** Every call answers `404` with no message naming the resource, identical
   to the answer for a path id that never existed. Nothing is read and nothing is written.
 
+### TC-02-INT-22
+
+- **Level:** Integration
+- **Covers:** REQ-02-009, the `reorder` rows of the state machine
+- **Asserts:** `PATCH /api/organizations/{orgId}/request-topics/{topicId}` → 200;
+  `GET /api/organizations/{orgId}/request-topics` → 200
+- **Steps:** As an admin, read the seeded staff catalogue. `PATCH` the last row's `sortOrder`
+  to a value below the first row's and read the catalogue back. Archive a different topic,
+  `PATCH` its `sortOrder`, read `status=archived`, then restore it and read `status=active`.
+- **Expected Result:** The moved row is returned first and `updatedAt` has moved on it and on
+  no other row; no other row's `sortOrder` is rewritten. The archived topic's `sortOrder` is
+  written and returned, and after the restore the topic sits at the position that value gives
+  it — a reorder taken while archived takes effect on restore.
+
 ### TC-02-E2E-01
 
 - **Level:** E2E
@@ -436,10 +462,14 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
   submission keeps the modal open, draws the duplicate message under the name field, and
   leaves the typed value in place. The archive moves the row to the archived list and the
   restore moves it back. The audience control is drawn when adding and not when renaming.
+  Every active row carries up and down ordering controls and no drag handle, except that the
+  first row draws no up control and the last draws no down one; the archived row draws
+  neither.
 - **Selectors:** `settings-tab-request-topics`, `request-topics-page`,
   `request-topics-audience-staff`, `request-topics-audience-client`, `request-topics-add-btn`,
   `request-topic-modal`, `request-topic-name`, `request-topic-audience`, `request-topic-type`,
   `request-topic-submit`, `request-topic-error-name`, `request-topic-row-{id}`,
+  `request-topic-row-{id}-up-btn`, `request-topic-row-{id}-down-btn`,
   `request-topic-row-{id}-archive-btn`, `request-topic-row-{id}-restore-btn`
 
 ### TC-02-E2E-02
@@ -481,7 +511,8 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
   offers exactly those four words plus an all-statuses entry, and selecting Closed leaves the
   cancelled request in the list. The detail header reads Closed with `cancelled` beside it,
   and the history entry for the change reads Closed rather than the stored value.
-- **Selectors:** `requests-status-filter`, `request-row-{id}-status`, `request-detail-status`
+- **Selectors:** `requests-status-filter`, `request-row-{id}-status`, `request-detail-status`,
+  `request-detail-history`
 
 ### TC-02-E2E-05
 

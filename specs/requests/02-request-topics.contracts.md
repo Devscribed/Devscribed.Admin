@@ -14,7 +14,7 @@ with no body message, identical to a row that does not exist.
 |---|---|---|---|
 | `GET /api/organizations/{orgId}/request-topics` | session, org scope | `200` | `400` `REQUEST_TOPIC_MESSAGES.audienceUnknown`; `404` |
 | `POST /api/organizations/{orgId}/request-topics` | session, org scope, `ManageRequestTopics` | `201` | `400` `REQUEST_TOPIC_MESSAGES.audienceUnknown`, `REQUEST_TOPIC_MESSAGES.nameRequired`, `REQUEST_TOPIC_MESSAGES.nameTooLong`, `REQUEST_TOPIC_MESSAGES.typeUnknown`; `403` `REQUEST_TOPIC_MESSAGES.manageForbidden`; `404`; `409` `REQUEST_TOPIC_MESSAGES.nameDuplicate` |
-| `PATCH /api/organizations/{orgId}/request-topics/{topicId}` | session, org scope, `ManageRequestTopics` | `200` | `400` `REQUEST_TOPIC_MESSAGES.nameRequired`, `REQUEST_TOPIC_MESSAGES.nameTooLong`, `REQUEST_TOPIC_MESSAGES.audienceImmutable`; `403` `REQUEST_TOPIC_MESSAGES.manageForbidden`; `404`; `409` `REQUEST_TOPIC_MESSAGES.nameDuplicate` |
+| `PATCH /api/organizations/{orgId}/request-topics/{topicId}` | session, org scope, `ManageRequestTopics` | `200` | `400` `REQUEST_TOPIC_MESSAGES.nameRequired`, `REQUEST_TOPIC_MESSAGES.nameTooLong`, `REQUEST_TOPIC_MESSAGES.audienceImmutable`, `REQUEST_TOPIC_MESSAGES.typeImmutable`; `403` `REQUEST_TOPIC_MESSAGES.manageForbidden`; `404`; `409` `REQUEST_TOPIC_MESSAGES.nameDuplicate` |
 | `PATCH /api/organizations/{orgId}/request-topics/{topicId}/archive` | session, org scope, `ManageRequestTopics` | `200` | `403` `REQUEST_TOPIC_MESSAGES.manageForbidden`; `404`; `409` `REQUEST_TOPIC_MESSAGES.statusUnchanged` |
 | `PATCH /api/organizations/{orgId}/request-topics/{topicId}/restore` | session, org scope, `ManageRequestTopics` | `200` | `403` `REQUEST_TOPIC_MESSAGES.manageForbidden`; `404`; `409` `REQUEST_TOPIC_MESSAGES.statusUnchanged` |
 | `POST /api/organizations/{orgId}/requests` | session, org scope, `CreateRequest` | `201` | `400` `REQUEST_MESSAGES.topicRequired`, `REQUEST_MESSAGES.topicUnavailable`, `REQUEST_MESSAGES.topicAudienceMismatch`, `REQUEST_MESSAGES.classifierNotAccepted`; `403` `REQUEST_MESSAGES.createForbidden`; `404` |
@@ -59,8 +59,8 @@ list without the caller computing anything.
 
 ### `PATCH /api/organizations/{orgId}/request-topics/{topicId}`
 
-Accepts `name` and `sortOrder`. Accepts `audience` only when it equals the stored value
-(REQ-02-004). `type` is not accepted. `200` with `{ "topic": { … } }`.
+Accepts `name` and `sortOrder`. Accepts `audience` and `type` only when each equals the stored
+value; a different one is refused, not ignored (REQ-02-004). `200` with `{ "topic": { … } }`.
 
 ### `PATCH …/request-topics/{topicId}/archive` · `/restore`
 
@@ -83,7 +83,10 @@ No body. `200` with `{ "topic": { … } }`.
 ```
 
 `201` with the row shape below. `type` and `accessKind` are no longer accepted in the body
-(REQ-02-022); `type` is written by the server from the topic (REQ-02-021).
+(REQ-02-022); `type` is written by the server from the topic and `accessKind` is written `null`
+(REQ-02-021). Neither name is validated as a body field here, so this route answers with none
+of `REQUEST_MESSAGES.typeUnknown`, `REQUEST_MESSAGES.accessKindRequired`,
+`REQUEST_MESSAGES.accessKindUnknown` or `REQUEST_MESSAGES.accessKindNotAllowed`.
 
 The `201` body observed today carries `id`, `number`, `type`, `accessKind`, `title`,
 `description`, `status`, `priority`, `blocking`, `overdue`, `neededBy`, `project`,
@@ -94,10 +97,13 @@ The `201` body observed today carries `id`, `number`, `type`, `accessKind`, `tit
 { "topic": { "id": "…", "name": "VPN", "audience": "staff", "type": "access", "status": "active" } }
 ```
 
-`topic` is `null` on a request raised before this spec. `topic.name` is the **snapshot**
-`topicLabel`, not the catalogue's current name (REQ-02-025); `topic.status` is read from the
-catalogue row so a screen can mark a topic that has since been archived, and is `null` when
-the row is gone.
+The member is keyed on `topicLabel`: `topic` is `null` exactly when the request carries no
+`topicLabel`, which is every request raised before this spec and no request raised after it.
+`topic.name` is the **snapshot** `topicLabel`, not the catalogue's current name (REQ-02-025).
+`topic.id`, `topic.audience`, `topic.type` and `topic.status` are read from the row `topicId`
+names, so a screen can mark a topic that has since been archived; each of the four is `null`
+when the request carries a label and no `topicId`, the state a row reaches only if its topic
+was deleted outside this product's routes.
 
 ### `GET /api/organizations/{orgId}/requests` — amended
 
@@ -115,6 +121,7 @@ one already there.
 | `REQUEST_TOPIC_MESSAGES.audienceUnknown` | `GET /api/organizations/{orgId}/request-topics`, `POST /api/organizations/{orgId}/request-topics` | Choose a valid audience | yes |
 | `REQUEST_TOPIC_MESSAGES.audienceImmutable` | `PATCH /api/organizations/{orgId}/request-topics/{topicId}` | A topic cannot change audience after it is created | yes |
 | `REQUEST_TOPIC_MESSAGES.typeUnknown` | `POST /api/organizations/{orgId}/request-topics` | Choose whether this topic is an access or a question | yes |
+| `REQUEST_TOPIC_MESSAGES.typeImmutable` | `PATCH /api/organizations/{orgId}/request-topics/{topicId}` | A topic cannot change kind after it is created | yes |
 | `REQUEST_TOPIC_MESSAGES.nameRequired` | `POST /api/organizations/{orgId}/request-topics`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}` | Enter a topic name | yes |
 | `REQUEST_TOPIC_MESSAGES.nameTooLong` | `POST /api/organizations/{orgId}/request-topics`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}` | Topic name must be 60 characters or fewer | yes |
 | `REQUEST_TOPIC_MESSAGES.nameDuplicate` | `POST /api/organizations/{orgId}/request-topics`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}` | A topic with this name already exists for this audience | yes |
@@ -135,9 +142,9 @@ no endpoint emits it.
 
 ## Status Labels
 
-One exported map, read by the list rows, the detail header and the filter control
-(REQ-02-028). It is display copy, not a validation message, and lives beside the messages so
-web and API cannot disagree about the word a status shows as.
+One exported map, read by the list rows, the detail header, the detail history entries and the
+filter control (REQ-02-028). It is display copy, not a validation message, and lives beside
+the messages so web and API cannot disagree about the word a status shows as.
 
 | Stored status | Label | Closure sub-label |
 |---|---|---|
@@ -182,7 +189,7 @@ migration SQL, not a Prisma `@@unique`, which would be case-sensitive. This is t
 
 | Field | Type | Description |
 |---|---|---|
-| `topicId` | `String?` FK → `RequestTopic`, **SetNull** | The chosen topic. Nullable, so requests that predate this spec need no backfill. `SetNull` never fires in practice: there is no route that deletes a topic. |
+| `topicId` | `String?` FK → `RequestTopic`, **SetNull** | The chosen topic. Nullable, so requests that predate this spec need no backfill. `SetNull` fires through no route: this spec exposes none that deletes a topic (REQ-02-014). |
 | `topicLabel` | `String?` `@db.VarChar(60)` | Snapshot of the topic's name at creation. Written once, never rewritten (REQ-02-023, REQ-02-025). |
 
 `type` and `accessKind` keep their columns and their stored values. `type` is now written by
@@ -228,10 +235,8 @@ twice is safe. `createdByAccountId` is `null` on each.
 | client | 10 | Access | access |
 | client | 20 | Other | question |
 
-The staff set covers what the retired `accessKind` vocabulary covered, plus the two the
-request named, so nothing an organization could classify before becomes unclassifiable. Every
-row is the organization's own from the moment it is written: renaming or archiving any of
-them is an ordinary edit, and the seed is never re-applied.
+Every row is the organization's own from the moment it is written: renaming or archiving any
+of them is an ordinary edit, and the seed is never re-applied.
 
 ## Validation Rules
 
@@ -240,6 +245,7 @@ them is an ordinary edit, and the seed is never re-applied.
 | 1 | topic `name` | Required, 1–60 chars after trim and whitespace collapse | `REQUEST_TOPIC_MESSAGES.nameRequired` / `REQUEST_TOPIC_MESSAGES.nameTooLong` | no |
 | 2 | topic `audience` | One of `staff`, `client` | `REQUEST_TOPIC_MESSAGES.audienceUnknown` | no |
 | 3 | topic `audience` on rename | Equal to the stored value | `REQUEST_TOPIC_MESSAGES.audienceImmutable` | yes |
+| 3a | topic `type` on rename | Equal to the stored value | `REQUEST_TOPIC_MESSAGES.typeImmutable` | yes |
 | 4 | topic `type` | One of `access`, `question` | `REQUEST_TOPIC_MESSAGES.typeUnknown` | no |
 | 5 | topic `name` uniqueness | Unique per organization and audience, ignoring case | `REQUEST_TOPIC_MESSAGES.nameDuplicate` | yes |
 | 6 | topic `sortOrder` | Optional integer, 0–32767 | `REQUEST_TOPIC_MESSAGES.nameRequired` is not used here; an out-of-range value is clamped to the bound | yes |
@@ -249,7 +255,7 @@ them is an ordinary edit, and the seed is never re-applied.
 | 10 | request `type`, `accessKind` | Absent from the body | `REQUEST_MESSAGES.classifierNotAccepted` | yes |
 
 The client validates rules 1, 2, 4 and 7 for immediate feedback. **The server re-validates
-every rule**, including the ones the client cannot check: 3, 5, 8 and 9 need the stored row,
+every rule**, including the ones the client cannot check: 3, 3a, 5, 8 and 9 need the stored row,
 and 10 is a contract the client is simply expected to keep. Submit controls are never disabled
 for validation — clicking an invalid form shows every error and focuses the first invalid
 field.
@@ -264,6 +270,8 @@ field.
 | `request-topics-audience-client` | Settings › Request topics | present |
 | `request-topics-add-btn` | Settings › Request topics | present |
 | `request-topic-row-{id}` | Settings › Request topics | present |
+| `request-topic-row-{id}-up-btn` | Settings › Request topics | present on an active row, absent on the first row of the audience and on every archived row |
+| `request-topic-row-{id}-down-btn` | Settings › Request topics | present on an active row, absent on the last row of the audience and on every archived row |
 | `request-topic-row-{id}-archive-btn` | Settings › Request topics | present while active |
 | `request-topic-row-{id}-restore-btn` | Settings › Request topics | present while archived |
 | `request-topic-modal` | Settings › Request topics | present while adding or renaming |
@@ -284,13 +292,14 @@ field.
 | `requests-status-filter` | Requests list | present, showing the four labels |
 | `request-row-{id}-status` | Requests list | present, showing the label for the stored status |
 | `request-detail-status` | Request detail | present, showing the label and the closure sub-label |
+| `request-detail-history` | Request detail | present, its status entries showing the labels and not the stored values |
 | `requests-page` | Requests list | present |
 
 `requests-new-btn`, `request-new-modal`, `request-new-submit`, `requests-status-filter`,
-`request-row-{id}-status`, `request-detail-status` and `requests-page` are already drawn by the
-requests screens; they appear here because this spec's cases assert them and their contents
-change. `request-new-type` and `request-new-access-kind` are **removed** from the new-request
-modal by REQ-02-022 and appear in no case here.
+`request-row-{id}-status`, `request-detail-status`, `request-detail-history` and `requests-page`
+are already drawn by the requests screens; they appear here because this spec's cases assert
+them and their contents change. `request-new-type` and `request-new-access-kind` are
+**removed** from the new-request modal by REQ-02-022 and appear in no case here.
 
 ## Screens
 
@@ -302,16 +311,24 @@ modal by REQ-02-022 and appear in no case here.
 ├──────────────────────────────────────────────────────────────────────────────┤
 │  ( Staff | Client )                                                          │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│  ⠿  VPN               access                        [ Rename ] [ Archive ]   │
-│  ⠿  Claude            access                        [ Rename ] [ Archive ]   │
-│  ⠿  Repository        access                        [ Rename ] [ Archive ]   │
-│  ⠿  Question          question                      [ Rename ] [ Archive ]   │
-│  ⠿  Other             question                      [ Rename ] [ Archive ]   │
+│      [▼]  VPN         access                        [ Rename ] [ Archive ]   │
+│   [▲][▼]  Claude      access                        [ Rename ] [ Archive ]   │
+│   [▲][▼]  Repository  access                        [ Rename ] [ Archive ]   │
+│   [▲][▼]  Question    question                      [ Rename ] [ Archive ]   │
+│   [▲]     Other       question                      [ Rename ] [ Archive ]   │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │  Archived                                                                    │
 │     Legacy VPN        access                                   [ Restore ]   │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
+
+Ordering is the up and down controls the DS gaps table commits to, and no drag handle: the
+`@ds` barrel (`apps/web/src/ds.ts`) exports no drag or sortable primitive, and a pointer-only
+handle is unreachable from the keyboard. Each control issues one
+`PATCH …/request-topics/{topicId}` carrying that row's new `sortOrder`. The first row of an
+audience draws no up control and the last draws no down one —
+a control that cannot act is not drawn. The archived list draws neither: the route accepts a
+`sortOrder` on an archived topic, and the screen offers restoring it instead.
 
 ### The new-request modal, amended
 
@@ -366,7 +383,7 @@ Light theme only, as everywhere else this release.
 
 | Gap | Where it bites | What ships instead | What closes it |
 |---|---|---|---|
-| No drag-handle or reorder list primitive | The catalogue's ordering control | Up and down controls on each row, each issuing one `PATCH` — keyboard-reachable, and no pointer-only interaction | A `SortableList` in `@ds` with a keyboard contract |
+| No drag-handle or reorder list primitive | The catalogue's ordering control | Up and down controls on each active row, as the mock draws them, each issuing one `PATCH` — keyboard-reachable, and no pointer-only interaction | A `SortableList` in `@ds` with a keyboard contract |
 | No segmented-control primitive | The Staff / Client audience switch | Two `Button`s with an aria-pressed state, carrying `var(--sp-*)` and `var(--fs-*)` tokens | A `SegmentedControl` in `@ds`, adopted by this screen and the requests scope toggle together |
 
 ## Edge Cases

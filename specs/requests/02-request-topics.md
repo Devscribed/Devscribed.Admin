@@ -88,13 +88,21 @@ written onto a request raised under it.
 **Decided:** the list's type filter already turns on this distinction, so a topic that could
 not declare it would leave the filter guessing.
 
-#### REQ-02-004 — the audience is immutable
+#### REQ-02-004 — the audience and the kind are immutable
 
 IF a rename call carries an `audience` different from the stored one, THEN THE SYSTEM SHALL
 answer `400` with `REQUEST_TOPIC_MESSAGES.audienceImmutable`.
 
+IF a rename call carries a `type` different from the stored one, THEN THE SYSTEM SHALL answer
+`400` with `REQUEST_TOPIC_MESSAGES.typeImmutable`. A `type` equal to the stored value is
+accepted and changes nothing, exactly as the stored `audience` is.
+
 **Decided:** moving a topic between audiences silently re-addresses every future request
 raised under it. Archiving and re-creating is one more click and leaves a trail.
+
+**Decided:** a different `type` is refused rather than dropped, the stance REQ-02-022 takes on
+the same classifier at the other end. Rejected: answering `200` having ignored the field, which
+leaves a caller believing the topic now produces a kind it does not.
 
 #### REQ-02-005 — the name
 
@@ -168,11 +176,17 @@ organization holding no `RequestTopic` row.
 
 #### REQ-02-017 — an audience with no active topic
 
-WHILE an audience has no active topic, THE SYSTEM SHALL render the new-request form's topic
-picker as `REQUEST_TOPIC_MESSAGES.pickerEmpty` and draw no submit control.
+WHILE the audience of the form's addressee has no active topic, THE SYSTEM SHALL render the
+new-request form's topic picker as `REQUEST_TOPIC_MESSAGES.pickerEmpty` and draw no submit
+control. That audience is `staff`, `member` being the only addressee kind a request may carry
+as this spec ships (REQ-02-020); an empty `client` audience leaves the form usable.
 
 **Decided:** correctness does not depend on the seed having run — an emptied catalogue gets a
 screen that says so, not a form that fails on submit.
+
+**Decided:** the form reads one audience, the addressee's. Rejected: emptying the form when
+*any* audience has no active topic, which would withdraw a working staff picker over a half of
+the catalogue the form cannot reach.
 
 ### Raising a request under a topic
 
@@ -183,11 +197,12 @@ IF `POST …/requests` carries no `topicId`, THEN THE SYSTEM SHALL answer `400` 
 
 #### REQ-02-019 — an unusable topic
 
-IF `topicId` names a topic that is archived or belongs to another organization, THEN THE
+IF `topicId` names no active topic of the caller's organization — because it is archived,
+because it belongs to another organization, or because it names no row at all — THEN THE
 SYSTEM SHALL answer `400` with `REQUEST_MESSAGES.topicUnavailable`.
 
-**Decided:** one answer for both. A topic id names a word the organization publishes inside
-itself, so there is nothing to enumerate and nobody the split would inform.
+**Decided:** one answer for all three. A topic id names a word the organization publishes
+inside itself, so there is nothing to enumerate and nobody the split would inform.
 
 #### REQ-02-020 — the audience must match the addressee
 
@@ -203,7 +218,14 @@ answer `400` with `REQUEST_MESSAGES.topicAudienceMismatch`.
 
 #### REQ-02-021 — the kind is derived, never supplied
 
-WHEN a request is created, THE SYSTEM SHALL write `type` from the chosen topic's `type`.
+WHEN a request is created, THE SYSTEM SHALL write `type` from the chosen topic's `type` and
+write `accessKind` as `null`, including under a topic whose `type` is `access`.
+
+THE SYSTEM SHALL NOT validate `type` or `accessKind` as body fields on `POST …/requests`. The
+absence check of REQ-02-022 is the only reading either name gets there, and a body that carries
+neither is valid: the kind is read from the topic after that check. So `POST …/requests`
+answers with none of `REQUEST_MESSAGES.typeUnknown`, `REQUEST_MESSAGES.accessKindRequired`,
+`REQUEST_MESSAGES.accessKindUnknown` or `REQUEST_MESSAGES.accessKindNotAllowed`.
 
 #### REQ-02-022 — a supplied kind is refused
 
@@ -305,6 +327,7 @@ Invariants:
 | The `client` audience can be curated but no request can be addressed to a client yet, so a `client` topic is unreachable from the new-request form | The audience is what makes the catalogue's second half worth seeding and manageable before it is needed, and the mismatch refusal is a live, tested rule rather than a dormant one | Spec 03, which makes a client an addressee and admits `client` topics to the picker |
 | Existing requests carry no `topicId` and no `topicLabel` | The columns are nullable and the screens fall back to the request's stored `type` for those rows, so nothing is lost and no backfill guesses at a topic nobody chose | Nothing needs to. The set is closed the moment this spec ships |
 | A topic's `type` cannot be corrected after creation | Changing it would make the type filter disagree with the requests already raised under the topic. Archive and re-create is the honest path | A migration that rewrites `type` on the topic and every request under it, if the need is ever real |
+| The seeded staff set has no topic for two of the retired access kinds — `saas`, and an `access` topic for `other` — so an organization that classified a request either way has no seeded topic that produces the same kind | The seed is a starting catalogue, not a migration of the old vocabulary, and a curator adds a topic in one screen. An `access` topic named `Other` is in any case unreachable while the seeded `Other` holds the name: one name per audience (REQ-02-006) | A curator adding the topics the organization wants, or a later revision of the seed table |
 | Ordering is a single integer per topic with no gap strategy | The catalogue is a handful of rows curated by hand; a move is one `PATCH` of one row's `sortOrder`, and two rows sharing a value fall to the name tiebreak | A fractional or linked ordering, if a catalogue ever grows past what one screen shows |
 
 ## Acceptance Criteria
