@@ -22,6 +22,7 @@
     "ship:run": "node scripts/ship.mjs",
     "board": "node scripts/run-watch.mjs --open",
     "watch": "node scripts/run-watch.mjs",
+    "specs": "node scripts/spec-index.mjs",
     "wf": "node scripts/wf.mjs",
     "wf:status": "node scripts/wf.mjs status",
     "wf:log": "node scripts/wf.mjs log",

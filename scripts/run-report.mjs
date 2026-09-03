@@ -40,13 +40,26 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const RUNS = join(ROOT, '.workflow', 'runs');
 
 const argv = process.argv.slice(2);
-const TAKES_VALUE = new Set(['--out']);
+const TAKES_VALUE = new Set(['--out', '--from-json']);
 const flag = (n) => {
   const i = argv.indexOf(n);
   return i === -1 ? null : argv[i + 1];
 };
 const asJson = argv.includes('--json');
 const positional = argv.filter((a, i) => !a.startsWith('--') && !TAKES_VALUE.has(argv[i - 1]));
+
+/* The page is the one thing here that is not about a run: it draws whatever payload it is
+   given, and `refine-report.mjs` produces one for a thing that is not a run at all. Rendering
+   from a file is what lets that exist without a second copy of eight hundred lines of markup
+   drifting away from this one. */
+const fromJson = flag('--from-json');
+if (fromJson) {
+  const given = JSON.parse(readFileSync(fromJson, 'utf8'));
+  const target = flag('--out') ?? join(ROOT, '.workflow', 'report.html');
+  writeFileSync(target, pageHtml(given));
+  console.log(target);
+  process.exit(0);
+}
 
 const runId =
   positional[0] ??
@@ -503,12 +516,15 @@ if (asJson) {
 
 /* ── the page ─────────────────────────────────────────────────────────────── */
 
+/* Hoisted deliberately: `--from-json` calls it before this line is reached, which is what
+   makes a page out of a payload this script did not build. */
+function pageHtml(payload) {
 const DATA = JSON.stringify(payload).split('<').join('\\u003c').split('\u2028').join('\\u2028').split('\u2029').join('\\u2029');
 
-const html = `<!doctype html>
+return `<!doctype html>
 <html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Прогон · ${runId}</title>
+<title>Прогон · ${payload.runId}</title>
 <style>
 /* Material 3, light scheme, no network dependencies. */
 :root{
@@ -700,10 +716,34 @@ pre.txt{background:var(--surface-3);border-radius:12px;padding:14px 16px;overflo
 @keyframes actin{from{background:rgba(103,80,164,.16)}to{background:transparent}}
 .stepitem .nm small.live{color:var(--primary);opacity:.9}
 .dot.beat{animation:pulse 1.6s ease-in-out infinite}
-.runpick{display:flex;align-items:center;gap:10px;margin:14px 0 4px}
-.runpick label{font-size:12px;opacity:.75}
-.runpick select{max-width:min(560px,100%);padding:7px 12px;border-radius:12px;font:inherit;font-size:13px;
-  border:1px solid var(--outline,#79747E);background:var(--surface,#fff);color:inherit}
+/* ── the two views above a run ─────────────────────────────────────────────
+   A run id is a fact about the pipeline; the spec is the thing being worked on. So the board
+   opens on the specs, a spec opens on what has been run against it, and a run opens on what
+   it did — each level answering one question instead of one list answering none. */
+/* Every container below sets its own display, which beats the browser's rule for [hidden].
+   Without this a hidden view is hidden and its header, its metrics and its button are not. */
+[hidden]{display:none!important}
+.crumbs{display:flex;align-items:center;gap:6px;margin:0 0 8px;font-size:12.5px;flex-wrap:wrap}
+.crumbs a{color:var(--primary);cursor:pointer;text-decoration:none}
+.crumbs a:hover{text-decoration:underline}
+.crumbs i{opacity:.4;font-style:normal}
+.board{max-width:1180px;margin:22px auto;padding:0 22px}
+.specrow{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;cursor:pointer;
+  border:1px solid transparent;text-align:left;width:100%;background:transparent;color:inherit;font:inherit}
+.specrow:hover{background:var(--surface-2,rgba(0,0,0,.03));border-color:var(--divider,#E7E0EC)}
+.specrow + .specrow{margin-top:2px}
+.specrow .lead{min-width:0;flex:1 1 auto}
+.specrow .nm{display:block;font-weight:500;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.specrow .sub{display:block;font-size:12px;opacity:.62;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.specrow .num{flex:0 0 auto;font-size:12px;opacity:.7;font-variant-numeric:tabular-nums;text-align:right;min-width:74px}
+.specrow .num b{display:block;font-weight:600;font-size:13px;opacity:.95}
+.specdot{flex:0 0 auto;width:9px;height:9px;border-radius:50%;background:var(--divider,#CAC4D0)}
+.specdot.on{background:var(--primary)}
+.grouphd{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;opacity:.55;margin:18px 0 6px;padding:0 14px}
+.grouphd:first-child{margin-top:0}
+.kindchip{flex:0 0 auto;font-size:11px;padding:2px 8px;border-radius:8px;background:var(--secondary-container);
+  color:var(--on-secondary-container)}
+.kindchip.refine{background:#EADDFF;color:#21005D}
 .livebadge{position:fixed;left:22px;bottom:22px;z-index:40;padding:8px 14px;border-radius:14px;
   background:var(--secondary-container);color:var(--on-secondary-container);font-size:12px;font-variant-numeric:tabular-nums}
 .livebadge.lost{background:#F9DEDC;color:#410E0B}
@@ -720,26 +760,37 @@ pre.txt{background:var(--surface-3);border-radius:12px;padding:14px 16px;overflo
 </style></head>
 <body>
 <div class="appbar"><div class="appbar-in">
+  <div class="crumbs" id="crumbs" hidden></div>
   <h1><span id="hdTitle"></span> <span id="hdStatus"></span></h1>
-  <div class="runpick" id="runPickWrap" hidden><label for="runPick">Прогон</label><select id="runPick"></select></div>
   <div class="meta" id="hdMeta"></div>
   <div class="metrics" id="hdMetrics"></div>
 </div></div>
 
+<div class="board" id="viewIndex" hidden>
+  <div class="card"><h2>Спеки</h2><div class="body" id="specList"></div></div>
+</div>
+
+<div class="board" id="viewSpec" hidden>
+  <div class="card"><h2>Прогоны этой спеки</h2><div class="body" id="specRuns"></div></div>
+</div>
+
+<div id="viewRun">
 <div class="shell">
   <nav class="rail"><h3>Шаги прогона</h3><div id="rail"></div></nav>
   <div>
     <div class="card"><h2>Хронология</h2><div class="gantt" id="gantt"></div></div>
     <div class="toolbar" id="filters"></div>
     <div id="steps"></div>
-    <div class="card"><h2>Маршрут: каждое решение роутера</h2><div class="body" id="routing"></div></div>
+    <div class="card" id="cardRounds" hidden><h2>Раунды</h2><div class="body" id="rounds"></div></div>
+    <div class="card" id="cardRouting"><h2>Маршрут: каждое решение роутера</h2><div class="body" id="routing"></div></div>
     <div class="card"><h2>Размышление против инструментов</h2><div class="body" id="split"></div></div>
     <div class="card"><h2>По стадиям</h2><div class="body" id="stages"></div></div>
-    <div class="card"><h2>Покрытие ревью</h2><div class="body" id="cov"></div></div>
+    <div class="card" id="cardCov"><h2>Покрытие ревью</h2><div class="body" id="cov"></div></div>
   </div>
 </div>
+</div>
 
-<div class="fab">
+<div class="fab" id="fab">
   <button class="sec" id="toggleAll">Развернуть всё</button>
 </div>
 
@@ -762,7 +813,8 @@ let viewSpan = 1;
 const openIds = new Set();
 const activeTab = new Map();
 
-const COLOR ={ pre_implement:'#7E57C2', implement:'#3B6FD4', review:'#D4761B', qa:'#0F8F82', static_gate:'#79747E', preflight:'#79747E' };
+const COLOR ={ pre_implement:'#7E57C2', implement:'#3B6FD4', review:'#D4761B', qa:'#0F8F82', static_gate:'#79747E', preflight:'#79747E',
+                lint:'#79747E', judge:'#D4761B', fix:'#3B6FD4' };
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 /* Round once, then split. Flooring the minutes off an unrounded value while rounding the
    seconds prints 0:60 for anything just under a minute — which only shows up once a caller
@@ -781,15 +833,24 @@ const verdictChip = s => {
 function render() {
 
 /* ── header ─────────────────────────────────────────────────────────── */
-document.title = 'Прогон · ' + D.runId;
+const isRefine = D.kind === 'refine';
+document.title = (isRefine ? 'Рефайн · ' : 'Прогон · ') + D.runId;
 document.getElementById('hdTitle').textContent = D.spec || D.runId;
 document.getElementById('hdStatus').innerHTML =
-  verdictChip(D.status) + (D.totals.running ? ' <span class="chip c-run">прогон идёт</span>' : '') +
-  (D.halt ? ' <span class="chip c-block">halt: ' + esc(D.halt.reason || '') + '</span>' : '');
+  verdictChip(D.status) + (D.totals.running ? ' <span class="chip c-run">' + (isRefine ? 'луп идёт' : 'прогон идёт') + '</span>' : '') +
+  (D.halt ? ' <span class="chip c-block">' + (isRefine ? 'стоп' : 'halt') + ': ' + esc(D.halt.reason || '') + '</span>' : '');
 document.getElementById('hdMeta').innerHTML =
-  hhmm(D.t0) + ' → ' + hhmm(D.t1) + ' · ветка <span class="mono">' + esc(D.branch) + '</span>' +
+  hhmm(D.t0) + ' → ' + hhmm(D.t1) +
+  (D.branch ? ' · ветка <span class="mono">' + esc(D.branch) + '</span>' : '') +
   (D.diff ? ' · ' + esc(D.diff) : '') +
+  (isRefine ? ' · ' + D.rounds.length + ' раунд(ов)' + (D.request ? ' · запрос: ' + esc(D.request) : '') : '') +
   (D.budget ? ' · бюджет: код ' + D.budget.codeAttempts + ', переплан ' + D.budget.handoffReplans + ', среда ' + D.budget.infra : '');
+
+/* A refine loop has no diff and no review, so the two cards that are about those say nothing
+   true about it. Hidden rather than left empty: an empty card reads as a finding of zero. */
+document.getElementById('cardRouting').hidden = isRefine;
+document.getElementById('cardCov').hidden = isRefine || !D.coverage;
+document.getElementById('cardRounds').hidden = !isRefine;
 
 const T = D.totals;
 document.getElementById('hdMetrics').innerHTML = [
@@ -1004,7 +1065,7 @@ document.getElementById('steps').innerHTML = D.steps.map((s,i) => {
   return '<div class="card step" id="' + s.stage + '-' + s.attempt + '" data-idx="' + i + '"' +
     (bl ? ' data-bad="1"' : '') + (s.state !== 'done' ? ' data-odd="1"' : '') + '>' +
     '<button class="step-head"><span class="idx" style="background:' + color + '">' + (s.script ? '·' : s.attempt) + '</span>' +
-      '<span class="hd"><span class="ttl">' + esc(s.stage) + ' ' + s.attempt + ' ' + verdictChip(s.status) + ' ' + stateChip(s.state) +
+      '<span class="hd"><span class="ttl">' + esc(s.label || (s.stage + ' ' + s.attempt)) + ' ' + verdictChip(s.status) + ' ' + stateChip(s.state) +
         (bl ? '<span class="chip c-block">' + bl + ' блок.</span>' : '') +
         (nt ? '<span class="chip c-note">' + nt + ' зам.</span>' : '') +
       '</span><span class="sub">' + esc(sub) + '</span>' + actHtml(s) + '</span>' +
@@ -1121,8 +1182,22 @@ document.getElementById('stages').innerHTML =
     '<td class="n">' + b.costUsd.toFixed(2) + '</td><td class="n">' + pctOf(b.costUsd*100, D.totals.costUsd*100) + '%</td>' +
     '<td class="n">' + pctOf(b.wallSec-b.toolSec, b.wallSec) + '%</td></tr>').join('') + '</table>';
 
+/* ── rounds, on a refine loop ───────────────────────────────────────── */
+if (isRefine) document.getElementById('rounds').innerHTML =
+  '<p class="dim" style="margin-top:0">Каждый раунд — ворота по возрастанию цены: T0 бесплатен, ' +
+  'T1 — те же ворота, на которых останавливается ship, T2 — судья. Раунд заканчивается коммитом, ' +
+  'и следующий судит этот коммит, а не документ заново.</p>' +
+  '<table><tr><th class="n">Раунд</th><th class="n">T0</th><th>T1 план</th><th>T2 судья</th><th>Починка</th><th>Коммит</th></tr>' +
+  D.rounds.map(r => '<tr><td class="n">' + r.round + '</td>' +
+    '<td class="n">' + (r.lint == null ? '—' : r.lint === 0 ? 'чисто' : r.lint) + '</td>' +
+    '<td>' + (r.plan ? esc(r.plan.status) + (r.plan.specBlockers ? ' · ' + r.plan.specBlockers + ' в спеку' : '') : '—') + '</td>' +
+    '<td>' + (r.judge ? r.judge.blockers + ' блок. / ' + r.judge.notes + ' зам. · ' + esc(r.judge.mode || '') : '—') + '</td>' +
+    '<td>' + (r.fix ? 'починено ' + r.fix.fixed + ', решено ' + r.fix.decided + ', человеку ' + r.fix.left : '—') + '</td>' +
+    '<td class="mono">' + (r.commit ? esc(r.commit) : '—') + '</td></tr>').join('') +
+  '</table>';
+
 /* ── coverage ───────────────────────────────────────────────────────── */
-document.getElementById('cov').innerHTML =
+if (D.coverage) document.getElementById('cov').innerHTML =
   D.coverage.perPass.map(p => '<div class="sr"><span>review ' + p.attempt + '</span>' +
     '<div class="sbar"><i class="i-tools" style="width:' + pctOf(p.named, D.coverage.files) + '%"></i></div>' +
     '<span class="n2">' + p.named + ' / ' + D.coverage.files + '</span></div>').join('') +
@@ -1171,6 +1246,141 @@ function tick() {
 
 render();
 
+/* ── the three views ────────────────────────────────────────────────────
+   Specs, then what has been run against one, then one run. The deepest view is the report
+   this page has always been; the two above it exist because a flat list of run ids answers
+   "which run is 14-44-29" and never "where is spec 02", which is the question people arrive
+   with. Only the run view survives on a file:// snapshot — the other two are a live index. */
+let IDX = null;
+let view = 'run';
+let openSpec = null;
+
+const VIEWS = { index: 'viewIndex', spec: 'viewSpec', run: 'viewRun' };
+const specOf = (p) => (IDX ? IDX.specs.find((s) => s.path === p) ?? null : null);
+const entryOf = (id) => {
+  if (!IDX) return null;
+  for (const s of [...IDX.specs, { entries: IDX.orphans }]) {
+    const e = s.entries.find((x) => x.id === id);
+    if (e) return e;
+  }
+  return null;
+};
+
+function show(v) {
+  view = v;
+  for (const [k, id] of Object.entries(VIEWS)) document.getElementById(id).hidden = k !== v;
+  document.getElementById('fab').hidden = v !== 'run';
+  document.getElementById('crumbs').hidden = !IDX;
+  document.getElementById('hdMetrics').hidden = v !== 'run';
+}
+
+function crumbs() {
+  const el = document.getElementById('crumbs');
+  if (!IDX) { el.hidden = true; return; }
+  /* Taken from the payload on screen rather than from what was clicked to get here: a run
+     opened from a link, or one whose payload arrived after the view switched, would otherwise
+     be filed under whichever spec the reader happened to pass through. */
+  if (view === 'run') {
+    const e = entryOf(D.runId);
+    if (e && e.spec) openSpec = e.spec;
+  }
+  const bits = ['<a data-go="#">Спеки</a>'];
+  if (view !== 'index') {
+    const s = specOf(openSpec);
+    if (s) bits.push('<i>›</i><a data-go="#spec:' + esc(s.path) + '">' + esc(s.key) + '</a>');
+    if (view === 'run') bits.push('<i>›</i><span>' + esc(D.runId) + '</span>');
+  }
+  el.innerHTML = bits.join('');
+}
+
+const wallOf = (sec) => (sec >= 3600 ? Math.round(sec / 360) / 10 + ' ч' : Math.round(sec / 60) + ' мин');
+
+function renderIndex() {
+  document.title = 'Спеки · борд';
+  document.getElementById('hdTitle').textContent = 'Спеки';
+  document.getElementById('hdStatus').innerHTML =
+    IDX.specs.some((s) => s.running) ? '<span class="chip c-run">что-то идёт</span>' : '';
+  const touched = IDX.specs.filter((s) => s.entries.length);
+  const untouched = IDX.specs.filter((s) => !s.entries.length);
+  document.getElementById('hdMeta').innerHTML =
+    touched.length + ' из ' + IDX.specs.length + ' спек что-то запускали · $' +
+    touched.reduce((a, s) => a + s.totals.costUsd, 0).toFixed(2) + ' всего';
+
+  const row = (s) => '<button class="specrow" data-go="#spec:' + esc(s.path) + '">' +
+    '<span class="specdot' + (s.running ? ' on' : '') + '"></span>' +
+    '<span class="lead"><span class="nm">' + esc(s.key) + ' · ' + esc(s.title || s.path) + '</span>' +
+    '<span class="sub">' + (s.entries.length
+      ? s.entries.slice(0, 3).map((x) => esc(x.kind === 'refine' ? 'refine' : 'ship') + ' ' + esc(x.detail || x.status)).join(' · ')
+        + (s.entries.length > 3 ? ' · +' + (s.entries.length - 3) : '')
+      : 'ничего не запускалось') +
+    (s.dependsOn.length ? ' · зависит от ' + esc(s.dependsOn.join(', ')) : '') + '</span></span>' +
+    (s.entries.length
+      /* Cost sums; wall clock does not. A run abandoned in August and stamped again in
+         September spans a fortnight of nobody working, and four of those add up to a number
+         that reads as effort and is calendar. */
+      ? '<span class="num"><b>$' + s.totals.costUsd.toFixed(2) + '</b>' + s.entries.length + ' прогон(ов)</span>'
+      : '') + '</button>';
+
+  document.getElementById('specList').innerHTML =
+    (touched.length ? '<div class="grouphd">Работа велась</div>' + touched.map(row).join('') : '') +
+    (untouched.length ? '<div class="grouphd">Пока не запускалось</div>' + untouched.map(row).join('') : '') +
+    (IDX.orphans.length
+      ? '<div class="grouphd">Прогоны без спеки — она переименована или удалена</div>' +
+        IDX.orphans.map((e) => '<button class="specrow" data-go="#' + esc(e.id) + '">' +
+          '<span class="specdot"></span><span class="lead"><span class="nm">' + esc(e.id) + '</span>' +
+          '<span class="sub">' + esc(e.status) + '</span></span></button>').join('')
+      : '');
+}
+
+function renderSpec(path) {
+  const s = specOf(path);
+  if (!s) { location.hash = ''; return; }
+  document.title = s.key + ' · борд';
+  document.getElementById('hdTitle').textContent = s.key + ' · ' + (s.title || '');
+  document.getElementById('hdStatus').innerHTML = s.running ? '<span class="chip c-run">идёт</span>' : '';
+  document.getElementById('hdMeta').innerHTML =
+    '<span class="mono">' + esc(s.path) + '</span>' +
+    (s.dependsOn.length ? ' · зависит от <b>' + esc(s.dependsOn.join(', ')) + '</b>' : '') +
+    ' · ' + s.totals.ship + ' ship, ' + s.totals.refine + ' refine · $' + s.totals.costUsd.toFixed(2) +
+    (s.totals.blockers ? ' · <b>' + s.totals.blockers + '</b> блокеров за всё время' : '');
+
+  document.getElementById('specRuns').innerHTML = s.entries.length
+    ? s.entries.map((e) => '<button class="specrow" data-go="#' + esc(e.id) + '">' +
+        '<span class="specdot' + (e.running ? ' on' : '') + '"></span>' +
+        '<span class="kindchip' + (e.kind === 'refine' ? ' refine' : '') + '">' + (e.kind === 'refine' ? 'refine' : 'ship') + '</span>' +
+        '<span class="lead"><span class="nm">' + esc(e.label) + ' ' + verdictChip(e.status) + '</span>' +
+        '<span class="sub">' + (e.detail ? esc(e.detail) + ' · ' : '') +
+          (e.startedAt ? hhmm(e.startedAt) : '') +
+          (e.blockers ? ' · ' + e.blockers + ' блок.' : '') + (e.notes ? ' · ' + e.notes + ' зам.' : '') +
+          (e.branch ? ' · ' + esc(e.branch) : '') + '</span></span>' +
+        '<span class="num"><b>$' + e.costUsd.toFixed(2) + '</b>' + wallOf(e.wallSec) + '</span></button>').join('')
+    : '<p class="dim">По этой спеке ещё ничего не запускали.</p>';
+}
+
+/* The hash is the whole of the navigation state, so a reload lands where the reader was and a
+   link is worth sending to someone. */
+function route() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  if (IDX && (!h || h === 'specs')) { show('index'); renderIndex(); crumbs(); return; }
+  if (h.startsWith('spec:')) { openSpec = h.slice(5); show('spec'); renderSpec(openSpec); crumbs(); return; }
+  if (h && h !== D.runId) { wanted(h); return; }
+  show('run');
+  crumbs();
+}
+
+document.addEventListener('click', (e) => {
+  const go = e.target.closest('[data-go]');
+  if (!go) return;
+  e.preventDefault();
+  location.hash = go.dataset.go.replace(/^#/, '');
+  route();
+});
+addEventListener('hashchange', route);
+
+/* Asking for a run the page is not holding: the payload has to arrive before it can be drawn,
+   so the switch happens when it does. */
+let wanted = () => {};
+
 /* ── live ───────────────────────────────────────────────────────────────
    Served over http by run-watch.mjs, the page follows the run: the watcher pushes a fresh
    payload whenever the run directory changes, and the whole view is drawn again from it.
@@ -1182,8 +1392,6 @@ if (location.protocol === 'http:' || location.protocol === 'https:') {
   live.textContent = '● следит';
   document.body.appendChild(live);
 
-  const wrap = document.getElementById('runPickWrap');
-  const pick = document.getElementById('runPick');
   let es = null;
   let shown = D.runId;
 
@@ -1195,32 +1403,47 @@ if (location.protocol === 'http:' || location.protocol === 'https:') {
     activeFilter = 0; allOpen = false; cursor = 0; first = true;
   }
 
-  function connect(runId) {
+  function connect(entry) {
     if (es) es.close();
     live.classList.remove('lost');
     live.textContent = '● следит';
-    es = new EventSource('feed' + (runId ? '?run=' + encodeURIComponent(runId) : ''));
+    es = new EventSource('feed' + (entry ? '?entry=' + encodeURIComponent(entry) : ''));
 
-    es.addEventListener('runs', (ev) => {
-      const list = JSON.parse(ev.data);
-      pick.innerHTML = list.map((r) =>
-        '<option value="' + esc(r.id) + '">' + esc(r.id) +
-        (r.status ? ' · ' + esc(r.status) : '') +
-        (r.spec ? ' · ' + esc(r.spec.split('/').pop()) : '') + '</option>').join('');
-      pick.value = shown;
-      wrap.hidden = list.length < 2;
+    /* The index is pushed to everyone on every change, whichever view they are on: a run that
+       starts while somebody is reading another one has no watcher to attach, and a board that
+       only learns about it on reload is blind exactly when someone is looking. */
+    es.addEventListener('index', (ev) => {
+      IDX = JSON.parse(ev.data);
+      if (view === 'run') crumbs(); else route();
+      if (!location.hash) route();
     });
 
     es.addEventListener('payload', (ev) => {
       const next = JSON.parse(ev.data);
-      if (next.runId !== shown) { reset(); shown = next.runId; pick.value = shown; }
+      if (next.runId !== shown) { reset(); shown = next.runId; }
       D = next;
-      render();
+      /* Drawn only where it is visible. A payload arriving while the reader is on the index is
+         still kept, so opening the run is instant and never shows the state it had on load. */
+      if (view === 'run') render();
       beat();
     });
 
     es.onerror = () => { live.textContent = '○ связь потеряна'; live.className = 'livebadge lost'; };
   }
+
+  /* A run asked for from a list: already held, so draw it; otherwise the switch waits for the
+     payload the reconnect brings. */
+  wanted = (id) => {
+    if (id === shown) { show('run'); render(); crumbs(); return; }
+    connect(id);
+    const once = (ev) => {
+      if (JSON.parse(ev.data).runId !== id) return;
+      es.removeEventListener('payload', once);
+      show('run');
+      crumbs();
+    };
+    es.addEventListener('payload', once);
+  };
 
   /* What the badge says is the difference between "thinking" and "stopped", which is the one
      question a page like this has to answer and the one an animation cannot. A run in flight
@@ -1243,20 +1466,17 @@ if (location.protocol === 'http:' || location.protocol === 'https:') {
 
   setInterval(beat, 1000);
 
-  pick.addEventListener('change', () => {
-    location.hash = pick.value;
-    connect(pick.value);
-  });
-
-  /* The hash is what makes a reload land back on the run being read, and what makes the link
-     worth sending to someone. */
-  connect(decodeURIComponent(location.hash.slice(1)) || null);
+  const hash = decodeURIComponent(location.hash.slice(1));
+  connect(hash && !hash.startsWith('spec:') ? hash : null);
 }
+
+route();
 </script>
 </body></html>`;
+}
 
 const out = flag('--out') ?? join(dir, 'report.html');
-writeFileSync(out, html);
+writeFileSync(out, pageHtml(payload));
 console.log(out);
 console.log(
   `  ${mmss(totals.wallSec)} · $${totals.costUsd} · ${totals.invocations} вызовов` +
