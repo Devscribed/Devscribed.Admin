@@ -5,13 +5,13 @@
   "rounds": [
     {
       "round": 1,
-      "startedAt": "2026-09-03T13:53:50.452Z",
-      "head": "20b9d09b1240a92daf73108d8d915d24054f5790",
+      "startedAt": "2026-09-03T14:04:33.279Z",
+      "head": "a586e880bd13df13615f2958ae7278049381be3f",
       "status": "running",
       "lint": 0
     }
   ],
-  "status": "error",
+  "status": "running",
   "outcome": {
     "reason": "judge-error",
     "detail": "spec-refiner produced no verdict at .workflow/refine/requests-03.verdict.json (result success). It ended by saying: \"API Error: 529 Overloaded. This is a server-side issue, usually temporary — try again in a moment. If it persists, check https://status.claude.com.\"",
