@@ -94,7 +94,14 @@
       "startedAt": "2026-09-03T14:16:55.865Z",
       "head": "488d11978aec2ff49821390b740abb25865f19d1",
       "status": "running",
-      "lint": 0
+      "lint": 0,
+      "judge": {
+        "status": "pass",
+        "mode": "diff",
+        "blockers": 0,
+        "notes": 0,
+        "criteria": null
+      }
     }
   ],
   "status": "running",
