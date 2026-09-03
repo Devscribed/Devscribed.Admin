@@ -95,11 +95,17 @@ function headSha() {
  */
 function commitGate(ledger, { round, gate, summary, spec }) {
   if (dryRun) return null;
-  const files = ['.workflow/refine', ...(spec ? [spec, ...bundleMembers(spec)] : [])];
-  try { git('add', '--', ...files.filter((f) => existsSync(join(ROOT, f)))); } catch { /* nothing staged */ }
-  const staged = git('diff', '--cached', '--name-only');
+  const files = ['.workflow/refine', ...(spec ? [spec, ...bundleMembers(spec)] : [])]
+    .filter((f) => existsSync(join(ROOT, f)));
+  try { git('add', '--', ...files); } catch { /* nothing staged */ }
+  /* Both halves are limited to this gate's paths. A gate runs for a quarter of an hour while a
+     person works in the same tree, and anything else that stages a file in that window — an
+     editor, a checkpoint, another tool — ends up inside the commit if `commit` is left to take
+     the whole index. Then the range the next round is judged against holds somebody's unrelated
+     work, and the judge is asked to explain it. */
+  const staged = git('diff', '--cached', '--name-only', '--', ...files);
   if (!staged) return null;
-  git('commit', '-q', '-m', `refine(${ledger.stem}): round ${round} ${gate} — ${summary}`);
+  git('commit', '-q', '-m', `refine(${ledger.stem}): round ${round} ${gate} — ${summary}`, '--', ...files);
   return headSha();
 }
 

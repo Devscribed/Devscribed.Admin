@@ -150,6 +150,15 @@ this repository still true, do two clear statements disagree, and what has this 
 false in the documents around it. `npm run refine -- <spec path>` runs the same judgement on any
 spec at any time, which is what a spec that has sat while the code moved needs.
 
+**A judge blocks only under a criterion somebody wrote down.** Both judges work from a closed
+register — `.claude/skills/spec/references/blocking-criteria.md` for the refiner,
+`.claude/skills/code-review/references/blocking-criteria.md` for the review — and every blocking
+finding names an id from it. A blocker naming none, or one the register marks note-only, is
+demoted to a note by the script that reads the verdict. Anything outside a register is still
+reported, as a note, which is also how a criterion the register lacks gets proposed. Without
+this the blocking surface is a different one every pass, and the loop repairs findings the pass
+before never raised.
+
 **Two statements that disagree block, even when you can tell which one is right.** Neither the
 refiner nor the reviewer settles a contradiction by preferring one side; that decision is a
 person's, and it is made in the document. A contradiction resolved silently upstream is
