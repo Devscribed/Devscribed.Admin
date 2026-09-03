@@ -5,10 +5,10 @@
   "task": "requests-03-client-participants",
   "branch": "spec/requests-03-client-participants",
   "baseRef": "de9c5f916fa328734ed5f8f9c77023e8720e35e8",
-  "headAtInit": "5840d41a2bc31f809f1b11dab78c77423eb51f24",
-  "status": "halted",
+  "headAtInit": "ddcab5d554a48d75a99be07f2fe492362d338920",
+  "status": "static_gate",
   "createdAt": "2026-09-03T16:00:49.472Z",
-  "updatedAt": "2026-09-03T17:59:01.053Z",
+  "updatedAt": "2026-09-03T18:13:19.035Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -22,11 +22,11 @@
       "endedAt": "2026-09-03T17:50:00.665Z"
     },
     "implement": {
-      "status": "blocked",
-      "attempts": 3,
-      "startedAt": "2026-09-03T17:50:00.883Z",
-      "lastVerdict": "blocked",
-      "endedAt": "2026-09-03T17:59:01.003Z"
+      "status": "passed",
+      "attempts": 5,
+      "startedAt": "2026-09-03T18:04:08.352Z",
+      "lastVerdict": "pass",
+      "endedAt": "2026-09-03T18:13:18.984Z"
     },
     "static_gate": {
       "status": "pending",
@@ -632,11 +632,28 @@
         "from": "bbc07854cd24deeb78d7192922b0ce4612e0f7638c64d67537139ef06feea9ab",
         "pendingUntilReplan": "6da7bca30f907aa75e473f481b949810266f1e6c5b9f212f366641494b1ab83d"
       }
+    },
+    {
+      "at": "2026-09-03T18:02:06.687Z",
+      "stage": "implement",
+      "from": "spec-defect",
+      "detail": "implement found a defect in the spec: spec/contradiction (specs/requests/03-client-participants.contracts.md)",
+      "reason": "I1 is stale. It was filed from a session begun before REQ-03-043 existed and argues that the contacts route is the only one that lists contacts; the bundle now carries GET /api/organizations/{orgId}/request-contacts guarded by create-request, and the handoff plans it. ship.mjs no longer resumes a session older than the handoff it is working to.",
+      "headAtInit": {
+        "from": "5840d41a2bc31f809f1b11dab78c77423eb51f24",
+        "to": "ddcab5d554a48d75a99be07f2fe492362d338920"
+      }
+    },
+    {
+      "at": "2026-09-03T18:03:48.393Z",
+      "stage": "implement",
+      "from": "abandoned",
+      "detail": "orchestrator stopped during implement",
+      "reason": "attempt 4 resumed the stale session again; the staleness test now compares the age of the session rather than of the attempt carrying it",
+      "headAtInit": {
+        "from": "ddcab5d554a48d75a99be07f2fe492362d338920",
+        "to": "ddcab5d554a48d75a99be07f2fe492362d338920"
+      }
     }
-  ],
-  "halt": {
-    "reason": "spec-defect",
-    "detail": "implement found a defect in the spec: spec/contradiction (specs/requests/03-client-participants.contracts.md)",
-    "at": "2026-09-03T17:59:01.052Z"
-  }
+  ]
 }
