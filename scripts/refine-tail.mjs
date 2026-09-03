@@ -48,15 +48,22 @@ function snapshot() {
        it ends, so the line comes from the log the agent is still writing. */
     const live = r.gates.find((g) => g.log?.running);
     if (live) {
-      bits.push(`${live.label} running ${min(Date.now() - (live.log.startedAt ?? Date.now()))}`
-        + ` ${live.log.calls} calls ${money(live.log.costUsd)}`);
+      /* Whole minutes, deliberately. Every line printed here is a notification somebody reads,
+         and a gate that reports each tool call produces thirty of them per pass — which is how
+         a watcher gets switched off and the run goes dark again. A minute is often enough to
+         show it is alive and rare enough to stay readable. */
+      const mins = Math.floor((Date.now() - (live.log.startedAt ?? Date.now())) / 60000);
+      bits.push(`${live.label} running ${mins}m ${live.log.calls} calls ${money(live.log.costUsd)}`);
     }
     if (bits.length) parts.push(`r${r.round}: ${bits.join(' · ')}`);
   }
 
   const tail = loop.status === 'running' ? 'running'
     : `${loop.status}${loop.outcome?.reason ? ` — ${loop.outcome.reason}` : ''}`;
-  return `${parts.join('  |  ')}  ||  ${tail}`;
+  const line = `${parts.join('  |  ')}  ||  ${tail}`;
+  /* The line carries the call count and the spend; the key does not. Otherwise every tool call
+     is a change and the heartbeat becomes the firehose. */
+  return { line, key: line.replace(/\d+ calls \$[\d.]+/g, '') };
 }
 
 let last = null;
@@ -66,12 +73,11 @@ const tick = () => {
     return true;
   }
   const now = snapshot();
-  if (now !== last) {
-    process.stdout.write(`${now}\n`);
-    last = now;
+  if (now.key !== last) {
+    process.stdout.write(`${now.line}\n`);
+    last = now.key;
   }
-  /* A cost that only moves by a cent is not an event. Anything else in the line is. */
-  return !now.endsWith('running');
+  return !now.line.endsWith('running');
 };
 
 const loopOnce = () => {
