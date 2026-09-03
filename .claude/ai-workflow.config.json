@@ -61,7 +61,7 @@
   "breakers": {
     "$comment": "Fuses, not checks. They understand nothing about the code and therefore cannot be wrong about it.",
     "stageTimeoutMin": {
-      "pre_implement": 20,
+      "pre_implement": 35,
       "implement": 45,
       "review": 20,
       "qa": 30
