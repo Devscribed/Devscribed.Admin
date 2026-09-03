@@ -98,6 +98,11 @@
       "lint": 2
     }
   ],
-  "status": "running",
-  "request": "Employees pick a request topic from presets the organization curates (VPN, Claude, Question, Other for staff; Access, Other for clients), and the screens say Pending / In progress / Completed / Closed"
+  "status": "blocked",
+  "request": "Employees pick a request topic from presets the organization curates (VPN, Claude, Question, Other for staff; Access, Other for clients), and the screens say Pending / In progress / Completed / Closed",
+  "outcome": {
+    "reason": "lint",
+    "detail": "2 lint finding(s). Every one has a mechanical repair and no judgement in it; fix them and run again rather than paying a model to edit text.",
+    "at": "2026-09-03T08:41:10.068Z"
+  }
 }
