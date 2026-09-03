@@ -1,14 +1,14 @@
 {
   "runId": "2026-09-03T16-00-49_requests-03-client-participants",
   "spec": "specs/requests/03-client-participants.md",
-  "specSha": "bbc07854cd24deeb78d7192922b0ce4612e0f7638c64d67537139ef06feea9ab",
+  "specSha": "6da7bca30f907aa75e473f481b949810266f1e6c5b9f212f366641494b1ab83d",
   "task": "requests-03-client-participants",
   "branch": "spec/requests-03-client-participants",
   "baseRef": "de9c5f916fa328734ed5f8f9c77023e8720e35e8",
-  "headAtInit": "de9c5f916fa328734ed5f8f9c77023e8720e35e8",
-  "status": "halted",
+  "headAtInit": "5840d41a2bc31f809f1b11dab78c77423eb51f24",
+  "status": "implement",
   "createdAt": "2026-09-03T16:00:49.472Z",
-  "updatedAt": "2026-09-03T17:24:27.551Z",
+  "updatedAt": "2026-09-03T17:50:00.714Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -16,30 +16,27 @@
     },
     "pre_implement": {
       "status": "passed",
-      "attempts": 1,
-      "startedAt": "2026-09-03T16:00:49.678Z",
-      "endedAt": "2026-09-03T16:14:56.136Z",
-      "lastVerdict": "pass"
+      "attempts": 2,
+      "startedAt": "2026-09-03T17:36:03.953Z",
+      "lastVerdict": "pass",
+      "endedAt": "2026-09-03T17:50:00.665Z"
     },
     "implement": {
-      "status": "passed",
+      "status": "pending",
       "attempts": 2,
       "startedAt": "2026-09-03T17:00:03.488Z",
-      "endedAt": "2026-09-03T17:09:10.295Z",
       "lastVerdict": "pass"
     },
     "static_gate": {
-      "status": "passed",
+      "status": "pending",
       "attempts": 1,
       "startedAt": "2026-09-03T17:09:10.388Z",
-      "endedAt": "2026-09-03T17:09:15.111Z",
       "lastVerdict": "pass"
     },
     "review": {
-      "status": "blocked",
+      "status": "pending",
       "attempts": 1,
       "startedAt": "2026-09-03T17:09:15.209Z",
-      "endedAt": "2026-09-03T17:24:27.497Z",
       "lastVerdict": "blocked"
     },
     "qa": {
@@ -497,13 +494,53 @@
         "kind": "scenario",
         "detail": "TC-03-E2E-02 discards the result at :248; TC-03-E2E-04 re-logins as the admin at :362 before looking the contact up."
       }
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": null,
+      "file": "specs/requests/03-client-participants.md",
+      "symbol": "REQ-03-035",
+      "claim": "A decline writes two RequestEvents in one transaction, so a per-event reading of REQ-03-035 produces two outbox rows per recipient for one decline, and no case asserts the count either way.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "apps/api/src/requests/requests.service.ts#transition records a `message_posted` event for the decline reason AND a `status_changed` event in the same transaction. REQ-03-035 writes one row per recipient 'in the same transaction as the RequestEvent' and REQ-03-039's uniqueness key is ([eventId, recipientKind, recipientId]) — both per event, so a decline notifies its recipient twice. TC-03-INT-21 exercises decline and asserts nothing about the outbox; TC-03-INT-24 asserts counts for create, message and answer only. Either reading ships green."
+      },
+      "suggestedFix": "if one notification per decline is wanted rather than two, say so in REQ-03-035 and add a count assertion to TC-03-INT-21"
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": null,
+      "file": "specs/requests/03-client-participants.md",
+      "symbol": "Known Gaps — row 2",
+      "claim": "Nobody has decided whether staff may take a client-addressed request away from the contact and hand it to a colleague. The route accepts it, spec 01 requirement 35 permits it, and the row it leaves carries a client-audience topic with a member addressee — a pairing REQ-03-024 refuses at creation and constrains nowhere afterwards.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "A request is created with assigneeKind='client' under a client-audience topic. An admin POSTs …/reassign with assigneeKind='member': the row becomes member-addressed, assigneeClientMembershipId is cleared, and the request leaves the contact's list and answers them 404. Spec 01 requirement 35 permits it ('reassign an open or answered request to a different member' — the restriction is on the target) and requirement 36 draws the control; spec 03's Known Gaps row says a removed contact's open requests are 'flagged but not reassigned', which reads either as 'nothing reassigns automatically' (edge case 5 uses the same words for exactly that) or as 'the route refuses the row'. The plan takes the first reading, which leaves every written statement true, and repairs the trail so the event names who the request was taken from. Under the second reading the route would answer 400 for a client-addressed row — a refusal no document states."
+      },
+      "suggestedFix": "one sentence in the spec: either a numbered requirement stating that a client-addressed request may be reassigned to a member and what the event records, or one refusing it with a named status and message"
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P4",
+      "target": "spec",
+      "severity": "note",
+      "rule": null,
+      "file": "specs/requests/03-client-participants.md",
+      "symbol": "REQ-03-043",
+      "claim": "REQ-03-043 says 'every client owning a project that member is assigned to' without naming project status, while the create route it exists to mirror refuses an archived project. The plan filters to active projects; the requirement does not say so.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "A member is assigned to one project of client Acme and that project is archived. REQ-03-043 read literally returns Acme's contacts; addressing one of them is then 400 REQUEST_MESSAGES.projectUnavailable at apps/api/src/requests/requests.service.ts#createRequest, since the project read tests status before the assignment check. The requirement's own Decided line — 'the boundary the create route already enforces, so the picker offers what the server accepts' — is what the plan follows. TC-03-INT-36 does not cover an archived project, so either implementation passes it."
+      },
+      "suggestedFix": "add the word to REQ-03-043 and a fourth caller or fixture to TC-03-INT-36 if the narrowing is wanted; drop it from the plan if it is not"
     }
   ],
-  "halt": {
-    "reason": "spec-defect",
-    "detail": "review found a defect in the spec: specs/requests/03-client-participants.contracts.md, Roles & Permission Matrix: \"Raise a request, to a colleague or to a client contact | admin ✅ | manager ✅ | user ✅ | viewer ❌\" — against the same file's Routes table, which gives `GET /api/organizations/{orgId}/clients/{clientId}/contacts` the guard `view-clients`. (apps/web/app/org/[orgId]/requests/NewRequestModal.tsx)",
-    "at": "2026-09-03T17:24:27.550Z"
-  },
   "preflight": {
     "at": "2026-09-03T16:00:49.627Z",
     "checks": [
@@ -572,5 +609,27 @@
       "20260903120000_requests_02_request_topics",
       "20260903120100_requests_02_request_topics_backfill"
     ]
-  }
+  },
+  "resumes": [
+    {
+      "at": "2026-09-03T17:35:55.261Z",
+      "stage": "pre_implement",
+      "from": "spec-defect",
+      "detail": "review found a defect in the spec: specs/requests/03-client-participants.contracts.md, Roles & Permission Matrix: \"Raise a request, to a colleague or to a client contact | admin ✅ | manager ✅ | user ✅ | viewer ❌\" — against the same file's Routes table, which gives `GET /api/organizations/{orgId}/clients/{clientId}/contacts` the guard `view-clients`. (apps/web/app/org/[orgId]/requests/NewRequestModal.tsx)",
+      "reason": "F2 repaired: REQ-03-043 gives the contact picker a create-request route bounded by the requester's projects. Replan against the repaired spec; F1, F3, F4, F5 stand for the implementer.",
+      "headAtInit": {
+        "from": "de9c5f916fa328734ed5f8f9c77023e8720e35e8",
+        "to": "5840d41a2bc31f809f1b11dab78c77423eb51f24"
+      },
+      "specEdits": [
+        "specs/requests/03-client-participants.cases.md",
+        "specs/requests/03-client-participants.contracts.md",
+        "specs/requests/03-client-participants.md"
+      ],
+      "specSha": {
+        "from": "bbc07854cd24deeb78d7192922b0ce4612e0f7638c64d67537139ef06feea9ab",
+        "pendingUntilReplan": "6da7bca30f907aa75e473f481b949810266f1e6c5b9f212f366641494b1ab83d"
+      }
+    }
+  ]
 }

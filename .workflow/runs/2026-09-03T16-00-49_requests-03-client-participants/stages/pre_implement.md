@@ -1,198 +1,290 @@
-# Pre-implement — requests/03 Client Participants & Client-Addressed Requests
+# Pre-implement (replan) — requests/03 Client Participants & Client-Addressed Requests
 
-Spec: `specs/requests/03-client-participants.md` (+ `.contracts.md`, `.cases.md`)
-Base: `de9c5f916fa328734ed5f8f9c77023e8720e35e8`
+Spec: `specs/requests/03-client-participants.md` @ `6da7bca3…` (+ `.contracts.md`, `.cases.md`)
+Base: `de9c5f916fa328734ed5f8f9c77023e8720e35e8` · Branch head: `5840d41`
 
-42 numbered requirements (REQ-03-001…041 plus REQ-03-042), 42 cases (2 unit, 35 integration,
-5 E2E), 17 acceptance criteria. Verdict: **pass** — the spec compiles into a plan. Three notes
-below, none blocking.
+The spec was amended after the first implementation was reviewed: commit `30401b4` adds
+**REQ-03-043** and **TC-03-INT-36** — a contacts read of the requester's own, guarded by
+`create-request` and bounded by the projects they are assigned to. So this is a **delta plan on
+a working tree**: `771451a` already carries the model, the principal, the contacts routes,
+client-addressed requests, the notification port, the shell and the cases. 43 cases (2 unit,
+36 integration, 5 E2E), 17 acceptance criteria. Verdict: **pass**, with five notes.
+
+`node scripts/handoff-coverage.mjs` — pass (requirements 0/0, cases 0/0 in the main file,
+sections 8/8; the cases live in the bundle and are listed in `testCases` in full).
+
+---
+
+## What sent this back — every finding, answered
+
+### F1 — reassign leaves a client-addressed request with no trail of who it was taken from
+
+**Fixed in the plan (T5), and one half of the suggested fix contested.**
+
+Verified at the code, not from the finding. `reassignRequest` looks `previous` up from
+`locked.assigneeMembershipId` alone, so on a row whose addressee is a contact the
+`assignee_changed` event is written with `oldValue: null, oldLabel: null` while the update
+clears `assigneeClientMembershipId`. The request leaves the contact's inbox naming nobody.
+
+That much is a defect against a written rule, and it needs no decision from anybody:
+
+- spec 01 requirement 35 — reassignment writes the event "carrying the old and new display
+  names in `oldLabel` / `newLabel`, so the trail stays readable after a member is removed";
+- this spec's contracts, on `RequestEvent` — "Display names keep being snapshotted into the
+  event's label columns, so the trail survives a removed contact".
+
+T5 reads the outgoing `ClientMembership` inside the same transaction — `lockRequest` already
+selects `assigneeKind` and `assigneeClientMembershipId`, so no second pre-transaction read is
+needed — and writes the contact's id and display name into `oldValue` / `oldLabel`.
+
+**Contested: "stop drawing the Reassign control for a client-addressed row."** Counter-witness:
+spec 01 requirement 35 permits an admin or manager to reassign "an open or answered request to
+a different **member**" — the restriction is on the *target*, not on the row — and requirement
+36 makes the inactive-addressee flag draw "the reassign banner and the reassign control **on
+the detail screen**", which the UI-states row repeats ("Addressee inactive |
+`request-detail-assignee-inactive-banner` above the actions; reassign offered to admin/manager
+only"). Spec 03 states no requirement withdrawing that control, and its Known Gaps row names
+what is missing as "a reassign path that **accepts a client addressee**" — a body that may
+*name* a contact, which is exactly the refusal the code keeps (`400`
+`REQUEST_MESSAGES.assigneeInvalid`). Hiding a control the route accepts, so that a transition a
+numbered requirement grants is unreachable through the product, is a product decision nobody has
+written down; withdrawing a shipping control is growing the spec, not refining it. So the
+control stays drawn, the route keeps answering, and the trail is repaired.
+
+Two comments assert the opposite of what the code does and are corrected by the same task: the
+one at the top of `reassignRequest`, and the one beside the inactive-addressee banner in
+`requests/[requestId]/page.tsx` that reads "this release has no reassign path that accepts a
+client addressee" next to a control that is drawn and works. Both are replaced with what is
+true — the body takes a colleague; a client-addressed request may be handed to one, and the
+outgoing contact is snapshotted into the event.
+
+Carried to a person as **P2**: whether staff should be able to take a request away from a
+contact at all is the product question underneath this, and answering it either way is a
+sentence in the spec, not a decision for a gate. The row it leaves behind carries a
+client-audience topic with a member addressee, a pairing REQ-03-024 refuses at creation and
+constrains nowhere else.
+
+### F2 — a `user` may address a contact but may not list one
+
+**Fixed in the spec, by a person, and compiled here.** `30401b4` adds REQ-03-043 and
+`GET /api/organizations/{orgId}/request-contacts`, guarded by `create-request` and bounded by
+REQ-03-023's own boundary, and leaves the client-detail contacts route on `view-clients`.
+
+I re-checked the bundle for a residual disagreement and found none: the Routes table carries
+both rows with different guards, the contracts paragraph says in as many words which caller each
+is for, and the permission-matrix row for `user` ("Raise a request, to a colleague or to a
+client contact ✅") is now satisfiable — `user` holds `create-request` and
+`list-assigned-projects` and needs nothing else to complete the form.
+
+Planned as **T11** (route and service), **T9** (the modal reads it instead of the
+clients-then-contacts loop) and **T10** (TC-03-INT-36, three callers: the `user` assigned to one
+project, the admin assigned to none, the `viewer`).
+
+### F3 — TC-03-E2E-03 throws before its first assertion
+
+**Fixed in the plan (T10).** Confirmed: `e2e/playwright.config.ts:72` declares `baseURL` under
+`use`, and those options are applied by the `context`/`page` fixtures only — a context built by
+hand in a test carries none, so `page.goto('/login')` on it is an invalid URL. Every other
+hand-built context in this suite navigates with an absolute URL
+(`envelopes-signing.spec.ts:102`, `outbox.spec.ts:87`, `regressions.spec.ts:134`); this file is
+the only one that goes relative. T10 takes the `baseURL` fixture in the test signature and
+passes it to both contexts. The case is the only E2E witness for stamp rotation ending a live
+session, so until this lands AC-8 has an integration witness and no browser one.
+
+### F4 — the members screen is served to a client contact
+
+**Fixed in the plan (T7), at one place rather than at the one screen.** Confirmed: the members
+page has no gate — a client's read answers 404, the non-ok branch leaves `members` at `null`,
+and the render falls to `MembersLoadingSkeleton` under the header, the search field and the
+show-removed checkbox. It is the only staff screen in that state, because it is the only one
+every staff role may see; the rest short-circuit on a role-keyed helper that answers `false` for
+a null role.
+
+CR-18 is about a class of call sites, so the repair goes where the class is: the org layout,
+which already resolves the principal before anything renders and already calls `notFound()` for
+the wrong organization. A client principal on any path other than the requests destination gets
+`notFound()` there. That covers the twenty-one organization pages at once, including the four
+project sub-pages and the member detail page, which have no gate of their own either, and it
+holds for screens nobody has written yet. `allCallSites` on T7 enumerates all of them with what
+each does today, so the next reader can see the class rather than the instance.
+
+T10 strengthens TC-03-E2E-02 to assert the chrome is absent — `members-search-input` and
+`show-removed-checkbox` — not only `members-list`, which a page rendering its full chrome over a
+stuck skeleton satisfies. The comment left in `members/page.tsx` ("A client contact never
+reaches this screen") becomes true and is rewritten to name the gate that makes it so.
+
+### F5 — TC-03-UNIT-02 asserts a normalized role where the case names the absent one
+
+**Fixed in the plan (T10).** Confirmed against the helper: `can` is
+`CAPABILITY_MATRIX[role]?.[capability] ?? false`, so `can(null, 'view-own-requests')` is `false`
+and the case's stated expectation is directly assertable. The test asserts
+`can(normalizeRole(null), …) === true` (true by construction) and `can('client' as Role, …)`,
+under a comment claiming the two helpers disagree — the disagreement REQ-03-017 exists for is
+asserted nowhere, and nothing in the suite would fail if `can` began granting an absent role.
+T10 asserts the pair the case names and rewrites the comment to describe the assertions made.
 
 ---
 
 ## What already exists to build on
 
-Every path below was opened, not inferred.
+Every path opened, not inferred. Beyond the branch's own work (which the handoff's `state`
+fields name per task):
 
 | What | Where |
 |---|---|
-| Session cookie, stamp re-read on every request | `apps/api/src/auth/session.guard.ts` |
-| Org scope, 404 not 403, path `orgId` never a selector | `apps/api/src/auth/org-scope.guard.ts` |
-| Capability → **404** (not the guard's 403) discipline | `apps/api/src/clients/clients.service.ts:360` (`requireManageCapability`), `:369` (`requireViewCapability`) |
-| Membership-before-password refusal at sign-in | `apps/api/src/auth/login.service.ts:35-40` |
-| Identity endpoint, today `null` for a non-staff account | `apps/api/src/members/me.controller.ts:27` |
-| Invitation token: SHA-256 hash, 7-day expiry, accept screen | `apps/api/src/invitations/invitation-token.ts`, `apps/api/src/invitations/invitations.service.ts` |
-| Supersession — one live pending invitation per (email, org) | `apps/api/src/invitations/invitations.service.ts:105` (`updateMany` inside the create transaction) |
-| Port declared as an abstract class used as its own DI token | `apps/api/src/mail/mail.service.ts:152`, driver chosen in `apps/api/src/mail/mail.provider.ts`, registered global in `apps/api/src/core.module.ts` |
-| `FOR UPDATE` re-read + guard evaluated against that read | `apps/api/src/requests/requests.service.ts:848` (`lockRequest`) |
-| Append-only event writer, always takes the caller's `tx` | `apps/api/src/requests/request-events.service.ts` |
-| Request wire shape, `assignee.kind` already a column read | `apps/api/src/requests/requests.serializer.ts` |
-| Topic read → audience compare → assignee → project ordering | `apps/api/src/requests/requests.service.ts:317-400` |
-| `normalizeRole` / `hasCapability` / `can` / `canReadRequest` | `packages/validation/src/roles.ts`, `packages/validation/src/index.ts:763` |
-| Empty-catalogue picker + submit-not-drawn, per audience | `apps/web/app/org/[orgId]/requests/NewRequestModal.tsx:255-330` |
-| `Select` option `label` is a `React.ReactNode` | `1_DS for dev/components/forms/Select.d.ts:3` |
-| E2E helpers the cases need | `e2e/tests/helpers.ts` — `signupOrg`, `createBareAccount`, `latestInvitationToken`, `inviteAndAcceptViaApi`, `assignProjectMembersViaApi`, `createProjectViaApi`, `listRequestTopicsViaApi`, `archiveRequestTopicViaApi` |
-| Provider double in an integration test | `apps/api/test/clients.spec.ts:136`, `apps/api/test/requests.spec.ts:270` (`overrideProvider`) |
+| Capability → bare **404**, decided in the service, not the guard's fixed 403 | `apps/api/src/clients/clients.service.ts` `requireManageCapability` / `requireViewCapability` |
+| Caller resolution and the member narrowing every requests route starts with | `apps/api/src/requests/requests.service.ts#requireCaller`, `#requireMemberCaller` |
+| The assignment test REQ-03-043 mirrors, with no admin carve-out | `requests.service.ts#createRequest` — `projectMember.findUnique` on `projectId_membershipId` |
+| Project ↔ client link and the assignment row | `apps/api/prisma/schema.prisma` — `Project.clientId`, `ProjectMember @@unique([projectId, membershipId])` |
+| The row lock, already selecting the client half of the addressee | `requests.service.ts#lockRequest` |
+| The display-name helper the event labels and the serializer share | `requests.serializer.ts#displayNameOf` |
+| The shell that resolves the principal before anything renders | `apps/web/app/org/[orgId]/layout.tsx` |
+| A page-level short-circuit for a principal that cannot use the screen | `projects/page.tsx` (`notFound()`), `clients/page.tsx` (`return null`) |
+| An effect keyed on the modal's open cycle rather than a length guard | `NewRequestModal.tsx` — the topics effect |
+| A hand-built context that navigates correctly | `envelopes-signing.spec.ts:102`, `outbox.spec.ts:87`, `regressions.spec.ts:134` |
+| E2E preconditions | `e2e/tests/helpers.ts` — `signupOrg`, `findMember`, `assignProjectMembersViaApi`, `acceptInvitationViaApi`, `latestInvitationToken`, `listRequestTopicsViaApi`, `archiveRequestTopicViaApi` |
 
 ## What must be built from zero
 
-- `ClientMembership` — model, migration, service, and the three contacts routes.
-- `RequestNotification` — the outbox table, its `@@unique([eventId, recipientKind, recipientId])`.
-- `RequestNotifier` — the port, `NullRequestNotifier`, the post-commit dispatcher.
-- `CLIENT_USER_MESSAGES` and the `ClientCapability` union + `CLIENT_CAPABILITIES` list in
-  `packages/validation/src/index.ts`. Neither name exists in the tree today (grepped).
-- Principal resolution: the second principal kind on the session, and the rule that decides
-  which organization routes a client principal may reach at all.
-- The `client` branches of sign-in, `/api/me` and invitation acceptance.
-- Web: the contacts section on client detail, the addressee-kind control and contact picker in
-  the new-request modal, and the client shell (sidebar gating + post-auth landing).
+- `GET /api/organizations/{orgId}/request-contacts` — handler, service method, query. It is the
+  whole of the unbuilt product surface in this spec.
+- `TC-03-INT-36`.
+
+Everything else this pass is a repair to code that exists: four files, named per task.
 
 ---
 
 ## Sweeps
 
-### Premises — every claim the spec makes about this repository, checked at the file
+### Premises — re-checked against the files, on the amended spec
 
-| Claim | Verified at | Verdict |
-|---|---|---|
-| Migrations run before the services roll out; skipped on a web-only deploy | `infra/deploy.sh:175-185` (migrate, guarded on `api` being in `SERVICES`) then `:187-192` (`tf apply`) | true |
-| `GET /api/me` answers `null` for an account with no staff membership | `apps/api/src/members/me.controller.ts:27` | true |
-| The shell sends a `null` identity answer back to sign-in | `apps/web/app/org/[orgId]/layout.tsx:45-49` | true |
-| `nav-members` is drawn unconditionally | `apps/web/src/layout/Sidebar.tsx:71-77` | true |
-| Sign-in refuses an account with no active `Membership`, before the password compare | `apps/api/src/auth/login.service.ts:35-40` | true |
-| `hasCapability` normalizes an absent role to `viewer`, and `viewer` holds `ViewOwnRequests` | `packages/validation/src/roles.ts` (`normalizeRole`, `ROLE_CAPABILITIES.viewer`) | true |
-| `can` answers `false` for a role its matrix has no row for | `packages/validation/src/index.ts:763-765` | true |
-| The legacy `member` value therefore holds neither `manage-clients` nor `view-clients` | same; `CAPABILITY_MATRIX` is keyed `admin\|manager\|user\|viewer` | true |
-| `manager` holds `manage-clients` and `view-clients` (TC-03-INT-12 needs it) | `packages/validation/src/index.ts` manager row | true |
-| The staff invitation's duplicate check reads staff rows only | `apps/api/src/invitations/invitations.service.ts:90-95` (`memberships` include) | true |
-| `Invitation.role` is a free-form `String`; `clientId` is a new nullable column | `apps/api/prisma/schema.prisma:109-133` | true |
-| `Request.assigneeMembershipId` is already nullable, `assigneeKind` a `String` | `apps/api/prisma/schema.prisma:1147-1151` | true |
-| `MailService` is an abstract class used as its own token | `apps/api/src/mail/mail.service.ts:152` | true |
-| Today's client-addressee refusal is `400 assigneeMembershipId: "Choose who this request is for"` | `packages/validation/src/requests.ts:219-231` (`REQUEST_ASSIGNEE_KINDS = ['member']`) | true — matches the probe transcript verbatim |
-| The modal already replaces the picker with `pickerEmpty` and draws no submit | `NewRequestModal.tsx:255-266`, `:281-292` | true |
-| `Select`'s option label may be a `ReactNode` (the DS-gaps "no gap" claim) | `1_DS for dev/components/forms/Select.d.ts:3` | true |
-| `apps/api/test/clients.spec.ts` replaces a provider with `overrideProvider` | `apps/api/test/clients.spec.ts:136` | true |
+The fifteen rows are in `handoff.premises` with a path each. The ones this pass turns on:
+
+- `user`: `create-request` **true**, `view-clients` **false**; `viewer`: `create-request`
+  **false** — `CAPABILITY_MATRIX` in `packages/validation/src/index.ts`. Both rows of
+  TC-03-INT-36 rest on these.
+- `can(null, …)` is `false` (`?.` then `?? false`, `index.ts:785-787`) while
+  `hasCapability(null, 'ViewOwnRequests')` is `true` (`normalizeRole` → `viewer`, whose list is
+  `['ViewOwnRequests']`). F5's repair is assertable exactly as the case words it.
+- `createRequest` refuses an archived project (`projectUnavailable`) **before** the assignment
+  check, so a picker that ignored project status would offer contacts the create route refuses.
+- `lockRequest`'s `SELECT … FOR UPDATE` already lists `assigneeKind` and
+  `assigneeClientMembershipId`.
+- Context options under `use` reach the `context`/`page` fixtures only.
+- The migration for this run already exists on the branch — nothing this pass may add a second.
 
 No stale premise found.
 
 ### Contradiction sweep — the absolutes, against the call sites they forbid
 
-- *"An account never holds an active `Membership` and an active `ClientMembership` at once"* — the
-  writers are: client accept (REQ-03-014 refuses), staff invitation write and staff accept
-  (REQ-03-042 refuses), and `POST /api/signup`. Signup cannot reach it: `Account.email` is
-  `@unique` and `apps/api/src/signup/signup.service.ts:36` refuses an existing address, so a
-  client contact cannot sign up a second organization under the same address. The cell the table
-  marks unreachable has no third writer.
-- *"A client principal is refused 404 on every organization route other than the ones REQ-03-019
-  names"* — every controller mounted under `api/organizations/:orgId` already applies
-  `OrgScopeGuard` (checked: `grep -L OrgScopeGuard` over all of them returns nothing), so there is
-  one choke point and no route that escapes it. Listed in T3's `allCallSites`.
-- *"The principal kind is asked before any role-keyed helper"* — the call sites that would violate
-  it are enumerated in T3/T7's `allCallSites`. `RequestsService.requireCaller` (`:894`) currently
-  throws `Forbidden` for an account with no membership, which is the one a client principal
-  reaches first.
-- REQ-03-013 (any client of the organization, whatever the status) vs the state-machine row
-  `removed | invite` (an invitation is written): the row is the **same** client's removed row and
-  the contracts file says so in the paragraph under the table. No conflict.
-- REQ-03-011 (a contact invitation supersedes pending staff invitations) vs REQ-03-042 (a staff
-  invitation for a client contact is refused at write): REQ-03-042 keys on an **active
-  `ClientMembership`**, not on a pending invitation, so TC-03-INT-31's "invite as a contact, then
-  as staff" sequence is writable and both rules hold.
-- REQ-03-029 (`scope=all` → 200 for a client) vs the list route's `403 scopeForbidden`: the 403 is
-  reached only after the principal kind is resolved as staff. No conflict.
+- *"A `user` may raise a request to a client contact"* against *"the only contacts route is
+  guarded by `view-clients`"* — this was F2's contradiction and it is gone: REQ-03-043 adds the
+  route the first statement needs, and the contracts say which caller each route is for.
+- *"A client principal is answered 404 on every organization route other than those REQ-03-019
+  names"* — one choke point (`OrgScopeGuard`) with an explicit opt-in; T11's new handler does
+  **not** opt in, so it is refused by default. The web half becomes one gate in the layout
+  (T7), which is what F4 showed was missing at one screen out of twenty-one.
+- *"An account never holds an active `Membership` and an active `ClientMembership` at once"* —
+  writers unchanged this pass: client accept (REQ-03-014), staff invitation write and accept
+  (REQ-03-042), and signup, which cannot reach it (`Account.email` is `@unique` and signup
+  refuses an existing address).
+- *"Nothing is reassigned"* (edge case 5, Known Gaps row 2) against spec 01 requirement 35 — the
+  reading under which both hold: nothing is reassigned **automatically** when a contact is
+  removed, and no reassign body may **name** a contact. Handing a client-addressed request to a
+  colleague stays permitted by requirement 35, which spec 03 does not narrow in any numbered
+  requirement. Recorded as note **P2** rather than settled quietly: the alternative reading is
+  available and the choice belongs in the document.
+- REQ-03-043 ("every client owning a project that member is assigned to") against REQ-03-023 —
+  the same boundary, which is the requirement's own stated reason. The active-project narrowing
+  is derived from "offers what the server accepts" and is stated in T11 and as note **P4**.
 
-No contradiction found.
+No contradiction that blocks.
 
 ### External claims
 
-The spec's "Access this needs" table is a single row saying there is none, and the shipped
-adapter makes no outbound call. There is no `Assumed` observation carrying a requirement, so no
-`spec` finding is owed here. The doubles the cases register are of **our own port**, and
-`doubleBehaviours` is planned from the port's own table of members and outcomes, not from prose.
+The "Access this needs" table is a single row saying there is none, and the shipped adapter
+makes no outbound call. No `Assumed` observation carries a requirement. The doubles are of our
+own port and `doubleBehaviours` is planned from the port's table of members and outcomes.
 
 ### Call sites — the "every X" requirements
 
-- REQ-03-019 ("every other organization route") → the 17 controllers under
-  `api/organizations/:orgId`, listed in T3.
-- REQ-03-035 ("every notifiable event") → `createRequest:317`, `postMessage:465`,
-  `transition:534` (answer/grant/decline/cancel), `reassignRequest:756`. `patchRequest:625`
-  writes `field_changed`, which REQ-03-035's list does not name, so it notifies nobody.
-- REQ-03-017 ("when a right is checked") → API: `requests.service.ts:894`, `:130` (`can`),
-  `:283` (`canReadRequest`); web: `Sidebar.tsx:180`, `requests/page.tsx:117-119`,
-  `requests/[requestId]/page.tsx:47-49`, `requests-badge-context.tsx:41`.
+- REQ-03-019 ("every other organization route") — API: `OrgScopeGuard`, one choke point, opt-in
+  per handler. Web: the twenty-one pages under `apps/web/app/org/[orgId]`, all listed in T7's
+  `allCallSites` with what each does today.
+- REQ-03-035 ("every notifiable event") — `createRequest`, `postMessage`, `transition`,
+  `reassignRequest`. `patchRequest` writes `field_changed`, which the list does not name.
+- REQ-03-017 ("when a right is checked") — unchanged this pass; T11's new capability check asks
+  the principal kind first by construction, because `OrgScopeGuard` has already refused a client
+  principal before the handler runs.
+- Writers of the addressee columns — `createRequest` and `reassignRequest`, nothing else
+  (`patchRequest` may not touch them, spec 01 requirement 34). Both are in T5's `allCallSites`,
+  which is what makes the trail repair land at the whole class rather than at the one branch.
 
 ### Writers and locks
 
-- `Request.status` — the existing `SELECT … FOR UPDATE` re-read (`requests.service.ts:848`) is
-  the lock, and state-machine invariant 3 extends it unchanged to a client actor.
-- `Organization.nextRequestNumber` — the existing `FOR UPDATE` on the organization row.
-- `ClientMembership` — writers are accept (create/restore) and remove. `accountId @unique` is the
-  race backstop for two concurrent accepts; removal does the status write and the `securityStamp`
-  rotation in one transaction (REQ-03-006), which is the whole of the concurrency the spec asks
-  for. The repository takes no row lock on `Membership` today and this row is planned the same
-  way.
-- `RequestNotification` — no lock; `@@unique([eventId, recipientKind, recipientId])` is the
-  mechanism REQ-03-039 names.
+- `Request` — the existing `FOR UPDATE` re-read; the reassign repair reads the outgoing contact
+  from that locked row, inside the transaction.
+- `RequestNotification` — no lock; `@@unique([eventId, recipientKind, recipientId])`.
+- The new route takes no lock and holds none; a contact removed between the read and the create
+  call is refused by REQ-03-025 at creation, where the decision belongs.
 
 ### Messages
 
-Every row of the Error Messages table is placed in `handoff.messages`, with the module that
-exports it and the route that emits it. Five are new (`CLIENT_USER_MESSAGES.*`), three are new
-keys on the existing `REQUEST_MESSAGES` (`clientProjectRequired`, `clientProjectMismatch`,
-`notOnProject`) — that const is extended in place, never duplicated. The remaining rows exist
-verbatim already and were grepped (`packages/validation/src/index.ts:1818-1890`, `:2219-2226`,
-`:217-232`, `:337-345`).
+Twelve rows in `handoff.messages`, each with the module that exports it and the route that
+emits it. The new route emits none — its refusal is a bare `404`, which the Routes table gives
+it and which the contacts routes already answer for the same reason (a distinctive body would
+say the resource exists to somebody who may not see it).
 
 ### Verification plan
 
-Every state a case needs is reached through this spec's own routes or through a helper that
-exists today; the "Exists today" column checks out against `e2e/tests/helpers.ts`. **This spec
-owes no test fixture** and adds nothing under `apps/api/src/test-support/`. The three rows marked
-`not run` are the ones this change creates.
+Unchanged: every precondition is reached through this spec's own routes or a helper that exists
+in `e2e/tests/helpers.ts`. This spec owes no fixture route and adds nothing under
+`apps/api/src/test-support/`. TC-03-INT-36 needs only what `apps/api/test/client-participants.spec.ts`
+already builds — clients, client-linked projects, project assignment, contacts, and callers of a
+named role.
 
----
+### Sections
 
-## Things the implementer will hit that the spec does not spell out
-
-These are planned, not raised as blockers — each is derivable from a rule the spec does state.
-
-1. **How a screen knows the client principal is the addressee.** `request-detail/page.tsx:86`
-   learns "who am I" from `GET …/members`, which answers a client principal 404 (REQ-03-019).
-   The answer follows from REQ-03-034 and REQ-03-029: every request a client principal can read
-   is one they are the addressee of, so `isAssignee` is true for any request that loads.
-   No new endpoint field, and none is invented.
-2. **Where sign-in lands.** `apps/web/app/login/LoginForm.tsx:92` and
-   `apps/web/app/accept-invite/AcceptInviteScreen.tsx:322` both hardcode
-   `/org/{orgId}/members`. TC-03-E2E-01 requires a contact to land on the requests screen. The
-   contracts amend `/api/me` and do **not** amend the login body, so the branch reads
-   `/api/me` — the pattern the accept screen already uses.
-3. **The requests list's two side reads.** `requests/page.tsx:224` (projects) and `:251`
-   (topics) will 404 for a client principal. Both already swallow a failure, so nothing breaks,
-   but they are gated on the principal kind so no refused call is made at all.
-4. **A decline writes two events.** `transition` records `message_posted` *and* `status_changed`
-   in one transaction. REQ-03-035 is written per event ("in the same transaction as the
-   `RequestEvent`") and REQ-03-039's uniqueness is per event, so the plan writes one row per
-   recipient per notifiable event, and a decline therefore produces two. Note N1.
+All eight `##` headings of the main spec, and the bundle's, are answered by name in
+`handoff.sections`. Two carry no task and say why: **Out of Scope** (six things not built) and
+**Known Gaps** (four accepted, with the second one's exact reading spelled out, since it is what
+F1 turns on).
 
 ---
 
 ## Notes handed to the human (not blocking)
 
-- **N1 — a decline notifies twice.** Reading REQ-03-035 per event (which is what its own words and
-  REQ-03-039's uniqueness key say) means a decline, which writes two events, produces two outbox
-  rows per recipient. No case asserts the count for a decline, so nothing catches it either way.
-- **N2 — TC-03-INT-24 and TC-03-INT-26 together fix the dispatch shape.** TC-03-INT-26 requires
-  the route to answer *before* the notifier double is released, so delivery cannot be awaited in
-  the request path; TC-03-INT-24 asserts the rows have reached `skipped`/`attempts: 1` after the
-  three calls. Both hold only if the case waits for the drain rather than reading immediately.
-  Planned as: dispatch scheduled after commit, not awaited, with the test polling.
-- **N3 — the client's post-auth landing is asserted but not required.** TC-03-E2E-01 observes it;
-  no REQ states it. Planned from the case.
+- **P1 — a decline notifies twice.** Carried from the first plan. `transition` writes
+  `message_posted` and `status_changed` in one transaction; REQ-03-035 is written per event and
+  REQ-03-039's uniqueness is per event, so a decline produces two outbox rows per recipient. No
+  case asserts the count either way.
+- **P2 — nobody has decided whether staff may take a request away from a contact.** The route
+  accepts it today and spec 01 requirement 35 permits it; the result is a row carrying a
+  client-audience topic with a member addressee, which REQ-03-024 refuses at creation and
+  constrains nowhere afterwards. The trail is repaired either way; the question is whether the
+  transition should exist. One sentence in the spec settles it.
+- **P3 — TC-03-E2E-03 has never run green.** Its first navigation throws, so the case has never
+  exercised its subject; whatever the first implementation reported about it was reported about
+  a case that could not run. Worth knowing when reading that attempt's log.
+- **P4 — the active-project narrowing on REQ-03-043.** The requirement says "every client owning
+  a project that member is assigned to" without naming project status. The plan filters to
+  active projects, because the requirement's own Decided line is that the picker offers what the
+  create route accepts, and the create route refuses an archived project. If the intent was
+  otherwise, it is a word in REQ-03-043 and an assertion in TC-03-INT-36.
+- **P5 — the branch carries work this spec did not ask for.** `git diff baseRef...HEAD` includes
+  `scripts/refine-read.mjs`, `scripts/run-report.mjs`, `scripts/ship.mjs`, `scripts/spec-lint.mjs`,
+  `scripts/usage-recover.mjs` and `1_DS for dev/components/surfaces/Modal.jsx`. The first five
+  came from two `build(pipeline)` commits on this branch; CLAUDE.md sends machinery to a
+  `build/*` branch precisely because the reviewer diffs `baseRef...HEAD` and is built to block on
+  a file no task names. The Modal change is a shared design-system component the spec's DS gaps
+  table records as `None` (the reviewer's N21). Moving them is a person's call — `scripts/aside.mjs`
+  is the tool — and no task here touches any of them.
 
 ## Test levels
 
-The 5 E2E cases each buy something an API test cannot reach: mail-to-accept-to-sign-in as a
-journey (E2E-01), a control that must not be drawn and a URL typed by hand (E2E-02), a session
-revoked mid-visit across two browser contexts (E2E-03), focus and the per-audience re-read in a
-modal (E2E-04), the drawn/undrawn action controls (E2E-05). Every server rule — status code,
-message, token state, authorization decision — sits at integration. Nothing is duplicated across
-levels.
+Unchanged from the first plan, plus one case. TC-03-INT-36 is integration: it is a status code
+and an authorization decision, which belongs at the API level even though a picker shows the
+result. The five E2E cases each still buy something an API test cannot reach — a
+mail-to-accept-to-sign-in journey, a control that must not be drawn and a URL typed by hand, a
+session revoked mid-visit across two contexts, focus and the per-audience re-read in a modal, the
+drawn/undrawn action controls. Nothing is duplicated across levels, and nothing is retired.
