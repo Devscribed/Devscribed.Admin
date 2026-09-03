@@ -90,7 +90,17 @@
         "decided": 7,
         "left": 0
       },
-      "endedAt": "2026-09-03T13:03:30.879Z"
+      "endedAt": "2026-09-03T13:03:30.879Z",
+      "commit": "3ec5e530aa12aaaf8fa5c425061f7b961b62bb3a",
+      "growth": 37,
+      "repairs": 16
+    },
+    {
+      "round": 2,
+      "startedAt": "2026-09-03T13:03:31.049Z",
+      "head": "3ec5e530aa12aaaf8fa5c425061f7b961b62bb3a",
+      "status": "running",
+      "lint": 0
     }
   ],
   "status": "running"
