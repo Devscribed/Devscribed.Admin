@@ -36,6 +36,7 @@ import {
   type NotificationRecipient,
 } from './request-notifications.service';
 import type {
+  RequestContactsDto,
   RequestDetailDto,
   RequestMessageDto,
   RequestRowDto,
@@ -357,6 +358,72 @@ export class RequestsService {
     ]);
 
     return toRequestDetail(row, messages, events, todayInTimeZone(caller.timezone));
+  }
+
+  /* ---------------------------------------------------------------- *
+   * The addressees a requester may choose from
+   * ---------------------------------------------------------------- */
+
+  /**
+   * `GET …/request-contacts` — REQ-03-043. The active client contacts of every client
+   * owning a project the caller is assigned to, and no other.
+   *
+   * The boundary is the create route's own (REQ-03-023), so the picker offers exactly
+   * what `createRequest` will accept from this caller: an admin assigned to no project
+   * is answered an empty list rather than the organization's client book, because that
+   * rule carves no admin out either.
+   *
+   * The capability is `create-request`, not `view-clients`: a `user` may raise a request
+   * to a contact and holds `view-clients` nowhere, so gating this read on the client book
+   * would offer that role an addressee kind it could never fill. A caller without
+   * `create-request` is answered a bare 404 — no message naming the resource, the same
+   * discipline the contacts routes use (REQ-03-008).
+   *
+   * Two boundaries beyond the assignment, both of them what creation would refuse:
+   * only `active` contacts (a removed one is `assigneeInactive` at creation) and only
+   * `active` projects (an archived one is `projectUnavailable` before the assignment
+   * check is ever reached).
+   */
+  async listRequestContacts(
+    session: SessionPayload,
+    organizationId: string,
+  ): Promise<RequestContactsDto> {
+    const caller = this.requireMemberCaller(await this.requireCaller(session, organizationId));
+    if (!can(caller.role, 'create-request')) throw new NotFoundException();
+
+    const rows = await this.prisma.clientMembership.findMany({
+      where: {
+        organizationId,
+        status: 'active',
+        client: {
+          organizationId,
+          projects: {
+            some: {
+              status: 'active',
+              members: { some: { membershipId: caller.membershipId } },
+            },
+          },
+        },
+      },
+      select: {
+        id: true,
+        clientId: true,
+        client: { select: { name: true } },
+        account: { select: { firstName: true, lastName: true, email: true } },
+      },
+      orderBy: [{ client: { name: 'asc' } }, { account: { firstName: 'asc' } }],
+    });
+
+    return {
+      contacts: rows.map((row) => ({
+        id: row.id,
+        // The serializer's name, with the account's email behind it: an account whose
+        // name is blank is still an addressee somebody can recognise.
+        displayName: displayNameOf(row.account) || row.account.email,
+        clientId: row.clientId,
+        clientName: row.client.name,
+      })),
+    };
   }
 
   /* ---------------------------------------------------------------- *

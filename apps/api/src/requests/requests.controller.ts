@@ -64,6 +64,17 @@ export class RequestsController {
     });
   }
 
+  /**
+   * REQ-03-043 — the addressees a requester may choose from. No
+   * `@AllowClientPrincipal()`: a contact raises nothing, so `OrgScopeGuard` answers them
+   * the bare 404 it gives by default. The capability is decided in the service, which
+   * answers a caller without `create-request` a 404 with no message.
+   */
+  @Get('request-contacts')
+  async listRequestContacts(@Req() req: AuthenticatedRequest) {
+    return this.requests.listRequestContacts(req.session!, req.session!.organizationId);
+  }
+
   @Post('requests')
   @AllowClientPrincipal()
   async createRequest(

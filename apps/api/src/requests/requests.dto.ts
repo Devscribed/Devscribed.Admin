@@ -107,3 +107,19 @@ export interface RequestsListDto {
   vacation?: { requests: RequestCard[]; pendingCount: number };
   counts: { waitingOnMe: number; total: number };
 }
+
+/**
+ * `GET …/request-contacts` — one addressee the caller may raise a request to
+ * (REQ-03-043): an active contact of a client that owns a project the caller works on.
+ */
+export interface RequestContactDto {
+  id: string;
+  displayName: string;
+  clientId: string;
+  clientName: string;
+}
+
+/** `GET …/request-contacts` — the contacts a requester may choose from, and no others. */
+export interface RequestContactsDto {
+  contacts: RequestContactDto[];
+}

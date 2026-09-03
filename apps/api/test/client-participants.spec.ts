@@ -766,6 +766,75 @@ describe('Client participants (requests spec 03)', () => {
     expect(await prisma.request.count()).toBe(0);
   });
 
+  // TC-03-INT-36
+  it('offers a requester the contacts of the clients they work for, and no others', async () => {
+    const admin = await signupAdmin('admin36@acme.test', 'Acme Thirtysix');
+    const firstClient = await createClient(admin, 'Acme First');
+    const secondClient = await createClient(admin, 'Beta Second');
+    const firstProject = await createProject(admin, 'Acme Redesign', firstClient);
+    await createProject(admin, 'Beta Redesign', secondClient);
+
+    const mine = await inviteAndAccept(admin, firstClient, 'dana36@acme.example');
+    await inviteAndAccept(admin, secondClient, 'sam36@beta.example', 'Sam');
+    const gone = await inviteAndAccept(admin, firstClient, 'kim36@acme.example', 'Kim');
+    expect((await removeContact(admin, firstClient, gone.clientMembershipId)).status).toBe(200);
+
+    // A `user`, on the first client's project only — the caller REQ-03-023 requires, and
+    // the role that holds `create-request` and not `view-clients`.
+    const user = await createMember(admin.organizationId, {
+      email: 'user36@acme.test',
+      role: 'user',
+      firstName: 'Uma',
+    });
+    await assignProject(admin, firstProject, [user.membershipId]);
+    const viewer = await createMember(admin.organizationId, {
+      email: 'viewer36@acme.test',
+      role: 'viewer',
+    });
+
+    const asUser = await request(server())
+      .get(`/api/organizations/${admin.organizationId}/request-contacts`)
+      .set('Cookie', user.cookies);
+    expect(asUser.status).toBe(200);
+    expect(asUser.body.contacts.map((row: { id: string }) => row.id)).toEqual([
+      mine.clientMembershipId,
+    ]);
+    expect(asUser.body.contacts[0]).toMatchObject({
+      displayName: 'Dana Stone',
+      clientId: firstClient,
+      clientName: 'Acme First',
+    });
+
+    // The route answers on `create-request`, which this caller holds, and not on
+    // `view-clients`, which it does not: the client book refuses the same person.
+    const book = await listContacts(user, firstClient);
+    expect(book.status).toBe(404);
+
+    // The admin is assigned to no project, and REQ-03-023 carves no admin out, so the
+    // read carves none out either — an empty list, not the organization's client book.
+    const asAdmin = await request(server())
+      .get(`/api/organizations/${admin.organizationId}/request-contacts`)
+      .set('Cookie', admin.cookies);
+    expect(asAdmin.status).toBe(200);
+    expect(asAdmin.body.contacts).toEqual([]);
+
+    // A caller without `create-request` is answered the bare 404 — the same body an
+    // organization they have no part in answers, so the refusal names no capability and
+    // says nothing about the resource.
+    const foreign = await signupAdmin('admin36b@beta.test', 'Beta Thirtysix');
+    const strangerOrg = await request(server())
+      .get(`/api/organizations/${foreign.organizationId}/request-contacts`)
+      .set('Cookie', viewer.cookies);
+    expect(strangerOrg.status).toBe(404);
+
+    const asViewer = await request(server())
+      .get(`/api/organizations/${admin.organizationId}/request-contacts`)
+      .set('Cookie', viewer.cookies);
+    expect(asViewer.status).toBe(404);
+    expect(JSON.stringify(asViewer.body)).toBe(JSON.stringify(strangerOrg.body));
+    expect(JSON.stringify(asViewer.body)).not.toContain('create-request');
+  });
+
   // TC-03-INT-15
   it('requires a project on a client-addressed request and leaves it optional otherwise', async () => {
     const admin = await signupAdmin('admin15@acme.test', 'Acme Fifteen');

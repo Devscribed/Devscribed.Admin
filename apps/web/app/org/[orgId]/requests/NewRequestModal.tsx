@@ -227,40 +227,33 @@ export function NewRequestModal({
     };
   }, [open, orgId, assigneeKind, topicsByAudience]);
 
-  /* The contact picker's offers: the active contacts of the organization's active
-     clients, read only once the client kind has been chosen. The narrowing this fills is
-     a convenience — the server decides who may be addressed (REQ-03-020). */
+  /* The contact picker's offers: REQ-03-043's read — the active contacts of every client
+     that owns a project this requester is assigned to, which is the same boundary the
+     create route enforces (REQ-03-023), so the picker offers what the server accepts.
+     It is the requester's own route, guarded by `create-request`: the client book's
+     contacts route is a manager's read and a `user` is answered 404 by it. Read on the
+     open cycle rather than once, so a contact invited or removed elsewhere in the same
+     session is not offered stale. */
   useEffect(() => {
-    if (!open || assigneeKind !== 'client' || contacts.length > 0) return;
+    if (!open || assigneeKind !== 'client') return;
     let cancelled = false;
     void (async () => {
       try {
-        const response = await fetch(`/api/organizations/${orgId}/clients?status=active`, {
+        const response = await fetch(`/api/organizations/${orgId}/request-contacts`, {
           credentials: 'same-origin',
         });
         if (!response.ok) return;
-        const body = (await response.json()) as { clients: { id: string; name: string }[] };
-        const collected: ContactOption[] = [];
-        for (const client of body.clients) {
-          const contactsResponse = await fetch(
-            `/api/organizations/${orgId}/clients/${client.id}/contacts`,
-            { credentials: 'same-origin' },
-          );
-          if (!contactsResponse.ok) continue;
-          const contactsBody = (await contactsResponse.json()) as {
-            contacts: { id: string; displayName: string | null; email: string; status: string }[];
-          };
-          for (const contact of contactsBody.contacts) {
-            if (contact.status !== 'active') continue;
-            collected.push({
+        const body = (await response.json()) as { contacts: ContactOption[] };
+        if (!cancelled) {
+          setContacts(
+            body.contacts.map((contact) => ({
               id: contact.id,
-              displayName: contact.displayName ?? contact.email,
-              clientId: client.id,
-              clientName: client.name,
-            });
-          }
+              displayName: contact.displayName,
+              clientId: contact.clientId,
+              clientName: contact.clientName,
+            })),
+          );
         }
-        if (!cancelled) setContacts(collected);
       } catch {
         // The picker offers nothing; the server refuses a request with no addressee and
         // the inline error says so.
@@ -269,7 +262,7 @@ export function NewRequestModal({
     return () => {
       cancelled = true;
     };
-  }, [open, orgId, assigneeKind, contacts.length]);
+  }, [open, orgId, assigneeKind]);
 
   /**
    * Switching the addressee kind clears the chosen topic — a topic of the other audience
