@@ -74,11 +74,33 @@ const runId =
     .pop();
 
 const dir = join(RUNS, runId);
-if (!existsSync(join(dir, 'run.json'))) {
-  console.error(`no run.json under ${dir}`);
+if (!existsSync(dir)) {
+  console.error(`no run directory at ${dir}`);
   process.exit(1);
 }
-const run = JSON.parse(readFileSync(join(dir, 'run.json'), 'utf8'));
+
+/**
+ * A run whose `init` died before it wrote `run.json` is the extreme case of the rule this file
+ * already lives by: every source is optional. It is also the case a person is most likely to
+ * click on, because a directory nobody can account for is exactly what invites a click — so it
+ * opens and says what happened, with whatever its journal and stages did manage to record,
+ * rather than taking the board down with it.
+ *
+ * `baseRef` is HEAD so every diff and log this asks git for comes back empty instead of
+ * failing: there is no base to measure from, and pretending otherwise would invent a diff.
+ */
+const run = existsSync(join(dir, 'run.json'))
+  ? JSON.parse(readFileSync(join(dir, 'run.json'), 'utf8'))
+  : {
+    runId,
+    spec: null,
+    branch: null,
+    baseRef: 'HEAD',
+    status: 'half-created',
+    halt: { reason: 'init не завершился', detail: 'run.json не был записан — прогон умер до того, как оркестратор его создал' },
+    stages: {},
+    notes: [],
+  };
 
 const git = (...a) => {
   try {
@@ -788,8 +810,8 @@ pre.txt{background:var(--surface-3);border-radius:12px;padding:14px 16px;overflo
     <div id="steps"></div>
     <div class="card" id="cardRounds" hidden><h2>Раунды</h2><div class="body" id="rounds"></div></div>
     <div class="card" id="cardRouting"><h2>Маршрут: каждое решение роутера</h2><div class="body" id="routing"></div></div>
-    <div class="card"><h2>Размышление против инструментов</h2><div class="body" id="split"></div></div>
-    <div class="card"><h2>По стадиям</h2><div class="body" id="stages"></div></div>
+    <div class="card" id="cardSplit"><h2>Размышление против инструментов</h2><div class="body" id="split"></div></div>
+    <div class="card" id="cardStages"><h2>По стадиям</h2><div class="body" id="stages"></div></div>
     <div class="card" id="cardCov"><h2>Покрытие ревью</h2><div class="body" id="cov"></div></div>
   </div>
 </div>
@@ -852,9 +874,14 @@ document.getElementById('hdMeta').innerHTML =
   (D.budget ? ' · бюджет: код ' + D.budget.codeAttempts + ', переплан ' + D.budget.handoffReplans + ', среда ' + D.budget.infra : '');
 
 /* A refine loop has no diff and no review, so the two cards that are about those say nothing
-   true about it. Hidden rather than left empty: an empty card reads as a finding of zero. */
-document.getElementById('cardRouting').hidden = isRefine;
-document.getElementById('cardCov').hidden = isRefine || !D.coverage;
+   true about it; a run whose init died has no steps, so none of the four analyses has anything
+   to analyse. Hidden rather than left empty: an empty card reads as a finding of zero — a
+   coverage table saying 0 of 0 is indistinguishable from one saying nothing was reviewed. */
+const bare = !D.steps.length;
+document.getElementById('cardRouting').hidden = isRefine || bare;
+document.getElementById('cardCov').hidden = isRefine || bare || !D.coverage;
+document.getElementById('cardSplit').hidden = bare;
+document.getElementById('cardStages').hidden = bare;
 document.getElementById('cardRounds').hidden = !isRefine;
 
 const T = D.totals;
@@ -1050,7 +1077,12 @@ const TABS = [
   ['Метрики', paneMetrics, () => 0],
 ];
 
-document.getElementById('steps').innerHTML = D.steps.map((s,i) => {
+document.getElementById('steps').innerHTML = (bare
+  ? '<div class="card"><div class="body"><p class="dim" style="margin:0">Ни одного шага. ' +
+    (D.status === 'half-created'
+      ? 'Оркестратор не дописал <span class="mono">run.json</span> — прогон умер на инициализации, и всё, что от него осталось, это имя директории.'
+      : 'Прогон ещё ничего не запустил.') + '</p></div></div>'
+  : '') + D.steps.map((s,i) => {
   const bl = s.findings.filter(isBlocker).length, nt = s.findings.length - bl;
   const color = COLOR[s.stage] || '#79747E';
   const sub = [
@@ -1287,7 +1319,7 @@ function crumbs() {
      be filed under whichever spec the reader happened to pass through. */
   if (view === 'run') {
     const e = entryOf(D.runId);
-    if (e && e.spec) openSpec = e.spec;
+    if (e) openSpec = e.spec ?? null;
   }
   const bits = ['<a data-go="#">Спеки</a>'];
   if (view !== 'index') {
