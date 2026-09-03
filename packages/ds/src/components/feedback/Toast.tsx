@@ -208,11 +208,14 @@ export function ToastHost({
   const ids = toasts.map((toast) => toast.id).join('|');
 
   React.useEffect(() => {
-    if (!onDismiss || !autoClose || paused) return undefined;
-    const timers = toasts.map((toast) => setTimeout(
-      () => onDismiss(toast.id),
-      toast.autoClose == null ? autoClose : toast.autoClose,
-    ));
+    if (!onDismiss || paused) return undefined;
+    /* `0` leaves a message standing, for the host and for one entry alike: an entry that
+       overrides the host's clock with `0` gets no timer, not a timer of zero. That is what
+       lets a failure carrying its own retry stay until somebody has pressed it or the ×. */
+    const timers = toasts.flatMap((toast) => {
+      const delay = toast.autoClose == null ? autoClose : toast.autoClose;
+      return delay ? [setTimeout(() => onDismiss(toast.id), delay)] : [];
+    });
     return () => timers.forEach(clearTimeout);
     // The list is keyed by its ids: a re-render that changes nothing must not restart a
     // timer somebody is already halfway through reading.

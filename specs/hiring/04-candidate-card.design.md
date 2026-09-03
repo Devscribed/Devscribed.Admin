@@ -35,9 +35,9 @@ stops being a `Badge`, and [reversal 2](#the-cancelled-badge) gets its second of
   ‹ Candidates                                                         ← BackTo (§56)
   Jane Doe                                                         ⋮  ← PageHeader + Popover
   jane@example.com ⧉ · first seen 12 Aug 2026                          ← IconButton + CopyIcon
-  ┌──────────────────────────────────────────────────────────────────┐
-  │ ⓘ Moved to Didn't pass                                        ×  │  ← InfoBanner, in flow
-  └──────────────────────────────────────────────────────────────────┘
+                                              ┌────────────────────────┐
+                                              │ Moved to Didn't pass × │  ← Toast, top-right, over the page
+                                              └────────────────────────┘
   ┌───────────────────────────────────────────────────────────────────┐
   │ Senior React Engineer  (Open)          Status [ Scheduled  ▾ ]  ⋮ │  ← <h2> + VacancyStatusBadge
   │ [React] [Senior] [Full Stack]                                     │  ← Badge neutral s
@@ -162,7 +162,7 @@ stops being a `Badge`, and [reversal 2](#the-cancelled-badge) gets its second of
   beside a control somebody is using. A kebab is one deliberate press away from either — the same
   shape every list row in the module uses — and it is drawn only while there is something in it,
   because a menu whose every row is gone is a trigger that opens nothing. Both rows are absent once
-  the interview is behind or called off ([07 §14.65](07-manage-booking.md)).
+  the interview is behind or called off ([07 §14.68](07-manage-booking.md)).
 
 - **The header ends in the two places this interview goes**: `View vacancy` and `Open in calendar`,
   bottom-right, pushed to the header's baseline so a two-line title does not drag them up with it.
@@ -214,9 +214,12 @@ The page has a real outline now, which is what replacing `SectionLabel` with hea
 | `<h2>` | Each application: the vacancy's title, and the vacancy's own status beside it | the system's headline-6: 16px, `--font-weight-medium`, -0.32px |
 | `<h3>` | `Criteria`, `From the candidate`, `Candidate's note` | `fieldLabelStyle` ([§74](../design-system/decisions.md)) — 12px regular, `--text-secondary`, indented 10px |
 
-The `<h2>` is exactly what `Card` paints its own titles with, so a panel that composes its header
-by hand still looks like one that did not. the earlier design drew it in `--font-display` at 600 and -.2px,
-which is the same idea in a family the app no longer has.
+The `<h2>` takes headline-6 deliberately, and not what `Card variant="panel"` paints its own
+`title` with — the small-caps micro label ([§66](../design-system/decisions.md)) that leads a
+public section under a page's `<h1>`. Here the heading names a vacancy beside its status and
+its own status control, and it has to hold its own against the page title two rows up. The
+earlier design drew it in `--font-display` at 600 and -.2px, which is the same idea in a family
+the app no longer has.
 
 **The `<h3>` takes the ink of a field label, and that is deliberate.** *Revised.*
 It was body-s at medium weight in `--text-primary` — the system's own treatment for small emphatic text,
@@ -233,8 +236,10 @@ The *element* does not follow the paint. `FieldLabel` is a `<label>` and belongs
 `From the candidate` names a file row and `Candidate's note` names a paragraph, so these stay real
 `<h3>`s and only borrow the geometry.
 
-**Sentence case, not the uppercase the earlier design drew.** The system's only uppercase treatment anywhere is
-`PageTabs`; this is the call Phase 4 made for spec 03's column headers and group labels.
+**Sentence case, not the uppercase the earlier design drew.** The system's uppercase treatments
+are two — `PageTabs`' labels and `Card variant="panel"`'s own micro-label `title`
+([§66](../design-system/decisions.md)) — and this screen paints neither by hand; this is the
+call Phase 4 made for spec 03's column headers and group labels.
 
 When a section is collapsible the toggle goes **inside** the heading — `<h2><button
 aria-expanded>…</button></h2>`, the disclosure pattern — so the section stays findable by heading
@@ -303,31 +308,46 @@ below**, in the scheduling history, with the actor, the timestamp and the reason
 vacancies menu ([§22](../design-system/decisions.md)) had nowhere to put a sentence and therefore had
 to draw one; a card with a history log does not.
 
-## The two announcement surfaces
+## The announcement surface
 
-[§24](../design-system/decisions.md) put this page's announcement *in flow*, under
-`PageHeader`, at a time when `Toast` did not exist and `InfoBanner` in a fixed container was the
-only thing standing in for one. `Toast` exists now ([§54](../design-system/decisions.md)), and the
-question it reopens is not *which component* but *which announcements*.
+The banner slot ([01 design](01-vacancies.design.md#the-banner-slot)) put this page's
+announcement *in flow*, under `PageHeader`, with [§24](../design-system/decisions.md)'s dismiss
+control on it, at a time when `Toast` did not exist and `InfoBanner` in a fixed container was the
+only thing standing in for one. `Toast` exists now ([§54](../design-system/decisions.md)), and for
+a while the page kept **two** surfaces, split by grain: an application's outcome — a status
+moved, an interview rescheduled or cancelled — stayed in the flow, and the header's own outcomes
+went to a toast.
 
-The answer is **grain**, and it draws the line exactly where the controls are.
+**Every announcement on this page is a toast now**
+([ADR 0010](../../docs/adr/0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md)).
+The grain distinction was real, but it picked the wrong remedy for the application-grain
+message: a banner in flow pushes every section below it down by its own height to say "Moved
+to Offer", and the section below it holds the interview notes a member is typing into during a
+call — which is the one thing this screen exists not to do. A toast floats over the page and
+changes nothing beneath it, whichever grain the message has.
 
-| Grain | Surface | What raises it |
+| What is announced | Surface | Tone |
 |---|---|---|
-| An **application** | `InfoBanner`, in flow under `PageHeader` | a status moved, an interview rescheduled or cancelled |
-| The **page's own header** | `Toast` | the email was copied, or a delete was refused |
+| A status moved, an interview rescheduled or cancelled | `Toast` | untyped |
+| The email was copied | `Toast` | untyped |
+| A status change, a copy, a delete, a save or the load itself failed | `Toast` | `error`, `role="alert"` on the plate |
 
-The banner stays where reversal 4 put it, and for reversal 4's reason: it reports a change to a
-record that is *on this page*, it sits above the sections it is about, and pushing them down is
-how the member knows the panel below is the one that changed. The status change's focus move still
-waits for it to be laid out.
+No action on this page raises two announcements. The two failures that can be retried keep
+their retry in different places: a failed **save** carries `Retry` inside its toast, and that
+toast stands until it is dismissed ([States](#states)); a failed **load** raises a plain error
+toast that leaves on the host's clock, and its retry lives in the empty state drawn where the
+page would have been ([the component map](#component-map)).
 
-A toast reports something that changed **nothing in the body**. `Email copied` has no referent
-below it, and a delete that was refused leaves the page exactly as it was. Pushing every
-application section down by a banner's height to say either of those would move the interview notes
-under a hand typing into them — which is the one thing this screen exists not to do.
-
-Neither surface ever draws the same event twice: no action on this page raises both.
+Two inline messages are **not** announcements and stay beside the control they belong to, as a
+field's own validation error stays under its field: the criteria picker's "Already assessed"
+note (`card-criteria-note`) and a refused assessment's reason (`card-criteria-error`), both in
+the section's own polite region under the picker. They are the picker's field-level messages —
+the answer to what was just typed into it — and a toast in the corner for them would separate
+the reason from the control it is about. The same holds for the reschedule dialog's calendar
+and slot list, whose availability failure keeps the banner-and-retry the control specs give it
+([calendar](controls/calendar-control.md) §35, [slots](controls/time-slot-picker-control.md)):
+a picker inside a modal is the dialog's own form, and the dialog is the exclusion
+([ADR 0010](../../docs/adr/0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md)).
 
 ## Component map
 
@@ -342,7 +362,7 @@ Neither surface ever draws the same event twice: no action on this page raises b
 | Page actions | **`Popover`** | `label`, `items` *(one, `danger`)* | `candidate-actions` · `candidate-action-delete` |
 | Delete confirmation | **`ConfirmDialog`** | `busy`, **`closeOnAccept={false}`** ([§41](../design-system/decisions.md)) | `candidate-delete-dialog` · `candidate-delete-confirm` |
 | Applied as | native `<p>` | `--font-size-xs`, `--text-secondary` | `application-submitted-as-{applicationId}` |
-| Announcement · application | `InfoBanner` | `variant="success"`, `onDismiss`, `role="status"` | `card-status-toast` · `toast-interview-rescheduled` · `toast-interview-cancelled` |
+| Announcement · application | **`ToastHost` > `Toast`** | untyped; `tone="error"` for a status change that failed ([§54](../design-system/decisions.md)) | `card-status-toast` · `toast-interview-rescheduled` · `toast-interview-cancelled` |
 | Announcement · header | **`ToastHost` > `Toast`** | `tone`, `onDismiss` ([§54](../design-system/decisions.md)) | `toast-email-copied` · `toast-email-copy-failed` · `card-delete-failed` |
 | Application panel | `Card variant="panel"` ([§66](../design-system/decisions.md)) | **`clip={false}`**, **`padded={false}`** | `application-section-{applicationId}` |
 | Panel heading | native `<h2>` (+ `<button aria-expanded>` when collapsible) | — | `application-toggle-{applicationId}` |
@@ -360,13 +380,15 @@ Neither surface ever draws the same event twice: no action on this page raises b
 | Criterion value · scale/boolean | `Select` | `options` | `card-criterion-value-{criterionId}` |
 | Criterion value · number/text | `TextInput` | `type`, `wrapperStyle` | `card-criterion-value-{criterionId}` |
 | Add criteria | **`Select`** | `isSearchable`, `allowCreate` | `card-criteria-autocomplete` |
+| Criteria picker notes | native `<span aria-live="polite">` under the picker | the "Already assessed" note and a refused assessment's reason — field-level messages beside the control, not announcements | `card-criteria-note` · `card-criteria-error` |
 | Notes / conclusion | `TextArea` | `label`, `rows`, **`trailing`** | `card-notes-input` · `card-conclusion-input` |
 | Save | `Button` | **`variant="primary"`**, `disabled` while there is nothing to save, `minWidth: 96` | `card-notes-save` · `card-conclusion-save` |
-| Saved indicator | native `<span>` in `TextArea trailing` | — | `card-notes-saved-at` |
-| Save failure | `InfoBanner` | `variant="error"`, `role="alert"` | `card-save-error` |
-| Loading | `Preloader` | — | `card-loading` |
-| Load failure | `InfoBanner` | `variant="error"` + retry | `card-load-error` |
-| Not found | `Card` | — | `candidate-not-found` |
+| Saved indicator | native `<span>` in `TextArea trailing` | — | `card-notes-saved-at` · `card-conclusion-saved-at` |
+| Save failure | `Toast` in `ToastHost` with a retry `Button` inside | `tone="error"`, **`autoClose={0}`** — stands until the retry or the × is pressed, or the field is saved another way | `card-save-error` · `card-save-retry` |
+| Loading | `Preloader` | centred on the page's own ground under the back link — no card | `card-loading` |
+| Load failure | `Toast tone="error"` in `ToastHost`, and `EmptyState` + retry `Button` in the page's place | the toast leaves; the state stays with the way back inside it (§65) | `toast-card-load-failed` · `card-load-error` · `card-load-retry` |
+| No applications | `EmptyState` | on the page's own ground — no card | `candidate-no-applications` |
+| Not found | `EmptyState` | on the page's own ground under the back link — no card, the same shape as every other dead end in hiring | `candidate-not-found` |
 
 Every `Button` on this screen is the system's **default** — the neutral outlined one — except Cancel
 interview, which is `delete`, and the two **`Save`**s, which are `primary`. *Revised by
@@ -400,8 +422,9 @@ named a component that no longer exists.
 | Submitted-as | Applied as "{submittedName}" |
 | Section captions | Candidate's note · Criteria |
 | Field labels | Interview notes · Conclusion |
-| Add criteria | + Add criteria |
-| Criteria autocomplete | Type to find or create… |
+| Criteria autocomplete | Type a criterion… |
+| Retry, load failure | Retry |
+| No applications | see [04 §Error Messages](04-candidate-card.md) |
 | Criteria empty | No criteria recorded yet. |
 | Notes placeholder | Notes from the interview… |
 | Conclusion placeholder | The outcome, and why. |
@@ -427,10 +450,10 @@ ticking would be motion in the corner of the eye during a call.
 | **Notes · focus** | `--color-blue` border, `--shadow-focus-input` |
 | **Notes · saving** | indicator reads "Saving…" in the label row's `--text-secondary`; the field stays fully editable |
 | **Notes · saved** | indicator reads the time, no colour change, no animation |
-| **Notes · failed** | `InfoBanner variant="error"` **below** the field with an inline retry; the field keeps its text and its focus |
+| **Notes · failed** | `Toast tone="error"` carrying `Retry`, **standing until dismissed** (`autoClose={0}`); nothing is drawn under the field, and the field keeps its text and its focus. Pressing `Retry`, the ×, the field's own `Save`, or an edit that saves, takes the plate down; a retry that fails again raises a fresh one |
 | **Criterion row** | The sunken box ([§59](../design-system/decisions.md) settled the read-only half; this is the editable one): `--surface-sunken`, 1px `--border-subtle`, `--radius-s`, `6px 6px 6px 10px`. It was `Chip` until a later pass — and `Chip` is the token react-select draws for a value chosen *inside a field*, whose 7px `--color-blue` edge marks a selection. This is a small form recording a fact, and the blue edge put the loudest mark on the card on the quietest thing on it. Read-only, with no form left, it is the neutral `Badge` the database row already draws the same assessment with |
 | **Criterion · saving** | the value control is `aria-busy`; no spinner, no layout shift |
-| **Status · changed** | `InfoBanner variant="success"` under `PageHeader`; the `Select` does not animate |
+| **Status · changed** | an untyped `Toast` top-right; the `Select` does not animate, and nothing in the body moves |
 | **Collapsed application** | header row only, the same white `Card`; chevron rotating `--duration-hover` |
 | **History · open** | a `--surface-sunken` `Card` inset into the panel |
 
@@ -462,11 +485,12 @@ card floating inside a white card.
 - **A criterion value** saves on change with no separate confirmation. A `Select` writes when it is
   chosen; the two typed fields commit on blur and on Enter, because saving per keystroke would write
   `7`, `70`, `700` on the way to `700`.
-- **A status change raises the banner and does not navigate** — the member stays on the card.
+- **A status change raises a toast and does not navigate** — the member stays on the card, and
+  nothing in the body moves.
 - **Focus moves to the conclusion one frame later.** A status change that records an outcome focuses
-  the conclusion field (prompted, never required). The announcement is now *in flow* rather than
-  floating over the page, so focusing first would scroll the field into view and then push it down
-  by the banner's own height. It waits for the banner to be laid out.
+  the conclusion field (prompted, never required). One frame later so that the `Select` which
+  raised it has finished returning focus to itself first — a focus moved inside its own change
+  handler is a focus it takes back.
 - **`?application=`** expands that section and scrolls it into view with `scroll-margin-top` clear
   of the fixed top bar, `block: 'nearest'` so a section already on screen is left where it is.
 - **Copying the email** writes the address, raises a toast, and changes nothing else. Focus stays
@@ -497,10 +521,11 @@ design-system token.
 - The page has one `<h1>`, an `<h2>` per application and `<h3>` captions inside each — no level is
   skipped, and a collapsible panel's toggle sits inside its heading.
 - The saved indicator is **not** a live region. A separate visually-hidden `aria-live="polite"` node
-  announces only failures and explicit saves; announcing every autosave would speak over an
-  interview every two seconds, and the visible indicator carries the routine case.
-- The page's announcement is `role="status"`; a save failure under one field is `role="alert"`,
-  because it belongs to the field the member is looking at rather than to the page.
+  announces only explicit saves — the one outcome no toast reports; announcing every autosave
+  would speak over an interview every two seconds, and the visible indicator carries the routine
+  case.
+- A save failure is spoken once, by the toast that carries its retry: every toast plate is
+  `role="alert"` ([§54](../design-system/decisions.md)), and the hidden node stays silent for it.
 - Criterion chips are a list; each cross names its criterion ("Remove English"), never a bare
   "Remove".
 - The value control's accessible name is the criterion, so a screen-reader user hears
@@ -508,15 +533,16 @@ design-system token.
 - The cancelled badge's accessible name is the whole cancellation, never the truncated form.
 - The CV's two controls are real anchors ([§38](../design-system/decisions.md)), so middle-click,
   copy-address, open-in-new-tab and the browser's own download handling all work.
-- Focus is never moved by an autosave, by the banner, or by a background refetch — and the one focus
-  move there is waits for the layout to settle first.
+- Focus is never moved by an autosave, by a toast, or by a background refetch — and the one focus
+  move there is waits a frame for the control that raised it to settle first.
 - The back link is a real anchor with a real destination, so middle-click, copy-address and
   open-in-new-tab all work and a reader is told "link, Candidates" about a link that goes there.
 - The copy control is glyph-only, so its accessible name is the whole of what it says it does —
   `Copy email`, not the address, which the reader has just been read.
-- The two announcement surfaces do not compete: the banner is `role="status"` in flow, and the
-  toasts are the polite region [§54](../design-system/decisions.md) owns. Only one of them speaks per
-  action, because no action raises both.
+- One announcement surface: the toasts. Every plate is `role="alert"` today — the host offers no
+  per-entry role, so an outcome and a failure are announced the same way
+  ([§54](../design-system/decisions.md)). Each action speaks once, because no action raises two
+  toasts and the hidden node speaks nothing a toast reports.
 
 ## DS gaps
 
@@ -536,9 +562,9 @@ index.
 | `Preloader` and `InfoBanner` forward nothing | [§23](../design-system/decisions.md) / [§6](../design-system/decisions.md) / [§24](../design-system/decisions.md) |
 | The icon set has no copy mark | [§57](../design-system/decisions.md) — `CopyIcon` |
 | A screen cannot reach the field-label geometry to paint a caption with it | [§74](../design-system/decisions.md) — `fieldLabelStyle` exported |
-| `Popover`'s panel clipped [§62](../design-system/decisions.md)'s bubble away entirely | Not a divergence — an `overflow: hidden` that was never the system's; see the decisions record's note on §62 |
+| `Popover`'s panel clipped [§62](../design-system/decisions.md)'s bubble away entirely | Not a divergence — an `overflow: hidden` that was never the system's, since removed; the account is in `Popover`'s own file |
 | `BackTo` is a link with no destination | [§56](../design-system/decisions.md) — landed in desktop 8 |
-| No `Toast`, for the header's own outcomes | [§54](../design-system/decisions.md) — landed in desktop 5; the application-grain announcement stays in reversal 4's slot |
+| No `Toast`, for the header's own outcomes | [§54](../design-system/decisions.md) — landed in desktop 5; every announcement on the page is a toast now, the application-grain ones included |
 | ~~`Badge` cannot host an interactive child~~ | Not composed in the app after all — `Chip` is the component, [§37](../design-system/decisions.md) is the slot |
 | ~~`Tooltip`~~ | Deleted, not replaced — see [The cancelled badge](#the-cancelled-badge) |
 | ~~`Skeleton`~~ | `Preloader`, with the announcement beside it |

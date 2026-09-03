@@ -255,7 +255,7 @@ whose link has not been shared is already private.
   and "New vacancy" — sits in the toolbar beneath it (§07.18).
 - Each tab carries its own count, computed under the search and not under the tab (§07.20).
 - Category chips sit under the title, in the same cell.
-- Rows link to the vacancy detail page; the trailing "⋮" holds the row's five actions (§07.22)
+- Rows link to the vacancy detail page; the trailing "⋮" holds the row's six actions (§07.22)
   and never navigates.
 - Empty state: "No vacancies yet." when the organization has none, "No vacancies match these
   filters." when a search emptied the list (§07.21).
@@ -285,7 +285,7 @@ whose link has not been shared is already private.
   ([05 §05](05-board.md)) and is named here, once, rather than on every card.
 - The description is clamped to three lines; `View more` appears only when the clamp cuts
   (§08.29). A vacancy without one offers `Add a description` in its place (§08.30).
-- "⋮" holds "Edit vacancy", "Close vacancy" / "Reopen vacancy", and "Delete vacancy" (disabled
+- "⋮" holds "Open booking page", "Edit vacancy", "Close vacancy" / "Reopen vacancy", and "Delete vacancy" (disabled
   when the vacancy has applications, with the reason drawn in the row itself — §07.23).
 
 ### New / Edit vacancy dialog
@@ -294,17 +294,17 @@ whose link has not been shared is already private.
 ┌──────────────────────────────────────────────┐
 │  New vacancy                                 │
 │                                              │
-│  TITLE                                       │
+│  Title                                       │
 │  [__________________________________]        │
-│  INTERVIEWER                                 │
+│  Categories                                  │
+│  [ React ×] [ Senior ×] [type to add…    ]   │
+│  Interviewer                                 │
 │  [ Pat Owner                        ▾]       │
 │    Sam Manager                               │
 │    Alex Kaminski — No Microsoft 365 mailbox  │  ← disabled
-│  INTERVIEW LENGTH                            │
+│  Interview length                            │
 │  ( )15  ( )30  ( )45  (•)60  minutes         │
-│  CATEGORIES                                  │
-│  [ React ×] [ Senior ×] [type to add…    ]   │
-│  DESCRIPTION                                 │
+│  Description                                 │
 │  [__________________________________]        │
 │                                              │
 │              [ Cancel ]  [ Create vacancy ]  │
@@ -321,8 +321,9 @@ whose link has not been shared is already private.
 3. User fills title, picks an interviewer and a length, optionally adds categories and a
    description.
 4. User submits. System sends `POST …/hiring/vacancies`.
-5. On success the dialog closes, the banner reads "Vacancy created", and the browser navigates to the
-   new vacancy's detail page with the booking link visible.
+5. On success the dialog closes, the browser navigates to the new vacancy's screen, and a toast
+   there reads "Vacancy created" once. Nothing on the screen prints the link; the header's button
+   copies it (§08.28).
 
 ### Flow: add a category that does not exist yet
 
@@ -466,12 +467,13 @@ Errors:
 | Delete blocked | "Close this vacancy instead — it has candidates" |
 | Forbidden | "You do not have permission to manage vacancies" |
 | Member removal blocked (user-management 04) | "Reassign or close this member's open vacancies first" |
-| Banner — created | "Vacancy created" |
-| Banner — updated | "Vacancy updated" |
-| Banner — closed | "Vacancy closed" |
-| Banner — reopened | "Vacancy reopened" |
-| Banner — link copied | "Booking link copied" |
+| Toast — created | "Vacancy created" |
+| Toast — updated | "Vacancy updated" |
+| Toast — closed | "Vacancy closed" |
+| Toast — reopened | "Vacancy reopened" |
+| Toast — link copied | "Booking link copied" |
 | Empty list | "No vacancies yet." |
+| Load failed | "We couldn't load vacancies. Try again." |
 | Network error | "Something went wrong. Please try again." |
 
 ## UI Notes
@@ -489,8 +491,14 @@ Errors:
   and it is [05](05-board.md)'s: a drag is applied optimistically and reverted on failure.
 - Both screens announce with **toasts**. The vacancy screen's banner slot went with the fold-in:
   the header is fixed and the board owns the height beneath it, so an announcement in the flow
-  would take a row of cards to say "Vacancy closed". The one message that keeps its place inline
-  is the board's own load failure, which is a state rather than an event and must not time out.
+  would take a row of cards to say "Vacancy closed". The board's own load failure is a toast as
+  well, and because it is a state rather than an event the region it stands in for shows an empty
+  state carrying the retry, so the way back does not leave with the toast ([05 §UI Notes](05-board.md)).
+- The list's first load, its empty state and its failed load stand on the page's own ground; the
+  list's card is drawn only around rows, as the candidate database's is
+  ([03 §05.23](03-candidate-database.md)). The vacancy screen's own first load and failed load
+  take the same shape: no header is drawn until the record arrives, and a load that fails is
+  announced by a toast with the retry left standing where the screen would be.
 - `?created=1` is consumed on arrival — the toast is raised once and the query is stripped, so a
   reload of a kept address does not re-announce a create that happened yesterday.
 - Required `data-testid` attributes:
@@ -517,7 +525,14 @@ Errors:
   - `toast-vacancy-created`, `toast-vacancy-updated`, `toast-vacancy-closed`,
     `toast-vacancy-reopened`, `toast-vacancy-deleted`, `toast-link-copied`,
     `toast-link-copy-failed`
-  - `vacancies-empty-state`, `vacancies-loading`
+  - `vacancies-empty-state`, `vacancies-loading`, `vacancies-error`, `vacancies-retry`,
+    `toast-vacancies-load-failed`
+  - `vacancy-loading`, `vacancy-load-error`, `vacancy-load-retry`, `toast-vacancy-load-failed`
+  - `vacancy-dialog-error`
+- **Covered elsewhere.** The failed load and the loader standing on the page's own ground are
+  the same mechanism every hiring screen draws from the same component, tested once on the
+  cheapest page that exercises it: [03 TC-H03-E2E-11](03-candidate-database.md). This spec adds
+  no case for them; TC-H01-E2E-01 asserts the empty state's ground.
 
 ## Out of Scope
 
@@ -654,12 +669,14 @@ Errors:
   4. Submit.
   5. On the vacancy screen, click "Copy booking link".
 - **Expected Result:**
+  0. On arrival, before step 1's click, the organization has no vacancies: the empty state stands
+     on the page's own ground, and no list card is drawn around it.
   1. After step 4 the dialog closes, "Vacancy created" appears **once**, and the vacancy opens —
      header, meta line and its (empty) board on one route.
   2. After step 5, "Booking link copied" appears and the clipboard holds the title's slug plus a
      random suffix. Nothing on the page prints the link (§08.28), so the clipboard is where it is
      read from.
-- **Selectors:** `vacancy-new-button`, `vacancy-dialog`, `vacancy-title-input`, `vacancy-interviewer-select`, `vacancy-duration-60`, `vacancy-categories-input`, `vacancy-submit-button`, `toast-vacancy-created`, `vacancy-copy-link-button`, `toast-link-copied`.
+- **Selectors:** `vacancy-new-button`, `vacancy-dialog`, `vacancy-title-input`, `vacancy-interviewer-select`, `vacancy-duration-60`, `vacancy-categories-input`, `vacancy-submit-button`, `toast-vacancy-created`, `vacancy-copy-link-button`, `toast-link-copied`, `vacancies-empty-state`, `vacancies-list` (asserted absent beside it).
 
 ### TC-H01-E2E-02: Ineligible members are visible but disabled, with a reason
 - **Level:** E2E

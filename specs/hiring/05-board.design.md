@@ -68,8 +68,9 @@ are on, and its name is a label on that ground rather than a title above it.
 
 The column names were uppercase in the earlier design and are not any more. The system's content rule is
 explicit — *"Sentence case for everything except nav section titles… Tab labels (`PageTabs`) are the
-one place text is fully UPPERCASE"* — and the narrow board's tab strip **is** `PageTabs`, so the one
-uppercase on this screen is already spent. `SectionLabel` → headings (D4) supplies the rest: the
+one place text is fully UPPERCASE"*, since amended to name a panel `Card`'s micro-label `title`
+([§66](../design-system/decisions.md)) as the other — and the narrow board's tab strip **is**
+`PageTabs`, so the uppercase this screen may paint is already spent. `SectionLabel` → headings (D4) supplies the rest: the
 name is the column's own `<h2>` in the outline under `PageTitle`'s `<h1>`, not a caption.
 
 ## The card
@@ -187,7 +188,7 @@ field the response carries for no reader is a promise the next change has to kee
 | Narrow column picker | `PageTabs` ([§45](../design-system/decisions.md)) | `tabs` (object form), `active`, `onChange`, `label` | `board-tab-{status}` |
 | Move failure · stale board | `Toast` in `ToastHost` ([§54](../design-system/decisions.md)) | `tone="error"`, `onDismiss` | `toast-move-failed` · `toast-board-stale` |
 | Loading | `Preloader` | default 12/7, centred in the region | `board-loading` |
-| Load failure | `InfoBanner` + `Button` | `variant="error"`, `role="alert"` | `board-load-error` · `board-load-retry` |
+| Load failure | `Toast tone="error"` in `ToastHost`, and `EmptyState` + retry `Button` in the region's place | the toast leaves; the state stays with the way back inside it (§65) | `toast-board-load-failed` · `board-load-error` · `board-load-retry` |
 
 The `toast-*` ids stay, and they are toasts again. They named the **announcement** rather than the
 component drawing it — the call Phase 3 made when the first five of these moved off `Toast` onto
@@ -195,11 +196,16 @@ component drawing it — the call Phase 3 made when the first five of these move
 descriptions. `board-loading-skeleton` does not stay: it named the component, there is no skeleton,
 and Phase 3's `vacancies-loading` is the shape to follow.
 
-**A move that failed is a toast; a board that could not be read is not.** The distinction is
-whether the message is still true: a failed drag is over — it happened, it is announced, it goes
-away — while a board that would not load is a state, and it is standing in for the whole region.
-A toast that timed out over an empty board would leave nothing at all saying why it is empty, and
-the retry inside the message would go with it.
+**A move that failed is a toast, and so is a board that could not be read — but the second one
+also leaves something behind.** The distinction is whether the message is still true: a failed
+drag is over — it happened, it is announced, it goes away — while a board that would not load is a
+state, and it is standing in for the whole region. So its toast is the announcement, and the
+region shows an `EmptyState` carrying the retry, in the shape the candidate database gives an
+empty list: a toast that timed out over an empty board would otherwise leave nothing at all
+saying why it is empty, and the retry inside the message would go with it. For a while the
+whole message was an `InfoBanner` kept in the flow on that argument; the argument was right
+about the region and wrong about the remedy
+([ADR 0010](../../docs/adr/0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md)).
 
 `BoardColumn` owns the placeholder, because the placeholder is a slot in the column rather than a
 state of the card — the card being dragged is not rendered at all while it is in flight. The column
@@ -241,10 +247,9 @@ slot means, and what a drop writes are all the screen's.
   Its height is **measured from the card at pick-up**, so the gap is exactly the size of the thing
   going into it and the column does not resize as the card leaves it.
 - **Optimistic move** — the card renders in its new place before the request resolves. On failure it
-  returns and `toast-move-failed` appears **directly under `PageHeader`**, in flow, which is the
-  banner slot [§24](../design-system/decisions.md) settled in Phase 3. It pushes the board down
-  rather than covering the column being looked at, a new notice replaces the old rather than
-  stacking, and nothing auto-dismisses — that would be a toast wearing a different component.
+  returns and `toast-move-failed` is raised as a `Toast` ([§54](../design-system/decisions.md)),
+  top-right over the page: nothing on the board moves to say so, a second failure adds a line
+  rather than replacing the first, and the plate withdraws itself on the host's clock.
 - **Drop into `Didn't pass` or `Offer`** — the move completes, then the card page opens with
   Conclusion focused. The navigation happens *after* the move is confirmed, so a failed move never
   navigates.

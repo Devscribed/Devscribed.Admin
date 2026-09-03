@@ -13,8 +13,9 @@ import {
   formatShortWhen,
   type ApplicationStatus,
 } from '@devscribed/validation';
-import { BoardCard, BoardColumn, Button, EmptyState, InfoBanner, PageTabs, Preloader } from '@devscribed/ds';
+import { BoardCard, BoardColumn, EmptyState, PageTabs, Preloader } from '@devscribed/ds';
 import type { Board, BoardCardData } from '@/hiring/types';
+import { LoadFailed } from '@/hiring/LoadFailed';
 import { useMediaQuery } from '@/hiring/useMediaQuery';
 import type { QueuedToast } from '@/hiring/useToasts';
 import { columnWithout, useBoardDrag, withMove, type Placement } from './useBoardDrag';
@@ -231,18 +232,18 @@ export function VacancyBoard({
 
   if (state.status === 'error') {
     // A board that could not be read is not a move that failed, and must not borrow that
-    // sentence — nothing has been dragged yet. It is also the one message on this screen
-    // that is not transient: a toast that timed out would leave an empty region with
-    // nothing saying why, so this one keeps its place in the flow.
+    // sentence — nothing has been dragged yet. The screen that owns the fetch raised the
+    // toast; this is what stays in the region the board would have filled, with the way
+    // back inside it, so the toast's leaving does not leave an empty half-screen with
+    // nothing saying why.
     return (
-      <InfoBanner variant="error" role="alert" data-testid="board-load-error">
-        <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          {MESSAGES.generic}
-          <Button onClick={() => void reload()} data-testid="board-load-retry">
-            {HIRING_MESSAGES.card.retry}
-          </Button>
-        </span>
-      </InfoBanner>
+      <LoadFailed
+        message={MESSAGES.generic}
+        retryLabel={HIRING_MESSAGES.card.retry}
+        onRetry={() => void reload()}
+        retryTestId="board-load-retry"
+        data-testid="board-load-error"
+      />
     );
   }
 

@@ -13,7 +13,6 @@ import {
   BackTo,
   Badge,
   Button,
-  Card,
   ConfirmDialog,
   PageTitle,
   Popover,
@@ -21,13 +20,18 @@ import {
   ToastHost,
 } from '@devscribed/ds';
 import { rememberCandidateOrigin } from '@/hiring/candidate-origin';
+import { LoadFailed } from '@/hiring/LoadFailed';
 import { useToasts } from '@/hiring/useToasts';
 import { VacancyStatusBadge } from '@/hiring/StatusBadge';
 import type { Board, Vacancy } from '@/hiring/types';
 import { VacancyDialog } from '../VacancyDialog';
 import { VacancyBoard, type BoardState } from './VacancyBoard';
 
-type State = { status: 'loading' } | { status: 'ready'; vacancy: Vacancy } | { status: 'gone' };
+type State =
+  | { status: 'loading' }
+  | { status: 'ready'; vacancy: Vacancy }
+  | { status: 'error' }
+  | { status: 'gone' };
 
 /** Which of the two confirmations is up. */
 type Pending = 'close' | 'delete';
@@ -114,16 +118,25 @@ export default function VacancyDetailPage({
   }, [orgId, vacancyId]);
 
   const load = useCallback(async (): Promise<void> => {
-    const response = await fetch(`/api/organizations/${orgId}/hiring/vacancies/${vacancyId}`, {
-      credentials: 'same-origin',
-    });
-    if (response.status === 403 || response.status === 404) {
-      setState({ status: 'gone' });
-      return;
+    try {
+      const response = await fetch(`/api/organizations/${orgId}/hiring/vacancies/${vacancyId}`, {
+        credentials: 'same-origin',
+      });
+      if (response.status === 403 || response.status === 404) {
+        setState({ status: 'gone' });
+        return;
+      }
+      if (!response.ok) {
+        setState({ status: 'error' });
+        push({ message: MESSAGES.generic, tone: 'error', testId: 'toast-vacancy-load-failed' });
+        return;
+      }
+      setState({ status: 'ready', vacancy: await response.json() });
+    } catch {
+      setState({ status: 'error' });
+      push({ message: MESSAGES.generic, tone: 'error', testId: 'toast-vacancy-load-failed' });
     }
-    if (!response.ok) return;
-    setState({ status: 'ready', vacancy: await response.json() });
-  }, [orgId, vacancyId]);
+  }, [orgId, vacancyId, push]);
 
   const loadBoard = useCallback(async (): Promise<void> => {
     try {
@@ -142,14 +155,18 @@ export default function VacancyDetailPage({
       }
       if (!response.ok) {
         setBoardState({ status: 'error' });
+        push({ message: MESSAGES.generic, tone: 'error', testId: 'toast-board-load-failed' });
         return;
       }
       const board: Board = await response.json();
       setBoardState({ status: 'ready', board });
     } catch {
+      // Announced here, where the request is owned; the board draws what stays behind
+      // once the toast has gone — the failure in the region's place, with its retry.
       setBoardState({ status: 'error' });
+      push({ message: MESSAGES.generic, tone: 'error', testId: 'toast-board-load-failed' });
     }
-  }, [orgId, vacancyId]);
+  }, [orgId, vacancyId, push]);
 
   useEffect(() => {
     void load();
@@ -220,18 +237,35 @@ export default function VacancyDetailPage({
   if (state.status === 'gone') notFound();
 
   if (state.status === 'loading') {
+    // On the page's own ground, as every hiring screen's first load is: a bordered white
+    // box holding three dots is a surface drawn around nothing.
     return (
-      <Card>
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-7)' }}>
-          <Preloader aria-hidden />
-          <span
-            aria-live="polite"
-            style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}
-          >
-            Loading vacancy
-          </span>
-        </div>
-      </Card>
+      <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-7)' }}>
+        <Preloader data-testid="vacancy-loading" aria-hidden />
+        <span
+          aria-live="polite"
+          style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}
+        >
+          Loading vacancy
+        </span>
+      </div>
+    );
+  }
+
+  if (state.status === 'error') {
+    // The toast said it; this is what stays, with the way back inside it (§65). The host
+    // is mounted on this state too — the failure was raised into it a moment ago.
+    return (
+      <>
+        <LoadFailed
+          message={MESSAGES.generic}
+          retryLabel={HIRING_MESSAGES.card.retry}
+          onRetry={() => void load()}
+          retryTestId="vacancy-load-retry"
+          data-testid="vacancy-load-error"
+        />
+        <ToastHost toasts={toasts} onDismiss={dismiss} />
+      </>
     );
   }
 

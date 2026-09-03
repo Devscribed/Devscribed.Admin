@@ -208,6 +208,8 @@ test.describe('Category library', () => {
     await expect(page.getByTestId('categories-empty')).toHaveText(
       'No categories yet. Add one when you create a vacancy.',
     );
+    // On the page's own ground: the card is the table's, and there is no table.
+    await expect(page.getByTestId('categories-list')).toHaveCount(0);
   });
 });
 

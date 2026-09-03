@@ -118,13 +118,17 @@ me?* — chosen by a tab rather than by a sidebar row.
 
 ### 05. Volume & Empty States
 
-20. The list is **paginated**, 25 rows to a page, with a **visible result count** above it —
-    "128 candidates" and, when narrowed, "12 of 128". Infinite scroll was rejected: "how many
-    match?" is the question this page exists to answer, and it is the one pattern that cannot
-    show it.
+20. The list is **paginated**, 25 rows to a page, with a **visible result count** above it
+    wherever the scope strip is drawn — the count in each scope tab's label, `All (12)` beside
+    `Assigned to me (4)`, computed under the filters that are applied (§08.38). A caller who gets
+    no strip (§08.41) — an assigned interviewer, whose list is one scope — reads no count: the size
+    of their list is the rows and the page strip, and nothing else on the screen states it. There
+    is no separate count line and nothing stands in its place while a request is in flight: the
+    rows dim (§09), and the tab counts move when the answer lands. Infinite scroll was rejected: "how many match?" is the question this page
+    exists to answer, and it is the one pattern that cannot show it.
 
-    The two controls answer two questions and neither replaces the other: the count says how many
-    match, the strip says which twenty-five of them are on screen. The strip is **not drawn at
+    The two controls answer two questions and neither replaces the other: the tab's count says
+    how many match, the strip says which twenty-five of them are on screen. The strip is **not drawn at
     all** when the result fits on one page — a control offering one choice is not a choice, which
     is the same rule the scope tabs follow (§08.41). The current page is stated with
     `aria-current="page"` and not only painted.
@@ -135,8 +139,10 @@ me?* — chosen by a tab rather than by a sidebar row.
     one they started on.
 21. **Empty database** — "No candidates yet. Share a booking link to start."
 22. **No results** — "No candidates match these filters", with a clear-filters action.
-23. **Loading** — skeleton rows matching the table layout.
-24. **Error** — a friendly message with a retry.
+23. **Loading** — a centred loader on the page's own ground, with a polite announcement beside
+    it. No card is drawn until there are rows, and no skeleton.
+24. **Error** — an error toast, and the same friendly message drawn where the rows would be with
+    a retry inside it, so the way back is still on the page after the toast has gone.
 
 ### 06. My Interviews
 
@@ -409,10 +415,9 @@ behind both.
 ┌────────────────────────────────────────────────────────────────────────────────────┐
 │  Candidates                                                  Times in Europe/Minsk │
 │                                                                                    │
-│  ┌ ALL (128) ┐ ASSIGNED TO ME (4)      [🔍 Search name or email…] [ Filters (3) ]  │
-│  ─────────────                                                                     │
+│  ┌ ALL (12) ┐  ASSIGNED TO ME (4)      [🔍 Search name or email…] [ Filters (3) ]  │
+│  ────────────                                                                      │
 │                                                                                    │
-│  12 of 128 candidates                                                              │
 │  ┌──────────────────────────────────────────────────────────────────────────────┐  │
 │  │ Name             │ Email          │ Vacancy      │ Interview date│Status │  ⋮ │  │
 │  ├──────────────────┼────────────────┼──────────────┼───────────────┼───────┼────┤  │
@@ -454,7 +459,7 @@ interviewer, and it is the one thing on the row that the scope removes.
 ```
 
 The panel hangs from the navbar rather than over it, and the list stays visible beside it: every
-control applies at once, so the count under the toolbar moves while the drawer is still open.
+control applies at once, so the tab counts in the toolbar move while the drawer is still open (§05.20).
 
 ### Assigned to me
 
@@ -468,7 +473,6 @@ first. An interviewer's whole hiring navigation is `Members` and `Candidates`.
 │  ALL (128) ┌ ASSIGNED TO ME (4) ┐                                                  │
 │  ──────────────────────────────────────────────────────────────────────────────────│
 │                                                                                    │
-│  4 of 128 candidates                                                               │
 │  ┌──────────────────────────────────────────────────────────────────────────────┐  │
 │  │ Name             │ Email          │ Vacancy      │ Interview date│Status │  ⋮ │  │
 │  ├──────────────────┼────────────────┼──────────────┼───────────────┼───────┼────┤  │
@@ -490,7 +494,7 @@ every row.
 1. `admin` opens Candidates.
 2. Selects the category `React` in the category filter.
 3. Adds a criterion filter: `English`, `at least`, `B1`.
-4. System sends one request with both clauses; the count updates to "12 of 128".
+4. System sends one request with both clauses; the `All` tab reads `All (12)` (§05.20).
 5. Opening a row lands on that candidate's card.
 
 ### Flow: search narrows an already-filtered set
@@ -668,7 +672,7 @@ Response `200`:
 | Column headers | Name · Email · Vacancy · Interview date · Status · Actions |
 | Row menu | "View in calendar" · "Reschedule interview" · "Cancel interview" · "View candidate" · "Delete candidate" |
 | Row menu — accessible name | "Actions for {name}" |
-| `View in calendar` toast | "Opening the interview in the calendar…" |
+| `View in calendar` toast | "Not implemented yet" |
 | Delete confirmation — title | "Delete {name}?" |
 | Delete confirmation — body | "{n} applications and {m} assessments go with them. They come back, and all of it with them, if they book again with the same email." |
 | Delete confirmation — nothing recorded | "Nothing has been recorded against them yet. They come back if they book again with the same email." |
@@ -683,8 +687,10 @@ candidates sit in a list they cannot see.
 
 ## UI Notes
 
-- The result count sits directly above the table and updates with every request. It is the only
-  thing left between the toolbar and the table; the page strip sits under it.
+- Nothing sits between the toolbar and the table. The count lives in the scope tabs' labels and
+  updates with every request; the page strip sits under the table.
+- The first load, an empty database, a search or filter that matches nobody and a failed load all
+  stand on the page's own ground; the list's card is drawn only around rows.
 - Filter chips are removable individually, inside the drawer; `Clear filters` appears there
   whenever one is applied.
 - A criterion chip's operator and value are its own, and changing the operator resets the value
@@ -693,7 +699,7 @@ candidates sit in a list they cannot see.
 - The `Interview date` cell is the date over the time, centred; the `Vacancy` cell is the title
   over its interviewer. Both are two-line cells in a table whose row grows to hold them.
 - Required `data-testid` attributes:
-  - `candidates-list`, `candidates-search-input`, `candidates-count`, `candidates-timezone`
+  - `candidates-list`, `candidates-search-input`, `candidates-timezone`
   - `candidates-filters-open`, `candidates-filters`, `candidates-filters-close`,
     `candidates-filters-apply`, `candidates-clear-filters`
   - `candidates-filter-status`, `candidates-filter-position`, `candidates-filter-category`,
@@ -712,7 +718,8 @@ candidates sit in a list they cannot see.
   - `candidate-delete-dialog`, `candidate-delete-confirm-{id}`, `toast-candidate-deleted`
   - `candidates-pagination`, `candidates-page-{n}`
   - `candidates-scope-tabs`, `candidates-scope-all`, `candidates-scope-mine`
-  - `candidates-empty-state`, `candidates-no-results`, `candidates-loading`
+  - `candidates-empty-state`, `candidates-no-results`, `candidates-clear-all`, `candidates-loading`
+  - `candidates-error`, `candidates-retry`, `toast-candidates-load-failed`
 
 ## Out of Scope
 
@@ -1020,11 +1027,11 @@ candidates sit in a list they cannot see.
   3. Add the criterion `English`, then set its operator to `at least` and its value to `B1`.
   4. Remove the category chip.
 - **Expected Result:**
-  1. The count shows the unfiltered total and the button reads `Filters`.
-  2. It narrows after each filter, reads "n of total", and the button counts what is applied.
+  1. The `All` tab's count shows the unfiltered total and the button reads `Filters`.
+  2. It narrows after each filter, and the button counts what is applied. Nothing is drawn above the table while a request is in flight — the rows dim and the tab's count moves when the answer lands.
   3. A criterion chip with no value yet narrows nothing and is not counted.
-  4. Removing a chip widens the result set and updates both the count and the button.
-- **Selectors:** `candidates-count`, `candidates-filters-open`, `candidates-filter-category`, `candidates-criteria-filter-add`, `candidates-criteria-option-{id}`, `criteria-filter-op-0`, `criteria-filter-value-0`, `candidates-filter-chip-{id}`.
+  4. Removing a chip widens the result set and updates both the tab's count and the button.
+- **Selectors:** `candidates-scope-all`, `candidates-filters-open`, `candidates-filter-category`, `candidates-criteria-filter-add`, `candidates-criteria-option-{id}`, `criteria-filter-op-0`, `criteria-filter-value-0`, `candidates-filter-chip-{id}`.
 
 ### TC-H03-E2E-02: Search debounces and composes with filters
 - **Level:** E2E
@@ -1034,8 +1041,8 @@ candidates sit in a list they cannot see.
   2. Wait for the debounce.
 - **Expected Result:**
   1. No request fires during the burst.
-  2. One request fires afterwards carrying both the term and the existing filter; the count reflects both.
-- **Selectors:** `candidates-search-input`, `candidates-count`.
+  2. One request fires afterwards carrying both the term and the existing filter; the `All` tab's count reflects both.
+- **Selectors:** `candidates-search-input`, `candidates-scope-all`.
 
 ### TC-H03-E2E-03: A user interviewer sees only their own candidates
 - **Level:** E2E
@@ -1095,7 +1102,7 @@ candidates sit in a list they cannot see.
   2. The drawer closes, the filter stays applied, and focus returns to the button that opened it.
   3. The status filter survived the tab change; the Interviewer field is **absent** in this scope.
   4. Every filter is dropped and the tab is not — the list is still `Assigned to me`.
-- **Selectors:** `candidates-filters-open`, `candidates-filters`, `candidates-filter-status`, `candidates-filter-interviewer`, `candidates-filters-apply`, `candidates-clear-filters`, `candidates-scope-mine`, `candidates-count`.
+- **Selectors:** `candidates-filters-open`, `candidates-filters`, `candidates-filter-status`, `candidates-filter-interviewer`, `candidates-filters-apply`, `candidates-clear-filters`, `candidates-scope-mine`.
 
 ### TC-H03-E2E-07: The page strip pages, and disappears when it fits
 - **Level:** E2E
@@ -1106,11 +1113,11 @@ candidates sit in a list they cannot see.
   3. Press page 2.
   4. Search for a term matching one candidate.
 - **Expected Result:**
-  1. 25 rows, and the count reads "26 candidates" — org-wide and unfiltered, so it does not move with the page.
+  1. 25 rows, and the `All` tab reads `All (26)` — org-wide and unfiltered, so it does not move with the page.
   2. Page 1 carries `aria-current="page"`; page 2 does not.
-  3. One row, and `aria-current` has moved with it. The count is unchanged.
+  3. One row, and `aria-current` has moved with it. The tab's count is unchanged.
   4. Back to page 1, and the strip is **gone**: what is left fits on one page.
-- **Selectors:** `candidates-pagination`, `candidates-page-{n}`, `candidates-count`, `candidate-row-{id}`.
+- **Selectors:** `candidates-pagination`, `candidates-page-{n}`, `candidates-scope-all`, `candidate-row-{id}`.
 
 ### TC-H03-E2E-08: A row is acted on without being opened
 - **Level:** E2E
@@ -1144,8 +1151,35 @@ candidates sit in a list they cannot see.
   2. Read the address bar.
   3. Reload.
 - **Expected Result:**
-  1. The count moves twice, as it does for any filter.
+  1. The `All` tab's count moves twice, as it does for any filter.
   2. The address carries `search` and `categoryId`, and carries **neither** `scope` nor `page` — defaults are absent, not spelled out ([§09.53](#09-filter-drawer)).
-  3. The reload is not a reset: the search field, the `Filters (1)` count and the count line all come back as they were.
-- **Selectors:** `candidates-filter-category`, `candidates-search-input`, `candidates-filters-open`, `candidates-count`.
+  3. The reload is not a reset: the search field, the `Filters (1)` count and the tab's count all come back as they were.
+- **Selectors:** `candidates-filter-category`, `candidates-search-input`, `candidates-filters-open`, `candidates-scope-all`.
+
+### TC-H03-E2E-11: A list that could not be read says so, and keeps its retry after the toast has gone
+- **Level:** E2E
+- **Preconditions:** logged in as `admin`; one candidate; the candidates endpoint made to answer slowly and then fail.
+- **Steps:**
+  1. Open Candidates.
+  2. Wait for the answer.
+  3. Restore the endpoint and press `Try again`.
+- **Expected Result:**
+  1. While the answer is on its way, the loader stands on the page's own ground and no list card is drawn.
+  2. An error toast reads "We couldn't load candidates. Try again."; where the rows would be, the same sentence stands on the page's own ground with a `Try again` button inside it, and still no list card is drawn.
+  3. The failure state is gone and the row is on screen, inside the list's card.
+- **Selectors:** `candidates-loading`, `toast-candidates-load-failed`, `candidates-error`, `candidates-retry`, `candidates-list`, `candidate-row-{id}`.
+- **Covers:** the load-failure mechanism and the loader's ground for every hiring screen — the vacancies list, the vacancy screen, the libraries, the candidate card and the board draw the same composition from the same component, and are not tested again for it.
+
+### TC-H03-E2E-12: An empty database and a filter that matches nobody are told apart, and the way out clears everything
+- **Level:** E2E
+- **Preconditions:** logged in as `admin`; an organization with no candidates, then one with three.
+- **Steps:**
+  1. Open Candidates with no candidates at all.
+  2. With three candidates, apply a filter and a search that match nobody.
+  3. Press the button inside the empty state.
+- **Expected Result:**
+  1. The empty-database sentence stands on the page's own ground, with no way out drawn — a booking link is what fills it — and no list card.
+  2. The no-results sentence stands in the same place, the `All` tab reads `All (0)`, and the state holds the one control that empties the filters **and** the search.
+  3. Every filter and the search are gone, and the `All` tab reads `All (3)`.
+- **Selectors:** `candidates-empty-state`, `candidates-no-results`, `candidates-clear-all`, `candidates-scope-all`, `candidates-list`.
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 
 /**
  * The queue behind `ToastHost` (decisions §54).
@@ -20,7 +20,9 @@ import { useCallback, useRef, useState } from 'react';
  *   would silently collapse them into one.
  *
  * Nothing here times anything: `ToastHost` owns the clock (`autoClose`, paused while a
- * pointer is over the column) and calls `dismiss` with the id of whatever it dropped.
+ * pointer is over the column) and calls `dismiss` with the id of whatever it dropped. The
+ * one thing a caller may say about the clock is `autoClose: 0`, which is how a failure
+ * that carries its own retry stays standing until that retry — or the × — is pressed.
  */
 
 /**
@@ -34,16 +36,26 @@ export type ToastTone = 'default' | 'info' | 'success' | 'warning' | 'error';
 
 export interface QueuedToast {
   id: number;
-  message: string;
+  /**
+   * A sentence, or a sentence with a control in it. A failure that can be retried carries
+   * its retry *in* the message, so the way back is on the plate that reports the need for it.
+   */
+  message: ReactNode;
   /** Omitted is `default`, which is what a confirmation is. */
   tone?: ToastTone;
   /** Names the announcement, not the component — the same rule the card's banners follow. */
   testId?: string;
+  /**
+   * Overrides the host's clock for this one message. `0` leaves it standing: a failure whose
+   * plate holds the retry cannot be allowed to take the retry with it.
+   */
+  autoClose?: number;
 }
 
 export interface Toasts {
   toasts: QueuedToast[];
-  push: (toast: Omit<QueuedToast, 'id'>) => void;
+  /** Returns the id, so a caller that raised a standing message can take it down again. */
+  push: (toast: Omit<QueuedToast, 'id'>) => number;
   /** Widened to the host's own id type, which allows a string. Ours are always numbers. */
   dismiss: (id: string | number) => void;
 }
@@ -52,10 +64,11 @@ export function useToasts(): Toasts {
   const [toasts, setToasts] = useState<QueuedToast[]>([]);
   const nextId = useRef(0);
 
-  const push = useCallback((toast: Omit<QueuedToast, 'id'>) => {
+  const push = useCallback((toast: Omit<QueuedToast, 'id'>): number => {
     nextId.current += 1;
     const id = nextId.current;
     setToasts((current) => [...current, { ...toast, id }]);
+    return id;
   }, []);
 
   const dismiss = useCallback((id: string | number) => {

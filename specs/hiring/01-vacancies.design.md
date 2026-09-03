@@ -102,14 +102,18 @@ the session before rendering anything, so a gated row never flashes into view an
   rounds its first and last rows. `clip` stays at its default: the row kebab opens *inside* the
   card now, but `Popover` portals its menu ([§55](../design-system/decisions.md)), so nothing it
   raises is clipped by the surface it was opened from ([§12](../design-system/decisions.md)).
-- **One surface at every state.** The loader and the empty message render *inside* that card,
-  under the header row, rather than replacing it. This is the system's own table screen, and what the
-  members list already does. A refetch over rows already on screen dims them instead
+- **The card is drawn only around rows.** The first load's `Preloader` and the empty message
+  stand on the page's own ground, under the toolbar, and the card appears when the rows do —
+  the shape the candidate database gives every state ([03 design](03-candidate-database.design.md)),
+  and what Projects, Clients and Requests already do. A bordered white slab around three dots, or
+  around one line of grey text, is a surface drawn around nothing
+  ([ADR 0010](../../docs/adr/0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md)).
+  A refetch over rows already on screen dims them instead
   (`Table busy`, [§34](../design-system/decisions.md)) — a table that collapsed and re-expanded on
   every keystroke would reflow the page under the reader for no information at all.
 - Column alignment is the system's positional rule — first left, last right, everything between
   centred — so `Length` and `Candidates` read centred, and the kebab takes the last column's own
-  80px. They were right-aligned Grotesk numerals in the earlier design; the system has one family and no mono
+  96px ([§60](../design-system/decisions.md)). They were right-aligned Grotesk numerals in the earlier design; the system has one family and no mono
   treatment to align.
 - Category chips sit on a second line inside the title cell.
 
@@ -175,7 +179,9 @@ a different component, and the point of the reversal is that the system has no t
 
 The dialog's own error banner is the same component in the same role, at the top of the form.
 
-**Phases 4 and 6 follow this**: header, then banner, then body.
+**Phases 4 and 6 followed this**: header, then banner, then body. Neither draws the banner any
+more — every announcement on both is a `Toast`, and the slot is gone from them as it is from
+here ([ADR 0010](../../docs/adr/0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md)).
 
 > **Amended by Phase 7 — and the reversal is half-undone, deliberately.** The system has a toast now
 > ([§54](../design-system/decisions.md), built in Phase 5 because the candidate list had more than
@@ -199,13 +205,15 @@ The dialog's own error banner is the same component in the same role, at the top
 > flow does not push anything down, it takes a row of cards away to say "Vacancy closed", and
 > gives it back when it is dismissed. The vacancy screen raises `Toast`s.
 >
-> One message stays inline, and it sharpens the rule rather than bending it: the **board's load
-> failure**. Everything the slot ever held was an *event* — created, updated, closed, copied — and
-> an event is over by the time it is announced. A board that would not load is a **state**, it is
-> standing in for the whole region, and the retry lives inside it. A toast that timed out there
-> would leave an empty half-screen with nothing saying why. So: **events announce and leave;
-> states are drawn and stay.** That is the distinction the slot was approximating with "does not
-> time out", said in terms of the message rather than of the component.
+> The **board's load failure** was, for a while, the one message kept inline, on the argument
+> that a board that would not load is a *state* standing in for the whole region and a toast
+> that timed out there would leave an empty half-screen with nothing saying why. The argument
+> was right about the region and wrong about the remedy
+> ([ADR 0010](../../docs/adr/0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md)):
+> the failure is now a `Toast tone="error"` **and** an `EmptyState` carrying the retry, drawn in the
+> region's place. **Events announce and leave; states are drawn and stay** still holds — the toast
+> is the announcement, and the state that stays is the empty state, not a banner. Nothing on
+> either screen is an `InfoBanner` any more except the dialogs' own form-level error.
 >
 > The consequence that had to be handled in code: a slot is idempotent and a queue is not. Setting
 > the same banner twice showed it once; pushing the same toast twice is two lines. `?created=1` is
@@ -214,7 +222,7 @@ The dialog's own error banner is the same component in the same role, at the top
 
 ### Headings
 
-`SectionLabel` is gone (D4; the system captions nothing, and `PageTabs` is its only uppercase). Each of
+`SectionLabel` is gone (D4; the system captions nothing, and its uppercase treatments are two — `PageTabs` and a panel `Card`'s own micro-label `title`, [§66](../design-system/decisions.md) — neither of which a screen paints by hand). Each of
 the detail page's three captions becomes a **card title**, which is the system's own header line at the
 headline-6 step:
 
@@ -249,8 +257,8 @@ this arrived at its third and final shape.
 
 Delete stays **disabled rather than hidden** — a missing action is indistinguishable from a bug —
 and the row stays **focusable** while disabled (`aria-disabled`, never the `disabled` attribute),
-because a reason nobody can reach is the same failure one step later. Full reasoning in the
-ledger's note on §22. Phases 5 and 6 own the other two `Tooltip` sites and are not bound to this
+because a reason nobody can reach is the same failure one step later. Full reasoning in
+[§22](../design-system/decisions.md) and in `Popover`'s own file. Phases 5 and 6 own the other two `Tooltip` sites and are not bound to this
 answer: a menu row has somewhere to put a sentence, an inline icon may not.
 
 > **Amended by Phase 7.** The list's rows take the same menu, so there are now two blocked rows
@@ -297,7 +305,7 @@ a loss: the slot exists for a row whose destination needs explaining, and none o
 > throughout, which is why a screen reader was told and a member with a mouse was not, and why the
 > test that asserts the reason `toBeVisible()` passed the whole time: the id it names is on the
 > hidden node, and a 1×1 clipped span is visible as far as Playwright is concerned. Reachable is
-> not legible. See the decisions record's note on §62.
+> not legible. See [§62](../design-system/decisions.md); the clipping account is in `Popover`'s own file.
 
 ## Component map
 
@@ -316,8 +324,11 @@ a loss: the slot exists for a row whose destination needs explaining, and none o
 | Row confirmations | `ConfirmDialog` | `busy`, `closeOnAccept={false}`, `acceptTestId` | `vacancy-close-confirm`, `vacancy-delete-confirm` |
 | Category label | **`Badge status="neutral" size="s"`** ([§59](../design-system/decisions.md)) | — | `vacancy-category-chip-{id}` |
 | Status pill | `Badge` | `status="active"` open, `"inactive"` closed, **`outlined` for both** | `vacancy-status-{id}` |
-| Loading | `Preloader` | default 12/7, centred in the card | `vacancies-loading` |
-| Empty state | `EmptyState` | — | `vacancies-empty-state` |
+| Loading | `Preloader` | default 12/7, centred on the page's own ground under the toolbar — no card | `vacancies-loading` |
+| Empty state | `EmptyState` | on the page's own ground — no card | `vacancies-empty-state` |
+| Load failure · list | `Toast tone="error"` in `ToastHost`, and `EmptyState` + retry `Button` in the table's place | the toast leaves; the state stays with the way back inside it (§65) | `toast-vacancies-load-failed` · `vacancies-error` · `vacancies-retry` |
+| Loading · vacancy screen | `Preloader` | default 12/7, centred on the page's own ground — no card, a polite "Loading vacancy" beside it | `vacancy-loading` |
+| Load failure · vacancy screen | `Toast tone="error"` in `ToastHost`, and `EmptyState` + retry `Button` in the screen's place | the same composition as the list's | `toast-vacancy-load-failed` · `vacancy-load-error` · `vacancy-load-retry` |
 | Meta line | `Badge status="neutral"` + text, `·` separators `aria-hidden` | — | `vacancy-detail-categories` |
 | Description | plain `<div>`, `-webkit-line-clamp: 3` | — | `vacancy-description` |
 | Expand / collapse | text button, `--color-blue`, `aria-expanded` | — | `vacancy-description-toggle` |
@@ -326,18 +337,19 @@ a loss: the slot exists for a row whose destination needs explaining, and none o
 | The board | see [05 design](05-board.design.md) | — | `board` |
 | New / Edit | `Modal` | `title`, `style={{ width: 520 }}`. Field order **Title · Categories · Interviewer · Interview length · Description** | `vacancy-dialog` |
 | Dialog footer | `FormActions` | `align="full"` | — |
+| Dialog error | `InfoBanner` | `variant="error"`, `role="alert"`, at the top of the form — the one banner left on these screens, a form-level server error beside what was submitted | `vacancy-dialog-error` |
 | Title field | `TextInput` | `label`, **`required`**, `id`, `error`, `errorId` | `vacancy-title-input` |
 | Interviewer | `Select` + **disabled options** | **`required`**, `hint`, `hintId`, option `disabled`/`hint` | `vacancy-interviewer-select` |
 | Length | native radios + `FieldLabel` + `RequiredMark` | `role="radiogroup"` | `vacancy-duration-{minutes}` |
 | Categories | `Select` `isMulti isSearchable allowCreate` | `variant="formik"`, `chipTestId` | `vacancy-categories-input` |
 | Description | `TextArea` | `label`, `id`, `error`, `errorId` | `vacancy-description-input` |
-| Actions · vacancy screen | `Popover` | the same rows less `Open board`, which is the page it is on | `vacancy-actions-menu` |
+| Actions · vacancy screen | `Popover` | four rows — Open booking page · Edit vacancy · Close/Reopen vacancy · Delete vacancy. `Open board` is the page it is on, and `Copy booking link` is the header's own button beside it | `vacancy-actions-menu` |
 | Copy link | `Button` | `variant="primary"`, `disabled` when closed | `vacancy-copy-link-button` |
 | Confirmations · vacancy screen | `ConfirmDialog` | `busy`, `closeOnAccept={false}`, `acceptTestId` | `vacancy-close-confirm`, `vacancy-delete-confirm` |
 | Reassign confirm | `Modal` + `FormActions` | — | `vacancy-reassign-confirm` |
 
 The `toast-*` ids are the ones the suite already knows these announcements by. They named a
-`Toast` when there was one to name; what they identify now is the banner slot.
+`Toast` when there was one to name, a banner slot while there was not, and a `Toast` again now.
 
 **`Button` variants** are the system's three: `primary` (solid blue), `delete` (solid red) and the
 default outlined neutral. the earlier design's `secondary` and `ghost` both land on the default, and
@@ -359,7 +371,7 @@ nothing else in the app makes a three-way inline choice — so the row stays thr
 | Status tablist name | Vacancy status |
 | Column headers | Title · Interviewer · Length · Candidates · Status · Actions |
 | Row menu name | Actions for {title} |
-| Row menu items | Copy booking link · Edit vacancy · Close vacancy \| Reopen vacancy · Delete vacancy |
+| Row menu items | Open board · Copy booking link · Open booking page · Edit vacancy · Close vacancy \| Reopen vacancy · Delete vacancy |
 | Blocked copy reason | This link is no longer accepting bookings. |
 | Close confirm title | Close this vacancy? |
 | Close confirm body | The booking link stops accepting new candidates. {n} scheduled interviews stand, and the board keeps working. |
@@ -390,7 +402,9 @@ nothing else in the app makes a three-way inline choice — so the row stays thr
 | Submit, create | Create vacancy |
 | Submit, edit | Save changes |
 | Closed link note, vacancy screen | This link is no longer accepting bookings. Scheduled interviews stand and the board keeps working. |
-| Menu items, vacancy screen | Edit vacancy · Close vacancy \| Reopen vacancy · Delete vacancy |
+| Menu items, vacancy screen | Open booking page · Edit vacancy · Close vacancy \| Reopen vacancy · Delete vacancy |
+| Retry, list | Try again |
+| Retry, vacancy screen | Retry |
 | Delete blocked reason | Close this vacancy instead — it has candidates |
 | Reassign confirmation body | {n} scheduled interviews keep their current time and interviewer. |
 | Empty list | No vacancies yet. |
@@ -413,19 +427,20 @@ than waiting for the visitor to discover it from a disabled row.
 
 | State | Treatment |
 |---|---|
-| **Status · open** | `Badge status="active"` — solid `--status-success`, white text |
-| **Status · closed** | `Badge status="inactive"` — solid `--status-error`, white text |
+| **Status · open** | `Badge status="active" outlined` — a `--status-success` hairline and ink, no fill |
+| **Status · closed** | `Badge status="inactive" outlined` — a `--color-error-outline` hairline, `--status-error` ink, no fill |
 | **Category label** | `Badge status="neutral"` ([§59](../design-system/decisions.md)) — `--surface-sunken` hairlined in `--border-subtle`, `--radius-s`, regular weight; `size="s"` in a table row, `m` on the detail header. It was `Chip` until a later pass, and `Chip` is what `Select isMulti` draws for a value chosen **inside a field**: its 7px `--color-blue` left edge marks a *selection*, and on a table row it put the loudest mark on the screen on the quietest fact on it. Inside the dialog it is still a `Chip`, because there it really is a selection |
 | **Select option · eligible** | `rgba(0, 122, 255, 0.1)` under the pointer *and* under the arrow keys |
 | **Select option · ineligible** | `--text-secondary` ink, reason trailing at `--font-size-xs`, `aria-disabled`, no hover, not selectable — but still reachable by arrow key |
 | **Select option · selected** | `--color-blue` fill, white text (single-value only; a chosen chip leaves the list) |
 | **Menu row · blocked** | `--text-secondary`, `aria-disabled`, focusable, reason drawn beneath |
-| **Link · copied** | `Toast tone="success"`; the button itself does not change label |
+| **Link · copied** | an untyped `Toast` — a confirmation, not a status; the button itself does not change label |
 | **Link · closed vacancy** | `Button disabled` — the system's own disabled paint — with the reason drawn as a sentence above it rather than in a `title` |
 | **Description · clamped** | Three lines, then an ellipsis, with `View more` beneath. Drawn only when `scrollHeight` exceeds `clientHeight`: whether the clamp cut anything is a fact about the width the header ended up with, not about the string |
 | **Description · expanded** | `max-height` of a fifth of the viewport, floored at 66px and capped at 132px, `overflow-y: auto`. It never grows past its share — the board keeps the rest |
 | **Row · hover** | `--color-row-hover`, the system's neutral grey. the earlier design tinted it violet |
-| **Loading** | `Preloader` centred in the card, under the table header. Content pops in rather than resolving in place — the honest cost of losing `Skeleton` (D4) |
+| **Loading** | `Preloader` centred on the page's own ground, under the toolbar; the card appears with the rows. Content pops in rather than resolving in place — the honest cost of losing `Skeleton` (D4). The vacancy screen's first load is the same dots on the same ground, with no header drawn until the record arrives |
+| **Load failure** | `Toast tone="error"` announces it, and an `EmptyState` with a `Try again` (`Retry`, on the vacancy screen) inside is drawn with the toast, where the table or the screen would be, and stays after the toast has gone — the same composition on both screens, and on every hiring screen ([ADR 0010](../../docs/adr/0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md)) |
 | **Refetching** | The rows stay, dimmed and `aria-busy` (`Table busy`, [§34](../design-system/decisions.md)). Only the first load draws the `Preloader`; a search that replaced the table on every keystroke would reflow the page under the reader |
 | **Tab · current** | `PageTabs`' own selected treatment, `aria-selected`. The strip is drawn only once a response has arrived, so no label reads `(0)` and then jumps |
 | **Menu row · blocked copy** | `--text-secondary`, `aria-disabled`, focusable, the closed-link note drawn beneath as its `aria-describedby` |
@@ -510,8 +525,9 @@ query cannot be one — the same reason `.page-title` and the shell's breakpoint
 - The status strip is a real tablist with an accessible name (`Vacancy status`), and the count is
   inside each tab's label rather than beside it — so it is part of what is announced, not a number
   a reader has to go and find.
-- Toasts arrive in a polite live region and dismiss themselves; they never take focus, and a
-  second action taken before the first has faded adds a line rather than replacing one.
+- Toasts dismiss themselves and never take focus; each plate is `role="alert"`, the host is a
+  labelled column rather than a live region of its own ([§54](../design-system/decisions.md)), and
+  a second action taken before the first has faded adds a line rather than replacing one.
 - The back link is an anchor with an `href`, so it is announced as a link to somewhere and behaves
   like one ([§56](../design-system/decisions.md)).
 - The meta line's `·` separators are `aria-hidden`: a reader hears `React, Senior, Pat Owner,
@@ -522,7 +538,8 @@ query cannot be one — the same reason `.page-title` and the shell's breakpoint
   [05 design](05-board.design.md). Its columns are the `<h2>`s under this screen's `<h1>`.
 - Both dialogs trap focus, close on `Escape` and return focus to the opener
   ([§8](../design-system/decisions.md)).
-- Announcements are `role="status"`, polite, and never steal focus.
+- Every announcement is a toast plate, and every plate is `role="alert"` today — the host offers
+  no per-entry role, so an outcome and a failure are announced the same way. None steals focus.
 - The loader is `aria-hidden` with a single polite "Loading vacancies" beside it.
 - Every field's label is a real `<label for>`, and its error or hint is the field's
   `aria-describedby`. Only one of the two ever exists, which is what keeps that attribute
@@ -548,7 +565,7 @@ a component owes whatever else it does. See [the system's README](../../packages
 | `TextArea` forwards nothing, its label is associated with nothing, and its error is a boolean | The description field could not be named, focused by the validator or described by its error | [§25](../design-system/decisions.md) |
 | `SearchInput` forwards nothing and its clear cross is a `<span onClick>` | The field could not be named or sized, and clearing it needed a pointer | [§26](../design-system/decisions.md) |
 | `Card`'s title is a `<div>` | Captions became card titles, so those titles are now the page's outline | [§27](../design-system/decisions.md) |
-| `InfoBanner` cannot be dismissed | A banner reporting a state goes away when the state does; one standing in for a toast reports an event that nothing later makes untrue | [§24](../design-system/decisions.md) |
+| `InfoBanner` cannot be dismissed | A banner reporting a state goes away when the state does; one standing in for a toast reports an event that nothing later makes untrue. *Answered, and no longer needed here*: nothing on these screens stands in for a toast since [§54](../design-system/decisions.md), and the one banner left — the dialog's form-level error — reports a state | [§24](../design-system/decisions.md) |
 | `BackTo` is an `<a href="#">` with an `onClick` | The one back link on this surface could not be middle-clicked, opened in a new tab or copied, and was announced as a link to nowhere | [§56](../design-system/decisions.md) |
 
 ### Left open for Phase 6 — answered

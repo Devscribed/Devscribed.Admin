@@ -20,12 +20,13 @@ import {
 /**
  * The candidate database (spec 03) — the screen the two libraries exist to serve.
  *
- * Most of what is below is about the same thing seen from several angles: **the count is
- * the feedback**. It is what a filter change is judged by, what a search has to compose
- * with, and the one thing on the page that is announced.
+ * Most of what is below is about the same thing seen from several angles: **the scope tab's
+ * count is the feedback**. It is what a filter change is judged by and what a search has to
+ * compose with; there is no count line under the strip and nothing stands in its place
+ * while a request is in flight (03 §05.20).
  *
  * Since the filters moved into a drawer (§09), it is also what says the drawer works: the
- * panel covers a strip of the list and never the count, so every case here reads the
+ * panel covers a strip of the list and never the tab strip, so every case here reads the
  * effect of a filter without closing the thing that set it.
  */
 test.describe('Candidate database', () => {
@@ -274,6 +275,10 @@ test.describe('Candidate database', () => {
     await expect(page.getByTestId('candidate-card')).toBeVisible();
   });
 
+  /**
+   * TC-H03-E2E-12 — an empty database and a filter that matches nobody are told apart, and the
+   * way out of the second empties the filters and the search together.
+   */
   test('tells an empty database apart from a filter that matches nobody', async ({
     page,
     request,
@@ -657,6 +662,61 @@ test.describe('Candidate database', () => {
     await expect(page.getByTestId(`candidate-action-open-${id}`)).toBeVisible();
     // The one about the person is not.
     await expect(page.getByTestId(`candidate-action-delete-${id}`)).toHaveCount(0);
+  });
+
+  /**
+   * TC-H03-E2E-11 — a list that could not be read says so, and keeps its retry after the
+   * toast has gone.
+   *
+   * The one E2E case for the load-failure mechanism every hiring screen shares: the toast
+   * announces, the empty state stays with the way back inside it, and no card is drawn
+   * around either. The libraries, the card and the board draw the same composition from the
+   * same component and are not tested again for it.
+   */
+  test('says a list could not be read, and keeps the retry on the page', async ({
+    page,
+    request,
+  }) => {
+    const org = await registerOrganization(request, uniqueEmail('cand-load-failed'));
+    const vacancy = await createVacancy(request, org, { title: 'Senior React Engineer' });
+    await bookInterview(request, vacancy.publicSlug, {
+      firstName: 'Jane',
+      lastName: 'Doe',
+      email: uniqueEmail('jane'),
+      slotIndex: 0,
+    });
+    await signIn(page, org.email);
+
+    // Only the list's API request fails — not the page navigation, whose path ends the same
+    // way, and not the libraries the filters are built from.
+    const isList = (url: URL) => /\/api\/organizations\/[^/]+\/hiring\/candidates$/.test(url.pathname);
+    await page.route(isList, async (route) => {
+      // Held for a moment, so the loader can be seen standing on the page's own ground.
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' });
+    });
+    await page.goto(`/org/${org.orgId}/hiring/candidates`);
+
+    // The first load: the dots, and no card drawn around them.
+    await expect(page.getByTestId('candidates-loading')).toBeVisible();
+    await expect(page.getByTestId('candidates-list')).toHaveCount(0);
+
+    await expect(page.getByTestId('toast-candidates-load-failed')).toContainText(
+      "We couldn't load candidates. Try again.",
+    );
+    const failed = page.getByTestId('candidates-error');
+    await expect(failed).toContainText("We couldn't load candidates. Try again.");
+    // On the page's own ground: the card is the table's, and there is no table.
+    await expect(page.getByTestId('candidates-list')).toHaveCount(0);
+
+    await page.unroute(isList);
+    await page.getByTestId('candidates-retry').click();
+
+    await expect(failed).toHaveCount(0);
+    await expect(page.getByTestId('candidates-list')).toBeVisible();
+    await expect(
+      page.getByTestId('candidates-list').locator('[data-testid^="candidate-row-"]'),
+    ).toHaveCount(1);
   });
 
   /** The id of the single row on screen — the tests above narrow to one before asking. */

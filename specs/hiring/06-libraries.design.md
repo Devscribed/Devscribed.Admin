@@ -78,8 +78,11 @@ sharing mechanics.
   was measured for, which is why the badge survives the revision that took the type's chip. The
   dimming sits on each cell's content and never on the Actions cell: the badge naming the state
   may fade with its row, the menu holding the way back may not.
-- Loading is the module's centred `Preloader` beside a visually-hidden live region; a refetch
-  after an action dims the rows in place instead (`Table busy`, §34).
+- Loading is the module's centred `Preloader` beside a visually-hidden live region, on the page's
+  own ground; a refetch after an action dims the rows in place instead (`Table busy`, §34). The
+  card is the table's and is drawn only around rows — an empty library, an empty search and a
+  failed load all stand on the page's own ground, in the shape the candidate database gives them
+  ([ADR 0010](../../docs/adr/0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md)).
 
 ## The criterion dialog
 
@@ -168,14 +171,14 @@ sentence, and each one is reached through a menu — there is no way to arrive a
 | Page header | `PageHeader` → `PageTitle` | `title` | `page-title` |
 | Toolbar | `TableToolbar` | `tabs` (§45 objects), `activeTab`, `onTab`, `search`, per-tab `searchPlaceholder`/`searchTestId` | `libraries-tabs` · `libraries-tab-categories` · `libraries-tab-criteria` · `categories-search-input` · `criteria-search-input` |
 | Primary action | `Button` | `variant="primary"`, one per tab | `category-new-button` · `criterion-new-button` |
-| List surface | `Card` | `padded={false}` | `categories-list` · `criteria-list` |
+| List surface | `Card` — drawn only around rows | `padded={false}` | `categories-list` · `criteria-list` |
 | Table | `Table` | `columns` (objects, §18), `busy` (§34), `rowTestId` | `category-row-{id}` · `criterion-row-{id}` |
 | Row actions | `Popover` | kebab trigger, `items` with `danger`/`disabled`/`description` (§22), portalled menu (§55) | `category-actions-{id}` · `criterion-actions-{id}` and the item ids |
 | Vacancies cell | app composition | two titles + a `+N` bubble (32px circle, 8% black wash); count as `aria-label` | `category-usage-{id}` |
 | Archived mark | `Badge` | `status="inactive"`, `outlined` | `criterion-archived-badge-{id}` |
-| Loading | `Preloader` | `aria-hidden`, beside an `aria-live` node | `libraries-loading` |
-| Empty / no results | `EmptyState` | per tab, per cause | `categories-empty` · `criteria-empty` · `categories-no-results` · `criteria-no-results` |
-| Load failure | `InfoBanner` | `variant="error"`, retry `Button` inside | `library-error-banner` · `libraries-retry` |
+| Loading | `Preloader` — on the page's own ground, no card | `aria-hidden`, beside an `aria-live` node | `libraries-loading` |
+| Empty / no results | `EmptyState` — on the page's own ground, no card | per tab, per cause | `categories-empty` · `criteria-empty` · `categories-no-results` · `criteria-no-results` |
+| Load failure | `Toast tone="error"` in `ToastHost`, and `EmptyState` + retry `Button` in the table's place | the toast leaves; the state stays with the way back inside it (§65) | `toast-libraries-load-failed` · `libraries-error` · `libraries-retry` |
 | Announcements | `Toast` in `ToastHost` (§54) | `tone`, stacking queue | `toast-library-created` · `toast-criteria-archived` · `toast-criteria-restored` · `toast-library-error` |
 | Category dialog | `Modal` | `title`, `style={{ width: 420 }}` | `category-dialog` |
 | Criterion dialog | `Modal` | `title`, `style={{ width: 520 }}` | `criterion-dialog` |
@@ -240,10 +243,10 @@ list follows.
 
 | State | Treatment |
 |---|---|
-| **Loading** | Centred `Preloader`, announcement beside it |
+| **Loading** | Centred `Preloader` on the page's own ground, announcement beside it; the card appears with the rows |
 | **Refetch after an action** | Rows dim in place — `Table busy`, `aria-busy` (§34) |
-| **Load failure** | `InfoBanner variant="error"` with a retry `Button` inside, in the table's place |
-| **Delete · blocked** | Menu row `aria-disabled`, still focusable; the reason in a `Tooltip` bubble on hover and focus ([§62](../design-system/decisions.md)) over a hidden copy that is the row's permanent `aria-describedby` target. *The bubble was clipped away by an `overflow: hidden` on `Popover`'s panel until A later pass removed it — see the decisions record's note on §62.* |
+| **Load failure** | `Toast tone="error"` announces it, and an `EmptyState` with a retry `Button` inside is drawn with the toast, in the table's place, and stays after the toast has gone |
+| **Delete · blocked** | Menu row `aria-disabled`, still focusable; the reason in a `Tooltip` bubble on hover and focus ([§62](../design-system/decisions.md)) over a hidden copy that is the row's permanent `aria-describedby` target. *The bubble was clipped away by an `overflow: hidden` on `Popover`'s panel until a later pass removed it — the account is in `Popover`'s own file.* |
 | **Archived row** | content at `opacity: .7`, sorted last, "Archived" badge, Archive replaced by Restore; the Actions cell never fades |
 | **Value chip · dragging** | `--shadow-popover`, siblings shift |
 | **Value chip · held (keyboard)** | `1.5px solid --action-primary` outline, plus the same shadow |

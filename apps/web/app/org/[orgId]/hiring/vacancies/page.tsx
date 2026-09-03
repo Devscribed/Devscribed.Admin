@@ -25,12 +25,13 @@ import {
   ToastHost,
 } from '@devscribed/ds';
 import { PageHeader } from '@/layout/PageHeader';
+import { LoadFailed } from '@/hiring/LoadFailed';
 import { useToasts } from '@/hiring/useToasts';
 import { VacancyStatusBadge } from '@/hiring/StatusBadge';
 import type { Vacancy, VacancyList } from '@/hiring/types';
 import { VacancyDialog } from './VacancyDialog';
 
-type Phase = 'loading' | 'ready' | 'gone';
+type Phase = 'loading' | 'ready' | 'failed' | 'gone';
 
 /** 01 §05.16 — the same 300 ms the member and candidate searches already use. */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -103,13 +104,28 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
         setPhase('gone');
         return;
       }
-      if (!response.ok) return;
+      if (!response.ok) {
+        setPhase('failed');
+        push({
+          message: HIRING_MESSAGES.vacancy.loadFailed,
+          tone: 'error',
+          testId: 'toast-vacancies-load-failed',
+        });
+        return;
+      }
       setData(await response.json());
       setPhase('ready');
+    } catch {
+      setPhase('failed');
+      push({
+        message: HIRING_MESSAGES.vacancy.loadFailed,
+        tone: 'error',
+        testId: 'toast-vacancies-load-failed',
+      });
     } finally {
       setRefreshing(false);
     }
-  }, [orgId, query, status]);
+  }, [orgId, query, status, push]);
 
   useEffect(() => {
     void load();
@@ -332,15 +348,51 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
       </TableToolbar>
 
       {/*
-        One surface at every state, which is what the system's table screens do and what the
-        members and candidates lists already do: the card gives the edge-to-edge table its
-        border and rounds its first and last rows, and the loader and the empty message
-        sit inside it rather than replacing it.
+        The card is the table's, and it is drawn only around rows — the shape the candidate
+        database gives every state. The first load and an empty list stand on the page's own
+        ground: a bordered white slab the height of the viewport holding three dots, or one
+        line of grey text near its top, is a surface drawn around nothing.
 
         `clip` stays at its default. The row kebab opens *inside* this card, but the DS
         `Popover` portals its menu (decisions §55), so nothing it raises is clipped by the
         surface it was opened from.
       */}
+      {phase === 'failed' ? (
+        /*
+          The toast said it; this is what stays. A toast leaves, and a list that could not
+          be read must not leave a blank page behind it, so the failure is drawn where the
+          rows would be, on the page's own ground, with the way back inside it (§65).
+        */
+        <LoadFailed
+          message={HIRING_MESSAGES.vacancy.loadFailed}
+          retryLabel="Try again"
+          onRetry={() => void load()}
+          retryTestId="vacancies-retry"
+          data-testid="vacancies-error"
+        />
+      ) : phase === 'loading' ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-7)' }}>
+          {/* The dots carry no text, so the announcement is made beside them. */}
+          <Preloader data-testid="vacancies-loading" aria-hidden />
+          <span
+            aria-live="polite"
+            style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}
+          >
+            Loading vacancies
+          </span>
+        </div>
+      ) : vacancies.length === 0 ? (
+        /*
+          Driven by `total` — the whole library, narrowed by nothing — and never by a tab's
+          own count. Somebody who has twelve vacancies and searched for the thirteenth must
+          not be told they have none (01 §07.21).
+        */
+        <EmptyState data-testid="vacancies-empty-state">
+          {data?.total === 0
+            ? HIRING_MESSAGES.vacancy.empty
+            : HIRING_MESSAGES.vacancy.emptyFiltered}
+        </EmptyState>
+      ) : (
       <Card padded={false} data-testid="vacancies-list">
         <Table<Vacancy>
           rows={vacancies}
@@ -458,33 +510,8 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
             },
           ]}
         />
-
-        {refreshing && vacancies.length === 0 && (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-7)' }}>
-            {/* The dots carry no text, so the announcement is made beside them. */}
-            <Preloader data-testid="vacancies-loading" aria-hidden />
-            <span
-              aria-live="polite"
-              style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}
-            >
-              Loading vacancies
-            </span>
-          </div>
-        )}
-
-        {/*
-          Driven by `total` — the whole library, narrowed by nothing — and never by a tab's
-          own count. Somebody who has twelve vacancies and searched for the thirteenth must
-          not be told they have none (01 §07.21).
-        */}
-        {phase === 'ready' && vacancies.length === 0 && (
-          <EmptyState data-testid="vacancies-empty-state">
-            {data?.total === 0
-              ? HIRING_MESSAGES.vacancy.empty
-              : HIRING_MESSAGES.vacancy.emptyFiltered}
-          </EmptyState>
-        )}
       </Card>
+      )}
 
       <VacancyDialog
         orgId={orgId}

@@ -24,7 +24,6 @@ import {
   ConfirmDialog,
   EmptyState,
   FormActions,
-  InfoBanner,
   Modal,
   Popover,
   Preloader,
@@ -35,6 +34,7 @@ import {
 } from '@devscribed/ds';
 import { PageHeader } from '@/layout/PageHeader';
 import { CriterionDialog } from '@/hiring/CriterionDialog';
+import { LoadFailed } from '@/hiring/LoadFailed';
 import { useToasts } from '@/hiring/useToasts';
 import type { Category, Criterion } from '@/hiring/types';
 
@@ -116,6 +116,11 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
       }
       if (!categoriesRes.ok || !criteriaRes.ok) {
         setPhase('failed');
+        push({
+          message: LIBRARY_MESSAGES.loadFailed,
+          tone: 'error',
+          testId: 'toast-libraries-load-failed',
+        });
         return;
       }
       setCategories((await categoriesRes.json()).categories);
@@ -123,10 +128,15 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
       setPhase('ready');
     } catch {
       setPhase('failed');
+      push({
+        message: LIBRARY_MESSAGES.loadFailed,
+        tone: 'error',
+        testId: 'toast-libraries-load-failed',
+      });
     } finally {
       setRefreshing(false);
     }
-  }, [orgId]);
+  }, [orgId, push]);
 
   useEffect(() => {
     void load();
@@ -134,8 +144,9 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
 
   if (phase === 'gone') notFound();
 
-  const failed = (message?: string): void =>
+  const failed = (message?: string): void => {
     push({ message: message ?? MESSAGES.generic, tone: 'error', testId: 'toast-library-error' });
+  };
 
   async function saveCategory(): Promise<void> {
     if (!editing || busy) return;
@@ -406,32 +417,54 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
       </TableToolbar>
 
       {phase === 'failed' ? (
-        <InfoBanner variant="error" data-testid="library-error-banner">
-          {LIBRARY_MESSAGES.loadFailed}{' '}
-          <Button onClick={() => void load()} data-testid="libraries-retry">
-            Try again
-          </Button>
-        </InfoBanner>
+        /*
+          The toast said it; this is what stays. A toast leaves, and a library that could
+          not be read must not leave a blank page behind it, so the failure is drawn where
+          the rows would be, on the page's own ground, with the way back inside it (§65).
+        */
+        <LoadFailed
+          message={LIBRARY_MESSAGES.loadFailed}
+          retryLabel="Try again"
+          onRetry={() => void load()}
+          retryTestId="libraries-retry"
+          data-testid="libraries-error"
+        />
+      ) : phase === 'loading' ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-7)' }}>
+          {/* The dots carry no text, so the announcement is made beside them. */}
+          <Preloader data-testid="libraries-loading" aria-hidden />
+          <span aria-live="polite" style={VISUALLY_HIDDEN}>
+            Loading libraries
+          </span>
+        </div>
+      ) : rows === 0 ? (
+        /*
+          Two different sentences for two different facts: an empty library points at
+          where its entries are actually created — inline creation is the primary path —
+          while a search that matched nothing must not be allowed to claim the library
+          is empty beside a button that would prove it wrong. Both stand on the page's own
+          ground, as the candidate database's do: the card is the table's.
+        */
+        total === 0 ? (
+          <EmptyState data-testid={onCategories ? 'categories-empty' : 'criteria-empty'}>
+            {onCategories ? LIBRARY_MESSAGES.category.empty : CRITERION_MESSAGES.empty}
+          </EmptyState>
+        ) : (
+          <EmptyState
+            data-testid={onCategories ? 'categories-no-results' : 'criteria-no-results'}
+          >
+            {onCategories ? LIBRARY_MESSAGES.category.noResults : CRITERION_MESSAGES.noResults}
+          </EmptyState>
+        )
       ) : (
         /*
-          One surface at every state, which is what the system's table screens do: the card gives
-          the edge-to-edge table its border and rounds its first and last rows, and the
-          loader and both empty messages sit inside it rather than replacing it. The row
-          kebab opens inside it too, but the DS `Popover` portals its menu (decisions §55),
-          so nothing it raises is clipped by the surface it was opened from.
+          The card is the table's and is drawn only around rows: it gives the edge-to-edge
+          table its border and rounds its first and last rows. The row kebab opens inside
+          it, but the DS `Popover` portals its menu (decisions §55), so nothing it raises is
+          clipped by the surface it was opened from.
         */
         <Card padded={false} data-testid={onCategories ? 'categories-list' : 'criteria-list'}>
-          {phase === 'loading' && (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-7)' }}>
-              {/* The dots carry no text, so the announcement is made beside them. */}
-              <Preloader data-testid="libraries-loading" aria-hidden />
-              <span aria-live="polite" style={VISUALLY_HIDDEN}>
-                Loading libraries
-              </span>
-            </div>
-          )}
-
-          {phase === 'ready' && rows > 0 && onCategories && (
+          {onCategories && (
             <Table<Category>
               rows={categoryRows}
               /* A refetch after an action dims the rows in place rather than replacing
@@ -468,7 +501,7 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
             />
           )}
 
-          {phase === 'ready' && rows > 0 && !onCategories && (
+          {!onCategories && (
             <Table<Criterion>
               rows={criterionRows}
               busy={refreshing}
@@ -516,25 +549,6 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
             />
           )}
 
-          {/*
-            Two different sentences for two different facts: an empty library points at
-            where its entries are actually created — inline creation is the primary path —
-            while a search that matched nothing must not be allowed to claim the library
-            is empty beside a button that would prove it wrong.
-          */}
-          {phase === 'ready' && rows === 0 && (
-            total === 0 ? (
-              <EmptyState data-testid={onCategories ? 'categories-empty' : 'criteria-empty'}>
-                {onCategories ? LIBRARY_MESSAGES.category.empty : CRITERION_MESSAGES.empty}
-              </EmptyState>
-            ) : (
-              <EmptyState
-                data-testid={onCategories ? 'categories-no-results' : 'criteria-no-results'}
-              >
-                {onCategories ? LIBRARY_MESSAGES.category.noResults : CRITERION_MESSAGES.noResults}
-              </EmptyState>
-            )
-          )}
         </Card>
       )}
 

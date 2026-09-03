@@ -203,7 +203,7 @@ pulse loader rather than a guess at what is coming. The test id changes with it:
 | History list | `Card` | `--surface-sunken` | `application-history-{applicationId}` |
 | History entry | native `<li>` | — | `application-history-entry-{eventId}` |
 | Cancelled mark (card) | `Badge` | `status="inactive"`, `aria-label` | `application-cancelled-{applicationId}` |
-| Outcome | `InfoBanner` | `onDismiss` | `toast-interview-rescheduled` · `toast-interview-cancelled` |
+| Outcome | `ToastHost` > `Toast` — on the card as on the list ([04 design](04-candidate-card.design.md#the-announcement-surface), [ADR 0010](../../docs/adr/0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md)) | untyped | `toast-interview-rescheduled` · `toast-interview-cancelled` |
 | Reschedule · Cancel (list row) | *(pending — see below)* | — | — |
 
 The team's reschedule dialog is a **720px `Modal` holding the same `Calendar` and slot list** the
@@ -217,18 +217,15 @@ compose it the same way, which is the point: one confirmation pattern, not a sec
 even on a destructive confirmation ([§40](../design-system/decisions.md)), and these are the dialogs
 where the irreversible action must not look like the safe one.
 
-**On the candidate card the outcome is an `InfoBanner`.** `Toast` was gone (D4) and Phase 3 settled
-the replacement: a banner with a close control ([§24](../design-system/decisions.md)): a banner reporting a
-*state* goes away when the state does, while one standing in for a toast reports an *event* that
-nothing later makes untrue. The two test ids are unchanged — they name the
-announcement, not the component that carries it.
-
-**On the candidate list it is a real toast** ([§54](../design-system/decisions.md)), and the two are
-not an inconsistency. The card reports one outcome about the one interview filling the screen, and
-a banner under its `PageHeader` is where that belongs — [§24](../design-system/decisions.md)'s
-own slot. The list reports an outcome about a *row*, and the row is still there: a panel that pushed
-the table down would move the list under the hand working it, and three actions taken in a minute
-would push it three times. Same test ids in both places, for the same reason as ever.
+**On the candidate card and on the candidate list the outcome is a toast**
+([§54](../design-system/decisions.md)). The card's was an `InfoBanner` under `PageHeader` for a
+while — `Toast` was gone (D4) and Phase 3 settled the replacement as a banner with a close
+control ([§24](../design-system/decisions.md)) — and it is a toast now for the reason the
+list's always was: a panel in the flow pushes the content down under the hand working it, and on
+the card that hand is typing interview notes ([04 design](04-candidate-card.design.md#the-announcement-surface),
+[ADR 0010](../../docs/adr/0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md)).
+The two test ids are unchanged in both places — they name the announcement, not the component
+that carries it.
 
 On the **candidate list** the two actions live in the row's **actions kebab**
 ([03 §10](03-candidate-database.design.md)), which is where they were always going to end up. They
@@ -381,10 +378,10 @@ control 1px on press; the system's buttons have neither.
 - **Changing the time format** — re-renders slot labels only. Written to `localStorage` under the
   same key the booking page uses, so the candidate's choice follows them between the two screens.
 - **Team reschedule** — opens the 720px `Modal`; success closes it, refreshes the section in place,
-  and raises the outcome banner. The board is not navigated to and the card is not collapsed.
+  and raises the outcome toast. The board is not navigated to and the card is not collapsed.
 - **Team cancel** — the `Modal` carries the optional `TextArea`, whose character count sits in the
   label row ([§33](../design-system/decisions.md)) so it can change without moving the field beneath
-  it. Success closes the dialog, marks the section cancelled, and raises the outcome banner.
+  it. Success closes the dialog, marks the section cancelled, and raises the outcome toast.
 - **History** — the summary row toggles the list. Expansion never scrolls the page: a member reading
   a card must not have the notes field move under their cursor.
 
@@ -423,8 +420,9 @@ about it.
   and it is the name rather than a `title`, so it is announced once.
 - The CV chooser is **one tab stop** and carries its own name (`Replace CV`) even with no visible
   label, because the row above it is the only thing that says what it replaces.
-- Success and failure of every action go to a polite live region; the error banner is `role="alert"`
-  so the two are never announced twice.
+- On the manage page, success and failure of every action go to a polite live region; the error
+  banner is `role="alert"` so the two are never announced twice. On the candidate card the outcome
+  is the toast's own plate ([04 design](04-candidate-card.design.md#accessibility)).
 - The `Calendar`, slot group, and `FileInput` carry their own contracts from
   [02](02-booking-page.design.md) and the control specs, unchanged.
 - Contrast: `--action-primary-text` on `--action-primary`, and `--action-danger-text` on

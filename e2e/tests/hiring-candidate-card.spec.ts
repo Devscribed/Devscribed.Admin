@@ -188,6 +188,7 @@ test.describe('Candidate card', () => {
     expect(Buffer.concat(chunks).equals(CV_FILE.buffer)).toBe(true);
   });
 
+  /** TC-H04-E2E-11 — a status change confirms with a toast and prompts for the conclusion. */
   test('moves the application on a status change and prompts for a conclusion', async ({
     page,
     request,

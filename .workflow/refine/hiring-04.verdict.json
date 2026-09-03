@@ -1,0 +1,246 @@
+{
+  "status": "blocked",
+  "spec": "specs/hiring/04-candidate-card.design.md",
+  "request": "Hiring UI bug fixes on the signed-in screens: remove the candidate database's \"Counting…\" preloader row; draw every page-load preloader and every empty state on the page's own ground rather than inside a card, as the candidate database's empty state already is; report every inline alert as a toast, with a failed load also drawing an empty state carrying the retry and a failed autosave's toast standing until dismissed. Dialog form-level errors and the public booking and manage pages are excluded.",
+  "read": {
+    "specs": [
+      "specs/hiring/04-candidate-card.design.md",
+      "specs/hiring/04-candidate-card.md",
+      "specs/hiring/README.md",
+      "specs/hiring/01-vacancies.design.md",
+      "specs/hiring/02-booking-page.design.md",
+      "specs/hiring/03-candidate-database.md",
+      "specs/hiring/03-candidate-database.design.md",
+      "specs/hiring/05-board.md",
+      "specs/hiring/05-board.design.md",
+      "specs/hiring/06-libraries.design.md",
+      "specs/hiring/07-manage-booking.md",
+      "specs/hiring/07-manage-booking.design.md",
+      "specs/design-system/decisions.md",
+      "docs/adr/0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md",
+      "CLAUDE.md",
+      ".claude/skills/spec/references/checklist.md"
+    ],
+    "files": [
+      "packages/ds/README.md",
+      "packages/ds/src/index.ts",
+      "packages/ds/src/components/feedback/Toast.tsx",
+      "packages/ds/src/components/feedback/EmptyState.tsx",
+      "packages/ds/src/components/feedback/Preloader.tsx",
+      "packages/ds/src/components/core/Card.tsx",
+      "packages/ds/src/components/core/Badge.tsx",
+      "packages/ds/src/components/core/Chip.tsx",
+      "packages/ds/src/components/core/IconButton.tsx",
+      "packages/ds/src/components/core/Button.tsx",
+      "packages/ds/src/components/forms/TextArea.tsx",
+      "packages/ds/src/components/forms/TextInput.tsx",
+      "packages/ds/src/components/forms/Select.tsx",
+      "packages/ds/src/components/navigation/PageTabs.tsx",
+      "packages/ds/src/components/overlays/Popover.tsx",
+      "packages/ds/src/tokens/spacing.css",
+      "packages/ds/src/tokens/colors.css",
+      "packages/ds/src/tokens/effects.css",
+      "packages/ds/src/tokens/typography.css",
+      "packages/validation/src/hiring.ts",
+      "packages/validation/src/hiring-candidates.ts",
+      "packages/validation/src/hiring-libraries.ts",
+      "apps/web/src/hiring/LoadFailed.tsx",
+      "apps/web/src/hiring/useToasts.ts",
+      "apps/web/src/hiring/useAutosave.ts",
+      "apps/web/src/layout/PageHeader.tsx",
+      "apps/web/app/globals.css",
+      "apps/web/app/org/[orgId]/hiring/candidates/[candidateId]/page.tsx",
+      "apps/web/app/org/[orgId]/hiring/candidates/[candidateId]/AutosavingField.tsx",
+      "apps/web/app/org/[orgId]/hiring/candidates/[candidateId]/CriteriaSection.tsx"
+    ]
+  },
+  "sweeps": {
+    "currency": 54,
+    "contradiction": 33,
+    "consequence": 16,
+    "obligations": 167,
+    "scope": 6
+  },
+  "findings": [
+    {
+      "id": "R1",
+      "severity": "blocker",
+      "rule": "spec/unamended-consequence",
+      "file": "specs/hiring/07-manage-booking.design.md",
+      "symbol": "Interactions — Team reschedule / Team cancel",
+      "line": 381,
+      "claim": "07 design's own component map and prose were amended to say the team's outcome is a toast; two Interactions bullets in the same document still say it raises a banner, and both are explicitly about the candidate card and the candidate list.",
+      "witness": {
+        "kind": "rule",
+        "detail": "04 design (:321): 'Every announcement on this page is a toast now'; component map (:354): '| Announcement · application | **`ToastHost` > `Toast`** | … | `card-status-toast` · `toast-interview-rescheduled` · `toast-interview-cancelled` |'. 07 design was amended to match at :206 ('| Outcome | `ToastHost` > `Toast` — on the card as on the list …') and :220 ('**On the candidate card and on the candidate list the outcome is a toast**'). Unamended in the same document: (:381) '**Team reschedule** — opens the 720px `Modal`; success closes it, refreshes the section in place, and raises the outcome banner.' and (:384) 'Success closes the dialog, marks the section cancelled, and raises the outcome banner.' No implementation both raises a banner and raises a toast for those two outcomes.",
+        "source": "specs/hiring/04-candidate-card.design.md:321 against specs/hiring/07-manage-booking.design.md:381 and :384"
+      },
+      "suggestedFix": "Amend both bullets beside the statement, citing ADR 0010 as the row at :206 and the paragraph at :220 already do — 'raises the outcome toast'."
+    },
+    {
+      "id": "R2",
+      "severity": "blocker",
+      "rule": "spec/unamended-consequence",
+      "file": "packages/ds/README.md",
+      "symbol": "Content rule — uppercase",
+      "line": 188,
+      "claim": "This pass rewrote 04 design to say the design system has two uppercase treatments. Four documents still say `PageTabs` is the only one, including the design system's own normative README, and none carries an amendment.",
+      "witness": {
+        "kind": "rule",
+        "detail": "04 design (:239-241): 'The system's uppercase treatments are two — `PageTabs`' labels and `Card variant=\"panel\"`'s own micro-label `title` ([§66]) — and this screen paints neither by hand.' Against, unamended: packages/ds/README.md:188-189 '**Sentence case everywhere except nav section titles**, which are Title Case. Tab labels are the one place text is uppercase'; specs/hiring/01-vacancies.design.md:225 '`SectionLabel` is gone (D4; the system captions nothing, and `PageTabs` is its only uppercase)'; specs/hiring/02-booking-page.design.md:203-204 'the system's content rule spends its one uppercase treatment on `PageTabs`'; specs/hiring/05-board.design.md:70-71 quotes the rule as '\"Tab labels (`PageTabs`) are the one place text is fully UPPERCASE\"'. The code settles which is right: grep -rn 'textTransform' packages/ds/src | grep -v none → 'packages/ds/src/components/core/Card.tsx:86:  … textTransform: \"uppercase\", color: var(--text-secondary),' and 'packages/ds/src/components/navigation/PageTabs.tsx:202:          textTransform: \"uppercase\",' — two, and the first is the variant this screen puts on every application panel (04 design:89).",
+        "source": "specs/hiring/04-candidate-card.design.md:239 against packages/ds/README.md:188, specs/hiring/01-vacancies.design.md:225, specs/hiring/02-booking-page.design.md:203, specs/hiring/05-board.design.md:70"
+      },
+      "suggestedFix": "04 design is the one the code agrees with. Amend the content rule in packages/ds/README.md:188-189 to name both treatments, and the three specs that quote it beside each quotation."
+    },
+    {
+      "id": "R3",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/hiring/04-candidate-card.design.md",
+      "symbol": "The criterion chip",
+      "line": 271,
+      "claim": "The section is half-revised: its opening sentence and the component map say the criterion row is a sunken row with an `IconButton`, and four statements in the same section still specify `Chip`'s own slots and controls.",
+      "witness": {
+        "kind": "rule",
+        "detail": "The decision, stated three times: (:256) '**A sunken row, not `Chip` and not `Badge`.** *(Revised.)*'; component map (:367) '| Criterion row (editable) | sunken row — `--surface-sunken`, 1px `--border-subtle`, `--radius-s` — with `Select`/`TextInput` and a 24px `IconButton` |'; States (:440) 'It was `Chip` until a later pass'. Against it, in the same section: (:264) 'The value control goes in the chip's **`trailing`** slot ([§37]), never in its label'; (:265-267) 'The label span is `overflow: hidden` + `text-overflow: ellipsis` + `white-space: nowrap`, because inside a `Select` it only ever holds one line of text'; (:271-273) 'The remove cross is `Chip`'s own `onRemove`, **not a separate `IconButton`** … it carries `removeTestId` ([§37]) because the component draws it'; (:274) '**The pointer cursor `Chip` paints when it can be removed is turned off here.**'; (:284-288) 'The read-only view … is the same chip **without a cross** … The recorded value keeps the `trailing` slot it has in the editable form', against component map (:368) '| Criterion label (read-only) | **`Badge status=\"neutral\"`** ([§59]) |'. `:271` and `:367` cannot both be built. `Badge` has no `trailing` slot to keep — packages/ds/src/components/core/Badge.tsx:3-23 declares `status`, `outlined`, `size`, `children` and nothing else — and the DS gaps table still carries the `Chip` row at :540.",
+        "source": "specs/hiring/04-candidate-card.design.md:271 against :256, :367 and :368"
+      },
+      "suggestedFix": "Finish the revision: rewrite :264-288 for the sunken row — the cross is the 24px `IconButton` named at :367 carrying `card-criterion-remove-{id}`, the value control sits beside the name, the read-only form is the neutral `Badge` — and drop or restate the `Chip` DS-gap row at :540."
+    },
+    {
+      "id": "R4",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/hiring/04-candidate-card.md",
+      "symbol": "Error Messages — the one-surface paragraph",
+      "line": 405,
+      "claim": "The new one-surface paragraph says every row of the Error Messages table is a toast; three of those rows are a field-length error and an empty-state sentence that the same pair of documents draws in place.",
+      "witness": {
+        "kind": "rule",
+        "detail": "04-candidate-card.md (:405-406): 'The page announces on **one** surface: **every message above** is a toast ([§54]), floating over the page rather than sitting in its flow.' The rows above it include (:391) '| Notes too long | \"Notes must be at most 20,000 characters\" |', (:392) '| Conclusion too long | \"Conclusion must be at most 5,000 characters\" |' and (:398) '| No criteria yet | \"No criteria recorded yet.\" |'. The same spec requires the last of those to be a node in the criteria section, not a toast: `card-criteria-empty` is in the Required list at :443, and 04 design's Copy table carries it at :414 as '| Criteria empty | No criteria recorded yet. |'. The two length messages are `TextArea`'s own error slot (packages/ds/src/components/forms/TextArea.tsx:98-102), which draws them under the field. An implementer reading :405 raises five toasts; one reading :443 and design:414 draws two of them in place.",
+        "source": "specs/hiring/04-candidate-card.md:405 against :391, :398, :443 and specs/hiring/04-candidate-card.design.md:414"
+      },
+      "suggestedFix": "Say which rows announce. The predecessor paragraph enumerated; this one should too — the outcomes and the failures are toasts, the two length errors stay in the field's error slot, and 'No criteria recorded yet.' is an empty state, not an announcement."
+    },
+    {
+      "id": "R5",
+      "severity": "blocker",
+      "rule": "spec/missing-artefact",
+      "file": "specs/hiring/04-candidate-card.md",
+      "symbol": "UI Notes — Required data-testid attributes",
+      "line": 446,
+      "claim": "Seven test ids were added to the Required list in this pass. Four are excused by an explicit note; the three at :446 have no test case at any level in any spec and no note.",
+      "witness": {
+        "kind": "command",
+        "detail": "The pass added (:445) '`card-load-error`, `card-load-retry`, `toast-card-load-failed`, `candidate-no-applications`' and (:446) '`card-status-toast`, `toast-interview-rescheduled`, `toast-interview-cancelled`', and wrote a note for the first four only (:447-452, '**Covered elsewhere.** … This spec adds no case for it'). grep -n '^- \\*\\*Selectors:\\*\\*' specs/hiring/04-candidate-card.md → 10 lines (:590, :604, :613, :624, :635, :648, :657, :670, :683, :692); piping those through grep -E 'card-status-toast|toast-interview-rescheduled|toast-interview-cancelled' returns 0. Nor is the card's outcome covered elsewhere: grep -rn --exclude-dir=.next 'card-status-toast' specs → only 04 design:354 and 04 md:446; the one `toast-interview-cancelled` in a spec case is specs/hiring/03-candidate-database.md:1133, which is the candidate *list*. The checklist rule is 'Every `data-testid` in the selectors section appears in an E2E case, and vice versa' (.claude/skills/spec/references/checklist.md:73).",
+        "source": "specs/hiring/04-candidate-card.md:446"
+      },
+      "suggestedFix": "One E2E case for the status change on the card — the toast reads 'Moved to {status}', nothing in the body moves, and focus lands on the conclusion — or a second 'Covered elsewhere' sentence naming the case in 07 that covers the reschedule and cancel toasts on this route."
+    },
+    {
+      "id": "R6",
+      "severity": "blocker",
+      "rule": "spec/missing-artefact",
+      "file": "specs/hiring/04-candidate-card.md",
+      "symbol": "Error Messages",
+      "line": 388,
+      "claim": "The pass gives this route three new pieces of user-facing text — the failed-load sentence, its retry label and the no-applications sentence — and neither document states any of them, while every sibling screen drawing the same state names its own.",
+      "witness": {
+        "kind": "rule",
+        "detail": "04 design's component map now carries (:377) '| Load failure | `Toast tone=\"error\"` in `ToastHost`, and `EmptyState` + retry `Button` in the page's place | … | `toast-card-load-failed` · `card-load-error` · `card-load-retry` |' and (:378) '| No applications | `EmptyState` | on the page's own ground — no card | `candidate-no-applications` |', and 04 md (:418-420) says 'a failed load's toast leaves, and the page shows the failure in its own place with `Retry` inside it'. ADR 0010:75 states the cost as 'A load failure says its sentence twice' — but the sentence is written nowhere: the Error Messages table (:388-403) has no load-failure row and no no-applications row, and 04 design's Copy table (:405-426) has neither, nor the retry's label. Every sibling names its own: specs/hiring/01-vacancies.md:475 '| Load failed | \"We couldn't load vacancies. Try again.\" |', specs/hiring/03-candidate-database.md:660 '| Load failed | \"We couldn't load candidates. Try again.\" |', specs/hiring/06-libraries.md:318 '| Libraries failed to load | \"We couldn't load the libraries. Try again.\" |'. The label is not inferable either — 01 design:440 says the retry reads '`Try again` (`Retry`, on the vacancy screen)'.",
+        "source": "specs/hiring/04-candidate-card.md:388 against specs/hiring/04-candidate-card.design.md:377"
+      },
+      "suggestedFix": "Three rows: the card's load-failure sentence and its retry label in the Error Messages table beside the other card messages, and the no-applications sentence in the design's Copy table beside 'Criteria empty'."
+    },
+    {
+      "id": "R7",
+      "severity": "blocker",
+      "rule": "spec/scope-gap",
+      "file": "specs/hiring/04-candidate-card.design.md",
+      "symbol": "The announcement surface",
+      "line": 321,
+      "claim": "The request converts every inline alert on the signed-in screens to a toast, excluding only dialog form-level errors and the public pages. This route draws two inline alerts under the criteria picker that the spec neither converts nor names as excluded — and then asserts there are none left.",
+      "witness": {
+        "kind": "command",
+        "detail": "grep -n 'card-criteria-error\\|card-criteria-note' 'apps/web/app/org/[orgId]/hiring/candidates/[candidateId]/CriteriaSection.tsx' → ':278: data-testid=\"card-criteria-note\"' and ':286: data-testid=\"card-criteria-error\"', both inside '<span aria-live=\"polite\">' at :275, drawn in the criteria section of the card — not in a dialog and not on a public page. The note carries HIRING_MESSAGES.card.criterionPresent ('Already assessed — edit the existing value', :142); the error carries the server's refusal or MESSAGES.generic (:87, :101, :122, :127) — 'That value doesn't match this criterion' and 'This criterion is archived and can't be added', both rows of 04's own Error Messages table (:393, :394). Against that, the spec says (:321) '**Every announcement on this page is a toast now**' and (:528) 'One announcement surface: the toasts.' Neither id appears anywhere in either document, the component map (:345-379) has no row for them, and the States table has no failed-criterion row.",
+        "source": "apps/web/app/org/[orgId]/hiring/candidates/[candidateId]/CriteriaSection.tsx:278 against specs/hiring/04-candidate-card.design.md:321"
+      },
+      "suggestedFix": "Decide it in the document: either the criteria section's refusal and its 'already assessed' note become toasts, with component-map rows and their ids in the Required list, or the spec says why an assessment's refusal stays beside the control that caused it — as the excluded dialog errors do."
+    },
+    {
+      "id": "R8",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/hiring/04-candidate-card.design.md",
+      "symbol": "Component map — Save",
+      "line": 385,
+      "claim": "The spec disables the Save button for a third reason that the repository rule permits only two of.",
+      "witness": {
+        "kind": "rule",
+        "detail": "CLAUDE.md:64-66: '**Submit buttons are never disabled for validation.** Clicking an invalid form shows every error and focuses the first invalid field. Disabling is only for genuine in-flight guards and deliberate confirmations.' 04 design (:385-387): 'It is also **disabled while there is nothing to save**, which states a rule the editor already had: `useAutosave` refuses a write for text the server already holds', and the component map row (:373) '| Save | `Button` | **`variant=\"primary\"`**, `disabled` while there is nothing to save, `minWidth: 96` |'. A clean editor is neither a request in flight nor a deliberate confirmation. The code takes both halves at once — apps/web/app/org/[orgId]/hiring/candidates/[candidateId]/AutosavingField.tsx:174 `disabled={editor.state === 'saving' || !editor.dirty}` — of which only the first is the guard the rule allows.",
+        "source": "CLAUDE.md:65 against specs/hiring/04-candidate-card.design.md:385"
+      },
+      "suggestedFix": "Keep `disabled` for the in-flight save only, and let a press on a clean editor be the no-op `useAutosave` already makes it — or carve the case out in CLAUDE.md, deliberately, as a third permitted reason."
+    },
+    {
+      "id": "N1",
+      "severity": "note",
+      "rule": "spec/contradiction",
+      "file": "specs/hiring/07-manage-booking.design.md",
+      "symbol": "Accessibility",
+      "line": 423,
+      "claim": "07 sends the success of every action to a polite live region; 04 now lets the card's hidden region speak only an explicit save.",
+      "witness": {
+        "kind": "rule",
+        "detail": "07 design (:423-424): 'Success and failure of every action go to a polite live region; the error banner is `role=\"alert\"` so the two are never announced twice.' 04 design (:509-511): 'A separate visually-hidden `aria-live=\"polite\"` node announces **only explicit saves** — the one outcome no toast reports.' A team reschedule succeeding on the card is not an explicit save. It is a note rather than a blocker because 07's Accessibility section is shared between the public page and the team surfaces and does not say which this bullet is — 07 §16.72 (07-manage-booking.md:392-394) scopes the same rule to the manage page.",
+        "source": "specs/hiring/07-manage-booking.design.md:423 against specs/hiring/04-candidate-card.design.md:509"
+      },
+      "suggestedFix": "Mark the bullet 'on the manage page', which is what 07 §16.72 already says."
+    },
+    {
+      "id": "N2",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "file": "docs/adr/0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md",
+      "symbol": "The list of specs amended",
+      "line": 85,
+      "claim": "The record names five specs as the ones amended; a sixth was amended and cites it.",
+      "witness": {
+        "kind": "command",
+        "detail": "ADR 0010:85-86: 'The specs amended, statement by statement: 01 (both), 03 (both), 04 (both), 05 (both), 06 (both), each citing this record beside the statement it overrules.' git status --short → ' M specs/hiring/07-manage-booking.design.md', and that file now cites the record twice: :206 '| Outcome | `ToastHost` > `Toast` — on the card as on the list ([04 design], [ADR 0010]) |' and :221-222.",
+        "source": "docs/adr/0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md:85"
+      },
+      "suggestedFix": "Add '07 (design)' to the list."
+    },
+    {
+      "id": "N3",
+      "severity": "note",
+      "rule": "spec/missing-artefact",
+      "file": "specs/hiring/04-candidate-card.design.md",
+      "symbol": "Copy",
+      "line": 405,
+      "claim": "Five message strings are written out in both halves of the pair, against the checklist's rule that none is.",
+      "witness": {
+        "kind": "rule",
+        "detail": ".claude/skills/spec/references/checklist.md:84: 'No message text is duplicated between the business spec and a `.design.md`.' Duplicated: 'We couldn't find that candidate.' (04-candidate-card.md:396 / design:423); 'No criteria recorded yet.' (md:398 / design:414); 'Email copied' (md:402 / design:408); 'The clipboard is unavailable. Select the address to copy it.' (md:403 / design:409); \"Couldn't save. Retry\" (md:390 / design:420). Pre-existing rather than introduced by this pass, which is why it is a note.",
+        "source": "specs/hiring/04-candidate-card.design.md:405 against specs/hiring/04-candidate-card.md:388"
+      },
+      "suggestedFix": "Leave the sentences in the business spec's Error Messages table and cite the row from the design's Copy table, as the Delete confirmation row (design:426) already does."
+    },
+    {
+      "id": "N4",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "file": "specs/hiring/04-candidate-card.design.md",
+      "symbol": "The criterion chip — the archived marker",
+      "line": 281,
+      "claim": "The archived marker is specified inside the criterion's label and drawn as a separate badge, and neither the component map nor the Copy table records it.",
+      "witness": {
+        "kind": "command",
+        "detail": "The spec (:281-283): 'An **archived** criterion keeps its ` (archived)` marker inside the label, in `--text-secondary`.' sed -n '249,253p' 'apps/web/app/org/[orgId]/hiring/candidates/[candidateId]/CriteriaSection.tsx' → '{criterion.isArchived && (<Badge status=\"inactive\" outlined size=\"s\">{CANDIDATE_MESSAGES.archived}</Badge>)}', whose text is packages/validation/src/hiring-libraries.ts:274 `archivedBadge: 'Archived'`. The spec wins over the code by CLAUDE.md's rule, so this is a note rather than a blocker — but the marker has no component-map row (:345-379) and no Copy row (:405-426), so nothing in the document says which of the two it should be.",
+        "source": "apps/web/app/org/[orgId]/hiring/candidates/[candidateId]/CriteriaSection.tsx:250 against specs/hiring/04-candidate-card.design.md:281"
+      },
+      "suggestedFix": "One row in the component map and one in the Copy table, whichever form is chosen."
+    }
+  ]
+}

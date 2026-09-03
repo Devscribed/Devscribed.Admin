@@ -1,0 +1,257 @@
+{
+  "status": "blocked",
+  "spec": "specs/hiring/03-candidate-database.design.md",
+  "request": "Hiring UI bug fixes on the signed-in screens: remove the candidate database's \"Counting…\" preloader row; draw every page-load preloader and every empty state on the page's own ground rather than inside a card, as the candidate database's empty state already is; report every inline alert as a toast, with a failed load also drawing an empty state carrying the retry and a failed autosave's toast standing until dismissed. Dialog form-level errors and the public booking and manage pages are excluded.",
+  "read": {
+    "specs": [
+      "specs/hiring/03-candidate-database.design.md",
+      "specs/hiring/03-candidate-database.md",
+      "specs/hiring/README.md",
+      "specs/hiring/01-vacancies.design.md",
+      "specs/hiring/01-vacancies.md",
+      "specs/hiring/04-candidate-card.design.md",
+      "specs/hiring/04-candidate-card.md",
+      "specs/hiring/05-board.design.md",
+      "specs/hiring/05-board.md",
+      "specs/hiring/06-libraries.design.md",
+      "specs/hiring/06-libraries.md",
+      "specs/hiring/07-manage-booking.design.md",
+      "specs/hiring/02-booking-page.design.md",
+      "specs/hiring/controls/calendar-control.md",
+      "specs/hiring/controls/time-slot-picker-control.md",
+      "specs/design-system/decisions.md",
+      "docs/adr/0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md",
+      ".claude/skills/spec/references/checklist.md",
+      "CLAUDE.md"
+    ],
+    "files": [
+      "packages/ds/src/components/feedback/Toast.tsx",
+      "packages/ds/src/components/feedback/EmptyState.tsx",
+      "packages/ds/src/components/data/Table.tsx",
+      "packages/ds/src/components/data/TableToolbar.tsx",
+      "packages/ds/src/components/navigation/Pagination.tsx",
+      "packages/ds/src/components/overlays/MenuDrawer.tsx",
+      "packages/ds/src/components/overlays/Popover.tsx",
+      "packages/ds/src/components/core/Card.tsx",
+      "packages/ds/src/base.css",
+      "packages/ds/src/tokens/spacing.css",
+      "packages/validation/src/hiring-candidates.ts",
+      "apps/web/app/org/[orgId]/hiring/candidates/page.tsx",
+      "apps/web/app/org/[orgId]/hiring/candidates/[candidateId]/ApplicationSection.tsx",
+      "apps/web/app/org/[orgId]/hiring/vacancies/page.tsx",
+      "apps/web/app/org/[orgId]/hiring/vacancies/[vacancyId]/page.tsx",
+      "apps/web/app/org/[orgId]/hiring/vacancies/[vacancyId]/VacancyBoard.tsx",
+      "apps/web/app/org/[orgId]/members/page.tsx",
+      "apps/web/src/hiring/LoadFailed.tsx",
+      "apps/web/src/hiring/useToasts.ts",
+      "apps/web/src/hiring/SlotPicker.tsx",
+      "apps/web/src/hiring/RescheduleDialog.tsx",
+      "apps/web/src/hiring/CancelInterviewDialog.tsx",
+      "e2e/tests/hiring-candidates.spec.ts"
+    ]
+  },
+  "sweeps": {
+    "currency": 58,
+    "contradiction": 44,
+    "consequence": 19,
+    "obligations": 79,
+    "scope": 8
+  },
+  "findings": [
+    {
+      "id": "R1",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/hiring/03-candidate-database.design.md",
+      "symbol": "The filter drawer",
+      "line": 195,
+      "claim": "the document removes the count line and, in the drawer section, still says a count under the toolbar moves while the drawer is open",
+      "witness": {
+        "kind": "rule",
+        "detail": "The filter drawer (:195): 'Nothing here applies anything. Every control fires on change, the count under the toolbar moves while the drawer is still open, and `Show results` just gets the panel out of the way.' Layout (:65): '**There is no count line, and nothing stands in its place.** A later pass removed the line.' Scope tabs (:492): '**The count lives in the label, and only there.**' The tab strip is `TableToolbar`'s own left slot (:481-482), so it is *in* the toolbar, not under it; the node that was under the toolbar is the line :65 says no longer exists. No implementation both draws nothing under the toolbar and moves a count there.",
+        "source": "specs/hiring/03-candidate-database.design.md:195 against :65 and :492"
+      },
+      "suggestedFix": "Rewrite :195 to name the node that actually moves — 'the tab counts move while the drawer is still open' — and amend the identical sentence in the pair at specs/hiring/03-candidate-database.md:460."
+    },
+    {
+      "id": "R2",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/hiring/03-candidate-database.design.md",
+      "symbol": "Scope tabs — the drawing",
+      "line": 476,
+      "claim": "the Scope tabs drawing shows an unfiltered All count under three applied filters, three lines above the rule saying each tab counts under the applied filters",
+      "witness": {
+        "kind": "rule",
+        "detail": "Scope tabs (:476): '  ALL (128)  ASSIGNED TO ME (4)   [🔍 Search name or email…] [Filters (3)]'. Scope tabs (:492-493): '**The count lives in the label, and only there.** Each tab counts what *it* would show under the filters already applied, so `All (12)` beside `Assigned to me (4)` answers both …'. §08.38 (specs/hiring/03-candidate-database.md:194-195) says the same. The Layout drawing of the same toolbar was corrected in this change to '  ALL (12)  ASSIGNED TO ME (4)    [🔍 Search name or email…] [Filters (3)]' (:43); this second drawing of the same toolbar was not, and it draws `128` beside `Filters (3)` and beside prose using `All (12)` for that state.",
+        "source": "specs/hiring/03-candidate-database.design.md:476 against :43 and :492"
+      },
+      "suggestedFix": "Set :476 to `ALL (12)`, matching :43 and the prose at :493, or drop `Filters (3)` from that drawing."
+    },
+    {
+      "id": "R3",
+      "severity": "blocker",
+      "rule": "spec/stale-statement",
+      "file": "specs/hiring/03-candidate-database.design.md",
+      "symbol": "Toasts",
+      "line": 421,
+      "claim": "the spec says the deleted-candidate toast is the only toast in the product raised by a screen other than the one the action was taken on; the vacancy created toast is a second one",
+      "witness": {
+        "kind": "command",
+        "detail": "`grep -rn \"toast-vacancy-created|created=1\" apps/web`. The create is taken in `VacancyDialog` on the vacancies **list**, which hands the announcement to the destination: apps/web/app/org/[orgId]/hiring/vacancies/page.tsx:535 `router.push(`/org/${orgId}/hiring/vacancies/${vacancy.id}?created=1`);` under the comment 'A new vacancy's banner belongs to the destination, so it survives the navigation the spec asks for rather than being raised on a screen about to be replaced.' The toast is then raised on the **vacancy screen**: apps/web/app/org/[orgId]/hiring/vacancies/[vacancyId]/page.tsx:98-101 `push({ message: HIRING_MESSAGES.toast.vacancyCreated, testId: 'toast-vacancy-created' })`. specs/hiring/01-vacancies.design.md:218-221 records the same handoff. The spec says at :421-423: '`{name} deleted` is the first of those, and it is also the only toast in the product raised by a screen other than the one the action was taken on'.",
+        "source": "apps/web/app/org/[orgId]/hiring/vacancies/[vacancyId]/page.tsx:101"
+      },
+      "suggestedFix": "Drop 'only', or restate it as what makes the handoff necessary here — the card 404s the instant the flag is set — rather than as a count of the handoffs in the product."
+    },
+    {
+      "id": "R4",
+      "severity": "blocker",
+      "rule": "spec/stale-statement",
+      "file": "specs/hiring/03-candidate-database.design.md",
+      "symbol": "Layout — candidates",
+      "line": 53,
+      "claim": "the spec names six screens as sharing TableToolbar's geometry; TableToolbar has three consumers, all of them hiring, two of the six have no route, and the one I opened uses different numbers",
+      "witness": {
+        "kind": "command",
+        "detail": "The spec (:53-55): 'The row above the table is the system's own `TableToolbar` — the geometry Projects, Clients, Members, ToDo, Policies and Holidays all share: the strip on the left, a 250px search and the actions on the right, 20px gaps, 20px down to the table.' `grep -rl \"TableToolbar\" apps/web/app apps/web/src` returns exactly three files, all hiring: apps/web/app/org/[orgId]/hiring/candidates/page.tsx, .../hiring/settings/page.tsx, .../hiring/vacancies/page.tsx. Projects, Clients and Members are not among them. `find apps/web/app -type d` lists no ToDo and no Policies route at all. The members list hand-builds its row with different numbers: apps/web/app/org/[orgId]/members/page.tsx:145 `gap: 'var(--space-6)'` (16px, not 20) and :157 `wrapperStyle={{ width: '100%', maxWidth: 320 }}` (320px, not 250).",
+        "source": "apps/web/app/org/[orgId]/members/page.tsx:157"
+      },
+      "suggestedFix": "Name the screens that actually draw this toolbar (vacancies, hiring settings, this one), or state the geometry as the system's own without a list of consumers."
+    },
+    {
+      "id": "R5",
+      "severity": "blocker",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/hiring/03-candidate-database.design.md",
+      "symbol": "The row's actions",
+      "line": 145,
+      "claim": "one bullet says all three interview actions are absent on a cancelled row and then says View in calendar stays either way",
+      "witness": {
+        "kind": "rule",
+        "detail": "The row's actions (:143-145): 'The interview actions are **absent** on a cancelled row rather than disabled — there is nothing there to enable — and `Reschedule` and `Cancel` are absent on a **past** one for the same reason ([03 §10.54]). `View in calendar` stays either way.' Read with 'either way' = cancelled or past, the last sentence contradicts the first clause of the same bullet and the pair: specs/hiring/03-candidate-database.md:317 '| View in calendar | the row's interview stands | …', :337-338 '`View in calendar` stays on every uncancelled row', and TC-H03-E2E-08 expected result 4 (:1132) 'The three interview actions are gone and `View candidate` remains.' Read with 'either way' = ahead or past, it is consistent. The two readings differ in what the kebab draws on a cancelled row; the code takes the second (apps/web/app/org/[orgId]/hiring/candidates/page.tsx:589 `if (application && !application.isCancelled) {` gates the calendar item too).",
+        "source": "specs/hiring/03-candidate-database.design.md:145 against specs/hiring/03-candidate-database.md:317"
+      },
+      "suggestedFix": "Say which two cases 'either way' names — 'it stays on an interview that is ahead and on one that is past, and goes with the other two on a cancelled row'."
+    },
+    {
+      "id": "R6",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/hiring/03-candidate-database.md",
+      "symbol": "requirement 20",
+      "line": 121,
+      "claim": "the amended §05.20 requires a visible result count above the list and puts it in the tab labels; §08.41 gives an assigned interviewer no tab strip at all, so that caller has no count anywhere",
+      "witness": {
+        "kind": "rule",
+        "detail": "§05.20 (:121-123, rewritten by this change): 'The list is **paginated**, 25 rows to a page, with a **visible result count** above it — the count in each scope tab's label, `All (12)` beside `Assigned to me (4)`, computed under the filters that are applied (§08.41).' §08.41 (:200-201): 'A caller who may not see the whole database gets **no tab strip at all** — not a disabled one, not a single-tab one — and no count for the scope they may not see.' 03 design says the same twice: ':492 **The count lives in the label, and only there.**' and ':500 **No strip at all** for a caller who may not see the whole database.' For a caller with `canSeeAll: false` the two cannot both hold: there is no label, so there is no visible result count above the list, while §05.20 states one without exception and §06.32 (:172-173) promises that scope 'nothing is lost by an interviewer gaining them'. The code resolves it against §05.20 — apps/web/app/org/[orgId]/hiring/candidates/page.tsx:742-743 draws `tabs` only `if (data?.canSeeAll)` — and TC-H03-E2E-03 (:1060) asserts `candidates-scope-tabs` absent for that caller.",
+        "source": "specs/hiring/03-candidate-database.md:121 against :200"
+      },
+      "suggestedFix": "Decide it in §05.20: either qualify the count as visible only where the strip is drawn and say what an interviewer reads instead, or give that caller a count of their own and say where it sits. §08.41 and 03 design :492 must say the same thing."
+    },
+    {
+      "id": "R7",
+      "severity": "blocker",
+      "rule": "spec/unamended-consequence",
+      "file": "specs/hiring/03-candidate-database.md",
+      "symbol": "Screens / Flows",
+      "line": 495,
+      "claim": "two statements in the pair still assert the count line and its exact retired wording, and neither carries an amendment",
+      "witness": {
+        "kind": "rule",
+        "detail": "Overruled by 03 design :65 '**There is no count line, and nothing stands in its place.**' and :493-494 'What is lost with it is the org-wide total — a filter that matches nobody now reads `All (0)` rather than `0 of 128`. That is the trade, taken deliberately', and by the pair's own amended §05.20 (:123) 'There is no separate count line and nothing stands in its place'. Still asserting the opposite, unamended: (1) specs/hiring/03-candidate-database.md:495, Main flow step 4 — 'System sends one request with both clauses; the count updates to \"12 of 128\".' — which is exactly the `{matched} of {total}` form 03 design's Copy table dropped in this change and :494 says is gone; no export carries it (`CANDIDATE_MESSAGES` at packages/validation/src/hiring-candidates.ts:38-155 holds no count string). (2) specs/hiring/03-candidate-database.md:460, under 'The filter drawer' drawing — 'every control applies at once, so the count under the toolbar moves while the drawer is still open' — the node §05.20 says does not exist.",
+        "source": "specs/hiring/03-candidate-database.design.md:65 against specs/hiring/03-candidate-database.md:495 and :460"
+      },
+      "suggestedFix": "Amend both beside the statement, citing §05.20 / ADR 0010: step 4 becomes 'the `All` tab reads `All (12)`', and :460 becomes 'the tab counts move while the drawer is still open'."
+    },
+    {
+      "id": "R8",
+      "severity": "blocker",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/hiring/03-candidate-database.design.md",
+      "symbol": "Layout — the empty state's way out",
+      "line": 83,
+      "claim": "the empty state's way out is named `Clear filters`, a control the pair defines as leaving the search alone, and the screen's version of it clears the search",
+      "witness": {
+        "kind": "rule",
+        "detail": "03 design :83: 'the way out of an empty state (`Clear filters`, 160px, inside the state rather than under it) is part of what the state says'. 03 design :74: '`Clear all` left with the filters: it is `Clear filters` now, at the bottom of the drawer, beside the controls it clears.' §09.50 (specs/hiring/03-candidate-database.md:260-262) defines that name: '`Clear filters` empties every filter while leaving the search and the scope alone (§08.36).' Two readings, two implementations: the empty state's control either leaves the search applied — and a no-results state caused by the search offers a way out that changes nothing — or it clears the search too. The code takes the second and keeps a second name for it: apps/web/app/org/[orgId]/hiring/candidates/page.tsx:502 `function clearFilters()` (drawer, `candidates-clear-filters`) against :513-523 `function clearAll()` which begins `setSearch('')`, drawn at :1025 as `<Button onClick={clearAll} data-testid=\"candidates-clear-all\">` under the label `CANDIDATE_MESSAGES.clearFilters`. The design's component map row for the state (:261) names only `candidates-empty-state · candidates-no-results`, and `candidates-clear-all` — added to the pair's Required list by this change at :719 — is named by no test case in either document (`grep -rn \"candidates-clear-all\" specs/` returns that one line).",
+        "source": "specs/hiring/03-candidate-database.design.md:83 against specs/hiring/03-candidate-database.md:260"
+      },
+      "suggestedFix": "State the empty state's control as its own thing: what it clears (filters and the search), its label, and its id, in the component map and in the Required list, with a case that presses it."
+    },
+    {
+      "id": "R9",
+      "severity": "blocker",
+      "rule": "spec/scope-gap",
+      "file": "specs/hiring/03-candidate-database.design.md",
+      "symbol": "Accessibility — the two dialogs",
+      "line": 649,
+      "claim": "one inline alert with a retry survives on a signed-in hiring screen — the reschedule dialog's availability failure — and it is neither converted nor named as excluded",
+      "witness": {
+        "kind": "rule",
+        "detail": "The request asks that every inline alert on the signed-in screens be reported as a toast, excluding only dialog form-level errors and the public booking and manage pages. 03 design :649-650 binds this screen's dialogs to the control specs: 'Every day cell, slot and dialog control inside the two dialogs follows the two control specs ([calendar](controls/calendar-control.md), [slots](controls/time-slot-picker-control.md)).' specs/hiring/controls/calendar-control.md:176 requires the opposite of the new rule: '35. **Error** — a friendly message with a retry, drawn as an `InfoBanner variant=\"warning\"` above a `Button`.' (time-slot-picker-control.md:129 is the same for the slot list.) That is what the code draws — apps/web/src/hiring/SlotPicker.tsx:332 `<InfoBanner variant=\"warning\">{HIRING_MESSAGES.booking.availabilityFailed}</InfoBanner>` with the retry beneath at :333 — inside `RescheduleDialog`, which is mounted on the **candidate card**, a signed-in hiring screen: apps/web/app/org/[orgId]/hiring/candidates/[candidateId]/ApplicationSection.tsx:337. It is a failed **load** with a banner and a retry in the flow, not the dialog's form-level server error, which is a separate banner (apps/web/src/hiring/RescheduleDialog.tsx:148, `application-reschedule-error-{id}`). ADR 0010's exclusions (:41-43) name only 'a dialog's own form-level server error' and the public pages, so nothing covers this one; neither 04 design's component map nor 04's Required list mentions `calendar-error` / `slot-list-error` at all.",
+        "source": "specs/hiring/controls/calendar-control.md:176"
+      },
+      "suggestedFix": "Decide it and write it down in one place: either add the reschedule dialog's availability failure to the exclusions, naming why a picker inside a modal keeps its banner, or amend calendar-control §35 and time-slot-picker §31 for the internal host and say what the public one keeps."
+    },
+    {
+      "id": "R10",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "file": "specs/hiring/03-candidate-database.design.md",
+      "symbol": "Layout — the filter Card",
+      "line": 60,
+      "claim": "two design specs each claim to hold the last of the token map's four `--bg-panel-2` surfaces, and the token is in no stylesheet in the repository",
+      "witness": {
+        "kind": "command",
+        "detail": "`grep -rn \"bg-panel-2\" packages apps specs` returns no hit in packages/ds at all — colors.css, spacing.css, effects.css, typography.css and fonts.css do not define it — and two spec statements that cannot both be last: specs/hiring/03-candidate-database.design.md:60 '**The filter `Card` is gone**, and with it the last of the four `--bg-panel-2` uses in the token map', and specs/hiring/04-candidate-card.design.md:451 'The scheduling history is the last of the token map's four `--bg-panel-2` surfaces. It takes `--surface-sunken`' — a surface 04 still draws (apps/web/app/org/[orgId]/hiring/candidates/[candidateId]/ApplicationSection.tsx:675 carries the same sentence in a comment). Nothing implementable turns on it, which is why this is a note rather than a block.",
+        "source": "specs/hiring/03-candidate-database.design.md:60 against specs/hiring/04-candidate-card.design.md:451"
+      },
+      "suggestedFix": "One of the two says 'the last'; the other says 'one of'. Or drop the count, since the map it counts is not in this repository."
+    },
+    {
+      "id": "R11",
+      "severity": "note",
+      "rule": "spec/missing-artefact",
+      "file": "specs/hiring/03-candidate-database.design.md",
+      "symbol": "Copy",
+      "line": 320,
+      "claim": "the design spec owns micro-labels and its Copy table has no row for the retry button this change introduced",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/hiring/README.md:158-159: 'Copy ownership — validation messages belong to the business spec; headings, placeholders, hints, and micro-labels belong to the design spec.' The change adds a retry control at :262 ('`EmptyState` + retry `Button` in the table's place') and the pair's TC-H03-E2E-11 asserts its words — specs/hiring/03-candidate-database.md:1163 'Restore the endpoint and press `Try again`'. The Copy table (:320-355) has no row for it; the label is written inline in the screen instead (apps/web/app/org/[orgId]/hiring/candidates/page.tsx:970 `retryLabel=\"Try again\"`), while `CANDIDATE_MESSAGES` carries every other word on the screen. The same table duplicates nine strings the pair's Error Messages table already owns (Empty database, No results, Cancelled interview, Deleted toast, the delete dialog's three, the archived marker, the `View in calendar` toast), which the checklist forbids: 'No message text is duplicated between the business spec and a `.design.md`.'",
+        "source": ".claude/skills/spec/references/checklist.md:84"
+      },
+      "suggestedFix": "Add a `| Load failure retry | Try again |` row and drop the rows the Error Messages table already owns."
+    },
+    {
+      "id": "R12",
+      "severity": "note",
+      "rule": "spec/missing-artefact",
+      "file": "specs/hiring/03-candidate-database.md",
+      "symbol": "Required data-testid attributes",
+      "line": 699,
+      "claim": "eleven ids in the Required list are asserted by no test case in either document",
+      "witness": {
+        "kind": "command",
+        "detail": "Cross-checking the Required list (:699-720) against every `- **Selectors:**` line in the same file, and against 04's cases which cover the delete trio: no case names `candidates-timezone` (:700), `candidates-clear-all` (:719), `candidates-no-results` (:719), `candidates-filters-close` (:701), `candidate-name-{id}`, `candidate-email-{id}`, `candidate-app-count-{id}` (:709-711), `candidate-vacancy-{id}`, `candidate-interviewer-{id}`, `candidate-latest-{id}` (:710), or `candidate-criterion-{id}-{criterionId}` (:712). `criteria-filter-row/criterion/remove/archived-{index}` are likewise unnamed, while `criteria-filter-op-0` and `criteria-filter-value-0` are covered by TC-H03-E2E-01. The checklist requires 'Every `data-testid` in the selectors section appears in an E2E case, and vice versa.' Ten of the eleven predate this change; `candidates-clear-all` was added by it and is the one with a behaviour question attached (see R8).",
+        "source": ".claude/skills/spec/references/checklist.md:73"
+      },
+      "suggestedFix": "Either name them in the cases that already exercise those cells — TC-H03-E2E-01 reads a row, TC-H03-E2E-05 reads two — or drop the ids that nothing asserts."
+    },
+    {
+      "id": "R13",
+      "severity": "note",
+      "rule": "spec/missing-artefact",
+      "file": "specs/hiring/03-candidate-database.md",
+      "symbol": "TC-H03-E2E-11 — Covers",
+      "line": 1169,
+      "claim": "the one case that covers the shared load-failure mechanism enumerates three screens; five other documents hand their coverage to it",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/hiring/03-candidate-database.md:1169: '**Covers:** the load-failure mechanism for every hiring screen — the libraries, the candidate card and the board draw the same composition from the same component, and are not tested again for it.' Two more screens were pointed at this case by the same change and are not in that list: specs/hiring/01-vacancies.md:530-533 'The failed load and the loader standing on the page's own ground are the same mechanism every hiring screen draws from the same component, tested once on the cheapest page that exercises it: 03 TC-H03-E2E-11. This spec adds no case for them' — which covers both the vacancies list and the vacancy screen (01 design :329-333 gives each its own ids). The component itself has six call sites: `grep -rn \"LoadFailed\" apps/web` returns candidates/page.tsx:968, settings/page.tsx:425, candidates/[candidateId]/page.tsx:367, vacancies/page.tsx:366, vacancies/[vacancyId]/page.tsx:260 and VacancyBoard.tsx:240, while apps/web/src/hiring/LoadFailed.tsx:15 still says 'One composition for the four screens that need it'.",
+        "source": "specs/hiring/03-candidate-database.md:1169 against specs/hiring/01-vacancies.md:530"
+      },
+      "suggestedFix": "Name all five in the Covers line, and correct the count in the component's own note."
+    }
+  ]
+}

@@ -334,9 +334,9 @@ export interface CandidateRow {
 
 export interface CandidateDatabase {
   /**
-   * Unfiltered **and org-wide**, so the count line can say "12 of 128" (03 §05.20) — and
-   * so the "no candidates yet, share a booking link" state is never reached by a scope
-   * that merely happens to be empty.
+   * Unfiltered **and org-wide**, so the "no candidates yet, share a booking link" state is
+   * never reached by a scope or a filter that merely happens to be empty (03 §05.20–21): a
+   * database that holds people and shows none is "no results", not "no candidates".
    */
   total: number;
   matched: number;
