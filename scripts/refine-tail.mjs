@@ -68,10 +68,11 @@ function snapshot() {
 
 let last = null;
 const tick = () => {
-  if (!existsSync(resolve(ROOT, '.workflow/refine', `${stem}.loop.json`))) {
-    process.stdout.write(`${stem}: no ledger yet\n`);
-    return true;
-  }
+  /* No ledger is not the end. `--fresh` archives the old one before writing the new, so the
+     file is briefly absent in the middle of a healthy restart — and a watcher that exits there
+     dies exactly when the run it was armed for begins. The timeout is what ends a watch that
+     is waiting for something that never starts. */
+  if (!existsSync(resolve(ROOT, '.workflow/refine', `${stem}.loop.json`))) return false;
   const now = snapshot();
   if (now.key !== last) {
     process.stdout.write(`${now.line}\n`);
