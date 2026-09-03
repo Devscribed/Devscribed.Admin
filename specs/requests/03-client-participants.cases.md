@@ -246,19 +246,26 @@ against them.
 ### TC-03-INT-08
 
 - **Level:** Integration
-- **Covers:** REQ-03-002, REQ-03-014
+- **Covers:** REQ-03-002, REQ-03-014, REQ-03-042
 - **Asserts:** `POST /api/invitations/accept` → 409
   CLIENT_USER_MESSAGES.principalConflict;
+  `POST /api/invitations` → 409 CLIENT_USER_MESSAGES.principalConflict;
   `POST /api/login` → 200;
   `POST /api/login` → 400 AUTH_MESSAGES.deactivated
-- **Steps:** Take an account holding an active staff membership and accept a `client`
-  invitation with it. Then, for each row of the principal decision table that is reachable,
-  build the account and sign in: no rows at all; an active client row alone; a removed client
-  row alone; an active staff row alone; an active staff row with a removed client row; a
-  removed staff row with an active client row; a removed staff row alone; both rows removed.
-- **Expected Result:** The accept answers `409` and writes no `ClientMembership`, so the cell
-  the table marks unreachable stays unreachable. Every other cell resolves the principal the
-  table names, and every refusal carries the deactivated message.
+- **Steps:** Approach the unreachable cell from **both** directions. First, take an account
+  holding an active staff membership and accept a `client` invitation with it. Second, take an
+  account holding an active `ClientMembership` and, as an admin, invite that same address to
+  staff; then write a staff invitation for an address that is a client contact of another
+  organization and have it accepted. Then, for each row of the principal decision table that is
+  reachable, build the account and sign in: no rows at all; an active client row alone; a
+  removed client row alone; an active staff row alone; an active staff row with a removed
+  client row; a removed staff row with an active client row; a removed staff row alone; both
+  rows removed.
+- **Expected Result:** Every approach to the cell is refused with the same `409` and the same
+  message, and neither a `ClientMembership`, an `Invitation` nor a `Membership` is written by
+  the refused call — so the cell the table marks unreachable is unreachable from the client
+  side and from the staff side alike. Every other cell resolves the principal the table names,
+  and every refusal carries the deactivated message.
 
 ### TC-03-INT-09
 

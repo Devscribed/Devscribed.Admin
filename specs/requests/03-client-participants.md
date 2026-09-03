@@ -72,7 +72,7 @@ THE SYSTEM SHALL resolve at most one principal for an account, by the table belo
 | none | active | Sign-in resolves the **client** principal. |
 | none | removed | Sign-in is refused with `AUTH_MESSAGES.deactivated`. |
 | active | none | Sign-in resolves the **staff** principal. |
-| active | active | Unreachable — an accept that would write the second row is refused by REQ-03-014, and no other writer creates one. |
+| active | active | Unreachable — REQ-03-014 refuses the accept that would write the client row, REQ-03-042 refuses the invitation and the accept that would write the staff row, and no other writer creates either. |
 | active | removed | Sign-in resolves the **staff** principal. |
 | removed | none | Sign-in is refused with `AUTH_MESSAGES.deactivated`. |
 | removed | active | Sign-in resolves the **client** principal. |
@@ -147,8 +147,7 @@ organization, or an active one of the named client, THEN THE SYSTEM SHALL answer
 
 **Decided:** any client of the organization, whatever the other row's status — returning a
 removed row to `active` under a new client would rebind a row the old client's requests still
-resolve through. Staff membership, and a client membership in another organization, meet
-REQ-03-014 at accept.
+resolve through. A client membership in another organization meets REQ-03-014 at accept.
 
 #### REQ-03-014 — an address that belongs to staff
 
@@ -156,8 +155,16 @@ IF the account accepting a `client` invitation holds an active `Membership` or a
 `ClientMembership` of any organization, THEN THE SYSTEM SHALL answer `409` with
 `CLIENT_USER_MESSAGES.principalConflict`.
 
-**Decided:** refused at accept as well as at invite — the accept is the write that would
-break REQ-03-002.
+#### REQ-03-042 — an address that belongs to a client contact
+
+IF a staff invitation is written for, or accepted by, an account holding an active
+`ClientMembership` of any organization, THEN THE SYSTEM SHALL answer `409` with
+`CLIENT_USER_MESSAGES.principalConflict`, writing neither the invitation nor the `Membership`.
+
+**Decided:** both ends, mirroring REQ-03-014 and for its reason — the account may acquire the
+client principal between the invitation and its acceptance. The staff invitation's existing
+duplicate check reads staff rows only, and without this rule the cell REQ-03-002 calls
+unreachable is reached by inviting a contact to staff, which REQ-03-011 contemplates.
 
 #### REQ-03-015 — where accepting lands a client
 
@@ -388,7 +395,7 @@ invariants:
 | # | Criterion | Observed by |
 |---|---|---|
 | AC-1 | An invited client contact can sign in and reach the requests screen, and today's sign-in refusal for an account with no staff membership no longer applies to them. | TC-03-INT-03, TC-03-E2E-01 |
-| AC-2 | No account ends up holding both an active staff membership and an active client membership. | TC-03-INT-08 |
+| AC-2 | No account ends up holding both an active staff membership and an active client membership, approached from the client invitation and from the staff one alike. | TC-03-INT-08 |
 | AC-3 | A client principal reaches no organization screen other than requests, and the members, projects, contacts and request-topics routes answer 404. | TC-03-INT-13, TC-03-E2E-02 |
 | AC-4 | A request addressed to a client requires a project that the requester works on and that belongs to that client. | TC-03-INT-15, TC-03-INT-16, TC-03-INT-17 |
 | AC-5 | A client-audience topic is required for a client-addressed request and refused for a staff-addressed one. | TC-03-INT-18 |

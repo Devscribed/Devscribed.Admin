@@ -36,6 +36,7 @@ to.
 |---|---|---|---|
 | `POST /api/login` | none | `200` | `400` `AUTH_MESSAGES.invalidCredentials`, `AUTH_MESSAGES.deactivated` |
 | `POST /api/invitations/accept` | none | `200` | `400` `INVITE_MESSAGES.tokenInvalid`; `409` `CLIENT_USER_MESSAGES.principalConflict` |
+| `POST /api/invitations` | session | `200` | `409` `CLIENT_USER_MESSAGES.principalConflict` |
 | `GET /api/me` | session | `200` | `401` |
 | `GET /api/organizations/{orgId}/clients/{clientId}/contacts` | session, org scope, `view-clients` | `200` | `404` |
 | `POST /api/organizations/{orgId}/clients/{clientId}/contacts` | session, org scope, `manage-clients` | `201` | `400` `CLIENT_MESSAGES.clientArchived`, `CLIENT_USER_MESSAGES.emailInvalid`; `404`; `409` `CLIENT_USER_MESSAGES.alreadyLinked` |
@@ -180,7 +181,7 @@ a case author asserting a body never leaves this bundle.
 | `CLIENT_USER_MESSAGES.emailInvalid` | `POST /api/organizations/{orgId}/clients/{clientId}/contacts` | Enter a valid email address | yes |
 | `CLIENT_USER_MESSAGES.alreadyLinked` | `POST /api/organizations/{orgId}/clients/{clientId}/contacts` | This person is already a contact of a client in this workspace | yes |
 | `CLIENT_USER_MESSAGES.alreadyRemoved` | `DELETE /api/organizations/{orgId}/clients/{clientId}/contacts/{contactId}` | This contact has already been removed | yes |
-| `CLIENT_USER_MESSAGES.principalConflict` | `POST /api/invitations/accept` | This email address already belongs to somebody in a workspace | yes |
+| `CLIENT_USER_MESSAGES.principalConflict` | `POST /api/invitations/accept`, `POST /api/invitations` | This email address already belongs to somebody in a workspace | yes |
 | `CLIENT_USER_MESSAGES.clientCannotCreate` | `POST /api/organizations/{orgId}/requests` | Client contacts cannot raise requests | yes |
 | `CLIENT_MESSAGES.clientArchived` | `POST /api/organizations/{orgId}/clients/{clientId}/contacts` | This client is archived and cannot be assigned to new projects. | no |
 | `AUTH_MESSAGES.deactivated` | `POST /api/login` | Your account has been deactivated. Contact your administrator. | no |
@@ -244,7 +245,7 @@ new `NOT NULL` anywhere.
 | Field | Type | Description |
 |---|---|---|
 | `id` | `String` PK, uuid | |
-| `accountId` | `String` `@unique` FK → `Account`, **Cascade** | One client contact per account. The uniqueness is what makes REQ-03-002's invariant a schema fact rather than a rule. |
+| `accountId` | `String` `@unique` FK → `Account`, **Cascade** | One client contact per account, as a schema fact. It says nothing about the staff row: `Membership.accountId` is `@unique` too, and two unique constraints on two tables cannot express mutual exclusion between them. That exclusion is a rule — REQ-03-014 and REQ-03-042 — enforced at both writes, not by the schema. |
 | `organizationId` | `String` FK → `Organization`, **Cascade** | Scope key. |
 | `clientId` | `String` FK → `Client`, **Cascade** | The client this person works for. |
 | `status` | `String` `@default("active")` | `active` \| `removed`. Removal is a soft delete; there is no hard delete. |
