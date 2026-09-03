@@ -33,6 +33,13 @@ locals {
     STORAGE_DRIVER   = "s3"
     DOCUMENTS_BUCKET = var.documents_bucket
 
+    # Hiring's two ports, read as given in every environment (hiring 00 requirement 15).
+    # fs on a Fargate task keeps CVs only until the task is replaced, and fake invites
+    # nobody; the tfvars that choose them accept that.
+    STORAGE_PROVIDER  = var.hiring_storage_provider
+    STORAGE_FS_ROOT   = var.hiring_storage_fs_root
+    CALENDAR_PROVIDER = var.calendar_provider
+
     # `memory` on the dev stand, where mail is simulated because no provider exists yet —
     # see `test_fixtures_enabled`. Everywhere else this is the real transport.
     MAIL_TRANSPORT        = var.test_fixtures_enabled ? "memory" : "ses"

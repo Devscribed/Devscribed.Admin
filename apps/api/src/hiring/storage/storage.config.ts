@@ -1,12 +1,10 @@
 /**
  * Storage configuration, resolved once at boot.
  *
- * Filesystem storage on Vercel would accept a booking and silently discard the CV:
- * the function's filesystem is read-only except `/tmp`, and `/tmp` does not survive
- * the invocation. So production plus `fs` refuses to start (00 §03.15). That is
- * deliberately stricter than `SESSION_SECRET`, which falls back to a development key
- * without complaint — a missing signing key breaks loudly on the next request, where
- * a discarded CV breaks silently and is unrecoverable.
+ * `STORAGE_PROVIDER` is read as given, in every environment; `NODE_ENV` plays no part
+ * (hiring 00 §03.15). `fs` on an ephemeral filesystem keeps CVs only until the task is
+ * replaced, and an environment that sets it there has accepted that. What is still
+ * refused, before the port opens, is a value with no implementation behind it.
  */
 
 export type StorageProvider = 'fs' | 's3';
@@ -33,13 +31,6 @@ export function resolveStorageConfig(env: NodeJS.ProcessEnv = process.env): Stor
   if (provider === 's3') {
     throw new StorageConfigError(
       'STORAGE_PROVIDER=s3 is not implemented in this release. Set STORAGE_PROVIDER=fs.',
-    );
-  }
-
-  if (env.NODE_ENV === 'production') {
-    throw new StorageConfigError(
-      'STORAGE_PROVIDER=fs cannot be used in production: uploaded CVs would be discarded. ' +
-        'Set STORAGE_PROVIDER to a durable provider before starting.',
     );
   }
 

@@ -153,16 +153,14 @@ describe('Calendar configuration', () => {
     );
   });
 
-  /** The calendar half of TC-H00-INT-01's reasoning: no silent loss in production. */
-  it('refuses production with the fake calendar', () => {
-    expect(() => resolveCalendarConfig({ NODE_ENV: 'production' })).toThrow(/CALENDAR_PROVIDER/);
-    expect(() =>
-      resolveCalendarConfig({
-        NODE_ENV: 'production',
-        GRAPH_TENANT_ID: 'tenant',
-        GRAPH_CLIENT_ID: 'client',
-        GRAPH_CLIENT_SECRET: 'secret',
-      }),
-    ).not.toThrow();
+  /** The calendar half of TC-H00-INT-04: the choice is read as given in every environment. */
+  it('reads the fake calendar as given, in production as anywhere else', () => {
+    expect(resolveCalendarConfig({ NODE_ENV: 'production' })).toEqual({
+      provider: 'fake',
+      graph: null,
+    });
+    expect(
+      resolveCalendarConfig({ NODE_ENV: 'production', CALENDAR_PROVIDER: 'fake' }).provider,
+    ).toBe('fake');
   });
 });

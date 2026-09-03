@@ -1,11 +1,11 @@
 /**
  * Which calendar the application talks to, decided once at boot.
  *
- * This mirrors `storage.config.ts` and for the same reason. A production process
- * running the fake calendar would take bookings, write applications, and create no
- * event at all — so nobody receives an invite, and the interviewer's calendar stays
- * empty while the board fills up. That is the same class of silent loss as discarding
- * an uploaded CV, and it gets the same treatment: refuse to start.
+ * `CALENDAR_PROVIDER` is read as given, in every environment, and defaults to Graph when
+ * the tenant credentials are present and the fake otherwise; `NODE_ENV` plays no part
+ * (hiring 00 §03.15). The fake creates no event and invites nobody, and an environment
+ * that runs it has accepted that. What is still refused is a name with no provider behind
+ * it, and Graph with any of its three variables missing.
  */
 
 export type CalendarProviderName = 'graph' | 'fake';
@@ -53,13 +53,6 @@ export function resolveCalendarConfig(env: NodeJS.ProcessEnv = process.env): Cal
   }
 
   if (provider === 'fake') {
-    if (env.NODE_ENV === 'production') {
-      throw new CalendarConfigError(
-        'CALENDAR_PROVIDER=fake cannot be used in production: bookings would create no ' +
-          'calendar event, so neither the candidate nor the interviewer would be invited. ' +
-          `Set ${GRAPH_VARIABLES.join(', ')} before starting.`,
-      );
-    }
     return { provider, graph: null };
   }
 

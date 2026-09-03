@@ -389,3 +389,39 @@ variable "create_github_oidc_provider" {
   EOT
   type        = bool
 }
+
+variable "hiring_storage_provider" {
+  description = <<-EOT
+    Where hiring keeps uploaded CVs: fs or s3. Read as given in every environment
+    (specs/hiring/00-integrations.md, 03.15). fs on a Fargate task keeps CVs only until the
+    task is replaced - a deploy, a crash, a scale event - and an environment that sets it
+    has accepted that. s3 is not built in this release and refuses to start.
+  EOT
+  type        = string
+
+  validation {
+    condition     = contains(["fs", "s3"], var.hiring_storage_provider)
+    error_message = "hiring_storage_provider must be fs or s3."
+  }
+}
+
+variable "hiring_storage_fs_root" {
+  description = "Directory hiring writes CVs to when the provider is fs. Must be writable by the task user, which rules out the application directory; ephemeral on Fargate."
+  type        = string
+  default     = "/tmp/cv-storage"
+}
+
+variable "calendar_provider" {
+  description = <<-EOT
+    Which calendar hiring talks to: graph or fake. Read as given in every environment
+    (specs/hiring/00-integrations.md, 03.15). fake creates no calendar event, so a booking
+    invites nobody; an environment that sets it has accepted that. graph needs the three
+    GRAPH_* variables, which this configuration does not supply yet.
+  EOT
+  type        = string
+
+  validation {
+    condition     = contains(["graph", "fake"], var.calendar_provider)
+    error_message = "calendar_provider must be graph or fake."
+  }
+}

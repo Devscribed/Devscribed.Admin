@@ -120,12 +120,16 @@ decision.
 
 14. `LocalFsStorage` writes under a git-ignored directory and ships for development and the test
     suites. `S3Storage` is the production implementation and is not built in this release.
-15. **Fail-fast at boot.** An application starting with `NODE_ENV=production` and a filesystem
-    storage provider **must refuse to start**, with a message naming the variable to set. Vercel
-    functions get a read-only filesystem except `/tmp`, and `/tmp` does not survive the invocation
-    — so the alternative is accepting bookings and silently discarding every CV. This is
-    deliberately stricter than the existing `SESSION_SECRET` behaviour, which falls back to a
-    development key without complaint.
+15. **Configuration is read as given, in every environment.** `STORAGE_PROVIDER` is the only
+    input to the choice of storage, and `CALENDAR_PROVIDER` (with the Graph variables) the only
+    input to the choice of calendar; `NODE_ENV` plays no part in either. An environment that sets
+    `fs` on an ephemeral filesystem — a Fargate task, a Vercel function — keeps CVs only until that
+    filesystem is replaced, and one that sets `fake` takes bookings that invite nobody. Setting
+    either there is a statement that the stand accepts the loss. The application still refuses,
+    before the port opens, a value it has no implementation for — `s3` in this release, or an
+    unknown name — with a message naming the variable. *Amended: this item previously required
+    an application with `NODE_ENV=production` and filesystem storage to refuse to start, and the
+    calendar resolver mirrored it for the fake; TC-H00-INT-01 is retired accordingly.*
 16. **CVs are served through an authenticated endpoint, never a direct URL.** The API checks the
     session and the interviewer scope, then streams the bytes from whichever provider is
     configured. Presigned URLs remain available later as an optimisation; they are not the security
@@ -183,11 +187,12 @@ decision.
 
 | Variable | Required | Notes |
 |---|---|---|
-| `GRAPH_TENANT_ID` | yes | Azure app registration |
-| `GRAPH_CLIENT_ID` | yes | |
-| `GRAPH_CLIENT_SECRET` | yes | |
-| `STORAGE_PROVIDER` | yes | `fs` \| `s3`. `fs` is rejected at boot in production (§03.15) |
-| `STORAGE_FS_ROOT` | when `fs` | git-ignored path |
+| `CALENDAR_PROVIDER` | no | `graph` \| `fake`. Unset means Graph when `GRAPH_TENANT_ID` is set, the fake otherwise. Read as given in every environment (§03.15); `fake` creates no event and invites nobody |
+| `GRAPH_TENANT_ID` | when `graph` | Azure app registration |
+| `GRAPH_CLIENT_ID` | when `graph` | |
+| `GRAPH_CLIENT_SECRET` | when `graph` | |
+| `STORAGE_PROVIDER` | yes | `fs` \| `s3`. Read as given in every environment (§03.15); `s3` is not built in this release |
+| `STORAGE_FS_ROOT` | when `fs` | a path the process can write. Git-ignored locally; ephemeral on a Fargate task, where the deployment supplies it |
 
 There is no `HIRING_MANAGER_EMAIL`. The interviewer is a property of the vacancy
 ([01-vacancies.md](01-vacancies.md) §02).
@@ -236,6 +241,7 @@ There is no `HIRING_MANAGER_EMAIL`. The interviewer is a property of the vacancy
   2. Disallowed characters are replaced before the path is built; the read-back returns the same bytes.
 
 ### TC-H00-INT-01: Production plus filesystem storage refuses to boot
+- **Retired.** §03.15 no longer requires the refusal; TC-H00-INT-04 covers what the resolvers accept and reject now.
 - **Level:** Integration
 - **Preconditions:** `NODE_ENV=production`, `STORAGE_PROVIDER=fs`.
 - **Steps:**
@@ -263,3 +269,15 @@ There is no `HIRING_MANAGER_EMAIL`. The interviewer is a property of the vacancy
   2. The unassigned `user` receives 404.
   3. The unauthenticated caller receives 401.
   4. No response exposes the underlying storage key or a provider URL.
+
+### TC-H00-INT-04: Storage and calendar configuration is read as given
+- **Level:** Integration
+- **Preconditions:** none; the resolvers are called with an explicit environment.
+- **Steps:**
+  1. Resolve storage with `STORAGE_PROVIDER=fs` under `NODE_ENV=production`, `development` and `test`.
+  2. Resolve the calendar with no Graph variables under `NODE_ENV=production`, and again with `CALENDAR_PROVIDER=fake`.
+  3. Resolve storage with `STORAGE_PROVIDER=s3` and with an unknown name.
+- **Expected Result:**
+  1. Every `fs` resolution succeeds with the configured root; `NODE_ENV` changes nothing.
+  2. Both calendar resolutions answer `fake`.
+  3. Both storage resolutions throw, naming `STORAGE_PROVIDER`.

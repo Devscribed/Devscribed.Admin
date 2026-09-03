@@ -25,10 +25,10 @@ import { resolveStorageConfig } from './hiring/storage/storage.config';
  * development and Fargate in production.
  */
 async function bootstrap(): Promise<void> {
-  // Before anything else, and deliberately before the port is opened: an application
-  // that would keep CVs somewhere they will not survive, or create no calendar event at
-  // all, must not accept bookings. The module would refuse too, but this reports it as
-  // its own sentence rather than as a dependency-injection failure.
+  // Before anything else, and deliberately before the port is opened: a storage or
+  // calendar variable naming something this build cannot provide must stop the process
+  // here. The module would refuse too, but this reports it as its own sentence rather
+  // than as a dependency-injection failure.
   resolveStorageConfig();
   resolveCalendarConfig();
 

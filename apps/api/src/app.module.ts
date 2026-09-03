@@ -112,11 +112,11 @@ import { VacationService } from './vacation/vacation.service';
 
 /**
  * Storage is resolved at module construction, so a misconfiguration throws before
- * `main.ts` ever reaches `listen()` — an application that would accept bookings and
- * discard every CV must not open a port (hiring 00 requirement 15).
+ * `main.ts` ever reaches `listen()`.
  *
- * `LocalFsStorage` is the only implementation this release ships; `resolveStorageConfig`
- * is what refuses every environment it is wrong for.
+ * `LocalFsStorage` is the only implementation this release ships. `resolveStorageConfig`
+ * reads `STORAGE_PROVIDER` as given in every environment (hiring 00 requirement 15) and
+ * refuses only a value it has no implementation for.
  */
 const storageProvider = {
   provide: Storage,
@@ -127,9 +127,9 @@ const storageProvider = {
  * One calendar implementation, chosen here so no caller ever names it.
  *
  * Graph whenever the tenant credentials are present, and the fake otherwise — which is
- * every development machine and both automated suites, neither of which can hold a real
- * mailbox. `resolveCalendarConfig` is what refuses the one combination that would take
- * bookings and invite nobody: the fake in production.
+ * every development machine, both automated suites, and any deployed stand that sets
+ * `CALENDAR_PROVIDER=fake` and accepts that bookings then invite nobody. The choice is
+ * read as given in every environment (hiring 00 requirement 15).
  */
 const calendarProvider = {
   provide: CalendarProvider,

@@ -141,6 +141,12 @@ module "app" {
   signwell_secrets_provisioned = var.signwell_secrets_provisioned
 
   test_fixtures_enabled = var.test_fixtures_enabled
+
+  # Hiring's storage and calendar, read as given in every environment. See the
+  # variables' descriptions for what fs and fake cost.
+  hiring_storage_provider = var.hiring_storage_provider
+  hiring_storage_fs_root  = var.hiring_storage_fs_root
+  calendar_provider       = var.calendar_provider
 }
 
 module "sweep" {

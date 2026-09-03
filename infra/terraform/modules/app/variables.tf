@@ -253,3 +253,18 @@ variable "signwell_secrets_provisioned" {
   type        = bool
   default     = false
 }
+
+variable "hiring_storage_provider" {
+  description = "Hiring CV storage: fs or s3. Becomes STORAGE_PROVIDER, read as given in every environment."
+  type        = string
+}
+
+variable "hiring_storage_fs_root" {
+  description = "Directory hiring writes CVs to when the provider is fs. Must be writable by the task user; ephemeral on Fargate."
+  type        = string
+}
+
+variable "calendar_provider" {
+  description = "Hiring calendar: graph or fake. Becomes CALENDAR_PROVIDER, read as given in every environment."
+  type        = string
+}

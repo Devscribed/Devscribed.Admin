@@ -10,28 +10,18 @@ import { StorageConfigError, resolveStorageConfig } from '../src/hiring/storage/
  * production: a discarded CV cannot be recovered from anywhere.
  */
 describe('Hiring — storage', () => {
-  /** TC-H00-INT-01 */
+  /** TC-H00-INT-04 (TC-H00-INT-01 retired) */
   describe('resolveStorageConfig', () => {
-    it('refuses production with filesystem storage, naming the variable', () => {
-      expect(() =>
-        resolveStorageConfig({ NODE_ENV: 'production', STORAGE_PROVIDER: 'fs' } as NodeJS.ProcessEnv),
-      ).toThrow(StorageConfigError);
-
-      try {
-        resolveStorageConfig({ NODE_ENV: 'production', STORAGE_PROVIDER: 'fs' } as NodeJS.ProcessEnv);
-      } catch (error) {
-        expect((error as Error).message).toContain('STORAGE_PROVIDER');
+    it('reads filesystem storage as given, in production as anywhere else', () => {
+      for (const NODE_ENV of ['production', 'development', 'test']) {
+        expect(
+          resolveStorageConfig({
+            NODE_ENV,
+            STORAGE_PROVIDER: 'fs',
+            STORAGE_FS_ROOT: '/tmp/cv',
+          } as NodeJS.ProcessEnv),
+        ).toEqual({ provider: 'fs', root: '/tmp/cv' });
       }
-    });
-
-    it('accepts filesystem storage outside production', () => {
-      expect(
-        resolveStorageConfig({
-          NODE_ENV: 'development',
-          STORAGE_PROVIDER: 'fs',
-          STORAGE_FS_ROOT: '/tmp/cv',
-        } as NodeJS.ProcessEnv),
-      ).toEqual({ provider: 'fs', root: '/tmp/cv' });
     });
 
     it('refuses a provider it has no implementation for', () => {
