@@ -322,6 +322,10 @@ describe('the request list query vocabulary', () => {
     expect(vacationStatusesFor('cancelled')).toEqual(['cancelled']);
     // `answered` has no vacation counterpart, so it selects no vacation row at all.
     expect(vacationStatusesFor('answered')).toEqual([]);
+    // Requests spec 02's `closed` selects both closures on this side too (edge case 9),
+    // so one control on one page still means one thing. A vacation's own vocabulary is
+    // untouched: the rows that come back still read Rejected and Cancelled.
+    expect(vacationStatusesFor('closed')).toEqual(['rejected', 'cancelled']);
   });
 });
 

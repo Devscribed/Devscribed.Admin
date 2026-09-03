@@ -57,7 +57,8 @@ export default function RequestTopicsPage({ params }: { params: Promise<{ orgId:
   const [audience, setAudience] = useState<Audience>('staff');
   const [topics, setTopics] = useState<RequestTopicRow[] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  /** The message the banner shows, or `null` for no banner. */
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [modalMode, setModalMode] = useState<RequestTopicModalMode | null>(null);
 
@@ -75,14 +76,14 @@ export default function RequestTopicsPage({ params }: { params: Promise<{ orgId:
           const body = (await response.json()) as RequestTopicsResponse;
           if (signal?.aborted) return;
           setTopics(body.topics);
-          setError(false);
+          setError(null);
         } else {
           // The last good list stays on screen behind the banner.
-          setError(true);
+          setError(REQUEST_MESSAGES.genericError);
         }
       } catch (err) {
         if ((err as Error)?.name === 'AbortError') return;
-        setError(true);
+        setError(REQUEST_MESSAGES.genericError);
       }
       if (signal?.aborted) return;
       setLoading(false);
@@ -110,22 +111,43 @@ export default function RequestTopicsPage({ params }: { params: Promise<{ orgId:
     [inAudience],
   );
 
-  /** One `PATCH`, then a re-read of the catalogue. Nothing is written optimistically. */
+  /**
+   * One `PATCH`, then a re-read of the catalogue. Nothing is written optimistically.
+   *
+   * **A refusal is shown, never swallowed.** These routes publish two user-facing strings
+   * the curator can genuinely reach: `statusUnchanged` when somebody else archived the row
+   * first (REQ-02-013, edge case 12) and `manageForbidden` for a curator demoted
+   * mid-session (REQ-02-007). Reading only the thrown case would leave both — and every
+   * 5xx — as a press that appears to do nothing, or worse, as a row that moves because
+   * *another* curator's write landed while this one was refused.
+   *
+   * The re-read happens either way, so the screen still shows the truth; the message is
+   * applied after it, because a successful `load()` clears the banner and would otherwise
+   * erase the refusal it is there to report.
+   */
   async function write(path: string, body?: object): Promise<void> {
     if (busy) return;
     setBusy(true);
+
+    let failure: string | null = null;
     try {
-      await fetch(`/api/organizations/${orgId}/request-topics${path}`, {
+      const response = await fetch(`/api/organizations/${orgId}/request-topics${path}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
         ...(body ? { body: JSON.stringify(body) } : {}),
       });
+      if (!response.ok) {
+        const answer = await response.json().catch(() => null);
+        failure = answer?.message ?? REQUEST_MESSAGES.genericError;
+      }
     } catch {
-      setError(true);
+      failure = REQUEST_MESSAGES.genericError;
     }
+
     setBusy(false);
     await load();
+    if (failure) setError(failure);
   }
 
   /**
@@ -202,8 +224,14 @@ export default function RequestTopicsPage({ params }: { params: Promise<{ orgId:
         ))}
       </div>
 
-      {error && (
-        <div data-testid="request-topics-error-banner" style={{ marginBottom: 'var(--sp-6)' }}>
+      {/* Carries whatever the server said — `statusUnchanged`, `manageForbidden` or the
+          generic copy — so a refused press says why it was refused rather than looking
+          like a press that did nothing.
+
+          No `data-testid` on the banner or its retry control: the spec's testid table
+          names none for either, and an id the spec does not name is not mine to add. */}
+      {error !== null && (
+        <div style={{ marginBottom: 'var(--sp-6)' }}>
           <InfoBanner tone="error" role="alert">
             <div
               style={{
@@ -213,12 +241,11 @@ export default function RequestTopicsPage({ params }: { params: Promise<{ orgId:
                 gap: 'var(--sp-4)',
               }}
             >
-              <span>{REQUEST_MESSAGES.genericError}</span>
+              <span>{error}</span>
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={() => void load()}
-                data-testid="request-topics-error-retry-btn"
               >
                 Retry
               </Button>
@@ -457,8 +484,10 @@ function TopicRow({
 /** Token-coloured blocks in the rows' place — no empty state, no flash of "no topics". */
 function TopicsSkeleton() {
   return (
+    // No `data-testid` here either, for the same reason: the spec names none for the
+    // skeleton. The UI Description's "Loading (catalogue)" row requires it to be drawn in
+    // the rows' place, which it is.
     <div
-      data-testid="request-topics-loading-skeleton"
       style={{
         background: 'var(--bg-panel)',
         border: 'var(--border-hair) solid var(--border)',
