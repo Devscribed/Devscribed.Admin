@@ -42,6 +42,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { agentSummary, parseAgentLog } from './refine-read.mjs';
+import { priceOf, ratesFromAllRuns, sessionUsage } from './usage-recover.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const RUNS = join(ROOT, '.workflow', 'runs');
@@ -246,13 +247,22 @@ function collectSteps() {
       wallSec,
       apiSec: Math.round((log?.duration_api_ms ?? 0) / 1000),
       turns: log?.num_turns ?? live?.turns ?? null,
-      costUsd: +(log?.total_cost_usd ?? 0).toFixed(2),
+      calls: live?.calls ?? null,
+      /**
+       * `null` where the closing `result` never arrived — a killed or in-flight stage — and a
+       * number only where one did. Zero would say the stage cost nothing, which is the one
+       * thing it did not do: the implement attempt the fuse killed ran 345 turns and 244 tool
+       * calls and showed on the board as free.
+       */
+      costUsd: log ? +(log.total_cost_usd ?? 0).toFixed(2) : null,
+      tokens: log
+        ? {
+          out: log.usage?.output_tokens ?? 0,
+          cacheRead: log.usage?.cache_read_input_tokens ?? 0,
+          cacheWrite: log.usage?.cache_creation_input_tokens ?? 0,
+        }
+        : null,
       stopReason: log?.stop_reason ?? null,
-      tokens: {
-        out: log?.usage?.output_tokens ?? 0,
-        cacheRead: log?.usage?.cache_read_input_tokens ?? 0,
-        cacheWrite: log?.usage?.cache_creation_input_tokens ?? 0,
-      },
       prompt,
       result: clip(log?.result ?? null),
       report,
@@ -347,7 +357,7 @@ function attachTools() {
     s.calls = s.tools.length;
     s.thinkSec = Math.max(0, s.wallSec - s.toolSec);
     s.thinkPct = s.wallSec ? Math.round((s.thinkSec / s.wallSec) * 100) : 0;
-    s.tokPerSec = s.apiSec ? +(s.tokens.out / s.apiSec).toFixed(1) : null;
+    s.tokPerSec = s.apiSec && s.tokens ? +(s.tokens.out / s.apiSec).toFixed(1) : null;
   }
 }
 attachTools();
@@ -473,7 +483,39 @@ const cov = coverage();
 
 /* ── totals ───────────────────────────────────────────────────────────────── */
 
+/**
+ * What the stages that died never reported, recovered from the session store.
+ *
+ * A resumed stage shares its session with the attempt it continues, so the transcript holds
+ * both and the later attempt's own reported total is subtracted to leave the killed one's.
+ * Cost is priced from rates fitted on this run's completed stages and is marked `estimated`
+ * wherever it is shown; tokens are exact.
+ */
+(function recoverKilled() {
+  const rates = ratesFromAllRuns(RUNS);
+  for (const s of steps) {
+    if (s.script || s.tokens || !s.sessionId) continue;
+    const whole = sessionUsage(ROOT, s.sessionId);
+    if (!whole) continue;
+    const shared = steps.filter((o) => o !== s && o.sessionId === s.sessionId && o.tokens);
+    const t = {
+      out: whole.out - shared.reduce((a, o) => a + o.tokens.out, 0),
+      cacheRead: whole.cacheRead - shared.reduce((a, o) => a + o.tokens.cacheRead, 0),
+      cacheWrite: whole.cacheWrite - shared.reduce((a, o) => a + o.tokens.cacheWrite, 0),
+    };
+    if (t.out <= 0) continue;
+    s.tokens = t;
+    s.tokensRecovered = true;
+    const r = rates[s.model] ?? rates['claude-opus-5'] ?? null;
+    s.costUsd = priceOf(t, r);
+    s.costEstimated = s.costUsd != null;
+    s.costErrPct = r ? Math.round(r.worstErr * 100) : null;
+  }
+})();
+
 const agents = steps.filter((s) => !s.script && s.state === 'done');
+/** Every invocation that spent money, whether or not it lived to report it. */
+const billable = steps.filter((s) => !s.script && s.costUsd != null);
 const t0 = steps.length ? Math.min(...steps.map((s) => s.startedAt)) : Date.now();
 const t1 = steps.length ? Math.max(...steps.map((s) => s.endedAt ?? Date.now())) : Date.now();
 
@@ -481,8 +523,18 @@ const totals = {
   wallSec: Math.round((t1 - t0) / 1000),
   apiSec: agents.reduce((a, s) => a + s.apiSec, 0),
   toolSec: steps.reduce((a, s) => a + s.toolSec, 0),
-  costUsd: +agents.reduce((a, s) => a + s.costUsd, 0).toFixed(2),
-  outTokens: agents.reduce((a, s) => a + s.tokens.out, 0),
+  /* Over everything that spent, not over everything that finished. A killed attempt is billed
+     like any other, and leaving it out is what made this run's headline read $15.62 when the
+     stage the fuse cut short had cost roughly three times the rest of it together. */
+  costUsd: +billable.reduce((a, s) => a + (s.costUsd ?? 0), 0).toFixed(2),
+  outTokens: billable.reduce((a, s) => a + (s.tokens?.out ?? 0), 0),
+  cacheTokens: billable.reduce((a, s) => a + (s.tokens?.cacheRead ?? 0) + (s.tokens?.cacheWrite ?? 0), 0),
+  estimated: billable.filter((s) => s.costEstimated).length,
+  /* Invocations whose closing summary never arrived, counted over every step rather than over
+     `agents` — which is filtered to finished ones, so a killed stage is not in it and counting
+     nulls there always answers zero. Their cost and tokens are in none of the figures above,
+     and the board says how many rather than letting the totals read complete. */
+  unaccounted: steps.filter((s) => !s.script && s.state === 'aborted').length,
   turns: agents.reduce((a, s) => a + (s.turns ?? 0), 0),
   calls: steps.reduce((a, s) => a + s.calls, 0),
   invocations: agents.length,
@@ -501,8 +553,8 @@ for (const s of agents) {
   b.wallSec += s.wallSec;
   b.apiSec += s.apiSec;
   b.toolSec += s.toolSec;
-  b.costUsd = +(b.costUsd + s.costUsd).toFixed(2);
-  b.outTokens += s.tokens.out;
+  b.costUsd = +(b.costUsd + (s.costUsd ?? 0)).toFixed(2);
+  b.outTokens += s.tokens?.out ?? 0;
   b.turns += s.turns ?? 0;
 }
 
@@ -857,6 +909,10 @@ const mmss = s => { const t = Math.round(s); return Math.floor(t/60) + ':' + Str
 const hhmm = ms => new Date(ms).toTimeString().slice(0,8);
 const pctOf = (a,b) => b ? Math.round(a/b*100) : 0;
 const nfmt = n => (n ?? 0).toLocaleString('ru-RU');
+/* Cost and tokens live only in the closing summary the SDK sends. A stage killed by its fuse
+   has none, and they cannot be recovered from the stream — its per-message usage is chunk
+   deltas under different accounting. So the board says the figure is missing, never zero. */
+const NO_SUMMARY = 'нет — убит до сводки';
 const isBlocker = f => f.severity !== 'note' && f.severity !== 'info';
 const stateChip = st => ({done:'', running:'<span class="chip c-run">идёт</span>', aborted:'<span class="chip c-block">убит</span>'}[st] ?? '');
 const verdictChip = s => {
@@ -894,8 +950,13 @@ document.getElementById('cardRounds').hidden = !isRefine;
 const T = D.totals;
 document.getElementById('hdMetrics').innerHTML = [
   ['Время', mmss(T.wallSec), T.invocations + ' вызовов' + (T.aborted ? ' + ' + T.aborted + ' убит' : '') + (T.running ? ' + ' + T.running + ' идёт' : '')],
-  ['Стоимость', '$' + T.costUsd, T.turns + ' ходов'],
-  ['Токенов', (T.outTokens/1000).toFixed(0) + 'k', T.tokPerSec + ' ток/с'],
+  ['Стоимость', '$' + T.costUsd, T.turns + ' ходов' + (T.estimated ? ' · ' + T.estimated + ' оценено' : '')
+    + (T.unaccounted ? ' · без ' + T.unaccounted + ' убит.' : '')],
+  /* Output alone is a thousandth of what the run actually moves: every turn re-reads the whole
+     accumulated context, so a long stage is cache reads and almost nothing else. Showing only
+     the output made a 131M-token run read as 79k. */
+  ['Токенов', (T.outTokens/1000).toFixed(0) + 'k вых.',
+    T.cacheTokens ? nfmt(Math.round(T.cacheTokens/1e6)) + 'M кэш' : (T.tokPerSec + ' ток/с')],
   ['Размышление', pctOf(T.apiSec, T.wallSec) + '%', mmss(T.apiSec) + ' в API'],
   ['Инструменты', pctOf(T.toolSec, T.wallSec) + '%', T.calls + ' вызовов'],
   ['Блокеры', String(T.blockers), T.notes + ' заметок'],
@@ -1071,9 +1132,14 @@ function paneMetrics(s) {
     ['В API (размышление и генерация)', s.apiSec ? mmss(s.apiSec) : '—'],
     ['В инструментах', s.toolSec + ' с в ' + s.calls + ' вызовах'],
     ['Ходов', s.turns ?? '—'],
-    ['Выходных токенов', nfmt(s.tokens.out) + (s.tokPerSec ? ' · ' + s.tokPerSec + ' ток/с' : '')],
-    ['Кэш прочитан / записан', nfmt(s.tokens.cacheRead) + ' / ' + nfmt(s.tokens.cacheWrite)],
-    ['Стоимость', s.costUsd ? '$' + s.costUsd : '—'],
+    ['Выходных токенов', s.tokens
+      ? nfmt(s.tokens.out) + (s.tokensRecovered ? ' · из транскрипта сессии' : (s.tokPerSec ? ' · ' + s.tokPerSec + ' ток/с' : ''))
+      : NO_SUMMARY],
+    ['Кэш прочитан / записан', s.tokens ? nfmt(s.tokens.cacheRead) + ' / ' + nfmt(s.tokens.cacheWrite) : NO_SUMMARY],
+    ['Стоимость', s.costUsd == null ? NO_SUMMARY
+      : s.costEstimated
+        ? '≈$' + s.costUsd + ' — оценка по ставкам этого прогона' + (s.costErrPct ? ', ±' + s.costErrPct + '%' : '')
+        : '$' + s.costUsd],
     ['Артефакты', Object.entries(s.has).filter(([,v]) => v).map(([k]) => k).join(', ') || 'нет'],
   ].map(([k,v]) => '<dt>' + k + '</dt><dd>' + esc(v) + '</dd>').join('') + '</dl>';
 }
@@ -1097,7 +1163,11 @@ document.getElementById('steps').innerHTML = (bare
   const sub = [
     s.model || (s.script ? 'скрипт-гейт' : ''),
     s.script ? null : mmss(s.wallSec) + ' (' + s.thinkPct + '% размышление)',
-    s.costUsd ? '$' + s.costUsd : null,
+    /* A killed stage has no cost, not a cost of nothing. Saying so beside the turns it did
+       run is what keeps the most expensive attempt of a run from reading as the cheapest. */
+    s.script ? null
+      : s.costUsd == null ? 'стоимость неизвестна'
+        : (s.costEstimated ? '≈$' + s.costUsd + ' (оценка)' : '$' + s.costUsd),
     s.turns ? s.turns + ' ходов' : null,
     s.calls ? s.calls + ' вызовов инстр.' : null,
     s.resumedSession ? '↻ продолжает сессию' : null,
