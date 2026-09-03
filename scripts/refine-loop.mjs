@@ -779,8 +779,13 @@ async function main() {
       summary: `${record.fix.fixed} fixed, ${record.fix.decided} decided, ${record.fix.left} left`,
     });
     record.growth = growthOf(record.commit, spec);
+    /* The allowance is per repair, not per blocker. The fixer is dispatched on the whole
+       verdict and repairs the notes too, so a verdict of one blocker and six notes was being
+       charged fifteen lines for seven repairs — and the loop stopped on arithmetic that did
+       not measure what it had asked for. */
+    record.repairs = (fix.fixed?.length ?? 0) + (fix.decided?.length ?? 0);
     saveLedger(ledger);
-    note(`bundle grew by ${record.growth} line(s) for ${blockers.length} blocker(s)`);
+    note(`bundle grew by ${record.growth} line(s) for ${record.repairs} repair(s)`);
 
     if (fix.left?.length) {
       for (const l of fix.left) note(`left: ${l.id} — ${l.question}`);
@@ -793,9 +798,9 @@ async function main() {
        not a repair at all — it is a feature answering a finding, and a person decides whether
        the spec wanted it. The commit stands; what stops is the spending of another pass. */
     const maxGrowth = RC.maxGrowthPerFinding ?? 15;
-    if (record.growth > maxGrowth * blockers.length) {
+    if (record.growth > maxGrowth * Math.max(1, record.repairs)) {
       finish(ledger, 'blocked', 'growing',
-        `the repair added ${record.growth} net line(s) for ${blockers.length} blocker(s); the budget is ${maxGrowth} per finding. `
+        `the repair added ${record.growth} net line(s) for ${record.repairs} repair(s); the budget is ${maxGrowth} per finding. `
         + 'Read the fixer commit: a finding answered with a route, a lock or a case is a scope decision, not a repair.');
     }
   }
