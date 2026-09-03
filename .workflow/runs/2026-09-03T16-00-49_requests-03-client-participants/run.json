@@ -6,9 +6,9 @@
   "branch": "spec/requests-03-client-participants",
   "baseRef": "de9c5f916fa328734ed5f8f9c77023e8720e35e8",
   "headAtInit": "5840d41a2bc31f809f1b11dab78c77423eb51f24",
-  "status": "implement",
+  "status": "halted",
   "createdAt": "2026-09-03T16:00:49.472Z",
-  "updatedAt": "2026-09-03T17:50:00.714Z",
+  "updatedAt": "2026-09-03T17:59:01.053Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -22,10 +22,11 @@
       "endedAt": "2026-09-03T17:50:00.665Z"
     },
     "implement": {
-      "status": "pending",
-      "attempts": 2,
-      "startedAt": "2026-09-03T17:00:03.488Z",
-      "lastVerdict": "pass"
+      "status": "blocked",
+      "attempts": 3,
+      "startedAt": "2026-09-03T17:50:00.883Z",
+      "lastVerdict": "blocked",
+      "endedAt": "2026-09-03T17:59:01.003Z"
     },
     "static_gate": {
       "status": "pending",
@@ -53,7 +54,8 @@
     "specs/requests/01-requests.md requirement 35: \"An admin or manager may reassign an open or answered request to a different member. Reassignment writes a RequestEvent with action = 'assignee_changed' carrying the old and new display names in oldLabel / newLabel, so the trail stays readable after a member is removed.\"@apps/api/src/requests/requests.service.ts#reassignRequest": 1,
     "specs/requests/03-client-participants.contracts.md, Roles & Permission Matrix: \"Raise a request, to a colleague or to a client contact | admin ✅ | manager ✅ | user ✅ | viewer ❌\" — against the same file's Routes table, which gives `GET /api/organizations/{orgId}/clients/{clientId}/contacts` the guard `view-clients`.@apps/web/app/org/[orgId]/requests/NewRequestModal.tsx#contacts effect": 1,
     ".claude/skills/code-review/references/blocking-criteria.md — CR-26: \"a test cannot fail — an assertion about a value nothing produces, a selector nothing renders, a mechanism that throws before the assertion runs\"@e2e/tests/client-participants.spec.ts#TC-03-E2E-03": 1,
-    ".claude/skills/code-review/references/blocking-criteria.md — CR-18: \"a mechanism required at a class of call sites is applied at some of them and not the rest\"@apps/web/app/org/[orgId]/members/page.tsx#MembersPage": 1
+    ".claude/skills/code-review/references/blocking-criteria.md — CR-18: \"a mechanism required at a class of call sites is applied at some of them and not the rest\"@apps/web/app/org/[orgId]/members/page.tsx#MembersPage": 1,
+    "spec/contradiction@specs/requests/03-client-participants.contracts.md#Roles & Permission Matrix": 1
   },
   "carriedFindings": [],
   "carriedFrom": null,
@@ -631,5 +633,10 @@
         "pendingUntilReplan": "6da7bca30f907aa75e473f481b949810266f1e6c5b9f212f366641494b1ab83d"
       }
     }
-  ]
+  ],
+  "halt": {
+    "reason": "spec-defect",
+    "detail": "implement found a defect in the spec: spec/contradiction (specs/requests/03-client-participants.contracts.md)",
+    "at": "2026-09-03T17:59:01.052Z"
+  }
 }
