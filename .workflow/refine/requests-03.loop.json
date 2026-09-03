@@ -189,10 +189,10 @@
       "lint": 0
     }
   ],
-  "status": "running",
+  "status": "error",
   "outcome": {
-    "reason": "budget",
-    "detail": "2 judged round(s) without a clean verdict. The remaining findings are in .workflow/refine/requests-03.verdict.json; ship with them or spend another round deliberately.",
-    "at": "2026-09-03T13:18:32.748Z"
+    "reason": "judge-error",
+    "detail": "spec-refiner produced no verdict at .workflow/refine/requests-03.verdict.json (result success). It ended by saying: \"API Error: 529 Overloaded. This is a server-side issue, usually temporary — try again in a moment. If it persists, check https://status.claude.com.\"",
+    "at": "2026-09-03T13:30:31.627Z"
   }
 }
