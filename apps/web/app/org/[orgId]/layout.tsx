@@ -1,6 +1,6 @@
 'use client';
 
-import { notFound, useRouter } from 'next/navigation';
+import { notFound, usePathname, useRouter } from 'next/navigation';
 import { use, useEffect, useState, type ReactNode } from 'react';
 import { Spinner } from '@/ds';
 import { AppShell } from '@/layout/AppShell';
@@ -16,6 +16,13 @@ type Resolution = { state: 'loading' } | { state: 'ready'; session: Session } | 
  * The organization id in the URL is only checked here for the sake of the address bar.
  * The real boundary is `OrgScopeGuard` in the API, which refuses any request whose
  * `:orgId` disagrees with the session cookie.
+ *
+ * Requests spec 03 REQ-03-019 has a choke point on each side, and this is the web's. A
+ * client contact reaches the requests area and nothing else: a destination they cannot
+ * use is neither drawn nor reachable by typing, and a screen whose own read answers 404
+ * must not render its chrome around an answer that never comes. Gating here rather than
+ * screen by screen is what makes a screen added later refused by default, exactly as the
+ * server's guard refuses a route added later.
  */
 export default function OrgLayout({
   children,
@@ -26,6 +33,7 @@ export default function OrgLayout({
 }) {
   const { orgId } = use(params);
   const router = useRouter();
+  const pathname = usePathname();
   const [resolution, setResolution] = useState<Resolution>({ state: 'loading' });
 
   useEffect(() => {
@@ -70,6 +78,14 @@ export default function OrgLayout({
   }, [orgId, router]);
 
   if (resolution.state === 'gone') notFound();
+
+  // The requests area is the whole of a client contact's product (REQ-03-018). Anything
+  // else under this organization is the same 404 the API answers them, rather than a
+  // screen drawn around a read that was refused.
+  if (resolution.state === 'ready' && resolution.session.principal === 'client') {
+    const requests = `/org/${orgId}/requests`;
+    if (pathname !== requests && !pathname.startsWith(`${requests}/`)) notFound();
+  }
 
   if (resolution.state === 'loading') {
     return (

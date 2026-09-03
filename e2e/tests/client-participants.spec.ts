@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from './fixtures';
+import { WEB_ORIGIN } from '../environment';
 import {
   API,
   VALID,
@@ -253,14 +254,26 @@ test.describe('Client participants (requests spec 03)', () => {
     await expect(page.getByTestId('nav-projects')).toHaveCount(0);
     await expect(page.getByTestId('nav-clients')).toHaveCount(0);
 
-    // A destination the caller cannot use is not reachable by typing either: the route
-    // each page reads answers 404, so no screen renders behind it.
+    // A destination the caller cannot use is not reachable by typing either, and NO
+    // screen renders behind it: not the list, and not the chrome around it — the search
+    // field, the page's own controls, or a skeleton waiting on a read that was refused.
     await page.goto(`/org/${organizationId}/members`);
     await expect(page.getByTestId('members-list')).toHaveCount(0);
+    await expect(page.getByTestId('members-search-input')).toHaveCount(0);
+    await expect(page.getByTestId('show-removed-checkbox')).toHaveCount(0);
+    await expect(page.getByTestId('app-sidebar')).toHaveCount(0);
+
     await page.goto(`/org/${organizationId}/projects`);
     await expect(page.getByTestId('projects-page')).toHaveCount(0);
+    await expect(page.getByTestId('projects-table')).toHaveCount(0);
+
     await page.goto(`/org/${organizationId}/clients`);
     await expect(page.getByTestId('clients-page')).toHaveCount(0);
+    await expect(page.getByTestId('clients-search')).toHaveCount(0);
+
+    // And their own screen is still theirs.
+    await page.goto(`/org/${organizationId}/requests`);
+    await expect(page.getByTestId('requests-page')).toBeVisible();
 
     await switchUi(page, adminEmail, 'members');
     await expect(page.getByTestId('nav-members')).toBeVisible();
@@ -305,9 +318,13 @@ test.describe('Client participants (requests spec 03)', () => {
         assigneeClientMembershipId: contact.id,
       });
 
-      const contactContext = await browser.newContext();
+      // A context built by hand is not the `page` fixture's: it carries only the options
+      // passed here, so the base address is passed explicitly rather than assumed. Two
+      // contexts because the case needs two live sessions at once — the contact's, and
+      // the admin who removes them.
+      const contactContext = await browser.newContext({ baseURL: WEB_ORIGIN });
       const contactPage = await contactContext.newPage();
-      const adminContext = await browser.newContext();
+      const adminContext = await browser.newContext({ baseURL: WEB_ORIGIN });
       const adminPage = await adminContext.newPage();
 
       try {
@@ -400,6 +417,16 @@ test.describe('Client participants (requests spec 03)', () => {
     await expect(page.getByTestId('request-new-modal')).toBeHidden();
     await expect(page.getByText('Warehouse access, please')).toBeVisible();
 
+    // The admin who raised it holds view-all-requests, which is what draws the reassign
+    // control on every other row. It is not drawn on a client-addressed one: this
+    // release has no reassign path that accepts a client addressee, so offering one
+    // would take the request out of the contact's inbox through a route that refuses it.
+    await page.getByText('Warehouse access, please').click();
+    await expect(page.getByTestId('request-detail-page')).toBeVisible();
+    await expect(page.getByTestId('request-detail-grant-btn')).toBeVisible();
+    await expect(page.getByTestId('request-detail-reassign-btn')).toHaveCount(0);
+    await page.goto(`/org/${organizationId}/requests`);
+
     // With both client topics archived, the client audience has no catalogue: the picker
     // is replaced and no submit control is drawn — per audience, not per modal.
     const topics = await listRequestTopicsViaApi(request, organizationId);
@@ -470,6 +497,9 @@ test.describe('Client participants (requests spec 03)', () => {
     await expect(page.getByTestId('request-detail-assignee')).toContainText('Acme Answering');
     await expect(page.getByTestId('request-detail-grant-btn')).toHaveCount(0);
     await expect(page.getByTestId('client-contacts-empty-state')).toHaveCount(0);
+    // Nor is a reassign control drawn on a client-addressed row, for anybody: this
+    // release has no reassign path that accepts a client addressee.
+    await expect(page.getByTestId('request-detail-reassign-btn')).toHaveCount(0);
 
     await page.getByTestId('request-detail-composer').fill('Looking into it now.');
     await page.getByTestId('request-detail-composer-submit').click();

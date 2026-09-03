@@ -206,7 +206,10 @@ export default function RequestDetailPage({
   const showGrant = !terminal && !isContact && (isAdmin || isRequester);
   const showDecline = !terminal && (isAdmin || isAssignee);
   const showCancel = !terminal && !isContact && (isAdmin || isRequester);
-  const showReassign = !terminal && canViewAll;
+  // Reassignment moves a request between colleagues. A request addressed to a client
+  // contact has no reassign path in this release (requests spec 03, Known Gaps), and the
+  // route refuses one, so the control is not drawn on that row either.
+  const showReassign = !terminal && canViewAll && request.assignee.kind !== 'client';
   const showComposer = !terminal && isParty;
 
   return (

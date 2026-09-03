@@ -961,6 +961,24 @@ export class RequestsService {
         });
       }
 
+      // This route moves a request between MEMBERS, which is the whole of what spec 01
+      // requirement 35 defines and the whole of what this release builds: "a reassign
+      // path that accepts a client addressee" is named in requests spec 03's Known Gaps
+      // as the thing that would close a gap, and it is therefore not built here.
+      //
+      // The rule the check enforces: a request addressed to a client contact has no
+      // reassign path in this release. The question the code asks: is the row this
+      // transaction locked addressed to a member. Reassigning a client-addressed row
+      // would take it out of the contact's inbox with a trail that names nobody it was
+      // taken from, and would leave a client-audience topic on a member-addressed row —
+      // the pairing REQ-03-024 refuses at creation.
+      if (locked.assigneeKind !== 'member') {
+        throw new ConflictException({
+          error: 'conflict',
+          message: REQUEST_MESSAGES.invalidTransition,
+        });
+      }
+
       const parsed = validateRequestAssignee(body);
       if (!parsed.valid || parsed.value.assigneeKind !== 'member') {
         throw new BadRequestException({
@@ -998,9 +1016,6 @@ export class RequestsService {
         data: {
           assigneeKind: parsed.value.assigneeKind,
           assigneeMembershipId: next.id,
-          // The other half of the addressee is cleared, so exactly one of the two is
-          // ever set on a row.
-          assigneeClientMembershipId: null,
           lastActivityAt: new Date(),
         },
       });

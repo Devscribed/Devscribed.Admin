@@ -1323,6 +1323,70 @@ describe('Client participants (requests spec 03)', () => {
     });
   });
 
+  // Known Gaps — "a reassign path that accepts a client addressee" is not built, so the
+  // route this release ships refuses a client-addressed row rather than moving it with a
+  // trail that names nobody it was taken from.
+  it('refuses to reassign a request addressed to a client contact, changing nothing', async () => {
+    const admin = await signupAdmin('adminrx@acme.test', 'Acme Reassign');
+    const clientId = await createClient(admin, 'Acme Client');
+    const projectId = await createProject(admin, 'Acme Redesign', clientId);
+    await assignProject(admin, projectId, [admin.membershipId]);
+    const contact = await inviteAndAccept(admin, clientId, 'danarx@acme.example');
+    const colleague = await createMember(admin.organizationId, {
+      email: 'userrx@acme.test',
+      role: 'user',
+    });
+    const clientTopic = await topicId(admin.organizationId, 'client', 'Access');
+
+    const raised = await createRequest(admin, {
+      topicId: clientTopic,
+      title: 'Warehouse access',
+      projectId,
+      assigneeKind: 'client',
+      assigneeClientMembershipId: contact.clientMembershipId,
+    });
+    expect(raised.status).toBe(201);
+    const requestId = raised.body.id as string;
+
+    const refused = await request(server())
+      .post(`/api/organizations/${admin.organizationId}/requests/${requestId}/reassign`)
+      .set('Cookie', admin.cookies)
+      .send({ assigneeKind: 'member', assigneeMembershipId: colleague.membershipId });
+    expect(refused.status).toBe(409);
+
+    // The row is exactly as it was: still the contact's, still under its client topic.
+    const row = await prisma.request.findUniqueOrThrow({ where: { id: requestId } });
+    expect(row.assigneeKind).toBe('client');
+    expect(row.assigneeClientMembershipId).toBe(contact.clientMembershipId);
+    expect(row.assigneeMembershipId).toBeNull();
+    expect(
+      await prisma.requestEvent.count({ where: { requestId, action: 'assignee_changed' } }),
+    ).toBe(0);
+
+    // And it is still in the contact's inbox.
+    const theirs = await request(server())
+      .get(`/api/organizations/${admin.organizationId}/requests`)
+      .set('Cookie', contact.cookies);
+    expect(theirs.status).toBe(200);
+    expect(theirs.body.requests.map((r: { id: string }) => r.id)).toEqual([requestId]);
+
+    // A member-addressed request still reassigns, so the refusal is about the row and
+    // not about the route having been broken.
+    const staffTopic = await topicId(admin.organizationId, 'staff', 'VPN');
+    const staffRequest = await createRequest(admin, {
+      topicId: staffTopic,
+      title: 'VPN please',
+      assigneeKind: 'member',
+      assigneeMembershipId: admin.membershipId,
+    });
+    expect(staffRequest.status).toBe(201);
+    const reassigned = await request(server())
+      .post(`/api/organizations/${admin.organizationId}/requests/${staffRequest.body.id}/reassign`)
+      .set('Cookie', admin.cookies)
+      .send({ assigneeKind: 'member', assigneeMembershipId: colleague.membershipId });
+    expect(reassigned.status).toBe(200);
+  });
+
   // TC-03-INT-35
   it('lets a contact write in the thread while it is open, and refuses a closed one', async () => {
     const admin = await signupAdmin('admin35@acme.test', 'Acme ThirtyFive');

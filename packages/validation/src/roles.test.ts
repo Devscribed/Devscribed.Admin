@@ -444,11 +444,15 @@ describe('TC-03-UNIT-02 — the principal kind is asked first', () => {
   });
 
   it('records what the ordering rule protects against', () => {
-    // With no role at all the two staff helpers disagree, and one of them GRANTS: an
-    // absent role normalizes to `viewer`, which holds ViewOwnRequests. A client
-    // principal that reached either would be answered by a role it does not have.
+    // The two staff helpers are called with THE SAME absent role, which is the input a
+    // client principal would arrive with, and they disagree: `hasCapability` normalizes
+    // it to `viewer` and hands back a set holding ViewOwnRequests — a grant — while
+    // `can` finds no row for it and answers false. A client principal that reached
+    // either would be answered by a role it does not hold, and one of the two would
+    // grant. That is why REQ-03-017 makes the kind the first question rather than
+    // trusting the helpers to refuse.
     expect(hasCapability(null, 'ViewOwnRequests')).toBe(true);
-    expect(can(normalizeRole(null), 'view-own-requests')).toBe(true);
-    expect(can('client' as unknown as Role, 'view-own-requests')).toBe(false);
+    expect(can(null as unknown as Role, 'view-own-requests')).toBe(false);
+    expect(can(undefined as unknown as Role, 'view-own-requests')).toBe(false);
   });
 });
