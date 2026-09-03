@@ -69,10 +69,16 @@ const current = (() => {
 /* What a person opening the board wants to see first is whatever is moving; failing that, the
    run the pipeline last touched. */
 const byRecency = [...allEntries].sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0));
-const defaultEntry = positional[0]
+/* A run whose `init` died has nothing to show but the fact that it died. It stays in the list,
+   because a directory nobody can account for is worse than a row saying so, but it is never
+   what the board opens on — including when `.workflow/current` still names it, which is
+   exactly what a dead `init` leaves behind. */
+const openable = byRecency.filter((e) => e.status !== 'half-created');
+const currentIsOpenable = current && openable.some((e) => e.id === current);
+const wantedFirst = positional[0]
   ?? byRecency.find((e) => e.running)?.id
-  ?? (current && allEntries.some((e) => e.id === current) ? current : byRecency[0].id);
-if (!allEntries.some((e) => e.id === defaultEntry)) die(`no such run or loop: ${defaultEntry}`);
+  ?? (currentIsOpenable ? current : (openable[0] ?? byRecency[0]).id);
+if (!allEntries.some((e) => e.id === wantedFirst)) die(`no such run or loop: ${wantedFirst}`);
 
 const PORT = Number(opt('port', 4300));
 
@@ -87,10 +93,26 @@ const report = (id, ...a) => execFileSync(process.execPath, [...generator(id), .
 
 /* The page is generated once. Everything that changes afterwards — including the whole of a
    different run — arrives as a payload, so a reload is never needed and never loses what the
-   reader had open. */
+   reader had open.
+   Generated from whichever entry will generate. One entry the generator cannot read must not
+   be able to take the board down with it: the board is what a person opens to find out what
+   went wrong, so it is the last thing allowed to fail for the same reason. */
 const pagePath = join(tmpdir(), `run-watch-${process.pid}.html`);
-report(defaultEntry, '--out', pagePath);
-const page = readFileSync(pagePath, 'utf8');
+const [defaultEntry, page] = (() => {
+  const tried = [];
+  for (const id of [wantedFirst, ...byRecency.map((e) => e.id)]) {
+    if (tried.includes(id)) continue;
+    tried.push(id);
+    try {
+      report(id, '--out', pagePath);
+      if (id !== wantedFirst) process.stderr.write(`run-watch: ${wantedFirst} would not render, opening ${id} instead\n`);
+      return [id, readFileSync(pagePath, 'utf8')];
+    } catch (e) {
+      process.stderr.write(`run-watch: ${id} — ${String(e.stderr ?? e.message).split('\n')[0]}\n`);
+    }
+  }
+  return die(`none of ${tried.length} entr(ies) could be rendered`);
+})();
 
 /** res → entry id it is watching. */
 const clients = new Map();

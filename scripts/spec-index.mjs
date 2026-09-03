@@ -115,8 +115,10 @@ function shipEntries(root) {
       notes: findings.filter((f) => !isBlocker(f)).length,
       /* A killed run keeps the stage it died in marked `running` forever, so the stage is not
          evidence of anything. Only the run's own status is: it is what the orchestrator wrote
-         last, and it is written on the way out. */
-      running: !['ready', 'halted', 'aborted', 'failed'].includes(run?.status),
+         last, and it is written on the way out. And a run with no `run.json` at all is not
+         running — its `init` died — which matters because the board opens on whatever is
+         moving, and a dead directory claiming to move is what it would open on. */
+      running: !!run && !['ready', 'halted', 'aborted', 'failed'].includes(run.status),
     });
   }
   return out;
