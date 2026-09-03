@@ -84,9 +84,16 @@
         "decided": 4,
         "left": 0
       },
-      "endedAt": "2026-09-03T09:46:56.789Z"
+      "endedAt": "2026-09-03T09:46:56.789Z",
+      "commit": "2fdce098424fb686dbaf0a370042c8096766eae0",
+      "growth": 31
     }
   ],
-  "status": "running",
-  "request": "Employees pick a request topic from presets the organization curates (VPN, Claude, Question, Other for staff; Access, Other for clients), and the screens say Pending / In progress / Completed / Closed"
+  "status": "blocked",
+  "request": "Employees pick a request topic from presets the organization curates (VPN, Claude, Question, Other for staff; Access, Other for clients), and the screens say Pending / In progress / Completed / Closed",
+  "outcome": {
+    "reason": "growing",
+    "detail": "the repair added 31 net line(s) for 1 blocker(s); the budget is 15 per finding. Read the fixer commit: a finding answered with a route, a lock or a case is a scope decision, not a repair.",
+    "at": "2026-09-03T09:46:56.931Z"
+  }
 }
