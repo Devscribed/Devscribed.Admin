@@ -45,8 +45,9 @@ What is left below is judgement — the part no script reaches.
 - [ ] A failure in a derived artifact cannot lose the irreplaceable one.
 - [ ] Every state transition writes its audit record in the same transaction.
 - [ ] Values written exactly once are identified as such.
-- [ ] Every writer of a row is enumerated, with its lock and with what it re-reads inside the
-      transaction. Guards are evaluated on the in-transaction read, never on a copy loaded before
+- [ ] Every writer of a row is enumerated. Where two of them race in ordinary use, the lock and
+      what is re-read inside the transaction are stated, and guards are evaluated on that read;
+      where they do not, one line says so and why, and no lock or concurrency case is added for
       it.
 - [ ] Every unconditional invariant was checked against the call sites it already governs;
       violators are fixed, carved out, or named out of scope.
@@ -98,10 +99,12 @@ What is left below is judgement — the part no script reaches.
 - [ ] Every control the screens need that `@ds` does not export has a row in a `## DS gaps`
       table, naming what the screen does instead and what closes it. A spec that states the
       obligation and carries no table has not met it.
-- [ ] Every statement this spec overrules in another document is amended **in that document**,
-      marked beside the statement, naming the requirement that overrules it. A banner at the top
-      saying some statements below are superseded is a promise, not an amendment — and one that
-      names line offsets is stale on the next edit.
+- [ ] Every behaviour this spec changes from what an older document describes is stated here in
+      full — who may call it, what comes back, which status, which message — so a reader never
+      opens the older document. The older document is not edited and carries no marker.
+- [ ] The Summary opens with the request and closes with every addition beyond it — a route the
+      request never named, a migration, a changed contract of a shipping route — each with its
+      reason. An addition the Summary does not name is out of scope.
 - [ ] A test case amended for a new contract is amended on its Expected Result as well as its
       Steps.
 - [ ] Rules shared with other specs live in the area README, not copied.

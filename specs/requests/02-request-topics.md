@@ -77,8 +77,8 @@ the topics service.
 
 #### REQ-02-002 — the audience is a closed set
 
-IF a create or rename call carries an `audience` outside `staff` and `client`, THEN THE
-SYSTEM SHALL answer `400` with `REQUEST_TOPIC_MESSAGES.audienceUnknown`.
+IF a create call or a catalogue read carries an `audience` outside `staff` and `client`, THEN
+THE SYSTEM SHALL answer `400` with `REQUEST_TOPIC_MESSAGES.audienceUnknown`.
 
 #### REQ-02-003 — a topic declares the request kind it produces
 
@@ -163,8 +163,8 @@ transaction as the `Organization` row.
 
 #### REQ-02-016 — organizations that predate this spec
 
-WHEN the migration introducing `RequestTopic` runs, THE SYSTEM SHALL insert the same default
-topics for every organization that already exists.
+WHEN the backfill migration runs, THE SYSTEM SHALL insert the same default topics for every
+organization holding no `RequestTopic` row.
 
 #### REQ-02-017 — an audience with no active topic
 
@@ -247,7 +247,7 @@ status stays accepted here, so a link somebody saved still resolves.
 
 THE SYSTEM SHALL render `open` as Pending, `answered` as In progress, `granted` as
 Completed, and `declined` and `cancelled` both as Closed, from a single exported label map
-that the list, the detail screen and the filter control all read.
+that the list, the detail screen, its history entries and the filter control all read.
 
 #### REQ-02-029 — which closure it was
 
@@ -305,7 +305,7 @@ Invariants:
 | The `client` audience can be curated but no request can be addressed to a client yet, so a `client` topic is unreachable from the new-request form | The audience is what makes the catalogue's second half worth seeding and manageable before it is needed, and the mismatch refusal is a live, tested rule rather than a dormant one | Spec 03, which makes a client an addressee and admits `client` topics to the picker |
 | Existing requests carry no `topicId` and no `topicLabel` | The columns are nullable and the screens fall back to the request's stored `type` for those rows, so nothing is lost and no backfill guesses at a topic nobody chose | Nothing needs to. The set is closed the moment this spec ships |
 | A topic's `type` cannot be corrected after creation | Changing it would make the type filter disagree with the requests already raised under the topic. Archive and re-create is the honest path | A migration that rewrites `type` on the topic and every request under it, if the need is ever real |
-| Ordering is a single integer per topic with no gap strategy | The catalogue is a handful of rows curated by hand; a reorder rewrites the affected rows in one transaction | A fractional or linked ordering, if a catalogue ever grows past what one screen shows |
+| Ordering is a single integer per topic with no gap strategy | The catalogue is a handful of rows curated by hand; a move is one `PATCH` of one row's `sortOrder`, and two rows sharing a value fall to the name tiebreak | A fractional or linked ordering, if a catalogue ever grows past what one screen shows |
 
 ## Acceptance Criteria
 

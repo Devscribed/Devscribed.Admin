@@ -197,7 +197,9 @@ Registered in **both** unions, as the clients and holidays surfaces established.
 admin, manager.
 
 `Capability` (PascalCase, read by `@RequireCapability`): `ManageRequestTopics` — admin,
-manager.
+manager. The check runs in the topics service, not in `CapabilityGuard`, because the refusal
+must carry `REQUEST_TOPIC_MESSAGES.manageForbidden` and the guard's message is fixed; the
+`ManageRequestTopics` entry in the Routes table names the capability, not the guard.
 
 No existing capability changes meaning or grants.
 
@@ -208,7 +210,9 @@ None. Every value set is a `String` column validated in `packages/validation`.
 ## Seed Data
 
 Written for every organization at creation (REQ-02-015) and for every existing organization by
-the migration (REQ-02-016). `createdByAccountId` is `null` on each.
+the backfill migration (REQ-02-016), which is a migration file of its own, separate from the
+one creating the table, and inserts only where the organization holds no row, so executing it
+twice is safe. `createdByAccountId` is `null` on each.
 
 | audience | sortOrder | name | type |
 |---|---|---|---|
@@ -336,6 +340,10 @@ modal by REQ-02-022 and appear in no case here.
 │    #9   Which invoice template?    Question                 → A. Admin       │
 │                                                    Closed · cancelled        │
 ```
+
+The existing Type control (`requests-type-filter`) stays as drawn today, between About and
+Status; it is omitted from the mock only for width. It still selects the vacation section and
+is not changed by this spec.
 
 ## UI Description
 

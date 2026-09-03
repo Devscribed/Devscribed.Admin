@@ -233,8 +233,13 @@ is what shows it.
   control the screens draw that no route serves, a refusal a screen shows that has no message.
   Then the finding is that consequence, not the missing row.
 - **Scope.** Against the request you were given, in both directions: what was asked for and is
-  not covered, and what the spec builds that the request never asked for — `spec/scope-gap`. The
-  second direction is a note. When you were given no request, the Summary is the request; say so
+  not covered, and what the spec builds that the request never asked for — `spec/scope-gap`.
+  The second direction is a note, with one exception: an addition the request never named that
+  is a **new route, a migration, a new writer of an existing row, or a change to the contract
+  of a route that already ships** blocks, because each of those is paid for by every caller
+  and every later spec, and a person confirms it was wanted. The Summary's statement of what
+  the spec adds beyond the request, when it carries one, is that confirmation: an addition
+  named there is in scope. When you were given no request, the Summary is the request; say so
   in the verdict.
 
 ## The severity rule
@@ -291,7 +296,7 @@ A finding blocks only under one of these:
 | `spec/untestable-case` | A case that cannot run, or an acceptance criterion no observation settles |
 | `spec/ambiguous-requirement` | Two readings, materially different implementations |
 | `spec/missing-artefact` | The spec obliges itself to contain something it does not |
-| `spec/scope-gap` | The request asked for something the spec does not cover, or the spec narrowed it silently. Coverage the request never asked for is this rule as a **note** |
+| `spec/scope-gap` | The request asked for something the spec does not cover, or the spec narrowed it silently. Coverage the request never asked for is this rule as a **note**, unless it is a new route, a migration, a new writer or a changed contract of a shipping route that the Summary does not name as an addition |
 
 And one that is **note-only** and can never block:
 

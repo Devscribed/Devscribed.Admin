@@ -4,32 +4,38 @@
  *
  *   node scripts/refine-loop.mjs specs/requests/02-client-participants.md
  *
- * Three gates, cheapest first, and only the last two cost a model:
+ * Three gates, and only the last two cost a model:
  *
  *   T0  spec-lint          a script. Pointers, joins, cross-product completeness.
- *   T1  pre-implement      the spec is compiled into a plan. A `spec` finding here is the
- *                          same finding that halts a ship run, met before the run is paid for.
- *   T2  spec-refiner       one judge, on what T0 and T1 cannot decide.
+ *   T2  spec-refiner       one judge. Full on the first round; from the second, the range the
+ *                          previous repair produced, and nothing else.
+ *   T1  pre-implement      the spec compiled into a plan, by the agent the pipeline runs. It
+ *                          runs once, after a clean T2 verdict, as the last gate — it reads the
+ *                          whole document every time and cannot be given a range, so it is
+ *                          not the gate the loop converges on.
  *
- * Then `spec-fixer` repairs T2's verdict, the round is committed, and the next pass judges
- * **that commit** rather than the document again. The range is passed to the judge as an
- * argument; it is not inferred from a file lying around, which is how a loop ends up
- * re-sweeping a document it has already accepted and returning a different subset forever.
+ * Whichever gate blocked, `spec-fixer` repairs that verdict, the round is committed, and the
+ * next round's judge is given **that commit** as a range. A finding blocks only under the
+ * closed rule list; a blocker filed under any other rule is demoted to a note here, whichever
+ * agent wrote it.
  *
- * Nothing here decides anything a person would want to argue with. The stopping rule is
- * arithmetic: a round that does not reduce the blocker count, or a finding that survives two
- * rounds, halts for a person instead of spending another pass.
+ * Nothing here decides anything a person would want to argue with. The stopping rules are
+ * arithmetic: a round that does not reduce the blocker count, a finding that survives a
+ * repair, or a repair that grows the bundle by more than the configured lines per finding,
+ * halts for a person instead of spending another pass.
  *
  * Options:
  *   --rounds <n>       judged rounds before stopping (default from config)
  *   --request <text>   the request the spec answers; without it the Summary is the request
  *   --skip <gates>     comma-separated: t1, t2
  *   --no-fix           stop after the verdict instead of dispatching the fixer
+ *   --fresh            archive the ledger and probes of an earlier loop on this spec and start
+ *                      at round 1 — for a spec that was rewritten or restored since
  *   --dry-run          print what each gate would run, change nothing
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -128,7 +134,20 @@ function stemFor(spec) {
 function loadLedger(spec) {
   const stem = stemFor(spec);
   const path = join(ROOT, '.workflow/refine', `${stem}.loop.json`);
-  if (existsSync(path)) {
+  if (existsSync(path) && flag('fresh') && !dryRun) {
+    /* An earlier loop's rounds were judged against a document that no longer exists, so a
+       range into them is a range into nothing. The record is kept under its start time; only
+       the live names are freed. */
+    const l = JSON.parse(readFileSync(path, 'utf8'));
+    const tag = (l.startedAt ?? new Date().toISOString()).replace(/[:.]/g, '-');
+    renameSync(path, join(ROOT, '.workflow/refine', `${stem}.loop.${tag}.json`));
+    const probe = join(ROOT, '.workflow/refine', `${stem}.probe`);
+    if (existsSync(probe)) renameSync(probe, join(ROOT, '.workflow/refine', `${stem}.probe.${tag}`));
+    for (const f of ['verdict', 'fix']) {
+      const shared = join(ROOT, '.workflow/refine', `${stem}.${f}.json`);
+      if (existsSync(shared)) renameSync(shared, join(ROOT, '.workflow/refine', `${stem}.${f}.${tag}.json`));
+    }
+  } else if (existsSync(path)) {
     const l = JSON.parse(readFileSync(path, 'utf8'));
     if (l.spec === spec) return { ...l, path };
   }
@@ -252,8 +271,8 @@ async function gatePlan(spec, ledger, round) {
   step(`T1  pre-implement  (round ${round})`);
   const dir = `.workflow/refine/${ledger.stem}.probe/${round}`;
   const runId = `refine-${ledger.stem}-${round}`;
-  mkdirSync(join(ROOT, dir, 'stages'), { recursive: true });
-  writeFileSync(join(ROOT, dir, 'run.json'), `${JSON.stringify({
+  if (!dryRun) mkdirSync(join(ROOT, dir, 'stages'), { recursive: true });
+  if (!dryRun) writeFileSync(join(ROOT, dir, 'run.json'), `${JSON.stringify({
     runId, dir, spec, specSha: null, status: 'pre_implement',
     task: 'compile this spec into a plan; this is a refine probe, not a ship run',
     stages: { pre_implement: { status: 'running', attempts: 0 } },
@@ -325,8 +344,48 @@ async function repair(spec, ledger, round) {
 
 /* ── convergence ──────────────────────────────────────────────────────────── */
 
+/**
+ * The closed rule list. A blocker under any other rule is an opinion with a witness, and it
+ * reaches the person as a note. The judge's definition carries the same list; enforcing it
+ * here is what makes it hold for the pre-implementer too, and for any agent added later.
+ */
+const BLOCKING_RULES = new Set(RC.blockingRules ?? [
+  'spec/contradiction', 'spec/stale-statement', 'spec/incomplete-decision',
+  'spec/untestable-case', 'spec/ambiguous-requirement', 'spec/missing-artefact', 'spec/scope-gap',
+]);
+
+/** Demote every blocker outside the closed list, in place, and return the demoted ones. */
+function enforceRules(verdict) {
+  const demoted = [];
+  for (const f of verdict.findings ?? []) {
+    if (f.severity === 'blocker' && !BLOCKING_RULES.has(f.rule)) {
+      f.severity = 'note';
+      f.demotedFrom = 'blocker';
+      demoted.push(f);
+    }
+  }
+  return demoted;
+}
+
 const blockersOf = (v) => (v.findings ?? []).filter((f) => f.severity === 'blocker');
 const keyOf = (f) => `${f.rule ?? '?'}:${f.symbol ?? f.file ?? '?'}`;
+
+/**
+ * Lines a commit added to the bundle, net of what it removed. A repair that answers a finding
+ * with a route, a lock and three cases adds tens of lines per finding; one that corrects or
+ * deletes a sentence adds none. The number is the cheapest signal that a loop is growing the
+ * thing it is refining, and it is read from git rather than from the fixer's account of itself.
+ */
+function growthOf(sha, spec) {
+  if (!sha) return 0;
+  const out = git('diff', '--numstat', `${sha}~1..${sha}`, '--', spec, ...bundleMembers(spec));
+  let added = 0, removed = 0;
+  for (const line of out.split('\n').filter(Boolean)) {
+    const [a, d] = line.split('\t');
+    if (a !== '-') { added += Number(a); removed += Number(d); }
+  }
+  return added - removed;
+}
 
 /* ── main ─────────────────────────────────────────────────────────────────── */
 
@@ -370,10 +429,33 @@ async function main() {
     }
     note('clean');
 
-    /* T1 — the gate that halts a ship run, met before the run is paid for. */
-    if (!skip.has('t1')) {
+    /* T2 — the judge. Full on the first round; the previous repair's range after that. */
+    let verdict = null;
+    let gate = null;
+    if (!skip.has('t2')) {
+      const since = round > 1 ? ledger.rounds[round - 2]?.commit ?? null : null;
+      verdict = await gateJudge(spec, ledger, round, request, since);
+      if (verdict.status === 'error') finish(ledger, 'error', 'judge-error', verdict.error);
+      const demoted = enforceRules(verdict);
+      const blockers = blockersOf(verdict);
+      const notes = (verdict.findings ?? []).length - blockers.length;
+      record.judge = { status: verdict.status, mode: verdict.mode ?? (since ? 'diff' : 'full'), blockers: blockers.length, notes };
+      saveLedger(ledger);
+      keepVerdict(ledger, round, 'judge', `.workflow/refine/${ledger.stem}.verdict.json`);
+      commitGate(ledger, { round, gate: 'T2 spec-refiner', summary: `${blockers.length} blocker(s), ${notes} note(s)` });
+      note(`${blockers.length} blocker(s), ${notes} note(s)`);
+      for (const f of demoted) note(`demoted to note (rule outside the closed list): ${f.rule} — ${f.symbol ?? f.file}`);
+      for (const f of blockers) note(`${f.id ?? '-'}  ${f.rule} — ${f.symbol ?? f.file}`);
+      if (blockers.length) gate = 'T2';
+    }
+
+    /* T1 — the pipeline's own gate, once the judge is satisfied. It compiles the whole document
+       every time and cannot be given a range, so it runs last and only on a document the judge
+       has passed. */
+    if (!gate && !skip.has('t1')) {
       const plan = await gatePlan(spec, ledger, round);
       if (plan.status === 'error') finish(ledger, 'error', 'plan-error', plan.error);
+      const demoted = enforceRules(plan);
       const specFindings = (plan.findings ?? []).filter((f) => f.target === 'spec' && f.severity === 'blocker');
       record.plan = { status: plan.status, specBlockers: specFindings.length };
       saveLedger(ledger);
@@ -382,34 +464,31 @@ async function main() {
         gate: 'T1 pre-implement',
         summary: `${plan.status}${specFindings.length ? `, ${specFindings.length} spec finding(s)` : ''}`,
       });
+      for (const f of demoted) note(`demoted to note (rule outside the closed list): ${f.rule} — ${f.symbol ?? f.file}`);
+      for (const f of specFindings) note(`${f.id ?? '-'}  ${f.rule} — ${f.symbol ?? f.file}`);
       if (specFindings.length) {
-        for (const f of specFindings) note(`${f.rule ?? 'spec'} — ${f.claim ?? f.summary ?? ''}`);
-        finish(ledger, 'blocked', 'spec-defect',
-          `${specFindings.length} finding(s) the pipeline would halt on: ${specFindings.map((f) => f.rule ?? '?').join('; ')}`);
+        /* The plan's verdict becomes the round's, at the path the fixer reads. Its findings
+           carry the same schema and the same witness rule as the judge's. */
+        verdict = { status: 'blocked', spec, gate: 'pre_implement', findings: specFindings };
+        writeFileSync(join(ROOT, `.workflow/refine/${ledger.stem}.verdict.json`), `${JSON.stringify(verdict, null, 2)}\n`);
+        keepVerdict(ledger, round, 'judge', `.workflow/refine/${ledger.stem}.verdict.json`);
+        gate = 'T1';
+      } else {
+        note(`plan compiles${plan.status === 'pass' ? '' : ` (${plan.status})`}`);
       }
-      note(`plan compiles${plan.status === 'pass' ? '' : ` (${plan.status})`}`);
     }
 
-    /* T2 — one judge, on what the first two could not decide. */
-    if (skip.has('t2')) { record.status = 'skipped-t2'; saveLedger(ledger); break; }
-    const since = round > 1 ? ledger.rounds[round - 2]?.commit ?? null : null;
-    const verdict = await gateJudge(spec, ledger, round, request, since);
-    if (verdict.status === 'error') finish(ledger, 'error', 'judge-error', verdict.error);
-
-    const blockers = blockersOf(verdict);
-    const notes = (verdict.findings ?? []).length - blockers.length;
-    record.judge = { status: verdict.status, mode: verdict.mode ?? (since ? 'diff' : 'full'), blockers: blockers.length, notes };
-    record.keys = blockers.map(keyOf);
-    saveLedger(ledger);
-    keepVerdict(ledger, round, 'judge', `.workflow/refine/${ledger.stem}.verdict.json`);
-    commitGate(ledger, { round, gate: 'T2 spec-refiner', summary: `${blockers.length} blocker(s), ${notes} note(s)` });
-    note(`${blockers.length} blocker(s), ${notes} note(s)`);
-    for (const f of blockers) note(`${f.id ?? '-'}  ${f.rule} — ${f.symbol ?? f.file}`);
-
-    if (!blockers.length) {
+    if (!gate) {
+      const notes = verdict ? (verdict.findings ?? []).length : 0;
       finish(ledger, 'pass', 'pass',
         notes ? `${notes} note(s) for the person with the spec; none of them stops anything.` : 'no findings.');
     }
+
+    const blockers = blockersOf(verdict);
+    record.gate = gate;
+    record.blockers = blockers.length;
+    record.keys = blockers.map(keyOf);
+    saveLedger(ledger);
 
     /* A finding that survived a repair has been tried and not fixed. Another round buys nothing. */
     const previous = ledger.rounds[round - 2];
@@ -419,9 +498,9 @@ async function main() {
         finish(ledger, 'blocked', 'stuck-finding',
           `${survived.join(', ')} survived a repair — the requirement is ambiguous or the finding is wrong. A person decides.`);
       }
-      if (blockers.length >= previous.judge.blockers) {
+      if (previous.gate === gate && blockers.length >= previous.blockers) {
         finish(ledger, 'blocked', 'not-converging',
-          `round ${round - 1} left ${previous.judge.blockers} blocker(s), round ${round} found ${blockers.length}. `
+          `round ${round - 1} left ${previous.blockers} blocker(s), round ${round} found ${blockers.length}. `
           + 'A loop that does not shrink is judging the document again rather than the repair.');
       }
     }
@@ -446,13 +525,25 @@ async function main() {
       spec,
       summary: `${record.fix.fixed} fixed, ${record.fix.decided} decided, ${record.fix.left} left`,
     });
+    record.growth = growthOf(record.commit, spec);
     saveLedger(ledger);
+    note(`bundle grew by ${record.growth} line(s) for ${blockers.length} blocker(s)`);
 
     if (fix.left?.length) {
       for (const l of fix.left) note(`left: ${l.id} — ${l.question}`);
       finish(ledger, 'blocked', 'needs-a-person',
         `${fix.left.length} finding(s) the fixer may not settle: a repair needing scope the spec does not have, `
         + 'or a question only the product owner answers.');
+    }
+
+    /* A repair that adds text is a repair the next pass has to judge. Past the budget it is
+       not a repair at all — it is a feature answering a finding, and a person decides whether
+       the spec wanted it. The commit stands; what stops is the spending of another pass. */
+    const maxGrowth = RC.maxGrowthPerFinding ?? 15;
+    if (record.growth > maxGrowth * blockers.length) {
+      finish(ledger, 'blocked', 'growing',
+        `the repair added ${record.growth} net line(s) for ${blockers.length} blocker(s); the budget is ${maxGrowth} per finding. `
+        + 'Read the fixer commit: a finding answered with a route, a lock or a case is a scope decision, not a repair.');
     }
   }
 

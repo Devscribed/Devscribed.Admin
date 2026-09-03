@@ -136,6 +136,13 @@ Follow `references/spec-template.md`. It gives the file split, the EARS patterns
 directive, and the exact table headers the lint parses — keep those verbatim. Specs are written in
 English, including in Russian-language conversations.
 
+**The request is the budget.** The Summary opens with the request in one sentence and closes
+with what the spec adds beyond it, one line per addition with its reason — a route the request
+never named, a migration, a change to a route that already ships. An addition not listed there
+is a scope finding for the refiner. Before adding one, ask whether the request works without
+it: a curated list of six words does not need reordering, restoring or a lock to be the feature
+that was asked for, and every route added is paid for by every caller and every later spec.
+
 **Run the lint as you write, not at the end:**
 
 ```bash
@@ -212,6 +219,11 @@ PDF is derived. Identify the irreplaceable thing in your feature and protect it 
 **Anything reachable twice must be idempotent.** Double-clicks, retries after timeout, queue
 redeliveries, webhook replays. State the mechanism (a `UsedAt` set in the same transaction, a FIFO
 group key) and write a concurrency test for it.
+
+**A lock is specified where two writers race in ordinary use**, not on every row that has two
+writers. A settings list one curator edits, a seed that runs once at creation: say in one line
+that the writers do not race and why, instead of a `FOR UPDATE` and a concurrency case for each.
+The mechanism costs a rule, an invariant, a case and every edge the next reader finds in them.
 
 **Retry policy is stated per route, not per client.** For every outbound call say whether it is
 idempotent, and for one that is not, what runs between attempts. A generic retry loop wrapped

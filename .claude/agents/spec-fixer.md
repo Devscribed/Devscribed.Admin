@@ -54,13 +54,15 @@ Never decide by preferring the statement that is newer, longer, or cheaper to wr
 
 ## What you still may not do
 
-- **Invent scope.** A repair that needs a route, a capability, a column or a screen the spec
-  does not have is not a repair. Say so in `left`, with the question it turns on.
+- **Invent scope.** A repair that needs a route, a capability, a column, a writer, a lock, a
+  screen or a concurrency case the spec does not have is not a repair. Say so in `left`, with
+  the question it turns on.
 - **Answer a question only the product owner holds** — what a customer wants, what a screen is
   for, what a feature is worth. A choice between two mechanisms is yours; a choice between two
   products is not.
 
-`left` is for those two and nothing else. Everything else is decided.
+`left` is for those two and nothing else. Everything else is decided — and decided by the
+shortest repair, never by the most complete one.
 
 ## A repair is finished in one edit
 
@@ -76,6 +78,24 @@ a finding against you.
 
 Before you finish, re-read your own additions the way a judge would, and settle every claim in
 them against the tree.
+
+## Repair by subtraction
+
+Take the repairs in this order and stop at the first that closes the finding:
+
+1. **Delete** the statement — a stale claim, a second copy, a count, a promise the rules never
+   needed.
+2. **Narrow** the rule — scope it to the route, the state or the actor it was true for.
+3. **Change the word** — the message, the status, the name that was wrong.
+4. **Add one sentence** — the reading that was missing, beside the rule it completes.
+
+A repair that would add a route, a writer, a lock, a column, a screen, a testid or a
+concurrency case is not a repair; it is a feature answering a finding. It goes in `left`,
+with the question it turns on, and the person decides whether the spec wanted it. A case the
+verdict asks for is added only as the observer of a rule that is already there.
+
+The next pass judges every line you add. A repair that leaves the bundle longer than it found
+it has, more often than not, manufactured the next round.
 
 ## Behaviour, not implementation
 

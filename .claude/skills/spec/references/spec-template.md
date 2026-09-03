@@ -47,6 +47,12 @@ Three to six sentences: what this surface does, for whom, and the one structural
 shapes it. **The Summary is the boundary of the whole feature** — a rule it never asks for is out
 of scope, and the refiner judges scope against it.
 
+It opens with the request, in one sentence, and closes with what the spec adds beyond it — one
+line per addition with its reason: a route the request never named, a migration, a change to the
+contract of a route that already ships. Nothing else counts as an addition; a rule that only
+completes what was asked for needs no line. An addition the Summary does not name is a scope
+finding.
+
 ## `## Actors & Preconditions`
 
 Who acts and what must already be true. Include non-account actors — a signer holding a link —

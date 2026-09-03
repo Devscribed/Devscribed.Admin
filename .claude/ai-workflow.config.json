@@ -82,10 +82,20 @@
   ],
   "branchPrefix": "spec/",
   "refine": {
-    "$comment": "The pre-pipeline gate. T0 is a script, T1 is the same pre-implementer the pipeline runs, T2 is one judge. Rounds are judged rounds; the loop also stops when a round does not shrink the blocker count or a finding survives a repair.",
+    "$comment": "The pre-pipeline gate. T0 is a script, T2 is one judge (full, then the previous repair's range), T1 is the pipeline's pre-implementer run once after a clean verdict. Rounds are judged rounds; the loop also stops when a round does not shrink the blocker count, a finding survives a repair, or a repair adds more than maxGrowthPerFinding net lines to the bundle per blocker. A blocker filed under a rule outside blockingRules is demoted to a note.",
     "rounds": 2,
     "judgeModel": "opus",
     "fixerModel": "opus",
-    "timeoutMin": 45
+    "timeoutMin": 45,
+    "maxGrowthPerFinding": 15,
+    "blockingRules": [
+      "spec/contradiction",
+      "spec/stale-statement",
+      "spec/incomplete-decision",
+      "spec/untestable-case",
+      "spec/ambiguous-requirement",
+      "spec/missing-artefact",
+      "spec/scope-gap"
+    ]
   }
 }

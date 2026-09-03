@@ -28,7 +28,7 @@ both current at the checkout this was walked on.
 | A request that predates this spec | any request created today | yes | yes — the `201` body carries no `topic` member, which is exactly the shape the fallback in edge case 8 must handle |
 | A request in `declined` and in `cancelled` | the existing transition routes | yes | routes exist and are exercised by `apps/api/test/requests.spec.ts` |
 | A topic in `active` and in `archived` | this spec's own routes | created here | no — the routes are new, and each case drives the real transition rather than seeding a status |
-| An organization that predates the topics migration | the E2E database's rows, migrated by `e2e/global-setup.ts` before each run | yes | not run — the migration does not exist yet. TC-02-INT-02 is the case that proves it |
+| An organization holding no topic rows | delete them directly; the integration harness applies every migration before a test body runs, so the backfill file is executed again by path inside the case | yes | not run — the backfill file does not exist yet. TC-02-INT-02 is the case that proves it |
 | An organization with no active staff topic | archive every seeded staff topic through this spec's own route | created here | no — the route is new |
 
 ### Access this needs
@@ -42,7 +42,7 @@ both current at the checkout this was walked on.
 | Acceptance criterion | Observer | Level | Proven at spec time |
 |---|---|---|---|
 | AC-1 | TC-02-INT-01 | Integration | `signupOrg` proven; the seed is new |
-| AC-2 | TC-02-INT-02 | Integration | not run — the migration does not exist yet |
+| AC-2 | TC-02-INT-02 | Integration | not run — the backfill file does not exist yet |
 | AC-3 | TC-02-INT-05 | Integration | new; the functional-unique device is the one `Client` already uses |
 | AC-4 | TC-02-INT-07 | Integration | the `user` role is reachable — invited and accepted in the rehearsal |
 | AC-5 | TC-02-INT-10 | Integration | today's `201` body shape captured in the rehearsal |
@@ -163,11 +163,13 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
 - **Level:** Integration
 - **Covers:** REQ-02-016
 - **Asserts:** `GET /api/organizations/{orgId}/request-topics` → 200
-- **Steps:** Against a database holding an organization and at least one request created
-  before this migration, run the migration, then read the catalogue for that organization.
-- **Expected Result:** The organization has the full seeded catalogue. Every pre-existing
-  `Request` row still has its original `type` and `accessKind`, and both `topicId` and
-  `topicLabel` are null. No request row is written by the migration.
+- **Steps:** Sign up an organization and raise a request under a seeded topic. Delete every
+  `RequestTopic` row of that organization directly, which is the state an organization
+  predating this spec is in. Execute the backfill migration's SQL file by its path under
+  `apps/api/prisma/migrations/`, then read the catalogue for that organization.
+- **Expected Result:** The organization has the full seeded catalogue again. The request
+  raised earlier still has its `type`, its `topicLabel` and no `topicId`. No request row is
+  written by the backfill.
 
 ### TC-02-INT-03
 
@@ -477,7 +479,8 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
   Closed, then open the cancelled request.
 - **Expected Result:** The rows read Pending, In progress, Completed and Closed. The filter
   offers exactly those four words plus an all-statuses entry, and selecting Closed leaves the
-  cancelled request in the list. The detail header reads Closed with `cancelled` beside it.
+  cancelled request in the list. The detail header reads Closed with `cancelled` beside it,
+  and the history entry for the change reads Closed rather than the stored value.
 - **Selectors:** `requests-status-filter`, `request-row-{id}-status`, `request-detail-status`
 
 ### TC-02-E2E-05
