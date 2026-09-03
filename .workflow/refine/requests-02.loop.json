@@ -98,6 +98,11 @@
       "lint": 0
     }
   ],
-  "status": "running",
-  "request": "Employees pick a request topic from presets the organization curates (VPN, Claude, Question, Other for staff; Access, Other for clients), and the screens say Pending / In progress / Completed / Closed"
+  "status": "error",
+  "request": "Employees pick a request topic from presets the organization curates (VPN, Claude, Question, Other for staff; Access, Other for clients), and the screens say Pending / In progress / Completed / Closed",
+  "outcome": {
+    "reason": "judge-error",
+    "detail": "spec-refiner produced no verdict at .workflow/refine/requests-02.verdict.json (result success). It ended by saying: \"## Verdict: **clear — no blockers.** Six notes. I read both records, then checked the text and the repository claims each decision rests on. ### The record's claims, checked against what ships All nine findings are carried by the document. Spot-checks that mattered: | | Claim | Checked | |---|---|---| | R1 | `statusUnknown` | In REQ-02-002 (md:75–80), the Routes row (contracts:15), the Query parag\"",
+    "at": "2026-09-03T09:18:08.217Z"
+  }
 }
