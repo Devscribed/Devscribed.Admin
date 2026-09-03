@@ -17,8 +17,8 @@ with no body message, identical to a row that does not exist.
 | `PATCH /api/organizations/{orgId}/request-topics/{topicId}` | session, org scope, `ManageRequestTopics` | `200` | `400` `REQUEST_TOPIC_MESSAGES.nameRequired`, `REQUEST_TOPIC_MESSAGES.nameTooLong`, `REQUEST_TOPIC_MESSAGES.audienceImmutable`, `REQUEST_TOPIC_MESSAGES.typeImmutable`; `403` `REQUEST_TOPIC_MESSAGES.manageForbidden`; `404`; `409` `REQUEST_TOPIC_MESSAGES.nameDuplicate` |
 | `PATCH /api/organizations/{orgId}/request-topics/{topicId}/archive` | session, org scope, `ManageRequestTopics` | `200` | `403` `REQUEST_TOPIC_MESSAGES.manageForbidden`; `404`; `409` `REQUEST_TOPIC_MESSAGES.statusUnchanged` |
 | `PATCH /api/organizations/{orgId}/request-topics/{topicId}/restore` | session, org scope, `ManageRequestTopics` | `200` | `403` `REQUEST_TOPIC_MESSAGES.manageForbidden`; `404`; `409` `REQUEST_TOPIC_MESSAGES.statusUnchanged` |
-| `POST /api/organizations/{orgId}/requests` | session, org scope, `CreateRequest` | `201` | `400` `REQUEST_MESSAGES.topicRequired`, `REQUEST_MESSAGES.topicUnavailable`, `REQUEST_MESSAGES.topicAudienceMismatch`, `REQUEST_MESSAGES.classifierNotAccepted`; `403` `REQUEST_MESSAGES.createForbidden`; `404` |
-| `GET /api/organizations/{orgId}/requests` | session, org scope | `200` | `403` `REQUEST_MESSAGES.scopeForbidden`; `404` |
+| `POST /api/organizations/{orgId}/requests` | session, org scope, `CreateRequest` | `201` | `400` `REQUEST_MESSAGES.topicRequired`, `REQUEST_MESSAGES.topicUnavailable`, `REQUEST_MESSAGES.topicAudienceMismatch`, `REQUEST_MESSAGES.classifierNotAccepted`, and the field messages the route already answers, listed under it below; `403` `REQUEST_MESSAGES.createForbidden`; `404` |
+| `GET /api/organizations/{orgId}/requests` | session, org scope | `200` | `400` for an unrecognised `status`, `scope` or `type`, in the shape below; `403` `REQUEST_MESSAGES.scopeForbidden`; `404` |
 | `PATCH /api/organizations/{orgId}/requests/{requestId}` | session, org scope | `200` | `400` `REQUEST_MESSAGES.fieldImmutable`; `403` `REQUEST_MESSAGES.editForbidden`; `404` |
 
 The last three already exist and are amended here; the topic routes are new. The requests
@@ -88,6 +88,18 @@ No body. `200` with `{ "topic": { … } }`.
 of `REQUEST_MESSAGES.typeUnknown`, `REQUEST_MESSAGES.accessKindRequired`,
 `REQUEST_MESSAGES.accessKindUnknown` or `REQUEST_MESSAGES.accessKindNotAllowed`.
 
+Every other `400` this route answers is unchanged, over the fields the body above still
+carries: `REQUEST_MESSAGES.titleRequired`, `REQUEST_MESSAGES.titleTooShort`,
+`REQUEST_MESSAGES.titleTooLong`, `REQUEST_MESSAGES.descriptionTooLong`,
+`REQUEST_MESSAGES.priorityUnknown`, `REQUEST_MESSAGES.neededByInvalid`,
+`REQUEST_MESSAGES.neededByPast`, `REQUEST_MESSAGES.assigneeInvalid`,
+`REQUEST_MESSAGES.assigneeInactive` and `REQUEST_MESSAGES.projectUnavailable`. Those, and the
+topic messages this spec adds, come back in the field-keyed body
+`{ "error": "validation_error", "fields": { … } }`, every failing field at once —
+`REQUEST_MESSAGES.topicRequired`, `REQUEST_MESSAGES.topicUnavailable` and
+`REQUEST_MESSAGES.topicAudienceMismatch` under `topicId`, and
+`REQUEST_MESSAGES.classifierNotAccepted` under the refused name, `type` or `accessKind`.
+
 The `201` body observed today carries `id`, `number`, `type`, `accessKind`, `title`,
 `description`, `status`, `priority`, `blocking`, `overdue`, `neededBy`, `project`,
 `requester`, `assignee`, `createdAt`, `lastActivityAt`, `answeredAt`, `resolvedAt` and
@@ -110,6 +122,11 @@ was deleted outside this product's routes.
 Query gains `topicId`. `status` gains the value `closed` (REQ-02-027) alongside the five it
 already accepts and `all`. Each row of `requests[]` gains the same `topic` member.
 
+A `status`, `scope` or `type` outside its set is refused with `400` and the body
+`{ "error": "validation_error", "fields": { "status": "unknown_value" } }`, keyed by the
+parameter at fault and carrying that code rather than user-facing copy. `closed` is inside
+the `status` set from this spec on, so it is accepted rather than refused.
+
 ## Error Messages
 
 `REQUEST_TOPIC_MESSAGES` is a new export in `packages/validation/src/index.ts`. The
@@ -127,7 +144,7 @@ one already there.
 | `REQUEST_TOPIC_MESSAGES.nameDuplicate` | `POST /api/organizations/{orgId}/request-topics`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}` | A topic with this name already exists for this audience | yes |
 | `REQUEST_TOPIC_MESSAGES.manageForbidden` | `POST /api/organizations/{orgId}/request-topics`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}/archive`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}/restore` | You do not have permission to manage request topics | yes |
 | `REQUEST_TOPIC_MESSAGES.statusUnchanged` | `PATCH /api/organizations/{orgId}/request-topics/{topicId}/archive`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}/restore` | This topic is already in that state | yes |
-| `REQUEST_TOPIC_MESSAGES.pickerEmpty` | — | There are no request topics yet. An admin can add one in Settings. | yes |
+| `REQUEST_TOPIC_MESSAGES.pickerEmpty` | — | No request topics are available. An admin or manager can add one in Settings. | yes |
 | `REQUEST_MESSAGES.topicRequired` | `POST /api/organizations/{orgId}/requests` | Choose what this request is about | yes |
 | `REQUEST_MESSAGES.topicUnavailable` | `POST /api/organizations/{orgId}/requests` | That topic is not available | yes |
 | `REQUEST_MESSAGES.topicAudienceMismatch` | `POST /api/organizations/{orgId}/requests` | That topic cannot be used for this addressee | yes |
@@ -139,6 +156,12 @@ one already there.
 
 `REQUEST_TOPIC_MESSAGES.pickerEmpty` carries no route: it is screen copy for REQ-02-017 and
 no endpoint emits it.
+
+**Decided:** that copy says *available* rather than *yet*, and names both grantees. The screen
+is reached just as often by archiving the last active topic (edge case 13), where topics
+exist, and `manage-request-topics` is a manager's as well as an admin's. Rejected: "There are
+no request topics yet. An admin can add one in Settings", which is false in that state and
+sends the reader to the wrong person.
 
 ## Status Labels
 
@@ -272,6 +295,7 @@ field.
 | `request-topic-row-{id}` | Settings › Request topics | present |
 | `request-topic-row-{id}-up-btn` | Settings › Request topics | present on an active row, absent on the first row of the audience and on every archived row |
 | `request-topic-row-{id}-down-btn` | Settings › Request topics | present on an active row, absent on the last row of the audience and on every archived row |
+| `request-topic-row-{id}-rename-btn` | Settings › Request topics | present on an active row, absent on an archived row; opening it draws `request-topic-modal` on that row |
 | `request-topic-row-{id}-archive-btn` | Settings › Request topics | present while active |
 | `request-topic-row-{id}-restore-btn` | Settings › Request topics | present while archived |
 | `request-topic-modal` | Settings › Request topics | present while adding or renaming |
@@ -325,10 +349,19 @@ them and their contents change. `request-new-type` and `request-new-access-kind`
 Ordering is the up and down controls the DS gaps table commits to, and no drag handle: the
 `@ds` barrel (`apps/web/src/ds.ts`) exports no drag or sortable primitive, and a pointer-only
 handle is unreachable from the keyboard. Each control issues one
-`PATCH …/request-topics/{topicId}` carrying that row's new `sortOrder`. The first row of an
-audience draws no up control and the last draws no down one —
-a control that cannot act is not drawn. The archived list draws neither: the route accepts a
-`sortOrder` on an archived topic, and the screen offers restoring it instead.
+`PATCH …/request-topics/{topicId}` carrying that row's new `sortOrder` and no other row's: up
+sends the `sortOrder` of the row above minus one, down sends the `sortOrder` of the row below
+plus one, so the moved row lands strictly past the neighbour it moved over and the list comes
+back reordered. A value outside `0`–`32767` is clamped to the bound (validation rule 6).
+
+**Decided:** the moved row takes a value strictly past its neighbour. Rejected: sending the
+neighbour's own value, which leaves the two rows tied on `sortOrder` and the name tiebreak
+(REQ-02-009) deciding the order, so a press can leave the list exactly as it was.
+
+The first row of an audience draws no up control and the last draws no down one —
+a control that cannot act is not drawn. The archived list draws neither, and draws no rename
+control: the route accepts a `sortOrder` and a name on an archived topic, and the screen
+offers restoring it instead.
 
 ### The new-request modal, amended
 

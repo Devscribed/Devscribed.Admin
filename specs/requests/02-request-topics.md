@@ -36,7 +36,8 @@ caller supplies.** `type` keeps its meaning and is written by the server from th
 this about" drift apart invisibly until somebody filters on the wrong one.
 
 It also fixes the words the screens use for where a request stands — **Pending, In progress,
-Completed, Closed** — over statuses that stay in the database exactly as they are.
+Completed, Closed** — over statuses that stay in the database exactly as they are, and gives
+the requests list a filter by topic beside the status one.
 
 Blast radius and backward compatibility for this spec are in [README.md](README.md).
 
@@ -305,7 +306,7 @@ Invariants:
 | Existing requests carry no `topicId` and no `topicLabel` | The columns are nullable and the screens fall back to the request's stored `type` for those rows, so nothing is lost and no backfill guesses at a topic nobody chose | Nothing needs to. The set is closed the moment this spec ships |
 | A topic's `type` cannot be corrected after creation | Changing it would make the type filter disagree with the requests already raised under the topic. Archive and re-create is the honest path | A migration that rewrites `type` on the topic and every request under it, if the need is ever real |
 | The seeded staff set has no topic for two of the retired access kinds — `saas`, and an `access` topic for `other` — so an organization that classified a request either way has no seeded topic that produces the same kind | The seed is a starting catalogue, not a migration of the old vocabulary, and a curator adds a topic in one screen. An `access` topic named `Other` is in any case unreachable while the seeded `Other` holds the name: one name per audience (REQ-02-006) | A curator adding the topics the organization wants, or a later revision of the seed table |
-| Ordering is a single integer per topic with no gap strategy | The catalogue is a handful of rows curated by hand; a move is one `PATCH` of one row's `sortOrder`, and two rows sharing a value fall to the name tiebreak | A fractional or linked ordering, if a catalogue ever grows past what one screen shows |
+| Ordering is a single integer per topic with no gap strategy | The catalogue is a handful of rows curated by hand; a move is one `PATCH` of one row's `sortOrder`, taking a value one past the neighbour it moved over, and repeated moves into one gap can close it and leave two rows sharing a value, which falls to the name tiebreak | A fractional or linked ordering, if a catalogue ever grows past what one screen shows |
 
 ## Acceptance Criteria
 

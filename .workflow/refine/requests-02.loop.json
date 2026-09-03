@@ -7,7 +7,7 @@
       "round": 1,
       "startedAt": "2026-09-03T08:24:04.583Z",
       "head": "a9c514778a4eb4a9e30610f462ab060c5e4e1431",
-      "status": "running",
+      "status": "done",
       "lint": 0,
       "judge": {
         "status": "blocked",
@@ -73,7 +73,20 @@
           "S-56": "clear",
           "S-57": "note"
         }
-      }
+      },
+      "gate": "T2",
+      "blockers": 3,
+      "keys": [
+        "spec/untestable-case:02-request-topics.cases.md — TC-02-E2E-01, Expected Result",
+        "spec/ambiguous-requirement:02-request-topics.contracts.md — Screens, the ordering controls (with REQ-02-009 and Known Gaps row 5)",
+        "spec/incomplete-decision:02-request-topics.contracts.md — Routes, GET /api/organizations/{orgId}/requests"
+      ],
+      "fix": {
+        "fixed": 6,
+        "decided": 2,
+        "left": 0
+      },
+      "endedAt": "2026-09-03T08:41:09.723Z"
     }
   ],
   "status": "running",

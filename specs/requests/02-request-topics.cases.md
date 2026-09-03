@@ -180,9 +180,13 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
 - **Asserts:** `POST /api/organizations/{orgId}/request-topics` → 201;
   `GET /api/organizations/{orgId}/request-topics` → 200
 - **Steps:** As an admin, create a staff topic with no `sortOrder`. Create a second with
-  `sortOrder: 5`. Read the catalogue.
-- **Expected Result:** The first lands last, with a `sortOrder` ten above the highest seeded
-  value. The second lands first, before every seeded row. Both are `active`.
+  `sortOrder: 5`, a third with `sortOrder: 40000` and a fourth with `sortOrder: -5`. Read the
+  catalogue.
+- **Expected Result:** The first lands last of the seeded rows, with a `sortOrder` ten above
+  the highest seeded value. The second lands before every seeded row. The third is stored with
+  `sortOrder` `32767` and sorts last of all; the fourth is stored with `0` and sorts first of
+  all — an out-of-range value is clamped to the bound and answers `201`, never `400`
+  (validation rule 6). All four are `active`.
 
 ### TC-02-INT-04
 
@@ -453,23 +457,27 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
 ### TC-02-E2E-01
 
 - **Level:** E2E
-- **Covers:** REQ-02-006, REQ-02-010, REQ-02-012, REQ-02-030
+- **Covers:** REQ-02-006, REQ-02-009, REQ-02-010, REQ-02-012, REQ-02-030
 - **Steps:** Sign in as an admin. Follow the Settings › Request topics navigation row. Switch
   to the client audience and back. Add a staff topic, then attempt to add a second with the
-  same name in a different case. Archive a topic from its row, then restore it from the
-  archived list.
+  same name in a different case. Open the rename control on the third staff row and read the
+  modal it opens. Press the up control on that same row and read the order back. Archive a
+  topic from its row, then restore it from the archived list.
 - **Expected Result:** The page renders the seeded staff topics in order. The duplicate
   submission keeps the modal open, draws the duplicate message under the name field, and
-  leaves the typed value in place. The archive moves the row to the archived list and the
-  restore moves it back. The audience control is drawn when adding and not when renaming.
-  Every active row carries up and down ordering controls and no drag handle, except that the
-  first row draws no up control and the last draws no down one; the archived row draws
-  neither.
+  leaves the typed value in place. The rename modal opens carrying the row's stored name, and
+  neither the audience control nor the kind control is drawn in it, both of which are drawn
+  when adding. The up press moves that row above the one that was second and moves no other
+  row. The archive moves the row to the archived list and the restore moves it back.
+  Every active row carries a rename control and up and down ordering controls and no drag
+  handle, except that the first row draws no up control and the last draws no down one; the
+  archived row draws none of the three.
 - **Selectors:** `settings-tab-request-topics`, `request-topics-page`,
   `request-topics-audience-staff`, `request-topics-audience-client`, `request-topics-add-btn`,
   `request-topic-modal`, `request-topic-name`, `request-topic-audience`, `request-topic-type`,
   `request-topic-submit`, `request-topic-error-name`, `request-topic-row-{id}`,
-  `request-topic-row-{id}-up-btn`, `request-topic-row-{id}-down-btn`,
+  `request-topic-row-{id}-rename-btn`, `request-topic-row-{id}-up-btn`,
+  `request-topic-row-{id}-down-btn`,
   `request-topic-row-{id}-archive-btn`, `request-topic-row-{id}-restore-btn`
 
 ### TC-02-E2E-02
