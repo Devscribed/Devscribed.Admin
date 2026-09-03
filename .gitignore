@@ -66,6 +66,9 @@ docker-compose.override.yml
 # are committed; the raw agent transcripts are hundreds of kilobytes a gate and are not.
 .workflow/refine/*.probe/*/*.log
 .workflow/refine/*.probe/*/stages/*.log
+.workflow/refine/*.probe.*/**/*.log
+# Console output of a run, kept for whoever is watching it. The ledger is the record.
+.workflow/refine/*.log
 # Built for one reader, from files that are committed.
 .workflow/refine/*.payload.json
 .workflow/refine/*.report.html
