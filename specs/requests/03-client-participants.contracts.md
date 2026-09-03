@@ -37,9 +37,9 @@ to.
 | `POST /api/login` | none | `200` | `400` `AUTH_MESSAGES.invalidCredentials`, `AUTH_MESSAGES.deactivated` |
 | `POST /api/invitations/accept` | none | `200` | `400` `INVITE_MESSAGES.tokenInvalid`; `409` `CLIENT_USER_MESSAGES.principalConflict` |
 | `GET /api/me` | session | `200` | `401` |
-| `GET /api/organizations/{orgId}/clients/{clientId}/contacts` | session, org scope, `ViewClients` | `200` | `404` |
-| `POST /api/organizations/{orgId}/clients/{clientId}/contacts` | session, org scope, `ManageClients` | `201` | `400` `CLIENT_MESSAGES.clientArchived`, `CLIENT_USER_MESSAGES.emailInvalid`; `404`; `409` `CLIENT_USER_MESSAGES.alreadyLinked` |
-| `DELETE /api/organizations/{orgId}/clients/{clientId}/contacts/{contactId}` | session, org scope, `ManageClients` | `200` | `404`; `409` `CLIENT_USER_MESSAGES.alreadyRemoved` |
+| `GET /api/organizations/{orgId}/clients/{clientId}/contacts` | session, org scope, `view-clients` | `200` | `404` |
+| `POST /api/organizations/{orgId}/clients/{clientId}/contacts` | session, org scope, `manage-clients` | `201` | `400` `CLIENT_MESSAGES.clientArchived`, `CLIENT_USER_MESSAGES.emailInvalid`; `404`; `409` `CLIENT_USER_MESSAGES.alreadyLinked` |
+| `DELETE /api/organizations/{orgId}/clients/{clientId}/contacts/{contactId}` | session, org scope, `manage-clients` | `200` | `404`; `409` `CLIENT_USER_MESSAGES.alreadyRemoved` |
 | `POST /api/organizations/{orgId}/requests` | session, org scope | `201` | `400` `REQUEST_MESSAGES.topicRequired`, `REQUEST_MESSAGES.assigneeInvalid`, `REQUEST_MESSAGES.classifierNotAccepted`, `REQUEST_MESSAGES.topicUnavailable`, `REQUEST_MESSAGES.topicAudienceMismatch`, `REQUEST_MESSAGES.assigneeInactive`, `REQUEST_MESSAGES.clientProjectRequired`, `REQUEST_MESSAGES.clientProjectMismatch`, `REQUEST_MESSAGES.notOnProject`; `403` `CLIENT_USER_MESSAGES.clientCannotCreate`, `REQUEST_MESSAGES.createForbidden`; `404` |
 | `GET /api/organizations/{orgId}/request-topics` | session, org scope | `200` | `404` |
 | `GET /api/organizations/{orgId}/requests` | session, org scope | `200` | `400` `validation_error` on an unknown `scope`, `status` or `type` value; `403` `REQUEST_MESSAGES.scopeForbidden`; `404` |
@@ -56,7 +56,8 @@ The list route's `403` is the refusal a member without `view-all-requests` recei
 rows (REQ-03-029), and the `400` is the answer to a query value outside the closed set,
 whichever principal sends it. Each contacts route answers a caller lacking the capability its
 row names `404` with no message (REQ-03-008), the answer the client's own detail route
-already gives that caller.
+already gives that caller; the capability named in its Guards cell decides that `404`, and no
+contacts route refuses with a `403` naming the capability.
 
 The members and projects routes are listed because REQ-03-019 changes what they answer a
 client principal, and a case has to name them. The topics route is listed because the
@@ -570,7 +571,7 @@ exports through `apps/web/src/ds.ts`, and nothing here is improvised per screen.
 - **PII.** A client contact's email address is PII. It is stored once, on `Account`. It is not
   copied into `RequestNotification`, is never written to `lastError`, and appears in no event
   row — the trail snapshots display names only. It is visible on the contacts list, to holders
-  of `ViewClients`, and nowhere else: no request response carries it, the `assignee` member
+  of `view-clients`, and nowhere else: no request response carries it, the `assignee` member
   naming the contact and their client only.
 - This spec adds **no unauthenticated route** of its own. It amends two that are already
   public — sign-in and invitation acceptance — and adds no new refusal to either that names an

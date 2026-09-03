@@ -455,13 +455,16 @@ against them.
 
 - **Level:** Integration
 - **Covers:** REQ-03-029
-- **Asserts:** `GET /api/organizations/{orgId}/requests` → 200
+- **Asserts:** `GET /api/organizations/{orgId}/requests` → 200;
+  `GET /api/organizations/{orgId}/requests` → 400
 - **Steps:** In an organization holding requests addressed to two contacts, requests between
   members, and a pending vacation request, list as contact A with no query, then with
-  `scope=all`.
-- **Expected Result:** Both answers hold only the requests addressed to contact A. The
-  response carries no `vacation` member at all, and `counts.waitingOnMe` counts the
-  non-terminal ones addressed to them. `scope=all` widens nothing.
+  `scope=all`, then with a `scope` of `everything`, which is neither.
+- **Expected Result:** The first two answers hold only the requests addressed to contact A.
+  The response carries no `vacation` member at all, and `counts.waitingOnMe` counts the
+  non-terminal ones addressed to them. `scope=all` widens nothing. `scope=everything` answers
+  `400` `validation_error` naming `scope`, the refusal every principal receives, so the client
+  is not carved out of it.
 
 ### TC-03-INT-24
 

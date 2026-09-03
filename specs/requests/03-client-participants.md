@@ -57,9 +57,8 @@ the principal kind (REQ-03-016), and no value of `Membership.role` produces them
 THE SYSTEM SHALL link a client contact to the organization through a `ClientMembership` row
 carrying the account, the organization and the client.
 
-**Decided:** a separate table makes every existing staff-membership query incapable of
-returning a client by construction — vacation accrual, the members list, project assignment
-and time tracking cannot be handed one.
+**Decided:** a separate table makes every staff-membership query — accrual, the members list,
+project assignment, time tracking — incapable of returning a client by construction.
 
 #### REQ-03-002 — one active principal per account
 
@@ -146,11 +145,10 @@ IF the invited address already holds a `ClientMembership` of another client of t
 organization, or an active one of the named client, THEN THE SYSTEM SHALL answer `409` with
 `CLIENT_USER_MESSAGES.alreadyLinked`.
 
-**Decided:** any client of the organization, whatever the other row's status. An account
-holds one client principal (REQ-03-002), so a second client's invitation could never be
-accepted, and returning a removed row to `active` under a new client would rebind a row the
-old client's requests still resolve through. Staff membership, and a client membership in
-another organization, are not the inviter's to learn and meet REQ-03-014 at accept.
+**Decided:** any client of the organization, whatever the other row's status — returning a
+removed row to `active` under a new client would rebind a row the old client's requests still
+resolve through. Staff membership, and a client membership in another organization, meet
+REQ-03-014 at accept.
 
 #### REQ-03-014 — an address that belongs to staff
 
@@ -181,8 +179,7 @@ be refused, for a right no role can hold.
 WHEN a right is checked, THE SYSTEM SHALL resolve the principal kind before calling any
 role-keyed helper.
 
-**Decided:** an ordering rule — a role-keyed helper answers a principal with no role the
-viewer set rather than nothing.
+**Decided:** an ordering rule — a role-keyed helper answers a principal with no role the viewer set rather than nothing.
 
 #### REQ-03-018 — the client's navigation
 
@@ -210,10 +207,9 @@ WHEN a request carries `assigneeKind` of `client`, THE SYSTEM SHALL require
 `assigneeClientMembershipId` to name a contact of the caller's organization, answering `404`
 with no message when it names none.
 
-**Decided:** an id of another organization is `404`, identical to one naming nothing, so ids
-are not probed across organizations; a `400` would say the id belongs to somebody. A removed
-contact of the caller's own organization is `400` `REQUEST_MESSAGES.assigneeInactive`
-(REQ-03-025), a fact the caller may already read.
+**Decided:** an id of another organization is `404`, identical to one naming nothing; a `400`
+would say the id belongs to somebody. A removed contact of the caller's own organization is
+`400` `REQUEST_MESSAGES.assigneeInactive` (REQ-03-025).
 
 #### REQ-03-021 — a client request names a project
 
@@ -230,8 +226,7 @@ IF the named project is not linked to the addressee's client, THEN THE SYSTEM SH
 IF the requester holds no `ProjectMember` row on the named project, THEN THE SYSTEM SHALL
 answer `400` with `REQUEST_MESSAGES.notOnProject`.
 
-**Decided:** an admin is not carved out; the carve-out would remove the only rule keeping a
-client's inbox to people they work with.
+**Decided:** an admin is not carved out — that would remove the only rule keeping a client's inbox to people they work with.
 
 #### REQ-03-024 — the topic's audience
 
@@ -266,9 +261,8 @@ the request's assignee as inactive and cancel nothing.
 IF a client principal calls the create route, THEN THE SYSTEM SHALL answer `403` with
 `CLIENT_USER_MESSAGES.clientCannotCreate`, decided before the route consults any capability.
 
-**Decided:** the ordering is part of the rule. Asking `create-request` first answers a client
-`REQUEST_MESSAGES.createForbidden` — the sentence a viewer gets — which tells a contact they
-are staff with too small a role.
+**Decided:** the ordering is part of the rule — asking `create-request` first answers a
+client `REQUEST_MESSAGES.createForbidden`, the sentence written for a viewer.
 
 ### What a client may do with a request
 
@@ -283,11 +277,13 @@ and message keep the two tests they apply to a member.
 #### REQ-03-029 — the client's list
 
 WHEN a client principal lists requests, THE SYSTEM SHALL return only requests addressed to
-them, whatever `scope` the query names.
+them, whether the query names `scope=mine`, `scope=all` or no scope at all.
 
 **Decided:** `scope=all` answers `200` with their own rows, not the `403`
 `REQUEST_MESSAGES.scopeForbidden` a member without `view-all-requests` receives — the query
-widens nothing a client could ever be granted, so there is nothing to refuse.
+widens nothing a client could ever be granted. Any other `scope` value is the `400`
+`validation_error` this route answers every principal, decided before the caller's kind is
+looked at; answering a client `200` for a value outside those two was rejected.
 
 #### REQ-03-030 — a client answers
 
@@ -324,9 +320,13 @@ transaction as the `RequestEvent`.
 
 #### REQ-03-036 — who the recipients are
 
-THE SYSTEM SHALL make the recipients of an event the request's requester and its addressee
-other than the principal who caused it, and nobody else: a holder of `view-all-requests` who
-is neither receives nothing.
+THE SYSTEM SHALL make the recipients of an event the request's requester and the addressee
+the request carries as the transaction that wrote the event leaves it, other than the
+principal who caused it, and nobody else: a holder of `view-all-requests` who is neither
+receives nothing.
+
+**Decided:** a reassignment therefore notifies the incoming addressee and not the outgoing one;
+telling the person who lost the request was rejected, and adding it later takes nothing back.
 
 #### REQ-03-037 — delivery happens after the commit
 

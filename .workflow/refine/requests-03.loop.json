@@ -99,7 +99,7 @@
       "round": 2,
       "startedAt": "2026-09-03T13:03:31.049Z",
       "head": "3ec5e530aa12aaaf8fa5c425061f7b961b62bb3a",
-      "status": "running",
+      "status": "done",
       "lint": 0,
       "judge": {
         "status": "blocked",
@@ -165,7 +165,18 @@
           "S-56": "clear",
           "S-57": "clear"
         }
-      }
+      },
+      "gate": "T2",
+      "blockers": 1,
+      "keys": [
+        "spec/contradiction:REQ-03-029 against the list route's row"
+      ],
+      "fix": {
+        "fixed": 0,
+        "decided": 3,
+        "left": 0
+      },
+      "endedAt": "2026-09-03T13:18:32.508Z"
     }
   ],
   "status": "running"
