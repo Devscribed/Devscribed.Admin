@@ -422,7 +422,10 @@ that pushed the table down on every row action would move the list under the han
 working it.
 
 So `Toast` + `ToastHost` are built here ([§54](../design-system/decisions.md)), and Phases 6, 7 and 9
-each add more on top of them.
+each add more on top of them. **The queue is the application's one provider** in the root layout
+(`apps/web/src/toast.tsx`), shared with every screen in the product; no hiring screen mounts a
+host of its own, so there is one column in the corner whichever screen raised the message
+([ADR 0011](../../docs/adr/0011-one-toast-queue-and-it-stacks.md)).
 
 `{name} deleted` is the first of those, and it is a toast raised by a screen other than the one
 the action was taken on — as `Vacancy created` is on the vacancy screen — because it has to be:
@@ -432,8 +435,11 @@ because it `404`s the instant the flag is set. The name is handed across that on
 ([03 §11.65](03-candidate-database.md)).
 
 - Top-right, `1em` in, a 320px column, stacked with the oldest at the top — the host's own
-  geometry ([§54](../design-system/decisions.md)). **They stack rather than replace**: two actions
-  taken inside a few seconds are two things that happened.
+  geometry ([§54](../design-system/decisions.md)). **They stack rather than replace**, even under
+  the same test id: two actions taken inside a few seconds are two things that happened. This
+  is the whole product's rule now, not this screen's ([ADR 0011](../../docs/adr/0011-one-toast-queue-and-it-stacks.md)),
+  and its cost is the tests': a case that repeats an action inside one clock locates the plate
+  it means rather than the id alone.
 - The paint is the plate's own and deliberately not the app's tokens ([§54](../design-system/decisions.md)):
   an untyped message is white with no mark, a typed one takes its status fill, white ink and a
   mark, and every plate carries a × as well as dismissing on click.

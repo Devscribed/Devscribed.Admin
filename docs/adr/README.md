@@ -23,6 +23,7 @@ likely to be re-litigated.
 | [0008](0008-a-spec-is-judged-by-a-stranger.md) | A spec is judged by a stranger, before the pipeline is paid for | current |
 | [0009](0009-hiring-storage-and-calendar-are-read-as-given.md) | Hiring's storage and calendar are read as given, in every environment | current |
 | [0010](0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md) | Hiring's page states stand on the page, and its alerts are toasts | current |
+| [0011](0011-one-toast-queue-and-it-stacks.md) | One toast queue for the whole app, and it stacks | current |
 | [0012](0012-a-test-reads-its-own-interviewers-calendar.md) | A test reads its own interviewer's calendar, never the run's latest event | current |
 
 Measurements that led to these, including the hypotheses that did not survive, are in

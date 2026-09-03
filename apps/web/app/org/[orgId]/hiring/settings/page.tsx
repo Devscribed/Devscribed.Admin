@@ -30,12 +30,11 @@ import {
   Table,
   TableToolbar,
   TextInput,
-  ToastHost,
 } from '@devscribed/ds';
 import { PageHeader } from '@/layout/PageHeader';
 import { CriterionDialog } from '@/hiring/CriterionDialog';
 import { LoadFailed } from '@/hiring/LoadFailed';
-import { useToasts } from '@/hiring/useToasts';
+import { useToast } from '@/toast';
 import type { Category, Criterion } from '@/hiring/types';
 
 type Phase = 'loading' | 'ready' | 'failed' | 'gone';
@@ -84,7 +83,7 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
   const [busy, setBusy] = useState(false);
   /** Absent is closed; a present `criterion` edits, an absent one creates. */
   const [criterionDialog, setCriterionDialog] = useState<{ criterion?: Criterion } | null>(null);
-  const { toasts, push, dismiss } = useToasts();
+  const { push } = useToast();
 
   // Typing debounces; the tabs do not, because a click is already a deliberate act.
   useEffect(() => {
@@ -678,7 +677,6 @@ export default function HiringSettingsPage({ params }: { params: Promise<{ orgId
         data-testid="criterion-delete-confirm"
       />
 
-      <ToastHost toasts={toasts} onDismiss={dismiss} />
     </div>
   );
 }

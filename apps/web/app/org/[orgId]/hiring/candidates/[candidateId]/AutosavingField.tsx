@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { HIRING_MESSAGES } from '@devscribed/validation';
 import { Button, TextArea } from '@devscribed/ds';
 import { timeOf, useAutosave } from '@/hiring/useAutosave';
-import type { Toasts } from '@/hiring/useToasts';
+import { useToast } from '@/toast';
 
 /** How long "Saved just now" holds before it becomes a clock time (04 §UI Notes). */
 const JUST_NOW_MS = 60_000;
@@ -35,8 +35,6 @@ export function AutosavingField({
   initial,
   save,
   registerDirty,
-  push,
-  dismiss,
 }: {
   label: string;
   /** `card-notes` or `card-conclusion` — the spec's prefix for this field's test ids. */
@@ -47,10 +45,9 @@ export function AutosavingField({
   save: (value: string) => Promise<{ savedAt: string }>;
   /** Lets the page ask, on navigation, whether anything is still unsaved. */
   registerDirty?: (isDirty: () => boolean) => () => void;
-  /** The page's toast queue: a failure is raised into it, and taken down again from it. */
-  push: Toasts['push'];
-  dismiss: Toasts['dismiss'];
 }) {
+  /* The app's one toast queue: a failure is raised into it, and taken down again from it. */
+  const { push, dismiss } = useToast();
   const editor = useAutosave({ initial, save });
   const [recent, setRecent] = useState(false);
 

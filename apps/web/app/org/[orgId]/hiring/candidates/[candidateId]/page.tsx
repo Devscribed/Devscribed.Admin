@@ -25,7 +25,6 @@ import {
   IconButton,
   Popover,
   Preloader,
-  ToastHost,
 } from '@devscribed/ds';
 import { focusByTestId } from '@/field-error';
 import { PageHeader } from '@/layout/PageHeader';
@@ -33,7 +32,7 @@ import { useSession } from '@/layout/session-context';
 import { rememberDeletedCandidate } from '@/hiring/candidate-deleted';
 import { readCandidateOrigin } from '@/hiring/candidate-origin';
 import { LoadFailed } from '@/hiring/LoadFailed';
-import { useToasts } from '@/hiring/useToasts';
+import { useToast } from '@/toast';
 import type {
   CandidateCard,
   CardApplication,
@@ -156,7 +155,7 @@ export default function CandidateCardPage({
    * The test ids travel with each message: they name the announcement, not the component
    * that draws it, which is why `card-status-toast` is still the id it always was.
    */
-  const { toasts, push, dismiss } = useToasts();
+  const { push } = useToast();
 
   const loadLibrary = useCallback(async (): Promise<void> => {
     const response = await fetch(
@@ -371,7 +370,6 @@ export default function CandidateCardPage({
           retryTestId="card-load-retry"
           data-testid="card-load-error"
         />
-        <ToastHost toasts={toasts} onDismiss={dismiss} />
       </>
     );
   }
@@ -594,8 +592,6 @@ export default function CandidateCardPage({
                 initial={application.interviewNotes}
                 save={(value) => patch(application.id, { interviewNotes: value })}
                 registerDirty={registerDirty}
-                push={push}
-                dismiss={dismiss}
               />
               <AutosavingField
                 key={`${application.id}-conclusion`}
@@ -606,8 +602,6 @@ export default function CandidateCardPage({
                 initial={application.conclusion}
                 save={(value) => patch(application.id, { conclusion: value })}
                 registerDirty={registerDirty}
-                push={push}
-                dismiss={dismiss}
               />
             </ApplicationSection>
           ))}
@@ -636,11 +630,6 @@ export default function CandidateCardPage({
         />
       )}
 
-      {/*
-        The header's own outcomes, which change nothing in the body — see the queue's own
-        note above. They float rather than push, because the body is being typed into.
-      */}
-      <ToastHost toasts={toasts} onDismiss={dismiss} />
     </div>
   );
 }

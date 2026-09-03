@@ -3,9 +3,42 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
 import { ToastHost, type ToastEntry } from '@devscribed/ds';
 
-interface ToastContextValue {
+/**
+ * The design system's own set, which is `react-toastify`'s (decisions §54). Most of what this
+ * app confirms is **untyped** — `default`, the white message with no mark — because that is
+ * what most confirmations are, and because a status hue on "Vacancy updated" claims a
+ * significance the event does not have. The coloured types are kept for the case that earns
+ * one: a request that failed.
+ */
+export type ToastTone = 'default' | 'info' | 'success' | 'warning' | 'error';
+
+export interface QueuedToast {
+  id: number;
   /**
-   * Shows a toast carrying `testId` for a few seconds. `tone` defaults to `'success'`.
+   * A sentence, or a sentence with a control in it. A failure that can be retried carries its
+   * retry *in* the message, so the way back is on the plate that reports the need for it.
+   */
+  message: ReactNode;
+  /** Omitted is `default`, which is what a confirmation is. */
+  tone?: ToastTone;
+  /** Names the announcement, not the component that draws it. */
+  testId?: string;
+  /**
+   * Overrides the host's clock for this one message. `0` leaves it standing: a failure whose
+   * plate holds the retry cannot be allowed to take the retry with it.
+   */
+  autoClose?: number;
+}
+
+interface ToastContextValue {
+  /** Adds a line. Returns the id, so a caller that raised a standing message can take it down. */
+  push: (toast: Omit<QueuedToast, 'id'>) => number;
+  /** Widened to the host's own id type, which allows a string. Ours are always numbers. */
+  dismiss: (id: string | number) => void;
+  /**
+   * The older shape, kept so no call site has to move: a test id, a sentence, and a tone that
+   * defaults to `success` because the screens that use it chose that default, and re-deciding
+   * them one by one belongs to each screen. New code calls `push`.
    */
   showToast: (testId: string, message: string, tone?: 'success' | 'error') => void;
 }
@@ -13,53 +46,55 @@ interface ToastContextValue {
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 /**
- * The application's toast queue, drawn by the design system's `ToastHost` (§54).
+ * The application's one toast queue, drawn by the design system's `ToastHost` (§54).
  *
- * **The queue is the caller's** — that is the system's own division, and it is the one this
- * provider was already making: it holds the list, the host draws and times it. What moved
- * across is everything below that line. The plate was an `InfoBanner` in a hand-placed
- * bottom-right column; it is now §54's plate in the system's top-right column, which is
- * where a confirmation belongs — beside the header the action was taken from rather than in
- * the far corner from it. The timer moved too: 3400ms, chosen as a reading speed, rather
- * than the 4000 this file picked.
+ * **The queue is the caller's** — that is the system's own division, and this is the caller:
+ * one provider in the root layout, one host in the top-right corner, and every screen pushing
+ * into the same list. There used to be two — this one, and a per-screen copy under hiring
+ * that mounted its own host — which meant two columns drawn in the same corner the day a
+ * screen called both (ADR 0011).
  *
- * `showToast` is unchanged, so no call site moves. What is *not* settled here is which tone
- * each message deserves. §54 argues that most confirmations are untyped — a green plate for
- * every saved field is noise — and this provider still defaults to `success` because forty
- * call sites chose that default and re-deciding them one by one belongs to the screen each
- * one is on.
+ * Two rules, and both are the reason a queue exists rather than a single slot:
  *
- * Mounted once in the root layout so every route — signed-in or not — can call `useToast()`.
+ * - **A new message adds a line.** It never replaces the last one, not even one carrying the
+ *   same test id. Cancelling one interview and then another is two things that happened, and
+ *   the first is not made untrue by the second. The cost lands on the tests: two plates
+ *   raised within one clock share a test id, so a case that repeats an action inside 3.4
+ *   seconds locates the plate it means rather than the id alone.
+ * - **Ids are minted here, never derived from the message.** Two identical messages are two
+ *   events, and keying by text would silently collapse them into one.
+ *
+ * Nothing here times anything: `ToastHost` owns the clock (`autoClose`, paused while a
+ * pointer is over the column) and calls `dismiss` with the id of whatever it dropped. The one
+ * thing a caller may say about the clock is `autoClose: 0`, which is how a failure that
+ * carries its own retry stays standing until that retry — or the × — is pressed.
  */
 export function ToastProvider({ children }: { children: ReactNode }) {
-  const [toasts, setToasts] = useState<ToastEntry[]>([]);
+  const [toasts, setToasts] = useState<QueuedToast[]>([]);
   const nextId = useRef(0);
+
+  const push = useCallback((toast: Omit<QueuedToast, 'id'>): number => {
+    nextId.current += 1;
+    const id = nextId.current;
+    setToasts((current) => [...current, { ...toast, id }]);
+    return id;
+  }, []);
+
+  const dismiss = useCallback((id: string | number) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id));
+  }, []);
 
   const showToast = useCallback(
     (testId: string, message: string, tone: 'success' | 'error' = 'success') => {
-      const id = nextId.current++;
-      /**
-       * **One plate per test id.** The same confirmation raised twice — two saves, two
-       * failed sends — replaces its predecessor rather than stacking under it, and the
-       * replacement restarts the timer, which is what somebody who just acted again wants.
-       * A column reading `Saved` over `Saved` says nothing the first one did not.
-       *
-       * It also keeps the id a *handle*: two live nodes carrying one `data-testid` is an
-       * ambiguous locator, and E2E is right to refuse it.
-       */
-      setToasts((prev) => [...prev.filter((toast) => toast.testId !== testId), { id, testId, message, tone }]);
+      push({ testId, message, tone });
     },
-    [],
+    [push],
   );
 
-  const dismiss = useCallback((id: string | number) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
-  }, []);
-
   return (
-    <ToastContext.Provider value={{ showToast }}>
+    <ToastContext.Provider value={{ push, dismiss, showToast }}>
       {children}
-      <ToastHost toasts={toasts} onDismiss={dismiss} label="Notifications" />
+      <ToastHost toasts={toasts as ToastEntry[]} onDismiss={dismiss} label="Notifications" />
     </ToastContext.Provider>
   );
 }

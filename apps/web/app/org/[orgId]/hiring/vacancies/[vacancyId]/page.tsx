@@ -17,11 +17,10 @@ import {
   PageTitle,
   Popover,
   Preloader,
-  ToastHost,
 } from '@devscribed/ds';
 import { rememberCandidateOrigin } from '@/hiring/candidate-origin';
 import { LoadFailed } from '@/hiring/LoadFailed';
-import { useToasts } from '@/hiring/useToasts';
+import { useToast } from '@/toast';
 import { VacancyStatusBadge } from '@/hiring/StatusBadge';
 import type { Board, Vacancy } from '@/hiring/types';
 import { VacancyDialog } from '../VacancyDialog';
@@ -79,7 +78,7 @@ export default function VacancyDetailPage({
   const [editing, setEditing] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
   const [busy, setBusy] = useState(false);
-  const { toasts, push, dismiss } = useToasts();
+  const { push } = useToast();
 
   /**
    * Raised here rather than on the list, so it survives the navigation that follows a
@@ -264,7 +263,6 @@ export default function VacancyDetailPage({
           retryTestId="vacancy-load-retry"
           data-testid="vacancy-load-error"
         />
-        <ToastHost toasts={toasts} onDismiss={dismiss} />
       </>
     );
   }
@@ -476,7 +474,6 @@ export default function VacancyDetailPage({
         acceptTestId="vacancy-delete-confirm-button"
       />
 
-      <ToastHost toasts={toasts} onDismiss={dismiss} />
     </div>
   );
 }

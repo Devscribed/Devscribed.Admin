@@ -17,7 +17,7 @@ import { BoardCard, BoardColumn, EmptyState, PageTabs, Preloader } from '@devscr
 import type { Board, BoardCardData } from '@/hiring/types';
 import { LoadFailed } from '@/hiring/LoadFailed';
 import { useMediaQuery } from '@/hiring/useMediaQuery';
-import type { QueuedToast } from '@/hiring/useToasts';
+import type { QueuedToast } from '@/toast';
 import { columnWithout, useBoardDrag, withMove, type Placement } from './useBoardDrag';
 
 /** Below this the columns become a tab strip and drag is not attempted at all. */

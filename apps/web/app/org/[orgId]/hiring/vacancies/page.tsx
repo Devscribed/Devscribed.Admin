@@ -22,11 +22,10 @@ import {
   Preloader,
   Table,
   TableToolbar,
-  ToastHost,
 } from '@devscribed/ds';
 import { PageHeader } from '@/layout/PageHeader';
 import { LoadFailed } from '@/hiring/LoadFailed';
-import { useToasts } from '@/hiring/useToasts';
+import { useToast } from '@/toast';
 import { VacancyStatusBadge } from '@/hiring/StatusBadge';
 import type { Vacancy, VacancyList } from '@/hiring/types';
 import { VacancyDialog } from './VacancyDialog';
@@ -76,7 +75,7 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
   const [dialog, setDialog] = useState<{ vacancy?: Vacancy } | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [busy, setBusy] = useState(false);
-  const { toasts, push, dismiss } = useToasts();
+  const { push } = useToast();
 
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
@@ -570,7 +569,6 @@ export default function VacanciesPage({ params }: { params: Promise<{ orgId: str
         acceptTestId="vacancy-delete-confirm-button"
       />
 
-      <ToastHost toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }

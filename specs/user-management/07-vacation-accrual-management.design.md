@@ -215,8 +215,8 @@ Every `data-testid` the business spec requires for spec 07 appears here. Spec 05
 | Save button | `Button` | `variant="primary"`, `loading={saving}` | `vacation-financials-save-btn` |
 | Cancel button | `Button` | `variant="secondary"` | `vacation-financials-cancel-btn` |
 | Field errors | `field-error.tsx`'s `errorNode(field, msg)` helper, same as every other form | — | `field-error-monthlySalary`, `field-error-clientHourlyRate`, `field-error-vacationDaysPerYear`, `field-error-currency`, `field-error-vacationReservePercent` |
-| Saved toast | `InfoBanner tone="success"` via `useToast()` | `showToast('toast-financials-saved', 'Financial settings saved')` | `toast-financials-saved` |
-| Save-error toast | `InfoBanner tone="error"` via `useToast()`'s `tone` param (spec 05's addition) | `showToast('toast-financials-error', MESSAGES.generic, 'error')` | `toast-financials-error` (added; not in the business spec's required list — parity with spec 05's error toast) |
+| Saved toast | `Toast` (§54) via `useToast()` | `showToast('toast-financials-saved', 'Financial settings saved')` | `toast-financials-saved` |
+| Save-error toast | `Toast tone="error"` (§54) via `useToast()`'s `tone` param (spec 05's addition) | `showToast('toast-financials-error', MESSAGES.generic, 'error')` | `toast-financials-error` (added; not in the business spec's required list — parity with spec 05's error toast) |
 
 **All 27 business-spec `data-testid`s are mapped.** Nothing is intentionally omitted. `vacation-reserve-amount` is present but conditionally rendered (admin/manager only, and only when `reserveBalance != null`), matching the business spec's own note that a `user` sees no monetary amount.
 

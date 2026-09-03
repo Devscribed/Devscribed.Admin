@@ -193,7 +193,7 @@ No separate component exists for this variant — it is the same `MembersTable`/
 - The row-actions trigger is a real `<button>` (`IconButton`) with `aria-label="Actions"`, `aria-haspopup="menu"`, and `aria-expanded`; the menu itself carries `role="menu"`, each item `role="menuitem"`.
 - The disabled Delete item carries both a native `title` (a real hover tooltip) and a permanently-rendered `delete-guard-message` span — the reason is available to a screen reader without requiring a hover gesture, not only to a mouse user.
 - `Modal`'s dialog surface now always carries `role="dialog"` / `aria-modal="true"` (see [DS gaps](#ds-gaps)) — `confirm-delete-dialog` gets this for free.
-- Toasts reuse spec 03's `ToastProvider`, already `role="status"` / `aria-live="polite"`.
+- Toasts reuse spec 03's `ToastProvider`, the application's one queue; each plate is `role="alert"` ([§54](../design-system/decisions.md)).
 - Focus is never trapped or moved into the delete dialog automatically beyond the browser's own default; this matches spec 03's `InviteModal`, which does the same (no new pattern introduced here).
 - Colour is never the only signal for "removed": the row also carries the literal word "Removed" in its badge, not just a dimmed tint.
 

@@ -36,7 +36,6 @@ import {
   Select,
   Table,
   TableToolbar,
-  ToastHost,
   type SelectOption,
 } from '@devscribed/ds';
 import { PageHeader } from '@/layout/PageHeader';
@@ -54,7 +53,7 @@ import {
 import { rememberCandidateOrigin } from '@/hiring/candidate-origin';
 import { valuesOf } from '@/select';
 import { useMediaQuery } from '@/hiring/useMediaQuery';
-import { useToasts } from '@/hiring/useToasts';
+import { useToast } from '@/toast';
 import type {
   CandidateDatabase,
   CandidateRow,
@@ -187,7 +186,7 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
    * The dialog is mounted **once for the page**, not once per row: twenty-five rows would
    * otherwise be twenty-five idle dialogs, and only one of them can ever be open.
    */
-  const { toasts, push, dismiss } = useToasts();
+  const { push } = useToast();
   const [cancelling, setCancelling] = useState<CandidateRow | null>(null);
   /**
    * The row whose person is being deleted, and whether the request is in flight.
@@ -1312,7 +1311,6 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
         />
       )}
 
-      <ToastHost toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }
