@@ -60,11 +60,12 @@ already gives that caller; the capability named in its Guards cell decides that 
 contacts route refuses with a `403` naming the capability.
 
 The members and projects routes are listed because REQ-03-019 changes what they answer a
-client principal, and a case has to name them. The topics route is listed because the
-new-request modal reads it once per addressee kind and a case asserts what it returns for
-`audience=client`; it needs no capability — every active member reads the catalogue to fill
-the picker — and this spec does not amend it. The contacts routes are new; everything else is
-amended.
+client principal, and a case has to name them. The topics route is listed for the same reason
+as well as for the new-request modal's own read of it: REQ-03-019 does not name the topics
+route among its exceptions, so a client principal meets the same default `404` there as on
+every other unnamed route, and a case has to assert it. For a staff member the route is
+unamended — it still needs no capability, and every active member reads the catalogue to fill
+the picker. The contacts routes are new; everything else is amended.
 
 The create route's `400`s are listed in the order it decides them, which the answers make
 observable: the body's own fields are reported together, then the topic row, then the
@@ -121,7 +122,7 @@ both and the shell branches on a value that is always present.
 Answers `200` with `{ "accountId": "…", "redirectTo": "/requests" }` for a `client`
 invitation, and with the members destination it already returns for a staff one (REQ-03-015).
 
-### `GET /api/organizations/{orgId}/request-topics` — unchanged, read with a second audience
+### `GET /api/organizations/{orgId}/request-topics` — amended, and refused to a client principal
 
 The picker's read. `?audience=client&status=active` returns the client half of the catalogue,
 which every organization is seeded with:
@@ -134,7 +135,10 @@ which every organization is seeded with:
 ```
 
 The modal issues this read with `audience=staff` today and re-issues it with `audience=client`
-when the client addressee kind is chosen. Nothing about the route changes.
+when the client addressee kind is chosen. Nothing about the route changes for a staff member.
+A client principal is answered `404` on this route, since REQ-03-019 does not name it among
+its exceptions and a client contact — who cannot raise a request (REQ-03-027) — has no read to
+make here.
 
 ### `POST /api/organizations/{orgId}/requests` — amended
 

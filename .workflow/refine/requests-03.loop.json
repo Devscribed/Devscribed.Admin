@@ -7,7 +7,7 @@
       "round": 1,
       "startedAt": "2026-09-03T14:11:04.377Z",
       "head": "1490344a050a911e4ec3b10a917960f8f2d8357a",
-      "status": "running",
+      "status": "done",
       "lint": 0,
       "judge": {
         "status": "blocked",
@@ -73,7 +73,18 @@
           "S-56": "n/a",
           "S-57": "note"
         }
-      }
+      },
+      "gate": "T2",
+      "blockers": 1,
+      "keys": [
+        "spec/contradiction:REQ-03-019"
+      ],
+      "fix": {
+        "fixed": 0,
+        "decided": 1,
+        "left": 0
+      },
+      "endedAt": "2026-09-03T14:16:55.695Z"
     }
   ],
   "status": "running",

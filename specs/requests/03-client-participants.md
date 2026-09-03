@@ -389,7 +389,7 @@ invariants:
 |---|---|---|
 | AC-1 | An invited client contact can sign in and reach the requests screen, and today's sign-in refusal for an account with no staff membership no longer applies to them. | TC-03-INT-03, TC-03-E2E-01 |
 | AC-2 | No account ends up holding both an active staff membership and an active client membership. | TC-03-INT-08 |
-| AC-3 | A client principal reaches no organization screen other than requests, and the members, projects and contacts routes answer 404. | TC-03-INT-13, TC-03-E2E-02 |
+| AC-3 | A client principal reaches no organization screen other than requests, and the members, projects, contacts and request-topics routes answer 404. | TC-03-INT-13, TC-03-E2E-02 |
 | AC-4 | A request addressed to a client requires a project that the requester works on and that belongs to that client. | TC-03-INT-15, TC-03-INT-16, TC-03-INT-17 |
 | AC-5 | A client-audience topic is required for a client-addressed request and refused for a staff-addressed one. | TC-03-INT-18 |
 | AC-6 | A client contact can answer and decline a request addressed to them, and cannot grant one. | TC-03-INT-20, TC-03-INT-21, TC-03-INT-22 |

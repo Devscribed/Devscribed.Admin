@@ -50,7 +50,7 @@ helper that already exists. **This spec owes no test fixture** and adds nothing 
 |---|---|---|---|
 | AC-1 | TC-03-INT-03, TC-03-E2E-01 | Integration + E2E | today's refusal captured verbatim; the sign-in screen was reached |
 | AC-2 | TC-03-INT-08 | Integration | new |
-| AC-3 | TC-03-INT-13, TC-03-E2E-02 | Integration + E2E | the members and projects routes answer `200` to staff today, which is the baseline |
+| AC-3 | TC-03-INT-13, TC-03-E2E-02 | Integration + E2E | the members, projects and topics routes answer `200` to staff today, which is the baseline |
 | AC-4 | TC-03-INT-15, TC-03-INT-16, TC-03-INT-17 | Integration | the project, its client link and project membership are all reachable and proven |
 | AC-5 | TC-03-INT-18 | Integration | new |
 | AC-6 | TC-03-INT-20, TC-03-INT-21, TC-03-INT-22 | Integration | the transition routes exist and are exercised by `apps/api/test/requests.spec.ts` |
@@ -316,10 +316,11 @@ against them.
 - **Asserts:** `GET /api/organizations/{orgId}/members` → 404;
   `GET /api/organizations/{orgId}/projects` → 404;
   `GET /api/organizations/{orgId}/clients/{clientId}/contacts` → 404;
+  `GET /api/organizations/{orgId}/request-topics` → 404;
   `GET /api/organizations/{orgId}/members` → 200
-- **Steps:** As a signed-in client contact, call the members route, the projects route and the
-  contacts route of their own client, each with their own organization's id in the path. Then
-  call the members route as an admin of that organization.
+- **Steps:** As a signed-in client contact, call the members route, the projects route, the
+  contacts route of their own client and the request-topics route, each with their own
+  organization's id in the path. Then call the members route as an admin of that organization.
 - **Expected Result:** Every client call answers `404` with no message naming the resource —
   the same answer as for an organization the caller has no part in. The admin call answers
   `200`, so the `404` is about the principal and not about the route being broken.
