@@ -2,9 +2,9 @@
 #
 #   docker build -f apps/web/Dockerfile .
 #
-# It has to be. The app imports `@devscribed/validation` from packages/, and every screen
-# imports the Meridian design system from `1_DS for dev/` — a directory that sits outside
-# the Next.js app root on purpose (see `experimental.externalDir` in next.config.mjs).
+# It has to be. The app imports `@devscribed/validation` and the Meridian design system
+# `@devscribed/ds` from packages/ — workspace packages that sit outside the Next.js app root.
+# Both manifests go in before `npm ci` so the workspace links exist, and both sources after.
 
 # ---------------------------------------------------------------------------------------
 # Build
@@ -16,6 +16,7 @@ COPY package.json package-lock.json ./
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY packages/validation/package.json packages/validation/
+COPY packages/ds/package.json packages/ds/
 COPY e2e/package.json e2e/
 # The API's postinstall runs `prisma generate`, which needs the schema even though this
 # image never runs the API.
@@ -25,6 +26,7 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 RUN npm ci
 
 COPY packages/validation packages/validation
+COPY packages/ds packages/ds
 COPY apps/web apps/web
 
 # Where /api/* is proxied to, and it has to be set HERE rather than on the running task.
