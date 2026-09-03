@@ -1,0 +1,109 @@
+{
+  "stage": "pre_implement",
+  "spec": "specs/requests/02-request-topics.md",
+  "status": "pass",
+  "findings": [
+    {
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/scope-gap",
+      "file": "specs/requests/02-request-topics.contracts.md",
+      "symbol": "Seed Data",
+      "claim": "the spec requires two migration files in one run, where this pipeline's rule for an implementation run is one migration per run",
+      "witness": {
+        "kind": "rule",
+        "detail": "Seed Data: the backfill is 'a migration file of its own, separate from the one creating the table, and inserts only where the organization holds no row, so executing it twice is safe'. TC-02-INT-02 then 'Execute the backfill migration's SQL file by its path under apps/api/prisma/migrations/', which is impossible if it shares a file with the CREATE TABLE. Both files are additive and the backfill is idempotent, so the deploy window described at infra/deploy.sh:27 is safe either way.",
+        "source": "specs/requests/02-request-topics.contracts.md#Seed Data, specs/requests/02-request-topics.cases.md#TC-02-INT-02"
+      },
+      "suggestedFix": "confirm the two-file shape for this run, or state in the spec that the backfill may share the file and rewrite TC-02-INT-02's execution route"
+    },
+    {
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/requests/02-request-topics.contracts.md",
+      "symbol": "POST /request-topics default sortOrder",
+      "claim": "the default sortOrder can exceed the stated bound, and the spec does not say whether archived rows count toward it",
+      "witness": {
+        "kind": "scenario",
+        "detail": "A curator creates a topic with sortOrder 32767, then creates another with no sortOrder. The contracts say the default is 'the highest stored value in that audience plus ten' — 32777 — while validation rule 6 bounds the column at 0-32767. Separately, if the highest-valued staff topic is archived, 'the highest stored value in that audience' either includes it or does not, and the two answers differ when that topic is later restored. No case of this spec observes either."
+      },
+      "suggestedFix": "state that the computed default is clamped to the bound and that every row of the audience counts regardless of status; the plan implements both readings"
+    },
+    {
+      "id": "P3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/requests/02-request-topics.contracts.md",
+      "symbol": "request-row-{id}-topic",
+      "claim": "the spec does not say whether a request with no topic draws its fallback About value under the same testid",
+      "witness": {
+        "kind": "scenario",
+        "detail": "A request raised before this spec is listed. The testid table says request-row-{id}-topic is 'present when the request carries a topic'; edge case 8 says the row 'shows the stored type as its About value'. One implementation draws the fallback inside that testid, the other draws it outside. No case asserts a legacy row's About cell in the UI, so nothing settles it and nothing observes it."
+      },
+      "suggestedFix": "say whether the testid wraps the fallback value; the plan draws the fallback without it"
+    },
+    {
+      "id": "P4",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/requests/02-request-topics.cases.md",
+      "symbol": "TC-02-E2E-04",
+      "claim": "the list mock and the case disagree about whether a row shows the closure sub-label",
+      "witness": {
+        "kind": "rule",
+        "detail": "The Screens mock draws a row as 'Closed · cancelled'. TC-02-E2E-04's expected result says 'The rows read Pending, In progress, Completed and Closed'. REQ-02-029 says the closure reason is rendered beside the Closed label WHILE the request's status is declined or cancelled, which is true of a row as much as of the detail header. Read as equality the case contradicts the mock; read as containment it does not.",
+        "source": "specs/requests/02-request-topics.contracts.md#Screens, specs/requests/02-request-topics.cases.md#TC-02-E2E-04"
+      },
+      "suggestedFix": "say that the row assertion is a containment one, or drop the sub-label from the row in the mock; the plan follows the mock and REQ-02-029"
+    },
+    {
+      "id": "P5",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/untestable-case",
+      "file": "specs/requests/02-request-topics.cases.md",
+      "symbol": "TC-02-INT-07",
+      "claim": "the manager half of the case is only true under one ordering of its four writes",
+      "witness": {
+        "kind": "scenario",
+        "detail": "The case says 'Repeat every write as a member at manager' and expects 'Every manager write succeeds'. The four writes are create, rename, archive and restore. A restore issued against a topic that is active answers 409 REQUEST_TOPIC_MESSAGES.statusUnchanged by REQ-02-013, so the expectation holds only if the manager's calls run create then rename then archive then restore on one topic. Written in any other order the case fails against a correct implementation."
+      },
+      "suggestedFix": "name the order in the steps; the plan fixes it as create, rename, archive, restore on one topic"
+    },
+    {
+      "id": "P6",
+      "target": "self",
+      "severity": "note",
+      "rule": null,
+      "file": "scripts/handoff-coverage.mjs",
+      "symbol": "handoff-coverage",
+      "claim": "the coverage gate cannot see this spec's requirements or cases and would have passed a plan covering none of them",
+      "witness": {
+        "kind": "rule",
+        "detail": "The script reads only the file named in run.json, so none of the bundle is visible; it matches requirements as /^(\\d+)\\. /gm while this spec numbers them '#### REQ-02-001'; and its case regex ends the id on [: \\n], which does not match the CRLF line endings these files are stored with. Run as written against this spec it reports 0 requirements, 0 cases and 8 sections. The three checks were therefore run by hand, bundle-aware and CRLF-normalized: 31 of 31 requirements assigned, 34 of 34 live cases claimed, 22 of 22 sections accounted for.",
+        "source": "scripts/handoff-coverage.mjs:78-113"
+      },
+      "suggestedFix": "have the script read the spec's frontmatter `bundle` members, accept a REQ-id heading as a numbered requirement, and normalize CRLF before matching"
+    },
+    {
+      "id": "P7",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/scope-gap",
+      "file": "specs/requests/README.md",
+      "symbol": "Blast Radius / Spec 02",
+      "claim": "the blast radius does not name the existing E2E assertions the status vocabulary breaks",
+      "witness": {
+        "kind": "rule",
+        "detail": "It names STATUS_OPTIONS, REQUEST_STATUS_META and the two cases driving request-new-type and request-new-error-accessKind. It does not name the eleven assertions on 'Open', 'Answered', 'Granted', 'Declined' and 'Cancelled' in e2e/tests/requests.spec.ts (229, 247, 253, 255, 390, 395, 422, 426, 526, 589, 590), the two filter options selected by name there (626, 657), or e2e/tests/requests-page.spec.ts:147, every one of which reads a word REQ-02-028 replaces.",
+        "source": "specs/requests/README.md#Blast Radius"
+      },
+      "suggestedFix": "nothing in the spec need change — the work is owned by task T8 with the line numbers, and this is recorded so the run is not surprised by a red suite"
+    }
+  ]
+}

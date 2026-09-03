@@ -1,0 +1,14 @@
+{
+  "runId": "refine-requests-02-2",
+  "dir": ".workflow/refine/requests-02.probe/2",
+  "spec": "specs/requests/02-request-topics.md",
+  "specSha": null,
+  "status": "pre_implement",
+  "task": "compile this spec into a plan; this is a refine probe, not a ship run",
+  "stages": {
+    "pre_implement": {
+      "status": "running",
+      "attempts": 0
+    }
+  }
+}

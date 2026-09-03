@@ -158,6 +158,10 @@
           "S-56": "clear",
           "S-57": "clear"
         }
+      },
+      "plan": {
+        "status": "pass",
+        "specBlockers": 0
       }
     }
   ],
