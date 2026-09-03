@@ -346,6 +346,21 @@ against them.
   asserted to be that one and **not** `REQUEST_MESSAGES.createForbidden`, which is what a
   capability check reached first would answer.
 
+### TC-03-INT-36
+
+- **Level:** Integration
+- **Covers:** REQ-03-043
+- **Asserts:** `GET /api/organizations/{orgId}/request-contacts` → 200
+- **Steps:** Build two clients, each with a project and an active contact, and assign a member
+  holding `user` to the first client's project only. Read the route as that member, as an
+  admin assigned to neither project, and as a `viewer`.
+- **Expected Result:** The `user` is answered `200` with the first client's contact alone —
+  the second client's contact is absent, and so is a removed contact of the first. The route
+  answers on `create-request` and not on `view-clients`, which the `user` does not hold, so
+  the addressee kind the matrix grants that role is one they can complete. The admin, assigned
+  to no project, is answered `200` with an empty list rather than the whole client book. The
+  `viewer`, holding no `create-request`, is answered `404`.
+
 ### TC-03-INT-15
 
 - **Level:** Integration

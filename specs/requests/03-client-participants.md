@@ -30,9 +30,9 @@ A person at a client becomes a **signed-in principal of the organization**, so a
 blocked on an access from that client can raise a request against them and watch it answered
 in the product. The principal is a `ClientMembership`, never a role on `Membership`.
 
-This spec also introduces the **notification port**: every event a party should learn about
-writes an outbox row in the transaction that caused it, and a `RequestNotifier` delivers them
-afterwards. Blast radius and backward compatibility are in [README.md](README.md).
+It also introduces the **notification port**: every event a party should learn about writes an
+outbox row in the transaction that caused it, and a `RequestNotifier` delivers them after the
+commit. Blast radius and backward compatibility are in [README.md](README.md).
 
 ## Actors & Preconditions
 
@@ -57,8 +57,7 @@ the principal kind (REQ-03-016), and no value of `Membership.role` produces them
 THE SYSTEM SHALL link a client contact to the organization through a `ClientMembership` row
 carrying the account, the organization and the client.
 
-**Decided:** a separate table makes every staff-membership query — accrual, the members list,
-project assignment, time tracking — incapable of returning a client by construction.
+**Decided:** a separate table makes every staff-membership query — accrual, members, project assignment, time tracking — incapable of returning a client by construction.
 
 #### REQ-03-002 — one active principal per account
 
@@ -114,7 +113,7 @@ with `AUTH_MESSAGES.deactivated`.
 IF a caller without `manage-clients` invites or removes a client contact, or a caller without
 `view-clients` lists them, THEN THE SYSTEM SHALL answer `404` with no message.
 
-**Decided:** `404`, not a `403` naming the capability. The client's own detail route answers
+**Decided:** `404`, not a `403` naming the capability — the client's own detail route answers
 that caller `404`, so a distinctive refusal here would say the client exists to somebody who
 may not see it.
 
@@ -145,9 +144,9 @@ IF the invited address already holds a `ClientMembership` of another client of t
 organization, or an active one of the named client, THEN THE SYSTEM SHALL answer `409` with
 `CLIENT_USER_MESSAGES.alreadyLinked`.
 
-**Decided:** any client of the organization, whatever the other row's status — returning a
-removed row to `active` under a new client would rebind a row the old client's requests still
-resolve through. A client membership in another organization meets REQ-03-014 at accept.
+**Decided:** any client of the organization, whatever the row's status — returning a removed
+row to `active` under a new client would rebind a row the old client's requests resolve
+through. One in another organization meets REQ-03-014 at accept.
 
 #### REQ-03-014 — an address that belongs to staff
 
@@ -217,6 +216,15 @@ with no message when it names none.
 **Decided:** an id of another organization is `404`, identical to one naming nothing; a `400`
 would say the id belongs to somebody. A removed contact of the caller's own organization is
 `400` `REQUEST_MESSAGES.assigneeInactive` (REQ-03-025).
+
+#### REQ-03-043 — which contacts a requester may choose from
+
+WHEN a member holding `create-request` reads the addressees available to them, THE SYSTEM
+SHALL return the active client contacts of every client owning a project that member is
+assigned to, and no other.
+
+**Decided:** the boundary the create route already enforces (REQ-03-023), so the picker offers
+what the server accepts. `view-clients` would offer a `user` an addressee it can never fill.
 
 #### REQ-03-021 — a client request names a project
 
@@ -386,7 +394,6 @@ invariants:
 |---|---|---|
 | Nobody outside the product is told anything, so a client learns of a request only by signing in | The port, the outbox and every recipient decision ship and are tested; only the adapter is absent, and adding one writes no migration and changes no rule here | An adapter spec that adds an email channel and its templates |
 | A removed contact's open requests are flagged but not reassigned | The same choice the staff side already makes: an access asked for may still be needed by whoever takes the relationship over | A reassign path that accepts a client addressee |
-| The client shell is the requests screens with the rest of the navigation withheld, not a separately designed product | It is one screen and a list; designing a second shell before anybody has used the first is guesswork | A design pass once real contacts have used it |
 | A client contact's email address is visible on the contacts list to every member holding `view-clients` | It is the address a member of staff mailed yesterday, and the manager who invites and removes contacts has to see which person a row is | Nothing needs to; it is named so a reviewer meets it deliberately |
 | Delivery is attempted only while requests are being made against the API | With the shipped adapter there is nothing to deliver, so the property costs nothing today; an adapter spec will state its own drain | The adapter spec, which chooses between a queue and a scheduled drain |
 

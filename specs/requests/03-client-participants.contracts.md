@@ -39,6 +39,7 @@ to.
 | `POST /api/invitations` | session | `200` | `409` `CLIENT_USER_MESSAGES.principalConflict` |
 | `GET /api/me` | session | `200` | `401` |
 | `GET /api/organizations/{orgId}/clients/{clientId}/contacts` | session, org scope, `view-clients` | `200` | `404` |
+| `GET /api/organizations/{orgId}/request-contacts` | session, org scope, `create-request` | `200` | `404` |
 | `POST /api/organizations/{orgId}/clients/{clientId}/contacts` | session, org scope, `manage-clients` | `201` | `400` `CLIENT_MESSAGES.clientArchived`, `CLIENT_USER_MESSAGES.emailInvalid`; `404`; `409` `CLIENT_USER_MESSAGES.alreadyLinked` |
 | `DELETE /api/organizations/{orgId}/clients/{clientId}/contacts/{contactId}` | session, org scope, `manage-clients` | `200` | `404`; `409` `CLIENT_USER_MESSAGES.alreadyRemoved` |
 | `POST /api/organizations/{orgId}/requests` | session, org scope | `201` | `400` `REQUEST_MESSAGES.topicRequired`, `REQUEST_MESSAGES.assigneeInvalid`, `REQUEST_MESSAGES.classifierNotAccepted`, `REQUEST_MESSAGES.topicUnavailable`, `REQUEST_MESSAGES.topicAudienceMismatch`, `REQUEST_MESSAGES.assigneeInactive`, `REQUEST_MESSAGES.clientProjectRequired`, `REQUEST_MESSAGES.clientProjectMismatch`, `REQUEST_MESSAGES.notOnProject`; `403` `CLIENT_USER_MESSAGES.clientCannotCreate`, `REQUEST_MESSAGES.createForbidden`; `404` |
@@ -85,6 +86,26 @@ refusal in front of it.
 names the account itself carries win from then on. The mail sink names this message type
 `invitation`, the type it already carries, because the token, the expiry and the accept screen
 are the ones the staff invitation uses.
+
+### `GET /api/organizations/{orgId}/request-contacts`
+
+The new-request modal's read, and the only contacts read a `user` can make. Returns the active
+contacts of every client that owns a project the caller is assigned to, each with its client:
+
+```json
+{ "contacts": [ { "id": "…", "displayName": "Dana Stone", "clientId": "…", "clientName": "Acme" } ] }
+```
+
+`create-request`, not `view-clients`. The matrix grants a `user` the right to raise a request
+to a contact, and `view-clients` is the capability that opens the organization's client book —
+a `user` holds it nowhere and must not, so gating the picker on it would offer that role an
+addressee kind it could never fill. This route's boundary is REQ-03-023's: the projects the
+requester works on. A requester therefore sees exactly the contacts the create route will
+accept from them, and no client they have no part in.
+
+The contacts route below is unchanged and stays on `view-clients`: it is the client's own
+detail screen, it lists removed contacts and invitation state, and it is a manager's view of
+one client rather than a requester's view of their own reach.
 
 ### `GET /api/organizations/{orgId}/clients/{clientId}/contacts`
 
