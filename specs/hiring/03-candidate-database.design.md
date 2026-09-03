@@ -60,8 +60,10 @@ who, how to reach them, what for, when, where they got to, and what can be done 
 - **The filter `Card` is gone**, and with it the last of the four `--bg-panel-2` uses in the token
   map. It was `--surface-sunken` with `clip={false}` — the surface
   [§12](../design-system/decisions.md) was written for and the only thing that ever exercised
-  it. The prop stays on `Card`; the argument for it is unchanged, and the next list that opens a
-  control inside a card will need it. Nothing on this screen does any more.
+  it. The prop stays on `Card` for a `Popover` drawn with its portal off; a `Select` no longer
+  needs it anywhere, because its list is a portal now ([§95](../design-system/decisions.md),
+  [BUG-007](../bugs/BUG-007-select-list-scrolls-the-modal-it-opens-in.md)). Nothing on this
+  screen opens a control inside a card any more.
 - **There is no count line, and nothing stands in its place.** A later pass removed the line.
   Each scope tab already carries its own count, computed under the filters that are applied —
   `All (12)` beside `Assigned to me (4)` — so a line under the strip repeating the active tab's

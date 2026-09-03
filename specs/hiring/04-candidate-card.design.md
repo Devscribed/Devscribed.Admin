@@ -555,7 +555,7 @@ index.
 | `Button` cannot be an anchor, so a download loses the browser's own handling | [§38](../design-system/decisions.md) |
 | `TextArea` has no `trailing` slot in the label row | [§33](../design-system/decisions.md) — landed in Phase 4 |
 | `TextArea` has no real `<label for>` | [§25](../design-system/decisions.md) — landed in Phase 3 |
-| `Card` clips a popover opened inside it | [§12](../design-system/decisions.md)'s `clip`, second of four surfaces |
+| `Card` clips a popover opened inside it | [§12](../design-system/decisions.md)'s `clip`, second of four surfaces — and no longer needed for a `Select`, whose list is a portal since [§95](../design-system/decisions.md) |
 | `Badge` forwards no `aria-label` or `data-testid` | [§19](../design-system/decisions.md) |
 | `Select` is not a combobox, and `isSearchable` did nothing | [§21](../design-system/decisions.md) / [§29](../design-system/decisions.md) |
 | `TextInput` cannot size its own box | [§35](../design-system/decisions.md) |

@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { RequiredMark } from './FormField';
 import { CrossIcon } from '../icons/Icon';
 import { Chip } from '../core/Chip';
@@ -139,13 +140,58 @@ export function Select({
   const ref = React.useRef<HTMLDivElement | null>(null);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const controlRef = React.useRef<HTMLDivElement | null>(null);
+  const listRef = React.useRef<HTMLDivElement | null>(null);
   const generatedId = React.useId();
   const controlId = id || generatedId;
   const listId = `${controlId}-listbox`;
   React.useEffect(() => {
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) { setOpen(false); setQuery(''); } };
+    const h = (e: MouseEvent) => {
+      if (ref.current && ref.current.contains(e.target as Node)) return;
+      // §95 — the list is not inside the control's box any more, so it has to be asked too.
+      if (listRef.current && listRef.current.contains(e.target as Node)) return;
+      setOpen(false); setQuery('');
+    };
     document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h);
   }, []);
+
+  /* §95 — where the list goes. It is a **portal** into `document.body`, `position: fixed`,
+     measured off the control's rectangle rather than hung under it. Drawn inside the control's
+     box the list counted towards whatever scroller the control sat in: a `Modal` panel grew a
+     scrollbar and clipped the list at its edge the moment it opened, and a `MenuDrawer` did the
+     same near its bottom (BUG-007). §55 answered this for `Popover` and the answer is the same
+     here — with one difference: the list stays a portal inside a dialog, because a listbox never
+     takes focus (the combobox keeps it and names the active row), so the dialog's focus trap is
+     never asked to hold something outside the panel. Re-placed on every scroll and resize while
+     open, and opened **upward** when it would run off the bottom and fits above. */
+  const [pos, setPos] = React.useState<React.CSSProperties | null>(null);
+  const place = React.useCallback(() => {
+    const anchor = controlRef.current;
+    if (!anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    const height = listRef.current ? listRef.current.offsetHeight : 0;
+    const flip = height > 0 && rect.bottom + height > window.innerHeight && rect.top >= height;
+    setPos({
+      ...(flip ? { bottom: window.innerHeight - rect.top } : { top: rect.bottom }),
+      left: rect.left,
+      width: rect.width,
+    });
+  }, []);
+  React.useLayoutEffect(() => {
+    if (!open) { setPos(null); return undefined; }
+    place();
+    // `true` — capture, so a scroll inside any ancestor counts and not only the page's.
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+    };
+  }, [open, place]);
+  const flipped = pos !== null && 'bottom' in pos;
+  /* The list is rendered through the body when there is one; on the server it stays in place,
+     which is never painted anyway. */
+  const mount = (node: React.ReactNode) =>
+    typeof document !== 'undefined' ? createPortal(node, document.body) : node;
   const formik = variant === 'formik';
   const selectedList = isMulti ? ((value || []) as SelectOptionLike[]) : [];
   const hasValue = isMulti ? selectedList.length > 0 : !!value;
@@ -348,12 +394,27 @@ export function Select({
       {/* Unmounted when closed — a listbox left in the document keeps every option's
           `data-testid` reachable by a query that should have found nothing. `aria-controls` is
           dropped with it rather than pointing at a node that is not there. */}
-      {open && (
+      {open && mount(
       <div
+        ref={listRef}
         id={listId}
         role="listbox"
         aria-label={label}
-        style={{ position: 'absolute', top: '100%', left: 0, right: 0, boxSizing: 'border-box', marginTop: formik ? 'var(--space-3)' : 'var(--space-4)', minWidth: formik ? undefined : 150, /* @literal 5px end caps, below the scale — `AccountMenu`'s panel takes the same. */ paddingTop: 5, paddingBottom: 5, background: 'var(--surface-overlay)', borderRadius: 'var(--radius-l)', boxShadow: '0 6px 12px rgb(0 0 0 / 18%)', zIndex: 1000 }}
+        style={{
+          /* §95 — fixed and placed off the control's rectangle; see `place` above. Invisible for
+             the one commit before the layout effect has measured it, and **`opacity`, never
+             `visibility`**, which is §55's rule for the same window. The gap under (or over) the
+             control is the margin the in-flow list always had, which a fixed box still honours. */
+          position: 'fixed', ...(pos || {}), opacity: pos ? 1 : 0,
+          ...(flipped ? { marginBottom: formik ? 'var(--space-3)' : 'var(--space-4)' } : { marginTop: formik ? 'var(--space-3)' : 'var(--space-4)' }),
+          boxSizing: 'border-box', minWidth: formik ? undefined : 150,
+          /* Out of the control's box, so the family has to be said again. */
+          fontFamily: 'var(--font-family-base)',
+          /* @literal 5px end caps, below the scale — `AccountMenu`'s panel takes the same. */
+          paddingTop: 5, paddingBottom: 5, background: 'var(--surface-overlay)', borderRadius: 'var(--radius-l)', boxShadow: '0 6px 12px rgb(0 0 0 / 18%)',
+          /* Above a `Modal`'s 1001 and its scrim, where `Popover`'s panel already sits. */
+          zIndex: 3001,
+        }}
       >
         {/* The list scrolls at 300px rather than growing: a menu taller than that runs off
             whatever it was opened from. */}
@@ -408,7 +469,7 @@ export function Select({
             <div style={{ padding: 'var(--space-3) var(--space-5)', textAlign: 'center', fontSize: formik ? 'var(--font-size-s)' : 'var(--font-size-base)', color: N.n40 }}>No options</div>
           )}
         </div>
-      </div>
+      </div>,
       )}
       {/* §21 — `errorId`, and a `hint` sharing the error's slot and geometry. Both are §4's
           call on `TextInput`, for §4's reason: a hint drawn anywhere else would move the field

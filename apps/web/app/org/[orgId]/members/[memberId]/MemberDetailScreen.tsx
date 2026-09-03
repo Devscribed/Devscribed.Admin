@@ -248,8 +248,10 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
       )}
 
       {detail && (
-        /* §12 — `clip` off, because the About tab hosts `RoleSelect`: a card that clips to its
-           radius cuts off a `Select` popover opened inside it. */
+        /* §12 — `clip` off. It was for `RoleSelect` on the About tab, whose list a clipping card
+           cut off; the list is a portal now (§95) and needs nothing here. Left off all the same:
+           nothing in this card runs edge to edge, so clipping would only ever cut off something
+           that hangs out of it. */
         <Card clip={false}>
           <Header detail={detail} />
 
