@@ -133,7 +133,8 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
   `declined` and `cancelled`.
 - **Expected Result:** Pending, In progress, Completed, Closed, Closed. The closure sub-label
   is absent for the first three, `declined` for the fourth and `cancelled` for the fifth. The
-  map has an entry for every stored status, so no status can render as a raw column value.
+  map has an entry for each stored `Request` status, so no request status can render as a raw
+  column value; it has no entry for a vacation's stored status, which keeps its own word.
 
 ### TC-02-UNIT-06
 
@@ -155,8 +156,8 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
   admin of a second, separately signed-up organization.
 - **Expected Result:** The staff read returns the seeded staff topics in `sortOrder` order,
   each `active`, each with `createdByAccountId` null; the client read returns the seeded
-  client topics. The second organization sees its own rows and none of the first's. The seed
-  rows and the `Organization` row share a creation timestamp from the same transaction.
+  client topics. The second organization sees its own rows and none of the first's. The
+  catalogue is whole at that first read, with no read reaching an organization that has none.
 
 ### TC-02-INT-02
 
@@ -178,15 +179,20 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
 - **Level:** Integration
 - **Covers:** REQ-02-009
 - **Asserts:** `POST /api/organizations/{orgId}/request-topics` → 201;
+  `POST /api/organizations/{orgId}/request-topics` → 400
+  REQUEST_TOPIC_MESSAGES.sortOrderInvalid;
   `GET /api/organizations/{orgId}/request-topics` → 200
 - **Steps:** As an admin, create a staff topic with no `sortOrder`. Create a second with
-  `sortOrder: 5`, a third with `sortOrder: 40000` and a fourth with `sortOrder: -5`. Read the
+  `sortOrder: 5`, a third with `sortOrder: 40000` and a fourth with `sortOrder: -5`. Then
+  attempt a fifth with `sortOrder: "top"` and a sixth with `sortOrder: 1.5`. Read the
   catalogue.
 - **Expected Result:** The first lands last of the seeded rows, with a `sortOrder` ten above
   the highest seeded value. The second lands before every seeded row. The third is stored with
   `sortOrder` `32767` and sorts last of all; the fourth is stored with `0` and sorts first of
-  all — an out-of-range value is clamped to the bound and answers `201`, never `400`
-  (validation rule 6). All four are `active`.
+  all — an out-of-range integer is clamped to the bound and answers `201`, never `400`
+  (validation rule 6). The fifth and the sixth are each `400` with the named message and write
+  no row: a value that is not an integer is refused, not clamped and not dropped. The four that
+  were created are `active`.
 
 ### TC-02-INT-04
 
@@ -196,12 +202,15 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
   REQUEST_TOPIC_MESSAGES.audienceUnknown;
   `POST /api/organizations/{orgId}/request-topics` → 400 REQUEST_TOPIC_MESSAGES.typeUnknown;
   `GET /api/organizations/{orgId}/request-topics` → 400
-  REQUEST_TOPIC_MESSAGES.audienceUnknown
+  REQUEST_TOPIC_MESSAGES.audienceUnknown;
+  `GET /api/organizations/{orgId}/request-topics` → 400
+  REQUEST_TOPIC_MESSAGES.statusUnknown
 - **Steps:** As an admin, create a topic with `audience: "partner"`, then one with
-  `type: "vacation"`. Then read the catalogue with `audience=partner`.
-- **Expected Result:** Each answers `400` with the named message and writes no row. The read
-  refuses rather than returning everything, so a typo in a query string cannot look like an
-  empty catalogue.
+  `type: "vacation"`. Then read the catalogue with `audience=partner`, and read it again with
+  `status=activ`.
+- **Expected Result:** Each answers `400` with the named message and writes no row. Both reads
+  refuse rather than returning everything or falling back to the `active` default, so a typo in
+  a query string cannot look like an empty catalogue.
 
 ### TC-02-INT-05
 
@@ -528,9 +537,10 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
 - **Covers:** REQ-02-030
 - **Steps:** Sign in as a member holding `user`. Read the sidebar. Navigate directly to the
   Settings › Request topics address.
-- **Expected Result:** The navigation row is not rendered. The direct navigation renders no
-  topics page and no add control — a destination the caller cannot use is not drawn, and the
-  routes behind it refuse independently.
+- **Expected Result:** The navigation row is not rendered. The direct navigation draws no
+  topics page, no add control and no row control, and lands on the members list instead — a
+  destination the caller cannot use is not drawn, and the routes behind it refuse
+  independently.
 - **Selectors:** `settings-tab-request-topics` (absent), `request-topics-page` (absent),
   `request-topics-add-btn` (absent)
 

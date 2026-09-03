@@ -12,9 +12,9 @@ with no body message, identical to a row that does not exist.
 
 | Route | Guards | Success | Errors |
 |---|---|---|---|
-| `GET /api/organizations/{orgId}/request-topics` | session, org scope | `200` | `400` `REQUEST_TOPIC_MESSAGES.audienceUnknown`; `404` |
-| `POST /api/organizations/{orgId}/request-topics` | session, org scope, `ManageRequestTopics` | `201` | `400` `REQUEST_TOPIC_MESSAGES.audienceUnknown`, `REQUEST_TOPIC_MESSAGES.nameRequired`, `REQUEST_TOPIC_MESSAGES.nameTooLong`, `REQUEST_TOPIC_MESSAGES.typeUnknown`; `403` `REQUEST_TOPIC_MESSAGES.manageForbidden`; `404`; `409` `REQUEST_TOPIC_MESSAGES.nameDuplicate` |
-| `PATCH /api/organizations/{orgId}/request-topics/{topicId}` | session, org scope, `ManageRequestTopics` | `200` | `400` `REQUEST_TOPIC_MESSAGES.nameRequired`, `REQUEST_TOPIC_MESSAGES.nameTooLong`, `REQUEST_TOPIC_MESSAGES.audienceImmutable`, `REQUEST_TOPIC_MESSAGES.typeImmutable`; `403` `REQUEST_TOPIC_MESSAGES.manageForbidden`; `404`; `409` `REQUEST_TOPIC_MESSAGES.nameDuplicate` |
+| `GET /api/organizations/{orgId}/request-topics` | session, org scope | `200` | `400` `REQUEST_TOPIC_MESSAGES.audienceUnknown`, `REQUEST_TOPIC_MESSAGES.statusUnknown`; `404` |
+| `POST /api/organizations/{orgId}/request-topics` | session, org scope, `ManageRequestTopics` | `201` | `400` `REQUEST_TOPIC_MESSAGES.audienceUnknown`, `REQUEST_TOPIC_MESSAGES.nameRequired`, `REQUEST_TOPIC_MESSAGES.nameTooLong`, `REQUEST_TOPIC_MESSAGES.typeUnknown`, `REQUEST_TOPIC_MESSAGES.sortOrderInvalid`; `403` `REQUEST_TOPIC_MESSAGES.manageForbidden`; `404`; `409` `REQUEST_TOPIC_MESSAGES.nameDuplicate` |
+| `PATCH /api/organizations/{orgId}/request-topics/{topicId}` | session, org scope, `ManageRequestTopics` | `200` | `400` `REQUEST_TOPIC_MESSAGES.nameRequired`, `REQUEST_TOPIC_MESSAGES.nameTooLong`, `REQUEST_TOPIC_MESSAGES.audienceImmutable`, `REQUEST_TOPIC_MESSAGES.typeImmutable`, `REQUEST_TOPIC_MESSAGES.sortOrderInvalid`; `403` `REQUEST_TOPIC_MESSAGES.manageForbidden`; `404`; `409` `REQUEST_TOPIC_MESSAGES.nameDuplicate` |
 | `PATCH /api/organizations/{orgId}/request-topics/{topicId}/archive` | session, org scope, `ManageRequestTopics` | `200` | `403` `REQUEST_TOPIC_MESSAGES.manageForbidden`; `404`; `409` `REQUEST_TOPIC_MESSAGES.statusUnchanged` |
 | `PATCH /api/organizations/{orgId}/request-topics/{topicId}/restore` | session, org scope, `ManageRequestTopics` | `200` | `403` `REQUEST_TOPIC_MESSAGES.manageForbidden`; `404`; `409` `REQUEST_TOPIC_MESSAGES.statusUnchanged` |
 | `POST /api/organizations/{orgId}/requests` | session, org scope, `CreateRequest` | `201` | `400` `REQUEST_MESSAGES.topicRequired`, `REQUEST_MESSAGES.topicUnavailable`, `REQUEST_MESSAGES.topicAudienceMismatch`, `REQUEST_MESSAGES.classifierNotAccepted`, and the field messages the route already answers, listed under it below; `403` `REQUEST_MESSAGES.createForbidden`; `404` |
@@ -28,7 +28,10 @@ controller is `apps/api/src/requests/requests.controller.ts` and its service is
 ### `GET /api/organizations/{orgId}/request-topics`
 
 Query: `audience` (`staff` | `client`; omitted returns both), `status` (`active` default |
-`archived` | `all`).
+`archived` | `all`). A value outside either set is refused with `400` —
+`REQUEST_TOPIC_MESSAGES.audienceUnknown` for the first, `REQUEST_TOPIC_MESSAGES.statusUnknown`
+for the second (REQ-02-002) — never silently defaulted, so a typo in a query string cannot look
+like an empty catalogue.
 
 ```json
 {
@@ -136,12 +139,14 @@ one already there.
 | Export | Route | Message | New |
 |---|---|---|---|
 | `REQUEST_TOPIC_MESSAGES.audienceUnknown` | `GET /api/organizations/{orgId}/request-topics`, `POST /api/organizations/{orgId}/request-topics` | Choose a valid audience | yes |
+| `REQUEST_TOPIC_MESSAGES.statusUnknown` | `GET /api/organizations/{orgId}/request-topics` | Choose a valid status | yes |
 | `REQUEST_TOPIC_MESSAGES.audienceImmutable` | `PATCH /api/organizations/{orgId}/request-topics/{topicId}` | A topic cannot change audience after it is created | yes |
 | `REQUEST_TOPIC_MESSAGES.typeUnknown` | `POST /api/organizations/{orgId}/request-topics` | Choose whether this topic is an access or a question | yes |
 | `REQUEST_TOPIC_MESSAGES.typeImmutable` | `PATCH /api/organizations/{orgId}/request-topics/{topicId}` | A topic cannot change kind after it is created | yes |
 | `REQUEST_TOPIC_MESSAGES.nameRequired` | `POST /api/organizations/{orgId}/request-topics`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}` | Enter a topic name | yes |
 | `REQUEST_TOPIC_MESSAGES.nameTooLong` | `POST /api/organizations/{orgId}/request-topics`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}` | Topic name must be 60 characters or fewer | yes |
 | `REQUEST_TOPIC_MESSAGES.nameDuplicate` | `POST /api/organizations/{orgId}/request-topics`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}` | A topic with this name already exists for this audience | yes |
+| `REQUEST_TOPIC_MESSAGES.sortOrderInvalid` | `POST /api/organizations/{orgId}/request-topics`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}` | Enter a whole number for the order | yes |
 | `REQUEST_TOPIC_MESSAGES.manageForbidden` | `POST /api/organizations/{orgId}/request-topics`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}/archive`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}/restore` | You do not have permission to manage request topics | yes |
 | `REQUEST_TOPIC_MESSAGES.statusUnchanged` | `PATCH /api/organizations/{orgId}/request-topics/{topicId}/archive`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}/restore` | This topic is already in that state | yes |
 | `REQUEST_TOPIC_MESSAGES.pickerEmpty` | — | No request topics are available. An admin or manager can add one in Settings. | yes |
@@ -180,6 +185,15 @@ the messages so web and API cannot disagree about the word a status shows as.
 The filter control offers `All statuses`, `Pending`, `In progress`, `Completed` and `Closed`,
 sending `all`, `open`, `answered`, `granted` and `closed`. The endpoint keeps accepting
 `declined` and `cancelled` for a link somebody saved.
+
+The map covers the stored statuses of a `Request` and nothing else. The vacation section of the
+same list keeps its own vocabulary — a vacation card goes on reading `Pending`, `Approved`,
+`Rejected` or `Cancelled` from its own stored value — so selecting Closed can leave a card
+reading Rejected beside a request reading Closed.
+
+**Decided:** the four words are the request vocabulary alone. Rejected: relabelling vacations
+through the same map, which would call an approved vacation Completed and a rejected one
+Closed, renaming a decision this spec has no requirement about.
 
 ## Data Model
 
@@ -261,6 +275,14 @@ twice is safe. `createdByAccountId` is `null` on each.
 Every row is the organization's own from the moment it is written: renaming or archiving any
 of them is an ordinary edit, and the seed is never re-applied.
 
+**Decided:** the staff seed is wider than VPN, Claude, Question and Other, because it also
+names the access kinds the retired `accessKind` dial offered — `repository`, `environment`,
+`server`, `vpn`, `admin_panel` and `documentation` — so an organization that classified
+requests by that dial finds the same words in the catalogue and types none of them into
+Settings before its next request. Rejected: seeding VPN, Claude, Question and Other alone,
+which hands every organization the same list to re-type and makes the catalogue narrower than
+the vocabulary the product already had.
+
 ## Validation Rules
 
 | # | Field | Constraint | Message | Server-only |
@@ -271,7 +293,7 @@ of them is an ordinary edit, and the seed is never re-applied.
 | 3a | topic `type` on rename | Equal to the stored value | `REQUEST_TOPIC_MESSAGES.typeImmutable` | yes |
 | 4 | topic `type` | One of `access`, `question` | `REQUEST_TOPIC_MESSAGES.typeUnknown` | no |
 | 5 | topic `name` uniqueness | Unique per organization and audience, ignoring case | `REQUEST_TOPIC_MESSAGES.nameDuplicate` | yes |
-| 6 | topic `sortOrder` | Optional integer, 0–32767 | `REQUEST_TOPIC_MESSAGES.nameRequired` is not used here; an out-of-range value is clamped to the bound | yes |
+| 6 | topic `sortOrder` | Optional integer, 0–32767 | An out-of-range integer is clamped to the bound and answers `201` or `200`; a value that is not an integer — a string, a fraction, a boolean — is refused with `400` `REQUEST_TOPIC_MESSAGES.sortOrderInvalid` rather than coerced or dropped, so a caller never gets a topic ordered somewhere it did not ask for | yes |
 | 7 | request `topicId` | Required | `REQUEST_MESSAGES.topicRequired` | no |
 | 8 | request `topicId` | An active topic in the caller's organization | `REQUEST_MESSAGES.topicUnavailable` | yes |
 | 9 | request `topicId` | Audience matching the addressee kind | `REQUEST_MESSAGES.topicAudienceMismatch` | yes |
@@ -288,7 +310,7 @@ field.
 | id | Screen | Asserted |
 |---|---|---|
 | `settings-tab-request-topics` | Sidebar | present for admin, absent for `user` |
-| `request-topics-page` | Settings › Request topics | present |
+| `request-topics-page` | Settings › Request topics | present for a caller holding `manage-request-topics`, and absent for one without it |
 | `request-topics-audience-staff` | Settings › Request topics | present |
 | `request-topics-audience-client` | Settings › Request topics | present |
 | `request-topics-add-btn` | Settings › Request topics | present |
@@ -304,7 +326,7 @@ field.
 | `request-topic-type` | Settings › Request topics | present when adding, absent when renaming |
 | `request-topic-submit` | Settings › Request topics | present |
 | `request-topic-error-name` | Settings › Request topics | present on a duplicate name |
-| `request-new-topic` | New request modal | present |
+| `request-new-topic` | New request modal | present, and absent when the audience has no active topic |
 | `request-new-topic-empty` | New request modal | present when the audience has no active topic |
 | `request-new-error-topic` | New request modal | present when no topic is chosen |
 | `requests-topic-filter` | Requests list | present |
@@ -351,12 +373,17 @@ Ordering is the up and down controls the DS gaps table commits to, and no drag h
 handle is unreachable from the keyboard. Each control issues one
 `PATCH …/request-topics/{topicId}` carrying that row's new `sortOrder` and no other row's: up
 sends the `sortOrder` of the row above minus one, down sends the `sortOrder` of the row below
-plus one, so the moved row lands strictly past the neighbour it moved over and the list comes
-back reordered. A value outside `0`–`32767` is clamped to the bound (validation rule 6).
+plus one, so the moved row lands past the neighbour it moved over. A value outside `0`–`32767`
+is clamped to the bound (validation rule 6), and the clamp wins where the two meet: against a
+neighbour already holding `0` or `32767` the moved row clamps onto the neighbour's own value,
+the two tie, and the name tiebreak (REQ-02-009) decides the order — so that one press can leave
+the list as it was, and every other press reorders it.
 
-**Decided:** the moved row takes a value strictly past its neighbour. Rejected: sending the
-neighbour's own value, which leaves both rows tied on `sortOrder` and the name tiebreak
-(REQ-02-009) deciding the order, so a press can leave the list exactly as it was.
+**Decided:** the moved row takes a value one past its neighbour, clamped to the bound, and the
+press against a row already on the bound is the one that may not move. Rejected: sending the
+neighbour's own value on every press, which ties the moved row to its neighbour on every move
+rather than only at the bound; and reaching past the bound with a second `PATCH` renumbering
+the neighbour, which makes one press into a pair of writes with no lock between them.
 
 The first row of an audience draws no up control and the last draws no down one —
 a control that cannot act is not drawn. The archived list draws neither, and draws no rename
@@ -409,7 +436,7 @@ Light theme only, as everywhere else this release.
 | Duplicate name | The modal stays open with `request-topic-error-name` under the field and the typed value intact. |
 | Archived topic on a request | The detail screen renders the snapshot name with a muted "archived" marker beside it; the request is otherwise unchanged. |
 | Picker with no active topic | `request-new-topic-empty` carrying `REQUEST_TOPIC_MESSAGES.pickerEmpty`, and no submit control. |
-| Permission-limited (`user`, `viewer`) | The Settings row is not rendered and neither is the page's Add control; the route answers `403` regardless. |
+| Permission-limited (`user`, `viewer`) | The Settings row is not rendered, and the address draws no topics page: `request-topics-page`, `request-topics-add-btn` and every row control are absent, nothing of the screen is drawn in their place, and the browser is sent to `/org/{orgId}/members`, which every role can open. The write routes answer `403` regardless. **Decided:** the address is not a destination for a caller who cannot curate. Rejected: drawing the catalogue read-only, which `GET …/request-topics` would serve to a `user` (REQ-02-008) but which offers a screen whose every control is missing. |
 | Error (catalogue) | An inline banner with a retry control; the last good list stays on screen behind it. |
 
 ## DS gaps

@@ -7,7 +7,7 @@
       "round": 1,
       "startedAt": "2026-09-03T08:42:53.012Z",
       "head": "11a191c147d71557e731ee67740ea2b3182eafbc",
-      "status": "running",
+      "status": "done",
       "lint": 0,
       "judge": {
         "status": "blocked",
@@ -73,7 +73,20 @@
           "S-56": "clear",
           "S-57": "note"
         }
-      }
+      },
+      "gate": "T2",
+      "blockers": 3,
+      "keys": [
+        "spec/incomplete-decision:GET /api/organizations/{orgId}/request-topics",
+        "spec/contradiction:Screens — /org/{orgId}/settings/request-topics, ordering",
+        "spec/ambiguous-requirement:UI Description — Permission-limited (user, viewer)"
+      ],
+      "fix": {
+        "fixed": 3,
+        "decided": 6,
+        "left": 0
+      },
+      "endedAt": "2026-09-03T09:05:13.585Z"
     }
   ],
   "status": "running",

@@ -32,8 +32,7 @@ topic never rewrites what an old request says it was about.
 
 The structural decision that shapes everything below: **the topic is the only classifier a
 caller supplies.** `type` keeps its meaning and is written by the server from the chosen topic;
-`accessKind` is no longer accepted on the way in, because two dials that both answer "what is
-this about" drift apart invisibly until somebody filters on the wrong one.
+`accessKind` is no longer accepted on the way in.
 
 It also fixes the words the screens use for where a request stands — **Pending, In progress,
 Completed, Closed** — over statuses that stay in the database exactly as they are, and gives
@@ -61,9 +60,8 @@ There is no non-account actor. Every route is behind `SessionGuard` and `OrgScop
 | See the Settings › Request topics row | ✅ | ✅ | ❌ | ❌ |
 | See a topic's snapshot name on a request | ✅ | ✅ | ✅ | ✅ |
 
-`manage-request-topics` sits with `manage-clients`, not with admin-only `delete-holidays`:
-nothing here destroys a record. Every check runs against `normalizeRole()`
-(`packages/validation/src/roles.ts`), so legacy `member` maps to `user`.
+Every check runs against `normalizeRole()` (`packages/validation/src/roles.ts`), so legacy
+`member` maps to `user`.
 
 ## Functional Requirements
 
@@ -74,10 +72,12 @@ nothing here destroys a record. Every check runs against `normalizeRole()`
 THE SYSTEM SHALL scope every read and write of a `RequestTopic` by `session.organizationId`,
 a required argument with no default on every method of the topics service.
 
-#### REQ-02-002 — the audience is a closed set
+#### REQ-02-002 — the audience and the read's status are closed sets
 
 IF a create call or a catalogue read carries an `audience` outside `staff` and `client`, THEN
-THE SYSTEM SHALL answer `400` with `REQUEST_TOPIC_MESSAGES.audienceUnknown`.
+THE SYSTEM SHALL answer `400` with `REQUEST_TOPIC_MESSAGES.audienceUnknown`; a catalogue read
+carrying a `status` outside `active`, `archived` and `all` answers `400` with
+`REQUEST_TOPIC_MESSAGES.statusUnknown`, an omitted `status` meaning `active`.
 
 #### REQ-02-003 — a topic declares the request kind it produces
 
@@ -305,7 +305,7 @@ Invariants:
 | Existing requests carry no `topicId` and no `topicLabel` | The columns are nullable and the screens fall back to the request's stored `type` for those rows, so nothing is lost and no backfill guesses at a topic nobody chose | Nothing needs to. The set is closed the moment this spec ships |
 | A topic's `type` cannot be corrected after creation | Changing it would make the type filter disagree with the requests already raised under the topic. Archive and re-create is the honest path | A migration that rewrites `type` on the topic and every request under it, if the need is ever real |
 | The seeded staff set has no topic for two of the retired access kinds — `saas`, and an `access` topic for `other` — so an organization that classified a request either way has no seeded topic that produces the same kind | The seed is a starting catalogue, not a migration of the old vocabulary, and a curator adds a topic in one screen. An `access` topic named `Other` is in any case unreachable while the seeded `Other` holds the name: one name per audience (REQ-02-006) | A curator adding the topics the organization wants, or a later revision of the seed table |
-| Ordering is a single integer per topic with no gap strategy | The catalogue is a handful of rows curated by hand; a move is one `PATCH` of one row's `sortOrder`, taking a value one past the neighbour it moved over, and repeated moves into one gap can close it and leave two rows sharing a value, which falls to the name tiebreak | A fractional or linked ordering, if a catalogue ever grows past what one screen shows |
+| Ordering is a single integer per topic with no gap strategy | The catalogue is a handful of rows curated by hand; a move is one `PATCH` of one row's `sortOrder`, taking a value one past the neighbour it moved over, and repeated moves into one gap — or a move against a neighbour already holding `0` or `32767`, where the value clamps onto the neighbour's own — can leave two rows sharing a value, which falls to the name tiebreak and leaves the order as it was | A fractional or linked ordering, if a catalogue ever grows past what one screen shows |
 
 ## Acceptance Criteria
 
