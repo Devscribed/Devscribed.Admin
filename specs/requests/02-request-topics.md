@@ -30,9 +30,8 @@ renames, reorders and archives it in Settings. Raising a request means choosing 
 the request keeps a snapshot of the topic's name forever after, so renaming or archiving a
 topic never rewrites what an old request says it was about.
 
-The structural decision that shapes everything below: **the topic is the only classifier a
-caller supplies.** `type` keeps its meaning and is written by the server from the chosen topic;
-`accessKind` is no longer accepted on the way in.
+**The topic is the only classifier a caller supplies.** `type` keeps its meaning and is written
+by the server from the chosen topic; `accessKind` is no longer accepted on the way in.
 
 It also fixes the words the screens use for where a request stands — **Pending, In progress,
 Completed, Closed** — over statuses that stay in the database exactly as they are, and gives
@@ -48,7 +47,7 @@ Blast radius and backward compatibility for this spec are in [README.md](README.
 | **Requester** | An active member holding `create-request` (admin, manager, user). Reads the catalogue to fill the picker; may not change it. |
 | **Organization** | Exists, and carries at least one active `staff` topic once seeded. |
 
-There is no non-account actor. Every route is behind `SessionGuard` and `OrgScopeGuard`.
+There is no non-account actor.
 
 ## Roles & Permission Matrix
 
@@ -93,10 +92,9 @@ IF a rename call carries a `type` different from the stored one, THEN THE SYSTEM
 `400` with `REQUEST_TOPIC_MESSAGES.typeImmutable`. A `type` equal to the stored value is
 accepted and changes nothing, exactly as the stored `audience` is.
 
-**Decided:** both are refused rather than dropped, as REQ-02-022 does at the other end: moving
-a topic between audiences re-addresses every future request raised under it, and archiving and
-re-creating leaves a trail. Rejected: answering `200` having ignored the field, which leaves a
-caller believing the topic produces a kind it does not.
+**Decided:** both are refused rather than dropped: moving a topic between audiences
+re-addresses every future request raised under it. Rejected: answering `200` having ignored
+the field, which leaves a caller believing the topic produces a kind it does not.
 
 #### REQ-02-005 — the name
 
@@ -149,8 +147,6 @@ with `REQUEST_TOPIC_MESSAGES.statusUnchanged`.
 
 THE SYSTEM SHALL expose no route that removes a `RequestTopic` row.
 
-**Decided:** the snapshot name makes archiving lossless, so a delete would only orphan rows.
-
 ### Seeding
 
 #### REQ-02-015 — a new organization is born with a catalogue
@@ -171,8 +167,7 @@ control. That audience is `staff`, `member` being the only addressee kind a requ
 as this spec ships (REQ-02-020); an empty `client` audience leaves the form usable.
 
 **Decided:** an emptied catalogue gets a screen that says so, and the form reads one audience —
-the addressee's. Rejected: emptying it when *any* audience is empty, which withdraws a working
-staff picker over half a catalogue the form cannot reach.
+the addressee's. Rejected: emptying it when *any* audience is empty.
 
 ### Raising a request under a topic
 
@@ -192,8 +187,12 @@ inside itself, so a split would inform nobody.
 
 #### REQ-02-020 — the audience must match the addressee
 
-IF the chosen topic's audience does not match the addressee's kind, THEN THE SYSTEM SHALL
-answer `400` with `REQUEST_MESSAGES.topicAudienceMismatch`.
+IF a topic REQ-02-019 has found active carries an audience that does not match the addressee's
+kind, THEN THE SYSTEM SHALL answer `400` with `REQUEST_MESSAGES.topicAudienceMismatch`.
+
+**Decided:** the audience is compared only after the topic is found active, so an archived
+topic answers `REQUEST_MESSAGES.topicUnavailable` whatever its audience. Rejected: comparing
+the audience on any row the id names, which leaves one body answerable either way.
 
 `decision-table: keys=(topicAudience, assigneeKind) domains=(topicAudience: staff|client, assigneeKind: member)`
 
@@ -264,6 +263,14 @@ for the closure beside the Closed label as `declined` or `cancelled` respectivel
 WHERE the caller holds `manage-request-topics`, THE SYSTEM SHALL render the Settings ›
 Request topics navigation row.
 
+#### REQ-02-031 — the filter offers what the picker has retired
+
+THE SYSTEM SHALL fill the requests list's topic filter from `GET …/request-topics?status=all`,
+marking each archived entry as archived, while the new-request picker reads `status=active`.
+
+**Decided:** the filter reads every status. Rejected: filling both controls from one read,
+which hides the requests raised under an archived topic from the control that finds them.
+
 ## State Machine
 
 `decision-table: keys=(state, event) domains=(state: active|archived, event: archive|restore|rename|reorder)`
@@ -276,7 +283,7 @@ Request topics navigation row.
 | active | reorder | `sortOrder` is written; `updatedAt` moves. |
 | archived | archive | `409` `REQUEST_TOPIC_MESSAGES.statusUnchanged`; nothing is written. |
 | archived | restore | `status` → `active`, `archivedAt` and `archivedByAccountId` cleared. |
-| archived | rename | The name is written. An archived topic is still named on old requests, and correcting a spelling must not require restoring it. |
+| archived | rename | The name is written. **Decided:** the archived row draws no rename control, so this is an allowance for a caller holding the topic id, and a curator who wants the name changed on screen restores the topic, renames it and archives it again. Rejected: drawing a rename control on the archived row. |
 | archived | reorder | `sortOrder` is written. It takes effect if the topic is ever restored. |
 
 Invariants:

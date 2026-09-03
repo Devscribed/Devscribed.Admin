@@ -281,7 +281,9 @@ names the access kinds the retired `accessKind` dial offered — `repository`, `
 requests by that dial finds the same words in the catalogue and types none of them into
 Settings before its next request. Rejected: seeding VPN, Claude, Question and Other alone,
 which hands every organization the same list to re-type and makes the catalogue narrower than
-the vocabulary the product already had.
+the vocabulary the product already had. The wider seed is also the cheaper mistake: a seeded
+row an organization does not want is archived from its row in Settings, while a word the seed
+omits has to be typed there before anybody can raise a request under it.
 
 ## Validation Rules
 
@@ -296,8 +298,13 @@ the vocabulary the product already had.
 | 6 | topic `sortOrder` | Optional integer, 0–32767 | An out-of-range integer is clamped to the bound and answers `201` or `200`; a value that is not an integer — a string, a fraction, a boolean — is refused with `400` `REQUEST_TOPIC_MESSAGES.sortOrderInvalid` rather than coerced or dropped, so a caller never gets a topic ordered somewhere it did not ask for | yes |
 | 7 | request `topicId` | Required | `REQUEST_MESSAGES.topicRequired` | no |
 | 8 | request `topicId` | An active topic in the caller's organization | `REQUEST_MESSAGES.topicUnavailable` | yes |
-| 9 | request `topicId` | Audience matching the addressee kind | `REQUEST_MESSAGES.topicAudienceMismatch` | yes |
+| 9 | request `topicId` | Audience matching the addressee kind, compared only on a topic rule 8 has found active | `REQUEST_MESSAGES.topicAudienceMismatch` | yes |
 | 10 | request `type`, `accessKind` | Absent from the body | `REQUEST_MESSAGES.classifierNotAccepted` | yes |
+
+On a topic write, a violation of the audience or kind immutability is answered before the
+name-uniqueness one, so a rename carrying both a changed `audience` and a name another topic of
+that audience already holds answers `400` `REQUEST_TOPIC_MESSAGES.audienceImmutable` and writes
+nothing.
 
 The client validates rules 1, 2, 4 and 7 for immediate feedback. **The server re-validates
 every rule**, including the ones the client cannot check: 3, 3a, 5, 8 and 9 need the stored row,
@@ -329,7 +336,7 @@ field.
 | `request-new-topic` | New request modal | present, and absent when the audience has no active topic |
 | `request-new-topic-empty` | New request modal | present when the audience has no active topic |
 | `request-new-error-topic` | New request modal | present when no topic is chosen |
-| `requests-topic-filter` | Requests list | present |
+| `requests-topic-filter` | Requests list | present, offering every topic of the organization with the archived ones marked archived, from the catalogue read carrying `status=all` (REQ-02-031) |
 | `request-row-{id}-topic` | Requests list | present when the request carries a topic |
 | `request-detail-topic` | Request detail | present when the request carries a topic |
 | `requests-new-btn` | Requests list | present for a requester |
@@ -436,6 +443,7 @@ Light theme only, as everywhere else this release.
 | Duplicate name | The modal stays open with `request-topic-error-name` under the field and the typed value intact. |
 | Archived topic on a request | The detail screen renders the snapshot name with a muted "archived" marker beside it; the request is otherwise unchanged. |
 | Picker with no active topic | `request-new-topic-empty` carrying `REQUEST_TOPIC_MESSAGES.pickerEmpty`, and no submit control. |
+| Archived topic in the list's filter | Offered with the archived marker the detail screen uses; selecting it returns the requests raised under it (REQ-02-031). The new-request picker does not offer it. |
 | Permission-limited (`user`, `viewer`) | The Settings row is not rendered, and the address draws no topics page: `request-topics-page`, `request-topics-add-btn` and every row control are absent, nothing of the screen is drawn in their place, and the browser is sent to `/org/{orgId}/members`, which every role can open. The write routes answer `403` regardless. **Decided:** the address is not a destination for a caller who cannot curate. Rejected: drawing the catalogue read-only, which `GET …/request-topics` would serve to a `user` (REQ-02-008) but which offers a screen whose every control is missing. |
 | Error (catalogue) | An inline banner with a retry control; the last good list stays on screen behind it. |
 

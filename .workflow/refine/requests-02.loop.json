@@ -7,7 +7,7 @@
       "round": 1,
       "startedAt": "2026-09-03T09:24:40.746Z",
       "head": "a02e4b5da03257219f15e8adae53ccb7d563f5e7",
-      "status": "running",
+      "status": "done",
       "lint": 0,
       "judge": {
         "status": "blocked",
@@ -73,7 +73,18 @@
           "S-56": "clear",
           "S-57": "note"
         }
-      }
+      },
+      "gate": "T2",
+      "blockers": 1,
+      "keys": [
+        "spec/stale-statement:Verification Plan, 'Reaching the states the cases need', the viewer/manager row"
+      ],
+      "fix": {
+        "fixed": 3,
+        "decided": 4,
+        "left": 0
+      },
+      "endedAt": "2026-09-03T09:46:56.789Z"
     }
   ],
   "status": "running",

@@ -22,7 +22,7 @@ both current at the checkout this was walked on.
 |---|---|---|---|
 | An organization with an admin | `signupOrg` (`e2e/tests/helpers.ts`) | yes | yes — an organization id came back and every later call scoped to it |
 | A second member holding `user` | `inviteAndAcceptViaApi` (`e2e/tests/helpers.ts`) | yes | yes — invited, accepted, and found again through the members list |
-| A member holding `viewer` or `manager` | `setMembershipRole` (`e2e/tests/helpers.ts`) | yes | route in daily use by `e2e/tests/members-list.spec.ts`; this spec's use of it is not exercised |
+| A member holding `viewer` or `manager` | `setMembershipRole` (`e2e/tests/helpers.ts`) | yes | route in daily use — `e2e/tests/holidays.spec.ts` reaches `manager` through it and `e2e/tests/requests.spec.ts` reaches `viewer`; this spec's use of it is not exercised |
 | A project in the organization | `POST /api/organizations/{orgId}/projects` | yes | yes — `201`, with the client link echoed back |
 | A request addressed to a member | `POST /api/organizations/{orgId}/requests` | yes | yes — `201`, carrying `type`, `accessKind`, `number`, `assignee` and `requester` |
 | A request that predates this spec | any request created today | yes | yes — the `201` body carries no `topic` member, which is exactly the shape the fallback in edge case 8 must handle |
@@ -163,16 +163,20 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
 
 - **Level:** Integration
 - **Covers:** REQ-02-016
-- **Asserts:** `GET /api/organizations/{orgId}/request-topics` → 200
-- **Steps:** Sign up an organization and raise a request under a seeded topic. Delete every
-  `RequestTopic` row of that organization directly, which is the state an organization
-  predating this spec is in. Execute the backfill migration's SQL file by its path under
-  `apps/api/prisma/migrations/`, then read the catalogue for that organization.
+- **Asserts:** `GET /api/organizations/{orgId}/request-topics` → 200;
+  `GET /api/organizations/{orgId}/requests` → 200
+- **Steps:** Sign up an organization and raise a request under a seeded topic. Write a second
+  request row directly with `topicId` and `topicLabel` both `null`, which is the shape every
+  request raised before this spec has. Delete every `RequestTopic` row of that organization
+  directly, which is the state an organization predating this spec is in. Execute the backfill
+  migration's SQL file by its path under `apps/api/prisma/migrations/`, then read the catalogue
+  and the requests list for that organization.
 - **Expected Result:** The organization has the full seeded catalogue again. The request
   raised earlier still has its `type`, its `topicLabel` and no `topicId`, and reads back with a
   `topic` member whose `name` is the label and whose `id`, `audience`, `type` and `status` are
   `null` — the member is keyed on the label, so a request that has one is never served
-  `topic: null`. No request row is written by the backfill.
+  `topic: null`. The directly written row reads back with `topic` `null` and its stored `type`
+  intact, which is what the screens fall back to. No request row is written by the backfill.
 
 ### TC-02-INT-03
 
@@ -236,12 +240,14 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
   REQUEST_TOPIC_MESSAGES.typeImmutable
 - **Steps:** As an admin, rename a seeded staff topic of type `access`. Then send the same
   route `audience: "staff"`, then `audience: "client"`, then `type: "access"`, then
-  `type: "question"`.
+  `type: "question"`. Then send `audience: "client"` together with the name another seeded
+  staff topic already holds.
 - **Expected Result:** The rename succeeds and `updatedAt` moves. Sending the stored audience
   and sending the stored type each succeed and change nothing. Sending the other audience
   answers `400` with `audienceImmutable`, and sending the other type answers `400` with
   `typeImmutable`; each leaves the row untouched, so a kind is refused rather than dropped in
-  silence.
+  silence. The last call answers `400` with `audienceImmutable` rather than `409`: the
+  immutability refusal is answered before the name-uniqueness one, and nothing is written.
 
 ### TC-02-INT-07
 
@@ -378,15 +384,22 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
 ### TC-02-INT-16
 
 - **Level:** Integration
-- **Covers:** REQ-02-013
+- **Covers:** REQ-02-013, REQ-02-006
 - **Asserts:** `PATCH /api/organizations/{orgId}/request-topics/{topicId}/archive` → 200;
   `PATCH /api/organizations/{orgId}/request-topics/{topicId}/archive` → 409
-  REQUEST_TOPIC_MESSAGES.statusUnchanged
+  REQUEST_TOPIC_MESSAGES.statusUnchanged;
+  `PATCH /api/organizations/{orgId}/request-topics/{topicId}` → 200;
+  `PATCH /api/organizations/{orgId}/request-topics/{topicId}` → 409
+  REQUEST_TOPIC_MESSAGES.nameDuplicate
 - **Steps:** Fire two archive calls at one active topic concurrently, from two sessions,
-  without awaiting the first.
-- **Expected Result:** Exactly one answers `200` and one answers `409`. The row has one
+  without awaiting the first. Then, on two other staff topics of that organization, fire two
+  renames to the same name concurrently, again without awaiting the first.
+- **Expected Result:** Exactly one archive answers `200` and one answers `409`. The row has one
   `archivedAt` and one `archivedByAccountId`, both from the winner. The guard is evaluated on
   the row the transaction locked, so the outcome does not depend on which call arrived first.
+  Exactly one rename answers `200` and one answers `409` with the duplicate message: the
+  functional unique index refuses the loser and the service maps the violation to that answer
+  rather than letting it surface as a `500`. The loser's stored name is unchanged.
 
 ### TC-02-INT-17
 
@@ -452,16 +465,18 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
 ### TC-02-INT-22
 
 - **Level:** Integration
-- **Covers:** REQ-02-009, the `reorder` rows of the state machine
+- **Covers:** REQ-02-009, the `reorder` and archived `rename` rows of the state machine
 - **Asserts:** `PATCH /api/organizations/{orgId}/request-topics/{topicId}` → 200;
   `GET /api/organizations/{orgId}/request-topics` → 200
 - **Steps:** As an admin, read the seeded staff catalogue. `PATCH` the last row's `sortOrder`
   to a value below the first row's and read the catalogue back. Archive a different topic,
-  `PATCH` its `sortOrder`, read `status=archived`, then restore it and read `status=active`.
+  `PATCH` its `sortOrder` and its `name`, read `status=archived`, then restore it and read
+  `status=active`.
 - **Expected Result:** The moved row is returned first and `updatedAt` has moved on it and on
-  no other row; no other row's `sortOrder` is rewritten. The archived topic's `sortOrder` is
-  written and returned, and after the restore the topic sits at the position that value gives
-  it — a reorder taken while archived takes effect on restore.
+  no other row; no other row's `sortOrder` is rewritten. The archived topic's `sortOrder` and
+  its new name are written and returned while it is archived — the route renames an archived
+  topic for a caller holding its id, which is the allowance the screen does not draw — and
+  after the restore the topic sits at the position that value gives it, under the new name.
 
 ### TC-02-E2E-01
 
@@ -507,13 +522,14 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
 ### TC-02-E2E-03
 
 - **Level:** E2E
-- **Covers:** REQ-02-011
+- **Covers:** REQ-02-011, REQ-02-031
 - **Steps:** As an admin, raise a request under a staff topic. Archive that topic in Settings.
   Return to the requests list, open the new-request modal, then close it and filter the list
   by the archived topic. Open the request.
 - **Expected Result:** The picker no longer offers the archived topic. The topic filter still
-  offers it and still returns the request. The detail screen shows the snapshot name with the
-  archived marker beside it.
+  offers it, marked as archived, and selecting it still returns the request — the filter is
+  filled from the catalogue read that carries every status and the picker from the active one.
+  The detail screen shows the snapshot name with the archived marker beside it.
 - **Selectors:** `request-new-topic`, `requests-topic-filter`, `request-row-{id}-topic`,
   `request-detail-topic`
 
