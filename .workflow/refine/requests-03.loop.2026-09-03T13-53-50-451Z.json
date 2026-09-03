@@ -1,0 +1,113 @@
+{
+  "spec": "specs/requests/03-client-participants.md",
+  "stem": "requests-03",
+  "startedAt": "2026-09-03T13:53:50.451Z",
+  "rounds": [
+    {
+      "round": 1,
+      "startedAt": "2026-09-03T14:11:04.377Z",
+      "head": "1490344a050a911e4ec3b10a917960f8f2d8357a",
+      "status": "done",
+      "lint": 0,
+      "judge": {
+        "status": "blocked",
+        "mode": "full",
+        "blockers": 1,
+        "notes": 0,
+        "criteria": {
+          "S-01": "clear",
+          "S-02": "clear",
+          "S-03": "clear",
+          "S-04": "clear",
+          "S-05": "clear",
+          "S-06": "clear",
+          "S-07": "clear",
+          "S-08": "clear",
+          "S-09": "clear",
+          "S-10": "blocked",
+          "S-11": "clear",
+          "S-12": "clear",
+          "S-13": "clear",
+          "S-14": "clear",
+          "S-15": "clear",
+          "S-16": "clear",
+          "S-17": "clear",
+          "S-18": "clear",
+          "S-19": "clear",
+          "S-20": "clear",
+          "S-21": "clear",
+          "S-22": "clear",
+          "S-23": "clear",
+          "S-24": "clear",
+          "S-25": "clear",
+          "S-26": "clear",
+          "S-27": "clear",
+          "S-28": "clear",
+          "S-29": "clear",
+          "S-30": "clear",
+          "S-31": "clear",
+          "S-32": "clear",
+          "S-33": "clear",
+          "S-34": "clear",
+          "S-35": "n/a",
+          "S-36": "clear",
+          "S-37": "clear",
+          "S-38": "clear",
+          "S-39": "n/a",
+          "S-40": "clear",
+          "S-41": "clear",
+          "S-42": "clear",
+          "S-43": "clear",
+          "S-44": "clear",
+          "S-45": "clear",
+          "S-46": "clear",
+          "S-47": "clear",
+          "S-48": "clear",
+          "S-49": "clear",
+          "S-50": "clear",
+          "S-51": "clear",
+          "S-52": "clear",
+          "S-53": "n/a",
+          "S-54": "n/a",
+          "S-55": "clear",
+          "S-56": "n/a",
+          "S-57": "note"
+        }
+      },
+      "gate": "T2",
+      "blockers": 1,
+      "keys": [
+        "spec/contradiction:REQ-03-019"
+      ],
+      "fix": {
+        "fixed": 0,
+        "decided": 1,
+        "left": 0
+      },
+      "endedAt": "2026-09-03T14:16:55.695Z",
+      "commit": "488d11978aec2ff49821390b740abb25865f19d1",
+      "growth": 5,
+      "repairs": 1
+    },
+    {
+      "round": 2,
+      "startedAt": "2026-09-03T14:16:55.865Z",
+      "head": "488d11978aec2ff49821390b740abb25865f19d1",
+      "status": "running",
+      "lint": 0,
+      "judge": {
+        "status": "pass",
+        "mode": "diff",
+        "blockers": 0,
+        "notes": 0,
+        "criteria": null
+      }
+    }
+  ],
+  "status": "error",
+  "outcome": {
+    "reason": "plan-error",
+    "detail": "pre-implementer produced no verdict at .workflow/refine/requests-03.probe/2/pre_implement.verdict.json (result success). It ended by saying: \"API Error: 529 Overloaded. This is a server-side issue, usually temporary — try again in a moment. If it persists, check https://status.claude.com.\"",
+    "at": "2026-09-03T14:25:21.593Z"
+  }
+}
