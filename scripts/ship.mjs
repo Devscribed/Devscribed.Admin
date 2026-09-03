@@ -452,6 +452,24 @@ async function main() {
       say('usage: node scripts/ship.mjs <spec path> [--branch <name>] [--from <ref>] [--carry <runId>|--no-carry] [--skip qa] [--resume]');
       process.exit(1);
     }
+    /* A dry run prints and writes nothing. It used to guard only the agent calls and the static
+       gate, and drive the state machine for real — so it created a run directory, took the
+       lock, marched every stage to `ready` on fabricated verdicts forty milliseconds apart, and
+       left that behind. The board and `wf:status` then showed a green run of a spec nobody had
+       implemented, and the next real run was refused by the lock the rehearsal was holding. */
+    if (dryRun) {
+      step(`dry run ${specArg}`);
+      note('nothing is written: no run directory, no lock, no verdicts, no branch');
+      for (const [stage, s] of Object.entries(cfg.stages)) {
+        const state = skip.has(stage) ? 'skipped' : s.enabled === false ? 'disabled' : 'would run';
+        const how = s.script ? `node ${s.script}`
+          : s.agent ? `claude -p --agent ${s.agent}${s.model ? ` --model ${s.model}` : ''}`
+            : 'a preflight script';
+        note(`${stage.padEnd(14)} ${state}${state === 'would run' ? `  ${how}` : ''}`);
+      }
+      return;
+    }
+
     step(`init ${specArg}`);
     const from = opt('from');
     const carry = opt('carry');
