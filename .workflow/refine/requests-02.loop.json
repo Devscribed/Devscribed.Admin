@@ -1,21 +1,16 @@
 {
   "spec": "specs/requests/02-request-topics.md",
   "stem": "requests-02",
-  "startedAt": "2026-09-03T07:31:51.464Z",
+  "startedAt": "2026-09-03T07:38:55.127Z",
   "rounds": [
     {
       "round": 1,
-      "startedAt": "2026-09-03T07:31:51.465Z",
-      "head": "9f068d8e191a5a912a79902f6a268e205929063e",
+      "startedAt": "2026-09-03T07:38:55.128Z",
+      "head": "9d78f3c2b21c73f4f9d4ff719b430f21914d11ce",
       "status": "running",
       "lint": 0
     }
   ],
-  "status": "error",
-  "request": "Employees pick a request topic from presets the organization curates (VPN, Claude, Question, Other for staff; Access, Other for clients), and the screens say Pending / In progress / Completed / Closed",
-  "outcome": {
-    "reason": "judge-error",
-    "detail": "spec-refiner produced no verdict at .workflow/refine/requests-02.verdict.json (result success)",
-    "at": "2026-09-03T07:33:42.306Z"
-  }
+  "status": "running",
+  "request": "Employees pick a request topic from presets the organization curates (VPN, Claude, Question, Other for staff; Access, Other for clients), and the screens say Pending / In progress / Completed / Closed"
 }
