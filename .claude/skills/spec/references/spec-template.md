@@ -53,6 +53,16 @@ contract of a route that already ships. Nothing else counts as an addition; a ru
 completes what was asked for needs no line. An addition the Summary does not name is a scope
 finding.
 
+It ends with the pointer that carries two of the six coverage obligations:
+
+```
+Blast radius and backward compatibility for this spec are in [README.md](README.md).
+```
+
+Those two are properties of the area and live in its `README.md` under `## Blast Radius` and
+`## Backward Compatibility`. **They are not repeated in the bundle** — the pointer is the
+coverage, and a second copy is the one that goes stale.
+
 ## `## Actors & Preconditions`
 
 Who acts and what must already be true. Include non-account actors — a signer holding a link —
@@ -209,6 +219,20 @@ by a case and every id a case asserts is here.
 
 Mocks in fenced blocks; `| Surface | Behaviour |` for loading, empty, saving, read-only,
 permission-limited and error states.
+
+## `## Edge Cases`
+
+One of the six coverage obligations, and the one a reader reaches for first. A numbered table of
+specific situations and the exact behaviour of each — never a paragraph of caveats.
+
+```
+| # | Situation | Exact behaviour |
+|---|---|---|
+| 1 | Two curators rename two topics to the same name at the same instant | The unique index rejects the second; the service maps the violation to `409` `X_MESSAGES.nameDuplicate`. |
+```
+
+A row states an outcome a test could observe: a status, a message, what the screen shows. "It is
+handled gracefully" is not a row. Every row earns a test case.
 
 ## `## Security`
 

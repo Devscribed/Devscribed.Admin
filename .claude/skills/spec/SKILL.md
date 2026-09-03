@@ -13,14 +13,21 @@ implementation and its tests are checked against.
 
 Every spec covers all six. None is optional, and none is satisfied by a sentence.
 
-| | What it means |
-|---|---|
-| **Edge cases** | A numbered table of specific situations and the exact behaviour for each. Not a paragraph of caveats. |
-| **Blast radius** | What breaks *outside* this feature, with a mitigation per row. Listing what you add is not blast radius. |
-| **Backward compatibility** | What guarantees existing data, routes, and deployments keep working, and what mechanism enforces each guarantee. |
-| **Acceptance criteria** | Observable, checkable statements. Not a restatement of the functional requirements. |
-| **Automated tests to E2E** | Numbered `TC-NN-UNIT-NN`, `TC-NN-INT-NN`, `TC-NN-E2E-NN` with preconditions, steps, expected results, and — for E2E — the `data-testid` selectors. |
-| **A proven verification route** | The rig an agent verifies this on, walked by you: how it comes up, what reaches each state a case needs, what observes each criterion, and what access that took. Recorded as what ran and what came back. |
+**Two of them are covered in the area `README.md`, not in the bundle**, because they are properties
+of the area rather than of one document: an area has one blast radius and one compatibility story,
+and restating them per spec is a second copy that goes stale. A spec says where they are — the
+shipped ones say *"Blast radius and backward compatibility for this spec are in README.md"* — and
+that sentence is the coverage. A judge asking for a `## Blast Radius` heading inside the bundle is
+asking for the copy, and the answer is the pointer, not a new section.
+
+| | What it means | Where it lives |
+|---|---|---|
+| **Edge cases** | A numbered table of specific situations and the exact behaviour for each. Not a paragraph of caveats. | `## Edge Cases`, in the contracts file |
+| **Blast radius** | What breaks *outside* this feature, with a mitigation per row. Listing what you add is not blast radius. | `## Blast Radius`, in the area `README.md` |
+| **Backward compatibility** | What guarantees existing data, routes, and deployments keep working, and what mechanism enforces each guarantee. | `## Backward Compatibility`, in the area `README.md` |
+| **Acceptance criteria** | Observable, checkable statements. Not a restatement of the functional requirements. | `## Acceptance Criteria`, in `NN-name.md` |
+| **Automated tests to E2E** | Numbered `TC-NN-UNIT-NN`, `TC-NN-INT-NN`, `TC-NN-E2E-NN` with preconditions, steps, expected results, and — for E2E — the `data-testid` selectors. | `## Test Cases`, in the cases file |
+| **A proven verification route** | The rig an agent verifies this on, walked by you: how it comes up, what reaches each state a case needs, what observes each criterion, and what access that took. Recorded as what ran and what came back. | `## Verification Plan`, in the cases file |
 
 ## Workflow
 
@@ -164,9 +171,9 @@ gate whose findings are answered with new prose makes work for the next pass.
 npm run refine:loop -- specs/<area>/NN-name.md --request "<the request, in one line>"
 ```
 
-The loop runs three gates — the lint, then `pre-implement` compiling the spec into a plan, then
-`spec-refiner` — repairs what the judge finds, commits the round, and judges the next round against
-that commit. Read `.claude/skills/refine/SKILL.md` for how to read the outcome; the important part
+The loop runs three gates — the lint, then `spec-refiner`, and `pre-implement` **last and once**,
+after the judge's verdict is clean — repairs what the blocking gate finds, commits the round, and
+judges the next round against that commit. Read `.claude/skills/refine/SKILL.md` for how to read the outcome; the important part
 is that **you do not drive the agents and do not decide whether a finding deserves another round.**
 
 You do not check your own spec. You know which sentence you meant, so you read the sentence you

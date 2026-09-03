@@ -40,7 +40,11 @@ You write no code and run no test suites. `Bash` is here for reading — `grep` 
    status, an export holds a message, a default is `pending` — each is a claim, and the file
    is the only thing that settles it.
 6. `CLAUDE.md` — "Conventions that matter" and "Watch out for".
-7. `.claude/skills/spec/references/checklist.md` — your rubric.
+7. `.claude/skills/spec/references/checklist.md` — **the items marked `(blocks)` and `(note)`,
+   and no others.** The `(author)` items are the writer's craft: a script already decided some,
+   others live in a document you may not file against, and the rest have no repair the fixer is
+   allowed to make. Reading them produces findings with nowhere to go, and a rule you cannot
+   place drains into `spec/missing-artefact` and grows the spec a section a round.
 
 ## The boundary
 
@@ -53,9 +57,9 @@ finished.
 
 ## What a script already decided
 
-`node scripts/spec-lint.mjs <spec>` ran and came back clean before you were dispatched, and
-`pre-implement` compiled the document into a plan. So these are settled, and re-deriving them
-spends your pass on arithmetic:
+`node scripts/spec-lint.mjs <spec>` ran and came back clean before you were dispatched. Every
+bullet below is a rule that script enforces, so these are settled, and re-deriving them spends
+your pass on arithmetic:
 
 - every requirement carries a case and every case names requirements that exist;
 - every status a case expects is declared for that route, and every message it asserts has a row
@@ -67,6 +71,10 @@ spends your pass on arithmetic:
   count of a table, or a line number into code;
 - every table declaring `decision-table: keys=… domains=…` has a row for every cell of its cross
   product.
+
+**`pre-implement` has not run.** It is the gate *after* you — it compiles the document once your
+verdict is clean — so nothing it would find is settled here, and nothing it plans is yours to
+assume.
 
 **Do not enumerate these.** What the script cannot check is the whole of your work:
 
@@ -208,6 +216,9 @@ sweep 3 and find the case that would fail if it were implemented backwards.
 - A `data-testid` a case asserts and the list does not carry, or the reverse —
   `spec/missing-artefact`.
 
+Both `spec/missing-artefact` rows take that rule's one severity, stated under **Obligations**
+below: a note, unless a user meets the gap. `spec/untestable-case` blocks.
+
 Check the *route to the state*, not only the assertion. A case that says "invite, then make the
 account staff, then accept the first token" is checked against the rules this spec states about
 invitations: if one of them destroys the first token, the case is unrunnable and the enumeration
@@ -227,7 +238,9 @@ is what shows it.
   a test case for every `##` section and every edge case. Enumerate what the spec obliges and
   check each one is there.
 
-  **A gap here is a note.** Coverage is judged again by the reviewer and by QA, against code
+  **A gap here is a note.** This is the severity of `spec/missing-artefact` wherever it is
+  filed — this sweep, the testability sweep, any sweep. The rule has one severity and this is
+  it. Coverage is judged again by the reviewer and by QA, against code
   that exists; here it is a document counting itself, and every demand it makes is answered with
   new text that the next pass must then judge. It blocks only when a user meets the gap — a
   control the screens draw that no route serves, a refusal a screen shows that has no message.

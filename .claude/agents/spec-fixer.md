@@ -81,6 +81,11 @@ them against the tree.
 
 ## Repair by subtraction
 
+**Subtraction applies to what the spec says about the repository and about itself — a claim, a
+copy, a count, a description. It never applies to what the spec asks for: a requirement, an
+acceptance criterion or a test case is corrected, never deleted.** That is the boundary between
+this section and **Repair, not removal** below, and the two say the same thing from either side.
+
 Take the repairs in this order and stop at the first that closes the finding:
 
 1. **Delete** the statement — a stale claim, a second copy, a count, a promise the rules never
@@ -90,9 +95,16 @@ Take the repairs in this order and stop at the first that closes the finding:
 4. **Add one sentence** — the reading that was missing, beside the rule it completes.
 
 A repair that would add a route, a writer, a lock, a column, a screen, a testid or a
-concurrency case is not a repair; it is a feature answering a finding. It goes in `left`,
-with the question it turns on, and the person decides whether the spec wanted it. A case the
-verdict asks for is added only as the observer of a rule that is already there.
+concurrency case **that the spec does not already oblige itself to contain** is not a repair;
+it is a feature answering a finding. It goes in `left`, with the question it turns on, and the
+person decides whether the spec wanted it. A case the verdict asks for is added only as the
+observer of a rule that is already there.
+
+**The exception, and its whole extent, is `spec/missing-artefact`.** That rule means the spec
+promised the artefact somewhere else in its own text — a selector its own case asserts, a
+message row for a refusal it already describes, a case for a rule it already states. Adding
+that is not new surface; it is the spec keeping a promise it made. Everything the spec has not
+already promised stays forbidden, whichever rule the finding was filed under.
 
 The next pass judges every line you add. A repair that leaves the bundle longer than it found
 it has, more often than not, manufactured the next round.
