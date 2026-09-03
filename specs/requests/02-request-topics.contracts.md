@@ -355,7 +355,7 @@ plus one, so the moved row lands strictly past the neighbour it moved over and t
 back reordered. A value outside `0`–`32767` is clamped to the bound (validation rule 6).
 
 **Decided:** the moved row takes a value strictly past its neighbour. Rejected: sending the
-neighbour's own value, which leaves the two rows tied on `sortOrder` and the name tiebreak
+neighbour's own value, which leaves both rows tied on `sortOrder` and the name tiebreak
 (REQ-02-009) deciding the order, so a press can leave the list exactly as it was.
 
 The first row of an audience draws no up control and the last draws no down one —

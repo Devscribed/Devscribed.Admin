@@ -79,6 +79,17 @@ a finding against you.
 Before you finish, re-read your own additions the way a judge would, and settle every claim in
 them against the tree.
 
+**Then run `node scripts/spec-lint.mjs <spec>` and repair what your own edits broke**, until it
+comes back clean. It is free, it decides mechanically, and it is the gate the next round opens
+with: a repair that fails it costs the whole round, and the loop stops on a comma before any
+judgement is reached. The findings it produces against your work are yours — a requirement you
+rephrased out of its EARS pattern, a message you named that no table carries, a count you wrote
+in prose, a bundle you pushed past its size budget. None of them needs a decision, and none of
+them is the person's to fix.
+
+Its size budget is what makes subtraction a rule rather than a preference: text you add is paid
+for out of what is already there.
+
 ## Repair by subtraction
 
 **Subtraction applies to what the spec says about the repository and about itself — a claim, a

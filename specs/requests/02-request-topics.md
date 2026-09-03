@@ -122,8 +122,7 @@ WHERE the caller holds an active membership of the organization, THE SYSTEM SHAL
 
 #### REQ-02-009 — order is curated, not alphabetical
 
-THE SYSTEM SHALL return topics ordered by `sortOrder` ascending and, for equal values, by
-name ascending case-insensitively.
+THE SYSTEM SHALL order topics by `sortOrder` ascending, then by name case-insensitively.
 
 **Decided:** "Other" belongs at the bottom of a picker, which alphabetical order cannot say.
 
