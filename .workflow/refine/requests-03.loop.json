@@ -180,9 +180,16 @@
       "commit": "6c230e57616a954b680b73fcf2a714560fd27c22",
       "growth": 4,
       "repairs": 3
+    },
+    {
+      "round": 3,
+      "startedAt": "2026-09-03T13:19:27.418Z",
+      "head": "d98f52f244b13e7953f8a17331d24c9e33a057ec",
+      "status": "running",
+      "lint": 0
     }
   ],
-  "status": "blocked",
+  "status": "running",
   "outcome": {
     "reason": "budget",
     "detail": "2 judged round(s) without a clean verdict. The remaining findings are in .workflow/refine/requests-03.verdict.json; ship with them or spend another round deliberately.",
