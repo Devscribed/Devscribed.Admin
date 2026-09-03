@@ -1,0 +1,15 @@
+{
+  "spec": "specs/requests/03-client-participants.md",
+  "stem": "requests-03",
+  "startedAt": "2026-09-03T12:33:36.605Z",
+  "rounds": [
+    {
+      "round": 1,
+      "startedAt": "2026-09-03T12:33:36.605Z",
+      "head": "2bc8fca080e50a3044ee99713c37b59232187157",
+      "status": "running",
+      "lint": 0
+    }
+  ],
+  "status": "running"
+}
