@@ -194,6 +194,27 @@ contests halts the run for a person instead of spending another attempt. The run
 The pipeline stops at a green branch. It never merges and never pushes — see the note about
 `main` above.
 
+**While a run is in flight, its branch carries the spec's work and nothing else.** The reviewer
+diffs `baseRef...HEAD`, so anything else committed there is handed to it as part of the change
+under review — a script, a research note, a fix to the board — and it is built to block on a
+file no handoff task names and no requirement asks for. The run then halts on work that has
+nothing to do with the spec.
+
+Machinery changes go to a `build/*` branch instead. `node scripts/aside.mjs build/<topic>
+<path>...` commits the working-tree content of those paths onto that branch, in a worktree of
+its own, and puts **HEAD** back to the run's baseRef for them while leaving the change in the
+working tree, uncommitted. Merge the `build/*` branch when the run is over.
+
+**The change stays in force for the run.** Every stage spawns its scripts and reads its agent
+definitions from the working tree when it starts, so what governs a run is what is on disk, not
+what its branch has committed. That is the whole reason `aside` resets the commit and not the
+file: the first machinery it was used on was the static gate, and taking a gate fix off the disk
+hands the next stage the broken gate again.
+
+**Never `git add -A` while an agent is working.** Its half-written files land in your commit,
+and your files land in the commit the gate makes for it — both have happened. Stage the paths
+you touched, by name.
+
 **Agent prompts are rules only.** A definition under `.claude/agents/` states the desired
 behaviour and the prohibitions, in as few words as state them. Never put in a prompt:
 

@@ -206,10 +206,25 @@ for (const [project, scope] of TS_PROJECTS) {
 
 /* ── 4 and 5. the spec's own tables, against the repository ──────────────── */
 
+/**
+ * The whole bundle, not the behaviour file alone.
+ *
+ * A spec is one document in three files, and the tables this gate checks against live in the
+ * other two: the `data-testid` list and the routes are in `<name>.contracts.md`, the cases in
+ * `<name>.cases.md`. Reading only `<name>.md` made every id the spec names in its contracts
+ * read as named nowhere — seventeen blockers on one run, of which fourteen were the gate not
+ * having opened the file that names them, and the implementer was sent to delete ids the spec
+ * requires.
+ */
 const specText = (() => {
   if (!run?.spec) return null;
-  const p = join(ROOT, run.spec);
-  return existsSync(p) ? readFileSync(p, 'utf8') : null;
+  const base = run.spec.replace(/\.md$/, '');
+  const members = [run.spec, `${base}.contracts.md`, `${base}.cases.md`, `${base}.design.md`];
+  const found = members
+    .map((m) => join(ROOT, m))
+    .filter((p) => existsSync(p))
+    .map((p) => readFileSync(p, 'utf8'));
+  return found.length ? found.join('\n') : null;
 })();
 
 /* Split rather than match: a multiline `$` ends at the first newline, so an end-of-section
@@ -234,11 +249,23 @@ const seamless = (s) => s.replace(/["'`+]/g, '').replace(/\s+/g, ' ');
 const validationText = seamless(gitQuiet('grep', '-h', '', '--', 'packages/validation'));
 const present = (text) => validationText.includes(seamless(text));
 
-for (const line of section('Error Messages').split('\n')) {
-  if (!line.startsWith('|') || /^\|\s*-+/.test(line)) continue;
+/* The column holding the message, found by its heading rather than by its position. The table
+   has carried a `Route` column since specs began naming the route that emits each message, so
+   cell 2 is a URL — and a rule that searches `packages/validation` for a URL path reports every
+   row as unimplemented, which is what it did on a spec whose messages were all in place. */
+const messageRows = section('Error Messages')
+  .split('\n')
+  .filter((l) => l.startsWith('|') && !/^\|\s*-+/.test(l));
+const messageCol = (() => {
+  const header = messageRows[0]?.split('|').map((c) => c.trim().toLowerCase()) ?? [];
+  const i = header.indexOf('message');
+  return i === -1 ? 2 : i;
+})();
+
+for (const line of messageRows) {
   const cells = line.split('|').map((c) => c.trim());
-  const message = cells[2];
-  if (!message || message === 'Message') continue;
+  const message = cells[messageCol];
+  if (!message || message.toLowerCase() === 'message') continue;
 
   /* A row carrying a placeholder cannot be matched whole. The longest literal run either side
      of the substitution is what the code must contain, and a short one says too little to
@@ -279,8 +306,13 @@ for (const line of section('Error Messages').split('\n')) {
 /* 5. The id list is a contract in both directions: an id the spec requires and nothing renders
    makes its E2E case unfalsifiable, and an id the diff invents is a selector no spec names. */
 
-const specIds = [...section('Required data-testid Attributes').matchAll(/`([^`]+)`/g)]
-  .map((m) => m[1])
+/* The table's first cell, not every backtick in the section. The prose around the table talks
+   about ids too — including the sentence naming the ones this spec *removes* — and harvesting
+   those asks the implementer to render an id the spec has just retired. */
+const specIds = section('Required data-testid Attributes')
+  .split('\n')
+  .filter((l) => l.startsWith('|') && !/^\|\s*-+/.test(l))
+  .flatMap((l) => [...(l.split('|')[1] ?? '').matchAll(/`([^`]+)`/g)].map((m) => m[1]))
   .filter((id) => /^[a-z][a-z0-9]*(-[a-z0-9]+)+$/.test(id));
 
 /* An id the screen composes — `` data-testid={`signing-provider-option-${key}`} `` — never
