@@ -17,6 +17,12 @@ named here by id.
 | Post a message on a request they are party to | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Reach any organization screen other than requests | ✅ | ✅ | ✅ | ✅ | ❌ |
 
+The database still stores the legacy role value `member`. A membership carrying it holds
+neither `manage-clients` nor `view-clients`: the capability helper the contacts routes decide
+with answers `false` for a role its matrix has no row for, so `member` is refused exactly as
+`user` is and this spec needs no role migration before it ships. The client rules are
+role-free and are unaffected either way.
+
 ## Routes
 
 Organization routes sit behind `SessionGuard` → `OrgScopeGuard`
@@ -31,12 +37,12 @@ to.
 | `POST /api/login` | none | `200` | `400` `AUTH_MESSAGES.invalidCredentials`, `AUTH_MESSAGES.deactivated` |
 | `POST /api/invitations/accept` | none | `200` | `400` `INVITE_MESSAGES.tokenInvalid`; `409` `CLIENT_USER_MESSAGES.principalConflict` |
 | `GET /api/me` | session | `200` | `401` |
-| `GET /api/organizations/{orgId}/clients/{clientId}/contacts` | session, org scope, `ViewClients` | `200` | `403` `CLIENT_MESSAGES.forbidden`; `404` |
-| `POST /api/organizations/{orgId}/clients/{clientId}/contacts` | session, org scope, `ManageClients` | `201` | `400` `CLIENT_MESSAGES.clientArchived`, `CLIENT_USER_MESSAGES.emailInvalid`; `403` `CLIENT_USER_MESSAGES.inviteForbidden`; `404`; `409` `CLIENT_USER_MESSAGES.alreadyLinked` |
-| `DELETE /api/organizations/{orgId}/clients/{clientId}/contacts/{contactId}` | session, org scope, `ManageClients` | `200` | `403` `CLIENT_USER_MESSAGES.inviteForbidden`; `404`; `409` `CLIENT_USER_MESSAGES.alreadyRemoved` |
+| `GET /api/organizations/{orgId}/clients/{clientId}/contacts` | session, org scope, `ViewClients` | `200` | `404` |
+| `POST /api/organizations/{orgId}/clients/{clientId}/contacts` | session, org scope, `ManageClients` | `201` | `400` `CLIENT_MESSAGES.clientArchived`, `CLIENT_USER_MESSAGES.emailInvalid`; `404`; `409` `CLIENT_USER_MESSAGES.alreadyLinked` |
+| `DELETE /api/organizations/{orgId}/clients/{clientId}/contacts/{contactId}` | session, org scope, `ManageClients` | `200` | `404`; `409` `CLIENT_USER_MESSAGES.alreadyRemoved` |
 | `POST /api/organizations/{orgId}/requests` | session, org scope | `201` | `400` `REQUEST_MESSAGES.topicRequired`, `REQUEST_MESSAGES.assigneeInvalid`, `REQUEST_MESSAGES.classifierNotAccepted`, `REQUEST_MESSAGES.topicUnavailable`, `REQUEST_MESSAGES.topicAudienceMismatch`, `REQUEST_MESSAGES.assigneeInactive`, `REQUEST_MESSAGES.clientProjectRequired`, `REQUEST_MESSAGES.clientProjectMismatch`, `REQUEST_MESSAGES.notOnProject`; `403` `CLIENT_USER_MESSAGES.clientCannotCreate`, `REQUEST_MESSAGES.createForbidden`; `404` |
 | `GET /api/organizations/{orgId}/request-topics` | session, org scope | `200` | `404` |
-| `GET /api/organizations/{orgId}/requests` | session, org scope | `200` | `404` |
+| `GET /api/organizations/{orgId}/requests` | session, org scope | `200` | `400` `validation_error` on an unknown `scope`, `status` or `type` value; `403` `REQUEST_MESSAGES.scopeForbidden`; `404` |
 | `GET /api/organizations/{orgId}/requests/{requestId}` | session, org scope | `200` | `404` |
 | `POST /api/organizations/{orgId}/requests/{requestId}/answer` | session, org scope | `200` | `403` `REQUEST_MESSAGES.notYoursToAnswer`; `404`; `409` `REQUEST_MESSAGES.alreadyTerminal` |
 | `POST /api/organizations/{orgId}/requests/{requestId}/decline` | session, org scope | `200` | `400` `REQUEST_MESSAGES.declineReasonRequired`; `403` `REQUEST_MESSAGES.notYoursToDecline`; `404` |
@@ -44,6 +50,13 @@ to.
 | `POST /api/organizations/{orgId}/requests/{requestId}/messages` | session, org scope | `201` | `404`; `409` `REQUEST_MESSAGES.threadClosed` |
 | `GET /api/organizations/{orgId}/members` | session, org scope | `200` | `404` |
 | `GET /api/organizations/{orgId}/projects` | session, org scope | `200` | `404` |
+
+The list route's `403` is the refusal a member without `view-all-requests` receives for
+`scope=all`; a client principal asking for the same scope is answered `200` with their own
+rows (REQ-03-029), and the `400` is the answer to a query value outside the closed set,
+whichever principal sends it. Each contacts route answers a caller lacking the capability its
+row names `404` with no message (REQ-03-008), the answer the client's own detail route
+already gives that caller.
 
 The members and projects routes are listed because REQ-03-019 changes what they answer a
 client principal, and a case has to name them. The topics route is listed because the
@@ -159,14 +172,12 @@ a case author asserting a body never leaves this bundle.
 
 | Export | Route | Message | New |
 |---|---|---|---|
-| `CLIENT_USER_MESSAGES.inviteForbidden` | `POST /api/organizations/{orgId}/clients/{clientId}/contacts`, `DELETE /api/organizations/{orgId}/clients/{clientId}/contacts/{contactId}` | You do not have permission to manage client contacts | yes |
 | `CLIENT_USER_MESSAGES.emailInvalid` | `POST /api/organizations/{orgId}/clients/{clientId}/contacts` | Enter a valid email address | yes |
-| `CLIENT_USER_MESSAGES.alreadyLinked` | `POST /api/organizations/{orgId}/clients/{clientId}/contacts` | This person is already a contact of this client | yes |
+| `CLIENT_USER_MESSAGES.alreadyLinked` | `POST /api/organizations/{orgId}/clients/{clientId}/contacts` | This person is already a contact of a client in this workspace | yes |
 | `CLIENT_USER_MESSAGES.alreadyRemoved` | `DELETE /api/organizations/{orgId}/clients/{clientId}/contacts/{contactId}` | This contact has already been removed | yes |
 | `CLIENT_USER_MESSAGES.principalConflict` | `POST /api/invitations/accept` | This email address already belongs to somebody in a workspace | yes |
 | `CLIENT_USER_MESSAGES.clientCannotCreate` | `POST /api/organizations/{orgId}/requests` | Client contacts cannot raise requests | yes |
 | `CLIENT_MESSAGES.clientArchived` | `POST /api/organizations/{orgId}/clients/{clientId}/contacts` | This client is archived and cannot be assigned to new projects. | no |
-| `CLIENT_MESSAGES.forbidden` | `GET /api/organizations/{orgId}/clients/{clientId}/contacts` | You do not have permission to manage clients. | no |
 | `AUTH_MESSAGES.deactivated` | `POST /api/login` | Your account has been deactivated. Contact your administrator. | no |
 | `AUTH_MESSAGES.invalidCredentials` | `POST /api/login` | Invalid email or password | no |
 | `INVITE_MESSAGES.tokenInvalid` | `POST /api/invitations/accept` | This invitation is no longer valid | no |
@@ -180,6 +191,7 @@ a case author asserting a body never leaves this bundle.
 | `REQUEST_MESSAGES.topicUnavailable` | `POST /api/organizations/{orgId}/requests` | That topic is not available | no |
 | `REQUEST_MESSAGES.classifierNotAccepted` | `POST /api/organizations/{orgId}/requests` | The request kind is set by the topic and cannot be sent | no |
 | `REQUEST_MESSAGES.createForbidden` | `POST /api/organizations/{orgId}/requests` | You do not have permission to create requests | no |
+| `REQUEST_MESSAGES.scopeForbidden` | `GET /api/organizations/{orgId}/requests` | You do not have permission to view other people's requests | no |
 | `REQUEST_TOPIC_MESSAGES.pickerEmpty` | New request modal, screen copy | No request topics are available. An admin or manager can add one in Settings. | no |
 | `REQUEST_MESSAGES.notYoursToAnswer` | `POST /api/organizations/{orgId}/requests/{requestId}/answer` | Only the person this is addressed to can answer it | no |
 | `REQUEST_MESSAGES.notYoursToDecline` | `POST /api/organizations/{orgId}/requests/{requestId}/decline` | Only the person this is addressed to can decline it | no |
@@ -210,6 +222,12 @@ request’s lifecycle is unchanged by this spec.
 | removed | invite | An `Invitation` is written; accepting it restores the row to `active`. |
 | removed | accept | The existing row returns to `active`; no second row is created. |
 | removed | remove | `409` `CLIENT_USER_MESSAGES.alreadyRemoved`; nothing is written. |
+
+`state` is the address's `ClientMembership` at the client the invitation or the removal names.
+An address holding a row at **another** client of the organization is `409`
+`CLIENT_USER_MESSAGES.alreadyLinked` on invite whether that row is `active` or `removed`
+(REQ-03-013), so the `removed | invite` row above is the same client's row and accepting it
+never rebinds a row to a client it was not written for.
 
 ## Data Model
 
@@ -339,21 +357,24 @@ retried, because nothing ever fails.
 | # | Field | Constraint | Message | Server-only |
 |---|---|---|---|---|
 | 1 | contact `email` | Required, a valid address, normalized to lowercase | `CLIENT_USER_MESSAGES.emailInvalid` | no |
-| 2 | contact `email` | Not already an active contact of this client | `CLIENT_USER_MESSAGES.alreadyLinked` | yes |
+| 2 | contact `email` | Holds no `ClientMembership` at another client of the organization, and no active one at this client | `CLIENT_USER_MESSAGES.alreadyLinked` | yes |
 | 3 | the named client | Active | `CLIENT_MESSAGES.clientArchived` | yes |
 | 4 | accepting account | Holds no other active principal | `CLIENT_USER_MESSAGES.principalConflict` | yes |
 | 5 | `assigneeClientMembershipId` | Present when `assigneeKind` is `client` | `REQUEST_MESSAGES.assigneeInvalid` | no |
-| 6 | `assigneeClientMembershipId` | An active contact of the caller's organization | `REQUEST_MESSAGES.assigneeInactive` | yes |
-| 7 | `projectId` | Present when `assigneeKind` is `client` | `REQUEST_MESSAGES.clientProjectRequired` | no |
-| 8 | `projectId` | Linked to the addressee's client | `REQUEST_MESSAGES.clientProjectMismatch` | yes |
-| 9 | `projectId` | The requester holds a `ProjectMember` row on it | `REQUEST_MESSAGES.notOnProject` | yes |
-| 10 | `topicId` | Names an active topic of the caller's organization | `REQUEST_MESSAGES.topicUnavailable` | yes |
-| 11 | `topicId` | Audience `client` when the addressee is a client, `staff` when it is a member | `REQUEST_MESSAGES.topicAudienceMismatch` | yes |
-| 12 | `assigneeKind` | One of `member`, `client` | `REQUEST_MESSAGES.assigneeInvalid` | no |
+| 6 | `assigneeClientMembershipId` | Names a `ClientMembership` of the caller's organization; an unknown id and one of another organization are alike | `404`, no message | yes |
+| 7 | `assigneeClientMembershipId` | That contact is `active` | `REQUEST_MESSAGES.assigneeInactive` | yes |
+| 8 | `projectId` | Present when `assigneeKind` is `client` | `REQUEST_MESSAGES.clientProjectRequired` | no |
+| 9 | `projectId` | Linked to the addressee's client | `REQUEST_MESSAGES.clientProjectMismatch` | yes |
+| 10 | `projectId` | The requester holds a `ProjectMember` row on it | `REQUEST_MESSAGES.notOnProject` | yes |
+| 11 | `topicId` | Names an active topic of the caller's organization | `REQUEST_MESSAGES.topicUnavailable` | yes |
+| 12 | `topicId` | Audience `client` when the addressee is a client, `staff` when it is a member | `REQUEST_MESSAGES.topicAudienceMismatch` | yes |
+| 13 | `assigneeKind` | One of `member`, `client` | `REQUEST_MESSAGES.assigneeInvalid` | no |
 
-Rules 1–2 and 5–12 above are checked in the order of the create route's answers: rules 5, 7
-and 12 are body shape and are reported together with the topic's own presence check; rule 10
-reads the topic row; rules 6 and 11 follow; rules 8 and 9 read the project last.
+Rules 1–2 and 5–13 above are checked in the order of the create route's answers: rules 5, 8
+and 13 are body shape and are reported together with the topic's own presence check; rule 11
+reads the topic row; rules 6, 7 and 12 follow; rules 9 and 10 read the project last. Rule 6
+answers before rule 7, so an id the caller may not resolve is never told apart from an
+inactive one.
 
 The client validates the rules above marked `Server-only: no`, for immediate feedback. **The
 server re-validates every rule**; the server-only ones need stored rows and have no
@@ -369,7 +390,7 @@ client-side half at all. Submit controls are never disabled for validation.
 | `client-contact-invite-modal` | Client detail | present while inviting |
 | `client-contact-invite-email` | Client detail | present |
 | `client-contact-invite-submit` | Client detail | present |
-| `client-contact-invite-error-email` | Client detail | present on an address already contacting this client |
+| `client-contact-invite-error-email` | Client detail | present on an address already contacting a client of the organization |
 | `client-contact-row-{id}` | Client detail | present |
 | `client-contact-row-{id}-remove-btn` | Client detail | present while the contact is active |
 | `request-new-assignee-kind` | New request modal | present for a member holding `create-request` |
@@ -382,9 +403,9 @@ client-side half at all. Submit controls are never disabled for validation.
 | `request-new-submit` | New request modal | absent when the chosen audience has no active topic |
 | `requests-page` | Requests list | present for a client principal |
 | `sidebar-requests-link` | Sidebar | present for a client principal |
-| `nav-members` | Sidebar | absent for a client principal |
-| `nav-projects` | Sidebar | absent for a client principal |
-| `nav-clients` | Sidebar | absent for a client principal |
+| `nav-members` | Sidebar | absent for a client principal, present for an admin |
+| `nav-projects` | Sidebar | absent for a client principal, present for an admin |
+| `nav-clients` | Sidebar | absent for a client principal, present for an admin |
 | `request-detail-page` | Request detail | present for the addressee client principal |
 | `request-detail-assignee` | Request detail | present, naming the contact and their client |
 | `request-detail-answer-btn` | Request detail | present for the addressee client principal |
@@ -394,7 +415,7 @@ client-side half at all. Submit controls are never disabled for validation.
 | `request-detail-grant-btn` | Request detail | absent for a client principal, present for the requester |
 | `request-detail-composer` | Request detail | present for the addressee client principal |
 | `request-detail-thread` | Request detail | present |
-| `requests-new-btn` | Requests list | absent for a client principal |
+| `requests-new-btn` | Requests list | absent for a client principal, present for a member holding `create-request` |
 
 `requests-page`, `sidebar-requests-link`, `requests-new-btn`, `request-detail-page`,
 `request-detail-assignee`, `request-detail-answer-btn`, `request-detail-decline-btn`,
@@ -504,7 +525,7 @@ exports through `apps/web/src/ds.ts`, and nothing here is improvised per screen.
 |---|---|---|
 | 1 | An address holding an active staff membership accepts a client invitation | `409` `CLIENT_USER_MESSAGES.principalConflict`. No `ClientMembership` is written and the staff membership is untouched. |
 | 2 | A contact is removed while they are reading a request | The stamp rotates, so their next call answers `401` and the shell sends them to sign in. Nothing they already read is retracted. |
-| 3 | A contact is removed and later invited again | The same `ClientMembership` returns to `active`; no second row exists, and the requests addressed to them are theirs again. |
+| 3 | A contact is removed and later invited again to the same client | The same `ClientMembership` returns to `active`; no second row exists, and the requests addressed to them are theirs again. An invitation naming a different client is `409` `CLIENT_USER_MESSAGES.alreadyLinked` instead. |
 | 4 | The client is archived while a contact is signed in | The contact keeps their session and their open requests. The client is not offered for new projects, and no new contact may be invited to it. |
 | 5 | A request is addressed to a client contact who is then removed | The request stays open and reports its assignee as inactive. Nothing is cancelled and nothing is reassigned. |
 | 6 | A requester is unassigned from the project after raising the request | The request is unaffected. The rule is a gate at creation, not a standing condition, because retracting a client's request when staffing changes would be worse than the leak it prevents. |
@@ -527,9 +548,12 @@ exports through `apps/web/src/ds.ts`, and nothing here is improvised per screen.
 
 - Every organization route states its guard chain above; every query filters on
   `session.organizationId`, a required argument with no default.
-- **A client principal is refused with `404`, never `403`, on every organization route this
-  spec does not grant them**, matching `OrgScopeGuard`'s answer for an organization the caller
-  has no part in. The shape of the staff product is therefore not enumerable by a contact.
+- **A client principal is refused with `404` on every organization route other than the ones
+  REQ-03-019 names**, matching `OrgScopeGuard`'s answer for an organization the caller has no
+  part in, so the shape of the staff product is not enumerable by a contact. The create and
+  grant routes are the two exceptions and answer `403` with
+  `CLIENT_USER_MESSAGES.clientCannotCreate` and `REQUEST_MESSAGES.notYoursToGrant`: neither
+  names a resource the caller cannot already see.
 - A contact reading a request they are not the addressee of gets the same `404` as one that
   does not exist, so request existence is not enumerable either.
 - **A role-keyed check does not fail closed on a principal with no role.** `normalizeRole`
@@ -545,8 +569,9 @@ exports through `apps/web/src/ds.ts`, and nothing here is improvised per screen.
   cookie minted before this spec becomes invalid.
 - **PII.** A client contact's email address is PII. It is stored once, on `Account`. It is not
   copied into `RequestNotification`, is never written to `lastError`, and appears in no event
-  row — the trail snapshots display names only. It is visible on the contacts list to holders
-  of `ViewClients` and on a request to the parties and to holders of `ViewAllRequests`.
+  row — the trail snapshots display names only. It is visible on the contacts list, to holders
+  of `ViewClients`, and nowhere else: no request response carries it, the `assignee` member
+  naming the contact and their client only.
 - This spec adds **no unauthenticated route** of its own. It amends two that are already
   public — sign-in and invitation acceptance — and adds no new refusal to either that names an
   account.

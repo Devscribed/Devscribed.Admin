@@ -1,0 +1,176 @@
+{
+  "spec": "specs/requests/03-client-participants.md",
+  "verdict": ".workflow/refine/requests-03.verdict.json",
+  "fixed": [
+    {
+      "id": "R2",
+      "rule": "spec/untestable-case",
+      "edited": ["specs/requests/03-client-participants.cases.md"],
+      "change": "TC-03-E2E-01 no longer invalidates the token it then accepts: it invites once, accepts that token and signs in, and only then invites the same address again — the state REQ-03-013 names — so the already-a-contact error under the address field is reachable. Its Covers gains REQ-03-013, the rule that error now observes",
+      "verifiedBy": "specs/requests/03-client-participants.md REQ-03-011 (a new invitation invalidates every other pending one for the address) and REQ-03-013 (the refusal needs a ClientMembership, which exists only after acceptance)"
+    },
+    {
+      "id": "R3",
+      "rule": "spec/untestable-case",
+      "edited": ["specs/requests/03-client-participants.cases.md"],
+      "change": "TC-03-INT-04 now expects the deactivated message for both the correct and the wrong password, which is what REQ-03-004 states and what the route does; the sentence about the ordering is kept as the reason the two answers are the same",
+      "verifiedBy": "apps/api/src/auth/login.service.ts, LoginService.login — the `if (!membership) throw ... AUTH_MESSAGES.deactivated` precedes `bcrypt.compare`"
+    },
+    {
+      "id": "R5",
+      "rule": "spec/untestable-case",
+      "edited": ["specs/requests/03-client-participants.cases.md"],
+      "change": "TC-03-INT-20 has the requester attempt the answer while the request is still open, before the contact answers it, so the actor guard is the only check that attempt can fail and the case's 403 REQUEST_MESSAGES.notYoursToAnswer is the answer it gets; the cancel-then-answer step still reaches 409 alreadyTerminal",
+      "verifiedBy": "apps/api/src/requests/requests.service.ts, RequestsService.transition — party (404), terminal (409), legality of the move (409 invalidTransition), then the actor guard (403); TRANSITIONS.answer declares from: ['open']"
+    },
+    {
+      "id": "R8",
+      "rule": "spec/incomplete-decision",
+      "edited": [
+        "specs/requests/03-client-participants.md",
+        "specs/requests/03-client-participants.cases.md"
+      ],
+      "change": "REQ-03-036 now states the party set in full — the request's requester and its addressee, other than the principal who caused the event, and nobody else, a holder of view-all-requests who is neither receiving nothing — so the row count is decidable for a staff-only request. Its observer follows: TC-03-INT-25 runs in an organization that also holds an admin party to nothing and asserts no row for that admin",
+      "verifiedBy": "specs/requests/03-client-participants.md REQ-03-035 (every request, not only client-addressed ones) and REQ-03-028, which supplied only the client half of 'party'"
+    },
+    {
+      "id": "R9",
+      "rule": "spec/incomplete-decision",
+      "edited": ["specs/requests/03-client-participants.contracts.md"],
+      "change": "a paragraph beside the permission matrix says what the stored legacy role `member` gets from the gate the contacts routes use: no `manage-clients` and no `view-clients`, because the helper answers false for a role its matrix has no row for, so `member` is refused exactly as `user` is and no role migration is owed before this spec ships",
+      "verifiedBy": "packages/validation/src/index.ts — `can` is `CAPABILITY_MATRIX[role]?.[capability] ?? false` and CAPABILITY_MATRIX carries rows for admin, manager, user and viewer only; apps/api/src/clients/clients.service.ts passes the stored role to `can` in requireManageCapability and requireViewCapability"
+    },
+    {
+      "id": "R10",
+      "rule": "spec/stale-statement",
+      "edited": ["specs/requests/03-client-participants.md"],
+      "change": "the sentence claiming the capability check is the create route's first statement is deleted; it stated no rule the implementer must obey, and REQ-03-027's rule — the client refusal is decided before the route consults any capability — is untouched",
+      "verifiedBy": "apps/api/src/requests/requests.service.ts, RequestsService.createRequest — `requireCaller` is the first statement and the `create-request` check follows it"
+    },
+    {
+      "id": "R13",
+      "rule": "spec/missing-artefact",
+      "edited": ["specs/requests/03-client-participants.cases.md"],
+      "change": "the Verification Plan's three quoted commands no longer carry E2E_WEB_PORT and E2E_API_PORT: each reads `cd e2e && CI=1 PW_WORKERS=1 npx playwright test …`, under which the suite claims its own pair, which is what the Observed column already says. The transcripts' output is untouched",
+      "verifiedBy": "CLAUDE.md — under CI the suite claims its own pair and writes it to e2e/.last-ports.json; the plan's own step 2 records 'The suite claimed its own pair'"
+    },
+    {
+      "id": "R14",
+      "rule": "spec/missing-artefact",
+      "edited": [
+        "specs/requests/03-client-participants.cases.md",
+        "specs/requests/03-client-participants.contracts.md"
+      ],
+      "change": "the ids asserted absent now have presence twins: TC-03-E2E-02 reads the same sidebar as an admin of that organization and asserts nav-members, nav-projects and nav-clients present, and TC-03-E2E-04 opens the modal from requests-new-btn and asserts it present for the member holding create-request. The four rows of the testid table carry both halves",
+      "verifiedBy": "specs/requests/03-client-participants.contracts.md, Required data-testid Attributes — the four rows previously read 'absent for a client principal' alone"
+    },
+    {
+      "id": "R15",
+      "rule": "spec/stale-statement",
+      "edited": ["specs/requests/03-client-participants.contracts.md"],
+      "change": "the list route's Errors cell gains the 400 it answers for a query value outside the closed set and the 403 REQUEST_MESSAGES.scopeForbidden it answers a member without view-all-requests asking scope=all, and the Error Messages table gains the scopeForbidden row so a case author asserting either body never leaves the bundle",
+      "verifiedBy": "apps/api/src/requests/requests.service.ts — the unknown-query-value 400 with fields code `unknown_value`, and the `scope === 'all' && !can(caller.role, 'view-all-requests')` refusal; packages/validation/src/index.ts scopeForbidden text quoted verbatim"
+    }
+  ],
+  "decided": [
+    {
+      "id": "R1",
+      "rule": "spec/contradiction",
+      "edited": [
+        "specs/requests/03-client-participants.md",
+        "specs/requests/03-client-participants.contracts.md"
+      ],
+      "question": "does a client principal calling the create route or the grant route get REQ-03-019's 404, or the 403 REQ-03-027 and REQ-03-032 name",
+      "chose": "REQ-03-019 is bounded by an enumeration — the requests list, a request they are the addressee of, that request's answer, decline and message routes, and the create and grant routes — and every other organization route answers 404; create and grant answer the stated 403s and are the whole of the exception",
+      "rejected": "the absolute form, '404, never 403, on every organization route this spec does not grant them', which would have refused both with 404 and failed TC-03-INT-14 and TC-03-INT-22",
+      "why": "rule 2 and rule 3 — the 404 discipline exists so the staff product is not enumerable, and neither exception names a resource the caller cannot already see: grant acts on a request they may read, and the create refusal is a sentence written for a contact rather than the one a viewer gets. Hiding grant behind 404 would hide a request the caller is entitled to read",
+      "recordedAt": "REQ-03-019's rule and its Decided in specs/requests/03-client-participants.md; the Security bullet in the contracts now states the same boundary and names both messages, and AC-3 now claims 404 for the members, projects and contacts routes, which is what TC-03-INT-13 observes"
+    },
+    {
+      "id": "R4",
+      "rule": "spec/contradiction",
+      "edited": [
+        "specs/requests/03-client-participants.md",
+        "specs/requests/03-client-participants.contracts.md",
+        "specs/requests/03-client-participants.cases.md"
+      ],
+      "question": "is inviting an existing contact of client A to client B refused at the invite, or written and left to fail at accept",
+      "chose": "refused at the invite: REQ-03-013 now answers 409 CLIENT_USER_MESSAGES.alreadyLinked when the address holds a ClientMembership of another client of the organization, whatever that row's status, or an active one of the named client",
+      "rejected": "leaving the cross-client invite to be written and refused at accept with principalConflict — the manager is told the invitation was sent and the contact meets the refusal instead; and dropping the step from TC-03-INT-07, which would have deleted coverage rather than settling the rule",
+      "why": "rule 3 — the refusal that fails safe is the one at the door, since REQ-03-002 lets an account hold one client principal and a second client's invitation could never be accepted; extending it to a removed row at another client closes the same question for accept, where returning that row to active under a new client would rebind a row the old client's requests still resolve through",
+      "recordedAt": "REQ-03-013's rule and its Decided in specs/requests/03-client-participants.md; the paragraph under the contracts' state table, which scopes `state` to the named client and says the removed|invite row is that client's own row; validation rule 2, edge case 3, the alreadyLinked message text (now 'This person is already a contact of a client in this workspace', true of both refusals so neither says which client), the client-contact-invite-error-email row, AC-15, and TC-03-INT-07, which adds the removed-row step"
+    },
+    {
+      "id": "R6",
+      "rule": "spec/contradiction",
+      "edited": [
+        "specs/requests/03-client-participants.md",
+        "specs/requests/03-client-participants.contracts.md",
+        "specs/requests/03-client-participants.cases.md"
+      ],
+      "question": "does an assigneeClientMembershipId naming a contact of another organization answer 400 assigneeInactive or 404",
+      "chose": "404 with no message, identical to an id that names no row at all; only a removed contact of the caller's own organization is 400 REQUEST_MESSAGES.assigneeInactive",
+      "rejected": "one constraint covering both activeness and organization with one 400 message, which tells a caller that an id belongs to somebody, somewhere",
+      "why": "rule 3 — the answer that hides is the one that cannot be used to probe contact ids across organizations, and it matches the 404 the rest of this spec gives a row the caller may not see",
+      "recordedAt": "REQ-03-020's rule and its Decided in specs/requests/03-client-participants.md; validation rule 6 (organization and existence, 404, no message) split from rule 7 (active, assigneeInactive) in the contracts, with the ordering sentence beneath the table renumbered and stating that rule 6 answers before rule 7; TC-03-INT-32 asserts the cross-organization id and an unknown id are alike"
+    },
+    {
+      "id": "R7",
+      "rule": "spec/contradiction",
+      "edited": [
+        "specs/requests/03-client-participants.md",
+        "specs/requests/03-client-participants.contracts.md",
+        "specs/requests/03-client-participants.cases.md"
+      ],
+      "question": "do the three contacts routes answer a caller without the capability 403 with a message, or 404",
+      "chose": "404 with no message on all three — GET without view-clients, POST and DELETE without manage-clients",
+      "rejected": "403 CLIENT_MESSAGES.forbidden and 403 CLIENT_USER_MESSAGES.inviteForbidden; the inviteForbidden row and the forbidden row are deleted from the Error Messages table, since no route in this spec answers them",
+      "why": "rule 1 and rule 3 — the client resource these routes hang off already answers that caller 404 deliberately, and a distinctive 403 on a route hanging off it lets a `user` enumerate client ids the sibling route hides",
+      "recordedAt": "REQ-03-008, renamed 'who may manage contacts', with its Decided in specs/requests/03-client-participants.md; the three route rows and the paragraph under the Routes table in the contracts; TC-03-INT-12, which now asserts 404 on all three and says why"
+    },
+    {
+      "id": "R11",
+      "rule": "spec/divergence",
+      "edited": ["specs/requests/03-client-participants.md"],
+      "question": "does a client principal asking for scope=all get 200 with their own rows or the 403 the route answers a member without view-all-requests",
+      "chose": "200 with their own rows; REQ-03-029 now returns only requests addressed to them whatever `scope` the query names",
+      "rejected": "answering a client principal the member's 403 REQUEST_MESSAGES.scopeForbidden",
+      "why": "rule 2 — the refusal names a capability that is a staff one, and REQ-03-016 keeps a client principal out of the role-keyed helpers entirely; a client has no scope control and the query widens nothing, so there is nothing to refuse",
+      "recordedAt": "REQ-03-029's rule and its Decided in specs/requests/03-client-participants.md, with the staff 403 kept on the list route in the contracts and explained in the paragraph under the Routes table; TC-03-INT-23 observes it"
+    },
+    {
+      "id": "R12",
+      "rule": "spec/ambiguous-requirement",
+      "edited": [
+        "specs/requests/03-client-participants.md",
+        "specs/requests/03-client-participants.contracts.md"
+      ],
+      "question": "does accepting an invitation insert a ClientMembership, or return the account's existing row to active",
+      "chose": "REQ-03-012 now reads 'create one active ClientMembership or return the account's existing row to active, and write no Membership'",
+      "rejected": "the insert-only reading, which the unique accountId turns into a 500 on a re-invited contact",
+      "why": "rule 2 — the contracts' state table and TC-03-INT-11 already require one row, and the schema's unique accountId makes the second row impossible rather than duplicated",
+      "recordedAt": "REQ-03-012 in specs/requests/03-client-participants.md, and the paragraph under the contracts' state table, which says the restored row is the named client's own and that accepting never rebinds a row to a client it was not written for"
+    },
+    {
+      "id": "R16",
+      "rule": "spec/missing-artefact",
+      "edited": [
+        "specs/requests/03-client-participants.contracts.md",
+        "specs/requests/03-client-participants.md"
+      ],
+      "question": "does a request response carry the contact's email address, or is the PII claim narrowed to the contacts list",
+      "chose": "narrowed: the address is visible on the contacts list to holders of ViewClients and nowhere else, and no request response carries it — the assignee member names the contact and their client only",
+      "rejected": "adding an email member to the assignee shape and naming who receives it, which would put PII on every request read by a party and by every holder of ViewAllRequests for a need no requirement states",
+      "why": "rule 3 and rule 4 — the narrower claim matches the response shape this spec already states, and widening the shape later is cheaper than retracting an address already served",
+      "recordedAt": "the PII bullet of the contracts' Security section, and the Known Gaps row in specs/requests/03-client-participants.md, which now names view-clients and the contacts list"
+    }
+  ],
+  "left": [],
+  "filesTouched": [
+    "specs/requests/03-client-participants.md",
+    "specs/requests/03-client-participants.contracts.md",
+    "specs/requests/03-client-participants.cases.md"
+  ],
+  "lint": "node scripts/spec-lint.mjs specs/requests/03-client-participants.md — clean (41 requirements, 42 cases, 16 routes, 27 messages, 32 testids)",
+  "paidFor": "the behaviour file is at its budget, so every added rule and decision was paid for out of it: the Summary's two reasoning paragraphs, the non-account-actor sentence, REQ-03-024's reachability tail, REQ-03-027's stale sentence, the two state-machine invariants that restated REQ-03-006 and REQ-03-035/037, and the reasoning tails of the REQ-03-001, REQ-03-003, REQ-03-005, REQ-03-014, REQ-03-016, REQ-03-017, REQ-03-018, REQ-03-023 and REQ-03-028 decisions were cut. It ends at 406 lines, exactly where it started"
+}

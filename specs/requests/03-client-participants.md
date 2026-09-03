@@ -28,20 +28,11 @@ bundle:
 
 A person at a client becomes a **signed-in principal of the organization**, so a developer
 blocked on an access from that client can raise a request against them and watch it answered
-in the product rather than in somebody's inbox. The principal is a `ClientMembership`, never
-a fifth role on `Membership`: staff membership is read all over the API — vacation accrual,
-the members list, project assignment, time tracking — where a client row would crash nothing
-and be quietly wrong everywhere.
-
-Two things bound the surface. A client-addressed request must name a **project** the requester
-is assigned to and that belongs to the addressee's client; and a client principal sees **only
-requests they are party to** — no members, projects, vacation or other client.
+in the product. The principal is a `ClientMembership`, never a role on `Membership`.
 
 This spec also introduces the **notification port**: every event a party should learn about
 writes an outbox row in the transaction that caused it, and a `RequestNotifier` delivers them
-afterwards. The adapter that ships delivers nothing, so adding email later is an adapter and
-a channel value, not a migration and not a change to any rule below. Blast radius and
-backward compatibility for this spec are in [README.md](README.md).
+afterwards. Blast radius and backward compatibility are in [README.md](README.md).
 
 ## Actors & Preconditions
 
@@ -52,14 +43,10 @@ backward compatibility for this spec are in [README.md](README.md).
 | **Requester** | An active member holding `create-request` who is assigned to the project the request names. |
 | **Client** | An active `Client` row of the organization, with at least one active project. |
 
-There is no non-account actor: a contact holds a session like anybody else, and this spec adds
-no unauthenticated route, no token and no rate limiter.
-
 ## Roles & Permission Matrix
 
-The matrix is in the contracts file. A client contact holds no role at all: their rights come
-from the principal kind (REQ-03-016), so no value of `Membership.role` can produce them by
-accident.
+The matrix is in the contracts file. A client contact holds no role: their rights come from
+the principal kind (REQ-03-016), and no value of `Membership.role` produces them.
 
 ## Functional Requirements
 
@@ -71,7 +58,8 @@ THE SYSTEM SHALL link a client contact to the organization through a `ClientMemb
 carrying the account, the organization and the client.
 
 **Decided:** a separate table makes every existing staff-membership query incapable of
-returning a client by construction, not by a rule each future author must remember.
+returning a client by construction — vacation accrual, the members list, project assignment
+and time tracking cannot be handed one.
 
 #### REQ-03-002 — one active principal per account
 
@@ -96,8 +84,7 @@ THE SYSTEM SHALL resolve at most one principal for an account, by the table belo
 WHEN an account holding an active `ClientMembership` and no active `Membership` signs in
 successfully, THE SYSTEM SHALL issue the session cookie for that client's organization.
 
-**Decided:** the cookie's fields do not change — the principal kind is read from the database
-per request, as the role already is, so there is no session format to migrate.
+**Decided:** the cookie's fields do not change; the principal kind is read per request, as the role already is.
 
 #### REQ-03-004 — signing in with no principal at all
 
@@ -109,8 +96,7 @@ SYSTEM SHALL refuse the sign-in with `AUTH_MESSAGES.deactivated`.
 WHEN a client principal calls `GET /api/me`, THE SYSTEM SHALL answer `200` with the account,
 the organization, `principal: "client"` and the client's id and name.
 
-**Decided:** the endpoint answers `null` today for an account with no staff membership, and
-the shell sends `null` back to the sign-in screen — a client would sign in and bounce forever.
+**Decided:** it answers `null` today for an account with no staff membership, which the shell reads as signed out.
 
 #### REQ-03-006 — removing a contact revokes their sessions
 
@@ -124,10 +110,14 @@ with `AUTH_MESSAGES.deactivated`.
 
 ### Inviting a client contact
 
-#### REQ-03-008 — who may invite
+#### REQ-03-008 — who may manage contacts
 
-IF a caller without `manage-clients` invites a client contact, THEN THE SYSTEM SHALL answer
-`403` with `CLIENT_USER_MESSAGES.inviteForbidden`.
+IF a caller without `manage-clients` invites or removes a client contact, or a caller without
+`view-clients` lists them, THEN THE SYSTEM SHALL answer `404` with no message.
+
+**Decided:** `404`, not a `403` naming the capability. The client's own detail route answers
+that caller `404`, so a distinctive refusal here would say the client exists to somebody who
+may not see it.
 
 #### REQ-03-009 — the invitation names the client
 
@@ -147,13 +137,20 @@ transaction.
 
 #### REQ-03-012 — accepting creates the client principal
 
-WHEN a `client` invitation is accepted, THE SYSTEM SHALL create an active `ClientMembership`
-and no `Membership`.
+WHEN a `client` invitation is accepted, THE SYSTEM SHALL create one active `ClientMembership`
+or return the account's existing row to `active`, and write no `Membership`.
 
-#### REQ-03-013 — an address that is already a contact of that client
+#### REQ-03-013 — an address that is already a contact
 
-IF the invited address already holds an active `ClientMembership` of the named client, THEN
-THE SYSTEM SHALL answer `409` with `CLIENT_USER_MESSAGES.alreadyLinked`.
+IF the invited address already holds a `ClientMembership` of another client of the
+organization, or an active one of the named client, THEN THE SYSTEM SHALL answer `409` with
+`CLIENT_USER_MESSAGES.alreadyLinked`.
+
+**Decided:** any client of the organization, whatever the other row's status. An account
+holds one client principal (REQ-03-002), so a second client's invitation could never be
+accepted, and returning a removed row to `active` under a new client would rebind a row the
+old client's requests still resolve through. Staff membership, and a client membership in
+another organization, are not the inviter's to learn and meet REQ-03-014 at accept.
 
 #### REQ-03-014 — an address that belongs to staff
 
@@ -161,8 +158,8 @@ IF the account accepting a `client` invitation holds an active `Membership` or a
 `ClientMembership` of any organization, THEN THE SYSTEM SHALL answer `409` with
 `CLIENT_USER_MESSAGES.principalConflict`.
 
-**Decided:** refused at accept as well as at invite: the account may acquire the other
-principal between the two, and the accept is the write that would break REQ-03-002.
+**Decided:** refused at accept as well as at invite — the accept is the write that would
+break REQ-03-002.
 
 #### REQ-03-015 — where accepting lands a client
 
@@ -176,38 +173,47 @@ WHEN a `client` invitation is accepted, THE SYSTEM SHALL answer with a `redirect
 THE SYSTEM SHALL resolve a client principal's capabilities from a single exported list whose
 values belong to no staff capability union, not from a role table.
 
-**Decided:** a union of its own, because the staff unions are keyed by role in a table the
-compiler forces every role to answer for — so a value added there is one four staff roles
-must each be refused, for a right no role can hold.
+**Decided:** a union of its own — a value added to a staff union is one every staff role must
+be refused, for a right no role can hold.
 
 #### REQ-03-017 — the principal kind is asked first
 
 WHEN a right is checked, THE SYSTEM SHALL resolve the principal kind before calling any
 role-keyed helper.
 
-**Decided:** an ordering rule, because the role-keyed helpers do not fail closed on a
-principal with no role: one answers a client the viewer set rather than nothing.
+**Decided:** an ordering rule — a role-keyed helper answers a principal with no role the
+viewer set rather than nothing.
 
 #### REQ-03-018 — the client's navigation
 
 WHILE the signed-in principal is a client contact, THE SYSTEM SHALL render the requests
 destination as the only organization navigation entry.
 
-**Decided:** Members is the entry that has to be gated for this to hold. Every other row asks
-a capability a caller with no role is refused and drops out on its own; Members is drawn
-unconditionally, because until now only staff could reach the shell.
+**Decided:** Members is the entry that has to be gated for this to hold — it is drawn
+unconditionally, where every other row asks a capability a caller with no role is refused.
 
 #### REQ-03-019 — every other organization route
 
-IF a client principal calls an organization route this spec does not grant them, THEN THE
-SYSTEM SHALL answer `404`.
+IF a client principal calls an organization route other than the requests list, a request
+they are the addressee of, that request's answer, decline and message routes, and the create
+and grant routes, THEN THE SYSTEM SHALL answer `404`.
+
+**Decided:** create and grant are the whole of the exception and answer the `403`s REQ-03-027
+and REQ-03-032 state. `404` on those two was rejected: grant acts on a request the caller may
+read, and create is refused by a sentence written for a contact rather than for staff.
 
 ### Addressing a request to a client
 
 #### REQ-03-020 — the addressee kind
 
 WHEN a request carries `assigneeKind` of `client`, THE SYSTEM SHALL require
-`assigneeClientMembershipId` to name an active contact of the caller's organization.
+`assigneeClientMembershipId` to name a contact of the caller's organization, answering `404`
+with no message when it names none.
+
+**Decided:** an id of another organization is `404`, identical to one naming nothing, so ids
+are not probed across organizations; a `400` would say the id belongs to somebody. A removed
+contact of the caller's own organization is `400` `REQUEST_MESSAGES.assigneeInactive`
+(REQ-03-025), a fact the caller may already read.
 
 #### REQ-03-021 — a client request names a project
 
@@ -224,8 +230,8 @@ IF the named project is not linked to the addressee's client, THEN THE SYSTEM SH
 IF the requester holds no `ProjectMember` row on the named project, THEN THE SYSTEM SHALL
 answer `400` with `REQUEST_MESSAGES.notOnProject`.
 
-**Decided:** an admin is not carved out — anyone may assign themselves first, and the
-carve-out would remove the only rule keeping a client's inbox to people they work with.
+**Decided:** an admin is not carved out; the carve-out would remove the only rule keeping a
+client's inbox to people they work with.
 
 #### REQ-03-024 — the topic's audience
 
@@ -241,11 +247,9 @@ answer `400` with `REQUEST_MESSAGES.topicAudienceMismatch`.
 | client | member | `400` with `REQUEST_MESSAGES.topicAudienceMismatch`. |
 | client | client | The request is created `201`. |
 
-Every row above is a topic that is **active and in the caller's organization**, named by a
-body whose own fields are valid; a topic that is archived, belongs to another organization or
-names no row at all is `400` with `REQUEST_MESSAGES.topicUnavailable` and its audience is
-never compared. So the mismatch is reachable only once `client` is an accepted addressee
-kind, which is what makes the `client` rows above observable at all.
+Every row above is a topic **active and in the caller's organization**, named by a body whose
+own fields are valid; an archived topic, one of another organization and one that names no row
+are all `400` `REQUEST_MESSAGES.topicUnavailable`, audience never compared.
 
 #### REQ-03-025 — an inactive contact at creation
 
@@ -264,8 +268,7 @@ IF a client principal calls the create route, THEN THE SYSTEM SHALL answer `403`
 
 **Decided:** the ordering is part of the rule. Asking `create-request` first answers a client
 `REQUEST_MESSAGES.createForbidden` — the sentence a viewer gets — which tells a contact they
-are staff with too small a role. That check is the route's first statement today, so the
-order is a change and not an arrangement that happens to hold.
+are staff with too small a role.
 
 ### What a client may do with a request
 
@@ -274,15 +277,17 @@ order is a change and not an arrangement that happens to hold.
 WHERE a request's addressee is the calling client principal, THE SYSTEM SHALL treat that
 principal as a party to it.
 
-**Decided:** the party test is already the whole of the read rule and already answers a
-principal with no role correctly — not a party and no `ViewAllRequests` reads `404`. This
-spec adds the client half of "party", not a second authorization scheme: answer, decline and
-message keep the two tests they apply to a member.
+**Decided:** the client half of "party", not a second authorization scheme — answer, decline
+and message keep the two tests they apply to a member.
 
 #### REQ-03-029 — the client's list
 
 WHEN a client principal lists requests, THE SYSTEM SHALL return only requests addressed to
-them.
+them, whatever `scope` the query names.
+
+**Decided:** `scope=all` answers `200` with their own rows, not the `403`
+`REQUEST_MESSAGES.scopeForbidden` a member without `view-all-requests` receives — the query
+widens nothing a client could ever be granted, so there is nothing to refuse.
 
 #### REQ-03-030 — a client answers
 
@@ -319,8 +324,9 @@ transaction as the `RequestEvent`.
 
 #### REQ-03-036 — who the recipients are
 
-THE SYSTEM SHALL make the recipients of an event every party to the request other than the
-principal who caused it.
+THE SYSTEM SHALL make the recipients of an event the request's requester and its addressee
+other than the principal who caused it, and nobody else: a holder of `view-all-requests` who
+is neither receives nothing.
 
 #### REQ-03-037 — delivery happens after the commit
 
@@ -351,23 +357,17 @@ authoritative whether or not any outbox row has ever been delivered.
 
 ## State Machine
 
-The client contact's own lifecycle, whose transition table is in the contracts file. The
-request's lifecycle is unchanged by this spec. Its invariants:
+The client contact's own lifecycle, whose transition table is in the contracts file. Its
+invariants:
 
 1. An account never holds an active `Membership` and an active `ClientMembership` at once.
 2. A `ClientMembership` moves between `active` and `removed` and is never deleted.
-3. Every removal rotates the security stamp inside its own transaction, so revocation is never
-   observed as half done.
-4. Every write of a request's status re-reads the row with `FOR UPDATE` and evaluates the actor
-   guard against that read, whichever principal kind the actor is.
-5. Every outbox row is written in the transaction that wrote its event, and delivered outside
-   it.
+3. Every write of a request's status re-reads the row with `FOR UPDATE` and tests the actor guard against that read, whichever principal kind the actor is.
 
 ## Out of Scope
 
 - **A client raising a request.** REQ-03-027 refuses it; the thread carries anything urgent.
-- **Any actual mail**, and **per-contact notification preferences**. The adapter and the
-  channel value are what a later spec adds; there is nothing to prefer yet.
+- **Any actual mail**, and **per-contact notification preferences**: a later spec's adapter.
 - **A contact belonging to more than one client**, or to more than one organization.
 - **Client-side attachments** and any client-facing document surface.
 - **A client seeing tasks, time or reports.** Requests are the whole of their product.
@@ -380,7 +380,7 @@ request's lifecycle is unchanged by this spec. Its invariants:
 | Nobody outside the product is told anything, so a client learns of a request only by signing in | The port, the outbox and every recipient decision ship and are tested; only the adapter is absent, and adding one writes no migration and changes no rule here | An adapter spec that adds an email channel and its templates |
 | A removed contact's open requests are flagged but not reassigned | The same choice the staff side already makes: an access asked for may still be needed by whoever takes the relationship over | A reassign path that accepts a client addressee |
 | The client shell is the requests screens with the rest of the navigation withheld, not a separately designed product | It is one screen and a list; designing a second shell before anybody has used the first is guesswork | A design pass once real contacts have used it |
-| A client contact's email address is visible to every member holding `view-all-requests` | It is the address a member of staff mailed yesterday, and the requester needs to know who they are waiting on | Nothing needs to; it is named so a reviewer meets it deliberately |
+| A client contact's email address is visible on the contacts list to every member holding `view-clients` | It is the address a member of staff mailed yesterday, and the manager who invites and removes contacts has to see which person a row is | Nothing needs to; it is named so a reviewer meets it deliberately |
 | Delivery is attempted only while requests are being made against the API | With the shipped adapter there is nothing to deliver, so the property costs nothing today; an adapter spec will state its own drain | The adapter spec, which chooses between a queue and a scheduled drain |
 
 ## Acceptance Criteria
@@ -389,7 +389,7 @@ request's lifecycle is unchanged by this spec. Its invariants:
 |---|---|---|
 | AC-1 | An invited client contact can sign in and reach the requests screen, and today's sign-in refusal for an account with no staff membership no longer applies to them. | TC-03-INT-03, TC-03-E2E-01 |
 | AC-2 | No account ends up holding both an active staff membership and an active client membership. | TC-03-INT-08 |
-| AC-3 | A client principal reaches no organization screen other than requests, and every other organization route answers 404. | TC-03-INT-13, TC-03-E2E-02 |
+| AC-3 | A client principal reaches no organization screen other than requests, and the members, projects and contacts routes answer 404. | TC-03-INT-13, TC-03-E2E-02 |
 | AC-4 | A request addressed to a client requires a project that the requester works on and that belongs to that client. | TC-03-INT-15, TC-03-INT-16, TC-03-INT-17 |
 | AC-5 | A client-audience topic is required for a client-addressed request and refused for a staff-addressed one. | TC-03-INT-18 |
 | AC-6 | A client contact can answer and decline a request addressed to them, and cannot grant one. | TC-03-INT-20, TC-03-INT-21, TC-03-INT-22 |
@@ -401,6 +401,6 @@ request's lifecycle is unchanged by this spec. Its invariants:
 | AC-12 | Replaying an event cannot produce a second notification for the same recipient. | TC-03-INT-28 |
 | AC-13 | The list, the detail screen and the badge are correct with no notification ever delivered. | TC-03-INT-29 |
 | AC-14 | A client contact cannot raise a request through any route. | TC-03-INT-14 |
-| AC-15 | An invitation to an archived client is refused, and one to an address already contacting that client is refused. | TC-03-INT-06, TC-03-INT-07 |
+| AC-15 | An invitation to an archived client is refused, and so is one to an address already contacting any client of the organization. | TC-03-INT-06, TC-03-INT-07 |
 | AC-16 | A removed contact who is re-invited comes back as the same row rather than a second one. | TC-03-INT-11 |
 | AC-17 | Adding an email channel later needs no migration: the outbox row already carries the channel, the provider key and the provider reference. | TC-03-INT-30 |

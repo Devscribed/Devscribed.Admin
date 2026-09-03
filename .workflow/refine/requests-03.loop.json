@@ -7,7 +7,7 @@
       "round": 1,
       "startedAt": "2026-09-03T12:33:36.605Z",
       "head": "2bc8fca080e50a3044ee99713c37b59232187157",
-      "status": "running",
+      "status": "done",
       "lint": 0,
       "judge": {
         "status": "blocked",
@@ -73,7 +73,24 @@
           "S-56": "clear",
           "S-57": "note"
         }
-      }
+      },
+      "gate": "T2",
+      "blockers": 7,
+      "keys": [
+        "spec/contradiction:REQ-03-019 against REQ-03-027 and REQ-03-032",
+        "spec/untestable-case:TC-03-E2E-01 against REQ-03-011 and REQ-03-013",
+        "spec/untestable-case:TC-03-INT-04 against REQ-03-004",
+        "spec/contradiction:REQ-03-013 against TC-03-INT-07",
+        "spec/untestable-case:TC-03-INT-20 against the answer route's shipped ordering",
+        "spec/contradiction:REQ-03-020 / validation rule 6 against TC-03-INT-32",
+        "spec/contradiction:REQ-03-008 and the contacts routes' 403"
+      ],
+      "fix": {
+        "fixed": 9,
+        "decided": 7,
+        "left": 0
+      },
+      "endedAt": "2026-09-03T13:03:30.879Z"
     }
   ],
   "status": "running"
