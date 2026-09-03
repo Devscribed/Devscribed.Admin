@@ -22,6 +22,7 @@ likely to be re-litigated.
 | [0007](0007-a-busy-port-moves-the-run-and-stale-servers-are-reaped.md) | A busy port moves the run, and stale servers are reaped | current |
 | [0008](0008-a-spec-is-judged-by-a-stranger.md) | A spec is judged by a stranger, before the pipeline is paid for | current |
 | [0009](0009-specs-are-frozen-and-the-newest-one-governs.md) | Specs are frozen; the newest spec that speaks about a behaviour governs it, and states it in full | current |
+| [0010](0010-a-chain-of-dependent-specs-ships-one-link-at-a-time.md) | A chain of dependent specs is refined and shipped one link at a time, in dependency order | current |
 
 Measurements that led to these, including the hypotheses that did not survive, are in
 [docs/research/](../research/).

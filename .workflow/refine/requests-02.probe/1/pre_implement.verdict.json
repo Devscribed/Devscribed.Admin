@@ -1,0 +1,89 @@
+{
+  "stage": "pre_implement",
+  "status": "blocked",
+  "spec": "specs/requests/02-request-topics.md",
+  "handoff": ".workflow/refine/requests-02.probe/1/handoff.json",
+  "report": ".workflow/refine/requests-02.probe/1/stages/pre_implement.md",
+  "findings": [
+    {
+      "id": "P1",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/02-request-topics.contracts.md",
+      "symbol": "Known Gaps row 4 / DS gaps row 1 / Routes",
+      "claim": "The reorder is described as one PATCH per row and as a multi-row transaction, and no route can be both; nothing states what a press of the reorder control sends, and no requirement or case pins it.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Three statements in the bundle. specs/requests/02-request-topics.md Known Gaps row 4: 'a reorder rewrites the affected rows in one transaction'. specs/requests/02-request-topics.contracts.md DS gaps row 1: up and down controls on each row, 'each issuing one PATCH'. contracts Routes: 'PATCH /api/organizations/{orgId}/request-topics/{topicId} ... Accepts name and sortOrder' - a single-row write, and the only route that touches ordering. Concretely: the seeded staff catalogue is VPN 10, Claude 20, ... Question 80, Other 90. A curator presses up on Other. Implementation A: the client computes 79 and PATCHes one row. Implementation B: the server swaps the pair, writing Other=80 and Question=90 in one transaction. Both satisfy every sentence of the spec; they differ observably - under A two curators reordering simultaneously never collide and the catalogue can end with two topics sharing a sortOrder, whose order then falls to REQ-02-009's name tiebreak rather than to what either curator asked for; under B they serialize on two locked rows. 'reorder' appears in the Roles & Permission Matrix, the Actors table and two rows of the State Machine, and in no numbered requirement and no test case.",
+        "source": "specs/requests/02-request-topics.md#Known Gaps; specs/requests/02-request-topics.contracts.md#DS gaps, #Routes"
+      },
+      "suggestedFix": "Add a numbered requirement stating the reorder contract - which route, which rows it writes, what the client sends, and whether ties are possible - and one TC-02-INT case that reorders two topics and reads the catalogue back. Then correct whichever of the two Known Gaps / DS gaps sentences the decision makes false."
+    },
+    {
+      "id": "P2",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "spec/unverifiable-criterion",
+      "file": "specs/requests/02-request-topics.cases.md",
+      "symbol": "TC-02-INT-02",
+      "claim": "TC-02-INT-02, the only observer of AC-2, requires a database holding an organization created before this migration and then requires the test to run the migration. The integration harness applies every migration before any test body runs and offers no way back, so the state cannot exist and the step cannot be taken.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "TC-02-INT-02 steps: 'Against a database holding an organization and at least one request created before this migration, run the migration, then read the catalogue for that organization.' apps/api/test/global-setup.ts:28 runs `npx prisma migrate deploy` against devscribed_test, and apps/api/jest.config.js declares that file as globalSetup; workers 2..N receive CREATE DATABASE ... TEMPLATE copies of the already-migrated database (global-setup.ts:60-64). Every migration is applied before the first test body executes. The Verification Plan row for this state points at e2e/global-setup.ts - the E2E harness, not the integration one - and marks it 'not run'. Two implementations both satisfy the words and differ in what they prove: (a) delete the organization's seeded RequestTopic rows, insert legacy-shaped Request rows, then execute a copy of the backfill SQL pasted into the test - which passes even when the shipped migration is wrong, because the copy is what ran; (b) migrate a second database to the migration before this one, seed it, then apply this one - which nothing in the harness supports. AC-2 ('an organization that existed before this spec has the same catalogue after the migration, with no request rewritten') is unobservable until the spec chooses.",
+        "source": "specs/requests/02-request-topics.cases.md#TC-02-INT-02; apps/api/test/global-setup.ts:28; apps/api/jest.config.js"
+      },
+      "suggestedFix": "Either restate TC-02-INT-02 in terms the harness can execute - name the fixture that produces a topic-less organization and require the case to invoke the migration's own SQL file by path rather than a copy of it - or move the case to a level that can migrate its own database and say so, and name the helper as a Verification Plan row that does not exist today."
+    },
+    {
+      "id": "P3",
+      "target": "spec",
+      "severity": "major",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/requests/02-request-topics.contracts.md",
+      "symbol": "Screens / The list, amended",
+      "claim": "The amended list draws no Type filter while REQ-02-003's rationale rests on that filter existing, and the testid table neither retires it nor lists it. Whether requests-type-filter survives decides whether the vacation section keeps a selector.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "REQ-02-003 Decided: 'the list's type filter already turns on this distinction, so a topic that could not declare it would leave the filter guessing.' The amended list wireframe in contracts #Screens draws '( Mine | All )  About [ Any ]  Status [ Pending ]  Project [ Any ]  search' with no Type control. The Required data-testid Attributes table adds requests-topic-filter, never names requests-type-filter, and is explicit about removal only for the modal: 'request-new-type and request-new-access-kind are removed'. In the code, apps/web/app/org/[orgId]/requests/page.tsx:334-340 renders requests-type-filter with options All types / Access / Question / Vacation, and the vacation value is not a filter over the requests array but the section selector of requests spec 01 requirement 41, asserted by apps/api/test/requests.spec.ts:1294-1303 ('type=vacation chooses the section rather than filtering one array'). Reading one: the control stays and the wireframe is incomplete. Reading two: About replaces it, and the vacation section loses its only on-screen selector, with no requirement, no case and no Blast Radius line recording the loss.",
+        "source": "specs/requests/02-request-topics.md#REQ-02-003; specs/requests/02-request-topics.contracts.md#Screens, #Required data-testid Attributes; apps/web/app/org/[orgId]/requests/page.tsx:334"
+      },
+      "suggestedFix": "State in the spec's own text whether the requests list still draws a request-kind filter after this change. If it does not, say what selects the vacation section instead and add the case; if it does, put requests-type-filter in the testid table beside requests-topic-filter."
+    },
+    {
+      "id": "P4",
+      "target": "spec",
+      "severity": "minor",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/requests/02-request-topics.contracts.md",
+      "symbol": "GET /api/organizations/{orgId}/request-topics",
+      "claim": "An unrecognised status query value on the catalogue read has no stated behaviour, while the sibling audience parameter has an explicit 400 and an explicit reason.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "The contract gives status three values with active as the default. REQ-02-002 and TC-02-INT-04 make an unknown audience a 400 with REQUEST_TOPIC_MESSAGES.audienceUnknown, reasoned as 'The read refuses rather than returning everything, so a typo in a query string cannot look like an empty catalogue.' Nothing says what ?status=activee does: it either answers 400 or quietly returns the active catalogue, and both readings are consistent with the text. The repository's habit on the sibling endpoint is refusal - packages/validation/src/requests.ts:456 returns null for an unrecognised value and apps/api/src/requests/requests.service.ts:167 turns that into a 400 with the comment 'a closed set is only a contract if breaking it is observable' - which makes the silence read as an omission rather than a decision. Adjacent and equally silent: Validation Rule 6 says an out-of-range sortOrder is clamped, a deliberate departure from that habit, and says nothing about a non-integer.",
+        "source": "specs/requests/02-request-topics.contracts.md#Routes, #Validation Rules; specs/requests/02-request-topics.md#REQ-02-002; packages/validation/src/requests.ts:456"
+      },
+      "suggestedFix": "Say what an unrecognised status value answers, and what a non-integer sortOrder answers, in the Validation Rules table."
+    },
+    {
+      "id": "P5",
+      "target": "spec",
+      "severity": "minor",
+      "rule": "spec/stale-premise",
+      "file": "specs/requests/02-request-topics.contracts.md",
+      "symbol": "Routes",
+      "claim": "The topic write routes name ManageRequestTopics in the Guards column and require a 403 body of REQUEST_TOPIC_MESSAGES.manageForbidden. The guard that reads that decorator emits a fixed, different message.",
+      "witness": {
+        "kind": "rule",
+        "detail": "apps/api/src/auth/capability.guard.ts:63-66 throws ForbiddenException({ error: 'forbidden', message: TEMPLATE_MESSAGES.generic.forbidden }), and packages/validation/src/documents.ts:125 defines that as 'You do not have permission to manage templates'. RequireCapability (apps/api/src/auth/require-capability.decorator.ts:14) takes a capability and nothing else, so no message can be threaded through it. Wired as the Guards column reads, TC-02-INT-07 - which asserts 403 REQUEST_TOPIC_MESSAGES.manageForbidden on all four write routes - fails on the body. The repository's answer already exists and is stated twice in comments: apps/api/src/holidays/holidays.controller.ts:19 ('Capability checks live in the service because ... CapabilityGuard can express neither combination') and apps/api/src/requests/requests.controller.ts:28 ('Capability is checked in the service rather than by CapabilityGuard wherever the spec names the message the refusal must carry, since the guard's message is fixed and generic').",
+        "source": "specs/requests/02-request-topics.contracts.md#Routes; apps/api/src/auth/capability.guard.ts:63"
+      },
+      "suggestedFix": "Say in the Routes table that the manage-request-topics check runs in the service and carries the named message, as the holidays and requests controllers already do, rather than naming a guard whose refusal is fixed."
+    }
+  ],
+  "notes": [
+    "The plan is written and complete despite the block: 30/30 numbered requirements assigned to a task, 33/33 live test cases claimed, 22/22 '##' sections across all three bundle files accounted for by name, 27/27 required data-testid attributes carried. Eight tasks, T1..T8.",
+    "scripts/handoff-coverage.mjs passes on this handoff and its pass is not evidence. It reports 'requirements 0/0  cases 0/0  sections 8/8': it matches numbered requirements as /^(\\d+)\\. /m while this spec numbers them as '#### REQ-02-001' headings, and it matches '### TC-*' in run.spec alone while every case of this spec lives in 02-request-topics.cases.md. For a bundled spec in this format the gate sees neither requirements nor cases, and only the main file's headings.",
+    "packages/validation/src/requests.test.ts:332-360 drives validateNewRequest with a type and no topic and will break when the classifier is retired. The spec's Blast Radius enumerates the callers it breaks by design and names apps/api/test/requests.spec.ts, e2e/tests/requests.spec.ts and NewRequestModal.tsx but not this file. Not a defect - the enumeration is a mitigation, not a requirement - and it is in T1's file list."
+  ]
+}

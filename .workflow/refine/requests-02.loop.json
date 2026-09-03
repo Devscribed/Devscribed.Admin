@@ -1,0 +1,34 @@
+{
+  "spec": "specs/requests/02-request-topics.md",
+  "stem": "requests-02",
+  "startedAt": "2026-09-03T05:14:07.385Z",
+  "rounds": [
+    {
+      "round": 1,
+      "startedAt": "2026-09-03T05:14:07.386Z",
+      "head": "78b04fdd9ae7086dd42e530d54d720eacf4065f4",
+      "lint": 0,
+      "plan": {
+        "status": "blocked",
+        "specBlockers": 2
+      }
+    },
+    {
+      "round": 2,
+      "startedAt": "2026-09-03T05:29:36.995Z",
+      "head": "088ec931a647458bef80ef141a8202b720a25969",
+      "lint": 0,
+      "plan": {
+        "status": "blocked",
+        "specBlockers": 4
+      }
+    }
+  ],
+  "status": "blocked",
+  "request": "Employees pick a request topic from presets the organization curates (VPN, Claude, Question, Other for staff; Access, Other for clients), and the screens say Pending / In progress / Completed / Closed",
+  "outcome": {
+    "reason": "spec-defect",
+    "detail": "4 finding(s) the pipeline would halt on: spec/contradiction; spec/ambiguous-requirement; spec/silent-on-concurrency; spec/unverifiable-case",
+    "at": "2026-09-03T05:43:54.460Z"
+  }
+}
