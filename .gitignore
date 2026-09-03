@@ -69,3 +69,10 @@ docker-compose.override.yml
 # Where the last local E2E run put its servers. A note for a person, not a source of
 # truth: see e2e/environment.ts.
 e2e/.last-ports.json
+
+# A QA walkthrough and what it saw — copied from e2e/tests/qa-look.template.ts for one
+# pass and deleted after it. Ignored rather than merely temporary: a copy left behind by a
+# killed stage must not be able to reach a branch, and `*.spec.ts` under e2e/tests is what
+# the deploy gate runs.
+e2e/tests/qa-look.spec.ts
+e2e/.qa-look/
