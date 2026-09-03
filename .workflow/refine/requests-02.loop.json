@@ -92,13 +92,13 @@
     },
     {
       "round": 2,
-      "startedAt": "2026-09-03T09:05:13.712Z",
-      "head": "63204135930ede7d5f2387e4f83d2e878af60081",
+      "startedAt": "2026-09-03T09:20:45.090Z",
+      "head": "d2c438c7451e15afb2e7ca06ea4162da4d2e0f38",
       "status": "running",
       "lint": 0
     }
   ],
-  "status": "error",
+  "status": "running",
   "request": "Employees pick a request topic from presets the organization curates (VPN, Claude, Question, Other for staff; Access, Other for clients), and the screens say Pending / In progress / Completed / Closed",
   "outcome": {
     "reason": "judge-error",
