@@ -57,7 +57,8 @@ both current at the checkout this was walked on.
 | AC-14 | TC-02-INT-13 | Integration | the cross-organization `404` convention is proven today by `apps/api/test/org-scope.spec.ts` |
 | AC-15 | TC-02-INT-07, TC-02-E2E-05 | Integration + E2E | the Settings destination was reached as admin in the rehearsal |
 | AC-16 | TC-02-E2E-06 | E2E | new |
-| AC-17 | TC-02-INT-22, TC-02-E2E-01 | Integration + E2E | new |
+| AC-17 | TC-02-INT-22, TC-02-INT-23, TC-02-E2E-01 | Integration + E2E | new |
+| AC-18 | TC-02-INT-24 | Integration (concurrency) | new; the concurrent-caller pattern is in daily use in `apps/api/test/requests.spec.ts` |
 
 ### Rehearsal
 
@@ -226,11 +227,13 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
   `PATCH /api/organizations/{orgId}/request-topics/{topicId}` → 400
   REQUEST_TOPIC_MESSAGES.audienceImmutable
 - **Steps:** As an admin, rename a seeded staff topic. Then send the same route
-  `audience: "staff"`, then `audience: "client"`, then `sortOrder: 999`.
+  `audience: "staff"`, then `audience: "client"`, then `audience: "partner"`, then
+  `sortOrder: 999`.
 - **Expected Result:** The rename succeeds and `updatedAt` moves. Sending the stored audience
-  succeeds and changes nothing. Sending the other audience answers `400` and leaves the row
-  untouched. The `sortOrder` is ignored and the row's order is unchanged — a rename can never
-  reorder, because ordering has its own route.
+  succeeds and changes nothing. Both the other audience **and the nonsense one** answer `400`
+  with `audienceImmutable` — never `audienceUnknown`, which this route does not emit — so one
+  input reaches one rule. The `sortOrder` is ignored and the row's order is unchanged: a rename
+  can never reorder, because ordering has its own route.
 
 ### TC-02-INT-07
 
@@ -446,12 +449,39 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
 - **Steps:** As an admin, archive one staff topic so the audience holds both statuses. Send the
   staff audience's ids reversed. Read the catalogue. Then send a list omitting one id, one
   naming an id twice, one naming a client topic among the staff ids, and one naming a topic of
-  another organization. Send a valid list as a member holding `user`. Finally send a valid list
-  and force the transaction to fail partway.
+  another organization, and one naming a valid id in the middle of an otherwise complete list
+  for the wrong audience. Send a valid list as a member holding `user`.
 - **Expected Result:** The reversal answers `200` and the catalogue reads back in the new order,
-  archived row included. Each malformed list answers `400` and writes no `sortOrder` at all.
-  The `user` call answers `403`. The failed transaction leaves every `sortOrder` as the last
-  successful reorder set them, so no order the curator did not choose is ever visible.
+  archived row included. Each malformed list answers `400` and writes **no** `sortOrder` at all
+  — including the one whose first ids were valid, which is what "either every named topic moves
+  or none does" means on the path a test can drive. The `user` call answers `403`. Atomicity
+  under a concurrent writer is TC-02-INT-23's half; no case here injects a fault, because this
+  spec's Verification Plan lists no mechanism that could.
+
+### TC-02-INT-23
+
+- **Level:** Integration
+- **Covers:** REQ-02-031
+- **Asserts:** `PATCH /api/organizations/{orgId}/request-topics/order` → 200;
+  `GET /api/organizations/{orgId}/request-topics` → 200
+- **Steps:** Build two different valid orderings of the staff audience. Send both concurrently
+  from two sessions without awaiting the first. Read the catalogue.
+- **Expected Result:** Both answer `200`. The stored order equals one of the two submitted
+  lists **exactly** — never a mixture of the two, and never an order neither caller sent. Each
+  call rewrote the whole audience in one transaction, so the later writer wins whole.
+
+### TC-02-INT-24
+
+- **Level:** Integration
+- **Covers:** REQ-02-016
+- **Asserts:** `GET /api/organizations/{orgId}/request-topics` → 200
+- **Steps:** Sign up an organization and delete every `RequestTopic` row of it directly. Issue
+  two reads of the staff audience concurrently, without awaiting the first. Read once more
+  afterwards and count the rows.
+- **Expected Result:** Both reads answer `200` with the same rows and neither answers `500`.
+  Exactly one seeded catalogue exists — the count matches the default list, with no duplicate
+  and no unique-index failure. One writer held the `Organization` row lock; the other re-read a
+  non-zero count inside its own transaction and wrote nothing.
 
 ### TC-02-E2E-01
 
@@ -507,12 +537,16 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
 - **Level:** E2E
 - **Covers:** REQ-02-028, REQ-02-029
 - **Steps:** Build four requests and drive them to `open`, `answered`, `granted` and
-  `cancelled`. Open the requests list, read each row's status, open the status filter, select
-  Closed, then open the cancelled request.
+  `cancelled`, driving one of them through `answered` first so its history holds a status
+  change. Open the requests list, read each row's status, open the status filter, select
+  Closed, then open the cancelled request and read its history.
 - **Expected Result:** The rows read Pending, In progress, Completed and Closed. The filter
   offers exactly those four words plus an all-statuses entry, and selecting Closed leaves the
-  cancelled request in the list. The detail header reads Closed with `cancelled` beside it.
-- **Selectors:** `requests-status-filter`, `request-row-{id}-status`, `request-detail-status`
+  cancelled request in the list. The detail header reads Closed with `cancelled` beside it, and
+  the history entry for the change reads Pending → In progress rather than the stored values —
+  the fourth surface reads the same map as the other three.
+- **Selectors:** `requests-status-filter`, `request-row-{id}-status`, `request-detail-status`,
+  `request-detail-history`
 
 ### TC-02-E2E-05
 

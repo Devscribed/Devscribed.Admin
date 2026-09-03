@@ -194,10 +194,11 @@ them.
 - **Asserts:** `POST /api/organizations/{orgId}/clients/{clientId}/contacts` → 409
   CLIENT_USER_MESSAGES.alreadyLinked
 - **Steps:** Invite and accept a contact, then invite the same address to the same client
-  again. Then invite the same address to a **different** client of the same organization.
-- **Expected Result:** The first repeat answers `409`. The second also answers `409`, because
-  the account already holds its one client membership, and the message is the same so neither
-  answer says which client the person belongs to.
+  again. Then invite the same address to a **different** client of the same organization. Then
+  read the contacts list of both clients.
+- **Expected Result:** Both repeats answer `409` with the same message and the same body, so
+  neither says which client the person belongs to. The first client's list shows the contact
+  with `kind: "membership"`; the second client's list does not show them at all.
 
 ### TC-03-INT-08
 
@@ -422,7 +423,9 @@ them.
 - **Expected Result:** Each of the three writes produced its outbox rows, each carrying the id
   of the event written by the same transaction, and every row was handled by the shipped
   notifier: `status` `skipped`, `channel` `none`, `handledAt` set, `attempts` at one. No mail
-  message of any type reached the sink.
+  message of any type reached the sink. Then force the event write to fail on a fourth attempt
+  and assert that neither the event nor any outbox row exists — which is what makes "in the
+  same transaction" a claim that can fail rather than a description.
 
 ### TC-03-INT-25
 
@@ -440,11 +443,13 @@ them.
 - **Level:** Integration
 - **Covers:** REQ-03-037
 - **Asserts:** `POST /api/organizations/{orgId}/requests` → 201
-- **Steps:** Register a notifier double that records whether a transaction is open when it is
-  called and blocks until released. Raise a client-addressed request.
-- **Expected Result:** The route answers before the double is released, the outbox row is
-  already committed when the double is called, and no database transaction is open at that
-  moment. A notifier that never returns therefore holds no row lock on the request.
+- **Steps:** Register a notifier double that, when called, reads the request and its outbox row
+  **through a second connection** and records what it saw, then resolves. Raise a
+  client-addressed request.
+- **Expected Result:** The second connection saw the request and the outbox row already
+  committed. A notifier called inside the writing transaction could not have: an uncommitted
+  row is invisible to another connection, so this is the observable form of "after the commit"
+  and needs no way to ask the driver whether a transaction is open.
 
 ### TC-03-INT-27
 
@@ -476,8 +481,10 @@ them.
 - **Covers:** REQ-03-041
 - **Asserts:** `GET /api/organizations/{orgId}/requests` → 200;
   `GET /api/organizations/{orgId}/requests/{requestId}` → 200
-- **Steps:** Register a notifier double that never returns, so every row stays `pending`.
-  Raise, message and answer a client-addressed request, then list and read it as both parties.
+- **Steps:** Register a notifier double whose promise the test holds unresolved, so every row
+  stays `pending`. Raise, message and answer a client-addressed request, then list and read it
+  as both parties. Release the promise at the end of the case so the harness does not leak a
+  pending handle.
 - **Expected Result:** The list, the detail, the counts and the badge number are exactly what
   they are when every row is handled. No read path consults the outbox.
 

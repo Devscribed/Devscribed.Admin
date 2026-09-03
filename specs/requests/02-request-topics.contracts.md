@@ -60,7 +60,9 @@ list without the caller computing anything.
 
 ### `PATCH /api/organizations/{orgId}/request-topics/{topicId}`
 
-Accepts `name`. Accepts `audience` only when it equals the stored value (REQ-02-004). `type`
+Accepts `name`. Accepts `audience` only when it equals the stored value; **any** other value,
+including one outside the closed set, answers `400`
+`REQUEST_TOPIC_MESSAGES.audienceImmutable` (REQ-02-004), so no input reaches a second rule. `type`
 and `sortOrder` are not accepted — ordering has its own route, so a rename can never reorder.
 `200` with `{ "topic": { … } }`.
 
@@ -147,6 +149,11 @@ one already there.
 
 `REQUEST_TOPIC_MESSAGES.pickerEmpty` carries no route: it is screen copy for REQ-02-017 and
 no endpoint emits it.
+
+`REQUEST_TOPIC_MESSAGES.audienceUnknown` deliberately does **not** list the rename route.
+Audience is not a settable field there, so every value that is not the stored one — including
+one outside the closed set — is `REQUEST_TOPIC_MESSAGES.audienceImmutable`, so no input
+reaches a second rule (REQ-02-002, REQ-02-004).
 
 ## Status Labels
 
@@ -297,6 +304,7 @@ field.
 | `requests-topic-filter` | Requests list | present |
 | `request-row-{id}-topic` | Requests list | present when the request carries a topic |
 | `request-detail-topic` | Request detail | present when the request carries a topic |
+| `request-detail-history` | Request detail | present, rendering each status change through the label map |
 | `requests-new-btn` | Requests list | present for a requester |
 | `request-new-modal` | Requests list | present while raising a request |
 | `request-new-submit` | New request modal | present, and absent when the picker is empty |
@@ -402,6 +410,8 @@ Light theme only, as everywhere else this release.
 | 12 | Two curators archive one topic at the same instant | The row lock serializes them: one write, one `409` `REQUEST_TOPIC_MESSAGES.statusUnchanged`. |
 | 12a | Two curators reorder one audience at the same instant | Each call rewrites every row of the audience in one transaction, so the later one wins whole. Neither leaves an order nobody chose. |
 | 12b | A reorder omits a topic, names one twice, or names one of the other audience | `400` `REQUEST_TOPIC_MESSAGES.orderIncomplete`, and no `sortOrder` is written. |
+| 12c | Two first reads of an unseeded audience arrive together | The `Organization` row lock serializes them. One writes the catalogue; the other re-reads a non-zero count inside its own transaction, writes nothing, and both answer `200` with the same rows. Neither sees a unique-index failure. |
+| 12d | A rename sends `audience: "partner"` | `400` `REQUEST_TOPIC_MESSAGES.audienceImmutable`, not `audienceUnknown`. Audience is not settable on that route, so every value that is not the stored one is the same refusal. |
 | 13 | The catalogue's last active staff topic is archived | The Settings screen shows an empty staff list; the new-request picker shows `REQUEST_TOPIC_MESSAGES.pickerEmpty` and draws no submit control. |
 | 14 | A `viewer` calls `GET …/request-topics` | `200` with the catalogue. Reading the words is not a privilege; raising a request still is. |
 | 15 | `PATCH …/requests/{requestId}` carries `topicId` | `400` `REQUEST_MESSAGES.fieldImmutable`. The title, description, priority, blocking flag and needed-by date stay editable. |

@@ -77,8 +77,11 @@ the topics service.
 
 #### REQ-02-002 — the audience is a closed set
 
-IF a create or rename call carries an `audience` outside `staff` and `client`, THEN THE
-SYSTEM SHALL answer `400` with `REQUEST_TOPIC_MESSAGES.audienceUnknown`.
+IF a create call or a catalogue read carries an `audience` outside `staff` and `client`, THEN
+THE SYSTEM SHALL answer `400` with `REQUEST_TOPIC_MESSAGES.audienceUnknown`.
+
+**Decided:** the rename route is not among them. Audience is not settable there, so every
+value that is not the stored one — nonsense included — is REQ-02-004's single refusal.
 
 #### REQ-02-003 — a topic declares the request kind it produces
 
@@ -92,9 +95,6 @@ not declare it would leave the filter guessing.
 
 IF a rename call carries an `audience` different from the stored one, THEN THE SYSTEM SHALL
 answer `400` with `REQUEST_TOPIC_MESSAGES.audienceImmutable`.
-
-**Decided:** moving a topic between audiences silently re-addresses every future request
-raised under it. Archiving and re-creating is one more click and leaves a trail.
 
 #### REQ-02-005 — the name
 
@@ -121,8 +121,6 @@ WHERE the caller holds an active membership of the organization, THE SYSTEM SHAL
 THE SYSTEM SHALL return topics ordered by `sortOrder` ascending and, for equal values, by
 name ascending case-insensitively.
 
-**Decided:** "Other" belongs at the bottom of a picker, which alphabetical order cannot say.
-
 #### REQ-02-010 — archiving is the only removal
 
 WHEN a curator archives a topic, THE SYSTEM SHALL set its `status` to `archived` and leave
@@ -146,8 +144,6 @@ with `REQUEST_TOPIC_MESSAGES.statusUnchanged`.
 
 THE SYSTEM SHALL expose no route that removes a `RequestTopic` row.
 
-**Decided:** the snapshot name makes archiving lossless, so a delete would only orphan rows.
-
 ### Seeding
 
 #### REQ-02-015 — a new organization is born with a catalogue
@@ -158,7 +154,12 @@ transaction as the `Organization` row.
 #### REQ-02-016 — an organization holding no topics at all
 
 WHEN an audience of an organization is read and holds no `RequestTopic` row of any status,
-THE SYSTEM SHALL write that audience's default topics before answering.
+THE SYSTEM SHALL write that audience's default topics before answering, inside a transaction
+that locked the `Organization` row with `FOR UPDATE` and re-read the count against that lock.
+
+**Decided:** the lock is what makes a read safe to be a writer. Without it two first reads
+both find nothing, both insert, and the second fails the unique index — a race turned into a
+`500` on a read path.
 
 **Decided:** the migration writes the same rows, but it is a materialization and not the
 mechanism — a read that finds nothing seeds, so a skipped migration or an older dump heals
@@ -177,9 +178,6 @@ would leave a failure between two writes showing an order nobody chose.
 WHILE an audience has no active topic, THE SYSTEM SHALL render the new-request form's topic
 picker as `REQUEST_TOPIC_MESSAGES.pickerEmpty` and draw no submit control.
 
-**Decided:** correctness does not depend on the seed having run — an emptied catalogue gets a
-screen that says so, not a form that fails on submit.
-
 ### Raising a request under a topic
 
 #### REQ-02-018 — the topic is required
@@ -191,9 +189,6 @@ IF `POST …/requests` carries no `topicId`, THEN THE SYSTEM SHALL answer `400` 
 
 IF `topicId` names a topic that is archived or belongs to another organization, THEN THE
 SYSTEM SHALL answer `400` with `REQUEST_MESSAGES.topicUnavailable`.
-
-**Decided:** one answer for both. A topic id names a word the organization publishes inside
-itself, so there is nothing to enumerate and nobody the split would inform.
 
 #### REQ-02-020 — the audience must match the addressee
 
@@ -215,9 +210,6 @@ WHEN a request is created, THE SYSTEM SHALL write `type` from the chosen topic's
 
 IF `POST …/requests` carries `type` or `accessKind`, THEN THE SYSTEM SHALL answer `400` with
 `REQUEST_MESSAGES.classifierNotAccepted`.
-
-**Decided:** refused rather than ignored. A silent drop turns a caller working from a stale
-contract into a request classified as something nobody chose.
 
 #### REQ-02-023 — the label is snapshotted
 
@@ -246,22 +238,22 @@ WHEN `GET …/requests` carries `topicId`, THE SYSTEM SHALL return only requests
 WHEN `GET …/requests` carries `status=closed`, THE SYSTEM SHALL return requests whose status
 is `declined` or `cancelled`.
 
-**Decided:** the control needs a value meaning "ended without being granted". Every stored
-status stays accepted here, so a link somebody saved still resolves.
-
 #### REQ-02-028 — the four words
 
 THE SYSTEM SHALL render `open` as Pending, `answered` as In progress, `granted` as
-Completed, and `declined` and `cancelled` both as Closed, from a single exported label map
-that the list, the detail screen and the filter control all read.
+Completed, and `declined` and `cancelled` both as Closed, from a single exported label map read
+by every surface that shows a status to a person: the list row's badge, the detail header's
+badge, the status filter control, and each `status_changed` entry of the detail history, which
+renders its stored old and new values through the same map.
+
+**Decided:** the history is included rather than left raw. A trail saying "open → answered"
+beside a header saying In progress is the drift this spec exists to prevent, and the stored
+event row is unchanged — only its rendering is.
 
 #### REQ-02-029 — which closure it was
 
 WHILE a request's status is `declined` or `cancelled`, THE SYSTEM SHALL render the reason
 for the closure beside the Closed label as `declined` or `cancelled` respectively.
-
-**Decided:** collapsing them entirely is the one thing the shorter vocabulary would lose,
-and the audit trail already tells them apart.
 
 #### REQ-02-030 — the Settings row
 
@@ -291,7 +283,9 @@ Invariants:
    and evaluates the status guard against that read, never against a copy loaded earlier.
 4. `topicLabel` on a `Request` is written once, at creation, and no topic write may alter it.
 5. Writers of a `RequestTopic` row are the create, rename, reorder, archive and restore
-   handlers plus the seed; each writer of an existing row takes the row lock.
+   handlers, the organization-creation seed, and the read that finds an audience empty. Each
+   writer of an existing row takes that row's lock; the seeding read takes the
+   `Organization` row's lock and re-reads the count against it (REQ-02-016).
 
 ## Out of Scope
 
@@ -330,7 +324,8 @@ Invariants:
 | AC-11 | The list, the detail screen and the filter control show the same four words for the same request. | TC-02-UNIT-05, TC-02-E2E-04 |
 | AC-12 | A closed request still says which way it closed. | TC-02-E2E-04 |
 | AC-13 | Two concurrent archives of one topic produce one write and one refusal. | TC-02-INT-16 |
-| AC-17 | A reorder is one call and one transaction: either every named topic moves or none does. | TC-02-INT-22, TC-02-E2E-01 |
+| AC-17 | A reorder is one call over one audience: a list that does not name the audience exactly moves nothing, and two concurrent reorders leave one of the two submitted orders and never a mixture. | TC-02-INT-22, TC-02-INT-23, TC-02-E2E-01 |
+| AC-18 | Two first reads of an unseeded audience arriving together produce one catalogue and no error. | TC-02-INT-24 |
 | AC-14 | A topic id from another organization is refused with the same answer as an archived one, and no request is created. | TC-02-INT-13 |
 | AC-15 | A `user` opening Settings sees no Request topics row and the route answers 403 to their write. | TC-02-INT-07, TC-02-E2E-05 |
 | AC-16 | An organization whose catalogue holds no active staff topic gets a form that says so instead of one that fails on submit. | TC-02-E2E-06 |

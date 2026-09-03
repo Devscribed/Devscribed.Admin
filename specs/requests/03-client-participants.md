@@ -163,8 +163,11 @@ and no `Membership`.
 
 #### REQ-03-013 — an address that is already a contact of that client
 
-IF the invited address already holds an active `ClientMembership` of the named client, THEN
+IF the invited address already holds an active `ClientMembership` in the organization, THEN
 THE SYSTEM SHALL answer `409` with `CLIENT_USER_MESSAGES.alreadyLinked`.
+
+**Decided:** one answer whether the existing row is for this client or another, so the refusal
+never says which client a person works for.
 
 #### REQ-03-014 — an address that belongs to staff
 
@@ -297,8 +300,12 @@ transaction as the `RequestEvent`.
 
 #### REQ-03-036 — who the recipients are
 
-THE SYSTEM SHALL make the recipients of an event every party to the request other than the
-principal who caused it.
+THE SYSTEM SHALL make the recipients of an event the request's requester and its addressee,
+minus the principal who caused it.
+
+**Decided:** not "every party", which by the composed definition includes every holder of
+`view-all-requests` — that would notify every admin and manager of every event in the
+organization the first time an adapter exists.
 
 #### REQ-03-037 — delivery happens after the commit
 
@@ -373,6 +380,7 @@ Invariants:
 | A removed contact's open requests are flagged but not reassigned | The same choice the staff side already makes: an access asked for may still be needed by whoever takes the relationship over | A reassign path that accepts a client addressee |
 | The client shell is the requests screens with the rest of the navigation withheld, not a separately designed product | It is one screen and a list; designing a second shell before anybody has used the first is guesswork | A design pass once real contacts have used it |
 | A client contact's email address is visible to every member holding `view-all-requests` | It is the address a member of staff mailed yesterday, and the requester needs to know who they are waiting on | Nothing needs to; it is named so a reviewer meets it deliberately |
+| A pending contact invitation cannot be revoked, only superseded or left to expire | Inviting the corrected address supersedes it, and it expires in seven days; a mistyped address is a live seven-day grant until then. The staff invitation flow of user-management/03 has had exactly this property since it shipped, so this adds no new exposure class | A revoke route on the invitation, which would close it for staff invitations at the same time |
 | Delivery is attempted only while requests are being made against the API | With the shipped adapter there is nothing to deliver, so the property costs nothing today; an adapter spec will state its own drain | The adapter spec, which chooses between a queue and a scheduled drain |
 
 ## Acceptance Criteria
