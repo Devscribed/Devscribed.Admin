@@ -41,7 +41,7 @@ import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { agentSummary } from './refine-read.mjs';
+import { agentSummary, parseAgentLog } from './refine-read.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const RUNS = join(ROOT, '.workflow', 'runs');
@@ -182,6 +182,11 @@ function collectSteps() {
     const stem = join(stagesDir, `${stage}.attempt-${attempt}`);
     const start = jsonIf(`${stem}.start.json`);
     const log = agentSummary(`${stem}.log`);
+    /* A stage in flight has no summary — that arrives with its last message. Its stream has
+       everything the board needs to show it is alive, and without this the session id is
+       unknown, so no tool call is attributed to it and a working agent renders as one that has
+       made no calls and spent all its time thinking. Which is what a dead one looks like. */
+    const live = log ? null : parseAgentLog(`${stem}.log`);
     const verdict = jsonIf(`${stem}.json`);
     const prompt = clip(readIf(`${stem}.prompt.md`));
     const report = clip(readIf(`${stem}.md`)) ?? clip(readIf(join(stagesDir, `${stage}.md`)));
@@ -231,8 +236,8 @@ function collectSteps() {
       agent: isScript ? null : (start?.agent ?? AGENT_OF[stage]),
       script: isScript,
       state,
-      model: log ? principalModel(log.modelUsage) : (start?.model ?? null),
-      sessionId: log?.session_id ?? null,
+      model: log ? principalModel(log.modelUsage) : (live?.model ?? start?.model ?? null),
+      sessionId: log?.session_id ?? live?.sessionId ?? null,
       resumedSession: start?.resumedSession ?? null,
       fuseMin: start?.fuseMin ?? null,
       headAtStart: start?.head ?? null,
@@ -240,7 +245,7 @@ function collectSteps() {
       endedAt,
       wallSec,
       apiSec: Math.round((log?.duration_api_ms ?? 0) / 1000),
-      turns: log?.num_turns ?? null,
+      turns: log?.num_turns ?? live?.turns ?? null,
       costUsd: +(log?.total_cost_usd ?? 0).toFixed(2),
       stopReason: log?.stop_reason ?? null,
       tokens: {
