@@ -69,7 +69,12 @@ export function VacancyBoard({
   const board = state.status === 'ready' ? state.board : null;
   const { drag, pickUp, aimAt, drop, nudge, placementFor, announcement } = useBoardDrag(board);
 
-  /** The card focus returns to once a move has settled, so a keyboard drag keeps its place. */
+  /**
+   * The card focus returns to on every board a move draws — the optimistic one, a revert,
+   * and the one the server answers with — so a keyboard drag keeps its place through the
+   * whole of a move rather than only its first frame. A focused node that a redraw
+   * re-parents or re-orders is blurred, and nothing else puts it back.
+   */
   const refocus = useRef<string | null>(null);
   /** Guards the deferred pick-up below against a drag that is already over. */
   const dragEnded = useRef(false);
@@ -139,11 +144,13 @@ export function VacancyBoard({
 
   useEffect(() => {
     if (!refocus.current || state.status !== 'ready') return;
-    const card = document.querySelector<HTMLElement>(
-      `[data-testid="board-card-${refocus.current}"]`,
-    );
-    refocus.current = null;
-    card?.focus();
+    // Never taken from a control outside the board: a member who has moved on has said
+    // where they are. Focus that a redraw dropped on the body is what this restores.
+    const active = document.activeElement;
+    if (active && active !== document.body && !active.closest('[data-testid="board"]')) return;
+    document
+      .querySelector<HTMLElement>(`[data-testid="board-card-${refocus.current}"]`)
+      ?.focus();
   }, [state]);
 
   const cardHref = useCallback(
