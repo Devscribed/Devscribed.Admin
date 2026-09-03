@@ -18,12 +18,12 @@ or the loop stops and says why.
 | Gate | What it is | What it costs |
 |---|---|---|
 | **T0** `spec-lint` | a script — pointers, joins, cross-product completeness | nothing |
-| **T2** `spec-refiner` | one judge: the whole document on round one, the previous repair's range after that | one pass |
+| **T2** the judge | `spec-review` (opus, shards the reading across sonnet) or `spec-refiner` (one opus pass), by profile: the whole document on round one, the previous repair's range after that | one pass |
 | **T1** `pre-implement` | the spec compiled into a plan by the agent the pipeline runs — once, after T2 is clean, as the last gate | one pass |
 
-Whichever gate blocked, `spec-fixer` repairs its verdict and the round is committed.
+Whichever gate blocked, the profile's fixer repairs its verdict and the round is committed.
 
-**The judge blocks only under a criterion.** `.claude/skills/spec/references/blocking-criteria.md`
+**The judge blocks only under a criterion.** `.claude/skills/spec-review/references/admission-criteria.md`
 is the closed register: every check that may stop a spec, each with an id, and the verdict says
 `clear`, `blocked`, `note` or `n/a` for every one of them. A blocker naming no criterion, a
 criterion that is not in the register, one the register marks note-only, or a rule outside the
@@ -38,6 +38,9 @@ judge changing its mind, and both are worth a person's eye.
 Useful variants:
 
 ```bash
+node scripts/refine-loop.mjs <spec> --profile sharded  # opus judge, sonnet shards (the default)
+node scripts/refine-loop.mjs <spec> --profile solo      # one opus judge, synchronous
+node scripts/spec-slice.mjs <spec> --profile solo       # what that profile would do, run nothing
 node scripts/refine-loop.mjs <spec> --rounds 1      # one judged round, then stop
 node scripts/refine-loop.mjs <spec> --skip t1       # skip the plan gate
 node scripts/refine-loop.mjs <spec> --no-fix        # stop at the verdict, repair by hand
@@ -96,6 +99,10 @@ A stop is not a crash. Most stops are the loop working:
 | `not-converging` | A round found as many blockers as the one before, from the same gate | The loop is judging the document again rather than the repair. Check that the round committed |
 | `growing` | The repair added more lines per blocker than the budget allows | The repair is committed; read it. A finding answered with a route, a lock or a case is a scope decision. Revert it or keep it — a person's call — then run again |
 | `budget` | Rounds spent, findings remain | Ship with them or spend another round deliberately. Both are a person's call |
+| `judge-error` | The pass produced no verdict, reported no criterion, or ran on a model other than the one asked for | Re-run. A verdict with no `criteria` map ran no enumerated criterion, and recording it as a pass is what let an unjudged spec into the pipeline once |
+
+**A spec the loop never passed does not enter the pipeline.** `wf init` reads this ledger and
+refuses a run whose spec it never admitted, or whose bundle moved after the round that judged it.
 
 ## What each gate is for, and why the order
 
@@ -116,7 +123,7 @@ goes to the fixer like any other.
 
 ## Fixing, and the two things the fixer may not do
 
-`spec-fixer` repairs the whole verdict, settling contradictions and ambiguities **by deciding**,
+The fixer repairs the whole verdict, settling contradictions and ambiguities **by deciding**,
 and writes each choice and the alternative it rejected into the document. Two things come back in
 `left` instead: a repair needing scope the spec does not have, and a question only the product
 owner answers. Those stop the loop for you.

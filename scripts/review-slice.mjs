@@ -26,7 +26,7 @@
  * It also depends on history being permanent. An amended or rebased commit makes the sha a
  * verdict names unreachable, and the slice cannot be computed at all.
  *
- *   node scripts/review-slice.mjs [runId] [--head <sha>] [--json]
+ *   node scripts/review-slice.mjs [runId] [--head <sha>] [--profile <name>] [--json]
  */
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -37,7 +37,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const RUNS = join(ROOT, '.workflow', 'runs');
 
 const argv = process.argv.slice(2);
-const TAKES_VALUE = new Set(['--head']);
+const TAKES_VALUE = new Set(['--head', '--profile']);
 const flag = (n) => {
   const i = argv.indexOf(n);
   return i === -1 ? null : argv[i + 1];
@@ -182,7 +182,7 @@ const review = (() => {
     return {};
   }
 })();
-const profileName = review.profile ?? 'sweeps';
+const profileName = flag('--profile') ?? review.profile ?? 'sweeps';
 const profile = review.profiles?.[profileName] ?? {};
 const shardSize = review.shardSize ?? 15;
 result.profile = { name: profileName, shardSize, ...profile };

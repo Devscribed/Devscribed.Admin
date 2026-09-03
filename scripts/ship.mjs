@@ -28,6 +28,10 @@
  *   --resume           continue the active run instead of starting a new one
  *   --skip <stages>    comma-separated stages to skip (e.g. --skip qa)
  *   --permission-mode  passed to claude; default acceptEdits
+ *   --implement-profile  solo | orchestrated — one implementer, or a lead with shards
+ *   --review-profile     open | sweeps
+ *   --plan-profile       classic | strict
+ *   --accept-unrefined <reason>  start even though the spec's refine ledger is not a pass
  *   --dry-run          print what each stage would run, change nothing
  */
 
@@ -36,11 +40,14 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, appendFileS
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { stageProfile } from './profiles.mjs';
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const WF = join(ROOT, 'scripts', 'wf.mjs');
 
 const argv = process.argv.slice(2);
-const VALUE_FLAGS = new Set(['branch', 'skip', 'permission-mode', 'from', 'carry']);
+const VALUE_FLAGS = new Set(['branch', 'skip', 'permission-mode', 'from', 'carry',
+  'implement-profile', 'review-profile', 'plan-profile', 'accept-unrefined']);
 
 const flag = (n) => argv.includes(`--${n}`);
 const opt = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
@@ -68,6 +75,20 @@ const dryRun = flag('dry-run');
 const permissionMode = opt('permission-mode', 'bypassPermissions');
 
 const cfg = JSON.parse(readFileSync(join(ROOT, '.claude/ai-workflow.config.json'), 'utf8'));
+
+/**
+ * Which shape each agent stage runs in this run. Resolved once, printed at the start and
+ * written into run.json, so a result is attributable to the shape that produced it rather than
+ * to whatever the config says the next time somebody looks.
+ */
+const PROFILE_FLAG = { pre_implement: 'plan-profile', implement: 'implement-profile', review: 'review-profile' };
+const STAGE = {};
+for (const [stage, f] of Object.entries(PROFILE_FLAG)) {
+  try { STAGE[stage] = stageProfile(cfg, stage, opt(f, null)); }
+  catch (e) { process.stderr.write(`ship: ${e.message}
+`); process.exit(1); }
+}
+STAGE.qa = stageProfile(cfg, 'qa', null);
 
 /* ── output ──────────────────────────────────────────────────────────────── */
 
@@ -145,12 +166,24 @@ function promptFor(stage, run, verdictPath) {
     case 'pre_implement':
       return `${head}\nCompile the spec into \`.workflow/runs/${run.id}/handoff.json\` and write your reasoning to `
         + `\`.workflow/runs/${run.id}/stages/pre_implement.md\`.${back}`;
-    case 'implement':
+    case 'implement': {
+      /* The shape reaches the lead as configuration, not as a choice. A lead told to shard picks
+         neither the agent nor how many run at once: two runs of one handoff must split it the
+         same way, or a comparison between them measures the split. */
+      const p = STAGE.implement ?? {};
+      const shards = p.shardAgent
+        ? `\n\n## How to shard\n\nDispatch subagent_type "${p.shardAgent}"${p.shardModel ? ` on ${p.shardModel}` : ''}, at most `
+          + `${p.maxShards ?? 4} at once, one Task call per group in a single message. Group the handoff's tasks so their `
+          + `\`files\` globs are disjoint and \`dependsOn\` orders the waves. Both live in .claude/ai-workflow.config.json `
+          + `under stages.implement. Do not choose your own.\n`
+        : '';
       return `${head}\nImplement \`.workflow/runs/${run.id}/handoff.json\`. Write your stage report to `
-        + `\`.workflow/runs/${run.id}/stages/implement.attempt-${(run.stages.implement.attempts ?? 0) + 1}.md\`.${back}`;
+        + `\`.workflow/runs/${run.id}/stages/implement.attempt-${(run.stages.implement.attempts ?? 0) + 1}.md\`.${shards}${back}`;
+    }
     case 'review': {
       const done = run.stages.review.attempts ?? 0;
-      const ledger = `\n\n## Your worklist\n\nRun \`node scripts/review-slice.mjs\` first. It splits the diff into what must be read this `
+      const slice = `node scripts/review-slice.mjs --profile ${STAGE.review?.profile ?? 'open'}`;
+      const ledger = `\n\n## Your worklist\n\nRun \`${slice}\` first. It splits the diff into what must be read this `
         + `pass and what an earlier pass settled, and it decides the second by comparing each file against the commit that pass `
         + `actually saw. You may not write a verdict while the worklist is non-empty; if the fuse runs out first, report the `
         + `remainder in \`covered.unreached\` and do not call it a pass.\n`;
@@ -172,7 +205,7 @@ They are claims to check, not conclusions to trust. If you disagree with an earl
 
 ## What has and has not been looked at
 
-Run \`node scripts/review-slice.mjs\`. It is derived from the commit each earlier verdict names as judged and the files it reported unreached. It is the plan for this pass:
+Run \`${slice}\`. It is derived from the commit each earlier verdict names as judged and the files it reported unreached. It is the plan for this pass:
 
 1. **Confirm each earlier blocker is closed** by checking its witness against the code. Say so per finding.
 2. **Then work the worklist**, largest first. A previous pass is not proof of absence — on the first run of this spec, four passes named 55, 46, 50 and 44 files of a diff that grew to 84, and nine files were never opened by any of them.
@@ -223,7 +256,7 @@ function blockersAreCarried(run) {
 
 /* ── stage runners ───────────────────────────────────────────────────────── */
 
-const AGENT_STAGES = { pre_implement: 'pre-implementer', implement: 'implementer', review: 'code-reviewer', qa: 'qa' };
+const AGENT_STAGES = { pre_implement: 'pre-implementer-strict', implement: 'implementer', review: 'code-reviewer', qa: 'qa' };
 
 /**
  * A parent Claude session refuses to spawn a nested `claude` CLI with
@@ -238,8 +271,8 @@ const AGENT_STAGES = { pre_implement: 'pre-implementer', implement: 'implementer
 const nested = process.env.CLAUDECODE === '1' || !!process.env.CLAUDE_CODE_ENTRYPOINT;
 
 async function runAgentStage(stage, run) {
-  const agent = AGENT_STAGES[stage];
-  const model = cfg.stages[stage]?.model;
+  const agent = STAGE[stage]?.agent ?? AGENT_STAGES[stage];
+  const model = STAGE[stage]?.model;
   const timeoutMin = cfg.breakers.stageTimeoutMin?.[stage] ?? 45;
   const verdictPath = `.workflow/runs/${run.id}/${stage}.verdict.json`;
   /* Remove any verdict left by the previous attempt: a stale file read as this attempt's
@@ -462,8 +495,11 @@ async function main() {
       note('nothing is written: no run directory, no lock, no verdicts, no branch');
       for (const [stage, s] of Object.entries(cfg.stages)) {
         const state = skip.has(stage) ? 'skipped' : s.enabled === false ? 'disabled' : 'would run';
+        const p = STAGE[stage] ?? s;
+        const agent = p.agent ?? AGENT_STAGES[stage];
         const how = s.script ? `node ${s.script}`
-          : s.agent ? `claude -p --agent ${s.agent}${s.model ? ` --model ${s.model}` : ''}`
+          : agent ? `claude -p --agent ${agent}${p.model ? ` --model ${p.model}` : ''}`
+            + (p.profile ? `  (profile ${p.profile}${p.shardAgent ? `, shards ${p.shardAgent} on ${p.shardModel}` : ''})` : '')
             : 'a preflight script';
         note(`${stage.padEnd(14)} ${state}${state === 'would run' ? `  ${how}` : ''}`);
       }
@@ -473,9 +509,14 @@ async function main() {
     step(`init ${specArg}`);
     const from = opt('from');
     const carry = opt('carry');
+    const unrefined = opt('accept-unrefined');
     if (wf('init', '--spec', specArg,
       ...(from ? ['--from', from] : []),
       ...(carry ? ['--carry', carry] : []),
+      ...(unrefined ? ['--accept-unrefined', unrefined] : []),
+      ...Object.entries(STAGE)
+        .filter(([, p]) => p?.profile)
+        .flatMap(([stage, p]) => ['--profile', `${stage}=${p.profile}`]),
       ...(flag('no-carry') ? ['--no-carry'] : [])) !== 0) process.exit(1);
     step('preflight');
     if (wf('preflight') !== 0) process.exit(2);

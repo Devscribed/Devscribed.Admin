@@ -20,12 +20,20 @@ import { join } from 'node:path';
 export const GATES = [
   { gate: 'lint', label: 'T0 · spec-lint', agent: null },
   { gate: 'pre_implement', label: 'T1 · pre-implement', agent: 'pre-implementer' },
-  { gate: 'judge', label: 'T2 · spec-refiner', agent: 'spec-refiner' },
-  { gate: 'fix', label: 'fix · spec-fixer', agent: 'spec-fixer' },
+  { gate: 'judge', label: 'T2 · the judge', agent: 'spec-review' },
+  { gate: 'fix', label: 'fix · the fixer', agent: 'spec-fixer-minimal' },
 ];
 
-/** The log stem each gate writes under the round's probe directory. */
-const LOG_OF = { pre_implement: 'stages/pre_implement', judge: 'spec-refiner', fix: 'spec-fixer' };
+/**
+ * The log stem each gate writes under the round's probe directory. The judge and the fixer log
+ * under the name of the agent that ran, which the profile chooses, so the ledger is asked before
+ * the defaults — a loop read back under the wrong name shows a gate that never ran.
+ */
+const LOG_STEMS = {
+  pre_implement: () => ['stages/pre_implement'],
+  judge: (l) => [l?.judgeAgent, 'spec-review', 'spec-refiner'].filter(Boolean),
+  fix: (l) => [l?.fixerAgent, 'spec-fixer-minimal', 'spec-fixer'].filter(Boolean),
+};
 
 const jsonIf = (p) => {
   try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; }
@@ -192,7 +200,8 @@ export function readLoop(root, stem, { full = false } = {}) {
     const gates = [];
 
     for (const g of GATES) {
-      const logPath = LOG_OF[g.gate] ? join(dir, `${LOG_OF[g.gate]}.log`) : null;
+      const stems = LOG_STEMS[g.gate]?.(ledger) ?? [];
+      const logPath = stems.map((x) => join(dir, `${x}.log`)).find((x) => existsSync(x)) ?? null;
       const log = logPath ? parseAgentLog(logPath, { full }) : null;
 
       /* T1 writes its verdict inside the round's own directory, so every round keeps it. T2 and

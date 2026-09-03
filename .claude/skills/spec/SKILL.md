@@ -358,7 +358,9 @@ second as something not to reproduce.
 - `references/spec-template.md` — section order, frontmatter, and what belongs in each section.
 - `references/checklist.md` — the standard to write to, the author's own. Not a self-check:
   step 6 hands it to somebody who has not read your spec.
-- `references/blocking-criteria.md` — the closed register `spec-refiner` judges against, and
-  the only thing that may block delivery. Every `(blocks)` and `(note)` item of the checklist
-  has a criterion there, alongside the repository conventions a spec may not overrule. Write
-  to the checklist; expect to be judged on the register.
+- `.claude/skills/spec-review/references/admission-criteria.md` — the closed register the judge
+  works from, and the only thing that may keep a spec out of development. Every `(blocks)` and
+  `(note)` item of the checklist has a criterion there, alongside the repository conventions a
+  spec may not overrule. Write to the checklist; expect to be judged on the register.
+- `.claude/skills/spec-review/SKILL.md` — how a pass is split and what a judge may return a
+  spec for.

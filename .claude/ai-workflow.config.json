@@ -5,15 +5,40 @@
       "enabled": true
     },
     "pre_implement": {
+      "$comment": "profile picks which compiler runs. `classic` is the original prompt; `strict` answers a closed compile checklist by id and writes shippingSurfaces. Both write the same handoff.json.",
       "enabled": true,
-      "agent": "pre-implementer",
-      "model": "opus",
-      "effort": "high"
+      "profile": "strict",
+      "profiles": {
+        "classic": {
+          "agent": "pre-implementer",
+          "model": "opus",
+          "effort": "high"
+        },
+        "strict": {
+          "agent": "pre-implementer-strict",
+          "model": "opus",
+          "effort": "high"
+        }
+      }
     },
     "implement": {
+      "$comment": "profile picks how the code is written. `solo` is one opus implementer, synchronous, and is the safe default for a small or tangled diff. `orchestrated` is an opus lead that splits the handoff into disjoint file sets and dispatches sonnet shards in parallel waves — faster, and only sound when the plan's file globs are disjoint. Override for one run with `--implement-profile`.",
       "enabled": true,
-      "agent": "implementer",
-      "model": "opus"
+      "profile": "solo",
+      "profiles": {
+        "solo": {
+          "agent": "implementer",
+          "model": "opus"
+        },
+        "orchestrated": {
+          "agent": "implement-lead",
+          "model": "opus",
+          "shardAgent": "implement-shard",
+          "shardModel": "sonnet",
+          "shardEffort": "medium",
+          "maxShards": 4
+        }
+      }
     },
     "static_gate": {
       "enabled": true,
@@ -82,7 +107,31 @@
   ],
   "branchPrefix": "spec/",
   "refine": {
-    "$comment": "The pre-pipeline gate. T0 is a script, T2 is one judge (full, then the previous repair's range), T1 is the pipeline's pre-implementer run once after a clean verdict. Rounds are judged rounds; the loop also stops when a round does not shrink the blocker count, a finding survives a repair, or a repair adds more than maxGrowthPerFinding net lines to the bundle per blocker. A blocker filed under a rule outside blockingRules is demoted to a note.",
+    "$comment": "The pre-pipeline gate. T0 is a script, T2 is the judge (full, then the previous repair's range), T1 is the pipeline's pre-implement run once after a clean verdict. Rounds are judged rounds; the loop also stops when a round does not shrink the blocker count, a finding survives a repair, or a repair adds more than maxGrowthPerFinding net lines to the bundle per blocker. A blocker filed under a rule outside blockingRules is demoted to a note.",
+    "$profiles": "profile picks who judges and who repairs. `solo` is the original single opus judge, synchronous, one pass over the whole bundle. `sharded` is an opus judge that splits the criteria families across sonnet shards, then decides what is worth returning — faster and cheaper per pass, and the judge still signs every finding. Override for one run with `--profile`.",
+    "profile": "sharded",
+    "profiles": {
+      "solo": {
+        "judgeAgent": "spec-refiner",
+        "judgeModel": "opus",
+        "fixerAgent": "spec-fixer",
+        "fixerModel": "opus"
+      },
+      "sharded": {
+        "judgeAgent": "spec-review",
+        "judgeModel": "opus",
+        "fixerAgent": "spec-fixer-minimal",
+        "fixerModel": "opus",
+        "shardAgent": "spec-review-shard",
+        "shardModel": "sonnet",
+        "shardEffort": "medium",
+        "mergeFamiliesUnderLines": 400
+      }
+    },
+    "$enforcement": "requireCriteriaMap: a judged verdict carrying no criteria map is a judge error, retried, never recorded as a pass — by the register's own definition a criterion absent from the map was not run. requireJudgeModel: the model the SDK reports at init must be the one asked for; a substitution is recorded and the round is retried. shipRequiresRefine: `wf.mjs init` refuses a spec whose loop ledger is not a pass, or whose bundle changed after the round that judged it; `--accept-unrefined <reason>` overrides and is recorded in run.json.",
+    "requireCriteriaMap": true,
+    "requireJudgeModel": true,
+    "shipRequiresRefine": true,
     "rounds": 2,
     "judgeModel": "opus",
     "fixerModel": "opus",

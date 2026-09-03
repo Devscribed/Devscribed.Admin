@@ -1,8 +1,8 @@
 /**
  * criteria — the closed registers a judge may block under, read from the register itself.
  *
- * Two documents carry them: `.claude/skills/spec/references/blocking-criteria.md` for the spec
- * refiner and `.claude/skills/code-review/references/blocking-criteria.md` for the review. Each
+ * Two documents carry them: `.claude/skills/spec-review/references/admission-criteria.md` for the
+ * spec judge and `.claude/skills/code-review/references/blocking-criteria.md` for the review. Each
  * is a set of markdown tables whose first cell is the id, so adding a criterion is an edit to
  * the page a judge reads and nothing else — there is no second list here to keep in step.
  *
@@ -16,7 +16,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export const REGISTERS = {
-  spec: '.claude/skills/spec/references/blocking-criteria.md',
+  spec: '.claude/skills/spec-review/references/admission-criteria.md',
   review: '.claude/skills/code-review/references/blocking-criteria.md',
 };
 
