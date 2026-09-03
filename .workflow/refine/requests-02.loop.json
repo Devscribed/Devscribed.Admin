@@ -165,11 +165,11 @@
       }
     }
   ],
-  "status": "running",
+  "status": "pass",
   "request": "Employees pick a request topic from presets the organization curates (VPN, Claude, Question, Other for staff; Access, Other for clients), and the screens say Pending / In progress / Completed / Closed",
   "outcome": {
-    "reason": "growing",
-    "detail": "the repair added 31 net line(s) for 1 blocker(s); the budget is 15 per finding. Read the fixer commit: a finding answered with a route, a lock or a case is a scope decision, not a repair.",
-    "at": "2026-09-03T09:46:56.931Z"
+    "reason": "pass",
+    "detail": "1 note(s) for the person with the spec; none of them stops anything.",
+    "at": "2026-09-03T10:08:52.906Z"
   }
 }
