@@ -520,6 +520,8 @@ async function main() {
        refusing the call itself — a contract error between these two scripts. Ignoring it
        leaves the status unchanged, so the loop re-runs the same stage forever, and each lap
        is a full agent. Stop instead. */
+    commitRecord(run, stage, verdict);
+
     if (code === 1) {
       say(`\n\x1b[1m${t()}  stopped — wf refused the verdict for "${stage}"\x1b[0m`);
       note('This is a defect in the pipeline, not in the code under review. Nothing was routed.');
@@ -529,6 +531,40 @@ async function main() {
 
   say('\nstopped: 40 stage transitions without settling. Something is wrong with the loop itself.');
   process.exit(3);
+}
+
+/**
+ * Every attempt of every stage is a commit of its own record.
+ *
+ * A run used to write its verdicts, reports and `run.json` and leave them all uncommitted
+ * until somebody swept them up at the end — so a run halted mid-way left dozens of untracked
+ * files with no order to them, and a stage that was retried overwrote the record of the
+ * attempt before it with nothing to say it had. The refine loop commits per gate for the same
+ * reason; this is that rule for the pipeline.
+ *
+ * Only `.workflow/runs/<id>` is staged, by pathspec on both the check and the commit. The
+ * code the implementer wrote is committed by the static gate and is not touched here, and a
+ * person editing in the same tree while a stage runs for half an hour does not end up inside
+ * this commit. What `.gitignore` excludes — the event journal, the blobs, the per-stage logs
+ * and prompts — stays excluded; what is committed is the record a reader wants in the pull
+ * request: which stage ran, on which attempt, and what it decided.
+ */
+function commitRecord(run, stage, verdict) {
+  const pathspec = `.workflow/runs/${run.id}`;
+  const attempt = run.stages[stage]?.attempts ?? 0;
+  const outcome = verdict?.status ?? 'done';
+  const blockers = (verdict?.findings ?? []).filter((f) => f.severity === 'blocker').length;
+  const notes = (verdict?.findings ?? []).length - blockers;
+  try {
+    execFileSync('git', ['add', '--', pathspec], { cwd: ROOT, stdio: 'ignore' });
+    const staged = execFileSync('git', ['diff', '--cached', '--name-only', '--', pathspec],
+      { cwd: ROOT, encoding: 'utf8' }).trim();
+    if (!staged) return;
+    const summary = `${outcome}${blockers || notes ? ` — ${blockers} blocker(s), ${notes} note(s)` : ''}`;
+    execFileSync('git', ['commit', '-q', '-m',
+      `run(${run.id}): ${stage} attempt ${attempt} — ${summary}`, '--', pathspec],
+    { cwd: ROOT, stdio: 'ignore' });
+  } catch { /* the record is a convenience; a run is not stopped by failing to write it */ }
 }
 
 function writeSkip(run, stage) {
