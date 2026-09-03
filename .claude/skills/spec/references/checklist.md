@@ -18,14 +18,18 @@ Every item carries one of three marks, and the mark is what decides who reads it
 
 | Mark | Who reads it | What a "no" is worth |
 |---|---|---|
-| **(blocks)** | the author, and `spec-refiner` | A blocker, under one of the rules in `blockingRules`. Delivery stops until it is repaired. |
-| **(note)** | the author, and `spec-refiner` | A note. The gap is real and the reviewer and QA meet it again against code that exists; a document counting itself is answered with new text that the next pass then has to judge. |
+| **(blocks)** | the author; the judge holds a criterion for it | A blocker. Delivery stops until it is repaired. |
+| **(note)** | the author; the judge holds a criterion for it | A note. The gap is real and the reviewer and QA meet it again against code that exists; a document counting itself is answered with new text that the next pass then has to judge. |
 | **(author)** | the author alone | Craft. It makes the spec better and no judge files a finding about it — either because a script already decided it, because it lives in a document the judge may not file against, or because the only repair is a route, a lock or a case that the fixer is forbidden to add. |
 
-**`spec-refiner` is given the `(blocks)` items and nothing else.** A rubric of ninety items handed
-to a judge that can file under seven rules drains everything it cannot place into
-`spec/missing-artefact`, and a spec grows a section per round. The rest of this page is the
-author's, before anybody is dispatched.
+**This page is the author's. `spec-refiner` is not given it.** What a judge may block on is the
+register in [blocking-criteria.md](blocking-criteria.md) — the same ground as the `(blocks)` and
+`(note)` items, written as checks with ids, plus the repository conventions a spec may not
+overrule. A rubric of ninety items handed to a judge that can file under seven rules drains
+everything it cannot place into `spec/missing-artefact`, and a spec grows a section per round.
+
+When this page and the register disagree about whether something blocks, **the register
+governs** — it is what the loop enforces — and the disagreement is a defect to repair here.
 
 ## Coverage
 

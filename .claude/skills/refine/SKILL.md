@@ -21,9 +21,19 @@ or the loop stops and says why.
 | **T2** `spec-refiner` | one judge: the whole document on round one, the previous repair's range after that | one pass |
 | **T1** `pre-implement` | the spec compiled into a plan by the agent the pipeline runs — once, after T2 is clean, as the last gate | one pass |
 
-Whichever gate blocked, `spec-fixer` repairs its verdict and the round is committed. A blocker
-filed under a rule outside the closed list is demoted to a note by the loop, whichever agent
-wrote it.
+Whichever gate blocked, `spec-fixer` repairs its verdict and the round is committed.
+
+**The judge blocks only under a criterion.** `.claude/skills/spec/references/blocking-criteria.md`
+is the closed register: every check that may stop a spec, each with an id, and the verdict says
+`clear`, `blocked`, `note` or `n/a` for every one of them. A blocker naming no criterion, a
+criterion that is not in the register, one the register marks note-only, or a rule outside the
+closed list, is demoted to a note by the loop, whichever agent wrote it.
+
+That is what makes one round comparable to the next. Without it a judge samples a different part
+of a document every pass, each round returns findings the round before never mentioned, and the
+repair grows the spec instead of finishing it. When a criterion the document already passed
+blocks in a later round, the loop prints it: that is either a defect the repair introduced or the
+judge changing its mind, and both are worth a person's eye.
 
 Useful variants:
 

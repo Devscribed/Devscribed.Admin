@@ -39,7 +39,7 @@ node scripts/wf.mjs release   # drop the lock when the run is done or abandoned
 | `pre_implement` | `pre-implementer` | `handoff.json` — the plan, compiled from the spec |
 | `implement` | `implementer` | code and tests |
 | `static_gate` | `scripts/static-gate.mjs` | two rules; see below |
-| `review` | `code-reviewer` | verdict against `checklist.md` and `CLAUDE.md` |
+| `review` | `code-reviewer` | verdict against the closed register in `.claude/skills/code-review/references/blocking-criteria.md` |
 | `qa` | `qa` | unit in full, integration and E2E targeted, plus the spec's acceptance criteria |
 
 The run ends at **`ready`**, not `merged`: a green branch, and a human opens the PR. `main`
@@ -66,6 +66,13 @@ it never read, QA cannot judge a plan it never saw.
 scenario, or a quoted rule with its source. Without one it is demoted to a note, collected for
 the human at the end, and the run carries on. A false positive almost always fails to produce
 a witness; that is what makes it false.
+
+**A review finding blocks only if it also names a criterion** — an id from
+`.claude/skills/code-review/references/blocking-criteria.md`, or a numbered requirement of the
+spec under review. The witness makes a finding checkable; the criterion makes the blocking
+surface the same on the next pass, so an implementer who fixed what was named does not meet a
+fresh objection over the same lines. Anything the register does not carry is still reported —
+as a note, which is also where a criterion the register is missing gets proposed.
 
 **The implementer may contest one finding** with a counter-witness, and a contested finding is
 never retried — the run halts. Contesting cannot produce a pass, so there is nothing to win by

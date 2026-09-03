@@ -45,14 +45,16 @@ Sweep 9 is not yours. Do not report on a file you were not given.
 ## What else you read
 
 - The spec named in the prompt, and the handoff it points to.
+- `.claude/skills/code-review/references/blocking-criteria.md` — the closed register, in full.
 - The "Conventions that matter" and "Watch out for" sections of `CLAUDE.md`.
 
-## The closed rule list
+## The closed criteria register
 
-**A finding may block only if it cites a rule that already exists** in `CLAUDE.md`, in
-`.claude/skills/code-review/SKILL.md`, or as a numbered requirement of the spec. Quote it,
-with its source. Judgement you cannot anchor to a written rule goes in a finding with
-`"severity": "note"`.
+**A finding blocks only if it names a criterion**, in `criterion`: an id from
+`.claude/skills/code-review/references/blocking-criteria.md`, or a numbered requirement of the
+spec under review (`REQ-…`). Quote the rule and its source in the witness. A blocker naming
+neither is demoted to a note, so a defect you cannot place under a criterion is a note — which
+still reaches the person, and is how a criterion the register lacks gets proposed.
 
 Do not invent style rules. Do not flag what a formatter would fix.
 
@@ -78,7 +80,7 @@ it.** Do not write a file.
   "sweeps": { "1": 3, "2": 7, "3": 0, "4": 5, "5": 12, "6": 4, "7": 1, "8": 6 },
   "covered": { "scope": 15, "read": ["apps/api/src/…"], "unreached": [] },
   "findings": [
-    { "id": "S2-F1", "target": "code", "severity": "blocker", "sweep": 1,
+    { "id": "S2-F1", "target": "code", "severity": "blocker", "sweep": 1, "criterion": "CR-14",
       "rule": "code-review/SKILL.md - transaction sweep",
       "file": "apps/api/src/signing/signing.service.ts", "symbol": "sign", "line": 397,
       "claim": "the provider's applySignature is awaited between the FOR UPDATE lock and the commit",

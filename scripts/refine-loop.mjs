@@ -39,6 +39,8 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { enforceCriteria, readRegister } from './criteria.mjs';
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const argv = process.argv.slice(2);
@@ -163,10 +165,45 @@ function saveLedger(l) {
   writeFileSync(path, `${JSON.stringify(rest, null, 2)}\n`);
 }
 
+/**
+ * One loop per spec at a time.
+ *
+ * Every artefact is named after the stem — the ledger, the verdict, the fix record, the probe
+ * directory — so two loops on one spec write to the same files and each round is judged against
+ * a range the other one committed. The result reads like a loop that will not converge and is
+ * nothing of the kind. The lock carries the pid, so a lock whose process is gone is stale and
+ * taken over rather than being something a person has to delete.
+ */
+function claimLock(stem) {
+  const path = join(ROOT, '.workflow', 'refine', `${stem}.lock`);
+  if (dryRun) return path;
+  mkdirSync(dirname(path), { recursive: true });
+  const held = (() => {
+    try {
+      const l = JSON.parse(readFileSync(path, 'utf8'));
+      process.kill(l.pid, 0);
+      return l;
+    } catch { return null; }
+  })();
+  if (held) {
+    say(`another loop is already refining this spec: pid ${held.pid}, started ${held.startedAt}`);
+    say('wait for it, or stop it — two loops share every artefact of this stem and corrupt each round.');
+    process.exit(2);
+  }
+  writeFileSync(path, `${JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }, null, 2)}\n`);
+  return path;
+}
+
+function releaseLock(stem) {
+  if (dryRun) return;
+  try { rmSync(join(ROOT, '.workflow', 'refine', `${stem}.lock`), { force: true }); } catch { /* nothing to release */ }
+}
+
 function finish(ledger, status, reason, detail) {
   ledger.status = status;
   ledger.outcome = { reason, detail, at: new Date().toISOString() };
   saveLedger(ledger);
+  releaseLock(ledger.stem);
   /* The loop leaves nothing behind it uncommitted, on any exit. A stop at T0 or T1 used to
      leave its verdict, its plan and the ledger untracked, which is how a person ends up with
      a working copy full of artefacts nobody can attribute to a round. */
@@ -442,17 +479,53 @@ const BLOCKING_RULES = new Set(RC.blockingRules ?? [
   'spec/untestable-case', 'spec/ambiguous-requirement', 'spec/missing-artefact', 'spec/scope-gap',
 ]);
 
-/** Demote every blocker outside the closed list, in place, and return the demoted ones. */
-function enforceRules(verdict) {
+/**
+ * The closed criteria register. A rule says which kind of defect a finding is; a criterion says
+ * which written check it failed. Both are enforced, because the rule alone leaves the judge free
+ * to file anything it can phrase as a contradiction, and a blocking surface nobody enumerated is
+ * a different surface every pass — which is where a loop that never converges comes from.
+ */
+const SPEC_CRITERIA = readRegister(ROOT, 'spec');
+
+/**
+ * Demote every blocker outside the closed list, in place, and return the demoted ones.
+ *
+ * `criteria` is off for the pre-implementer: its `spec` findings say the document would not
+ * compile into a plan, which is a judgement the refiner's register was not written for, and
+ * demoting them all would silently retire the pipeline's own gate.
+ */
+function enforceRules(verdict, { criteria = false } = {}) {
   const demoted = [];
   for (const f of verdict.findings ?? []) {
     if (f.severity === 'blocker' && !BLOCKING_RULES.has(f.rule)) {
       f.severity = 'note';
       f.demotedFrom = 'blocker';
+      f.demoted = `rule "${f.rule}" is outside the closed list`;
       demoted.push(f);
     }
   }
+  if (criteria) demoted.push(...enforceCriteria(verdict.findings, SPEC_CRITERIA));
   return demoted;
+}
+
+/**
+ * What the judge said about each criterion, and what changed since the round before.
+ *
+ * A criterion that was clear against text nobody has touched and is blocked now is the loop
+ * finding something it did not find last time — the one thing a closed register exists to make
+ * visible. It is printed, not acted on: whether that is a real defect the repair introduced or
+ * the judge changing its mind is a person's reading, and the ledger keeps both rounds.
+ */
+function criteriaShift(ledger, round, verdict) {
+  const now = verdict?.criteria;
+  if (!now || typeof now !== 'object') return null;
+  const before = ledger.rounds[round - 2]?.judge?.criteria;
+  const reported = Object.keys(now).length;
+  const missing = [...SPEC_CRITERIA.ids].filter((id) => !(id in now));
+  const regressed = before
+    ? Object.keys(now).filter((id) => before[id] === 'clear' && now[id] === 'blocked')
+    : [];
+  return { reported, missing, regressed };
 }
 
 const blockersOf = (v) => (v.findings ?? []).filter((f) => f.severity === 'blocker');
@@ -484,6 +557,11 @@ async function main() {
   }
   const spec = specArg.replace(/\\/g, '/');
   if (!existsSync(join(ROOT, spec))) { say(`no such spec: ${spec}`); process.exit(2); }
+
+  /* Before the ledger is loaded: `--fresh` archives the previous one, and archiving what
+     another loop is in the middle of writing is the worst of the two failures. */
+  claimLock(stemFor(spec));
+  process.on('exit', () => releaseLock(stemFor(spec)));
 
   const ledger = loadLedger(spec);
   ledger.status = 'running';
@@ -524,16 +602,30 @@ async function main() {
       const since = round > 1 ? ledger.rounds[round - 2]?.commit ?? null : null;
       verdict = await gateJudge(spec, ledger, round, request, since);
       if (verdict.status === 'error') finish(ledger, 'error', 'judge-error', verdict.error);
-      const demoted = enforceRules(verdict);
+      const demoted = enforceRules(verdict, { criteria: true });
+      const shift = criteriaShift(ledger, round, verdict);
       const blockers = blockersOf(verdict);
       const notes = (verdict.findings ?? []).length - blockers.length;
-      record.judge = { status: verdict.status, mode: verdict.mode ?? (since ? 'diff' : 'full'), blockers: blockers.length, notes };
+      record.judge = {
+        status: verdict.status,
+        mode: verdict.mode ?? (since ? 'diff' : 'full'),
+        blockers: blockers.length,
+        notes,
+        criteria: verdict.criteria ?? null,
+      };
       saveLedger(ledger);
       keepVerdict(ledger, round, 'judge', `.workflow/refine/${ledger.stem}.verdict.json`);
       commitGate(ledger, { round, gate: 'T2 spec-refiner', summary: `${blockers.length} blocker(s), ${notes} note(s)` });
       note(`${blockers.length} blocker(s), ${notes} note(s)`);
-      for (const f of demoted) note(`demoted to note (rule outside the closed list): ${f.rule} — ${f.symbol ?? f.file}`);
-      for (const f of blockers) note(`${f.id ?? '-'}  ${f.rule} — ${f.symbol ?? f.file}`);
+      if (shift) {
+        note(`criteria reported ${shift.reported}/${SPEC_CRITERIA.ids.size}`
+          + (shift.missing.length ? `, unreported: ${shift.missing.join(' ')}` : ''));
+        for (const id of shift.regressed) note(`criterion ${id} was clear last round and blocks now`);
+      } else if (SPEC_CRITERIA.ids.size) {
+        note('the verdict carries no criteria map');
+      }
+      for (const f of demoted) note(`demoted to note (${f.demoted}): ${f.rule} — ${f.symbol ?? f.file}`);
+      for (const f of blockers) note(`${f.id ?? '-'}  ${f.criterion ?? '-'}  ${f.rule} — ${f.symbol ?? f.file}`);
       if (blockers.length) gate = 'T2';
     }
 
@@ -552,7 +644,7 @@ async function main() {
         gate: 'T1 pre-implement',
         summary: `${plan.status}${specFindings.length ? `, ${specFindings.length} spec finding(s)` : ''}`,
       });
-      for (const f of demoted) note(`demoted to note (rule outside the closed list): ${f.rule} — ${f.symbol ?? f.file}`);
+      for (const f of demoted) note(`demoted to note (${f.demoted}): ${f.rule} — ${f.symbol ?? f.file}`);
       for (const f of specFindings) note(`${f.id ?? '-'}  ${f.rule} — ${f.symbol ?? f.file}`);
       if (specFindings.length) {
         /* The plan's verdict becomes the round's, at the path the fixer reads. Its findings

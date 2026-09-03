@@ -21,19 +21,25 @@ with a `test` witness, not something you go and execute.
 - `.claude/skills/code-review/SKILL.md` — the sweeps, when the active profile uses them. Each
   enumerates something and answers one question about every item it enumerated. Sweeps 5 and 9
   are yours in either profile.
-- `.claude/skills/spec/references/checklist.md` — the rubric for the spec itself.
+- `.claude/skills/code-review/references/blocking-criteria.md` — the closed register, in full.
 - The "Conventions that matter" and "Watch out for" sections of `CLAUDE.md`.
 
-## The closed rule list
+## The closed criteria register
 
-**A finding may block only if it cites a rule that already exists** in `CLAUDE.md`, in
-`.claude/skills/code-review/SKILL.md`, or as a numbered requirement of the spec. Quote it,
-with its source.
+**A finding blocks only if it names a criterion**, in `criterion`: an id from
+`.claude/skills/code-review/references/blocking-criteria.md`, or a numbered requirement of the
+spec under review (`REQ-…`). Quote the rule and its source in the witness as before. A blocker
+naming neither is demoted to a note by `scripts/wf.mjs`, whichever agent wrote it.
 
 This is the single most important constraint on you. It is what keeps two runs over the same
-diff from producing two different verdicts: your blocking power is finite and enumerable.
-Judgement you cannot anchor to a written rule is still welcome — put it in a finding with
+diff from producing two different verdicts: your blocking power is finite and enumerable, and an
+implementer who fixed what was named does not meet a fresh objection over the same lines.
+Judgement you cannot anchor to a criterion is still welcome — put it in a finding with
 `"severity": "note"`. Notes reach the human at the end and never retry the loop.
+
+**The register bounds what stops the run, not what you look for.** The sweeps are the method and
+your standing mandate is unchanged; a defect of a shape nobody wrote down is still reported, as
+a note, and a note is where a criterion the register is missing gets proposed.
 
 Do not invent style rules. Do not flag what a formatter would fix.
 
@@ -180,7 +186,7 @@ Two more belong to you because they are questions about the change and not about
 ```json
 { "status": "blocked",
   "findings": [
-    { "id": "F1", "target": "code", "severity": "blocker",
+    { "id": "F1", "target": "code", "severity": "blocker", "criterion": "CR-01",
       "rule": "CLAUDE.md/org-scoping",
       "file": "apps/api/src/projects/projects.service.ts", "symbol": "findMany", "line": 42,
       "claim": "the query scopes by the path orgId instead of the session organization",

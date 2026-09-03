@@ -40,6 +40,8 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
+import { enforceCriteria, readRegister } from './criteria.mjs';
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const WF = join(ROOT, '.workflow');
 const RUNS = join(WF, 'runs');
@@ -188,6 +190,17 @@ function witnessDefect(f) {
 }
 
 /**
+ * The review's closed register, and what a review may block under besides it: a numbered
+ * requirement of the spec it is reviewing, which is a written rule the register does not own.
+ *
+ * The register is the review's half of rule 2. A witness makes a finding checkable; a criterion
+ * makes the blocking surface the same on the next pass, so an implementer who fixed what was
+ * named is not met by a different objection over the same diff.
+ */
+const REVIEW_CRITERIA = readRegister(ROOT, 'review');
+const isRequirementId = (id) => /^REQ-[A-Za-z0-9-]+$/.test(id);
+
+/**
  * Applies rules 1 and 2 to a raw verdict and returns the findings split into what may
  * block and what may not. Nothing here judges the code — only the shape of the claim.
  */
@@ -207,6 +220,12 @@ function classify(stage, findings) {
     const defect = witnessDefect(f);
     if (defect) { notes.push({ ...f, severity: 'note', demoted: defect }); continue; }
     blockers.push(f);
+  }
+
+  if (stage === 'review') {
+    const demoted = enforceCriteria(blockers, REVIEW_CRITERIA, { extra: isRequirementId });
+    for (const f of demoted) notes.push(f);
+    return { blockers: blockers.filter((f) => f.severity === 'blocker'), notes, rejected };
   }
   return { blockers, notes, rejected };
 }

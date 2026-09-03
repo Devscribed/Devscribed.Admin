@@ -72,6 +72,8 @@ docker-compose.override.yml
 # Built for one reader, from files that are committed.
 .workflow/refine/*.payload.json
 .workflow/refine/*.report.html
+# One loop per spec: the pid of whoever holds it. Meaningless on another machine.
+.workflow/refine/*.lock
 
 # Where the last local E2E run put its servers. A note for a person, not a source of
 # truth: see e2e/environment.ts.

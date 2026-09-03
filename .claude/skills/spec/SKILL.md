@@ -356,5 +356,9 @@ second as something not to reproduce.
 ## Reference files
 
 - `references/spec-template.md` — section order, frontmatter, and what belongs in each section.
-- `references/checklist.md` — the rubric `spec-refiner` judges against, and the standard to
-  write to. Not a self-check: step 6 hands it to somebody who has not read your spec.
+- `references/checklist.md` — the standard to write to, the author's own. Not a self-check:
+  step 6 hands it to somebody who has not read your spec.
+- `references/blocking-criteria.md` — the closed register `spec-refiner` judges against, and
+  the only thing that may block delivery. Every `(blocks)` and `(note)` item of the checklist
+  has a criterion there, alongside the repository conventions a spec may not overrule. Write
+  to the checklist; expect to be judged on the register.

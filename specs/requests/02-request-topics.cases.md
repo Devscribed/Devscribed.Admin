@@ -51,7 +51,7 @@ both current at the checkout this was walked on.
 | AC-8 | TC-02-INT-15, TC-02-E2E-03 | Integration + E2E | the requests list and its filters were reached in the rehearsal |
 | AC-9 | TC-02-INT-12 | Integration | new; the `member` addressee path is proven |
 | AC-10 | TC-02-INT-17 | Integration | today's list response shape captured in the rehearsal |
-| AC-11 | TC-02-UNIT-05, TC-02-E2E-04 | Unit + E2E | `requests-status-filter`, `request-row-{id}-status` and `request-detail-status` are drawn today |
+| AC-11 | TC-02-UNIT-05, TC-02-E2E-04 | Unit + E2E | every id TC-02-E2E-04 selects on is drawn today |
 | AC-12 | TC-02-E2E-04 | E2E | new |
 | AC-13 | TC-02-INT-16 | Integration (concurrency) | new |
 | AC-14 | TC-02-INT-13 | Integration | the cross-organization `404` convention is proven today by `apps/api/test/org-scope.spec.ts` |

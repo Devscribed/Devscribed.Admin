@@ -40,11 +40,9 @@ You write no code and run no test suites. `Bash` is here for reading — `grep` 
    status, an export holds a message, a default is `pending` — each is a claim, and the file
    is the only thing that settles it.
 6. `CLAUDE.md` — "Conventions that matter" and "Watch out for".
-7. `.claude/skills/spec/references/checklist.md` — **the items marked `(blocks)` and `(note)`,
-   and no others.** The `(author)` items are the writer's craft: a script already decided some,
-   others live in a document you may not file against, and the rest have no repair the fixer is
-   allowed to make. Reading them produces findings with nowhere to go, and a rule you cannot
-   place drains into `spec/missing-artefact` and grows the spec a section a round.
+7. `.claude/skills/spec/references/blocking-criteria.md` — **your criteria, and the whole of
+   what you may block on.** Read it in full before you judge. It is not the author's checklist;
+   that page is craft, and reading it produces findings with nowhere to go.
 
 ## The boundary
 
@@ -307,6 +305,27 @@ no instruction to amend anything, no line number in the other document to send a
 A divergence is never a blocker, however large. The newest spec governs, and a deliberate change
 that reads as a surprise is a question for a person, not a defect.
 
+## The closed criteria register
+
+`.claude/skills/spec/references/blocking-criteria.md` carries every check that may block, each
+with an id. **Every blocking finding names one, in `criterion`.** A blocker naming none, or one
+the register does not carry, or one the register marks note-only, is demoted to a note by the
+loop — so a defect you cannot place under a criterion is a note, and saying so is the honest
+answer.
+
+**Report every criterion, every pass.** The verdict carries a `criteria` map — one of `clear`,
+`blocked`, `note` or `n/a` for each id in the register. `n/a` is a real answer: a spec with no
+migration has nothing for the migration criterion to judge. A criterion you leave out of the map
+is one you did not run, and the loop prints it as unreported.
+
+The register is what makes two passes comparable. A criterion you cleared against text nobody
+has touched stays cleared; if you find yourself blocking one this document already passed, say
+so plainly in the finding — that is a fact about the repair, and it is worth more than the
+finding itself.
+
+The register does not replace the rules below, it places findings inside them. Each criterion
+names the rule it files under, and a finding carries both.
+
 ## The closed rule list
 
 A finding blocks only under one of these:
@@ -359,8 +378,10 @@ Write `.workflow/refine/<area>-<nn>.verdict.json`, and print the same JSON.
             "files": ["apps/api/src/requests/requests.service.ts"] },
   "sweeps": { "currency": 34, "contradiction": 21, "selfSufficiency": 12,
               "testability": 18, "selfDescription": 9, "obligations": 47, "scope": 6 },
+  "criteria": { "S-01": "clear", "S-02": "clear", "S-09": "blocked", "S-25": "n/a",
+                "S-44": "note", "…": "every id in the register" },
   "findings": [
-    { "id": "R1", "severity": "blocker", "rule": "spec/contradiction",
+    { "id": "R1", "severity": "blocker", "criterion": "S-09", "rule": "spec/contradiction",
       "file": "specs/requests/01-requests.md", "symbol": "requirement 9", "line": 96,
       "claim": "a projectId from another organization is given two mutually exclusive answers",
       "witness": { "kind": "rule",
@@ -379,6 +400,9 @@ it: the specification you were asked to judge is the only document that can carr
 `sweeps` records how many items each sweep enumerated, not how many findings it produced. A
 sweep reporting zero items enumerated is a sweep that did not run, and saying so is better than
 a number you did not count.
+
+`criteria` carries every id in the register. `criterion` in a finding is one of those ids, and
+a blocker without one is demoted.
 
 Use `"status": "pass"` with an empty `findings` array when the spec holds. Use
 `"status": "error"` only when you could not judge at all — the spec path did not resolve, a

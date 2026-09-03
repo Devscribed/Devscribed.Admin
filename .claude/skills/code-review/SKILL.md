@@ -14,6 +14,10 @@ Record one line per item, at most a dozen words. No prose, no summary.
 Sweeps 5 and 9 are about the change as a whole. Every other sweep applies to the files you
 were given.
 
+**The sweeps are the method; what may block is the register.** Each "Blocks when" below has an
+id in [references/blocking-criteria.md](references/blocking-criteria.md), and a blocking finding
+names that id. A defect a sweep turns up that no criterion carries is a note.
+
 ## 1. Transaction sweep
 
 **Enumerate** every transaction the files open — `$transaction`, an explicit unit of work, any
@@ -169,5 +173,5 @@ applies to it. A file you can say nothing about was not reviewed.
 
 ## What does not block
 
-A finding citing no written rule is a note. A finding with no witness is a note. Formatting,
+A finding naming no criterion is a note. A finding with no witness is a note. Formatting,
 naming and anything a formatter would change is not a finding at all.

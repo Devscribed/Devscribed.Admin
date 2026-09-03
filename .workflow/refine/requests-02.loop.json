@@ -7,14 +7,28 @@
       "round": 1,
       "startedAt": "2026-09-03T07:38:55.128Z",
       "head": "9d78f3c2b21c73f4f9d4ff719b430f21914d11ce",
-      "status": "running",
+      "status": "done",
       "lint": 0,
       "judge": {
         "status": "blocked",
         "mode": "full",
         "blockers": 4,
         "notes": 6
-      }
+      },
+      "gate": "T2",
+      "blockers": 4,
+      "keys": [
+        "spec/incomplete-decision:REQ-02-022",
+        "spec/stale-statement:Seed Data",
+        "spec/contradiction:Screens against DS gaps",
+        "spec/ambiguous-requirement:PATCH …/request-topics/{topicId}"
+      ],
+      "fix": {
+        "fixed": 5,
+        "decided": 5,
+        "left": 0
+      },
+      "endedAt": "2026-09-03T08:06:05.142Z"
     }
   ],
   "status": "running",

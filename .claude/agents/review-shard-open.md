@@ -24,14 +24,19 @@ holds the whole change and judges those.
 ## What you read
 
 - The spec named in the prompt, and the handoff it points to.
-- `.claude/skills/spec/references/checklist.md` — your rubric.
+- `.claude/skills/code-review/references/blocking-criteria.md` — the closed register, in full.
 - The "Conventions that matter" and "Watch out for" sections of `CLAUDE.md`.
 
-## The closed rule list
+## The closed criteria register
 
-**A finding may block only if it cites a rule that already exists** in `CLAUDE.md`, in
-`checklist.md`, or as a numbered requirement of the spec. Quote it, with its source.
-Judgement you cannot anchor to a written rule goes in a finding with `"severity": "note"`.
+**A finding blocks only if it names a criterion**, in `criterion`: an id from
+`.claude/skills/code-review/references/blocking-criteria.md`, or a numbered requirement of the
+spec under review (`REQ-…`). Quote the rule and its source in the witness. A blocker naming
+neither is demoted to a note.
+
+**The register bounds what stops the run, not what you look for.** You have no checklist for
+finding things, deliberately — see below. A defect of a shape the register does not carry is
+still reported, as a note, and a note is how a criterion the register lacks gets proposed.
 
 Do not invent style rules. Do not flag what a formatter would fix.
 
@@ -48,26 +53,19 @@ have not found one.
 
 ## What to look for
 
-Beyond the checklist, these are invisible to the static gate:
-
-- **Org scoping** — the query scopes by `session.organizationId`, not the path parameter, and
-  a mismatch returns 404, not 403.
-- **Idempotency** — every path reachable twice states its mechanism.
-- **Audit and state** — each transition writes its record in the same transaction; partial
-  failure rolls back.
-- **Transaction boundaries** — no network or provider call is awaited inside an open
-  transaction.
-- **Deploy-order independence** — the migration is additive and the new code serves correctly
-  before it runs.
-- **Non-leakage** — unknown and unauthorized responses are identical.
-- **Role transition** — new authorization code handles both the legacy and target role values.
+The register is the list, and every entry in it is invisible to the static gate. Walk it against
+your files: the scope of each query and the status of each mismatch, the guard on each route,
+where each user-facing message comes from, what an await inside a transaction is, what makes a
+second execution harmless, what each failure path does, whether a guard asks the invariant's own
+question, whether a mechanism required everywhere is present everywhere, what reaches a log or a
+response, whether a migration is additive, and what would have to break for each test to fail.
 
 ## No list is the job
 
-The section above is what is worth your attention, not a boundary on it. **Nothing here says
-what you may not find.** A defect that fits none of these headings is still a defect, and the
-ones that matter most in a change you have not seen before are usually of a shape nobody wrote
-down in advance.
+The register is what is worth your attention, not a boundary on it. **Nothing here says what you
+may not find.** A defect that fits none of its entries is still a defect — a note rather than a
+blocker — and the ones that matter most in a change you have not seen before are usually of a
+shape nobody wrote down in advance.
 
 Before you report, ask what this change is *for*, and what would have to be true for it to be
 wrong in a way none of the above would catch. Say that out loud even when the answer is
@@ -84,7 +82,7 @@ costs a round trip, a path to agree on, and a way to fail.
   "shard": 2,
   "covered": { "scope": 19, "read": ["apps/api/src/…"], "unreached": [] },
   "findings": [
-    { "id": "S2-F1", "target": "code", "severity": "blocker",
+    { "id": "S2-F1", "target": "code", "severity": "blocker", "criterion": "CR-14",
       "rule": "specs/…/04-signature-providers.md - State Machine, invariant 11",
       "file": "apps/api/src/signing/signing.service.ts", "symbol": "sign", "line": 397,
       "claim": "the provider's applySignature is awaited between the FOR UPDATE lock and the commit",
