@@ -4,13 +4,12 @@ import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 
 import { Button, Checkbox, Input, Modal, Select } from '@/ds';
 import { useSession } from '@/layout/session-context';
 import {
-  ACCESS_KINDS,
   REQUEST_MESSAGES,
   REQUEST_PRIORITIES,
+  REQUEST_TOPIC_MESSAGES,
   todayInTimeZone,
   validateNewRequest,
 } from '@devscribed/validation';
-import { ACCESS_KIND_LABEL } from './RequestRow';
 import type { RequestRowData } from './types';
 
 /** Active members of the organization, as the members list returns them. */
@@ -18,6 +17,12 @@ interface MemberOption {
   id: string;
   fullName: string;
   status: 'active' | 'removed';
+}
+
+/** One offer in the About picker — an active topic of the addressee's audience. */
+interface TopicOption {
+  id: string;
+  name: string;
 }
 
 const microLabel: CSSProperties = {
@@ -36,22 +41,21 @@ const microLabel: CSSProperties = {
  * one (AC-10); the submit control is never disabled for validation.
  */
 const FIELD_ORDER = [
-  'type',
+  'topicId',
   'title',
-  'accessKind',
   'description',
   'assigneeMembershipId',
   'priority',
   'neededBy',
 ] as const;
 
-/** Inline field error. Only `title` and `accessKind` carry test ids the spec names. */
+/** Inline field error. Only `title` and `topicId` carry test ids the spec names. */
 function FieldError({ field, message }: { field: string; message: string }) {
   const testId =
     field === 'title'
       ? 'request-new-error-title'
-      : field === 'accessKind'
-        ? 'request-new-error-accessKind'
+      : field === 'topicId'
+        ? 'request-new-error-topic'
         : undefined;
   return (
     <div
@@ -94,8 +98,7 @@ export function NewRequestModal({
   const session = useSession();
   const today = todayInTimeZone(session.account.timezone);
 
-  const [type, setType] = useState('access');
-  const [accessKind, setAccessKind] = useState('');
+  const [topicId, setTopicId] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [projectId, setProjectId] = useState('');
@@ -105,6 +108,9 @@ export function NewRequestModal({
   const [neededBy, setNeededBy] = useState('');
 
   const [members, setMembers] = useState<MemberOption[]>([]);
+  // `null` while the catalogue has not been read yet, so an empty picker is never drawn
+  // before the answer arrives.
+  const [topics, setTopics] = useState<TopicOption[] | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -112,18 +118,16 @@ export function NewRequestModal({
   const [dateFocus, setDateFocus] = useState(false);
 
   const titleRef = useRef<HTMLDivElement>(null);
-  const accessKindRef = useRef<HTMLDivElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const assigneeRef = useRef<HTMLDivElement>(null);
   const priorityRef = useRef<HTMLDivElement>(null);
-  const typeRef = useRef<HTMLDivElement>(null);
+  const topicRef = useRef<HTMLDivElement>(null);
   const neededByRef = useRef<HTMLInputElement | null>(null);
 
   // Re-seed clean whenever the modal opens, and load the addressee choices.
   useEffect(() => {
     if (!open) return;
-    setType('access');
-    setAccessKind('');
+    setTopicId('');
     setTitle('');
     setDescription('');
     setProjectId('');
@@ -149,6 +153,27 @@ export function NewRequestModal({
         // addressee, and the inline error says so.
       }
     })();
+
+    /* The picker's own read: the addressee's audience, and active only. `member` is the
+       only addressee kind a request may carry as this spec ships, so that audience is
+       `staff` — neither an archived topic nor a client one is ever offered here. The
+       list's topic FILTER reads the same route with `status=all`, which is a different
+       question and deliberately a second read (REQ-02-031). */
+    void (async () => {
+      try {
+        const response = await fetch(
+          `/api/organizations/${orgId}/request-topics?audience=staff&status=active`,
+          { credentials: 'same-origin' },
+        );
+        if (!response.ok) return;
+        const data = (await response.json()) as { topics: TopicOption[] };
+        if (!cancelled) setTopics(data.topics.map((t) => ({ id: t.id, name: t.name })));
+      } catch {
+        // The picker stays in its loading state rather than claiming the catalogue is
+        // empty: "no topics" is a statement, and a failed read has not made it.
+      }
+    })();
+
     return () => {
       cancelled = true;
     };
@@ -157,9 +182,8 @@ export function NewRequestModal({
   function focusFirstInvalid(errors: Record<string, string>): void {
     const first = FIELD_ORDER.find((field) => errors[field]);
     const target: Record<string, HTMLElement | null> = {
-      type: typeRef.current?.querySelector('button') ?? null,
+      topicId: topicRef.current?.querySelector('button') ?? null,
       title: titleRef.current?.querySelector('input') ?? null,
-      accessKind: accessKindRef.current?.querySelector('button') ?? null,
       description: descriptionRef.current,
       assigneeMembershipId: assigneeRef.current?.querySelector('button') ?? null,
       priority: priorityRef.current?.querySelector('button') ?? null,
@@ -172,9 +196,10 @@ export function NewRequestModal({
     event.preventDefault();
     if (saving) return;
 
+    // Neither `type` nor `accessKind` is sent: the kind is set by the topic, and the
+    // route refuses a body carrying either name (REQ-02-021, REQ-02-022).
     const body = {
-      type,
-      accessKind: type === 'access' ? accessKind : undefined,
+      topicId,
       title,
       description: description.trim().length > 0 ? description : undefined,
       projectId: projectId.length > 0 ? projectId : undefined,
@@ -223,6 +248,10 @@ export function NewRequestModal({
     setSaving(false);
   }
 
+  // Only once the read has actually come back: a picker that has not been filled yet is
+  // not an empty catalogue.
+  const pickerEmpty = topics !== null && topics.length === 0;
+
   return (
     <Modal
       open={open}
@@ -244,56 +273,57 @@ export function NewRequestModal({
           >
             Cancel
           </Button>
-          {/* Disabled only while the request is in flight — never for validation. */}
-          <Button
-            type="submit"
-            form="request-new-form"
-            variant="primary"
-            size="lg"
-            loading={saving}
-            data-testid="request-new-submit"
-            style={{ flex: 1 }}
-          >
-            {saving ? 'Creating' : 'Create request'}
-          </Button>
+          {/* Disabled only while the request is in flight — never for validation. Not
+              drawn at all when the catalogue offers nothing (REQ-02-017). */}
+          {!pickerEmpty && (
+            <Button
+              type="submit"
+              form="request-new-form"
+              variant="primary"
+              size="lg"
+              loading={saving}
+              data-testid="request-new-submit"
+              style={{ flex: 1 }}
+            >
+              {saving ? 'Creating' : 'Create request'}
+            </Button>
+          )}
         </>
       }
     >
       <form id="request-new-form" onSubmit={submit} noValidate>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-6)' }}>
-          <div ref={typeRef}>
-            <Select
-              label="Type"
-              value={type}
-              options={[
-                { value: 'access', label: 'Access' },
-                { value: 'question', label: 'Question' },
-              ]}
-              onChange={(value) => {
-                setType(value);
-                if (value !== 'access') setAccessKind('');
+          {/* About — the only classifier a caller supplies. When the addressee's audience
+              has no active topic the picker is replaced by the empty-catalogue copy and
+              no submit control is drawn at all: the form says why it cannot be used,
+              instead of failing when it is used (REQ-02-017). */}
+          {pickerEmpty ? (
+            <div
+              data-testid="request-new-topic-empty"
+              style={{
+                fontFamily: 'var(--font-text)',
+                fontSize: 'var(--fs-14)',
+                color: 'var(--text-muted)',
               }}
-              error={fieldErrors.type}
-              data-testid="request-new-type"
-            />
-            {fieldErrors.type && <FieldError field="type" message={fieldErrors.type} />}
-          </div>
-
-          {type === 'access' && (
-            <div ref={accessKindRef}>
+            >
+              {REQUEST_TOPIC_MESSAGES.pickerEmpty}
+            </div>
+          ) : (
+            <div ref={topicRef}>
               <Select
-                label="Access kind"
-                value={accessKind}
-                options={ACCESS_KINDS.map((kind) => ({
-                  value: kind,
-                  label: ACCESS_KIND_LABEL[kind] ?? kind,
+                label="About"
+                value={topicId}
+                placeholder="Choose a topic"
+                options={(topics ?? []).map((topic) => ({
+                  value: topic.id,
+                  label: topic.name,
                 }))}
-                onChange={setAccessKind}
-                error={fieldErrors.accessKind}
-                data-testid="request-new-access-kind"
+                onChange={setTopicId}
+                error={fieldErrors.topicId}
+                data-testid="request-new-topic"
               />
-              {fieldErrors.accessKind && (
-                <FieldError field="accessKind" message={fieldErrors.accessKind} />
+              {fieldErrors.topicId && (
+                <FieldError field="topicId" message={fieldErrors.topicId} />
               )}
             </div>
           )}

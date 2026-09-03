@@ -2,19 +2,40 @@
 
 import Link from 'next/link';
 import { Badge, Card } from '@/ds';
+import { REQUEST_STATUS_LABELS } from '@devscribed/validation';
 import type { RequestRowData } from './types';
 
-/** Status → DS `Badge` tone + label. One map, used by the list and the detail screen. */
-export const REQUEST_STATUS_META: Record<
+/**
+ * Status → DS `Badge` tone. The *words* are not here: requests spec 02 requirement 28
+ * puts them in one exported map that this row, the detail header, the history entries and
+ * the filter control all read, so the four screens cannot disagree about what a status is
+ * called. Only the tone — which is a design decision about the badge, not vocabulary —
+ * stays on this side.
+ */
+export const STATUS_TONE: Record<
   string,
-  { tone: 'warning' | 'active' | 'inactive' | 'neutral' | 'info'; label: string }
+  'warning' | 'active' | 'inactive' | 'neutral' | 'info'
 > = {
-  open: { tone: 'warning', label: 'Open' },
-  answered: { tone: 'info', label: 'Answered' },
-  granted: { tone: 'active', label: 'Granted' },
-  declined: { tone: 'inactive', label: 'Declined' },
-  cancelled: { tone: 'neutral', label: 'Cancelled' },
+  open: 'warning',
+  answered: 'info',
+  granted: 'active',
+  declined: 'inactive',
+  cancelled: 'neutral',
 };
+
+/**
+ * The word a stored status shows as, and the closure reason beside it where there is one
+ * (REQ-02-028, REQ-02-029). An unmapped value — which no stored status is — falls back to
+ * itself rather than rendering blank.
+ */
+export function statusLabelOf(status: string): { label: string; closure: string | null } {
+  return (
+    REQUEST_STATUS_LABELS[status as keyof typeof REQUEST_STATUS_LABELS] ?? {
+      label: status,
+      closure: null,
+    }
+  );
+}
 
 export const REQUEST_TYPE_LABEL: Record<string, string> = {
   access: 'access',
@@ -60,7 +81,8 @@ export function formatShortDate(ymd: string): string {
  * rule ranks them separately.
  */
 export function RequestRow({ orgId, request }: { orgId: string; request: RequestRowData }) {
-  const meta = REQUEST_STATUS_META[request.status] ?? { tone: 'neutral' as const, label: request.status };
+  const tone = STATUS_TONE[request.status] ?? 'neutral';
+  const status = statusLabelOf(request.status);
 
   return (
     <Card data-testid={`request-row-${request.id}`}>
@@ -91,8 +113,8 @@ export function RequestRow({ orgId, request }: { orgId: string; request: Request
               {request.title}
             </span>
             <span style={{ marginLeft: 'auto' }}>
-              <Badge tone={meta.tone} data-testid={`request-row-${request.id}-status`}>
-                {meta.label}
+              <Badge tone={tone} data-testid={`request-row-${request.id}-status`}>
+                {status.closure ? `${status.label} · ${status.closure}` : status.label}
               </Badge>
             </span>
           </div>
@@ -107,7 +129,21 @@ export function RequestRow({ orgId, request }: { orgId: string; request: Request
               color: 'var(--text-muted)',
             }}
           >
-            <span>{REQUEST_TYPE_LABEL[request.type] ?? request.type}</span>
+            {/* The About cell. A request raised under a topic shows its snapshot name
+                under the id the spec names, with an archived marker where the catalogue
+                entry has since been retired. A request raised before requests spec 02
+                carries no topic and falls back to its stored type, drawn outside that id
+                — the testid marks a request that carries a topic (edge case 8). */}
+            {request.topic ? (
+              <span data-testid={`request-row-${request.id}-topic`}>
+                {request.topic.name}
+                {request.topic.status === 'archived' && (
+                  <span style={{ color: 'var(--text-faint)' }}> (archived)</span>
+                )}
+              </span>
+            ) : (
+              <span>{REQUEST_TYPE_LABEL[request.type] ?? request.type}</span>
+            )}
             {request.accessKind && <span>{ACCESS_KIND_LABEL[request.accessKind] ?? request.accessKind}</span>}
             <span>{REQUEST_PRIORITY_LABEL[request.priority] ?? request.priority}</span>
             {request.project && <span>{request.project.name}</span>}

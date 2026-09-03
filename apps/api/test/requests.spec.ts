@@ -26,11 +26,17 @@ const ymdUtc = (offsetDays = 0): string => {
 const COPY = {
   createForbidden: 'You do not have permission to create requests',
   scopeForbidden: "You do not have permission to view other people's requests",
-  typeUnknown: 'Choose a request type',
   titleRequired: 'Enter a title',
   titleTooLong: 'Title must be 200 characters or fewer',
-  accessKindRequired: 'Choose what kind of access this is',
-  accessKindNotAllowed: 'A question does not have an access kind',
+  priorityUnknown: 'Choose a valid priority',
+  classifierNotAccepted: 'The request kind is set by the topic and cannot be sent',
+  /** The four this route stopped emitting when requests spec 02 retired the classifier. */
+  retired: {
+    typeUnknown: 'Choose a request type',
+    accessKindRequired: 'Choose what kind of access this is',
+    accessKindUnknown: 'Choose a valid access kind',
+    accessKindNotAllowed: 'A question does not have an access kind',
+  },
   neededByPast: 'The date needed cannot be in the past',
   assigneeInvalid: 'Choose who this request is for',
   assigneeInactive: 'That person is no longer active in this organization',
@@ -151,10 +157,30 @@ describe('Requests (requests spec 01)', () => {
       .get(`/api/organizations/${orgId}/requests${path}`)
       .set('Cookie', who.cookies);
 
-  /** A minimal valid create body addressed to `assignee`. */
-  const newRequestBody = (assignee: Signed, over: Record<string, unknown> = {}) => ({
-    type: 'access',
-    accessKind: 'repository',
+  /**
+   * The id of a seeded topic of `organizationId`, by name. Requests spec 02 made the
+   * topic the only classifier a caller supplies, so every create body below needs one;
+   * signup writes the catalogue in the same transaction as the organization, so it is
+   * always there to be read.
+   */
+  const seededTopicId = async (organizationId: string, name = 'VPN'): Promise<string> => {
+    const topic = await prisma.requestTopic.findFirstOrThrow({
+      where: { organizationId, name },
+    });
+    return topic.id;
+  };
+
+  /**
+   * A minimal valid create body addressed to `assignee`. Neither `type` nor `accessKind`
+   * appears: the route refuses a body carrying either name, and writes `type` from the
+   * topic itself (requests spec 02 requirements 21 and 22).
+   */
+  const newRequestBody = (
+    assignee: Signed,
+    topicId: string,
+    over: Record<string, unknown> = {},
+  ) => ({
+    topicId,
     title: 'Staging DB access',
     assigneeKind: 'member',
     assigneeMembershipId: assignee.membershipId,
@@ -167,7 +193,8 @@ describe('Requests (requests spec 01)', () => {
     assignee: Signed,
     over: Record<string, unknown> = {},
   ) => {
-    const response = await post(who, orgId, '', newRequestBody(assignee, over));
+    const topicId = await seededTopicId(orgId);
+    const response = await post(who, orgId, '', newRequestBody(assignee, topicId, over));
     if (response.status !== 201) {
       throw new Error(`Precondition failed: create returned ${response.status} ${response.text}`);
     }
@@ -258,6 +285,7 @@ describe('Requests (requests spec 01)', () => {
     await prisma.requestEvent.deleteMany();
     await prisma.requestMessage.deleteMany();
     await prisma.request.deleteMany();
+    await prisma.requestTopic.deleteMany();
     await prisma.vacationRequest.deleteMany();
     await prisma.vacationReserveTransaction.deleteMany();
     await prisma.memberFinancialsSnapshot.deleteMany();
@@ -283,14 +311,22 @@ describe('Requests (requests spec 01)', () => {
       role: 'user',
     });
 
-    const response = await post(user, admin.organizationId, '', newRequestBody(admin));
+    const topicId = await seededTopicId(admin.organizationId);
+    const response = await post(
+      user,
+      admin.organizationId,
+      '',
+      newRequestBody(admin, topicId),
+    );
 
     expect(response.status).toBe(201);
     expect(response.body).toMatchObject({
       status: 'open',
       number: 1,
+      // Written by the server from the seeded `VPN` topic, which is an access topic; the
+      // caller sent neither name (requests spec 02 requirement 21).
       type: 'access',
-      accessKind: 'repository',
+      accessKind: null,
       title: 'Staging DB access',
       priority: 'normal',
       blocking: false,
@@ -340,9 +376,15 @@ describe('Requests (requests spec 01)', () => {
       role: 'user',
     });
 
+    const topicId = await seededTopicId(admin.organizationId);
     const responses = await Promise.all(
       Array.from({ length: 10 }, (_, i) =>
-        post(user, admin.organizationId, '', newRequestBody(admin, { title: `Access ${i + 1}` })),
+        post(
+          user,
+          admin.organizationId,
+          '',
+          newRequestBody(admin, topicId, { title: `Access ${i + 1}` }),
+        ),
       ),
     );
 
@@ -362,7 +404,13 @@ describe('Requests (requests spec 01)', () => {
       role: 'viewer',
     });
 
-    const response = await post(viewer, admin.organizationId, '', newRequestBody(admin));
+    const topicId = await seededTopicId(admin.organizationId);
+    const response = await post(
+      viewer,
+      admin.organizationId,
+      '',
+      newRequestBody(admin, topicId),
+    );
 
     expect(response.status).toBe(403);
     expect(response.body).toEqual({
@@ -380,35 +428,45 @@ describe('Requests (requests spec 01)', () => {
       role: 'user',
     });
 
-    // Edge case 5 — a question with an access kind.
-    const questionWithKind = await post(
-      user,
-      admin.organizationId,
-      '',
-      newRequestBody(admin, { type: 'question', accessKind: 'vpn' }),
-    );
-    expect(questionWithKind.status).toBe(400);
-    expect(questionWithKind.body).toEqual({
-      error: 'validation_error',
-      fields: { accessKind: COPY.accessKindNotAllowed },
-    });
+    const topicId = await seededTopicId(admin.organizationId);
 
-    // Edge case 6 — an access request with no access kind.
-    const accessNoKind = await post(
-      user,
-      admin.organizationId,
-      '',
-      newRequestBody(admin, { accessKind: undefined }),
-    );
-    expect(accessNoKind.status).toBe(400);
-    expect(accessNoKind.body.fields).toEqual({ accessKind: COPY.accessKindRequired });
+    // Edge cases 5 and 6 asserted the kind rules this route used to run. Requests spec 02
+    // retired them: the route no longer validates `type` or `accessKind` as body fields
+    // at all (REQ-02-021), so the two assertions are replaced by the rule that took their
+    // place here — the four retired messages are emitted by nothing, whatever the body
+    // carries. TC-02-INT-11 asserts the refusal itself; this asserts the silence.
+    for (const over of [
+      { type: 'question', accessKind: 'vpn' },
+      // An explicit null still counts as sent: the check is presence, not value, so a
+      // caller on a stale contract is told rather than silently reclassified.
+      { accessKind: null },
+      { type: 'nonsense' },
+    ]) {
+      const response = await post(
+        user,
+        admin.organizationId,
+        '',
+        newRequestBody(admin, topicId, over),
+      );
+      expect(response.status).toBe(400);
+      const body = JSON.stringify(response.body);
+      expect(body).not.toContain(COPY.retired.typeUnknown);
+      expect(body).not.toContain(COPY.retired.accessKindRequired);
+      expect(body).not.toContain(COPY.retired.accessKindUnknown);
+      expect(body).not.toContain(COPY.retired.accessKindNotAllowed);
+      expect(response.body.fields).toEqual(
+        Object.fromEntries(
+          Object.keys(over).map((name) => [name, COPY.classifierNotAccepted]),
+        ),
+      );
+    }
 
     // Edge case 7 — an addressee kind that is not `member`, and a missing id.
     const badKind = await post(
       user,
       admin.organizationId,
       '',
-      newRequestBody(admin, { assigneeKind: 'client' }),
+      newRequestBody(admin, topicId, { assigneeKind: 'client' }),
     );
     expect(badKind.status).toBe(400);
     expect(badKind.body.fields).toEqual({ assigneeMembershipId: COPY.assigneeInvalid });
@@ -417,7 +475,7 @@ describe('Requests (requests spec 01)', () => {
       user,
       admin.organizationId,
       '',
-      newRequestBody(admin, { assigneeMembershipId: undefined }),
+      newRequestBody(admin, topicId, { assigneeMembershipId: undefined }),
     );
     expect(noAssignee.status).toBe(400);
     expect(noAssignee.body.fields).toEqual({ assigneeMembershipId: COPY.assigneeInvalid });
@@ -427,22 +485,24 @@ describe('Requests (requests spec 01)', () => {
       user,
       admin.organizationId,
       '',
-      newRequestBody(admin, { neededBy: ymdUtc(-1) }),
+      newRequestBody(admin, topicId, { neededBy: ymdUtc(-1) }),
     );
     expect(past.status).toBe(400);
     expect(past.body.fields).toEqual({ neededBy: COPY.neededByPast });
 
     // Edge case 19 — a 201-character title, reported together with every other error.
+    // The second error is now an unknown priority: `type` is no longer a body field
+    // here, so it can no longer be the one that fails alongside the title.
     const longTitle = await post(
       user,
       admin.organizationId,
       '',
-      newRequestBody(admin, { title: 'a'.repeat(201), type: 'nonsense' }),
+      newRequestBody(admin, topicId, { title: 'a'.repeat(201), priority: 'nonsense' }),
     );
     expect(longTitle.status).toBe(400);
     expect(longTitle.body.fields).toEqual({
       title: COPY.titleTooLong,
-      type: COPY.typeUnknown,
+      priority: COPY.priorityUnknown,
     });
 
     expect(await prisma.request.count()).toBe(0);
@@ -472,12 +532,13 @@ describe('Requests (requests spec 01)', () => {
       role: 'user',
       status: 'removed',
     });
+    const topicId = await seededTopicId(admin.organizationId);
 
     const crossOrg = await post(
       user,
       admin.organizationId,
       '',
-      newRequestBody(admin, { assigneeMembershipId: other.membershipId }),
+      newRequestBody(admin, topicId, { assigneeMembershipId: other.membershipId }),
     );
     expect(crossOrg.status).toBe(404);
     expect(crossOrg.body.fields).toBeUndefined();
@@ -486,7 +547,7 @@ describe('Requests (requests spec 01)', () => {
       user,
       admin.organizationId,
       '',
-      newRequestBody(admin, { assigneeMembershipId: removed.membershipId }),
+      newRequestBody(admin, topicId, { assigneeMembershipId: removed.membershipId }),
     );
     expect(inactive.status).toBe(400);
     expect(inactive.body.fields).toEqual({ assigneeMembershipId: COPY.assigneeInactive });
@@ -847,11 +908,12 @@ describe('Requests (requests spec 01)', () => {
     expect(read.status).toBe(200);
     expect(read.body.request.project).toEqual({ id: project.body.id, name: 'Acme redesign' });
 
+    const topicId = await seededTopicId(admin.organizationId);
     const archived = await post(
       user,
       admin.organizationId,
       '',
-      newRequestBody(admin, { projectId: project.body.id }),
+      newRequestBody(admin, topicId, { projectId: project.body.id }),
     );
     expect(archived.status).toBe(400);
     expect(archived.body.fields).toEqual({ projectId: COPY.projectUnavailable });
@@ -862,7 +924,7 @@ describe('Requests (requests spec 01)', () => {
       user,
       admin.organizationId,
       '',
-      newRequestBody(admin, { projectId: otherProject.body.id }),
+      newRequestBody(admin, topicId, { projectId: otherProject.body.id }),
     );
     expect(crossOrg.status).toBe(404);
     expect(crossOrg.body.fields).toBeUndefined();

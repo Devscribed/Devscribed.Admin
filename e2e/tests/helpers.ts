@@ -1162,6 +1162,68 @@ export async function assignProjectMembersViaApi(
   }
 }
 
+/**
+ * One request topic, as `GET .../request-topics` returns it. Requests spec 02 made the
+ * topic the only classifier a caller supplies, so every request a fixture raises needs
+ * one; signup writes the catalogue in the same transaction as the organization, so a
+ * seeded topic is always there to read.
+ */
+export interface SeededTopic {
+  id: string;
+  name: string;
+  audience: string;
+  type: string;
+  status: string;
+}
+
+/** Reads one organization's catalogue. Requires any active member's cookie jar. */
+export async function listRequestTopicsViaApi(
+  request: APIRequestContext,
+  organizationId: string,
+  query = '?status=all',
+): Promise<SeededTopic[]> {
+  const response = await request.get(
+    `${API}/api/organizations/${organizationId}/request-topics${query}`,
+  );
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not read request topics (${response.status()} ${await response.text()})`,
+    );
+  }
+  return ((await response.json()) as { topics: SeededTopic[] }).topics;
+}
+
+/** The id of one seeded topic by name — the fixture every request create body needs. */
+export async function requestTopicIdViaApi(
+  request: APIRequestContext,
+  organizationId: string,
+  name = 'VPN',
+  audience = 'staff',
+): Promise<string> {
+  const topics = await listRequestTopicsViaApi(request, organizationId);
+  const topic = topics.find((t) => t.name === name && t.audience === audience);
+  if (!topic) {
+    throw new Error(`Precondition failed: no ${audience} topic named "${name}"`);
+  }
+  return topic.id;
+}
+
+/** Archives one topic through the product's own route. Requires a curator's jar. */
+export async function archiveRequestTopicViaApi(
+  request: APIRequestContext,
+  organizationId: string,
+  topicId: string,
+): Promise<void> {
+  const response = await request.patch(
+    `${API}/api/organizations/${organizationId}/request-topics/${topicId}/archive`,
+  );
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not archive topic ${topicId} (${response.status()} ${await response.text()})`,
+    );
+  }
+}
+
 export interface TimeEntryInput {
   /** Target member (admin/manager creating for another). Omitted = caller's own membership. */
   membershipId?: string;

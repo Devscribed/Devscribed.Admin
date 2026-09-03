@@ -43,6 +43,7 @@ export class RequestsController {
     @Query('status') status?: string,
     @Query('type') type?: string,
     @Query('projectId') projectId?: string,
+    @Query('topicId') topicId?: string,
     @Query('q') q?: string,
   ) {
     return this.requests.listRequests(req.session!, req.session!.organizationId, {
@@ -50,6 +51,7 @@ export class RequestsController {
       status,
       type,
       projectId,
+      topicId,
       q,
     });
   }

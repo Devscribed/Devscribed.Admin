@@ -10,6 +10,7 @@ import {
   can,
   canReadRequest,
   compareRequestRows,
+  expandRequestStatusQuery,
   isTerminalRequestStatus,
   normalizeRole,
   parseRequestScope,
@@ -158,6 +159,7 @@ export class RequestsService {
       status?: unknown;
       type?: unknown;
       projectId?: unknown;
+      topicId?: unknown;
       q?: unknown;
     },
   ): Promise<RequestsListDto> {
@@ -217,6 +219,18 @@ export class RequestsService {
       typeof query.projectId === 'string' && query.projectId.trim().length > 0
         ? query.projectId
         : null;
+    // Requests spec 02 requirement 26 — an equality filter on the stored column, applied
+    // INSIDE the organization scope above, so a topicId from another organization returns
+    // an empty array rather than that organization's rows (TC-02-INT-15).
+    const topicId =
+      typeof query.topicId === 'string' && query.topicId.trim().length > 0
+        ? query.topicId
+        : null;
+
+    // Requests spec 02 requirement 27 — `closed` is one filter value over two stored
+    // statuses, and the five stored values still resolve for a link somebody saved. The
+    // parser above has already refused anything outside the set, so this cannot be null.
+    const statuses = status === 'all' ? null : expandRequestStatusQuery(status);
 
     // `type=vacation` is a choice of SECTION, not a filter over one array: vacation rows
     // are not `Request` rows in this release (requirement 41).
@@ -226,9 +240,10 @@ export class RequestsService {
         : await this.prisma.request.findMany({
             where: {
               ...scopeWhere,
-              ...(status !== 'all' ? { status } : {}),
+              ...(statuses ? { status: { in: [...statuses] } } : {}),
               ...(type === 'access' || type === 'question' ? { type } : {}),
               ...(projectId ? { projectId } : {}),
+              ...(topicId ? { topicId } : {}),
               ...(q ? { title: { contains: q, mode: 'insensitive' as const } } : {}),
             },
             include: REQUEST_ROW_INCLUDE,
@@ -319,7 +334,40 @@ export class RequestsService {
     }
     const input = parsed.value!;
 
-    // Rule 8 — an active membership in the CALLER's organization. One in another
+    // Requests spec 02 rules 8 and 9 — the topic. Read before the transaction, exactly as
+    // the assignee and the project below are: a topic archived in that window yields a
+    // request under an archived topic, which requirement 10 makes lossless (the request
+    // keeps its snapshot name, stays readable and stays filterable) rather than a
+    // violation of any invariant.
+    //
+    // Rule 8 collapses three outcomes into one answer — archived, another organization's,
+    // and naming no row at all — with one body, so an id belonging to somebody else is
+    // not distinguishable from one that never existed (requirement 19). This is the
+    // module's one deliberate 400 where it otherwise answers 404 across organizations,
+    // and it leaks nothing precisely because all three answers are identical.
+    const topic = await this.prisma.requestTopic.findFirst({
+      where: { id: input.topicId, organizationId, status: 'active' },
+      select: { id: true, name: true, type: true, audience: true },
+    });
+    if (!topic) {
+      throw new BadRequestException({
+        error: 'validation_error',
+        fields: { topicId: REQUEST_MESSAGES.topicUnavailable },
+      });
+    }
+
+    // Rule 9 — compared only on a topic rule 8 has found active, so an archived client
+    // topic answers `topicUnavailable` and never `topicAudienceMismatch` (requirement 20).
+    // `member` is the only addressee kind a request may carry as this spec ships, so the
+    // audience it must match is `staff`.
+    if (topic.audience !== 'staff') {
+      throw new BadRequestException({
+        error: 'validation_error',
+        fields: { topicId: REQUEST_MESSAGES.topicAudienceMismatch },
+      });
+    }
+
+    // Rule 8 (spec 01) — an active membership in the CALLER's organization. One in another
     // organization answers 404, identical to a non-existent id, so ids cannot be probed
     // across organizations; a removed one is the validation case instead.
     const assignee = await this.prisma.membership.findUnique({
@@ -364,8 +412,15 @@ export class RequestsService {
         data: {
           organizationId,
           number,
-          type: input.type,
-          accessKind: input.accessKind,
+          // Requirement 21 — the kind is derived from the topic and never supplied, and
+          // `accessKind` is written null even under an access topic: the column keeps its
+          // stored values on the rows that carry them and gains none.
+          type: topic.type,
+          accessKind: null,
+          topicId: topic.id,
+          // Requirement 23 — the snapshot, written in the same transaction as the row it
+          // belongs to, and never rewritten afterwards by any writer (requirement 25).
+          topicLabel: topic.name,
           title: input.title,
           description: input.description,
           projectId: input.projectId,

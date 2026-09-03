@@ -10,6 +10,7 @@ import { usePendingRequests } from '@/layout/requests-badge-context';
 import { useToast } from '@/toast';
 import {
   REQUEST_MESSAGES,
+  REQUEST_STATUS_LABELS,
   can,
   normalizeRole,
   parseRequestScope,
@@ -32,14 +33,38 @@ import type { OrgRequest, OrgRequestsResponse, RequestRowData } from './types';
 /** Payload carries no currency field; USD is the app default (matches VacationPanel). */
 const CURRENCY = 'USD';
 
+/** One entry of the topic filter — the archived marker is already in the label. */
+interface TopicOption {
+  id: string;
+  label: string;
+}
+
+/**
+ * The status control (requests spec 02 §Status Labels). Four words plus an all-statuses
+ * entry, each read from the one exported map the rows, the detail header and the history
+ * entries also read — the words are not written here (REQ-02-028).
+ *
+ * `closed` is one value over two stored statuses, so `declined` and `cancelled` are not
+ * offered separately. The endpoint keeps accepting both for a link somebody saved; a
+ * saved link still filters on the value it carries and this control shows Closed as the
+ * nearest selection.
+ */
 const STATUS_OPTIONS: { value: RequestStatusQuery; label: string }[] = [
   { value: 'all', label: 'All statuses' },
-  { value: 'open', label: 'Open' },
-  { value: 'answered', label: 'Answered' },
-  { value: 'granted', label: 'Granted' },
-  { value: 'declined', label: 'Declined' },
-  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'open', label: REQUEST_STATUS_LABELS.open.label },
+  { value: 'answered', label: REQUEST_STATUS_LABELS.answered.label },
+  { value: 'granted', label: REQUEST_STATUS_LABELS.granted.label },
+  { value: 'closed', label: REQUEST_STATUS_LABELS.declined.label },
 ];
+
+/**
+ * Which entry of the control is shown for the status actually in force. A saved link
+ * carrying `declined` or `cancelled` filters on exactly that value while the control
+ * reads Closed, which is the nearest selection it offers.
+ */
+function statusSelection(status: RequestStatusQuery): RequestStatusQuery {
+  return status === 'declined' || status === 'cancelled' ? 'closed' : status;
+}
 
 const TYPE_OPTIONS: { value: RequestTypeQuery; label: string }[] = [
   { value: 'all', label: 'All types' },
@@ -106,6 +131,7 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
     parseRequestTypeQuery(searchParams.get('type') ?? undefined) ?? 'all',
   );
   const [projectId, setProjectId] = useState<string>(searchParams.get('projectId') ?? '');
+  const [topicId, setTopicId] = useState<string>(searchParams.get('topicId') ?? '');
   const [q, setQ] = useState<string>(searchParams.get('q') ?? '');
   const [debouncedQ, setDebouncedQ] = useState<string>(searchParams.get('q') ?? '');
 
@@ -113,6 +139,7 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [topics, setTopics] = useState<TopicOption[]>([]);
   const [newOpen, setNewOpen] = useState(false);
 
   const [rejectTarget, setRejectTarget] = useState<OrgRequest | null>(null);
@@ -121,7 +148,11 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
   const [approvingId, setApprovingId] = useState<string | null>(null);
 
   const filtersActive =
-    status !== 'all' || type !== 'all' || projectId.length > 0 || debouncedQ.trim().length > 0;
+    status !== 'all' ||
+    type !== 'all' ||
+    projectId.length > 0 ||
+    topicId.length > 0 ||
+    debouncedQ.trim().length > 0;
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q), 250);
@@ -135,19 +166,21 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
     if (status !== 'all') next.set('status', status);
     if (type !== 'all') next.set('type', type);
     if (projectId.length > 0) next.set('projectId', projectId);
+    if (topicId.length > 0) next.set('topicId', topicId);
     if (debouncedQ.trim().length > 0) next.set('q', debouncedQ.trim());
     const qs = next.toString();
     router.replace(qs.length > 0 ? `?${qs}` : '?', { scroll: false });
     // `router` is in the list because it is referenced here. The App Router's instance is
     // stable across renders, so naming it costs no extra run and the effect still fires
-    // only when one of the five filter values moves.
-  }, [scope, status, type, projectId, debouncedQ, router]);
+    // only when one of the six filter values moves.
+  }, [scope, status, type, projectId, topicId, debouncedQ, router]);
 
   const load = useCallback(
     async (signal?: AbortSignal): Promise<void> => {
       setLoading(true);
       const query = new URLSearchParams({ scope, status, type });
       if (projectId.length > 0) query.set('projectId', projectId);
+      if (topicId.length > 0) query.set('topicId', topicId);
       if (debouncedQ.trim().length > 0) query.set('q', debouncedQ.trim());
       try {
         const response = await fetch(
@@ -171,7 +204,7 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
       if (signal?.aborted) return;
       setLoading(false);
     },
-    [orgId, scope, status, type, projectId, debouncedQ],
+    [orgId, scope, status, type, projectId, topicId, debouncedQ],
   );
 
   useEffect(() => {
@@ -204,6 +237,43 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
       cancelled = true;
     };
   }, [orgId, canListProjects]);
+
+  /**
+   * The topic filter's own read (REQ-02-031). It carries `status=all`, unlike the
+   * new-request picker's `status=active`: the control that *finds* requests raised under
+   * a retired topic must still offer that topic, while the picker must not. One read
+   * cannot serve both without hiding those requests from the control that finds them.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(
+          `/api/organizations/${orgId}/request-topics?status=all`,
+          { credentials: 'same-origin' },
+        );
+        if (!response.ok) return;
+        const body = (await response.json()) as {
+          topics: { id: string; name: string; status: string }[];
+        };
+        if (!cancelled) {
+          setTopics(
+            body.topics.map((topic) => ({
+              id: topic.id,
+              // Each archived entry is marked as archived, the same marker the detail
+              // screen uses beside a retired topic's snapshot name.
+              label: topic.status === 'archived' ? `${topic.name} (archived)` : topic.name,
+            })),
+          );
+        }
+      } catch {
+        // No topic choices; the filter simply has nothing to offer.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId]);
 
   /** Update one vacation card's fields in place (keeps it visible under the filter). */
   const patchVacation = useCallback((id: string, changes: Partial<OrgRequest>): void => {
@@ -341,7 +411,20 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
 
           <div style={{ minWidth: 170 }}>
             <Select
-              value={status}
+              value={topicId}
+              placeholder="Any topic"
+              options={[
+                { value: '', label: 'Any topic' },
+                ...topics.map((topic) => ({ value: topic.id, label: topic.label })),
+              ]}
+              onChange={setTopicId}
+              data-testid="requests-topic-filter"
+            />
+          </div>
+
+          <div style={{ minWidth: 170 }}>
+            <Select
+              value={statusSelection(status)}
               options={STATUS_OPTIONS}
               onChange={(value) => setStatus(parseRequestStatusQuery(value) ?? 'all')}
               data-testid="requests-status-filter"
@@ -426,6 +509,7 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
                         setStatus('all');
                         setType('all');
                         setProjectId('');
+                        setTopicId('');
                         setQ('');
                       }}
                     >

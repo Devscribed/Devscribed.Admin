@@ -61,12 +61,27 @@ export interface RequestAssignee {
   inactive: boolean;
 }
 
+/**
+ * Requests spec 02 — the topic a request was raised under. `name` is the snapshot taken
+ * at creation, not the catalogue's current name; the other four are read from the row
+ * `topicId` names and are all `null` when a label outlives its topic.
+ */
+export interface RequestTopicMember {
+  id: string | null;
+  name: string;
+  audience: string | null;
+  type: string | null;
+  status: string | null;
+}
+
 /** One request row — the list row and the body of every write route's response. */
 export interface RequestRowData {
   id: string;
   number: number;
   type: string;
   accessKind: string | null;
+  /** `null` for a request raised before requests spec 02, and for no other. */
+  topic: RequestTopicMember | null;
   title: string;
   description: string | null;
   status: string;

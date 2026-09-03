@@ -3,6 +3,7 @@ import { MESSAGES, createAdminMembership, validateSignup } from '@devscribed/val
 import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma.service';
+import { seedRequestTopics } from '../requests/request-topics.seed';
 import type { SignupDto } from './signup.dto';
 
 const BCRYPT_ROUNDS = 12;
@@ -38,7 +39,9 @@ export class SignupService {
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
     try {
-      // Account, organization and admin membership are created together or not at all (FR-6).
+      // Account, organization, admin membership and the request-topic catalogue are
+      // created together or not at all (FR-6; requests spec 02 requirement 15 — an
+      // organization is born carrying a catalogue, or it is not born).
       return await this.prisma.$transaction(async (tx) => {
         const account = await tx.account.create({
           data: { email, passwordHash, firstName, lastName, timezone },
@@ -47,6 +50,7 @@ export class SignupService {
         await tx.membership.create({
           data: createAdminMembership({ accountId: account.id, organizationId: organization.id }),
         });
+        await seedRequestTopics(tx, organization.id);
 
         return {
           accountId: account.id,

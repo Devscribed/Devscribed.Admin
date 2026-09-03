@@ -24,12 +24,29 @@ export interface RequestAssigneeDto {
   inactive: boolean;
 }
 
+/**
+ * Requests spec 02 — the topic a request was raised under.
+ *
+ * `name` is the snapshot `topicLabel`, not the catalogue's current name. The other four
+ * are read from the row `topicId` names and are all `null` when a label outlives its
+ * `topicId`, which is why the member is keyed on the label rather than on the id.
+ */
+export interface RequestTopicMemberDto {
+  id: string | null;
+  name: string;
+  audience: string | null;
+  type: string | null;
+  status: string | null;
+}
+
 /** One row of the request list, and the body of every write route's response. */
 export interface RequestRowDto {
   id: string;
   number: number;
   type: string;
   accessKind: string | null;
+  /** `null` exactly when the request carries no `topicLabel` (requests spec 02). */
+  topic: RequestTopicMemberDto | null;
   title: string;
   description: string | null;
   status: string;

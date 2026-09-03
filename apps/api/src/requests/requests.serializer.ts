@@ -5,6 +5,7 @@ import type {
   RequestEventDto,
   RequestMessageDto,
   RequestRowDto,
+  RequestTopicMemberDto,
 } from './requests.dto';
 
 /**
@@ -13,6 +14,9 @@ import type {
  */
 export const REQUEST_ROW_INCLUDE = {
   project: { select: { id: true, name: true } },
+  /* Requests spec 02 — the live catalogue row, for the four members of `topic` that are
+     read from it. `topic.name` is NOT read here: it is the snapshot on the request. */
+  topic: { select: { id: true, audience: true, type: true, status: true } },
   requester: {
     select: { id: true, status: true, account: { select: { firstName: true, lastName: true } } },
   },
@@ -65,6 +69,7 @@ export function toRequestRow(row: RequestWithRelations, today: string): RequestR
     number: row.number,
     type: row.type,
     accessKind: row.accessKind,
+    topic: toRequestTopicMember(row),
     title: row.title,
     description: row.description,
     status: row.status,
@@ -90,6 +95,32 @@ export function toRequestRow(row: RequestWithRelations, today: string): RequestR
     answeredAt: row.answeredAt ? row.answeredAt.toISOString() : null,
     resolvedAt: row.resolvedAt ? row.resolvedAt.toISOString() : null,
     messageCount: row._count.messages,
+  };
+}
+
+/**
+ * Requests spec 02 — the one member this spec adds to a request row, and it removes none.
+ *
+ * Keyed on `topicLabel`, not on `topicId`: `topic` is `null` exactly when the request
+ * carries no label, which is every request raised before this spec and no request raised
+ * after it. `name` is the **snapshot** label, so renaming the catalogue entry never
+ * rewrites what an old request says it was about (REQ-02-025).
+ *
+ * The other four are read from the row `topicId` names, so a screen can mark a topic that
+ * has since been archived — and each of the four is `null` when a request carries a label
+ * and no `topicId`, the state a row reaches only if its topic was deleted outside this
+ * product's routes (REQ-02-023, TC-02-INT-02).
+ */
+export function toRequestTopicMember(
+  row: Pick<RequestWithRelations, 'topicLabel' | 'topic'>,
+): RequestTopicMemberDto | null {
+  if (row.topicLabel === null) return null;
+  return {
+    id: row.topic ? row.topic.id : null,
+    name: row.topicLabel,
+    audience: row.topic ? row.topic.audience : null,
+    type: row.topic ? row.topic.type : null,
+    status: row.topic ? row.topic.status : null,
   };
 }
 

@@ -176,6 +176,22 @@ function navigation(
     });
   }
 
+  // Requests spec 02 requirement 30 — the Request topics row, gated on
+  // `manage-request-topics`, so a `user` or `viewer` never sees a destination whose every
+  // control is missing and whose write routes answer 403. Built into the same conditional
+  // list as Signing and Holidays, so a role holding none of the three drops the whole
+  // group rather than seeing an empty Settings heading.
+  // `hasCapability` rather than `can`, as the two rows above it: it normalizes the raw
+  // `Membership.role` internally, so the legacy `member` value maps to `user`.
+  if (hasCapability(role, 'ManageRequestTopics')) {
+    settings.push({
+      testId: 'settings-tab-request-topics',
+      label: 'Request topics',
+      href: `/org/${orgId}/settings/request-topics`,
+      icon: <InboxIcon />,
+    });
+  }
+
   if (settings.length > 0) {
     groups.push({ label: 'Settings', entries: settings });
   }

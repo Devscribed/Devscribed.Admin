@@ -1,5 +1,6 @@
 'use client';
 
+import { statusLabelOf } from '../RequestRow';
 import type { RequestEventData } from '../types';
 
 function formatMoment(iso: string): string {
@@ -24,7 +25,11 @@ function describe(event: RequestEventData): string {
     case 'message_posted':
       return `${actor} replied`;
     case 'status_changed':
-      return `${actor} marked it ${event.newValue}`;
+      // The four words, from the same map the list rows, the detail header and the filter
+      // control read (REQ-02-028) — this entry used to print the raw stored value. The
+      // label alone: the closure reason is rendered where a request's own status is shown,
+      // not in the trail.
+      return `${actor} marked it ${statusLabelOf(event.newValue ?? '').label}`;
     case 'assignee_changed':
       return `${actor} reassigned it from ${event.oldLabel ?? 'nobody'} to ${
         event.newLabel ?? 'nobody'

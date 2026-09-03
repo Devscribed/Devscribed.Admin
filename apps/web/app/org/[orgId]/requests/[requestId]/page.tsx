@@ -13,11 +13,7 @@ import {
   validateRequestMessageBody,
   type Role,
 } from '@devscribed/validation';
-import {
-  ACCESS_KIND_LABEL,
-  REQUEST_STATUS_META,
-  formatShortDate,
-} from '../RequestRow';
+import { ACCESS_KIND_LABEL, STATUS_TONE, formatShortDate, statusLabelOf } from '../RequestRow';
 import type { RequestDetailData } from '../types';
 import { DeclineRequestModal } from './DeclineRequestModal';
 import { ReassignRequestModal } from './ReassignRequestModal';
@@ -180,10 +176,10 @@ export default function RequestDetailPage({
   }
 
   const request = detail.request;
-  const meta = REQUEST_STATUS_META[request.status] ?? {
-    tone: 'neutral' as const,
-    label: request.status,
-  };
+  // The tone is a badge decision; the word comes from the one exported map every request
+  // surface reads (REQ-02-028), with the closure reason beside it (REQ-02-029).
+  const tone = STATUS_TONE[request.status] ?? 'neutral';
+  const status = statusLabelOf(request.status);
   const terminal = isTerminalRequestStatus(request.status);
   const isRequester = myMembershipId !== null && request.requester.membershipId === myMembershipId;
   const isAssignee = myMembershipId !== null && request.assignee.id === myMembershipId;
@@ -228,8 +224,8 @@ export default function RequestDetailPage({
                 {request.title}
               </span>
               <span style={{ marginLeft: 'auto' }}>
-                <Badge tone={meta.tone} data-testid="request-detail-status">
-                  {meta.label}
+                <Badge tone={tone} data-testid="request-detail-status">
+                  {status.closure ? `${status.label} · ${status.closure}` : status.label}
                 </Badge>
               </span>
             </div>
@@ -243,7 +239,19 @@ export default function RequestDetailPage({
                 color: 'var(--text-muted)',
               }}
             >
-              <span>{request.type}</span>
+              {/* The About line: the snapshot name with a muted archived marker where
+                  the catalogue entry has been retired, or the stored type for a request
+                  raised before requests spec 02. */}
+              {request.topic ? (
+                <span data-testid="request-detail-topic">
+                  {request.topic.name}
+                  {request.topic.status === 'archived' && (
+                    <span style={{ color: 'var(--text-faint)' }}> (archived)</span>
+                  )}
+                </span>
+              ) : (
+                <span>{request.type}</span>
+              )}
               {request.accessKind && (
                 <span>{ACCESS_KIND_LABEL[request.accessKind] ?? request.accessKind}</span>
               )}

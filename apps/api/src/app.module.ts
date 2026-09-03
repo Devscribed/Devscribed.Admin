@@ -35,6 +35,8 @@ import { HolidaysController } from './holidays/holidays.controller';
 import { HolidaysService } from './holidays/holidays.service';
 import { ProjectsController } from './projects/projects.controller';
 import { ProjectsService } from './projects/projects.service';
+import { RequestTopicsController } from './requests/request-topics.controller';
+import { RequestTopicsService } from './requests/request-topics.service';
 import { RequestsController } from './requests/requests.controller';
 import { RequestsService } from './requests/requests.service';
 import { RequestEventsService } from './requests/request-events.service';
@@ -106,6 +108,7 @@ import { VacationService } from './vacation/vacation.service';
     AccountController,
     VacationController,
     RequestsController,
+    RequestTopicsController,
     ProjectsController,
     ClientsController,
     HolidaysController,
@@ -145,6 +148,7 @@ import { VacationService } from './vacation/vacation.service';
     VacationService,
     VacationRequestsService,
     RequestsService,
+    RequestTopicsService,
     RequestEventsService,
     VacationRequestFeedService,
     ProjectsService,

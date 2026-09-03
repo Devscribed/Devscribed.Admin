@@ -11,6 +11,7 @@ import {
   removeMember,
   seedReserveCredit,
   setMembershipRole,
+  requestTopicIdViaApi,
   signupOrg,
   submitVacationRequestViaApi,
   uniqueEmail,
@@ -105,8 +106,12 @@ async function createRequestViaApi(
   organizationId: string,
   body: Record<string, unknown>,
 ): Promise<SeededRequest> {
+  // Requests spec 02: the topic is the only classifier a caller supplies, and the route
+  // refuses a body carrying `type` or `accessKind`. The seeded `VPN` topic is the default
+  // unless the caller names another.
+  const topicId = body.topicId ?? (await requestTopicIdViaApi(request, organizationId));
   const response = await request.post(`${API}/api/organizations/${organizationId}/requests`, {
-    data: { type: 'access', accessKind: 'repository', assigneeKind: 'member', ...body },
+    data: { assigneeKind: 'member', ...body, topicId },
   });
   if (response.status() !== 201) {
     throw new Error(
@@ -207,8 +212,10 @@ test.describe('requests/01 — Requests', () => {
     await page.getByTestId('requests-new-btn').click();
     await expect(page.getByTestId('request-new-modal')).toBeVisible();
 
-    await chooseOption(page, 'request-new-type', 'Access');
-    await chooseOption(page, 'request-new-access-kind', 'SaaS');
+    // The two retired controls are gone entirely; About is the only classifier.
+    await expect(page.getByTestId('request-new-type')).toHaveCount(0);
+    await expect(page.getByTestId('request-new-access-kind')).toHaveCount(0);
+    await chooseOption(page, 'request-new-topic', 'Claude');
     await page.getByTestId('request-new-title').fill('Claude seat for the new hire');
     await page.getByTestId('request-new-description').fill('We need one more seat.');
     await chooseOption(page, 'request-new-project', 'Acme redesign');
@@ -220,13 +227,18 @@ test.describe('requests/01 — Requests', () => {
     await page.getByTestId('request-new-submit').click();
     await expect(page.getByTestId('request-new-modal')).toHaveCount(0);
 
-    const row = page.locator('[data-testid^="request-row-"]').first();
+    const row = page
+      .locator(
+        '[data-testid^="request-row-"]:not([data-testid*="-status"])' +
+          ':not([data-testid*="-flag"]):not([data-testid*="-topic"])',
+      )
+      .first();
     await expect(row).toBeVisible();
     const rowTestId = await row.getAttribute('data-testid');
     const requestId = (rowTestId ?? '').replace('request-row-', '');
     expect(requestId.length).toBeGreaterThan(0);
 
-    await expect(page.getByTestId(`request-row-${requestId}-status`)).toHaveText('Open');
+    await expect(page.getByTestId(`request-row-${requestId}-status`)).toHaveText('Pending');
     await expect(page.getByTestId(`request-row-${requestId}-blocking-flag`)).toBeVisible();
 
     // The admin's inbox carries the same row, and the admin answers it.
@@ -244,15 +256,15 @@ test.describe('requests/01 — Requests', () => {
     await expect(page.getByTestId('request-detail-thread')).toContainText('Buying it now.');
 
     await page.getByTestId('request-detail-answer-btn').click();
-    await expect(page.getByTestId('request-detail-status')).toHaveText('Answered');
+    await expect(page.getByTestId('request-detail-status')).toHaveText('In progress');
     await expect(page.getByTestId('request-detail-history')).toContainText('created the request');
 
     // Only the requester can confirm that the access works.
     await switchUi(page, userEmail);
     await page.goto(`/org/${org.organizationId}/requests/${requestId}`);
-    await expect(page.getByTestId('request-detail-status')).toHaveText('Answered');
+    await expect(page.getByTestId('request-detail-status')).toHaveText('In progress');
     await page.getByTestId('request-detail-grant-btn').click();
-    await expect(page.getByTestId('request-detail-status')).toHaveText('Granted');
+    await expect(page.getByTestId('request-detail-status')).toHaveText('Completed');
 
     // A terminal request draws no composer and no action at all.
     await expect(page.getByTestId('request-detail-composer')).toHaveCount(0);
@@ -274,15 +286,17 @@ test.describe('requests/01 — Requests', () => {
 
     await page.getByTestId('requests-new-btn').click();
     await expect(page.getByTestId('request-new-modal')).toBeVisible();
-    await chooseOption(page, 'request-new-type', 'Access');
+    await expect(page.getByTestId('request-new-topic')).toBeVisible();
 
     // The submit control is enabled before the click — validation never disables it.
     await expect(page.getByTestId('request-new-submit')).toBeEnabled();
     await page.getByTestId('request-new-submit').click();
 
+    // Every error at once, and the topic is now the first field in reading order, so it
+    // is the one that takes focus.
     await expect(page.getByTestId('request-new-error-title')).toBeVisible();
-    await expect(page.getByTestId('request-new-error-accessKind')).toBeVisible();
-    await expect(page.getByTestId('request-new-title')).toBeFocused();
+    await expect(page.getByTestId('request-new-error-topic')).toBeVisible();
+    await expect(page.getByTestId('request-new-topic')).toBeFocused();
     await expect(page.getByTestId('request-new-submit')).toBeEnabled();
   });
 
@@ -341,10 +355,11 @@ test.describe('requests/01 — Requests', () => {
     await signInUi(page, adminEmail);
     await openRequestsPage(page);
 
-    // The row containers only: the status badge and the two flags carry ids that begin
-    // with the same prefix.
+    // The row containers only: the status badge, the two flags and — since requests
+    // spec 02 — the About cell all carry ids that begin with the same prefix.
     const rows = page.locator(
-      '[data-testid^="request-row-"]:not([data-testid*="-status"]):not([data-testid*="-flag"])',
+      '[data-testid^="request-row-"]:not([data-testid*="-status"])' +
+        ':not([data-testid*="-flag"]):not([data-testid*="-topic"])',
     );
     await expect(rows).toHaveCount(3);
     const order = await rows.evaluateAll((nodes) =>
@@ -387,12 +402,13 @@ test.describe('requests/01 — Requests', () => {
     // reason field is still visible would pass for a modal rendering no error whatsoever; the
     // status code and the message text are TC-01-INT-12's.
     await expect(page.getByTestId('request-detail-decline-error')).toBeVisible();
-    await expect(page.getByTestId('request-detail-status')).toHaveText('Open');
+    await expect(page.getByTestId('request-detail-status')).toHaveText('Pending');
 
     await page.getByTestId('request-detail-decline-reason').fill('Nobody gets production.');
     await page.getByTestId('request-detail-decline-confirm').click();
 
-    await expect(page.getByTestId('request-detail-status')).toHaveText('Declined');
+    // The four words, with the closure reason beside the one that closed (REQ-02-029).
+    await expect(page.getByTestId('request-detail-status')).toHaveText('Closed · declined');
     await expect(page.getByTestId('request-detail-thread')).toContainText(
       'Nobody gets production.',
     );
@@ -419,11 +435,11 @@ test.describe('requests/01 — Requests', () => {
     await signInUi(page, userEmail);
     await page.goto(`/org/${org.organizationId}/requests/${seeded.id}`);
     await page.getByTestId('request-detail-cancel-btn').click();
-    await expect(page.getByTestId('request-detail-status')).toHaveText('Cancelled');
+    await expect(page.getByTestId('request-detail-status')).toHaveText('Closed · cancelled');
 
     await switchUi(page, adminEmail);
     await page.goto(`/org/${org.organizationId}/requests/${seeded.id}`);
-    await expect(page.getByTestId('request-detail-status')).toHaveText('Cancelled');
+    await expect(page.getByTestId('request-detail-status')).toHaveText('Closed · cancelled');
     await expect(page.getByTestId('request-detail-answer-btn')).toHaveCount(0);
     await expect(page.getByTestId('request-detail-composer')).toHaveCount(0);
   });
@@ -463,7 +479,8 @@ test.describe('requests/01 — Requests', () => {
     await expect(page.getByTestId('request-detail-assignee')).toContainText('Robin Ops');
     const history = page.getByTestId('request-detail-history');
     await expect(history).toContainText('created the request');
-    await expect(history).toContainText('marked it answered');
+    // The four words in the trail too: the entry used to print the raw stored value.
+    await expect(history).toContainText('marked it In progress');
     await expect(history).toContainText('Pat Member');
     await expect(history).toContainText('Robin Ops');
   });
@@ -523,7 +540,7 @@ test.describe('requests/01 — Requests', () => {
     await page.goto(`/org/${org.organizationId}/requests/${seeded.id}`);
     await expect(page.getByTestId('request-detail-assignee-inactive-banner')).toBeVisible();
     await expect(page.getByTestId('request-detail-reassign-btn')).toBeVisible();
-    await expect(page.getByTestId('request-detail-status')).toHaveText('Open');
+    await expect(page.getByTestId('request-detail-status')).toHaveText('Pending');
   });
 
   // TC-01-E2E-10 — the nav row, for every role. The regression witness for requirement 38:
@@ -586,8 +603,8 @@ test.describe('requests/01 — Requests', () => {
     // value by the time they are on screen. A server that still counted the two granted
     // requests as waiting would have drawn the badge into this same DOM.
     await openRequestsPage(page);
-    await expect(page.getByTestId(`request-row-${first.id}-status`)).toHaveText('Granted');
-    await expect(page.getByTestId(`request-row-${second.id}-status`)).toHaveText('Granted');
+    await expect(page.getByTestId(`request-row-${first.id}-status`)).toHaveText('Completed');
+    await expect(page.getByTestId(`request-row-${second.id}-status`)).toHaveText('Completed');
     await expect(page.getByTestId('sidebar-requests-badge')).toHaveCount(0);
   });
 
@@ -623,7 +640,7 @@ test.describe('requests/01 — Requests', () => {
     });
 
     await page.getByTestId('requests-status-filter').click();
-    await page.getByRole('option', { name: 'Open', exact: true }).click();
+    await page.getByRole('option', { name: 'Pending', exact: true }).click();
 
     await expect(page.getByTestId('requests-error-banner')).toBeVisible();
     await expect(page.getByTestId('requests-error-retry-btn')).toBeVisible();
@@ -654,7 +671,7 @@ test.describe('requests/01 — Requests', () => {
     await openRequestsPage(page);
 
     await page.getByTestId('requests-status-filter').click();
-    await page.getByRole('option', { name: 'Granted', exact: true }).click();
+    await page.getByRole('option', { name: 'Completed', exact: true }).click();
     await expect(page.getByTestId('requests-empty-state')).toHaveText(
       /No requests match these filters\./,
     );

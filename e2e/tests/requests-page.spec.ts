@@ -144,7 +144,7 @@ test.describe('10 — Organization Requests Page', () => {
     // Narrow to the rows this case is about, so the assertion below still means what it
     // meant: an acted-on card stays in view after it stops matching the active filter.
     await page.getByTestId('requests-status-filter').click();
-    await page.getByRole('option', { name: 'Open', exact: true }).click();
+    await page.getByRole('option', { name: 'Pending', exact: true }).click();
     await expect(page.getByTestId('requests-vacation-section')).toBeVisible();
 
     // Both cards render with avatar, linked name, and Approve/Reject on the open view.
