@@ -87,9 +87,16 @@
       "endedAt": "2026-09-03T09:46:56.789Z",
       "commit": "2fdce098424fb686dbaf0a370042c8096766eae0",
       "growth": 31
+    },
+    {
+      "round": 2,
+      "startedAt": "2026-09-03T09:48:23.306Z",
+      "head": "3fb886942e140704bf57533eae9aa5787e6dcf2f",
+      "status": "running",
+      "lint": 0
     }
   ],
-  "status": "blocked",
+  "status": "running",
   "request": "Employees pick a request topic from presets the organization curates (VPN, Claude, Question, Other for staff; Access, Other for clients), and the screens say Pending / In progress / Completed / Closed",
   "outcome": {
     "reason": "growing",
