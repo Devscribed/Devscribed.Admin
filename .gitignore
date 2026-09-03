@@ -69,6 +69,8 @@ docker-compose.override.yml
 .workflow/refine/*.probe.*/**/*.log
 # Console output of a run, kept for whoever is watching it. The ledger is the record.
 .workflow/refine/*.log
+.workflow/last-ship.log
+.workflow/last-ship.err
 # Built for one reader, from files that are committed.
 .workflow/refine/*.payload.json
 .workflow/refine/*.report.html
