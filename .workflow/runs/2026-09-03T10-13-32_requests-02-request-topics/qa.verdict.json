@@ -1,0 +1,143 @@
+{
+  "status": "pass",
+  "suites": {
+    "unit": {
+      "passed": 1084,
+      "failed": 0,
+      "ms": 2910
+    },
+    "int": {
+      "passed": 54,
+      "failed": 0,
+      "ms": 31543,
+      "files": [
+        "test/request-topics.spec.ts",
+        "test/requests.spec.ts",
+        "test/signup.spec.ts"
+      ]
+    },
+    "e2e": {
+      "passed": 27,
+      "failed": 0,
+      "ms": 148800,
+      "files": [
+        "tests/request-topics.spec.ts",
+        "tests/regressions.spec.ts",
+        "tests/requests.spec.ts",
+        "tests/requests-page.spec.ts"
+      ]
+    }
+  },
+  "flaky": [
+    {
+      "file": "tests/request-topics.spec.ts",
+      "test": "raising a request needs a topic and shows it on the row and the detail (TC-02-E2E-02)",
+      "detail": "First attempt: 'expect(locator).toHaveText(expected)' on request-detail-topic timed out — element not found within 5000ms after clicking the row. Passed clean on rerun (retry #1)."
+    },
+    {
+      "file": "tests/requests.spec.ts",
+      "test": "a user raises an access request, the admin answers it, the user grants it",
+      "detail": "First attempt: page.waitForURL('**/members') timed out at 30000ms inside signInUi during an account switch. Passed clean on rerun (retry #1)."
+    }
+  ],
+  "findings": [],
+  "walkthrough": {
+    "spec": "tests/qa-look.spec.ts (copied from the template, deleted after the pass)",
+    "areas": [
+      "Settings › Request topics: a curator (admin) opens the catalogue, sees the Staff/Client audience switch and the topics list — screenshot admin-settings-request-topics.png",
+      "A requester (user) sees no 'Request topics' sidebar row and is bounced from the direct route to /org/{orgId}/members — screenshot user-settings-request-topics-redirected.png",
+      "Raising a request: the requester picks a topic in the New request modal, the created row and the detail screen both show the topic's snapshot name (VPN) — screenshots requester-new-request-modal.png, requester-requests-list-with-topic.png, requester-request-detail-topic.png",
+      "The same request, viewed by the admin, shows the identical topic label on the list row — screenshot admin-requests-list-with-topic.png",
+      "Archiving a topic (VPN) removes it from the New request picker (status=active) but the requests list's topic filter still offers it, marked '(archived)' (status=all) — screenshots admin-new-request-picker-without-archived-vpn.png, admin-requests-topic-filter-shows-archived.png"
+    ],
+    "result": "No defect found. All screens matched the spec's stated behaviour; screenshots discarded with the deleted walkthrough spec, described here as required."
+  },
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "status": "pass",
+      "observedBy": "TC-02-INT-01"
+    },
+    {
+      "id": "AC-2",
+      "status": "pass",
+      "observedBy": "TC-02-INT-02"
+    },
+    {
+      "id": "AC-3",
+      "status": "pass",
+      "observedBy": "TC-02-INT-05"
+    },
+    {
+      "id": "AC-4",
+      "status": "pass",
+      "observedBy": "TC-02-INT-07"
+    },
+    {
+      "id": "AC-5",
+      "status": "pass",
+      "observedBy": "TC-02-INT-10"
+    },
+    {
+      "id": "AC-6",
+      "status": "pass",
+      "observedBy": "TC-02-INT-11"
+    },
+    {
+      "id": "AC-7",
+      "status": "pass",
+      "observedBy": "TC-02-INT-14"
+    },
+    {
+      "id": "AC-8",
+      "status": "pass",
+      "observedBy": "TC-02-INT-15, TC-02-E2E-03"
+    },
+    {
+      "id": "AC-9",
+      "status": "pass",
+      "observedBy": "TC-02-INT-12"
+    },
+    {
+      "id": "AC-10",
+      "status": "pass",
+      "observedBy": "TC-02-INT-17"
+    },
+    {
+      "id": "AC-11",
+      "status": "pass",
+      "observedBy": "TC-02-UNIT-05, TC-02-E2E-04"
+    },
+    {
+      "id": "AC-12",
+      "status": "pass",
+      "observedBy": "TC-02-E2E-04"
+    },
+    {
+      "id": "AC-13",
+      "status": "pass",
+      "observedBy": "TC-02-INT-16"
+    },
+    {
+      "id": "AC-14",
+      "status": "pass",
+      "observedBy": "TC-02-INT-13"
+    },
+    {
+      "id": "AC-15",
+      "status": "pass",
+      "observedBy": "TC-02-INT-07, TC-02-E2E-05"
+    },
+    {
+      "id": "AC-16",
+      "status": "pass",
+      "observedBy": "TC-02-E2E-06"
+    }
+  ],
+  "liveTestCases": {
+    "declared": 34,
+    "verified": 34,
+    "missing": [],
+    "note": "Every TC-* the spec's bundle (02-request-topics.cases.md) names — TC-02-UNIT-01..06, TC-02-INT-01..22, TC-02-E2E-01..06 — has a matching test in packages/validation/src/request-topics.test.ts, apps/api/test/request-topics.spec.ts, or e2e/tests/request-topics.spec.ts. No case is marked Retired."
+  }
+}

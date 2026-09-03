@@ -1,0 +1,262 @@
+{
+  "stage": "static_gate",
+  "status": "blocked",
+  "base": "225e843a7de689da2bafc0762d17287f88d4280f",
+  "findings": [
+    {
+      "id": "S1",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "spec/testid-unnamed",
+      "file": "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx",
+      "symbol": "request-new-submit",
+      "claim": "`request-new-submit` is added by this diff and named in no spec",
+      "witness": {
+        "kind": "rule",
+        "detail": "The diff adds a selector the spec does not name:\n    data-testid=\"request-new-submit\"",
+        "source": "specs/requests/02-request-topics.md"
+      },
+      "suggestedFix": "use the id the spec names, or raise a spec finding to have it named — selectors are the spec's to define"
+    },
+    {
+      "id": "S2",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "spec/testid-unnamed",
+      "file": "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx",
+      "symbol": "request-new-topic-empty",
+      "claim": "`request-new-topic-empty` is added by this diff and named in no spec",
+      "witness": {
+        "kind": "rule",
+        "detail": "The diff adds a selector the spec does not name:\n    data-testid=\"request-new-topic-empty\"",
+        "source": "specs/requests/02-request-topics.md"
+      },
+      "suggestedFix": "use the id the spec names, or raise a spec finding to have it named — selectors are the spec's to define"
+    },
+    {
+      "id": "S3",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "spec/testid-unnamed",
+      "file": "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx",
+      "symbol": "request-new-topic",
+      "claim": "`request-new-topic` is added by this diff and named in no spec",
+      "witness": {
+        "kind": "rule",
+        "detail": "The diff adds a selector the spec does not name:\n    data-testid=\"request-new-topic\"",
+        "source": "specs/requests/02-request-topics.md"
+      },
+      "suggestedFix": "use the id the spec names, or raise a spec finding to have it named — selectors are the spec's to define"
+    },
+    {
+      "id": "S4",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "spec/testid-unnamed",
+      "file": "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx",
+      "symbol": "request-detail-status",
+      "claim": "`request-detail-status` is added by this diff and named in no spec",
+      "witness": {
+        "kind": "rule",
+        "detail": "The diff adds a selector the spec does not name:\n    <Badge tone={tone} data-testid=\"request-detail-status\">",
+        "source": "specs/requests/02-request-topics.md"
+      },
+      "suggestedFix": "use the id the spec names, or raise a spec finding to have it named — selectors are the spec's to define"
+    },
+    {
+      "id": "S5",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "spec/testid-unnamed",
+      "file": "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx",
+      "symbol": "request-detail-topic",
+      "claim": "`request-detail-topic` is added by this diff and named in no spec",
+      "witness": {
+        "kind": "rule",
+        "detail": "The diff adds a selector the spec does not name:\n    <span data-testid=\"request-detail-topic\">",
+        "source": "specs/requests/02-request-topics.md"
+      },
+      "suggestedFix": "use the id the spec names, or raise a spec finding to have it named — selectors are the spec's to define"
+    },
+    {
+      "id": "S6",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "spec/testid-unnamed",
+      "file": "apps/web/app/org/[orgId]/requests/page.tsx",
+      "symbol": "requests-topic-filter",
+      "claim": "`requests-topic-filter` is added by this diff and named in no spec",
+      "witness": {
+        "kind": "rule",
+        "detail": "The diff adds a selector the spec does not name:\n    data-testid=\"requests-topic-filter\"",
+        "source": "specs/requests/02-request-topics.md"
+      },
+      "suggestedFix": "use the id the spec names, or raise a spec finding to have it named — selectors are the spec's to define"
+    },
+    {
+      "id": "S7",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "spec/testid-unnamed",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/RequestTopicModal.tsx",
+      "symbol": "request-topic-error-name",
+      "claim": "`request-topic-error-name` is added by this diff and named in no spec",
+      "witness": {
+        "kind": "rule",
+        "detail": "The diff adds a selector the spec does not name:\n    data-testid=\"request-topic-error-name\"",
+        "source": "specs/requests/02-request-topics.md"
+      },
+      "suggestedFix": "use the id the spec names, or raise a spec finding to have it named — selectors are the spec's to define"
+    },
+    {
+      "id": "S8",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "spec/testid-unnamed",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/RequestTopicModal.tsx",
+      "symbol": "request-topic-modal",
+      "claim": "`request-topic-modal` is added by this diff and named in no spec",
+      "witness": {
+        "kind": "rule",
+        "detail": "The diff adds a selector the spec does not name:\n    data-testid=\"request-topic-modal\"",
+        "source": "specs/requests/02-request-topics.md"
+      },
+      "suggestedFix": "use the id the spec names, or raise a spec finding to have it named — selectors are the spec's to define"
+    },
+    {
+      "id": "S9",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "spec/testid-unnamed",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/RequestTopicModal.tsx",
+      "symbol": "request-topic-submit",
+      "claim": "`request-topic-submit` is added by this diff and named in no spec",
+      "witness": {
+        "kind": "rule",
+        "detail": "The diff adds a selector the spec does not name:\n    data-testid=\"request-topic-submit\"",
+        "source": "specs/requests/02-request-topics.md"
+      },
+      "suggestedFix": "use the id the spec names, or raise a spec finding to have it named — selectors are the spec's to define"
+    },
+    {
+      "id": "S10",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "spec/testid-unnamed",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/RequestTopicModal.tsx",
+      "symbol": "request-topic-name",
+      "claim": "`request-topic-name` is added by this diff and named in no spec",
+      "witness": {
+        "kind": "rule",
+        "detail": "The diff adds a selector the spec does not name:\n    data-testid=\"request-topic-name\"",
+        "source": "specs/requests/02-request-topics.md"
+      },
+      "suggestedFix": "use the id the spec names, or raise a spec finding to have it named — selectors are the spec's to define"
+    },
+    {
+      "id": "S11",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "spec/testid-unnamed",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/RequestTopicModal.tsx",
+      "symbol": "request-topic-audience",
+      "claim": "`request-topic-audience` is added by this diff and named in no spec",
+      "witness": {
+        "kind": "rule",
+        "detail": "The diff adds a selector the spec does not name:\n    data-testid=\"request-topic-audience\"",
+        "source": "specs/requests/02-request-topics.md"
+      },
+      "suggestedFix": "use the id the spec names, or raise a spec finding to have it named — selectors are the spec's to define"
+    },
+    {
+      "id": "S12",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "spec/testid-unnamed",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/RequestTopicModal.tsx",
+      "symbol": "request-topic-type",
+      "claim": "`request-topic-type` is added by this diff and named in no spec",
+      "witness": {
+        "kind": "rule",
+        "detail": "The diff adds a selector the spec does not name:\n    data-testid=\"request-topic-type\"",
+        "source": "specs/requests/02-request-topics.md"
+      },
+      "suggestedFix": "use the id the spec names, or raise a spec finding to have it named — selectors are the spec's to define"
+    },
+    {
+      "id": "S13",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "spec/testid-unnamed",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+      "symbol": "request-topics-page",
+      "claim": "`request-topics-page` is added by this diff and named in no spec",
+      "witness": {
+        "kind": "rule",
+        "detail": "The diff adds a selector the spec does not name:\n    <div data-testid=\"request-topics-page\">",
+        "source": "specs/requests/02-request-topics.md"
+      },
+      "suggestedFix": "use the id the spec names, or raise a spec finding to have it named — selectors are the spec's to define"
+    },
+    {
+      "id": "S14",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "spec/testid-unnamed",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+      "symbol": "request-topics-add-btn",
+      "claim": "`request-topics-add-btn` is added by this diff and named in no spec",
+      "witness": {
+        "kind": "rule",
+        "detail": "The diff adds a selector the spec does not name:\n    data-testid=\"request-topics-add-btn\"",
+        "source": "specs/requests/02-request-topics.md"
+      },
+      "suggestedFix": "use the id the spec names, or raise a spec finding to have it named — selectors are the spec's to define"
+    },
+    {
+      "id": "S15",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "spec/testid-unnamed",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+      "symbol": "request-topics-error-banner",
+      "claim": "`request-topics-error-banner` is added by this diff and named in no spec",
+      "witness": {
+        "kind": "rule",
+        "detail": "The diff adds a selector the spec does not name:\n    <div data-testid=\"request-topics-error-banner\" style={{ marginBottom: 'var(--sp-6)' }}>",
+        "source": "specs/requests/02-request-topics.md"
+      },
+      "suggestedFix": "use the id the spec names, or raise a spec finding to have it named — selectors are the spec's to define"
+    },
+    {
+      "id": "S16",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "spec/testid-unnamed",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+      "symbol": "request-topics-error-retry-btn",
+      "claim": "`request-topics-error-retry-btn` is added by this diff and named in no spec",
+      "witness": {
+        "kind": "rule",
+        "detail": "The diff adds a selector the spec does not name:\n    data-testid=\"request-topics-error-retry-btn\"",
+        "source": "specs/requests/02-request-topics.md"
+      },
+      "suggestedFix": "use the id the spec names, or raise a spec finding to have it named — selectors are the spec's to define"
+    },
+    {
+      "id": "S17",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "spec/testid-unnamed",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+      "symbol": "request-topics-loading-skeleton",
+      "claim": "`request-topics-loading-skeleton` is added by this diff and named in no spec",
+      "witness": {
+        "kind": "rule",
+        "detail": "The diff adds a selector the spec does not name:\n    data-testid=\"request-topics-loading-skeleton\"",
+        "source": "specs/requests/02-request-topics.md"
+      },
+      "suggestedFix": "use the id the spec names, or raise a spec finding to have it named — selectors are the spec's to define"
+    }
+  ]
+}

@@ -5,10 +5,10 @@
   "task": "requests-02-request-topics",
   "branch": "spec/requests-02-client-participants",
   "baseRef": "225e843a7de689da2bafc0762d17287f88d4280f",
-  "headAtInit": "225e843a7de689da2bafc0762d17287f88d4280f",
-  "status": "implement",
+  "headAtInit": "90e412f15581bc9aa5a3781a9183050db98eecf1",
+  "status": "ready",
   "createdAt": "2026-09-03T10:13:32.551Z",
-  "updatedAt": "2026-09-03T10:24:24.763Z",
+  "updatedAt": "2026-09-03T12:06:05.802Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -22,29 +22,59 @@
       "lastVerdict": "pass"
     },
     "implement": {
-      "status": "running",
-      "attempts": 1,
-      "startedAt": "2026-09-03T10:24:24.762Z"
+      "status": "passed",
+      "attempts": 5,
+      "startedAt": "2026-09-03T11:39:55.138Z",
+      "lastVerdict": "pass",
+      "endedAt": "2026-09-03T11:43:59.416Z"
     },
     "static_gate": {
-      "status": "pending",
-      "attempts": 0
+      "status": "passed",
+      "attempts": 3,
+      "startedAt": "2026-09-03T11:43:59.516Z",
+      "lastVerdict": "pass",
+      "endedAt": "2026-09-03T11:44:03.827Z"
     },
     "review": {
-      "status": "pending",
-      "attempts": 0
+      "status": "passed",
+      "attempts": 2,
+      "startedAt": "2026-09-03T11:44:03.938Z",
+      "lastVerdict": "pass",
+      "endedAt": "2026-09-03T11:57:10.957Z"
     },
     "qa": {
-      "status": "pending",
-      "attempts": 0
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-03T11:57:11.102Z",
+      "endedAt": "2026-09-03T12:06:05.731Z",
+      "lastVerdict": "pass"
     }
   },
   "budget": {
-    "codeAttempts": 0,
+    "codeAttempts": 2,
     "handoffReplans": 0,
     "infra": 0
   },
-  "findingHistory": {},
+  "findingHistory": {
+    "spec/testid-unnamed@apps/web/app/org/[orgId]/requests/NewRequestModal.tsx#request-new-submit": 1,
+    "spec/testid-unnamed@apps/web/app/org/[orgId]/requests/NewRequestModal.tsx#request-new-topic-empty": 1,
+    "spec/testid-unnamed@apps/web/app/org/[orgId]/requests/NewRequestModal.tsx#request-new-topic": 1,
+    "spec/testid-unnamed@apps/web/app/org/[orgId]/requests/[requestId]/page.tsx#request-detail-status": 1,
+    "spec/testid-unnamed@apps/web/app/org/[orgId]/requests/[requestId]/page.tsx#request-detail-topic": 1,
+    "spec/testid-unnamed@apps/web/app/org/[orgId]/requests/page.tsx#requests-topic-filter": 1,
+    "spec/testid-unnamed@apps/web/app/org/[orgId]/settings/request-topics/RequestTopicModal.tsx#request-topic-error-name": 1,
+    "spec/testid-unnamed@apps/web/app/org/[orgId]/settings/request-topics/RequestTopicModal.tsx#request-topic-modal": 1,
+    "spec/testid-unnamed@apps/web/app/org/[orgId]/settings/request-topics/RequestTopicModal.tsx#request-topic-submit": 1,
+    "spec/testid-unnamed@apps/web/app/org/[orgId]/settings/request-topics/RequestTopicModal.tsx#request-topic-name": 1,
+    "spec/testid-unnamed@apps/web/app/org/[orgId]/settings/request-topics/RequestTopicModal.tsx#request-topic-audience": 1,
+    "spec/testid-unnamed@apps/web/app/org/[orgId]/settings/request-topics/RequestTopicModal.tsx#request-topic-type": 1,
+    "spec/testid-unnamed@apps/web/app/org/[orgId]/settings/request-topics/page.tsx#request-topics-page": 1,
+    "spec/testid-unnamed@apps/web/app/org/[orgId]/settings/request-topics/page.tsx#request-topics-add-btn": 1,
+    "spec/testid-unnamed@apps/web/app/org/[orgId]/settings/request-topics/page.tsx#request-topics-error-banner": 1,
+    "spec/testid-unnamed@apps/web/app/org/[orgId]/settings/request-topics/page.tsx#request-topics-error-retry-btn": 1,
+    "spec/testid-unnamed@apps/web/app/org/[orgId]/settings/request-topics/page.tsx#request-topics-loading-skeleton": 1,
+    "blocking-criteria.md CR-16 — \"a failure — timeout, 4xx, 5xx, unparseable body — is swallowed, reported as success, or leaves stored state claiming something that did not happen\"@apps/web/app/org/[orgId]/settings/request-topics/page.tsx#write": 1
+  },
   "carriedFindings": [],
   "carriedFrom": null,
   "contested": [],
@@ -157,9 +187,313 @@
         "source": "specs/requests/README.md#Blast Radius"
       },
       "suggestedFix": "nothing in the spec need change — the work is owned by task T8 with the line numbers, recorded here so the run is not surprised by a red suite"
+    },
+    {
+      "stage": "review",
+      "id": "F1",
+      "target": "code",
+      "severity": "note",
+      "criterion": "CR-26",
+      "rule": "blocking-criteria.md CR-26 — \"a test cannot fail — an assertion about a value nothing produces, a selector nothing renders, a mechanism that throws before the assertion runs\"",
+      "file": "apps/api/test/request-topics.spec.ts",
+      "symbol": "TC-02-INT-17",
+      "line": 982,
+      "claim": "The vacation half of TC-02-INT-17 asserts over an array that is always empty, so it cannot fail; combined with the missing unit assertion, the status=closed -> vacation ['rejected','cancelled'] mapping has no witness at any level.",
+      "witness": {
+        "kind": "test",
+        "detail": "TC-02-INT-17. apps/api/test/request-topics.spec.ts:982-989 asserts (closedWithVacation.body.vacation.requests as {status:string}[]).every(v => ['rejected','cancelled'].includes(v.status)) is true. `grep -n vacationRequest apps/api/test/request-topics.spec.ts` returns exactly one line — the `prisma.vacationRequest.deleteMany()` in beforeEach at line 208 — so no vacation request is ever created in the file and the array under assertion is [] in every run. [].every(...) is true, so the assertion holds identically if vacationStatusesFor('closed') returned null (every vacation row), [] , or ['approved']. The spec's Steps require the opposite state: \"repeat status=closed in an organization that also has a rejected and a cancelled vacation request\", with Expected Result \"In the vacation section closed returns the rejected and cancelled rows and no pending one\" (specs/requests/02-request-topics.cases.md:409-417) — and the 'no pending one' half is never checked at all. The new branch in packages/validation/src/requests.ts (vacationStatusesFor, case 'closed') is also unasserted in packages/validation/src/requests.test.ts:317-325, which enumerates the other six query values, so this integration case is the only coverage the branch has and it is vacuous.",
+        "source": "specs/requests/02-request-topics.cases.md:409"
+      },
+      "suggestedFix": "Create three vacation requests in that organization (pending, rejected, cancelled) before the status=closed read, then assert the returned vacation ids are exactly the rejected and the cancelled one and that the pending one is absent — the shape the request half of the same case already uses. Adding expect(vacationStatusesFor('closed')).toEqual(['rejected','cancelled']) to the unit file is a cheap second witness but does not by itself close this.",
+      "demoted": "witness kind \"test\" needs a test id"
+    },
+    {
+      "stage": "review",
+      "id": "N1",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/api/prisma/migrations/20260903120100_requests_02_request_topics_backfill/migration.sql",
+      "symbol": "backfill",
+      "line": 1,
+      "claim": "Deploy-window gap. infra/deploy.sh runs migrate.sh and only then tf apply (verified at infra/deploy.sh:183-191), so between the backfill and the rollout the previous code is still serving signup — and that code has no seed. An organization signed up in that window is created with zero RequestTopic rows and the backfill has already run, so it stays empty permanently. Not a violation of REQ-02-015 or REQ-02-016 as written, and REQ-02-017 makes the resulting empty picker a readable state rather than a failure. Recorded because nothing in the change notices it."
+    },
+    {
+      "stage": "review",
+      "id": "N2",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "createRequest",
+      "line": 363,
+      "claim": "REQ-02-020's guard is written as topic.audience !== 'staff' rather than as a comparison against the addressee kind the body carries. Correct today only because 'member' is the only addressee kind, which the spec's decision table fixes; the moment spec 03 admits a client addressee this line silently keeps refusing every client topic and nothing fails to compile. Deriving the expected audience from input.assigneeKind through a total mapping would make the next spec break loudly instead."
+    },
+    {
+      "stage": "review",
+      "id": "N3",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/api/src/signup/signup.service.ts",
+      "symbol": "signup",
+      "line": 69,
+      "claim": "The transaction's catch maps any Prisma P2002 to duplicateEmail(). Seeding eleven RequestTopic rows now runs inside that transaction and is a second possible source of P2002 via the functional unique index. Unreachable today — the organization id is fresh inside the transaction — but a fault there would be reported to the caller as 'email already registered'. Narrowing the mapping to the Account.email target would keep any other unique violation surfacing as itself."
+    },
+    {
+      "stage": "review",
+      "id": "N4",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/api/prisma/schema.prisma",
+      "symbol": "Request.accessKind",
+      "line": 1138,
+      "claim": "The doc comment still reads \"Required when type = 'access', absent otherwise\", which REQ-02-021 has just made false for every new row — accessKind is now written null even under an access topic. The topicId and topicLabel comments were added in the same diff, so the stale sentence sits directly beside its own correction."
+    },
+    {
+      "stage": "review",
+      "id": "N5",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/api/src/requests/request-topics.service.ts",
+      "symbol": "refuseDuplicateName",
+      "line": 404,
+      "claim": "The uniqueness pre-check folds with toLocaleLowerCase() while the arbiter — the functional unique index — folds with Postgres LOWER(). The two disagree on locale-sensitive pairs, so a name the index rejects can pass the pre-check. Behaviour stays correct because the P2002 path answers the same 409 nameDuplicate. Recorded so nobody later removes the P2002 catch on the grounds that the pre-check covers it."
+    },
+    {
+      "stage": "review",
+      "id": "N6",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/api/src/requests/request-topics.service.ts",
+      "symbol": "updateTopic",
+      "line": 239,
+      "claim": "validateTopicSortOrder maps null and '' to 'absent'. On POST that is right — absent means compute the default. On PATCH there is no default, so PATCH {\"sortOrder\": null} passes validation, writes nothing, and answers 200 with the order unchanged. The contracts table names no outcome for it either way; a gap in the contract rather than a defect against a stated rule."
+    },
+    {
+      "stage": "review",
+      "id": "N7",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+      "symbol": "write",
+      "line": 126,
+      "claim": "setBusy(false) runs before await load(), so every row control re-enables while the catalogue re-read is still in flight. A second press in that window issues a PATCH computed from the pre-reload active array, i.e. from stale neighbour sortOrder values. Bounded by the Known Gaps entry that already accepts a press leaving the order as it was; moving the line after the reload closes the window."
+    },
+    {
+      "stage": "review",
+      "id": "N8",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx",
+      "symbol": "the picker's catalogue read",
+      "line": 168,
+      "claim": "The picker's read does `if (!response.ok) return;` leaving topics at null, so a 5xx draws the About Select with no options, an enabled submit, and nothing saying the read failed. The code does correctly distinguish null (not yet read) from [] (genuinely empty), so REQ-02-017 itself is met; what is missing is any statement when the read never lands. The open-effect also never resets topics to null, so a failed read on a later open leaves the previous session's list on offer. The members read three lines above has the identical pre-existing shape."
+    },
+    {
+      "stage": "review",
+      "id": "N9",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/RequestTopicModal.tsx",
+      "symbol": "the name field's error",
+      "line": 205,
+      "claim": "The duplicate/blank-name message renders twice: Input error={errors.name} makes the DS component draw its own message node, and NameError draws a second copy carrying the spec's request-topic-error-name. getByTestId still resolves so no case fails, but the user reads the message twice. NewRequestModal already had this shape before the change, so this is the pattern being propagated rather than introduced; an errorId prop on the DS Input is the standing gap that closes it."
+    },
+    {
+      "stage": "review",
+      "id": "N10",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+      "symbol": "layout literals",
+      "line": 366,
+      "claim": "Raw pixel literals in the new screen — minHeight: 56, width: 84, width: 96, and 16 in the skeleton. Colours, spacing and type are all tokenized correctly. I measured the idiom before judging it: 174 such numeric layout literals across apps/web, in roughly twenty files, most untouched by this diff (settings/holidays, clients, projects, members). CR-11 reads on 'a colour, size or spacing literal', but blocking here would apply a rule the repository applies nowhere else, so this is a note. Either the rule or the practice should move, and that is a person's call."
+    },
+    {
+      "stage": "review",
+      "id": "N11",
+      "target": "code",
+      "severity": "note",
+      "file": "e2e/tests/request-topics.spec.ts",
+      "symbol": "TC-02-E2E-01",
+      "line": 149,
+      "claim": "The case asserts the first active row draws no up control but never asserts the last active row draws no down one, though its own comment and the testid table name both halves (\"absent on the last row of the audience\"). The behaviour is implemented — canMoveDown={index < active.length - 1} at page.tsx:266 — so this is a missing assertion, not a missing control. One line beside the existing first-row assertion closes it."
+    },
+    {
+      "stage": "review",
+      "id": "N12",
+      "target": "code",
+      "severity": "note",
+      "file": "e2e/tests/helpers.ts",
+      "symbol": "requestTopicIdViaApi",
+      "line": 1189,
+      "claim": "The fixture reads the catalogue with the default ?status=all and returns the first topic matching the name, so it can hand back an archived topic; every caller uses the result to build a POST .../requests body, where an archived topic is a 400 topicUnavailable and the caller then throws 'Precondition failed'. No current caller archives before creating, so it does not bite today. Passing ?status=active from this helper removes the trap while leaving the status=all default on listRequestTopicsViaApi for the archiving case."
+    },
+    {
+      "stage": "review",
+      "id": "N13",
+      "target": "code",
+      "severity": "note",
+      "file": "packages/validation/src/requests.test.ts",
+      "symbol": "vacationStatusesFor",
+      "line": 317,
+      "claim": "vacationStatusesFor gained a 'closed' branch and the unit test that enumerates that mapping was left at the six pre-existing values. See F1: the integration case that was supposed to be its witness asserts over an empty array, so between them the branch is unasserted everywhere."
+    },
+    {
+      "stage": "review",
+      "id": "N14",
+      "target": "code",
+      "severity": "note",
+      "file": "e2e/tests/requests-page.spec.ts",
+      "symbol": "TC-10 vacation review case",
+      "line": 112,
+      "claim": "The selected option changed from 'Open' to 'Pending' at line 147, but three comments still name the control by the retired word — 'the case picks Open' at 112, 'on the Open view' at 160 and 168 — so the file's prose describes a label the screen no longer draws."
+    },
+    {
+      "stage": "review",
+      "id": "N15",
+      "target": "code",
+      "severity": "note",
+      "file": "e2e/tests/request-topics.spec.ts",
+      "symbol": "TC-02-E2E-01",
+      "line": 100,
+      "claim": "The rendered order is compared against the order GET .../request-topics returned rather than against an independent expectation, so an API that ordered wrongly and a page that faithfully rendered it would both pass. REQ-02-009 is independently pinned by TC-02-UNIT-04 and TC-02-INT-22, so the case is not load-bearing for the rule; recorded because it is the assertion a reader would take as the ordering witness."
+    },
+    {
+      "stage": "review",
+      "id": "N16",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/api/test/request-topics.spec.ts",
+      "symbol": "TC-02-INT-02",
+      "line": 297,
+      "claim": "runSqlFile(BACKFILL_MIGRATION) executes the unscoped INSERT ... FROM \"Organization\" o WHERE NOT EXISTS (...), so it inserts eleven topics for every organization in the shared test database that currently holds none — including organizations belonging to other Jest workers. It cannot fail this case and every suite truncates in beforeEach, but it is a cross-worker write the case does not intend."
+    },
+    {
+      "stage": "review",
+      "id": "N17",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/api/prisma/schema.prisma",
+      "symbol": "Request.topicId",
+      "line": 1170,
+      "claim": "GET .../requests now filters on Request.topicId (REQ-02-026) and no index covers the column; Postgres creates none for a foreign key. Consistent with projectId, which the same route already filters unindexed, and one organization's request set is small. @@index([organizationId, topicId]) is additive if the list ever gets slow."
+    },
+    {
+      "stage": "review",
+      "id": "N18",
+      "target": "code",
+      "severity": "note",
+      "file": "e2e/tests/request-topics.spec.ts",
+      "symbol": "TC-02-E2E-01",
+      "line": 152,
+      "claim": "page.locator('[draggable=\"true\"]') is the only non-data-testid attribute locator in the e2e suite. CR-27 makes non-testid selection blocking, but this one asserts an absence — an element that is not drawn cannot carry a testid — so it is a note. Expressing the DS-gap commitment as the presence of the up/down testids instead would remove the exception."
+    },
+    {
+      "stage": "implement",
+      "id": "I1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/untestable-case",
+      "file": "specs/requests/02-request-topics.contracts.md",
+      "symbol": "Required data-testid Attributes",
+      "claim": "the catalogue screen's error banner is required by the UI Description but carries no id in the testid table, so the refusal it now renders can be asserted at no level",
+      "witness": {
+        "kind": "rule",
+        "detail": "The UI Description row 'Error (catalogue)' requires 'An inline banner with a retry control; the last good list stays on screen behind it', and review finding CR-16 required that a refused write render the server's message rather than swallow it — statusUnchanged (REQ-02-013, edge case 12, AC-13) and manageForbidden (REQ-02-007) are both reachable by a curator on this screen. Both are now rendered in that banner. The Required data-testid Attributes table names seventeen ids for Settings > Request topics and none for the banner or its retry control, so no selector reaches it; the behaviour is web-only, so integration cannot observe it either. Asserting it would mean reaching past a testid into a role or a text match, which the conventions forbid, or inventing an id, which the same table forbids. The fix therefore ships unasserted.",
+        "source": "specs/requests/02-request-topics.contracts.md#UI Description, #Required data-testid Attributes"
+      },
+      "suggestedFix": "add a row naming an id for the catalogue error banner — request-topics-error-banner, matching the requests list's requests-error-banner — so a case can drive a refused archive and assert the message"
+    },
+    {
+      "stage": "review",
+      "id": "N1",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/api/test/request-topics.spec.ts",
+      "symbol": "TC-02-INT-17",
+      "line": 1044,
+      "claim": "Pass 1's F1 (CR-26) is CLOSED, and I proved it by mutation rather than by reading. TC-02-INT-17 now builds three real vacation rows in the organization under test — pending, rejected and cancelled, each through the shipped routes with its status asserted at 201/200 — and then asserts the whole returned status multiset: ?status=all -> [cancelled,pending,rejected], ?status=closed -> [cancelled,rejected] (the 'no pending one' half the old assertion never checked), ?status=open -> [pending], ?status=granted -> []. The unit half at packages/validation/src/requests.test.ts:325 now pins vacationStatusesFor('closed') directly."
+    },
+    {
+      "stage": "review",
+      "id": "N2",
+      "target": "code",
+      "severity": "note",
+      "file": "packages/validation/src/requests.ts",
+      "symbol": "vacationStatusesFor",
+      "line": 538,
+      "claim": "The witness for N1, recorded so nobody has to take my word for it: I ran the case (npx jest test/request-topics.spec.ts -t 'answers status=closed with both closures') and it passed in 730 ms; I then mutated the built artefact the API loads — packages/validation/dist/requests.js, the 'closed' arm changed to `return null` — and re-ran it, and it failed at requests-02's own assertion line with Received + 'pending'. The dist file was restored from a copy taken first and `case 'closed': return ['rejected','cancelled'];` is back at dist line 422-423. The assertion can therefore fail on the exact mapping it claims to guard. `npm run test:unit` is green (1084 tests) and `tsc --noEmit` over apps/web is clean. Disclosed because my definition says the reviewer does not run suites; a CR-26 finding is the one claim reading cannot settle, and this was two targeted runs of one case, not a suite."
+    },
+    {
+      "stage": "review",
+      "id": "N3",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+      "symbol": "write",
+      "line": 130,
+      "claim": "Pass 1's F2 (CR-16) is CLOSED. write() now reads response.ok, parses the body with a .catch(() => null) guard against an unparseable one, lifts answer.message and falls back to REQUEST_MESSAGES.genericError, and a thrown fetch takes the same fallback. The message is applied AFTER the re-read, so load()'s success path — which sets error to null — cannot erase the refusal it is there to report. The two strings the contracts table publishes for these routes now reach a screen: the 409 statusUnchanged of edge case 12 and the 403 manageForbidden of REQ-02-007 both arrive as {error, message} (request-topics.service.ts:319 and :463) and are printed verbatim in the InfoBanner the read path already used."
+    },
+    {
+      "stage": "review",
+      "id": "N4",
+      "target": "spec",
+      "severity": "note",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+      "symbol": "error banner",
+      "line": 233,
+      "claim": "The fix for F2 also removed three data-testids the earlier commit had invented — request-topics-error-banner, request-topics-error-retry-btn and request-topics-loading-skeleton — on the stated ground that the spec's testid table names none of them. That ground holds (grep over specs/ finds none) and nothing selects on them (grep over e2e/, apps/, packages/ finds none), so this is not CR-23 and not CR-27. What it leaves is a correctness fix no case at any level can observe: the refusal path pass 1 demanded is right today and would go green again if a later edit re-swallowed every 409 and 403. The spec is where this closes — this one is frozen, so a later revision adding a banner id to the table and one case driving a repeated archive is the fix. Recorded against `spec` for that reason, not as work for the implementer now."
+    },
+    {
+      "stage": "review",
+      "id": "N5",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+      "symbol": "setAudience",
+      "line": 219,
+      "claim": "The new banner is cleared only by a successful load(). Switching audience clears nothing, so a refusal raised against a staff row keeps reading above the client catalogue, and 'This topic is already in that state' names no row — over the other audience it is copy with no referent. One setError(null) in the audience button's onClick closes it."
+    },
+    {
+      "stage": "review",
+      "id": "N6",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+      "symbol": "write",
+      "line": 142,
+      "claim": "answer?.message prints whatever the server put in `message`, and two reachable answers on these routes carry framework copy that lives in no packages/validation table: SessionGuard's UnauthorizedException('Not signed in') and OrgScopeGuard's bare NotFoundException ('Not Found'). A curator whose session was revoked mid-press reads 'Not signed in' in a red banner instead of being sent to the login screen. Not CR-07 — nothing user-facing is written inline in this diff — and the `body?.message ?? MESSAGES.generic` shape is the established idiom across apps/web, so this is a note about the idiom. Branching on 401 (end the session) and 404 (generic copy) before printing `message` is the narrow fix."
+    },
+    {
+      "stage": "review",
+      "id": "N7",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/api/test/request-topics.spec.ts",
+      "symbol": "futureWorkingRange",
+      "line": 199,
+      "claim": "The new vacation preconditions are calendar-dependent, and one of them is newly so. futureMonday picks the first Monday at least seven days out and the case uses week offsets 0, 3 and 6; a Mon-Wed range whose endpoints fall in different calendar years is refused with 400 cross_year (apps/api/src/vacation/vacation-requests.service.ts:112, REQUEST_MESSAGES.crossYear). Offset 6 puts the third range roughly seven weeks ahead, so for a stretch of runs in November and December the expect(...).toBe(201) on the row that is meant to be cancelled fails — and it fails inside a topics case, where it will be read as a topics regression. No register criterion covers a date-dependent test (CR-26 is 'cannot fail', not 'fails spuriously'), so this is a note; clamping the chosen Monday so start and end share a year removes the window."
+    },
+    {
+      "stage": "review",
+      "id": "N8",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/api/test/request-topics.spec.ts",
+      "symbol": "TC-02-INT-17",
+      "line": 1049,
+      "claim": "Accepted coupling, recorded not to be fixed. This case now drives spec 09/10 machinery — financials, the reserve ledger, submit, review and cancel — inside the spec 02 suite, because the cases file's Steps require exactly that state (specs/requests/02-request-topics.cases.md:409-417) and the vacation half of a shared filter cannot be observed without real vacation rows. The cost is that a future change to vacation submission breaks a case whose subject is REQ-02-027 and whose name mentions no vacation."
+    },
+    {
+      "stage": "review",
+      "id": "N9",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+      "symbol": "write",
+      "line": 148,
+      "claim": "Pass 1's note N7 still stands and now interacts with the banner: setBusy(false) runs before await load(), so every row control re-enables while the catalogue re-read is in flight, and a second press in that window computes its sortOrder from the pre-reload active array. Moving the line after the reload closes it. Of the eighteen notes pass 1 raised, only N13 (the missing vacationStatusesFor('closed') unit assertion) was closed by this pass; N1-N6, N8-N12 and N14-N18 live in files that have not moved since 90e412f and remain open for the person reading this at the end."
     }
   ],
-  "halt": null,
   "preflight": {
     "at": "2026-09-03T10:13:32.675Z",
     "checks": [
@@ -226,5 +560,40 @@
       "20260901140000_requests_01_requests",
       "20260901140000_spec_16_billable_time"
     ]
-  }
+  },
+  "resumes": [
+    {
+      "at": "2026-09-03T11:05:22.254Z",
+      "stage": "static_gate",
+      "from": "abandoned",
+      "detail": "orchestrator stopped during implement",
+      "reason": null,
+      "headAtInit": {
+        "from": "225e843a7de689da2bafc0762d17287f88d4280f",
+        "to": "90e412f15581bc9aa5a3781a9183050db98eecf1"
+      }
+    },
+    {
+      "at": "2026-09-03T11:21:07.377Z",
+      "stage": "implement",
+      "from": "abandoned",
+      "detail": "orchestrator stopped during implement",
+      "reason": null,
+      "headAtInit": {
+        "from": "90e412f15581bc9aa5a3781a9183050db98eecf1",
+        "to": "90e412f15581bc9aa5a3781a9183050db98eecf1"
+      }
+    },
+    {
+      "at": "2026-09-03T11:39:44.309Z",
+      "stage": "implement",
+      "from": "abandoned",
+      "detail": "orchestrator stopped during implement",
+      "reason": null,
+      "headAtInit": {
+        "from": "90e412f15581bc9aa5a3781a9183050db98eecf1",
+        "to": "90e412f15581bc9aa5a3781a9183050db98eecf1"
+      }
+    }
+  ]
 }

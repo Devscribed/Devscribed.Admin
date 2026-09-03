@@ -1,0 +1,20 @@
+{
+  "status": "pass",
+  "findings": [
+    {
+      "id": "I1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/untestable-case",
+      "file": "specs/requests/02-request-topics.contracts.md",
+      "symbol": "Required data-testid Attributes",
+      "claim": "the catalogue screen's error banner is required by the UI Description but carries no id in the testid table, so the refusal it now renders can be asserted at no level",
+      "witness": {
+        "kind": "rule",
+        "detail": "The UI Description row 'Error (catalogue)' requires 'An inline banner with a retry control; the last good list stays on screen behind it', and review finding CR-16 required that a refused write render the server's message rather than swallow it — statusUnchanged (REQ-02-013, edge case 12, AC-13) and manageForbidden (REQ-02-007) are both reachable by a curator on this screen. Both are now rendered in that banner. The Required data-testid Attributes table names seventeen ids for Settings > Request topics and none for the banner or its retry control, so no selector reaches it; the behaviour is web-only, so integration cannot observe it either. Asserting it would mean reaching past a testid into a role or a text match, which the conventions forbid, or inventing an id, which the same table forbids. The fix therefore ships unasserted.",
+        "source": "specs/requests/02-request-topics.contracts.md#UI Description, #Required data-testid Attributes"
+      },
+      "suggestedFix": "add a row naming an id for the catalogue error banner — request-topics-error-banner, matching the requests list's requests-error-banner — so a case can drive a refused archive and assert the message"
+    }
+  ]
+}

@@ -1,0 +1,118 @@
+{
+  "status": "pass",
+  "reviewedUpTo": "1c92fd90b706c64b4379b9255f54437c54188f9f",
+  "covered": {
+    "slice": 3,
+    "read": [
+      "apps/api/test/request-topics.spec.ts",
+      "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+      "packages/validation/src/requests.test.ts"
+    ],
+    "unreached": []
+  },
+  "shards": [
+    {
+      "shard": 1,
+      "findings": 7,
+      "kept": 6,
+      "blockersKept": 0,
+      "scope": "the whole slice — the topics integration spec, the catalogue screen, the validation unit spec"
+    }
+  ],
+  "sweep5": {
+    "requirements": 31,
+    "artefacts": 41,
+    "missing": [],
+    "detail": "Re-run over the artefact class this pass could have damaged: the Required data-testid table. All 41 backticked ids in specs/requests/02-request-topics.contracts.md were extracted mechanically; the 23 literal screen ids each resolve to exactly one apps/web .tsx (`grep -rl`), and the 8 templated ones resolve in TopicRow (request-topic-row-{id}, -up-btn, -down-btn, -rename-btn, -archive-btn, -restore-btn) and RequestRow (request-row-{id}-topic, -status); the remainder of the 41 are column and status names, not ids. The three ids this pass REMOVED — request-topics-error-banner, request-topics-error-retry-btn, request-topics-loading-skeleton — appear nowhere in the spec bundle (grep over specs/ returns nothing), so nothing the spec names is now unimplemented. The rest of sweep 5 was walked in full last pass over a commit whose non-test, non-screen files have not moved since (git diff 90e412f..HEAD names exactly three files)."
+  },
+  "sweep9": {
+    "pairs": 7,
+    "disagreeing": [],
+    "detail": "Pairs the three changed files newly create or alter: (1) write()'s `answer?.message` vs the bodies the service actually emits — request-topics.service.ts:319 ConflictException {error:'conflict', message: statusUnchanged} and :463 ForbiddenException {error:'forbidden', message: manageForbidden} both carry a string `message`, and apps/api has no global ValidationPipe (grep for ValidationPipe/useGlobalPipes in main.ts and app.module.ts returns nothing), so `message` is never an array and never renders as one; (2) the 400 shape on these routes is {error:'validation_error', fields} with no `message`, so the ?? fallback to REQUEST_MESSAGES.genericError is the branch it takes — genericError exists at packages/validation/src/index.ts:1841; (3) the banner's strings vs the Error Messages table — 'This topic is already in that state' and 'You do not have permission to manage request topics' are served verbatim by the API and printed unmodified; (4) the new unit assertion vs the implementation — vacationStatusesFor's 'closed' arm at packages/validation/src/requests.ts:538 returns ['rejected','cancelled'] and requests.test.ts:325 asserts exactly that; (5) TC-02-INT-17's vacation preconditions vs the routes they call — PUT .../vacation/financials, POST .../vacation/requests, PUT .../review, PUT .../cancel all exist and answer as the test expects (proved by executing the case); (6) the removed testids vs every selector in the tree — `grep -rn` over specs/, e2e/, apps/ and packages/ returns no reference to any of the three; (7) the vacation section's org scoping vs the assertion — the feed filters by the caller's membership organization, which is what makes ?status=all return the holidaymaker's three rows for the admin. None disagree.",
+    "blastRadius": "Contained to the three files. No shared module, export signature or nav array moved this pass; packages/validation gained only a test line. The one cross-file consequence is the loss of three data-testids from the catalogue screen, and no test, spec or helper selects on them.",
+    "roleTransition": "Untouched this pass — no authorization code changed."
+  },
+  "findings": [
+    {
+      "id": "N1",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/api/test/request-topics.spec.ts",
+      "symbol": "TC-02-INT-17",
+      "line": 1044,
+      "claim": "Pass 1's F1 (CR-26) is CLOSED, and I proved it by mutation rather than by reading. TC-02-INT-17 now builds three real vacation rows in the organization under test — pending, rejected and cancelled, each through the shipped routes with its status asserted at 201/200 — and then asserts the whole returned status multiset: ?status=all -> [cancelled,pending,rejected], ?status=closed -> [cancelled,rejected] (the 'no pending one' half the old assertion never checked), ?status=open -> [pending], ?status=granted -> []. The unit half at packages/validation/src/requests.test.ts:325 now pins vacationStatusesFor('closed') directly."
+    },
+    {
+      "id": "N2",
+      "target": "code",
+      "severity": "note",
+      "file": "packages/validation/src/requests.ts",
+      "symbol": "vacationStatusesFor",
+      "line": 538,
+      "claim": "The witness for N1, recorded so nobody has to take my word for it: I ran the case (npx jest test/request-topics.spec.ts -t 'answers status=closed with both closures') and it passed in 730 ms; I then mutated the built artefact the API loads — packages/validation/dist/requests.js, the 'closed' arm changed to `return null` — and re-ran it, and it failed at requests-02's own assertion line with Received + 'pending'. The dist file was restored from a copy taken first and `case 'closed': return ['rejected','cancelled'];` is back at dist line 422-423. The assertion can therefore fail on the exact mapping it claims to guard. `npm run test:unit` is green (1084 tests) and `tsc --noEmit` over apps/web is clean. Disclosed because my definition says the reviewer does not run suites; a CR-26 finding is the one claim reading cannot settle, and this was two targeted runs of one case, not a suite."
+    },
+    {
+      "id": "N3",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+      "symbol": "write",
+      "line": 130,
+      "claim": "Pass 1's F2 (CR-16) is CLOSED. write() now reads response.ok, parses the body with a .catch(() => null) guard against an unparseable one, lifts answer.message and falls back to REQUEST_MESSAGES.genericError, and a thrown fetch takes the same fallback. The message is applied AFTER the re-read, so load()'s success path — which sets error to null — cannot erase the refusal it is there to report. The two strings the contracts table publishes for these routes now reach a screen: the 409 statusUnchanged of edge case 12 and the 403 manageForbidden of REQ-02-007 both arrive as {error, message} (request-topics.service.ts:319 and :463) and are printed verbatim in the InfoBanner the read path already used."
+    },
+    {
+      "id": "N4",
+      "target": "spec",
+      "severity": "note",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+      "symbol": "error banner",
+      "line": 233,
+      "claim": "The fix for F2 also removed three data-testids the earlier commit had invented — request-topics-error-banner, request-topics-error-retry-btn and request-topics-loading-skeleton — on the stated ground that the spec's testid table names none of them. That ground holds (grep over specs/ finds none) and nothing selects on them (grep over e2e/, apps/, packages/ finds none), so this is not CR-23 and not CR-27. What it leaves is a correctness fix no case at any level can observe: the refusal path pass 1 demanded is right today and would go green again if a later edit re-swallowed every 409 and 403. The spec is where this closes — this one is frozen, so a later revision adding a banner id to the table and one case driving a repeated archive is the fix. Recorded against `spec` for that reason, not as work for the implementer now."
+    },
+    {
+      "id": "N5",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+      "symbol": "setAudience",
+      "line": 219,
+      "claim": "The new banner is cleared only by a successful load(). Switching audience clears nothing, so a refusal raised against a staff row keeps reading above the client catalogue, and 'This topic is already in that state' names no row — over the other audience it is copy with no referent. One setError(null) in the audience button's onClick closes it."
+    },
+    {
+      "id": "N6",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+      "symbol": "write",
+      "line": 142,
+      "claim": "answer?.message prints whatever the server put in `message`, and two reachable answers on these routes carry framework copy that lives in no packages/validation table: SessionGuard's UnauthorizedException('Not signed in') and OrgScopeGuard's bare NotFoundException ('Not Found'). A curator whose session was revoked mid-press reads 'Not signed in' in a red banner instead of being sent to the login screen. Not CR-07 — nothing user-facing is written inline in this diff — and the `body?.message ?? MESSAGES.generic` shape is the established idiom across apps/web, so this is a note about the idiom. Branching on 401 (end the session) and 404 (generic copy) before printing `message` is the narrow fix."
+    },
+    {
+      "id": "N7",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/api/test/request-topics.spec.ts",
+      "symbol": "futureWorkingRange",
+      "line": 199,
+      "claim": "The new vacation preconditions are calendar-dependent, and one of them is newly so. futureMonday picks the first Monday at least seven days out and the case uses week offsets 0, 3 and 6; a Mon-Wed range whose endpoints fall in different calendar years is refused with 400 cross_year (apps/api/src/vacation/vacation-requests.service.ts:112, REQUEST_MESSAGES.crossYear). Offset 6 puts the third range roughly seven weeks ahead, so for a stretch of runs in November and December the expect(...).toBe(201) on the row that is meant to be cancelled fails — and it fails inside a topics case, where it will be read as a topics regression. No register criterion covers a date-dependent test (CR-26 is 'cannot fail', not 'fails spuriously'), so this is a note; clamping the chosen Monday so start and end share a year removes the window."
+    },
+    {
+      "id": "N8",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/api/test/request-topics.spec.ts",
+      "symbol": "TC-02-INT-17",
+      "line": 1049,
+      "claim": "Accepted coupling, recorded not to be fixed. This case now drives spec 09/10 machinery — financials, the reserve ledger, submit, review and cancel — inside the spec 02 suite, because the cases file's Steps require exactly that state (specs/requests/02-request-topics.cases.md:409-417) and the vacation half of a shared filter cannot be observed without real vacation rows. The cost is that a future change to vacation submission breaks a case whose subject is REQ-02-027 and whose name mentions no vacation."
+    },
+    {
+      "id": "N9",
+      "target": "code",
+      "severity": "note",
+      "file": "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+      "symbol": "write",
+      "line": 148,
+      "claim": "Pass 1's note N7 still stands and now interacts with the banner: setBusy(false) runs before await load(), so every row control re-enables while the catalogue re-read is in flight, and a second press in that window computes its sortOrder from the pre-reload active array. Moving the line after the reload closes it. Of the eighteen notes pass 1 raised, only N13 (the missing vacationStatusesFor('closed') unit assertion) was closed by this pass; N1-N6, N8-N12 and N14-N18 live in files that have not moved since 90e412f and remain open for the person reading this at the end."
+    }
+  ]
+}
