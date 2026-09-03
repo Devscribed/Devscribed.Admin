@@ -1,0 +1,309 @@
+name: Deploy
+
+# ---------------------------------------------------------------------------------------
+# The pipeline for `main`: test, then deploy.
+#
+#   push to main        →  suite  →  dev
+#   tag v*  (on main)   →  suite  →  prod
+#   manual dispatch     →  suite  →  whichever environment you pick
+#
+# Tags are how prod moves, and `release-it` is what makes them: `npm run release` bumps the
+# version, tags it `v<version>`, pushes, and this workflow does the rest. A release is
+# therefore a deliberate act with a version number on it, while `main` flows to the stand
+# on its own. See docs/deployment.md.
+#
+# **The suite runs on the pull request, not here.** `test.yml` is triggered by
+# `pull_request` and is the only place the three tiers run; this workflow deploys what
+# `main` already holds and runs no tests of its own. The check that a change is green
+# therefore happens before the merge, which means every change must reach `main` through
+# a pull request — a push straight to `main` deploys code no suite has run. Turn on branch
+# protection for `main` requiring the test checks and that cannot happen.
+#
+# **A push to `main` deploys only what ships.** A commit that moves an agent prompt, a spec,
+# a doc, a developer script or an e2e test is copied into no image and changes nothing the
+# stand serves, so the `target` job reads the diff and the deploy job does not run. The run
+# still appears, and its summary says which files it saw and why it stopped — a filtered-out
+# trigger would leave "why did that not deploy" with nowhere to be answered. Tags and manual
+# dispatches skip the question entirely: both are deliberate acts.
+#
+# Two switches remain, and both are deliberate:
+#
+#   1. The repository variable `DEPLOY_ENABLED` must be `true`
+#      (Settings → Secrets and variables → Actions → Variables). A repository with it
+#      unset deploys nothing, however this workflow is triggered.
+#   2. `AWS_DEPLOY_ROLE_DEV` / `AWS_DEPLOY_ROLE_PROD` must hold the ARNs that
+#      `terraform output github_deploy_role_arn` prints for each environment. The job
+#      checks its own before asking AWS for anything, so an unset one fails with that
+#      sentence rather than with an OIDC error.
+#
+# There are no AWS access keys in this file and none in the repository's secrets. GitHub
+# presents an OIDC token naming this repo, this environment, and this workflow; the role's
+# trust policy decides whether that is enough. It matches on the *environment* — the
+# `environment:` key below is what puts `environment:dev` or `environment:prod` in the
+# token's subject claim — which is why a branch cannot deploy prod by being named
+# something clever.
+# ---------------------------------------------------------------------------------------
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which environment to deploy
+        type: choice
+        options: [dev, prod]
+        default: dev
+        required: true
+      services:
+        description: Which services to rebuild
+        type: choice
+        options: [both, api, web]
+        default: both
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Which environment this run is for, decided once and read by everything downstream.
+  # A job rather than an expression repeated at three sites: `environment:` and the
+  # deploy job's `concurrency` both need the answer, and two copies of a ternary are two
+  # chances for them to disagree about what a tag means.
+  target:
+    name: Resolve target
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.pick.outputs.environment }}
+      services: ${{ steps.pick.outputs.services }}
+      deploy: ${{ steps.scope.outputs.deploy }}
+    steps:
+      # The scope check below diffs this push against its predecessor, which the default
+      # shallow clone cannot reach.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: pick
+        env:
+          DISPATCH_ENVIRONMENT: ${{ inputs.environment }}
+          DISPATCH_SERVICES: ${{ inputs.services }}
+        run: |
+          set -euo pipefail
+          if [ -n "${DISPATCH_ENVIRONMENT}" ]; then
+            environment="${DISPATCH_ENVIRONMENT}"
+            services="${DISPATCH_SERVICES:-both}"
+          elif [ "${GITHUB_REF_TYPE}" = tag ]; then
+            environment=prod
+            services=both
+          else
+            environment=dev
+            services=both
+          fi
+
+          echo "environment=${environment}" >> "$GITHUB_OUTPUT"
+          echo "services=${services}" >> "$GITHUB_OUTPUT"
+          echo "### Target: \`${environment}\` (${services})" >> "$GITHUB_STEP_SUMMARY"
+
+      # A push to `main` that changed no shipping file has nothing to roll out. Editing an
+      # agent prompt, a spec or the README moved no code into any image, and a rollout for it
+      # costs a queue slot, a smoke test and a minute of somebody wondering what changed.
+      #
+      # Decided here rather than by a `paths` filter on the trigger, for two reasons. A path
+      # filter on a `push` that also carries `tags: ['v*']` would put the release path at the
+      # mercy of how GitHub evaluates paths for a tag push, and a prod release that silently
+      # does not run is far worse than a dev rollout that needlessly does. And a filtered-out
+      # trigger produces no run at all, so "why did my change not deploy" has nowhere to be
+      # answered; this way the run exists and says so.
+      #
+      # The list is what does *not* ship, never what does. A directory nobody has classified
+      # yet deploys, which is the failure worth having: the cost of a needless rollout is a
+      # minute, and the cost of a missed one is a stand serving last week's code.
+      - id: scope
+        name: Does anything that ships change?
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          decide() {
+            echo "deploy=$1" >> "$GITHUB_OUTPUT"
+            if [ "$1" = true ]; then echo "Deploying — $2" >> "$GITHUB_STEP_SUMMARY";
+            else echo "**Nothing to deploy** — $2" >> "$GITHUB_STEP_SUMMARY"; fi
+            exit 0
+          }
+
+          # A tag is a release and a dispatch is somebody pressing the button. Both are
+          # deliberate, and neither is second-guessed by reading a diff.
+          if [ "${GITHUB_EVENT_NAME}" != push ]; then decide true "run started by hand"; fi
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then decide true "tag ${GITHUB_REF_NAME} is a release"; fi
+
+          # A new branch, a force push, or a predecessor this clone does not carry: there is
+          # no diff to read, so deploy rather than guess.
+          if [ -z "${BEFORE}" ] || [ "${BEFORE}" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            decide true "no previous commit to compare against"
+          fi
+
+          changed="$(git diff --name-only "${BEFORE}" "${GITHUB_SHA}")"
+          [ -n "${changed}" ] || decide false "the push changed no files"
+
+          # Everything here is either read by a person or run on a developer's machine. None
+          # of it is copied by apps/api/Dockerfile or apps/web/Dockerfile, and none of it is
+          # touched by infra/deploy.sh.
+          ignored='^\.claude/|^docs/|^specs/|^scripts/|^\.workflow/|^e2e/|(^|/)[^/]*\.md$|^\.(gitignore|editorconfig)$|^LICENSE$'
+          # ...except this one: both Dockerfiles copy `e2e/package.json`, because the install
+          # resolves every workspace in the tree.
+          ships_anyway='^e2e/package(-lock)?\.json$'
+
+          rest="$(printf '%s\n' "${changed}" | { grep -vE "${ignored}" || true; })"
+          back="$(printf '%s\n' "${changed}" | { grep -E "${ships_anyway}" || true; })"
+          shipping="$(printf '%s\n%s\n' "${rest}" "${back}" | { grep -v '^$' || true; })"
+
+          {
+            echo "<details><summary>Files in this push (${GITHUB_EVENT_NAME})</summary>"
+            echo; echo '```'; printf '%s\n' "${changed}"; echo '```'; echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -z "${shipping}" ]; then
+            decide false "nothing in this push is copied into an image"
+          fi
+          decide true "$(printf '%s\n' "${shipping}" | wc -l | tr -d ' ') shipping file(s) changed"
+
+  deploy:
+    name: Deploy ${{ needs.target.outputs.environment }}
+    needs: [target]
+
+    # `DEPLOY_ENABLED` is the master switch: a repository with it unset cannot deploy by
+    # accident. `target.outputs.deploy` is the second: a push that moved no shipping file
+    # has nothing to roll out, and says so in the run summary rather than vanishing.
+    if: vars.DEPLOY_ENABLED == 'true' && needs.target.outputs.deploy == 'true'
+
+    runs-on: ubuntu-latest
+
+    # Not decoration. The OIDC subject claim becomes
+    # `repo:Devscribed/Devscribed.Admin:environment:<name>`, and that string is exactly
+    # what the role's trust policy matches. It is also where GitHub applies required
+    # reviewers — so a protection rule on `prod` becomes part of the credential rather
+    # than part of the UI.
+    environment: ${{ needs.target.outputs.environment }}
+
+    # Per job rather than per workflow, because the workflow does not know its target
+    # until `target` has run. Queued, never cancelled: cancelling mid-rollout leaves a
+    # service half-updated, and two runs into one environment would race each other.
+    concurrency:
+      group: deploy-${{ needs.target.outputs.environment }}
+      cancel-in-progress: false
+
+    permissions:
+      # Mint the OIDC token. Without this the role assumption fails and nothing else in
+      # the job can reach AWS.
+      id-token: write
+      contents: read
+
+    env:
+      AWS_REGION: us-west-1
+      TARGET_ENV: ${{ needs.target.outputs.environment }}
+      SERVICES: ${{ needs.target.outputs.services }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The ancestry check below needs history; the default shallow clone has none.
+          fetch-depth: 0
+
+      # A tag can be created on any commit, including one that never went near `main` and
+      # so was never reviewed. GitHub will happily run this workflow for it. The rule is
+      # "tags on main", so it is checked rather than assumed.
+      - name: A prod tag must point at a commit on main
+        if: env.TARGET_ENV == 'prod' && github.ref_type == 'tag'
+        run: |
+          set -euo pipefail
+          # Explicit refspec: `actions/checkout` does not necessarily leave a
+          # remote-tracking `origin/main` behind, and a plain `git fetch origin main`
+          # updates only FETCH_HEAD.
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/main; then
+            echo "::error::${GITHUB_REF_NAME} points at a commit that is not on main. Prod is released from main."
+            exit 1
+          fi
+
+      # Before AWS is asked for anything, so an unset variable fails with a sentence that
+      # says what to set rather than with an opaque OIDC rejection. Written as a script
+      # instead of a `&&`/`||` expression on purpose: in that form an empty PROD variable
+      # silently falls through to the DEV role.
+      - name: Pick the deploy role
+        id: role
+        env:
+          ROLE_DEV: ${{ vars.AWS_DEPLOY_ROLE_DEV }}
+          ROLE_PROD: ${{ vars.AWS_DEPLOY_ROLE_PROD }}
+        run: |
+          set -euo pipefail
+          if [ "${TARGET_ENV}" = prod ]; then role="${ROLE_PROD}"; else role="${ROLE_DEV}"; fi
+          if [ -z "${role}" ]; then
+            upper="$(printf '%s' "${TARGET_ENV}" | tr '[:lower:]' '[:upper:]')"
+            echo "::error::Set the repository variable AWS_DEPLOY_ROLE_${upper} to the ARN from 'terraform output github_deploy_role_arn'."
+            exit 1
+          fi
+          echo "arn=${role}" >> "$GITHUB_OUTPUT"
+
+      - name: Assume the deploy role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-west-1
+          role-to-assume: ${{ steps.role.outputs.arn }}
+          role-session-name: gha-deploy-${{ github.run_id }}
+
+      - run: aws sts get-caller-identity
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          # Matches the floor in infra/terraform/versions.tf: S3 native state locking.
+          terraform_version: 1.12.2
+          # The wrapper rewrites stdout, which breaks the `terraform output -raw` reads
+          # inside infra/deploy.sh.
+          terraform_wrapper: false
+
+      # The same script a developer runs. One code path, so what CI does is what somebody
+      # has already done by hand — and an image deployed here is recorded in the same
+      # Terraform state, not drifted away from it.
+      - name: Deploy
+        run: |
+          set -euo pipefail
+          case "${SERVICES}" in
+            api)  infra/deploy.sh "${TARGET_ENV}" api ;;
+            web)  infra/deploy.sh "${TARGET_ENV}" web ;;
+            *)    infra/deploy.sh "${TARGET_ENV}" api web ;;
+          esac
+
+      # `deploy.sh` already waits for both services to reach steady state, so this is not
+      # asking "did the rollout finish". It is asking the one question a rollout cannot
+      # answer about itself: whether the thing now serving traffic actually serves.
+      - name: Smoke the deployed address
+        id: smoke
+        run: |
+          set -euo pipefail
+          url="$(terraform -chdir=infra/terraform output -raw app_url)"
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+          for attempt in $(seq 1 10); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "${url}/api/health" || echo 000)"
+            if [ "${code}" = 200 ]; then
+              echo "health 200 on attempt ${attempt}"
+              exit 0
+            fi
+            echo "health ${code} on attempt ${attempt}; retrying"
+            sleep 10
+          done
+          echo "::error::${url}/api/health never answered 200 after the rollout."
+          exit 1
+
+      - name: Report the address
+        if: always() && steps.smoke.outputs.url != ''
+        run: |
+          {
+            echo "### Deployed \`${TARGET_ENV}\`"
+            echo
+            echo "${{ steps.smoke.outputs.url }}"
+          } >> "$GITHUB_STEP_SUMMARY"

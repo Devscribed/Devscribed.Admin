@@ -67,8 +67,10 @@ describe('AUTH_MESSAGES', () => {
   });
 
   it('keeps the deactivation message distinct from the credentials error', () => {
+    // Verbatim from spec 04's Error Messages table (the current source of truth for
+    // this string).
     expect(AUTH_MESSAGES.deactivated).toBe(
-      'Your account has been deactivated, contact your administrator',
+      'Your account has been deactivated. Contact your administrator.',
     );
     expect(AUTH_MESSAGES.deactivated).not.toBe(AUTH_MESSAGES.invalidCredentials);
   });

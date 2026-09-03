@@ -10,7 +10,7 @@ import {
 } from '@devscribed/validation';
 import { Button, Calendar, Card, InfoBanner, Preloader, Select, ToggleButton } from '@devscribed/ds';
 import { timeZoneOptions } from '@/hiring/format';
-import { valueOf } from '@/hiring/select';
+import { valueOf } from '@/select';
 import type { UseAvailability } from '@/hiring/useAvailability';
 
 /**

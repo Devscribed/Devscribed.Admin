@@ -1,0 +1,177 @@
+{
+  "runId": "2026-08-28T13-28-44_documents-04-signature-providers",
+  "spec": "specs/documents/04-signature-providers.md",
+  "specSha": "893b8c06a7d480c43086d5b25e309a3a0fccc9c00498ce5f3a3f8e643f8bff04",
+  "task": "documents-04-signature-providers",
+  "branch": "spec/signwell-provider",
+  "baseRef": "0f709b8c4c21e39cf3c149a4a8c27a7c8d96b72a",
+  "status": "halted",
+  "createdAt": "2026-08-28T13:28:44.076Z",
+  "updatedAt": "2026-08-28T13:45:46.815Z",
+  "stages": {
+    "preflight": {
+      "status": "passed",
+      "attempts": 1
+    },
+    "pre_implement": {
+      "status": "blocked",
+      "attempts": 1,
+      "startedAt": "2026-08-28T13:28:44.272Z",
+      "endedAt": "2026-08-28T13:45:46.759Z",
+      "lastVerdict": "blocked"
+    },
+    "implement": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "static_gate": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "review": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "qa": {
+      "status": "pending",
+      "attempts": 0
+    }
+  },
+  "budget": {
+    "codeAttempts": 0,
+    "handoffReplans": 0,
+    "infra": 0
+  },
+  "findingHistory": {
+    "spec/contradictory-requirement@specs/documents/04-signature-providers.md#req-1 / invariant-7 / edge-case-13 / TC-04-INT-17": 1
+  },
+  "contested": [],
+  "notes": [
+    {
+      "stage": "pre_implement",
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/unassigned-behaviour",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "req-18 / req-13 (reminders: false)",
+      "claim": "Requirement 3 puts `remind` on the port and requirement 18 maps it to POST /documents/{id}/remind, but no requirement, flow or test case says who calls it or when — while requirement 13 sets `reminders: false` on their side precisely so that 'our sweep sends reminders'.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "A two-signer SignWell envelope reaches the halfway point between sentAt and expiresAt. apps/api/src/internal/envelope-sweep.service.ts today mints a fresh token through the port and sends our own SES reminder with our /sign link. Reading A: the sweep keeps doing exactly that for a remote provider and SignWellSigningProvider.remind() is never called this release. Reading B: the sweep calls provider.remind() for a provider with notifications 'webhook', and SignWell mails the counterparty itself. The outcomes differ in what lands in the counterparty's inbox — our address and our link, versus a vendor they have no relationship with and a link our access control does not gate, which is the exact outcome requirement 12 exists to prevent. No TC covers either. The handoff picks Reading A on the strength of requirement 13's 'one reminder policy, not two', which leaves a port method with no caller."
+      },
+      "suggestedFix": "State in requirement 18 who calls `remind` and under which capability, or add a `reminders: ours | provider` entry to the ProviderCapabilities table so the sweep has a capability to branch on rather than a key; add one integration case either way."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/inconsistent-test-case",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "TC-04-INT-04 / req-35 / Data Model ProviderWebhookEvent.payload",
+      "claim": "TC-04-INT-04 expects the notification row to record 'the body verbatim' and the Data Model calls payload 'the body as received', while requirement 35 requires three things to be replaced by \"[redacted]\" before the first write.",
+      "witness": {
+        "kind": "rule",
+        "source": "specs/documents/04-signature-providers.md — requirement 35 ('ProviderWebhookEvent.payload therefore stores the body with three things replaced by \"[redacted]\": every recipients[].embedded_signing_url, every value under data.object.fields, and every data.object.metadata key outside our own two. Redaction happens before the first write and never on read') versus TC-04-INT-04 expected result 4 ('The ProviderWebhookEvent row records the body verbatim with outcome = converged') and the Data Model row ('payload | Json | The body as received, for forensics').",
+        "detail": "A literal reading of TC-04-INT-04 would store a working embedded_signing_url — a credential that signs as that recipient — and every fields[].value, which under spec 03 can be a tax id or a bank account, in a forensics table at rest. The handoff follows requirement 35 and treats 'verbatim' as 'unread by logic'; a reviewer reading the test case first would conclude the opposite."
+      },
+      "suggestedFix": "Reword TC-04-INT-04 expected result 4 to 'records the redacted body' and the Data Model row to 'the body as received, redacted per requirement 35'."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P4",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "req-32 / Infrastructure — The webhook route",
+      "claim": "Requirement 32 makes 'a registered webhook' part of being configured, and validation rule 2 refuses an unconfigured provider — while the Infrastructure section records that no deployed environment has a public address SignWell can reach, so no deployed environment can hold a registration pointing at itself.",
+      "witness": {
+        "kind": "rule",
+        "source": "specs/documents/04-signature-providers.md — requirement 32 ('A provider cannot be selected unless it is configured: SignWell requires an API key, an API application id, and a registered webhook') versus the Infrastructure section ('the dev stand has no public address today… Until one exists, the webhook is registered against a developer tunnel and the deployed environments run on convergence alone').",
+        "detail": "On the dev stand an admin either can or cannot select SignWell, observably 200 versus 400 from PUT .../settings/signing, depending on whether 'a registered webhook' means the SIGNWELL_WEBHOOK_SECRET environment value being present or a live GET /api/v1/hooks entry whose callback_url is this environment's. Under the second reading SignWell is unselectable in every deployed environment, which contradicts the same section's statement that those environments run on convergence alone. The handoff takes the first reading and surfaces the live check separately as `webhookRegistered`."
+      },
+      "suggestedFix": "Say in requirement 32 that 'configured' is decided from configuration presence (API key, application id, webhook secret) and that `reachable` and `webhookRegistered` are live checks displayed on the screen but not gates on selection — or say the opposite, and add the environment consequence to the Infrastructure section."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P5",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/contradicts-repository",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "Infrastructure — Configuration table",
+      "claim": "The configuration table places SIGNWELL_API_KEY and SIGNWELL_WEBHOOK_SECRET in AWS Secrets Manager, while this repository provisions every secret as an SSM SecureString parameter and the area README records that as the deliberate choice.",
+      "witness": {
+        "kind": "rule",
+        "source": "infra/terraform/modules/app/api.tf:54-66 (api_secrets built from aws_ssm_parameter ARNs for SESSION_SECRET, INTERNAL_TASK_SECRET, TEST_FIXTURE_SECRET) and infra/terraform/modules/app/iam.tf:56-90 (the execution-role policy naming those parameter ARNs); specs/documents/README.md, 'New infrastructure introduced by this area' — 'Secrets | SSM Parameter Store | SecureString parameters, free where Secrets Manager is $0.40/month each'.",
+        "detail": "Following the spec literally introduces a second secret store for two values, with a second IAM policy shape, alongside the three secrets already delivered from Parameter Store to the same container. The handoff follows the repository."
+      },
+      "suggestedFix": "Change the two Secrets Manager rows in the configuration table to SSM SecureString parameters, keeping the property that matters — Terraform creates the container and the IAM policy and never the value."
+    }
+  ],
+  "halt": {
+    "reason": "spec-defect",
+    "detail": "pre_implement found a defect in the spec: spec/contradictory-requirement (specs/documents/04-signature-providers.md)",
+    "at": "2026-08-28T13:45:46.814Z"
+  },
+  "preflight": {
+    "at": "2026-08-28T13:28:44.218Z",
+    "checks": [
+      {
+        "name": "branch-not-protected",
+        "ok": true,
+        "detail": "on \"spec/signwell-provider\""
+      },
+      {
+        "name": "spec-unchanged",
+        "ok": true,
+        "detail": "spec sha256 matches the one recorded at init"
+      },
+      {
+        "name": "api-env-present",
+        "ok": true,
+        "detail": "apps/api/.env exists (untracked — a fresh worktree does not get one)"
+      },
+      {
+        "name": "node-modules-present",
+        "ok": true,
+        "detail": "dependencies installed"
+      },
+      {
+        "name": "e2e-ports-free",
+        "ok": true,
+        "detail": "3000 and 4000 are free for the e2e suite"
+      },
+      {
+        "name": "prisma-client-generated",
+        "ok": true,
+        "detail": "prisma client generated (postinstall runs it from apps/api)"
+      },
+      {
+        "name": "migration-baseline",
+        "ok": true,
+        "detail": "11 migrations recorded as the baseline"
+      },
+      {
+        "name": "worktree-clean",
+        "ok": true,
+        "detail": "nothing in flight outside .workflow/"
+      }
+    ],
+    "migrations": [
+      "20260724114549_init",
+      "20260824080000_documents_templates",
+      "20260824090000_documents_envelopes",
+      "20260824100000_documents_member_profile",
+      "20260826121829_add_invitations_and_job_title",
+      "20260827090541_spec_06_account_settings",
+      "20260827093348_spec_07_member_financials",
+      "20260827120241_spec_08_vacation_reserve",
+      "20260827123444_spec_09_vacation_requests",
+      "20260827145447_spec_11_projects",
+      "20260827153333_spec_12_time_tracking"
+    ]
+  }
+}

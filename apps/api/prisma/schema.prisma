@@ -1,13 +1,27 @@
 generator client {
   provider = "prisma-client-js"
+
+  // `native` alone is not enough, and the failure it causes is worth spelling out.
+  //
+  // Prisma picks its query-engine binary by *detecting* the OpenSSL version at generate
+  // time. The container image generates in `node:22-bookworm-slim`, which ships no
+  // OpenSSL at all, so detection falls back to `debian-openssl-1.1.x` — and then the
+  // runtime, which does have OpenSSL 3, cannot load it. The application starts, maps
+  // every route, and dies on the first database call with "Unable to require
+  // libquery_engine".
+  //
+  // Naming the target removes the guess. `native` stays first so a developer on Windows
+  // or macOS still gets their own engine.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
   provider  = "postgresql"
-  // Neon's pooled endpoint in production, a plain local Postgres in dev and tests.
+  // RDS PostgreSQL in a deployed environment, a plain local Postgres in dev and tests.
   url       = env("DATABASE_URL")
-  // Migrations must bypass the pooler — pgbouncer cannot run the advisory locks and
-  // DDL transactions Prisma Migrate needs. Locally both point at the same server.
+  // Prisma Migrate needs advisory locks and DDL transactions, neither of which survives a
+  // pooler, so this must never be a pooled endpoint. There is no pooler in front of RDS,
+  // so deployed environments give it the same value; locally it is the same server.
   directUrl = env("DIRECT_URL")
 }
 
@@ -21,6 +35,15 @@ model Account {
   lastName          String
   /// IANA zone auto-detected from the browser at signup.
   timezone          String?
+  /// ISO 3166-1 alpha-2 country code for the phone number (spec 06); max 5 chars —
+  /// Prisma cannot express a length cap, it is enforced in the shared validation layer.
+  phoneCountryCode  String?
+  /// Phone number in the selected country's format (spec 06); informational only,
+  /// no uniqueness constraint. Max 20 chars, enforced in the validation layer.
+  phoneNumber       String?
+  /// "Monday" (default) or "Sunday" — the source for how dates are displayed to this
+  /// user elsewhere (spec 06 requirement 4/6). Max 10 chars, enforced in validation.
+  firstDayOfWeek    String    @default("Monday")
   /// Session-revocation token. Carried in every session cookie and re-checked on each
   /// authenticated request; regenerating it invalidates every outstanding cookie at
   /// once (spec 02 requirement 12 — shared with specs 04 and 06).
@@ -31,13 +54,87 @@ model Account {
   mailboxVerifiedAt DateTime?
   createdAt         DateTime  @default(now())
 
-  memberships             Membership[]
-  passwordResetTokens     PasswordResetToken[]
-  interviewerVacancies    Vacancy[]                  @relation("VacancyInterviewer")
-  /// The interviews actually booked with this account, which a later reassignment of
-  /// the vacancy never rewrites (hiring 07 §13.63).
-  interviewerApplications Application[]              @relation("ApplicationInterviewer")
-  scheduleEvents          ApplicationScheduleEvent[] @relation("ScheduleEventActor")
+  memberships               Membership[]
+  passwordResetTokens       PasswordResetToken[]
+  templatesCreated          DocumentTemplate[]           @relation("TemplatesCreated")
+  templatesArchived         DocumentTemplate[]           @relation("TemplatesArchived")
+  templateVersionsCreated   DocumentTemplateVersion[]    @relation("TemplateVersionsCreated")
+  envelopesCreated          Envelope[]                   @relation("EnvelopesCreated")
+  envelopesVoided           Envelope[]                   @relation("EnvelopesVoided")
+  signatureProvidersSet     Organization[]               @relation("SignatureProviderSetBy")
+  envelopeEventsActed       EnvelopeEvent[]              @relation("EnvelopeEventsActed")
+  memberProfilesUpdated     MemberProfile[]              @relation("MemberProfilesUpdated")
+  pendingEmailChanges       PendingEmailChange[]
+  financialsUpdated         MemberFinancials[]
+  transactionsCreated       VacationReserveTransaction[]
+  vacationRequestsReviewed  VacationRequest[]            @relation("VacationRequestReviewedBy")
+  vacationRequestsCancelled VacationRequest[]            @relation("VacationRequestCancelledBy")
+  projectsCreated           Project[]
+  projectMembersAssigned    ProjectMember[]
+  timeEntriesCreated        TimeEntry[]                  @relation("TimeEntryCreatedBy")
+  /// Spec organization/01 — audit back-relations for the Client entity.
+  clientsCreated            Client[]                     @relation("ClientsCreated")
+  clientsArchived           Client[]                     @relation("ClientsArchived")
+  /// Spec organization/03 — audit back-relation for the Holiday entity.
+  holidaysCreated           Holiday[]                    @relation("HolidaysCreated")
+  /// Hiring specs 01-07 — the interviewer side of a vacancy and of the interviews
+  /// actually booked against it, which a later reassignment never rewrites (07 §13.63).
+  interviewerVacancies      Vacancy[]                    @relation("VacancyInterviewer")
+  interviewerApplications   Application[]                @relation("ApplicationInterviewer")
+  scheduleEvents            ApplicationScheduleEvent[]   @relation("ScheduleEventActor")
+}
+
+/// Pending email-change confirmation grant (spec 06). The account's email is only
+/// updated once the token emailed to the NEW address is confirmed; a notification also
+/// goes to the OLD address. At most one live record per account (supersession).
+model PendingEmailChange {
+  id            String    @id @default(uuid())
+  accountId     String
+  /// Normalized (lowercase) target email, max 254 chars.
+  newEmail      String
+  /// SHA-256 of the raw token, hex-encoded. The raw token exists only in the email —
+  /// a database breach therefore yields nothing usable.
+  tokenHash     String    @unique
+  createdAt     DateTime  @default(now())
+  /// createdAt + 24 hours. Expiry is exclusive (spec 06 requirement 7).
+  expiresAt     DateTime
+  /// Set when the token is consumed; null while unused.
+  usedAt        DateTime?
+  /// Set to true when a newer request supersedes this record (requirement 2).
+  isInvalidated Boolean   @default(false)
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  // Supersession lookup: at most one live (non-invalidated, unused) record per account.
+  @@index([accountId, isInvalidated])
+}
+
+/// Pending, used, or invalidated invitation to join an organization (spec 03).
+model Invitation {
+  id                  String @id @default(uuid())
+  /// Normalized (lowercase) invitee email, max 254 chars.
+  email               String
+  /// Target role: "admin" | "manager" | "user" | "viewer".
+  role                String
+  organizationId      String
+  /// The membership of the person who sent the invite.
+  inviterMembershipId String
+
+  /// SHA-256 hash of the raw token (hex-encoded, lowercase). The raw token is never stored.
+  tokenHash String    @unique
+  createdAt DateTime  @default(now())
+  /// createdAt + 7 days. Expiry is exclusive (spec 03 requirement 3).
+  expiresAt DateTime
+  /// "pending" | "used" | "invalidated".
+  status    String    @default("pending")
+  /// Set when the invitation is accepted; null while unused.
+  usedAt    DateTime?
+
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  inviterMembership Membership   @relation(fields: [inviterMembershipId], references: [id], onDelete: Cascade)
+
+  // Supersession lookup: at most one live `pending` invitation per (email, org).
+  @@index([email, organizationId, status])
 }
 
 /// Single-use, time-limited password-reset grant (spec 02).
@@ -60,19 +157,40 @@ model PasswordResetToken {
 }
 
 model Organization {
-  id        String   @id @default(uuid())
-  name      String
+  id                     String    @id @default(uuid())
+  name                   String
   /// Reserved by the hiring 01 migration. Nothing uploads or renders a logo in this
   /// release — the booking page's wordmark is plain type (hiring 02 requirement 2).
-  logoKey   String?
-  createdAt DateTime @default(now())
+  logoKey                String?
+  createdAt              DateTime  @default(now())
+  /// Documents spec 04 requirement 1 — the provider **new** envelopes are sent
+  /// through. Read once at the start of a send and pinned onto the envelope in the
+  /// transaction that flips it to `sent`; never read as authority afterwards. The
+  /// default is what makes every organization that predates the column keep the
+  /// in-house engine without a backfill.
+  signatureProviderKey   String    @default("internal")
+  signatureProviderSetAt DateTime?
+  signatureProviderSetBy String?
 
-  memberships  Membership[]
-  vacancies    Vacancy[]
-  candidates   Candidate[]
-  applications Application[]
-  categories   Category[]
-  criteria     Criterion[]
+  signatureProviderSetByAccount Account? @relation("SignatureProviderSetBy", fields: [signatureProviderSetBy], references: [id], onDelete: SetNull)
+
+  memberships       Membership[]
+  documentTemplates DocumentTemplate[]
+  envelopes         Envelope[]
+  invitations       Invitation[]
+  projects          Project[]
+  timeEntries       TimeEntry[]
+  runningTimers     RunningTimer[]
+  /// Spec organization/01 — the clients that group projects for billing/reporting.
+  clients           Client[]
+  /// Spec organization/03 — the organization's paid public-holiday calendar.
+  holidays          Holiday[]
+  /// Hiring specs 01-06. Every hiring entity is org-scoped from its first migration.
+  vacancies         Vacancy[]
+  candidates        Candidate[]
+  applications      Application[]
+  categories        Category[]
+  criteria          Criterion[]
 }
 
 /// Links an account to its organization. One per account — single-org-per-user (FR-8).
@@ -80,16 +198,924 @@ model Membership {
   id             String   @id @default(uuid())
   accountId      String   @unique
   organizationId String
-  /// "admin" | "member" — org control is expressed purely through the admin role (FR-7).
+  /// "admin" | "manager" | "user" | "viewer" (spec 03 requirement 4 widens this to four roles).
   role           String
-  /// "active" | "invited" | "removed" — `removed` is the soft-deleted state (specs 02, 04).
+  /// "active" | "removed" — `removed` is the soft-deleted state (specs 02, 04). There is
+  /// no `invited` status; unaccepted invitees have no `Membership` row (spec 03).
   status         String
   joinedAt       DateTime @default(now())
+  /// Optional job title, max 100 chars. Cleared on membership restoration via invitation
+  /// acceptance (spec 03 requirement 5; spec 05).
+  jobTitle       String?
 
-  account      Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  account             Account                      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  organization        Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  envelopesAsSubject  Envelope[]                   @relation("EnvelopeSubject")
+  signerRecords       EnvelopeSigner[]             @relation("SignerMembership")
+  profile             MemberProfile?
+  invitationsSent     Invitation[]
+  financials          MemberFinancials?
+  financialsSnapshots MemberFinancialsSnapshot[]
+  transactions        VacationReserveTransaction[]
+  vacationRequests    VacationRequest[]
+  projectMemberships  ProjectMember[]
+  timeEntries         TimeEntry[]
+  runningTimer        RunningTimer?
+  tasksAssigned       Task[]                       @relation("TaskAssignee")
+  tasksReported       Task[]                       @relation("TaskReporter")
+  commentsAuthored    TaskComment[]                @relation("TaskCommentAuthor")
+  watchedTasks        TaskWatcher[]                @relation("TaskWatcherMembership")
+  taskActivity        TaskActivity[]               @relation("TaskActivityActor")
 
   @@index([organizationId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Documents area — spec 01, Document Templates.
+//
+// Strictly additive: none of the four models above changes a column, they only
+// gain back-relations. That is what lets `.github/workflows/migrate.yml` and the
+// Vercel deploy land in either order.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum TemplateStatus {
+  draft
+  published
+  archived
+}
+
+enum TemplateFieldType {
+  text
+  multiline
+  number
+  date
+  email
+  select
+  checkbox
+}
+
+/// A reusable contract. The template itself carries only identity and lifecycle —
+/// every piece of content lives on a version, so that publishing can freeze it.
+model DocumentTemplate {
+  id                  String         @id @default(uuid())
+  organizationId      String
+  name                String
+  description         String?
+  status              TemplateStatus @default(draft)
+  /// The version new envelopes bind to. Null until the first publish, and only
+  /// ever moved by a successful publish (requirement 4).
+  currentVersionId    String?        @unique
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  createdByAccountId  String
+  archivedAt          DateTime?
+  archivedByAccountId String?
+
+  organization   Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy      Account                   @relation("TemplatesCreated", fields: [createdByAccountId], references: [id])
+  archivedBy     Account?                  @relation("TemplatesArchived", fields: [archivedByAccountId], references: [id])
+  versions       DocumentTemplateVersion[] @relation("TemplateVersions")
+  /// Deliberately not a foreign key back to `versions`: Postgres would need the row
+  /// to exist before the template does. Resolved in the service instead.
+  currentVersion DocumentTemplateVersion?  @relation("TemplateCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+
+  /// Uniqueness is case-insensitive per the spec, which a plain @@unique cannot
+  /// express — the migration adds a lower(name) unique index and the service
+  /// checks first so the caller gets the spec's message rather than a 500.
+  @@index([organizationId])
+}
+
+/// Immutable once `publishedAt` is set. Nothing in the application may write to a
+/// published row — requirement 8, asserted by TC-01-INT-05.
+model DocumentTemplateVersion {
+  id                 String    @id @default(uuid())
+  templateId         String
+  versionNumber      Int
+  bodyHtml           String    @default("")
+  /// Ordered, frozen copy of the field definitions, written at publish. The live
+  /// definitions stay in `fields` so a draft can be edited row by row.
+  fieldsSnapshot     Json?
+  /// `[{ key, label, order }]` — exactly two entries once published.
+  signerRoles        Json      @default("[]")
+  publishedAt        DateTime?
+  /// Optimistic lock. Incremented on every draft save; a stale value is a 409.
+  rowVersion         Int       @default(1)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  createdByAccountId String
+
+  template   DocumentTemplate  @relation("TemplateVersions", fields: [templateId], references: [id], onDelete: Cascade)
+  createdBy  Account           @relation("TemplateVersionsCreated", fields: [createdByAccountId], references: [id])
+  fields     TemplateField[]
+  currentFor DocumentTemplate? @relation("TemplateCurrentVersion")
+  envelopes  Envelope[]
+
+  @@unique([templateId, versionNumber])
+  @@index([templateId])
+}
+
+model TemplateField {
+  id                String            @id @default(uuid())
+  templateVersionId String
+  key               String
+  label             String
+  type              TemplateFieldType
+  required          Boolean           @default(false)
+  /// For `select`: an array of strings. Null for every other type.
+  options           Json?
+  maxLength         Int?
+  /// `sender` or `signer:{roleKey}` — validated against the version's signer roles.
+  filledBy          String            @default("sender")
+  /// Catalogue key from spec 03; null means the value is typed by hand.
+  autofillSource    String?
+  order             Int
+
+  version DocumentTemplateVersion @relation(fields: [templateVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([templateVersionId, key])
+  @@index([templateVersionId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Documents area — spec 02, Envelopes & Signing.
+//
+// Additive again: the models above gain back-relations only. `Envelope` pins
+// `templateVersionId` with Restrict, which is the database half of the guarantee
+// that template maintenance can never alter a document already sent or signed.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum EnvelopeStatus {
+  draft
+  sent
+  partially_signed
+  completed
+  declined
+  voided
+  expired
+}
+
+enum SignerStatus {
+  pending
+  notified
+  viewed
+  signed
+  declined
+}
+
+enum SignatureType {
+  drawn
+  typed
+}
+
+enum PdfStatus {
+  not_required
+  pending
+  ready
+  failed
+}
+
+enum EnvelopeEventType {
+  created
+  sent
+  email_accepted
+  email_delivered
+  email_bounced
+  viewed
+  signed
+  declined
+  reminded
+  voided
+  expired
+  completed
+  downloaded
+  pdf_failed
+  tamper_detected
+  /// Spec 04 — written by the reconciler when a remote provider's state was read and
+  /// converged. Carries the provider key and the provider's status string, nothing else.
+  provider_synced
+  provider_error
+}
+
+/// One contract in flight: a pinned template version, the values filled into it,
+/// two signers, and the trail of everything that happened to it.
+model Envelope {
+  id                  String         @id @default(uuid())
+  organizationId      String
+  /// Pinned at creation and never changed. `Restrict` rather than `Cascade`: a
+  /// version that backs a document must not be deletable at all.
+  templateVersionId   String
+  title               String
+  status              EnvelopeStatus @default(draft)
+  /// Map of field key to value, accumulated from the sender and from each signer.
+  fieldValues         Json           @default("{}")
+  /// Written exactly once, at send, and never again (invariant 5).
+  renderedHtml        String?
+  documentHash        String?
+  signedPdfKey        String?
+  signedPdfHash       String?
+  pdfStatus           PdfStatus      @default(not_required)
+  /// Autofill subject (spec 03). SetNull so deleting a member cannot take an
+  /// executed contract with it.
+  subjectMembershipId String?
+  /// The SignatureProvider port, present from day one so that adding a
+  /// third-party adapter later is a class and an env var, not a migration.
+  providerKey         String         @default("internal")
+  providerRef         String         @default("")
+  /// Spec 04. Written at send beside `providerKey`, and never read from configuration
+  /// at display time: switching test mode off must not relabel a document that was
+  /// signed while it was on (edge case 17).
+  providerTestMode    Boolean        @default(false)
+  /// The provider's own status string, verbatim ("Sent", "Completed"). For support,
+  /// never for logic — every decision reads our own status column.
+  providerStatus      String?
+  /// Drives lazy convergence (requirement 24a). Written at send, so a freshly-sent
+  /// envelope is fresh and costs no provider call on its first read.
+  providerSyncedAt    DateTime?
+  /// Last provider-side error, cleared on the next successful sync.
+  providerError       String?
+  expiresAt           DateTime?
+  sentAt              DateTime?
+  completedAt         DateTime?
+  voidedAt            DateTime?
+  voidedByAccountId   String?
+  voidReason          String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  createdByAccountId  String
+
+  organization    Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  templateVersion DocumentTemplateVersion @relation(fields: [templateVersionId], references: [id], onDelete: Restrict)
+  subject         Membership?             @relation("EnvelopeSubject", fields: [subjectMembershipId], references: [id], onDelete: SetNull)
+  createdBy       Account                 @relation("EnvelopesCreated", fields: [createdByAccountId], references: [id])
+  voidedBy        Account?                @relation("EnvelopesVoided", fields: [voidedByAccountId], references: [id])
+  signers         EnvelopeSigner[]
+  events          EnvelopeEvent[]
+  webhookEvents   ProviderWebhookEvent[]
+
+  @@index([organizationId, status])
+  @@index([templateVersionId])
+}
+
+model EnvelopeSigner {
+  id                 String         @id @default(uuid())
+  envelopeId         String
+  roleKey            String
+  name               String         @default("")
+  /// Normalized to lowercase. The signature is bound to this address, not to an
+  /// account, which is why removing a member leaves an in-flight envelope alone.
+  email              String         @default("")
+  order              Int
+  status             SignerStatus   @default(pending)
+  /// Spec 04 — the remote recipient id. Empty for `internal`, which is why there is
+  /// deliberately no `@@unique([envelopeId, providerRef])`: the empty string would
+  /// collide across every internal signer. Uniqueness is enforced in the reconciler,
+  /// which is the only writer.
+  providerRef        String         @default("")
+  membershipId       String?
+  signedAt           DateTime?
+  declinedAt         DateTime?
+  declineReason      String?
+  /// PNG data URI. A typed signature keeps both the rendering and the name.
+  signatureImage     String?
+  signatureType      SignatureType?
+  signatureTypedName String?
+  /// The ESIGN/UETA consent record (requirement 21).
+  consentAcceptedAt  DateTime?
+
+  envelope   Envelope        @relation(fields: [envelopeId], references: [id], onDelete: Cascade)
+  membership Membership?     @relation("SignerMembership", fields: [membershipId], references: [id], onDelete: SetNull)
+  tokens     SigningToken[]
+  events     EnvelopeEvent[]
+
+  @@unique([envelopeId, roleKey])
+  @@unique([envelopeId, order])
+  @@index([envelopeId])
+}
+
+/// Mirrors PasswordResetToken deliberately: the raw token exists only in the
+/// email and the URL, and only its SHA-256 is ever stored.
+model SigningToken {
+  id               String    @id @default(uuid())
+  envelopeSignerId String
+  tokenHash        String    @unique
+  expiresAt        DateTime
+  usedAt           DateTime?
+  /// Set by decline, void, or resend.
+  isInvalidated    Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+
+  signer EnvelopeSigner @relation(fields: [envelopeSignerId], references: [id], onDelete: Cascade)
+
+  @@index([envelopeSignerId])
+}
+
+/// Append-only. The application has no update or delete path, and the rows form a
+/// hash chain so that an edited or deleted row is detectable rather than merely
+/// unlikely (requirements 38-39).
+model EnvelopeEvent {
+  id                String            @id @default(uuid())
+  envelopeId        String
+  envelopeSignerId  String?
+  type              EnvelopeEventType
+  actorAccountId    String?
+  actorEmail        String?
+  ipAddress         String?
+  userAgent         String?
+  documentHash      String?
+  /// Never contains field values: the trail records that a document was signed,
+  /// not what was written in it (requirement 40).
+  metadata          Json?
+  /// Lets the chain algorithm evolve without invalidating chains written under
+  /// the old one.
+  schemaVersion     Int               @default(1)
+  occurredAt        DateTime          @default(now())
+  previousEventHash String?
+  eventHash         String
+
+  envelope Envelope        @relation(fields: [envelopeId], references: [id], onDelete: Cascade)
+  signer   EnvelopeSigner? @relation(fields: [envelopeSignerId], references: [id], onDelete: SetNull)
+  actor    Account?        @relation("EnvelopeEventsActed", fields: [actorAccountId], references: [id], onDelete: SetNull)
+
+  @@index([envelopeId, occurredAt])
+}
+
+/// One webhook delivery from a signing provider, stored for forensics and for
+/// deduplication (spec 04 requirements 22 and 35).
+///
+/// **Nothing here is ever read as state.** The reconciler re-reads the provider's API
+/// on every accepted notification, so this table records that a doorbell rang, not what
+/// it claimed. `payload` is the body with the signing URLs, every field value, and every
+/// foreign metadata key replaced by "[redacted]" *before* the first write.
+model ProviderWebhookEvent {
+  id                 String    @id @default(uuid())
+  providerKey        String
+  /// The document id the notification named.
+  providerRef        String
+  /// Null when we do not recognize the reference — a document of another account, or
+  /// one whose send transaction has not committed yet.
+  envelopeId         String?
+  /// The provider's own event string, stored raw.
+  eventType          String
+  eventTime          DateTime
+  /// Normalized lowercase; empty when the event names no signer, which is the common
+  /// case — `related_signer` was absent from both captured deliveries.
+  relatedSignerEmail String    @default("")
+  hashVerified       Boolean
+  payload            Json
+  /// Null until the reconciler has converged.
+  processedAt        DateTime?
+  /// `converged` | `ignored_terminal` | `unknown_ref` | `error`.
+  outcome            String?
+  receivedAt         DateTime  @default(now())
+
+  envelope Envelope? @relation(fields: [envelopeId], references: [id], onDelete: SetNull)
+
+  /// SignWell issues no event id, so this composite is the best key available. Two
+  /// genuinely distinct events of the same type, for the same signer, in the same
+  /// second collapse into one — which loses nothing, because convergence is
+  /// state-based and the second would have read the same state.
+  @@unique([providerKey, providerRef, eventType, eventTime, relatedSignerEmail])
+  @@index([processedAt])
+  @@index([envelopeId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Documents area — spec 03, Field Autofill.
+//
+// The only new model the spec needs: `TemplateField.autofillSource` and
+// `Envelope.subjectMembershipId` already exist from specs 01 and 02.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The member data contracts are filled from. One-to-one with `Membership`, and
+/// every column is nullable: a profile is filled in over time, and an incomplete
+/// one must never block a document from being created (spec 03, alt flow
+/// "Incomplete profile").
+///
+/// Four of these columns are PII: `taxId`, `dateOfBirth`, `idDocumentNumber` and
+/// `bankDetails`. Reads are capability-gated, masked for callers without
+/// `ViewMemberProfilePii`, and excluded from logs and from the audit trail.
+/// Column-level encryption is a recorded, accepted gap — see the area README.
+model MemberProfile {
+  id                 String    @id @default(uuid())
+  membershipId       String    @unique
+  addressLine        String?
+  city               String?
+  postalCode         String?
+  /// ISO 3166-1 alpha-2.
+  country            String?
+  taxId              String?
+  /// A date with no time component; stored at UTC midnight.
+  dateOfBirth        DateTime?
+  idDocumentNumber   String?
+  bankDetails        String?
+  updatedAt          DateTime  @updatedAt
+  updatedByAccountId String?
+
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  updatedBy  Account?   @relation("MemberProfilesUpdated", fields: [updatedByAccountId], references: [id], onDelete: SetNull)
+}
+
+/// Current financial settings for an active membership (spec 07). Exactly one per
+/// membership (one-to-one). Every write also appends a `MemberFinancialsSnapshot`.
+model MemberFinancials {
+  id                     String   @id @default(uuid())
+  /// One-to-one with Membership — a member has at most one live settings record.
+  membershipId           String   @unique
+  /// Employee monthly salary. Min 0.01, max 999999.99 (validation layer).
+  monthlySalary          Decimal  @db.Decimal(10, 2)
+  /// Hourly rate billed to the client. Min 0.01, max 9999.99 (validation layer).
+  clientHourlyRate       Decimal  @db.Decimal(8, 2)
+  /// Effective reserve percentage — auto-calculated or the manager's manual value.
+  vacationReservePercent Decimal  @db.Decimal(5, 2)
+  /// true if the manager set the percentage manually; false if auto-calculated.
+  isReservePercentManual Boolean
+  /// Maximum vacation days per calendar year. Default 20, min 1, max 365.
+  vacationDaysPerYear    Int      @default(20)
+  /// ISO 4217 currency code (e.g. "USD").
+  currency               String   @db.VarChar(3)
+  updatedAt              DateTime @updatedAt
+  /// Account that last modified these settings.
+  updatedByAccountId     String
+
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  updatedBy  Account    @relation(fields: [updatedByAccountId], references: [id])
+}
+
+/// Historical snapshot of a member's financial settings (spec 07 requirements 11–13).
+/// A new row is appended on every create/update; existing rows are never mutated. The
+/// accrual job (spec 08) looks up which values were in effect during a billing month.
+model MemberFinancialsSnapshot {
+  id                     String   @id @default(uuid())
+  membershipId           String
+  monthlySalary          Decimal  @db.Decimal(10, 2)
+  clientHourlyRate       Decimal  @db.Decimal(8, 2)
+  vacationReservePercent Decimal  @db.Decimal(5, 2)
+  isReservePercentManual Boolean
+  vacationDaysPerYear    Int
+  currency               String   @db.VarChar(3)
+  /// Date from which these settings are effective (date-only, the day of the change).
+  effectiveFrom          DateTime @db.Date
+  createdAt              DateTime @default(now())
+
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([membershipId])
+}
+
+/// Append-only vacation-reserve ledger (spec 08). The balance is always derived by
+/// summing a membership's transactions within the current calendar year — there is no
+/// mutable balance field. Rows are immutable; corrections are compensating entries.
+model VacationReserveTransaction {
+  id                 String   @id @default(uuid())
+  membershipId       String
+  /// 'credit' | 'expiry' | 'debit' | 'refund'. Modeled as a documented string column,
+  /// matching the role/status convention on Membership — not a Prisma enum. A `debit`
+  /// (negative) is written when a vacation request is approved; a `refund` (positive)
+  /// when an approved request is cancelled (spec 09).
+  type               String
+  /// Positive for a credit, negative for an expiry.
+  amount             Decimal  @db.Decimal(12, 2)
+  /// 1–12; the month of work a credit covers. Null for non-credit transactions.
+  billingPeriodMonth Int?
+  /// The year of work a credit covers. Null for non-credit transactions.
+  billingPeriodYear  Int?
+  description        String?  @db.VarChar(200)
+  /// FK to VacationRequest — set on `debit`/`refund` transactions (spec 09).
+  vacationRequestId  String?
+  /// true for system-generated monthly credits; false for expiry/manual entries.
+  isAutoGenerated    Boolean
+  createdAt          DateTime @default(now())
+  /// Account that created the transaction; null for auto-generated credits.
+  createdByAccountId String?
+
+  membership      Membership       @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  createdBy       Account?         @relation(fields: [createdByAccountId], references: [id])
+  vacationRequest VacationRequest? @relation(fields: [vacationRequestId], references: [id])
+
+  @@unique([membershipId, billingPeriodMonth, billingPeriodYear])
+  @@index([membershipId])
+}
+
+/// A member's vacation request through its lifecycle (spec 09). Submission computes and
+/// freezes `workingDays` and `deductionAmount`; approval writes a `debit` to the reserve
+/// ledger and cancellation of an approved request writes a compensating `refund`.
+model VacationRequest {
+  id                   String    @id @default(uuid())
+  membershipId         String
+  /// First day of vacation, inclusive (date-only).
+  startDate            DateTime  @db.Date
+  /// Last day of vacation, inclusive (date-only).
+  endDate              DateTime  @db.Date
+  /// Count of weekdays (Mon–Fri) in the inclusive range, frozen at submission.
+  workingDays          Int
+  /// workingDays × dailySalary, frozen at submission (the reserve hold / debit amount).
+  deductionAmount      Decimal   @db.Decimal(12, 2)
+  /// 'pending' | 'approved' | 'rejected' | 'cancelled'.
+  status               String
+  requestedAt          DateTime  @default(now())
+  /// When the request was approved or rejected; null while pending.
+  reviewedAt           DateTime?
+  /// Account that approved or rejected the request.
+  reviewedByAccountId  String?
+  /// Optional reviewer comment, max 500 chars (enforced in the validation layer).
+  reviewerComment      String?   @db.VarChar(500)
+  /// When the request was cancelled; null otherwise.
+  cancelledAt          DateTime?
+  /// Account that cancelled the request.
+  cancelledByAccountId String?
+
+  membership   Membership                   @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  reviewedBy   Account?                     @relation("VacationRequestReviewedBy", fields: [reviewedByAccountId], references: [id])
+  cancelledBy  Account?                     @relation("VacationRequestCancelledBy", fields: [cancelledByAccountId], references: [id])
+  transactions VacationReserveTransaction[]
+
+  @@index([membershipId])
+}
+
+/// A unit of work an organization tracks time against (spec 11). Created by an admin or
+/// manager, soft-deleted via `status = 'archived'` (there is no hard delete). Names are
+/// unique per organization case-insensitively — enforced by a functional UNIQUE index on
+/// `(organizationId, LOWER(name))` added in the migration SQL, NOT a Prisma `@@unique`
+/// (which would be case-sensitive). `createdByAccountId` is an immutable audit field set
+/// from the session, never the request body.
+model Project {
+  id                 String   @id @default(uuid())
+  organizationId     String
+  /// Project name. Unique per org (case-insensitive); 1–100 chars (validation layer).
+  name               String
+  /// 'active' | 'archived'. Documented string column, matching the Membership.status
+  /// convention — not a Prisma enum. Archiving is the soft-delete.
+  status             String   @default("active")
+  /// Spec 13 — human-readable prefix for task keys (2–10 uppercase ASCII letters).
+  /// Nullable; unique per org via partial index (added in the spec-13 migration SQL,
+  /// since Prisma cannot express `WHERE key IS NOT NULL` on a `@@unique`). Immutable
+  /// once set — the service enforces that rule.
+  key                String?
+  /// Spec 13 — atomically-allocated per-project task counter. Advanced inside a
+  /// `SELECT ... FOR UPDATE` transaction on the project row before every task insert.
+  nextTaskNumber     Int      @default(1)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  /// Account that created the project (audit trail; set from the session).
+  createdByAccountId String
+  /// Spec organization/01 — optional client link. `ON DELETE SET NULL` on hard delete
+  /// (never fired through the API — soft archive preserves the FK per requirement 13).
+  clientId           String?
+
+  organization  Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy     Account         @relation(fields: [createdByAccountId], references: [id])
+  client        Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  members       ProjectMember[]
+  timeEntries   TimeEntry[]
+  runningTimers RunningTimer[]
+  columns       BoardColumn[]
+  tasks         Task[]
+  labels        TaskLabel[]
+
+  @@index([organizationId])
+  @@index([clientId])
+}
+
+/// Spec organization/01 — a client an organization bills projects against. Soft-deleted
+/// via `status = 'archived'` (there is no hard delete). Names are unique per organization
+/// case-insensitively — enforced by a functional UNIQUE index on
+/// `(organizationId, LOWER(name))` added in the migration SQL, NOT a Prisma `@@unique`.
+/// `createdByAccountId` / `archivedByAccountId` are immutable audit fields set from the
+/// session, never the request body.
+model Client {
+  id                  String    @id @default(uuid())
+  organizationId      String
+  /// Client display name. Unique per org (case-insensitive); 1–120 chars, allowed set
+  /// enforced by the validation layer, trimmed + whitespace-collapsed on save.
+  name                String
+  /// 'active' | 'archived'. String column, matching the Project.status convention —
+  /// not a Prisma enum. Archiving is the soft-delete.
+  status              String    @default("active")
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  createdByAccountId  String
+  /// Set when status transitions to `archived`; cleared on restore.
+  archivedAt          DateTime?
+  /// Account that archived the client (audit). Cleared on restore.
+  archivedByAccountId String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    Account      @relation("ClientsCreated", fields: [createdByAccountId], references: [id])
+  archivedBy   Account?     @relation("ClientsArchived", fields: [archivedByAccountId], references: [id])
+  projects     Project[]
+
+  @@index([organizationId, status])
+}
+
+/// Spec organization/03 — a paid public holiday in an organization's calendar. A
+/// calendar-day fact, not an instant: `date` is `@db.Date` and is serialized as
+/// 'YYYY-MM-DD', so no timezone can shift the day. `countryCode = null` means the
+/// holiday applies to every member, whatever their country.
+///
+/// Uniqueness needs TWO indexes and neither replaces the other. `@@unique` below
+/// covers same-date/same-country; Postgres treats every NULL as distinct, so the
+/// global case (`countryCode IS NULL` twice on one date) slips through it and is
+/// closed by the hand-written partial unique index `Holiday_org_date_globalUniq`
+/// in the migration SQL, which Prisma cannot express.
+///
+/// Hard delete — there is no archived state. `createdByAccountId` is an immutable
+/// audit field set from the session, never the request body.
+model Holiday {
+  id                 String   @id @default(uuid())
+  organizationId     String
+  /// Trimmed display name, 1–120 chars; the allowed character set is enforced by
+  /// the shared validation layer (`validateHolidayName`).
+  name               String
+  /// Calendar date only — no time component is ever accepted or stored.
+  date               DateTime @db.Date
+  /// 0.00–24.00 inclusive. Non-integers are legitimate (a half-day holiday).
+  paidHours          Decimal  @default(8.00) @db.Decimal(4, 2)
+  /// ISO 3166-1 alpha-2, uppercase. NULL = applies to all countries.
+  countryCode        String?  @db.Char(2)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  createdByAccountId String
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    Account      @relation("HolidaysCreated", fields: [createdByAccountId], references: [id])
+
+  @@unique([organizationId, date, countryCode])
+  @@index([organizationId, date])
+}
+
+/// Spec 13 — a column on a project's Kanban board. Lazy-created on first `GET /board`
+/// (three defaults: To Do / In Progress / Done). Names are unique per project
+/// case-insensitively (functional unique index added in the migration SQL); positions
+/// are 0-based and unique per project via `@@unique([projectId, position])`.
+model BoardColumn {
+  id        String   @id @default(uuid())
+  projectId String
+  name      String
+  position  Int
+  /// 'todo' | 'in_progress' | 'done' | 'custom'. Informational — drives visual styling
+  /// on the board only. Defaults get their fixed categories at lazy-init.
+  category  String   @default("custom")
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks   Task[]
+
+  @@unique([projectId, position])
+  @@index([projectId])
+}
+
+/// Spec 13 — a task on a project board. Identified by the human-readable key
+/// `{Project.key}-{taskNumber}` (built at read time via `formatTaskKey`). Hierarchy is
+/// self-referential (parent → children). Position is fractional so drag-and-drop can
+/// re-index one row without touching neighbours.
+model Task {
+  id          String    @id @default(uuid())
+  projectId   String
+  /// Per-project sequence, atomically allocated via `SELECT ... FOR UPDATE` on the
+  /// project row. Never re-used — deleting MOB-1 does not free the number.
+  taskNumber  Int
+  /// 'epic' | 'task' | 'bug' | 'story' | 'subtask' (spec 13 FR-9).
+  type        String
+  /// 1–200 codepoints (validation layer).
+  title       String
+  /// Markdown, max 10,000 codepoints (validation layer). Nullable.
+  description String?
+  /// 'low' | 'medium' | 'high' | 'critical' or null.
+  priority    String?
+  columnId    String
+  /// Fractional index — inserting between 2.0 and 3.0 uses 2.5, no other row rewrites.
+  position    Float
+  /// 0–999, nullable (validation layer).
+  storyPoints Int?
+  assigneeId  String?
+  reporterId  String
+  parentId    String?
+  /// Nullable date (no time component).
+  dueDate     DateTime? @db.Date
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project       Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  column        BoardColumn           @relation(fields: [columnId], references: [id])
+  assignee      Membership?           @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  reporter      Membership            @relation("TaskReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  parent        Task?                 @relation("TaskHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children      Task[]                @relation("TaskHierarchy")
+  labels        TaskLabelAssignment[]
+  comments      TaskComment[]
+  watchers      TaskWatcher[]
+  activity      TaskActivity[]
+  /// Spec 15 — back-relations for TimeEntry.taskRef / RunningTimer.taskRef.
+  timeEntries   TimeEntry[]           @relation("TimeEntryTask")
+  runningTimers RunningTimer[]        @relation("RunningTimerTask")
+
+  @@unique([projectId, taskNumber])
+  @@index([projectId, columnId])
+  @@index([assigneeId])
+  @@index([parentId])
+}
+
+/// Assignment of an organization member to a project (spec 11). A member may belong to
+/// many projects and a project to many members; the same member cannot be assigned twice
+/// (`@@unique`). `onDelete: Cascade` on `membershipId` is what makes a member's removal
+/// from the org (spec 04) cascade-delete their assignments (TC-11-INT-13).
+model ProjectMember {
+  id                  String   @id @default(uuid())
+  projectId           String
+  membershipId        String
+  assignedAt          DateTime @default(now())
+  /// Account that performed the assignment (audit trail; set from the session).
+  assignedByAccountId String
+
+  project    Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  membership Membership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  assignedBy Account    @relation(fields: [assignedByAccountId], references: [id])
+
+  @@unique([projectId, membershipId])
+}
+
+/// A completed unit of logged work (spec 12). Belongs to a membership and optionally a
+/// project. `organizationId` is denormalized for range queries. Removal of a member is a
+/// soft-delete (Membership.status → 'removed'), so the `onDelete: Cascade` FK never fires
+/// and historical entries survive (spec 12 §Concurrency 25 note / FR-19). `projectId` is
+/// `SetNull` so archived-then-deleted projects don't orphan the entry. `task`/`description`
+/// length caps live in the validation layer, not the DB. `createdByAccountId` is an
+/// immutable audit field set from the session (spec 12 Security 24), never the request body.
+model TimeEntry {
+  id                 String    @id @default(uuid())
+  membershipId       String
+  /// Denormalized org for the `(organizationId, date)` range index (spec 12 Data Model).
+  organizationId     String
+  projectId          String?
+  /// Free-text task label, max 200 codepoints (validation layer).
+  task               String?
+  /// Free-text description, max 500 codepoints (validation layer).
+  description        String?
+  /// Calendar date this entry belongs to (date-only).
+  date               DateTime  @db.Date
+  /// Full start timestamp; null for duration-only entries.
+  startTime          DateTime?
+  /// Full end timestamp; null for duration-only entries.
+  endTime            DateTime?
+  /// Duration in minutes. Always present. Min 1, max 1440 (validation layer).
+  durationMinutes    Int
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  /// Account that created the entry (may differ from the membership for admin-created
+  /// entries — a clean audit trail of who acted for whom, spec 12 Security 24).
+  createdByAccountId String
+  /// Spec user-management/16 — whether this entry counts toward the client's Billed
+  /// Amount on reports. `true` = billable (default; matches every pre-migration row);
+  /// `false` = non-billable (internal work, training, PTO). Amounts Owed excludes
+  /// `false` rows entirely; Time & Activity splits them into Non-Billable Time.
+  billable           Boolean   @default(true)
+
+  membership   Membership   @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdBy    Account      @relation("TimeEntryCreatedBy", fields: [createdByAccountId], references: [id])
+
+  /// Spec 15 — optional link to the task this entry was logged against. When set, the
+  /// free-text `task` column carries a snapshot of the task's key + title at write time
+  /// (FR-2/FR-3). onDelete: SetNull so hard-deleting the task un-links entries without
+  /// altering the historical `task` label (FR-8). Relation field is named `taskRef`
+  /// because the scalar `task` (free-text label) is already taken on this model.
+  taskId  String?
+  taskRef Task?   @relation("TimeEntryTask", fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([membershipId, date])
+  @@index([organizationId, date])
+  @@index([projectId])
+  @@index([taskId])
+}
+
+/// A member's single in-progress timer (spec 12). At most ONE per member — enforced by the
+/// UNIQUE constraint on `membershipId`, which is the race backstop that makes two concurrent
+/// starts resolve to exactly one 201 + one 409 (spec 12 Security 11 / TC-12-INT-23). Removal
+/// of a member cascade-deletes the timer (FR-19 / TC-12-INT-30). `startedAt` is always set
+/// server-side from NOW() — the client cannot supply it (Security 9).
+model RunningTimer {
+  id             String   @id @default(uuid())
+  membershipId   String   @unique
+  organizationId String
+  projectId      String?
+  task           String?
+  description    String?
+  startedAt      DateTime
+  /// Spec user-management/16 — lives on the running timer and is copied to the
+  /// resulting `TimeEntry` when `stopTimer` runs. Toggling mid-run is honored by
+  /// the same PATCH that updates task/description.
+  billable       Boolean  @default(true)
+
+  membership   Membership   @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  /// Spec 15 — optional link to the task this timer is running against. Carried into the
+  /// created TimeEntry on stop (FR-9); onDelete: SetNull so a task deletion mid-run
+  /// leaves the timer running with taskId cleared (FR-8 / TC-15-INT-20). Relation field
+  /// is `taskRef` because the scalar `task` (free-text label) is already taken here too.
+  taskId  String?
+  taskRef Task?   @relation("RunningTimerTask", fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([taskId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Spec 14 — Task Collaboration (labels, comments, watchers, activity log).
+// Additive: only back-relations on Project/Task/Membership above. Label-name
+// uniqueness is case-insensitive per project — enforced by a functional unique
+// index on LOWER("name") added by hand in the migration SQL.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Spec 14 — project-scoped label used to categorize tasks. Name is 1–30 codepoints,
+/// unique per project case-insensitively; color is a 7-char hex string. Definition is
+/// managed by admin/manager (`manage-labels`); assignment to a task reuses `manage-tasks`.
+model TaskLabel {
+  id        String   @id @default(uuid())
+  projectId String
+  name      String
+  color     String
+  createdAt DateTime @default(now())
+
+  project     Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignments TaskLabelAssignment[]
+
+  @@index([projectId])
+}
+
+/// Many-to-many join between Task and TaskLabel. Composite PK (`taskId`,`labelId`) is
+/// what makes label assignment naturally idempotent at the DB level (upsert on the PK).
+model TaskLabelAssignment {
+  taskId  String
+  labelId String
+
+  task  Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label TaskLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, labelId])
+  @@index([labelId])
+}
+
+/// Spec 14 — a discussion comment on a task. Content is markdown, 1–10,000 codepoints
+/// (validation layer). Author is a Membership; hard-deletion of a comment does not
+/// delete its `comment_added` activity entry — audit trail preserved (FR-13).
+model TaskComment {
+  id        String   @id @default(uuid())
+  taskId    String
+  authorId  String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task   Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author Membership @relation("TaskCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+}
+
+/// Spec 14 — a member's subscription to a task's activity. Composite PK guarantees
+/// no duplicate rows; watch/unwatch endpoints are naturally idempotent at the DB level.
+/// Notification delivery is out of scope in this spec — the row is data-model only.
+model TaskWatcher {
+  taskId       String
+  membershipId String
+  createdAt    DateTime @default(now())
+
+  task       Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  membership Membership @relation("TaskWatcherMembership", fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, membershipId])
+  @@index([membershipId])
+}
+
+/// Spec 14 — append-only activity feed. Written as side effects of task/comment/label/
+/// watcher operations, never via a direct API. `field`/`oldValue`/`newValue` are only
+/// set for `action === 'field_changed'`; label_added/removed carry the label id in
+/// `newValue`/`oldValue`; watcher_added/removed carry the membership id there.
+model TaskActivity {
+  id        String   @id @default(uuid())
+  taskId    String
+  actorId   String
+  action    String
+  field     String?
+  oldValue  String?
+  newValue  String?
+  /// Human-readable snapshot of the old value at write time (spec 14). Populated for
+  /// field_changed rows whose oldValue is an FK id (columnId/assigneeId/parentId), and
+  /// for label_removed / watcher_removed rows where oldValue is a label / membership id.
+  /// Frees the UI from resolving deleted rows through a stale lookup — the name from
+  /// the moment of change is preserved even if the target is later deleted or renamed.
+  oldLabel  String?
+  /// Same as oldLabel, for the incoming value.
+  newLabel  String?
+  createdAt DateTime @default(now())
+
+  task  Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor Membership @relation("TaskActivityActor", fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
 }
 
 /// One open position: one interviewer, one interview length, one public booking link.
@@ -153,7 +1179,7 @@ model VacancyCategory {
 
 /// A person who has applied at least once. Never signs in; the team owns the record.
 model Candidate {
-  id             String   @id @default(uuid())
+  id             String    @id @default(uuid())
   organizationId String
   /// Overwritten by the latest booking (hiring 02 requirement 27) — a typo in the
   /// first booking must not be permanently uncorrectable.
@@ -161,8 +1187,8 @@ model Candidate {
   lastName       String
   /// Always lowercase, matching the account rule.
   email          String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
   /// Soft delete (hiring 03 §11). Null is the whole of "present": every hiring read
   /// adds `deletedAt: null`, and nothing about the person or their history is erased.
   ///

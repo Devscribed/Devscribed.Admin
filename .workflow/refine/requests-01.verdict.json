@@ -1,0 +1,437 @@
+{
+  "status": "blocked",
+  "spec": "specs/requests/01-requests.md",
+  "request": null,
+  "read": {
+    "specs": [
+      "specs/requests/01-requests.md",
+      "specs/requests/README.md",
+      "specs/requests/02-client-participants.md",
+      "specs/user-management/10-organization-requests-page.md",
+      "specs/user-management/10-organization-requests-page.design.md",
+      "specs/user-management/00-app-shell.design.md",
+      "specs/user-management/README.md",
+      "CLAUDE.md",
+      ".claude/skills/spec/references/checklist.md"
+    ],
+    "files": [
+      "packages/validation/src/roles.ts",
+      "packages/validation/src/index.ts",
+      "apps/api/prisma/schema.prisma",
+      "apps/api/src/requests/requests.service.ts",
+      "apps/api/src/requests/requests.controller.ts",
+      "apps/api/src/mail/mail.service.ts",
+      "apps/api/src/projects/projects.controller.ts",
+      "apps/api/test/requests-page.spec.ts",
+      "apps/api/test/clients.spec.ts",
+      "apps/web/src/layout/Sidebar.tsx",
+      "apps/web/src/ds.ts",
+      "apps/web/app/org/[orgId]/requests/page.tsx",
+      "apps/web/app/org/[orgId]/requests/types.ts",
+      "e2e/tests/helpers.ts",
+      "e2e/tests/requests-page.spec.ts",
+      "e2e/environment.ts",
+      "docker-compose.yml",
+      "1_DS for dev/components/forms"
+    ]
+  },
+  "sweeps": {
+    "currency": 44,
+    "contradiction": 31,
+    "consequence": 31,
+    "obligations": 129,
+    "scope": 0
+  },
+  "findings": [
+    {
+      "id": "R1",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "requirement 9",
+      "line": 96,
+      "claim": "a projectId from another organization is given two mutually exclusive answers, and no test case decides it",
+      "witness": {
+        "kind": "rule",
+        "detail": "requirement 9 (:96): 'A project that is archived, or belongs to another organization, is rejected with 400 and REQUEST_MESSAGES.projectUnavailable.' The POST contract (:487): '404 for a project or membership outside the caller's organization - never 403.' Validation rule 9 (:563) restates the 400 side; edge case 13 (:541) and TC-01-INT-15 (:964) cover the archived project only, and TC-01-INT-06 (:896) covers only the cross-org membership. Nothing decides the cross-org project.",
+        "source": "specs/requests/01-requests.md:96 against :487"
+      },
+      "suggestedFix": "one answer, stated in requirement 9, in the POST contract, in validation rule 9 and in a test case. 404 matches the Security section's own rule that existence is not enumerable across organizations."
+    },
+    {
+      "id": "R2",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "AC-3",
+      "line": 702,
+      "claim": "the no-regression acceptance criterion forbids exactly what requirements 37 and 38 require, and TC-01-E2E-10 asserts the forbidden outcome",
+      "witness": {
+        "kind": "rule",
+        "detail": "AC-3 (:702): 'No role sees a request, a vacation row, or a control that it cannot see before this spec ships.' requirement 38 (:182): 'The sidebar Requests row is rendered for every signed-in member. Today it is drawn only for view-requests.' TC-01-E2E-10 (:1129): 'the Requests row is present for all four. This is the regression witness for the change proven absent at spec time - the probe measured a count of 0 for a user before this spec.' The same clash is in specs/requests/README.md:188, backward-compatibility guarantee 5: 'No role gains visibility of anything it cannot see today', whose stated mechanism ('the page-level capability check is replaced by two inner ones whose grants are identical') covers the vacation section and the All scope but not the page and the nav row, which requirements 37 and 38 deliberately open to every role.",
+        "source": "specs/requests/01-requests.md:702 against :182 and :1129"
+      },
+      "suggestedFix": "narrow AC-3 and README guarantee 5 to what is actually promised - no role gains sight of a vacation row, a request it is not party to, or an action control - and say plainly that the page and the sidebar row become visible to user and viewer."
+    },
+    {
+      "id": "R3",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "GET /requests errors",
+      "line": 468,
+      "claim": "the redefined status vocabulary makes the value the shipped vacation page sends a 400, while backward compatibility promises that page and its tests run unchanged",
+      "witness": {
+        "kind": "rule",
+        "detail": "requirement 42 (:195): status is '(all | open | answered | granted | declined | cancelled)'. The GET contract (:468): '400 for an unknown status or type value.' 'pending' is not in the set. The shipped page sends it: apps/web/app/org/[orgId]/requests/page.tsx:70 'useState<RequestStatusFilter>(\\'pending\\')' and :89 'fetch(`/api/organizations/${orgId}/requests?status=${parseRequestStatusFilter(filter)}`)'. apps/api/test/requests-page.spec.ts:342 pins 'defaults to pending when no status param is given'. Against that, specs/requests/README.md:181 backward-compatibility guarantee 3: 'VacationRequest is not touched - not a column, not a query, not a transaction. Mechanism: ... e2e/tests/requests-page.spec.ts and e2e/tests/vacation-requests.spec.ts run unchanged as the regression witness', and AC-12 (:711).",
+        "source": "specs/requests/01-requests.md:468 against specs/requests/README.md:181 and apps/web/app/org/[orgId]/requests/page.tsx:89"
+      },
+      "suggestedFix": "state how the one status parameter serves two vocabularies - either a separate vacationStatus parameter, or an explicit rule that the vacation values remain accepted and route to the vacation branch - and correct the backward-compatibility guarantee to name every caller that must change."
+    },
+    {
+      "id": "R4",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "State Machine invariant 8",
+      "line": 342,
+      "claim": "the exhaustive list of writers of a Request row omits the message handler, which requirements 19 and 32 require to write that row",
+      "witness": {
+        "kind": "rule",
+        "detail": "Invariant 8 (:342): 'Writers of a Request row are exactly: the create handler, the four transition handlers, the edit handler and the reassign handler. Each takes the row lock; the create handler additionally locks the Organization row for the number.' requirement 19 (:122): 'Every message writes a RequestEvent with action = \\'message_posted\\' in the same transaction as the RequestMessage row, and updates Request.lastActivityAt.' requirement 32 (:157): 'lastActivityAt is updated by any message, any status change and any reassignment.' The message handler is therefore an eighth writer, and the spec never says whether it takes the row lock or what it re-reads - which the checklist requires of every writer.",
+        "source": "specs/requests/01-requests.md:342 against :122 and :157"
+      },
+      "suggestedFix": "add the message handler to invariant 8 and state its lock, or state that lastActivityAt is written outside the enumerated set and why that is safe against a concurrent transition."
+    },
+    {
+      "id": "R5",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "requirement 43",
+      "line": 199,
+      "claim": "the default comparator does not demote terminal rows generally, but TC-01-UNIT-04 asserts that it does",
+      "witness": {
+        "kind": "scenario",
+        "detail": "requirement 43 (:199): 'Default ordering is: blocking and non-terminal first, then overdue, then priority descending, then lastActivityAt descending.' TC-01-UNIT-04 (:840): 'the terminal row sorts below every non-terminal one despite being blocking.' Inputs that satisfy requirement 43 and fail the case: row A = granted, blocking, priority urgent, lastActivityAt now; row B = open, not blocking, not overdue, priority normal. Neither is 'blocking and non-terminal'; neither is overdue (requirement 33 makes a terminal row never overdue); the next key is priority, so A sorts above B - a terminal row above a non-terminal one. The case's own fixture leaves the granted row's priority unstated, so both implementations pass or fail depending on a value the spec does not fix.",
+        "source": "specs/requests/01-requests.md:199 against :840"
+      },
+      "suggestedFix": "if terminal rows are meant to sink below every non-terminal one, make non-terminal the first sort key in requirement 43 and give TC-01-UNIT-04's terminal row an explicit priority."
+    },
+    {
+      "id": "R6",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "TC-01-INT-13",
+      "line": 947,
+      "claim": "the integration case for derived overdue names a state requirement 33 makes unreachable",
+      "witness": {
+        "kind": "scenario",
+        "detail": "requirement 33 (:159): 'A request is overdue when neededBy is strictly before today in the reading account's timezone.' TC-01-INT-13 (:947): 'Create a request with neededBy = tomorrow, then read it as an account whose timezone makes that date past.' Expected: 'overdue: true'. Two accounts' civil dates differ by at most one day, so if neededBy is D+1 relative to the creator, the reader's today is at most D+1 and D+1 < today is never satisfiable. The reachable case is neededBy = today for the creator, read by an account already on D+1 - which is what edge case 10 (:538) and TC-01-UNIT-05 (:846) describe.",
+        "source": "specs/requests/01-requests.md:947 against :159"
+      },
+      "suggestedFix": "change the case to neededBy = today in the creating account's timezone, read by an account whose civil date is already the following day."
+    },
+    {
+      "id": "R7",
+      "severity": "blocker",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "GET /requests query",
+      "line": 442,
+      "claim": "the default value of the status filter is stated three different ways, and the two readings produce different lists on first load",
+      "witness": {
+        "kind": "rule",
+        "detail": "The GET contract (:442-443) names a default for scope only: 'Query: scope (mine default | all), type, status, projectId, q.' requirement 42 (:195) lists the status values with 'all' first and names no default. The Screens mock (:354) draws the control preselected: 'Status [ Open V ]'. The document this one amends states a third default - specs/user-management/10-organization-requests-page.md:121: 'status - pending (default)' - and apps/api/test/requests-page.spec.ts:342 pins that behaviour today. An implementer choosing 'all' and an implementer choosing 'open' both satisfy the text and return different first loads; TC-01-E2E-13 (:1157) turns on which one is the unfiltered state.",
+        "source": "specs/requests/01-requests.md:442 against :195, :354 and specs/user-management/10-organization-requests-page.md:121"
+      },
+      "suggestedFix": "state the default for status and type in the GET contract next to scope's, and make the Screens mock show that same default."
+    },
+    {
+      "id": "R8",
+      "severity": "blocker",
+      "rule": "spec/unamended-consequence",
+      "file": "specs/user-management/10-organization-requests-page.md",
+      "symbol": "the whole document",
+      "line": 21,
+      "claim": "spec 10 carries no amendment anywhere; twenty-four of its statements now assert the opposite of this spec, and one of them is implemented as a passing test",
+      "witness": {
+        "kind": "rule",
+        "detail": "grep -niE 'amend|supersed|requests/01|overrul' over specs/user-management/10-organization-requests-page.md returns nothing; the only note of the amendment is a paragraph in specs/user-management/README.md:47, which the checklist calls a promise rather than an amendment. Statements overruled, each by requests/01 requirement 37 (:179), 38 (:182), 40 (:187), 42 (:195), 43 (:199), 44 (:202) or 46 (:207): :15 'a dedicated Requests page ... where admin and manager can see and act on all vacation requests'; :21 'user and viewer have no access to this page.'; :28 matrix row 'View Requests page | admin yes | manager yes | user no | viewer no'; :34 'ViewRequests - view the Requests page (admin, manager)'; :39 'Default filter: pending requests ... approved, rejected, cancelled, or all statuses'; :47 'The sidebar navigation item shows a badge with the count of pending requests'; :48 'The sidebar \"Requests\" item is not visible to user or viewer.'; :49 'Navigating directly to /org/{orgId}/requests as a user or viewer redirects to the members page (or shows 403).'; :112 '1b. System redirects to the members page (or shows 403).'; :118 'Caller must be admin or manager with active membership.'; :121 'status - pending (default), approved, rejected, cancelled, all'; :122 'type - vacation (default)'; :126-159 the response body, whose top-level requests[] are vacation rows and whose pendingCount/totalCount move under vacation and counts in the new contract (:459-460); :162 'Sorting: pending requests first (oldest requestedAt first)'; :166 '403 Forbidden: caller is user or viewer'; :172 error row 'Requests page - forbidden | You do not have permission to view requests'; :173 'No pending requests.'; :174 'No {status} requests.'; :181 'Visible to admin and manager only. Not visible to user or viewer.'; :182 'Shows a badge with the count of pending requests'; :188 'options are \"Pending\" (default), \"Approved\", \"Rejected\", \"Cancelled\", \"All\"'; :213 states row 'Empty (pending filter) | \"No pending requests.\"'; :244 out-of-scope row 'Other request types besides vacation (extensible but not implemented)'; :270-278 TC-10-INT-03 'Requests page - forbidden for user/viewer ... HTTP 403', which is live code at apps/api/test/requests-page.spec.ts:324 and will fail; :297 TC-10-E2E-03's retirement note 'Covered by TC-10-INT-03 (a user and a viewer are forbidden)'.",
+        "source": "specs/user-management/10-organization-requests-page.md:21 against specs/requests/01-requests.md:179"
+      },
+      "suggestedFix": "amend each statement in spec 10 beside itself, naming the requests/01 requirement that overrules it, and rewrite TC-10-INT-03's steps and expected result to the new contract."
+    },
+    {
+      "id": "R9",
+      "severity": "blocker",
+      "rule": "spec/unamended-consequence",
+      "file": "specs/user-management/10-organization-requests-page.design.md",
+      "symbol": "Role gating",
+      "line": 41,
+      "claim": "spec 10's design document still specifies the role gate, the badge fetch and the filter default that this spec replaces",
+      "witness": {
+        "kind": "rule",
+        "detail": ":13 'a role-gated destination where admin/manager see every vacation request across the organization' - overruled by requests/01 requirement 37 (:179). :41 'Role gating. Visible to admin/manager only, invisible to user/viewer ... the row is simply omitted from the nav array when the role lacks ViewRequests ... TC-10-E2E-03 asserts sidebar-requests-link absent for user/viewer' - overruled by requirement 38 (:182), and TC-01-E2E-10 (:1129) asserts the row present for all four roles. :48 'On shell mount, for admin/manager only (same role gate as the row's visibility, so user/viewer never fire it), a lightweight fetch of GET .../requests?status=pending reads pendingCount' - overruled by requirement 44 (:202), which makes the badge count requests waiting on the caller for every role, and by the status vocabulary of requirement 42 (:195). :145 'Filter option - pending (default)' - overruled by requirement 42.",
+        "source": "specs/user-management/10-organization-requests-page.design.md:41 against specs/requests/01-requests.md:182"
+      },
+      "suggestedFix": "amend the four statements in place, naming the requirement that overrules each."
+    },
+    {
+      "id": "R10",
+      "severity": "blocker",
+      "rule": "spec/unamended-consequence",
+      "file": "specs/user-management/00-app-shell.design.md",
+      "symbol": "Role gating / Planned rows",
+      "line": 56,
+      "claim": "the app shell's nav table still records the Requests row as admin/manager only",
+      "witness": {
+        "kind": "rule",
+        "detail": ":56 'Role gating - spec 10 requires the future Requests row to be invisible to user and viewer.' :67 planned-rows table: '| - | Requests | /org/{orgId}/requests | spec 10 | admin, manager |'. Both are overruled by requests/01 requirement 38 (:182): 'The sidebar Requests row is rendered for every signed-in member', and by TC-01-E2E-10 (:1129).",
+        "source": "specs/user-management/00-app-shell.design.md:67 against specs/requests/01-requests.md:182"
+      },
+      "suggestedFix": "amend the Visible-to cell to 'all roles' and the role-gating bullet beside itself, naming requests/01 requirement 38."
+    },
+    {
+      "id": "R11",
+      "severity": "blocker",
+      "rule": "spec/stale-statement",
+      "file": "specs/user-management/README.md",
+      "symbol": "It amends spec 10",
+      "line": 51,
+      "claim": "the amendment paragraph cites a requirement range that is not the one it means and a test case that does not exist",
+      "witness": {
+        "kind": "command",
+        "detail": "specs/user-management/README.md:51-52: 'No role gains sight of anything it cannot see today; see requests/01 requirements 41-45 and TC-01-INT-24.' requests/01's requirements 41-45 (:191-205) are the vacation section, the filters, the ordering, the badge and the row contents; the requirements that carry the amendment are 37-41 (:179-194). `grep -n 'TC-01-INT-2[0-9]' specs/requests/01-requests.md` returns TC-01-INT-20 (:1004) and TC-01-INT-21 (:1012) only - the integration cases stop at 21, and there is no TC-01-INT-24.",
+        "source": "grep -n \"TC-01-INT-2[0-9]\" specs/requests/01-requests.md"
+      },
+      "suggestedFix": "cite requirements 37-41, and name a case that exists - TC-01-INT-18 is the one that asserts a user's rows and absent vacation key."
+    },
+    {
+      "id": "R12",
+      "severity": "blocker",
+      "rule": "spec/stale-statement",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "Data Model, RequestMessage / RequestEvent",
+      "line": 262,
+      "claim": "both schema line citations point at unrelated models",
+      "witness": {
+        "kind": "command",
+        "detail": "The spec at :262: 'Index: @@index([requestId, createdAt]) - the shape TaskComment uses (apps/api/prisma/schema.prisma:997).' `grep -n 'model TaskComment' apps/api/prisma/schema.prisma` -> '1046:model TaskComment {'; its @@index([taskId, createdAt]) is at :1057. Line 997 is inside the running-timer model ('taskId String?'). The spec at :277: 'The device TaskActivity uses (apps/api/prisma/schema.prisma:1030).' `grep -n 'model TaskActivity' apps/api/prisma/schema.prisma` -> '1079:model TaskActivity {'; oldLabel/newLabel are at :1092-1094. Line 1030 is inside TaskLabelAssignment.",
+        "source": "grep -n \"model TaskComment|model TaskActivity\" apps/api/prisma/schema.prisma"
+      },
+      "suggestedFix": "cite schema.prisma:1057 and :1092, or cite the model names without line numbers."
+    },
+    {
+      "id": "R13",
+      "severity": "blocker",
+      "rule": "spec/stale-statement",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "Known Gaps, viewer/manager row",
+      "line": 694,
+      "claim": "the only evidence offered for the unproven viewer and manager paths is a use of setMembershipRole that does not exist",
+      "witness": {
+        "kind": "command",
+        "detail": "The spec at :694: 'setMembershipRole (e2e/tests/helpers.ts:160) is used by members-list.spec.ts today, so the route exists and is in daily use', repeated in the Verification Plan at :740: 'route in daily use by members-list.spec.ts'. `grep -rln setMembershipRole e2e/tests` returns e2e/tests/field-autofill.spec.ts, e2e/tests/helpers.ts, e2e/tests/holidays.spec.ts - members-list.spec.ts is not among them. (The same claim made for removeMember at :743 is true: `grep -rln removeMember e2e/tests` returns helpers.ts and members-list.spec.ts.)",
+        "source": "grep -rln \"setMembershipRole\" e2e/tests"
+      },
+      "suggestedFix": "name field-autofill.spec.ts and holidays.spec.ts as the daily users of the helper, in both the Known Gaps row and the Verification Plan row."
+    },
+    {
+      "id": "R14",
+      "severity": "blocker",
+      "rule": "spec/stale-statement",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "Verification Plan, Bringing it up",
+      "line": 725,
+      "claim": "the recorded rig names a database port this repository does not publish and the e2e harness does not use",
+      "witness": {
+        "kind": "command",
+        "detail": "The spec at :725: 'docker ps -> devscribed-postgres up 2 days (healthy), 0.0.0.0:5433->5432 and 0.0.0.0:5434->5432', and at :728: 'against database devscribed_e2e at localhost:5434'. docker-compose.yml publishes one mapping for that container: \"ports: - '5433:5432'\". e2e/environment.ts:81 returns 'postgresql://devscribed:devscribed@localhost:5433/devscribed_e2e'. There is no 5434 in the compose file or in the e2e harness, so the run recorded here cannot have gone where it says it went.",
+        "source": "docker-compose.yml ports and e2e/environment.ts:81"
+      },
+      "suggestedFix": "re-record the rig from a run against localhost:5433/devscribed_e2e, or state what published 5434 and why the next agent will not find it."
+    },
+    {
+      "id": "R15",
+      "severity": "blocker",
+      "rule": "spec/stale-statement",
+      "file": "specs/requests/README.md",
+      "symbol": "Product decisions",
+      "line": 46,
+      "claim": "four schema citations that carry the rationale requirement 43 and the data model point at are wrong, and two different fields are cited at the same line",
+      "witness": {
+        "kind": "command",
+        "detail": ":46 'Matches Project.status and Client.status (apps/api/prisma/schema.prisma:719, :763)'; :58 'Mirrors Project.nextTaskNumber (apps/api/prisma/schema.prisma:719)' - the same line cited for two different fields; :47 'VacationRequest (apps/api/prisma/schema.prisma:680)'. Actual: `grep -n 'model VacationRequest|model Project|model Client|nextTaskNumber' apps/api/prisma/schema.prisma` -> 684:model VacationRequest, 723:model Project, 738:nextTaskNumber, 767:model Client; Project.status is at :730 and Client.status at :775.",
+        "source": "grep -n \"model VacationRequest|model Project|model Client|nextTaskNumber\" apps/api/prisma/schema.prisma"
+      },
+      "suggestedFix": "cite :730, :775, :738 and :684, or drop the line numbers and cite model.field."
+    },
+    {
+      "id": "R16",
+      "severity": "blocker",
+      "rule": "spec/stale-statement",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "TC-01-UNIT-06",
+      "line": 855,
+      "claim": "the unit case is written against a symbol packages/validation does not export",
+      "witness": {
+        "kind": "command",
+        "detail": "The spec at :855: 'Check CAPABILITY_MATRIX and ROLE_CAPABILITIES for the three new capabilities across all four roles'. packages/validation/src/index.ts:600 declares 'const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {' - not exported; the only reader outside is `can()` at :727. ROLE_CAPABILITIES is exported (packages/validation/src/roles.ts:101). The existing matrix test, packages/validation/src/members.test.ts:142, therefore asserts through `can()` against a locally declared expectation rather than against the table. As written the case cannot be implemented without an export the spec does not ask for, and the README's blast radius for packages/validation (specs/requests/README.md:134) does not name one.",
+        "source": "grep -n \"CAPABILITY_MATRIX\" packages/validation/src/index.ts"
+      },
+      "suggestedFix": "assert through `can()` and `capabilitiesFor()` as members.test.ts does, or say that CAPABILITY_MATRIX becomes an export and add it to the blast radius."
+    },
+    {
+      "id": "R17",
+      "severity": "blocker",
+      "rule": "spec/missing-artefact",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "UI Description",
+      "line": 614,
+      "claim": "the spec states the DS-gaps obligation and carries no DS-gaps table, while three of its controls have no @ds component",
+      "witness": {
+        "kind": "command",
+        "detail": "The spec at :613-615: 'Components come from @ds via apps/web/src/ds.ts. ... Anything missing goes into the design system and is recorded in a DS-gaps table, not improvised here.' `grep -n 'DS gaps' specs/requests/01-requests.md` returns nothing, and there is no specs/requests/01-requests.design.md (the area index at specs/requests/README.md:29 shows Design '-'), which is where every other area keeps its table. The barrel apps/web/src/ds.ts exports AuthLayout, Badge, Button, Card, Checkbox, Eye, EyeOff, IconButton, InfoBanner, Input, Modal, NavItem, Radio, RadioGroup, SearchField, SectionLabel, Select, Spinner, Table, Tabs, Toggle; `ls '1_DS for dev/components/forms'` returns Checkbox, Input, Radio, SearchField, Select only, and `grep -rl 'Textarea|textarea' '1_DS for dev'` returns nothing. request-new-description (<=5000 chars), request-detail-composer and request-detail-decline-reason (1-1000 chars) all need a multi-line text control the design system does not have; requests-loading-skeleton has no DS component either. The repository already improvises this with a raw <textarea> in eight app files, which is what the sentence at :614 forbids.",
+        "source": "grep -n \"DS gaps\" specs/requests/01-requests.md"
+      },
+      "suggestedFix": "add a DS gaps table naming the multi-line text control and the loading skeleton, what each screen does in the meantime, and what closes it."
+    },
+    {
+      "id": "R18",
+      "severity": "blocker",
+      "rule": "spec/missing-artefact",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "Error Messages",
+      "line": 520,
+      "claim": "two refusals and one banner the spec describes have no row in the Error Messages table and name no packages/validation export",
+      "witness": {
+        "kind": "rule",
+        "detail": "The Error Messages preamble (:575): 'Every string below lives in packages/validation and is exported from REQUEST_MESSAGES, so web and API cannot disagree.' Missing: (1) the reassign route (:520-523) states a capability and a body and lists no errors at all - a user or viewer calling POST .../reassign, and a reassign against a terminal request (requirement 35 permits it only while open or answered), have no status and no message anywhere in the document, and the table has no reassignForbidden row; (2) the inactive-addressee banner copy at :396-397, 'The person this request is addressed to is no longer active. Reassign it to someone else.', is user-facing text with no export and no row, while its testid request-detail-assignee-inactive-banner is in the Required list (:645) and asserted by TC-01-E2E-09 (:1122). CLAUDE.md's rule is that message text lives in packages/validation, never inline.",
+        "source": "specs/requests/01-requests.md:520 and :396 against :575"
+      },
+      "suggestedFix": "give the reassign route an Errors block and the table a row for its refusal and for a terminal reassign, and add the banner string to REQUEST_MESSAGES with a row of its own."
+    },
+    {
+      "id": "R19",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "Verification Plan, step 4",
+      "line": 728,
+      "claim": "the recorded migration count is two behind the tree",
+      "witness": {
+        "kind": "command",
+        "detail": "The spec at :728 quotes 'prisma migrate deploy -> 17 migrations found'. `ls -1d apps/api/prisma/migrations/*/ | wc -l` -> 19; the two newest are 20260901130000_spec_org_03_holidays and 20260901140000_spec_16_billable_time. A quoted transcript ages, but the rig is what the next agent is told to reproduce.",
+        "source": "ls -1d apps/api/prisma/migrations/*/ | wc -l"
+      },
+      "suggestedFix": "re-record the step, or mark it as observed on the tree at the commit named."
+    },
+    {
+      "id": "R20",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "Verification Plan, soft-deleted member row",
+      "line": 743,
+      "claim": "removeMember is cited two lines above its declaration",
+      "witness": {
+        "kind": "command",
+        "detail": "The spec at :743 and :983 cite 'helpers.ts:1270'. `grep -n 'export async function removeMember' e2e/tests/helpers.ts` -> 1272; line 1270 is inside the doc comment. The other five helper citations in the same table (160, 734, 921, 1081, 1128) are exact.",
+        "source": "grep -n \"export async function removeMember\" e2e/tests/helpers.ts"
+      },
+      "suggestedFix": "cite helpers.ts:1272."
+    },
+    {
+      "id": "R21",
+      "severity": "note",
+      "rule": "spec/stale-statement",
+      "file": "specs/requests/README.md",
+      "symbol": "Product decisions / Blast Radius, spec 02",
+      "line": 55,
+      "claim": "two counts in the area README that spec 02 rests on are off by one, and a sidebar line number is two out",
+      "witness": {
+        "kind": "command",
+        "detail": ":55 and specs/requests/README.md:141 claim 'Membership means \"member of staff\" at 35 query sites across 16 files (grep -rn \"prisma\\.membership\\.\" apps/api/src)'. Running the command the README itself names: 36 matches across 17 files. :154 claims 'nav-members is drawn unconditionally (apps/web/src/layout/Sidebar.tsx:71)'; `grep -n \"nav-members\" apps/web/src/layout/Sidebar.tsx` -> 73. These are spec 02's claims, carried in the README spec 01 delegates its blast radius to.",
+        "source": "grep -rn \"prisma\\.membership\\.\" apps/api/src | wc -l"
+      },
+      "suggestedFix": "re-run both commands and update the counts when spec 02 is next touched."
+    },
+    {
+      "id": "R22",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "requirement 25 / requirement 19",
+      "line": 139,
+      "claim": "whether the decline reason's RequestMessage also writes a message_posted event is not settled",
+      "witness": {
+        "kind": "rule",
+        "detail": "requirement 19 (:122) is absolute - 'Every message writes a RequestEvent with action = message_posted in the same transaction as the RequestMessage row' - and requirement 25 (:139) stores the decline reason 'as the body of a RequestMessage posted in the same transaction'. TC-01-INT-11 (:935) expects 'a RequestMessage exists whose body is the reason ... one status_changed event' and neither requires nor forbids a second event. The History panel (requirement 21, :126) renders differently under the two readings.",
+        "source": "specs/requests/01-requests.md:139 against :122"
+      },
+      "suggestedFix": "say in requirement 25 whether the decline's message writes a message_posted event, and assert the event count in TC-01-INT-11."
+    },
+    {
+      "id": "R23",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "reassign contract",
+      "line": 522,
+      "claim": "a mutation is gated on a read capability, and there is no capability named for it",
+      "witness": {
+        "kind": "rule",
+        "detail": "The permission matrix (:66) grants Reassign to admin and manager. The contract (:522) implements it as 'Capability: ViewAllRequests (admin, manager)', a capability the matrix (:59) defines as 'the All scope, every request in the org'. The grants coincide today, so nothing observable diverges - but the next change to either grant silently changes the other.",
+        "source": "specs/requests/01-requests.md:522 against :59"
+      },
+      "suggestedFix": "either add a ReassignRequest capability or state in the New Capabilities section that ViewAllRequests deliberately doubles as the reassign gate."
+    },
+    {
+      "id": "R24",
+      "severity": "note",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "TC-01-E2E-05",
+      "line": 1077,
+      "claim": "the invalid-submission mechanism is exercised at E2E twice",
+      "witness": {
+        "kind": "rule",
+        "detail": "CLAUDE.md: 'One mechanism gets one E2E test, on the cheapest page that exercises it.' TC-01-E2E-02 (:1046) proves the shared rule - submit enabled, every error shown, focus on the first invalid field. TC-01-E2E-05 (:1077) opens with 'submit an empty reason ... the empty submission shows the field error and changes no status', and TC-01-INT-12 (:941) already covers the server side. The rest of E2E-05 (the reason landing in the thread, the composer absent) earns its place.",
+        "source": "specs/requests/01-requests.md:1077 against CLAUDE.md"
+      },
+      "suggestedFix": "drop the empty-reason half of E2E-05 and keep the decline journey; 13 E2E cases is the largest budget of any spec in the tree."
+    },
+    {
+      "id": "R25",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "Data Model, Request.assigneeMembershipId",
+      "line": 234,
+      "claim": "the SetNull foreign key can produce a row the spec says cannot exist",
+      "witness": {
+        "kind": "rule",
+        "detail": ":234 'assigneeMembershipId | String? FK -> Membership, SetNull | Required while assigneeKind = member.' A hard delete of a Membership row would leave assigneeKind = 'member' with a null id, which requirement 12 (:103) forbids. The spec's own defence elsewhere (:232, on requesterMembershipId) is that 'member removal is a soft delete, so the cascade does not fire in practice' - that reasoning is not restated here, and the two keys resolve the same risk in opposite directions (Cascade vs SetNull).",
+        "source": "specs/requests/01-requests.md:234 against :103"
+      },
+      "suggestedFix": "carry the soft-delete argument onto this row, and say what a read does if it ever meets kind member with a null id."
+    },
+    {
+      "id": "R26",
+      "severity": "note",
+      "rule": "spec/scope-gap",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "scope sweep",
+      "line": 1,
+      "claim": "no request was supplied with this spec, so the scope sweep was not run",
+      "witness": {
+        "kind": "rule",
+        "detail": "The refiner was given the spec path and 'no request given'. Per the agent definition, the scope sweep is skipped rather than invented from the spec's own summary; nothing here asserts that the spec does or does not cover what was asked for.",
+        "source": "spec-refiner input"
+      },
+      "suggestedFix": "re-run with the originating request if scope coverage matters."
+    }
+  ]
+}

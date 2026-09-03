@@ -301,7 +301,7 @@ test.describe('Manage booking', () => {
     await expect(page.getByTestId('card-cv-name')).toContainText(REPLACEMENT_CV.name);
     await expect(page.getByTestId('card-cv-download')).toHaveAttribute(
       'href',
-      `/api/organizations/${org.organizationId}/hiring/applications/${invite.applicationId}/cv`,
+      `/api/organizations/${org.orgId}/hiring/applications/${invite.applicationId}/cv`,
     );
   });
 

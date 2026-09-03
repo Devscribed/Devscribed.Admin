@@ -12,7 +12,7 @@ import {
   registerOrganization,
   signIn,
   uniqueEmail,
-  type Registered,
+  type RegisteredOrganization,
   type SeededCategory,
   type SeededCriterion,
 } from './helpers';
@@ -30,7 +30,7 @@ import {
  */
 test.describe('Candidate database', () => {
   interface Seed {
-    org: Registered;
+    org: RegisteredOrganization;
     react: SeededCategory;
     english: SeededCriterion;
     path: string;
@@ -85,7 +85,7 @@ test.describe('Candidate database', () => {
     await assessCriterion(request, org, jane.applicationId, english.id, { valueId: value('B1') });
     await assessCriterion(request, org, ivan.applicationId, english.id, { valueId: value('A1') });
 
-    return { org, react, english, path: `/org/${org.organizationId}/hiring/candidates` };
+    return { org, react, english, path: `/org/${org.orgId}/hiring/candidates` };
   }
 
   /** Picks an option out of a `Select`, searchable or not: both open on click. */
@@ -280,7 +280,7 @@ test.describe('Candidate database', () => {
   }) => {
     const org = await registerOrganization(request, uniqueEmail('cand-empty'));
     await signIn(page, org.email);
-    await page.goto(`/org/${org.organizationId}/hiring/candidates`);
+    await page.goto(`/org/${org.orgId}/hiring/candidates`);
 
     // Nothing has ever been booked — and the message names the only thing that would.
     await expect(page.getByTestId('candidates-empty-state')).toHaveText(
@@ -338,7 +338,7 @@ test.describe('Candidate database', () => {
     });
 
     await signIn(page, org.email);
-    await page.goto(`/org/${org.organizationId}/hiring/candidates`);
+    await page.goto(`/org/${org.orgId}/hiring/candidates`);
 
     const count = page.getByTestId('candidates-scope-all');
     const filters = page.getByTestId('candidates-filters-open');
@@ -469,7 +469,7 @@ test.describe('Candidate database', () => {
     }
 
     await signIn(page, org.email);
-    await page.goto(`/org/${org.organizationId}/hiring/candidates`);
+    await page.goto(`/org/${org.orgId}/hiring/candidates`);
 
     const rows = page.getByTestId('candidates-list').locator('[data-testid^="candidate-row-"]');
     await expect(page.getByTestId('candidates-scope-all')).toHaveText('All (26)');
@@ -611,7 +611,7 @@ test.describe('Candidate database', () => {
     await page.getByTestId('candidates-search-input').fill('');
     await expect(page.getByTestId('candidates-scope-all')).toHaveText('All (2)');
     // Their card is gone with them, however it is reached.
-    await page.goto(`/org/${org.organizationId}/hiring/candidates/${id}`);
+    await page.goto(`/org/${org.orgId}/hiring/candidates/${id}`);
     await expect(page.getByTestId('candidate-not-found')).toBeVisible();
 
     // The criterion the deleted candidate was assessed on is untouched — this deletes a
@@ -648,7 +648,7 @@ test.describe('Candidate database', () => {
     });
 
     await signIn(page, ines.email);
-    await page.goto(`/org/${org.organizationId}/hiring/candidates`);
+    await page.goto(`/org/${org.orgId}/hiring/candidates`);
 
     const id = await onlyRowId(page);
     await page.getByTestId(`candidate-actions-${id}`).click();

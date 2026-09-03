@@ -1,0 +1,93 @@
+{
+  "status": "fail",
+  "suites": {
+    "unit": {
+      "passed": 941,
+      "failed": 0,
+      "ms": 944
+    },
+    "int": {
+      "passed": 45,
+      "failed": 0,
+      "ms": 37680,
+      "files": [
+        "test/signwell-client.spec.ts",
+        "test/signwell-send.spec.ts",
+        "test/signwell-reconcile.spec.ts",
+        "test/signwell-completion.spec.ts",
+        "test/signwell-webhook.spec.ts",
+        "test/signing-embedded.spec.ts",
+        "test/signing-settings.spec.ts"
+      ],
+      "note": "Default TEST_DATABASE_URL (localhost:5433) fails auth in this environment because a native Windows postgres.exe service is also bound to port 5433 alongside the Docker Postgres (confirmed via netstat: two different PIDs LISTENING on 5433, one docker-backend, one postgres.exe). Ran instead against the same Docker container's second published port (TEST_DATABASE_URL=postgresql://devscribed:devscribed@localhost:5434/devscribed_test), which is documented in test/database-url.ts as the supported override. No container, volume or service was touched."
+    },
+    "e2e": {
+      "passed": 13,
+      "failed": 3,
+      "ms": "2 targeted runs, ~2m + ~1.5m",
+      "files": [
+        "tests/signature-providers.spec.ts",
+        "tests/regressions.spec.ts"
+      ],
+      "note": "First run (default/auto worker count) additionally showed 5 regressions.spec.ts failures and 3 flaky cases, all 30s page.goto/element timeouts on areas unrelated to this diff (templates list, template editor, subject picker) — reproduced clean (11/11 passed) on a second run at PW_WORKERS=2, confirming those were resource-contention noise from a cold, fully-parallel first run rather than product defects, and are excluded from this verdict. The 3 signature-providers.spec.ts failures below reproduced identically across both runs and a third isolated -g run."
+    }
+  },
+  "flaky": [],
+  "findings": [
+    {
+      "id": "Q1",
+      "target": "code",
+      "severity": "blocker",
+      "rule": "spec/04-signature-providers.md#TC-04-E2E-01",
+      "file": "e2e/tests/signature-providers.spec.ts",
+      "symbol": "TC-04-E2E-01: an admin switches the organization to SignWell",
+      "line": 154,
+      "claim": "`await signwell.check()` never completes: Playwright reports \"<span></span> intercepts pointer events\" and retries the click for the full 30s timeout, on both the first attempt and the retry.",
+      "witness": {
+        "kind": "test",
+        "test": "TC-04-E2E-01",
+        "detail": "apps DS `Radio` (1_DS for dev/components/forms/Radio.jsx, unmodified by this diff) renders its real `<input type=\"radio\">` visually hidden with `pointerEvents: 'none'`, so Playwright's `.check()` — which requires the target element itself to receive the event — can never satisfy its actionability check; the pointer event is always intercepted by the decorative dot `<span>` sitting on top. I verified a real user is not blocked: a manual Playwright script clicking the visible option row (`page.getByTestId('signing-provider-option-signwell').click({position:{x:200,y:20}})`) instead of `.check()` on the hidden input toggles the radio correctly in one click. Trace of the failing run: e2e/test-results/signature-providers-Spec-0-dde9f-he-organization-to-SignWell-chromium-retry1/trace.zip"
+      },
+      "suggestedFix": "In the test, select the provider by clicking the visible option row/label (e.g. `page.getByTestId('signing-provider-option-signwell').click()`) rather than calling `.check()` on the DS Radio's hidden input."
+    },
+    {
+      "id": "Q2",
+      "target": "code",
+      "severity": "blocker",
+      "rule": "spec/04-signature-providers.md#TC-04-E2E-02",
+      "file": "e2e/tests/signature-providers.spec.ts",
+      "symbol": "TC-04-E2E-02: the signing page hosts the widget on our origin",
+      "line": 203,
+      "claim": "The spec's own expected result for this case is \"`sign-embedded-loading` appears and is replaced by `sign-embedded-frame`\", but the test never observes the loading placeholder: `expect(signer.getByTestId('sign-embedded-loading')).toBeVisible()` fails with \"element(s) not found\" on both the first attempt and the retry, in two independent full runs.",
+      "witness": {
+        "kind": "test",
+        "test": "TC-04-E2E-02",
+        "detail": "apps/web/app/sign/[token]/EmbeddedSigning.tsx unmounts the placeholder (rather than merely hiding it) once the iframe's own `onLoad` fires (`{(!ready || loading || !url) && placeholder()}`). Against the in-process SignWell stub the iframe's `load` resolves fast enough that the placeholder is gone before Playwright's assertion polls for it, on every run observed. Trace: e2e/test-results/signature-providers-Spec-0-6ce3f-ts-the-widget-on-our-origin-chromium-retry1/trace.zip (page snapshot at failure shows the iframe already present, loading test-id absent)."
+      },
+      "suggestedFix": "Either make the transition reliably observable (e.g. hold the placeholder for a minimum tick, or gate the stub's response so the frame's load is not synchronous with page.goto), or assert the loading→frame handoff without depending on the placeholder still being mounted by the time the first assertion runs (e.g. race `sign-embedded-loading` against `sign-embedded-frame` immediately after `goto`)."
+    },
+    {
+      "id": "Q3",
+      "target": "code",
+      "severity": "blocker",
+      "rule": "spec/04-signature-providers.md#TC-04-E2E-04",
+      "file": "e2e/tests/signature-providers.spec.ts",
+      "symbol": "TC-04-E2E-04: a manager sees the setting but cannot change it",
+      "line": 293,
+      "claim": "`await page.getByTestId('logout-button').click()` times out after 30s waiting for the element, on both the first attempt and the retry.",
+      "witness": {
+        "kind": "test",
+        "test": "TC-04-E2E-04",
+        "detail": "The topbar only exposes `logout-button` inside the account menu opened by `topbar-account-button` — the established pattern in e2e/tests/app-shell.spec.ts:34-35 is `await page.getByTestId('topbar-account-button').click(); await page.getByTestId('logout-button').click();`. This test clicks `logout-button` directly without opening the menu first, so the element never appears. Screenshot: e2e/test-results/signature-providers-Spec-0-53f97-etting-but-cannot-change-it-chromium-retry1/test-failed-1.png shows the topbar with only the account avatar button visible, no logout control."
+      },
+      "suggestedFix": "Add `await page.getByTestId('topbar-account-button').click();` before clicking `logout-button`, matching app-shell.spec.ts."
+    }
+  ],
+  "priorFindingsAddressed": [
+    {
+      "id": "requirement-26-retry-orphan",
+      "verified": true,
+      "detail": "Re-read and executed apps/api/test/signwell-client.spec.ts (all 6 cases pass, including the 3 the prior finding named): 'does not repeat a create that may have landed, and adopts what it finds' asserts exactly one POST and one lookup after the single backoff before returning the adopted document; the 5xx-with-nothing-found case shows 2 requests/1 lookup; the 429 case shows 0 lookups/3 requests. This falsifies the previously reported defect — createOrAdopt's beforeUnsafeRetry callback runs the orphan lookup inside the retry loop, before any repeat POST, not after the loop gives up."
+    }
+  ]
+}

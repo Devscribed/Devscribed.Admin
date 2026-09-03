@@ -1,0 +1,36 @@
+{
+  "status": "blocked",
+  "findings": [
+    {
+      "id": "I1",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/user-management/10-organization-requests-page.md",
+      "symbol": "amendment banner (Summary, :14-23)",
+      "claim": "eleven statements in spec 10 state the opposite of specs/requests/01-requests.md requirements 37, 38, 42 and 44 — the page's audience, the endpoint's query vocabulary, its response envelope, its error row, the sidebar's visibility rule and the badge's meaning. Both specs are authoritative, so no implementation satisfies both, and the amendment cannot be made by this stage: scripts/static-gate.mjs:74 blocks any specs/ edit by the implementer and prescribes this finding instead.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Each verified against HEAD. :35 'user and viewer have no access to this page' and :42 the matrix row 'View Requests page | ✅ | ✅ | ❌ | ❌' against requirement 37 ('renders for every signed-in member of the organization, regardless of role') — apps/api/test/requests-page.spec.ts:325 asserts 200 for both roles. :139 'Caller must be admin or manager with active membership', same contradiction, not cited by review. :53 'Default filter: pending requests ... approved, rejected, cancelled, or all' and :142 'status — pending (default), approved, rejected, cancelled, all' against requirement 42, which declares that exact vocabulary 'retired on this endpoint' with an unknown value now a 400 — apps/api/test/requests.spec.ts:1288 asserts 400 for ?status=pending. :178-179 top-level '\"pendingCount\": 2, \"totalCount\": 15' against the envelope at specs/requests/01-requests.md:507 — {requests, vacation:{requests,pendingCount}, counts:{waitingOnMe,total}}; the string totalCount appears nowhere in the codebase. :198 the Error Messages row 'Requests page — forbidden' against requirement 37 — REQUESTS_PAGE_MESSAGES.viewForbidden (packages/validation/src/index.ts:1983) is emitted by no route, its only reader being the unit assertion at packages/validation/src/requests-page.test.ts:80. :207 'Visible to admin and manager only. Not visible to user or viewer' against requirement 38 — apps/web/src/layout/Sidebar.tsx:83 pushes the row unconditionally. :61 and :208 'a badge with the count of pending requests' against requirement 44 — apps/web/src/layout/requests-badge-context.tsx:58 sums counts.waitingOnMe and vacation.pendingCount. :214 'options are \"Pending\" (default), \"Approved\", \"Rejected\", \"Cancelled\", \"All\"' against the shipped control at apps/web/app/org/[orgId]/requests/page.tsx:35 (All statuses/Open/Answered/Granted/Declined/Cancelled), which e2e/tests/requests-page.spec.ts:146 drives by selecting 'Open', an option this line does not list. The banner at :14-23 asserts 'Each affected statement below is marked in place', which requirements 8 and 9 (:59, :63) honour and these eleven do not — so the document's own claim about itself is false. Replacement text for every line is drafted in .workflow/runs/2026-09-01T14-44-29_requests-01-requests/stages/implement.attempt-2.md. Precedent for the repair: ffa814d and f06c7d8, both deliberate docs(specs) commits made outside an implement attempt after an earlier halt.",
+        "source": "specs/user-management/10-organization-requests-page.md:35,42,53,61,139,142,178,198,207,208,214 against specs/requests/01-requests.md requirements 37, 38, 42, 44"
+      },
+      "suggestedFix": "amend spec 10 in place, deliberately, as a docs(specs) commit — then resume this run with --from. The eleven replacements are drafted in the attempt-2 stage report. One decision rides with :198: REQUESTS_PAGE_MESSAGES.viewForbidden is now dead copy, and either goes with its unit assertion or stays knowingly."
+    },
+    {
+      "id": "I2",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/user-management/10-organization-requests-page.md",
+      "symbol": "TC-10-INT-01",
+      "claim": "TC-10-INT-01 was amended on its Steps and not on its Expected Result, so the case now describes a response shape the endpoint must not return: the Steps carry requirement 42's new vocabulary while the Expected Result still describes the retired top-level envelope. The case as written cannot pass, and the test carrying its id asserts the opposite shape.",
+      "witness": {
+        "kind": "test",
+        "test": "TC-10-INT-01",
+        "detail": "specs/user-management/10-organization-requests-page.md:281 reads 'GET /api/organizations/{orgId}/requests?status=open' with the note '(Amended by requests/01 requirement 42: was ?status=pending, which now answers 400.)', but :285 still reads 'HTTP 200. Returns 3 requests across M1 and M2, each with member info, balance, and dates. pendingCount: 3'. The test labelled // TC-10-INT-01 at apps/api/test/requests-page.spec.ts:210 asserts res.body.vacation.requests toHaveLength(3) (:232), res.body.vacation.pendingCount toBe(3) (:233), res.body.requests toEqual([]) (:236) and res.body.counts toEqual({waitingOnMe: 0, total: 0}) (:237). Written to the Expected Result as it stands the case fails: the fixture seeds three VacationRequest rows and no Request rows, and specs/requests/01-requests.md requirement 41 keeps vacation rows out of Request in this release, so res.body.requests is necessarily empty. The test is the correct side — rewriting it to match :285 would assert the top-level envelope requirement 42 retires and would break AC-12's witness TC-01-INT-20 — so the Expected Result is what must change.",
+        "source": "specs/user-management/10-organization-requests-page.md:281-285 against apps/api/test/requests-page.spec.ts:210-237 and specs/requests/01-requests.md:507 and requirement 41"
+      },
+      "suggestedFix": "replace the Expected Result with the nested envelope: vacation.requests holds the 3 rows and vacation.pendingCount is 3, while requests is [] and counts is {waitingOnMe: 0, total: 0}, because vacation rows are not Request rows (requirement 41). Full sentence drafted in the attempt-2 stage report."
+    }
+  ]
+}

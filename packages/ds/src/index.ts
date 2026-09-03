@@ -20,6 +20,7 @@ export { AuthLayout } from './components/appLayout/AuthLayout';
 export { BookingLayout } from './components/appLayout/BookingLayout';
 export { MiniTracker } from './components/appLayout/MiniTracker';
 export { Navbar } from './components/appLayout/Navbar';
+export { Tracker } from './components/appLayout/Tracker';
 
 export { Badge } from './components/core/Badge';
 export { Button } from './components/core/Button';
@@ -29,6 +30,7 @@ export { IconButton } from './components/core/IconButton';
 export { PageTitle } from './components/core/PageTitle';
 export { ToggleButton } from './components/core/ToggleButton';
 
+export { Avatar } from './components/data/Avatar';
 export { BoardCard } from './components/data/BoardCard';
 export { BoardColumn } from './components/data/BoardColumn';
 export { Calendar } from './components/data/Calendar';
@@ -42,6 +44,7 @@ export { Toast, ToastHost } from './components/feedback/Toast';
 export { Tooltip } from './components/feedback/Tooltip';
 
 export { Checkbox } from './components/forms/Checkbox';
+export { DateRangePicker } from './components/forms/DateRangePicker';
 export { FileInput } from './components/forms/FileInput';
 export { FormActions } from './components/forms/FormActions';
 /* §74 — `fieldLabelStyle` is exported beside the components it belongs to. Every system input
@@ -50,6 +53,7 @@ export { FormActions } from './components/forms/FormActions';
 export { FieldLabel, fieldLabelStyle, FormField, RequiredMark } from './components/forms/FormField';
 export { SearchInput } from './components/forms/SearchInput';
 export { Select } from './components/forms/Select';
+export { Switch } from './components/forms/Switch';
 export { TextArea } from './components/forms/TextArea';
 export { TextInput } from './components/forms/TextInput';
 
@@ -85,9 +89,15 @@ export {
 } from './components/icons/Icon';
 
 export { BackTo } from './components/navigation/BackTo';
+export { NavigationCard } from './components/navigation/NavigationCard';
 export { PageTabs } from './components/navigation/PageTabs';
 export { Pagination } from './components/navigation/Pagination';
 export { Sidebar } from './components/navigation/Sidebar';
+
+export { ReportControls } from './components/reports/ReportControls';
+export { ReportGroupBody, ReportTableHead } from './components/reports/ReportGroupBody';
+export { ReportSummaryBanner } from './components/reports/ReportSummaryBanner';
+export { ReportTableTitle } from './components/reports/ReportTableTitle';
 
 export { ConfirmDialog } from './components/overlays/ConfirmDialog';
 export { MenuDrawer } from './components/overlays/MenuDrawer';
@@ -104,6 +114,7 @@ export type { AuthLayoutProps } from './components/appLayout/AuthLayout';
 export type { BookingLayoutProps } from './components/appLayout/BookingLayout';
 export type { MiniTrackerProps } from './components/appLayout/MiniTracker';
 export type { NavbarProps } from './components/appLayout/Navbar';
+export type { TrackerProps } from './components/appLayout/Tracker';
 
 export type { BadgeProps } from './components/core/Badge';
 export type { ButtonProps } from './components/core/Button';
@@ -111,8 +122,9 @@ export type { CardProps } from './components/core/Card';
 export type { ChipProps } from './components/core/Chip';
 export type { IconButtonProps } from './components/core/IconButton';
 export type { PageTitleProps } from './components/core/PageTitle';
-export type { ToggleButtonProps } from './components/core/ToggleButton';
+export type { ToggleButtonOption, ToggleButtonProps } from './components/core/ToggleButton';
 
+export type { AvatarProps } from './components/data/Avatar';
 export type { BoardCardProps } from './components/data/BoardCard';
 export type { BoardColumnProps } from './components/data/BoardColumn';
 export type { CalendarDate, CalendarMonth, CalendarProps } from './components/data/Calendar';
@@ -126,20 +138,32 @@ export type { ToastEntry, ToastHostProps, ToastProps } from './components/feedba
 export type { TooltipProps } from './components/feedback/Tooltip';
 
 export type { CheckboxProps } from './components/forms/Checkbox';
+export type { DateRangePickerProps, DateRangePreset } from './components/forms/DateRangePicker';
 export type { FileInputProps } from './components/forms/FileInput';
 export type { FormActionsProps } from './components/forms/FormActions';
 export type { FieldLabelProps, FormFieldProps } from './components/forms/FormField';
 export type { SearchInputProps } from './components/forms/SearchInput';
 export type { SelectOption, SelectOptionLike, SelectProps } from './components/forms/Select';
+export type { SwitchProps } from './components/forms/Switch';
 export type { TextAreaProps } from './components/forms/TextArea';
 export type { TextInputProps } from './components/forms/TextInput';
 
 export type { GlyphProps, IconProps } from './components/icons/Icon';
 
 export type { BackToProps } from './components/navigation/BackTo';
+export type { NavigationCardProps } from './components/navigation/NavigationCard';
 export type { PageTabsProps, TabItem } from './components/navigation/PageTabs';
 export type { PaginationProps } from './components/navigation/Pagination';
 export type { SidebarItem, SidebarNavigate, SidebarProps, SidebarSubItem } from './components/navigation/Sidebar';
+
+export type { ReportControlsProps } from './components/reports/ReportControls';
+export type {
+  ReportGroupBodyProps,
+  ReportTableColumn,
+  ReportTableHeadProps,
+} from './components/reports/ReportGroupBody';
+export type { ReportSummaryBannerProps, ReportSummaryItem } from './components/reports/ReportSummaryBanner';
+export type { ReportTableTitleProps } from './components/reports/ReportTableTitle';
 
 export type { ConfirmDialogProps } from './components/overlays/ConfirmDialog';
 export type { MenuDrawerProps } from './components/overlays/MenuDrawer';

@@ -1,0 +1,5 @@
+{
+  "status": "pass",
+  "findings": [],
+  "note": "Attempt 1 completed the work; the stage produced no verdict because the implementer definition did not yet specify one. Verdict reconstructed from the stage report and verified against the tree: component on semantic tokens only, all three registries at 179 with an empty set difference."
+}

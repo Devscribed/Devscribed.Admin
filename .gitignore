@@ -26,6 +26,17 @@ e2e/test-results/
 
 # Uploaded CVs, written by LocalFsStorage in development and tests
 apps/api/.storage/
+# Local FileStorage driver — signed documents a developer or a test produced. A signed
+# contract is still a signed contract; none of it belongs in version control.
+.local-storage/
+
+# Terraform — the provider lock file is deliberately NOT ignored: a plan that resolves
+# different provider versions on two machines is not a plan of the same infrastructure.
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
 
 # misc
 .DS_Store
@@ -37,3 +48,24 @@ Info.txt
 
 .idea
 plans/
+docker-compose.override.yml
+
+# AI workflow runs. The summary of a run is worth keeping — it answers "how did this spec
+# become code" in the PR. The raw journal is not: blobs hold whole tool outputs and the
+# transcript snapshots hold reasoning, both measured in hundreds of megabytes per week.
+.workflow/lock
+.workflow/current
+.workflow/runs/*/events.jsonl
+.workflow/runs/*/blobs/
+.workflow/runs/*/thinking/
+.workflow/runs/*/.pending.json
+.workflow/runs/*/stages/*.log
+.workflow/runs/*/*.verdict.json.raw
+# The prompt each agent was handed. Kept on the machine that ran it, because a review prompt
+# carries every prior verdict and grows with the run — but `report.html` embeds the prompts it
+# needs, so the committed record still answers "what did the reviewer actually see?".
+.workflow/runs/*/stages/*.prompt.md
+
+# Where the last local E2E run put its servers. A note for a person, not a source of
+# truth: see e2e/environment.ts.
+e2e/.last-ports.json

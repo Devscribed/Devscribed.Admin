@@ -1,0 +1,372 @@
+'use client';
+
+import { useState, type CSSProperties } from 'react';
+import { IconButton } from '@devscribed/ds';
+import { PencilIcon, TrashIcon } from '@/layout/icons';
+import { formatDurationHuman, formatWallClockInTz } from '@devscribed/validation';
+import { formatDayLabel } from './date-utils';
+import {
+  formatDurationSpoken,
+  isTimedEntry,
+  projectColor,
+  TimeGrid,
+  type BlockColor,
+  type BlockPlacement,
+} from './TimeGrid';
+import type { CalendarHoliday, TimeEntry } from './types';
+
+/**
+ * Daily Outlook-style grid (spec 12 mock, states 03–04). An hour gutter plus one wide day
+ * column for the selected date; timed entries render as positioned blocks, duration-only
+ * entries drop to a strip below the grid. Clicking a block opens its editor; hovering
+ * reveals inline edit/delete controls (own entries for everyone, any entry for
+ * admin/manager — `canManage` gates both). The day total is client-aggregated.
+ */
+export function DailyView({
+  date,
+  today,
+  tz,
+  entries,
+  canManage,
+  onEdit,
+  onDelete,
+  holidaysByDate,
+  onHolidayAnnounce,
+}: {
+  date: string;
+  today: string;
+  /** The viewer's effective timezone (`Account.timezone`, or `'UTC'`). */
+  tz: string;
+  entries: TimeEntry[];
+  canManage: boolean;
+  onEdit: (entry: TimeEntry) => void;
+  onDelete: (entry: TimeEntry) => void;
+  /** Spec organization/03 §10 — passed through to `TimeGrid`, which renders the
+   * full-column holiday overlay for the day when a holiday is present. */
+  holidaysByDate?: Map<string, CalendarHoliday>;
+  onHolidayAnnounce?: (message: string) => void;
+}) {
+  const holiday = holidaysByDate?.get(date);
+  const durationOnly = entries.filter((e) => !isTimedEntry(e));
+  const totalMinutes = entries.reduce((sum, e) => sum + e.durationMinutes, 0);
+
+  const header = (
+    <div
+      style={{
+        height: 64,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        gap: 2,
+        padding: '0 var(--space-6)',
+        // The header keeps the holiday tint as a running cue when the day is one;
+        // the overlay in the grid body carries the marker + testid.
+        background: holiday ? 'var(--surface-holiday)' : undefined,
+      }}
+    >
+      <span
+        style={{
+          fontWeight: 'var(--font-weight-semibold)',
+          fontSize: 'var(--font-size-xs)',
+          color: date === today ? 'var(--color-blue)' : 'var(--text-primary)',
+        }}
+      >
+        {formatDayLabel(date, today)}
+      </span>
+      <span style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-3)' }}>
+        <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }}>
+          Total logged
+        </span>
+        <span
+          data-testid="tt-day-total"
+          style={{
+            fontWeight: 'var(--font-weight-semibold)',
+            fontSize: 'var(--font-size-s)',
+            fontVariantNumeric: 'tabular-nums',
+            color: 'var(--color-blue)',
+          }}
+        >
+          {formatDurationHuman(totalMinutes)}
+        </span>
+      </span>
+    </div>
+  );
+
+  const strip =
+    durationOnly.length > 0 ? (
+      <div
+        style={{
+          borderTop: 'var(--border-width-hairline) solid var(--border-default)',
+          background: 'var(--surface-sunken)',
+          padding: 'var(--space-4) var(--space-6)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'var(--space-6)',
+          flexWrap: 'wrap',
+          flexShrink: 0,
+        }}
+      >
+        <span
+          style={{
+            fontWeight: 'var(--font-weight-medium)',
+            fontSize: 'var(--font-size-xs)',
+            color: 'var(--text-secondary)',
+          }}
+        >
+          Duration-only (no time set)
+        </span>
+        {durationOnly.map((entry) => (
+          <DurationChip
+            key={entry.id}
+            entry={entry}
+            canManage={canManage}
+            onEdit={onEdit}
+            onDelete={onDelete}
+          />
+        ))}
+      </div>
+    ) : null;
+
+  return (
+    <TimeGrid
+      columns={[{ date, isToday: date === today, isWeekend: false, header }]}
+      entries={entries}
+      today={today}
+      tz={tz}
+      gridTestId="tt-daily-list"
+      durationStrip={strip}
+      holidaysByDate={holidaysByDate}
+      onHolidayAnnounce={onHolidayAnnounce}
+      renderBlock={(entry, placement) => (
+        <DailyBlock
+          entry={entry}
+          placement={placement}
+          tz={tz}
+          canManage={canManage}
+          onEdit={onEdit}
+          onDelete={onDelete}
+        />
+      )}
+    />
+  );
+}
+
+/** A positioned block: a full-size button (opens the editor, carries the aria-label) with
+ * hover-revealed edit/delete controls layered above it. */
+function DailyBlock({
+  entry,
+  placement,
+  tz,
+  canManage,
+  onEdit,
+  onDelete,
+}: {
+  entry: TimeEntry;
+  placement: BlockPlacement;
+  tz: string;
+  canManage: boolean;
+  onEdit: (entry: TimeEntry) => void;
+  onDelete: (entry: TimeEntry) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const { color } = placement;
+  const timeRange = `${formatWallClockInTz(entry.startTime as string, tz)} – ${formatWallClockInTz(
+    entry.endTime as string,
+    tz,
+  )}`;
+  const project = entry.projectId ? entry.projectName ?? '—' : '(no project)';
+  const duration = formatDurationHuman(entry.durationMinutes);
+  const ariaLabel = [
+    `${formatWallClockInTz(entry.startTime as string, tz)} to ${formatWallClockInTz(
+      entry.endTime as string,
+      tz,
+    )}`,
+    project,
+    entry.task ?? '',
+    formatDurationSpoken(entry.durationMinutes),
+  ]
+    .filter(Boolean)
+    .join(', ');
+
+  const nonBillable = entry.billable === false;
+  return (
+    <div
+      data-testid={`tt-entry-row-${entry.id}`}
+      data-billable={nonBillable ? 'false' : 'true'}
+      style={{ position: 'relative', height: '100%' }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <button
+        type="button"
+        aria-label={nonBillable ? `Non-billable, ${ariaLabel}` : ariaLabel}
+        onClick={() => onEdit(entry)}
+        style={blockButtonStyle(color, nonBillable)}
+      >
+        {nonBillable ? (
+          <span
+            aria-hidden
+            style={{
+              position: 'absolute',
+              top: 4,
+              right: 6,
+              fontWeight: 'var(--font-weight-medium)',
+              fontSize: 'var(--font-size-xs)',
+              color: 'var(--text-secondary)',
+              background: 'var(--surface-card)',
+              borderRadius: 'var(--radius-s)',
+              padding: '0 var(--space-1)',
+              lineHeight: 1.3,
+            }}
+          >
+            NB
+          </span>
+        ) : null}
+        <span style={{ fontSize: 'var(--font-size-xs)', opacity: 0.85 }}>
+          {timeRange} · {duration}
+        </span>
+        <span
+          style={{
+            fontWeight: 'var(--font-weight-semibold)',
+            fontSize: 'var(--font-size-s)',
+            marginTop: 2,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {project}
+          {entry.task ? <span style={{ fontWeight: 'var(--font-weight-regular)' }}> · {entry.task}</span> : null}
+        </span>
+        {entry.description ? (
+          <span
+            style={{
+              fontSize: 'var(--font-size-xs)',
+              opacity: 0.75,
+              marginTop: 2,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {entry.description}
+          </span>
+        ) : null}
+      </button>
+
+      {canManage && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 4,
+            right: 4,
+            display: 'flex',
+            gap: 2,
+            opacity: hovered ? 1 : 0,
+            transition: 'opacity var(--duration-fast) var(--ease-standard)',
+            background: 'var(--surface-card)',
+            borderRadius: 'var(--radius-s)',
+          }}
+        >
+          <IconButton
+            label="Edit entry"
+            onClick={() => onEdit(entry)}
+            data-testid={`tt-entry-edit-${entry.id}`}
+          >
+            <PencilIcon />
+          </IconButton>
+          <IconButton
+            label="Delete entry"
+            onClick={() => onDelete(entry)}
+            data-testid={`tt-entry-delete-${entry.id}`}
+          >
+            <TrashIcon />
+          </IconButton>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A duration-only chip in the strip below the grid, with the same edit/delete controls. */
+function DurationChip({
+  entry,
+  canManage,
+  onEdit,
+  onDelete,
+}: {
+  entry: TimeEntry;
+  canManage: boolean;
+  onEdit: (entry: TimeEntry) => void;
+  onDelete: (entry: TimeEntry) => void;
+}) {
+  const color = projectColor(entry.projectId);
+  const nonBillable = entry.billable === false;
+  const project = entry.projectId ? entry.projectName ?? '—' : '(no project)';
+  return (
+    <span
+      data-testid={`tt-entry-row-${entry.id}`}
+      data-billable={nonBillable ? 'false' : 'true'}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: 'var(--space-2) var(--space-3) var(--space-2) var(--space-5)',
+        borderRadius: 'var(--radius-s)',
+        border: nonBillable ? 'var(--border-width-control) dashed var(--border-default)' : undefined,
+        borderLeft: nonBillable ? '3px dashed var(--border-default)' : `3px solid ${color.rail}`,
+        background: nonBillable ? 'var(--surface-sunken)' : color.bg,
+        color: nonBillable ? 'var(--text-secondary)' : color.text,
+        fontSize: 'var(--font-size-xs)',
+      }}
+    >
+      <span>
+        {project}
+        {entry.task ? <span> · {entry.task}</span> : null} ·{' '}
+        {formatDurationHuman(entry.durationMinutes)}
+      </span>
+      {canManage && (
+        <span style={{ display: 'inline-flex', gap: 2 }}>
+          <IconButton
+            label="Edit entry"
+            onClick={() => onEdit(entry)}
+            data-testid={`tt-entry-edit-${entry.id}`}
+          >
+            <PencilIcon />
+          </IconButton>
+          <IconButton
+            label="Delete entry"
+            onClick={() => onDelete(entry)}
+            data-testid={`tt-entry-delete-${entry.id}`}
+          >
+            <TrashIcon />
+          </IconButton>
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** Shared style for a grid block's clickable face. Spec 16 — non-billable adds a
+ * dashed border and swaps to `--bg-sunken` + muted text; `position: relative` lets
+ * the "NB" corner tag pin. */
+function blockButtonStyle(color: BlockColor, nonBillable: boolean): CSSProperties {
+  return {
+    position: 'relative',
+    display: 'flex',
+    flexDirection: 'column',
+    width: '100%',
+    height: '100%',
+    textAlign: 'left',
+    padding: '8px 12px',
+    // §Phase 2 settled `--border-strong` onto `--border-default` at `--border-width-control`:
+    // yellow said "a form control's edge" in ink, the system says it in width.
+    border: nonBillable ? 'var(--border-width-control) dashed var(--border-default)' : 'none',
+    borderLeft: nonBillable ? '3px dashed var(--border-default)' : `3px solid ${color.rail}`,
+    borderRadius: 'var(--radius-s)',
+    background: nonBillable ? 'var(--surface-sunken)' : color.bg,
+    color: nonBillable ? 'var(--text-secondary)' : color.text,
+    cursor: 'pointer',
+    overflow: 'hidden',
+  };
+}

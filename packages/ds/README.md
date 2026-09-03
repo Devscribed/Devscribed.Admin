@@ -82,13 +82,37 @@ That rule is re-run before anything is added or removed — not assumed. A compo
 renders and no spec asks for pays lint, documentation and review cost forever and repays none of
 it.
 
-What is here today: 40 component modules and 2 shared internals, listed below.
+What is here today: 49 component modules and 2 shared internals, listed below.
 
 What was deliberately left out when this package was created, fourteen files in all:
 `Tracker`, `TimeField`, `DateField`, `DateRangePicker`, `MembersCell`, `MembersMultiField`,
 `CircleList`, `CircleSelect`, `CheckboxRow`, `NavigationCard` and four report components.
-Nothing rendered them and no spec named them. They are recoverable from git history at
-`5b4b4cd`, the last commit that contained them.
+Nothing rendered them and no spec named them.
+
+**Seven of them are back**, and the rule is why rather than in spite of it: the reports area
+renders `ReportControls`, `ReportGroupBody`, `ReportSummaryBanner`, `ReportTableTitle`,
+`NavigationCard` and `DateRangePicker`, and time tracking renders `Tracker` — and written specs
+name all seven. Rule 4 is re-run before anything is added *or removed*, and its output expires:
+an eviction for having no consumer is a fact about which screens existed that week, not a
+judgement about the component.
+
+**Six of them stayed out with the screens that were supposed to want them already built**,
+which is the rule working the other way and is most of what Phase 5 of the merge produced:
+`MembersCell`, `MembersMultiField`, `CircleList`, `CircleSelect`, `CheckboxRow` and
+`DateField`. Two were drawn for a Team overview this product has no route for; the rest either
+have no consumer or have one that does not fit. **`DateField` is the one with a witness**: the
+holiday modal is a screen that wants a date field, and `DateField` is a *measurement* of a
+picker rather than a picker — a `readOnly` input with a hard-coded default date, no `onChange`
+and a popup that selects nothing. Restoring it would have replaced a control somebody can type
+into with one they cannot. What that phase did add — `Avatar` — was never
+on this list at all, and had nine call sites before the package had any of it.
+
+**One more stayed out with a consumer in the room, which is the same rule again.** `TimeField` was expected to land with `Tracker`; the screen that wanted a time field
+turned out to want something it cannot do. It steps in thirty minutes and its input is
+read-only, and spec 12 logs arbitrary wall-clock — a picker that cannot express `09:15` is not
+the control that screen needs. It is still out, with `DateField`, `MembersCell`,
+`MembersMultiField`, `CircleList`, `CircleSelect` and `CheckboxRow`. All are recoverable from
+git history at `5b4b4cd`, the last commit that contained them.
 
 ---
 
@@ -97,12 +121,13 @@ Nothing rendered them and no spec named them. They are recoverable from git hist
 | Group | Components |
 |---|---|
 | **Core** | `Button`, `Badge`, `Card`, `Chip`, `IconButton`, `PageTitle`, `ToggleButton` |
-| **Forms** | `TextInput`, `TextArea`, `Select`, `SearchInput`, `Checkbox`, `FileInput`, `FormField`, `FieldLabel`, `RequiredMark`, `FormActions` |
-| **Data** | `Table`, `TableToolbar`, `Calendar`, `BoardCard`, `BoardColumn` |
+| **Forms** | `TextInput`, `TextArea`, `Select`, `SearchInput`, `Checkbox`, `Switch`, `DateRangePicker`, `FileInput`, `FormField`, `FieldLabel`, `RequiredMark`, `FormActions` |
+| **Data** | `Table`, `TableToolbar`, `Calendar`, `BoardCard`, `BoardColumn`, `Avatar` |
 | **Feedback** | `InfoBanner`, `Toast`, `ToastHost`, `Tooltip`, `Preloader`, `EmptyState` |
 | **Overlays** | `Modal`, `ConfirmDialog`, `Popover`, `MenuDrawer` |
-| **Navigation** | `Sidebar`, `PageTabs`, `Pagination`, `BackTo` |
-| **App layout** | `AppShell`, `Navbar`, `AccountMenu`, `AuthLayout`, `BookingLayout`, `MiniTracker` |
+| **Navigation** | `Sidebar`, `PageTabs`, `Pagination`, `BackTo`, `NavigationCard` |
+| **Reports** | `ReportTableTitle`, `ReportControls`, `ReportSummaryBanner`, `ReportGroupBody`, `ReportTableHead` |
+| **App layout** | `AppShell`, `Navbar`, `AccountMenu`, `AuthLayout`, `BookingLayout`, `MiniTracker`, `Tracker` |
 | **Icons** | `Icon` (name-based dispatcher) plus 27 glyph exports |
 
 Two internals are shared rather than duplicated: `useDialogFocus` (what a dialog does with focus

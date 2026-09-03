@@ -1,0 +1,38 @@
+{
+  "status": "pass",
+  "suites": {
+    "unit": {
+      "passed": 1024,
+      "failed": 0,
+      "ms": 7890
+    },
+    "int": {
+      "passed": 28,
+      "failed": 0,
+      "ms": 31765,
+      "files": [
+        "apps/api/test/requests.spec.ts",
+        "apps/api/test/requests-page.spec.ts"
+      ]
+    },
+    "e2e": {
+      "passed": 23,
+      "failed": 0,
+      "ms": 78000,
+      "files": [
+        "e2e/tests/requests.spec.ts",
+        "e2e/tests/requests-page.spec.ts",
+        "e2e/tests/regressions.spec.ts"
+      ]
+    }
+  },
+  "flaky": [],
+  "findings": [],
+  "notes": [
+    "npm run test:unit run whole (packages/validation): 21 files, 1024 tests, all green.",
+    "Targeted integration: apps/api/test/requests.spec.ts (23 tests, all 22 TC-01-INT-* cases present and passing) and apps/api/test/requests-page.spec.ts (5 tests, rewritten onto the new status vocabulary per requirement 42 — confirmed 'status=pending' etc. now answer 400 and 'status=open/granted/declined' map to pending/approved/rejected).",
+    "Targeted E2E (CI=1, own ports 3100/4100): e2e/tests/requests.spec.ts (all 13 TC-01-E2E-* present), e2e/tests/requests-page.spec.ts (contains the edited TC-10-E2E-01, confirmed it now selects the 'Open' filter before approving per requirement 42's note), e2e/tests/regressions.spec.ts — 23 passed, 0 failed.",
+    "Manual inspection: started a fresh API+web pair on 4100/3100 against devscribed_e2e, signed up an org, invited a viewer/user/admin, and drove the UI directly (not the automated suite). Confirmed: admin sees Mine/All scope toggle + vacation section; viewer sees the page with no New Request button and no scope toggle; user sees New Request but no scope toggle and no vacation section; created an access request as a user, opened detail, saw Grant/Cancel (not Answer/Decline) correctly gated for the requester, thread and history rendered as separate panels. No stray errors, toasts or stack traces observed. Both dev servers stopped afterward; no containers or ports touched.",
+    "Spot-checked all 17 acceptance criteria against the integration/E2E evidence above; all are covered by passing, named TC-* cases (AC-1..AC-17)."
+  ]
+}

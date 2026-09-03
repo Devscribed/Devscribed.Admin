@@ -22,7 +22,7 @@ import {
   type SelectOption,
 } from '@devscribed/ds';
 import { focusByTestId } from '@/field-error';
-import { asOption, asOptions } from '@/hiring/select';
+import { asOption, asOptions } from '@/select';
 import type { Category, InterviewerOption, Vacancy } from '@/hiring/types';
 
 type Values = { title: string; interviewerAccountId: string; durationMinutes: string; description: string };

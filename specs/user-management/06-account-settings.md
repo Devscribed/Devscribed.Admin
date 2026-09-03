@@ -517,6 +517,11 @@ Account Settings page:
 - `account-save-button`, `toast-account-saved`
 - `field-error-firstName`, `field-error-lastName`, `field-error-phoneNumber`, `field-error-phoneCountryCode`, `field-error-timezone`, `field-error-firstDayOfWeek` (inline validation on settings page)
 
+Added during implementation (not in the original list above):
+- `account-settings-menu-link` — the "Account settings" item added to the top-bar account menu (the entry point to this screen; a spec-00 / app-shell touch).
+- `account-error-message` — the settings-page form-level error banner shown on a 5xx/network failure of the Save (`PUT /api/account/settings`); the spec names this "error area" but assigned no id.
+- `account-settings-loading-skeleton` — the skeleton shown while `GET /api/account/settings` is in flight; the spec names the Loading state but assigned no id.
+
 Change Email modal:
 - `change-email-form`, `change-email-new-input`, `change-email-submit-button`
 - `change-email-confirmation-message`, `change-email-error`
@@ -910,54 +915,16 @@ Email Confirmation screen:
 - **Selectors:** `account-settings`, `edit-first-name-input`, `edit-last-name-input`, `edit-timezone-select`, `edit-first-day-select`, `account-save-button`, `toast-account-saved`.
 
 ### TC-06-E2E-02: Change-email confirmation flow
-- **Level:** E2E
-- **Preconditions:** logged in as `pat@acme.com`; `new@acme.com` unused.
-- **Steps:**
-  1. Open Account settings and click "Change email".
-  2. Enter `new@acme.com` and submit.
-  3. Open the confirmation link from the mail sink for `new@acme.com`.
-  4. Log out and log in with `new@acme.com`.
-- **Expected Result:**
-  1. After step 2 the modal shows "A confirmation link has been sent to new@acme.com. Please check your inbox."
-  2. After step 3 the confirmation screen shows "Your email has been updated."
-  3. Step 4 login with the new email succeeds.
-- **Selectors:** `change-email-open-button`, `change-email-new-input`, `change-email-submit-button`, `change-email-confirmation-message`, `confirm-email-screen`, `confirm-email-success-message`, `confirm-email-login-link`, `login-email-input`, `login-password-input`, `login-submit-button`.
+- **Retired.** Covered by TC-06-INT-01, which asserts strictly more of the rule: that the old address still authenticates before confirmation, that the new one does not, and that the pair swaps afterwards. This case checked only the last of those, for 19.8s of browser time.
 
 ### TC-06-E2E-03: Change-password with wrong current password shows an error
-- **Level:** E2E
-- **Preconditions:** logged in as a user with current password `"Passw0rd"`.
-- **Steps:**
-  1. Open Account settings and click "Change password".
-  2. Enter current `"wrong"`, new `"NewPass1"`, confirm `"NewPass1"`, submit.
-- **Expected Result:**
-  1. The modal shows "Current password is incorrect" in `change-password-error`. The password is not changed.
-- **Selectors:** `change-password-open-button`, `change-password-current-input`, `change-password-new-input`, `change-password-confirm-input`, `change-password-submit-button`, `change-password-error`.
+- **Retired.** Covered by TC-06-INT-02, which asserts the refusal and that the password is unchanged. The modal showing a server error is the same mechanism TC-02-E2E-02 keeps.
 
 ### TC-06-E2E-04: Edit phone number with country code
-- **Level:** E2E
-- **Preconditions:** logged in as any user.
-- **Steps:**
-  1. Open Account settings.
-  2. Select country code "US (+1)" from the country selector.
-  3. Enter phone number "(555) 123-4567".
-  4. Click Save.
-  5. Reload the page.
-- **Expected Result:**
-  1. After step 4 a "Settings saved" toast appears.
-  2. After reload the country is US and the phone number is retained.
-- **Selectors:** `account-settings`, `edit-phone-country-select`, `edit-phone-number-input`, `account-save-button`, `toast-account-saved`.
+- **Retired.** Covered by TC-06-INT-12 for per-country phone validation and TC-06-INT-15 for persistence. The browser-level mechanism — a form that saves and repopulates from the server after a reload — is what TC-06-E2E-01 exercises, on a different field. One representative, not one per field.
 
 ### TC-06-E2E-05: First name validation error shown inline
-- **Level:** E2E
-- **Preconditions:** logged in as any user.
-- **Steps:**
-  1. Open Account settings.
-  2. Change First name to "Pat2" (contains digit).
-  3. Tab away from the first name field to trigger blur validation.
-- **Expected Result:**
-  1. An inline error appears beneath the first name field: "First name may contain only letters, hyphens, apostrophes, and spaces".
-  2. Save is blocked until the error is corrected.
-- **Selectors:** `account-settings`, `edit-first-name-input`, `field-error-firstName`, `account-save-button`.
+- **Retired.** Covered by TC-06-INT-13 for name validation at the API. The inline-error-and-blocked-save mechanism is TC-01-E2E-03; that the saved values survive a reload is TC-06-E2E-01.
 
 ### TC-06-E2E-06: Email confirmation screen — valid token
 - **Level:** E2E
@@ -970,56 +937,16 @@ Email Confirmation screen:
 - **Selectors:** `confirm-email-screen`, `confirm-email-success-message`, `confirm-email-login-link`.
 
 ### TC-06-E2E-07: Email confirmation screen — expired token
-- **Level:** E2E
-- **Preconditions:** an email change confirmation token that has expired (> 24 hours old).
-- **Steps:**
-  1. Navigate to `/account/confirm-email?token={expiredToken}`.
-- **Expected Result:**
-  1. The screen shows "This confirmation link has expired" in `confirm-email-error`.
-  2. No success message or login link is displayed.
-- **Selectors:** `confirm-email-screen`, `confirm-email-error`.
+- **Retired.** Covered by TC-06-INT-03 for the 24-hour expiry. That the confirmation screen renders is asserted by TC-06-E2E-06; the three token states differ only in which message the same screen shows.
 
 ### TC-06-E2E-08: Email confirmation screen — invalid token
-- **Level:** E2E
-- **Preconditions:** none (using a fabricated/invalid token).
-- **Steps:**
-  1. Navigate to `/account/confirm-email?token=invalid-garbage-token`.
-- **Expected Result:**
-  1. The screen shows "This confirmation link is no longer valid" in `confirm-email-error`.
-  2. No success message or login link is displayed.
-- **Selectors:** `confirm-email-screen`, `confirm-email-error`.
+- **Retired.** Covered by TC-06-INT-09, which refuses a garbage token on the public endpoint. Same reasoning as TC-06-E2E-07: the screen is proven once.
 
 ### TC-06-E2E-09: Change password happy path
-- **Level:** E2E
-- **Preconditions:** logged in as a user with current password `"Passw0rd"`.
-- **Steps:**
-  1. Open Account settings and click "Change password".
-  2. Enter current `"Passw0rd"`, new `"NewPass1"`, confirm `"NewPass1"`.
-  3. Click "Change password".
-- **Expected Result:**
-  1. The modal shows "Your password has been changed."
-  2. Logging out and back in with `"NewPass1"` succeeds.
-- **Selectors:** `change-password-open-button`, `change-password-current-input`, `change-password-new-input`, `change-password-confirm-input`, `change-password-submit-button`.
+- **Retired.** Covered by TC-06-INT-02, which changes the password and then logs in with the new one — the same assertion, without a browser.
 
 ### TC-06-E2E-10: Change password — confirmation mismatch shows inline error
-- **Level:** E2E
-- **Preconditions:** logged in as any user.
-- **Steps:**
-  1. Open Account settings and click "Change password".
-  2. Enter current password, new `"NewPass1"`, confirm `"NewPass2"`.
-  3. Tab away from the confirm field to trigger blur validation.
-- **Expected Result:**
-  1. `field-error-passwordConfirmation` shows "Passwords do not match".
-  2. Submit button remains disabled.
-- **Selectors:** `change-password-open-button`, `change-password-new-input`, `change-password-confirm-input`, `change-password-submit-button`, `field-error-passwordConfirmation`.
+- **Retired.** The rejection is covered by TC-06-INT-10, and inline error display by TC-06-E2E-05. Note for whoever next opens this screen: this case also asserted the submit button becomes disabled, which contradicts the shared rule that a submit CTA is never disabled for validation. The rule is the authority.
 
 ### TC-06-E2E-11: Change email — same as current email shows error
-- **Level:** E2E
-- **Preconditions:** logged in as `pat@acme.com`.
-- **Steps:**
-  1. Open Account settings and click "Change email".
-  2. Enter `pat@acme.com` as the new email and submit.
-- **Expected Result:**
-  1. The modal shows "This is already your email address" in `change-email-error`.
-  2. No confirmation email is sent.
-- **Selectors:** `change-email-open-button`, `change-email-new-input`, `change-email-submit-button`, `change-email-error`.
+- **Retired.** Covered by TC-06-INT-08, which rejects a change to the current address case-insensitively. That a server-side message reaches the screen is asserted by TC-06-E2E-03.

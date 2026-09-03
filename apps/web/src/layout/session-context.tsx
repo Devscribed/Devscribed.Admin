@@ -8,11 +8,23 @@ export interface SessionAccount {
   firstName: string;
   lastName: string;
   timezone: string | null;
+  /** Spec 06 preference: "Monday" (default) or "Sunday" — the week start for the
+   * spec-12 calendar/weekly views. */
+  firstDayOfWeek: string;
 }
 
 export interface SessionOrganization {
   id: string;
   name: string;
+}
+
+/**
+ * What this environment can do that the product does not otherwise promise. Not
+ * permissions — the role covers those — but whether a thing exists here at all.
+ */
+export interface SessionFeatures {
+  /** Mail is simulated here and readable, so the Outbox screen exists. */
+  mailOutbox: boolean;
 }
 
 export interface Session {
@@ -28,6 +40,7 @@ export interface Session {
    * gated row flashing into view and back out.
    */
   isInterviewer: boolean;
+  features: SessionFeatures;
 }
 
 const SessionContext = createContext<Session | null>(null);

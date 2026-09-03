@@ -1,13 +1,72 @@
+import { cpus } from 'node:os';
 import { defineConfig, devices } from '@playwright/test';
+import {
+  API_ORIGIN,
+  API_PORT,
+  E2E_DATABASE_URL,
+  REMOTE,
+  WEB_ORIGIN,
+  WEB_PORT,
+} from './environment';
 
-const WEB = 'http://localhost:3000';
+/**
+ * Where the suite points.
+ *
+ * Unset, it is the local pair of dev servers this config starts below — the hermetic run
+ * that CI and a fresh clone get. Set to a deployed environment's address, it runs the same
+ * tests against that deployment and starts nothing:
+ *
+ *   E2E_BASE_URL=https://<host> npm run test:e2e
+ *
+ * Note what that second mode really tests. Locally the browser talks to the web port and
+ * the suite talks to the API port directly; against a deployment there is only one address,
+ * because the API has no public one and every /api/* call goes through the web app's
+ * rewrite. So a remote run exercises the proxy path too, which the local run cannot.
+ *
+ * **The ports and the database are both movable, and that is the point.** Defaults are the
+ * dev pair, 3000 and 4000, so nothing about running the suite changes. Set `E2E_WEB_PORT`
+ * and `E2E_API_PORT` and the whole run relocates — servers, `baseURL`, the rewrite target
+ * and the signing links in the mail sink — so it can happen beside a dev environment
+ * somebody is using rather than instead of it. See `environment.ts`.
+ */
+const WEB = WEB_ORIGIN;
 
 export default defineConfig({
   testDir: './tests',
-  fullyParallel: false,
+  // Creates the E2E database if it is missing and migrates it. Skipped for a remote run.
+  globalSetup: './global-setup.ts',
+
+  /**
+   * Parallel, and safe to be: every test mints its own account, and signup creates a
+   * fresh organization with it, so no test can see another's data. That isolation was
+   * always the design — it just was not being spent.
+   *
+   * It is worth spending now because the suite tripled when the user-management area
+   * landed: ~124 cases at one worker is twelve minutes, which is long enough that people
+   * stop running it before pushing, which is the only way a suite really fails.
+   *
+   * The worker count is sized from the machine, not from CI. Those were one setting until
+   * the pipeline started running the suite with `CI=1` — which it must, so that
+   * `reuseExistingServer` stays off and a trace is produced — and thereby inherited the
+   * two-worker cap written for a two-core GitHub runner. On a fourteen-core workstation
+   * that turned a 135s suite into 282s.
+   *
+   * Measured on this suite, wall time against workers: 2 → 282s, 6 → 205s with no flakes,
+   * 10 → 135s with three, 20 → 213s with about thirty retries. Fastest is not the target,
+   * though. At the high end the machine is saturated and unusable for whoever owns it, the
+   * flake count climbs, and under enough contention the API itself starts answering 500 —
+   * which the page-error guard, correctly, turns into failures.
+   *
+   * So the cap is a quarter of the logical cores, bounded at six: five here, comfortably
+   * under a minute for the suite, and eleven cores still free. Raise it for a one-off with
+   * PW_WORKERS. CI keeps its two, because a two-core runner has nothing to give.
+   */
+  fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  workers: 1,
+  workers: process.env.PW_WORKERS
+    ? Number(process.env.PW_WORKERS)
+    : Math.max(2, Math.min(6, Math.floor(cpus().length / 4))),
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : [['list']],
   use: {
     baseURL: WEB,
@@ -15,23 +74,79 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
-  webServer: [
+  // Nothing to start when the target is a deployment.
+  webServer: REMOTE ? [] : [
     {
       command: 'npm run dev --workspace @devscribed/api',
       cwd: '..',
-      // The sink transport keeps reset links readable from the tests; it is also what
-      // unlocks /api/test/mail, which stays 404 under any real transport.
-      env: { MAIL_TRANSPORT: 'memory' },
-      port: 4000,
+      // Only what the suite genuinely needs to stay hermetic. Each of these is already
+      // the non-production default, and each is named anyway because Playwright reuses an
+      // already-running dev server: without them, whether the suite touched AWS would
+      // depend on how that server happened to be started. Everything else the documents
+      // area reads (bucket names, queue URLs, SES settings) is deliberately absent — a
+      // hermetic run must not have a value to reach for.
+      env: {
+        // Its own port, and its own database.
+        //
+        // Neither used to be said here, and both defaulted to whatever a developer's
+        // machine already had: the suite could only run on the ports `npm run dev` holds,
+        // and it wrote into the database `apps/api/.env` names — the one being worked in.
+        // A green run said nothing about which server it had talked to.
+        PORT: String(API_PORT),
+        DATABASE_URL: E2E_DATABASE_URL,
+        DIRECT_URL: E2E_DATABASE_URL,
+        // The sink transport keeps reset links and signing invitations readable from the
+        // tests; it is also what unlocks /api/test/mail, which stays 404 under any real
+        // transport.
+        MAIL_TRANSPORT: 'memory',
+        // Signed documents go to apps/api/.local-storage, never to S3.
+        STORAGE_DRIVER: 'local',
+        // Chromium via playwright-core, with the built-in fallback writer if the browser
+        // is missing. Never the render Lambda.
+        PDF_RENDERER: 'local-chromium',
+        // The completion render runs in-process, after the transaction commits, so a test
+        // can assert on the finished envelope without polling a queue.
+        JOB_QUEUE: 'inline',
+        // Signing links must point at the web server this config starts.
+        APP_PUBLIC_URL: WEB,
+        // Spec 04. The stub driver answers every SignWell call from memory and is
+        // refused outright when NODE_ENV is production, so the suite stays hermetic and
+        // spends none of the ten-documents-a-minute create budget. The three
+        // configuration values are named because *registration* is decided by their
+        // presence: without them the provider is unconfigured and TC-04-E2E-01 could
+        // never select it.
+        SIGNWELL_DRIVER: 'stub',
+        SIGNWELL_API_KEY: 'e2e-signwell-api-key',
+        SIGNWELL_API_APPLICATION_ID: 'e2e-signwell-application',
+        SIGNWELL_WEBHOOK_SECRET: 'e2e-signwell-webhook-id',
+        SIGNWELL_TEST_MODE: 'true',
+      },
+      port: API_PORT,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
+      // Playwright discards a web server's output by default, and that default cost a long
+      // afternoon: `LocalChromiumPdfRenderer` degrades to a Latin-1 text writer when it
+      // cannot launch a browser and says so with a warning — a warning that went nowhere.
+      // The visible symptom was a signed PDF that was merely *small*, with no clue why.
+      stdout: 'pipe',
+      stderr: 'pipe',
     },
     {
       command: 'npm run dev --workspace @devscribed/web',
       cwd: '..',
-      port: 3000,
+      env: {
+        // `next dev` takes its port from PORT, which is why the script no longer hardcodes
+        // one. API_ORIGIN is the rewrite's destination and is read when next.config.mjs
+        // loads, so a moved API port has to be said here or every /api/* call in the
+        // browser lands on the dev server instead.
+        PORT: String(WEB_PORT),
+        API_ORIGIN,
+      },
+      port: WEB_PORT,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
+      stdout: 'pipe',
+      stderr: 'pipe',
     },
   ],
 });

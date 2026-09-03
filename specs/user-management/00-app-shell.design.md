@@ -29,10 +29,12 @@ in [`decisions.md`](../design-system/decisions.md), cited here as `§n`.
 ┌──────────────────┬──────────────────────────────────────┐
 │ Teammerly✓       │                     Pat Owner (◕) ▾  │  ← 80px navbar
 ├──────────────────┼──────────────────────────────────────┤
-│  ▣ People     ▾  │  Members                             │  ← page header
-│  │ Members       │  ┌────────────────────────────────┐  │
-│  ▣ Hiring     ▴  │  │                                │  │
-│                  │  └────────────────────────────────┘  │
+│  ▣ Timesheets    │  Active members                      │  ← page header
+│  ▣ People     ▾  │  ┌────────────────────────────────┐  │
+│  │ Members       │  │                                │  │
+│  ▣ Reports    ▴  │  └────────────────────────────────┘  │
+│  ▣ Time off   ▴  │                                      │
+│  ▣ Hiring     ▴  │                                      │
 └──────────────────┴──────────────────────────────────────┘
        290px            content scrolls; the other two do not
 ```
@@ -56,26 +58,69 @@ Sidebar and navbar are fixed. Only the content column scrolls, and the well is t
 - **Wordmark** in the head: the system's own SVG, linking to the members list the way a wordmark links to a start page. There is no typographic wordmark any more and no `--fs-21` — that token was never defined in the old system either, so the wordmark silently inherited its size for as long as it existed.
 - **Groups** — the system's `SubMenu` title: 16px medium type, a 12px gap to the glyph, a chevron pushed to the right edge, `--text-secondary` going `--color-blue` on hover and while the group is current, 36px between groups. There is no uppercase caption above them; the system captions nothing, and the section labels the old shell drew are gone with it.
 - **Rows** — the system's `SubItem`, indented 8px behind a 1px rule in `--text-secondary`: 14px medium, 4px/12px padding, 16px apart, `--color-blue-tint` behind the current one. A sub-item draws **no glyph** — the system puts the icon on the parent title alone.
-- **Two levels, not one.** Every destination sits inside a titled group, which reverses what the rail shipped with: four unparented links, on the argument that one level deep needs no second one. That held while hiring was three rows out of four, and it is not what the system does with the same content — `People → Members` is a submenu in the system's default nav, and hiring is a section of the same size beside it. Four flat rows read as four unrelated screens; two titled groups say which of them belong together, which is the fact a reader needs before they need a route.
-- **A title is a toggle, not a destination.** `People` and `Hiring` are real `<button aria-expanded>` controls that open and close their group and go nowhere. `Hiring` has no screen behind it — there is no hiring landing page and no reason to invent one — so making the title a link would have promised a route that does not exist.
-- **Active rule** — a row is active when the current path equals its `href` or is nested beneath it, so a candidate card keeps `Candidates` lit. The row carries `aria-current="page"`. A **group** is current when one of its rows is, and a group that becomes current opens itself — otherwise arriving at a candidate card by deep link would leave its own section shut. Only that group is open: from Members, hiring is one toggle away.
+- **Two levels, and one exception.** Every destination sits inside a titled group except `Timesheets`, which is a top-level link — exactly the shape the system's own default nav has. That reverses what the rail shipped with twice over: first from four unparented links, then from an uppercase caption over a flat list. Neither is what the system does with this content, and the content is the same content: its default set is this product's sections, label for label. Flat rows read as unrelated screens; titled groups say which of them belong together, which is the fact a reader needs before they need a route.
+- **A title is a toggle, not a destination.** Every group title is a real `<button aria-expanded>` that opens and closes its group and goes nowhere. None has a screen behind it — there is no hiring landing page, no documents landing page and no reason to invent either — so making a title a link would promise a route that does not exist. `Reports` is the near miss that proves the rule: it *does* have a landing page, and that page is a row inside the group named `All reports`, not the title.
+- **Active rule** — a row is active when the current path equals its `href` or is nested beneath it, and **only the longest match wins**: `/documents` is a prefix of `/documents/templates` and `/reports` of every report, so a plain prefix test would light two rows at once. A candidate card keeps `Candidates` lit; `/reports/time-off` lights `Time offs` and not `All reports`. The row carries `aria-current="page"`. A **group** is current when one of its rows is, and a group that becomes current opens itself — otherwise arriving at a sub-page by deep link would leave its own section shut. Only that group is open: from Members, every other section is one toggle away.
 - **Rows are real links.** Each renders an `<a href>` so middle-click, copy-address and open-in-new-tab all work; an unmodified click is handed to the client router.
-- **Only real destinations appear.** `Sidebar` ships a default set of groups, and they are a default rather than a fixture: the navigation is content, not design language ([§13](../design-system/decisions.md)), and shipping a group as a dead or disabled row would promise a screen no spec defines. This product draws `People` and `Hiring`. Rows arrive with their specs.
-- **An empty group is not drawn.** A member with no hiring row at all — a `viewer`, or a `user` assigned nothing — gets no `Hiring` title. A titled group announces that it has contents; one that opens onto nothing is worse than an absent section, because it reads as a permission error rather than as a product they are not part of.
-- **Glyphs are hiring's own**, drawn in the system's icon language — geometric, filled, `currentColor`, no icon font. Same split as the nav items. `Hiring` reuses `PeopleIcon`, the mark `People` already draws: the icon set has no hiring glyph, the design asks for one, and reusing an existing mark leaves that gap visible where inventing one would hide it in the one place nobody would look.
-- **Role gating** — spec 10 requires the future `Requests` row to be invisible to `user` and `viewer`. The shell resolves the session before it renders, precisely so a gated row never flashes into view and back out.
+- **Only real destinations appear.** `Sidebar` ships a default set of groups, and it is a default rather than a fixture: the navigation is content, not design language ([§13](../design-system/decisions.md)), and shipping a group as a dead or disabled row would promise a screen no spec defines. The default's own five unserved rows are dropped for that reason; see the table below.
+- **An empty group is not drawn.** A member with no hiring row at all — a `viewer`, or a `user` assigned nothing — gets no `Hiring` title, and the same rule drops `Documents`, `Reports`, `Time off`, `Project management` and `Organization` for whoever holds none of their capabilities. A titled group announces that it has contents; one that opens onto nothing is worse than an absent section, because it reads as a permission error rather than as a product they are not part of.
+- **Glyphs are the system's, where the system named the section.** `TimesheetsIcon`, `ProjectManagementIcon`, `PeopleIcon`, `ReportsIcon`, `TimeOffIcon` and `OrgIcon` are all its exports, and they exist because it drew these sections. Two are ours: `Documents` takes the app's own mark, and `Hiring` reuses `PeopleIcon`, the mark `People` already draws — the icon set has no hiring glyph, the design asks for one, and reusing an existing mark leaves that gap visible where inventing one would hide it in the one place nobody would look.
+- **Role gating** — every row is omitted rather than drawn-and-disabled: a control the caller cannot use is never drawn. The shell resolves the session before it renders anything, precisely so a gated row never flashes into view and back out.
 
 ### Rows
 
+Rows list top-to-bottom in nav order. **Where the design system named the group, the
+system's grouping wins**, and its default set is not arbitrary: it was measured from this
+product, section for section. `Timesheets`, `Project management → Clients`,
+`People → Members`, the four `Reports` rows and `Time off → Holidays / Requests` are all
+its labels and its nesting. Two moves are worth naming, because both reverse where a row
+used to sit: **Requests leaves People** and **Holidays leaves Settings** — the system files
+each under the thing it is about rather than under who administers it.
+
+`Documents` and `Hiring` are ours, because the system has never seen either. They are
+shaped in its idiom, and `Documents` follows its own `All reports` construction: the
+landing row is named for the whole rather than repeating the group's title.
+
 | Group | Row | Route | Ships with | Visible to |
 |---|---|---|---|---|
+| — | Timesheets | `/org/{orgId}/time-tracking` | spec 12 | admin, manager, user |
+| Project management | Projects | `/org/{orgId}/projects` | spec 11 | admin, manager |
+| Project management | Clients | `/org/{orgId}/clients` | organization 01 | admin, manager |
 | People | Members | `/org/{orgId}/members` | now | all roles |
+| Reports | Time & activity | `/org/{orgId}/reports/time-and-activity` | reports 01 | `ViewTimeAndActivity` or `ViewMy…` |
+| Reports | Amounts owed | `/org/{orgId}/reports/amounts-owed` | reports 01 | `ViewAmountsOwed` or `ViewMy…` |
+| Reports | Time offs | `/org/{orgId}/reports/time-off` | reports 01 | `ViewTimeOff` or `ViewMy…` |
+| Reports | All reports | `/org/{orgId}/reports` | reports 01 | any of the six above |
+| Time off | Holidays | `/org/{orgId}/settings/holidays` | organization 03 | `ViewHolidays` |
+| Time off | Requests | `/org/{orgId}/requests` | spec 10 | admin, manager |
+| Documents | All documents | `/org/{orgId}/documents` | documents 02 | `ViewEnvelopes` |
+| Documents | Templates | `/org/{orgId}/documents/templates` | documents 01 | `ViewDocumentTemplates` |
+| Documents | Outbox | `/org/{orgId}/outbox` | documents 02 | `ManageEnvelopes` **and** a mail sink |
 | Hiring | Vacancies | `/org/{orgId}/hiring/vacancies` | hiring 01 | admin, manager |
 | Hiring | Candidates | `/org/{orgId}/hiring/candidates` | hiring 03 | admin, manager, **anyone assigned an interview** |
 | Hiring | Libraries | `/org/{orgId}/hiring/settings` | hiring 06 | admin, manager |
-| People | Requests | `/org/{orgId}/requests` | spec 10 | admin, manager |
+| Organization | Signing | `/org/{orgId}/settings/signing` | documents 04 | `ViewSigningSettings` |
 
-Candidates is the only row gated on assignment as well as role (hiring 03 §06.31) — which is what lets an engineer interview without becoming an org admin. They open the same screen a manager does, resolved to its `Assigned to me` scope; a second row for the same list would have been the rail claiming a difference the screen does not have. A member with neither role nor assignment sees Members alone, under People, with no Hiring group beside it.
+**Timesheets is a top-level link**, as it is in the system's own default: the daily-driver
+surface is one destination, and a group of one is a click in front of a page. Every other
+section holds more than one row, or will.
+
+**Five rows the system named are not shipped**: `Policies`, `Team overview`,
+`ToDo / Teams`, `My organization` and `Subscription`. None has a screen, and a dead link
+promises a page no spec defines. The same rule empties a whole group — a section with no
+visible rows is dropped title and all — which is why a `viewer` never meets a `Documents`
+heading that opens onto nothing.
+
+**Two gates are not roles.** Candidates is role *or* assignment (hiring 03 §06.31), which
+is what lets an engineer interview without becoming an org admin; Outbox needs an
+environment that simulates mail as well as a role allowed to see signing links, and that
+fact rides on the session as `features.mailOutbox`.
+
+**Requests carries a count** (§76): a small capsule on the row, fed by the shared pending
+count, drawn only when it is non-zero — a pill reading `0` is a claim that there is
+something to look at.
+
+An interviewer opens the same Candidates screen a manager does, resolved to its `Assigned to me` scope; a second row for the same list would have been the rail claiming a difference the screen does not have. A member with neither role nor assignment sees no Hiring group at all.
 
 **Libraries, on the route `/hiring/settings`.** The row was `Settings` and the path is unchanged. Nothing on that screen is a setting — it is two lists and the maintenance of them (hiring 06) — so the name says what it is, and the URL stays where readers have already bookmarked it. A route rename would have bought nothing and broken every link anybody kept.
 
@@ -89,7 +134,9 @@ The system's `Navbar` without its mini tracker, so what is left is right-aligned
 - **Menu** — click opens the system's popover (`--shadow-popover`, 6px radius) holding **Log out**. Closes on outside click or `Escape`, which returns focus to the trigger.
 - **Log out** calls `POST /api/logout` and then replaces the history entry with `/login`, so the signed-in URL is not sitting behind the back button.
 - **Hamburger** — below the breakpoint only, at the left edge. It opens the navigation drawer.
-- **Not shipped:** the tracker chip (`00:00:00`) belongs to Timesheets, which no spec covers.
+- **Mini tracker** (spec 12) — the system's `MiniTracker`, at the left of the bar, drawn **only while a timer runs**. It shows the elapsed clock, ticking every second from the shared `RunningTimerProvider`, and clicking it **discloses the tracker** (below) rather than navigating. An always-present `00:00:00` is a control that looks live and is not, so `tracker` is passed the answer to *is one running* rather than a constant.
+- **The project name and the stop button are the tracker's, not the bar's.** They used to sit beside the clock; they now live in the design system's `Tracker` (decisions §89) — the floating panel the pill discloses. Clicking the pill opens it: it carries the project (`topbar-timer-project`), the same clock (`topbar-timer-elapsed`) and the stop control (`topbar-timer-stop-btn`), and closes by its own ×. The pill is a real `<button aria-expanded>` (§92), so a test that reads any of those three opens it first — `openTracker(page)` in `e2e/tests/helpers.ts` is that seam, and it is the same one a collapsed nav group needs. A 144px pill has no room for a project name, which is why spec 12's design truncated it to fifteen characters and dropped it entirely below 768px.
+- **Not shipped:** the theme toggle is excluded by the light-only rule.
 
 > **Logout is not session revocation.** It drops this browser's cookie; the signed token itself stays valid until it expires. Revoking every outstanding session is what `SecurityStamp` rotation does (spec 02 requirement 12) — and it is deliberately not wired to logout, which would otherwise sign the account out of every other device too.
 

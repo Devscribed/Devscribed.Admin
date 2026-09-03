@@ -1,18 +1,20 @@
 # Devscribed.Admin
 
-Implementation of the specs in [`specs/`](specs/). User-management specs 01
-([Organization Creation](specs/user-management/01-organization-creation.md)) and 02
-([Authentication & Login](specs/user-management/02-authentication-login.md)) are complete.
-The [hiring specs](specs/hiring/README.md) run from a vacancy through a booking to the card the
-team takes notes on during the interview, the board, the candidate database, the two libraries,
-and the page a candidate manages their own booking from. See [Hiring](#hiring) for the capability
-boundaries and the rules that are easy to mistake for omissions.
+Implementation of the specs in [`specs/`](specs/). Complete today: the
+[user-management](specs/user-management/) area — organization creation, authentication,
+invitations, the member list and card, vacation and time tracking — the whole
+[document builder](specs/documents/), specs 01 through 04, and the
+[hiring specs](specs/hiring/README.md), which run from a vacancy through a booking to the
+card the team takes notes on during the interview, the board, the candidate database, the
+two libraries, and the page a candidate manages their own booking from. See
+[Hiring](#hiring) for the capability boundaries and the rules that are easy to mistake for
+omissions.
 
 ## Stack
 
 | Layer | Choice |
 |---|---|
-| API | NestJS 11, Prisma, PostgreSQL (Docker locally, Neon in production) |
+| API | NestJS 11, Prisma, PostgreSQL (Docker locally, RDS in a deployed environment) |
 | Web | Next.js 15 (App Router), React 19 |
 | UI | the design system (`packages/ds`), imported through `@devscribed/ds` — no hardcoded colors or sizes |
 | Unit tests | Vitest |
@@ -23,17 +25,18 @@ boundaries and the rules that are easy to mistake for omissions.
 
 ```
 packages/validation/  every rule and error message — one source shared by web and API
-apps/api/             NestJS: POST /api/signup, /api/login, /api/logout,
-                      GET /api/me, GET /api/organizations/{orgId}/members,
-                      …/hiring/vacancies, …/hiring/interviewers,
-                      …/hiring/candidates/{id}, …/hiring/applications/{id},
-                      …/hiring/applications/{id}/cv, and the two public surfaces
+apps/api/             NestJS: auth, invitations, members, time tracking, projects,
+                      clients, holidays, reports, /document-templates, /envelopes, the
+                      public /api/sign surface, /api/internal, and hiring —
+                      …/hiring/vacancies, …/hiring/candidates/{id},
+                      …/hiring/applications/{id}, plus the two public surfaces
                       /api/book/{slug} and /api/manage/{slug}/{token}
-apps/web/             Next.js: /signup, /login, /org/{orgId}/members,
-                      /org/{orgId}/hiring/vacancies,
-                      /org/{orgId}/hiring/candidates/{id}, and the public /book/{slug}
+apps/web/             Next.js: /signup, /login, /org/{orgId}/…, /sign/{token} — the one
+                      route in the app that has no session — and the public /book/{slug}
                       and /manage/{slug}/{token}
-e2e/                  Playwright specs, one per TC-*-E2E-* case
+packages/ds/          the design system, imported through `@devscribed/ds`
+e2e/                  Playwright specs, one file per spec area
+infra/terraform/      AWS for the documents area — one root module, dev and prod
 ```
 
 `packages/validation` exists so the client and the server can never disagree about a
@@ -45,7 +48,7 @@ message. The API re-runs it on every request — the client's copy is a convenie
 
 | | Version | Why |
 |---|---|---|
-| Node.js | 22.x | the version CI and Vercel run; the repo uses npm workspaces |
+| Node.js | 22.x | the version CI and both container images run; the repo uses npm workspaces |
 | Docker | any recent | supplies Postgres 17 — nothing is installed on the host |
 
 Nothing else is needed globally: the Prisma CLI, Nest CLI and Playwright all come from
@@ -169,14 +172,44 @@ reads it.
 ## Tests
 
 ```bash
-npm run test:unit   # validation rules — TC-01-UNIT-*, TC-H01…H07-UNIT-*
-npm run test:int    # API endpoints — TC-01-INT-*, TC-H00…H07-INT-*, needs Postgres running
-npm run test:e2e    # browser flows — TC-01-E2E-*, TC-H01…H07-E2E-*
+npm run test:unit   # pure rules: validation, sanitizer, hash chain, autofill, hiring
+npm run test:int    # every endpoint, against a disposable database — needs Postgres
+npm run test:e2e    # browser flows, including signing (starts both dev servers)
 ```
+
+Every test case in the specs has a test named after it, so `TC-02-INT-14` in
+`specs/documents/02-envelopes-and-signing.md` and the `describe` that proves it are one
+search apart. `.github/workflows/test.yml` runs all three tiers on every pull request.
+
+`test:e2e` runs **four browsers at once** locally, two on CI. Every test mints its own
+account, and signup creates a fresh organization with it, so no test can see another's
+data — that isolation was always the design and the suite simply was not spending it. It
+matters now that the suite is around 120 cases: twelve minutes is long enough that people
+stop running it before pushing, which is the only way a suite really fails. Three minutes
+is not.
+
+Parallelism is also a better test than serial. It found a hydration race in the template
+editor, one in the member detail screen, and an address generator that handed two workers
+the same account — none of which were parallelism's fault; all of them were real, and all
+three were invisible while one thing happened at a time.
 
 `test:int` resets `devscribed_test` before it starts, so a failed run never poisons the
 next one. `test:e2e` starts the two dev servers itself and reuses them if they are
-already up.
+already up — which is worth knowing, because a stale server left on port 3000 gets
+adopted silently. If a whole E2E run fails at the login screen, check what is actually
+answering there before looking anywhere else.
+
+It writes to **`devscribed_e2e`**, not to the database you are working in, and it can be
+moved off the dev ports entirely so a run happens beside your work instead of instead of it:
+
+```bash
+E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/<file>.spec.ts
+```
+
+`CI=1` is what turns reuse off, so the run starts its own servers with the stub signing
+provider rather than borrowing yours. Under it, a port that is already taken fails with the
+line above rather than with "port is already in use". See
+[ADR 0005](docs/adr/0005-e2e-runs-beside-a-dev-environment.md).
 
 ### When something is off
 
@@ -218,32 +251,23 @@ answers 404 on any disagreement; queries still scope by the session.
 
 ## Deployment
 
-Two Vercel projects from this one repository, plus a Neon database.
+Everything runs on AWS — web, API, database, storage, mail — in two complete and independent
+environments, `dev` and `prod`. Terraform describes all of it; nothing is created by hand in the
+console, and exactly one thing in the account is reachable from the internet: the web service.
 
-| | Root directory | Framework preset | Notes |
-|---|---|---|---|
-| web | `apps/web` | Next.js | needs `API_ORIGIN` pointing at the api project's URL |
-| api | `apps/api` | NestJS | zero-config; no `vercel.json` |
+```bash
+export AWS_PROFILE=Devscribed.Admin-Admins
+make bootstrap            # once per AWS account: the Terraform state bucket
+make deploy-dev           # build, push, apply, wait for health, migrate
+make url-dev              # the address to open
+```
 
-The api project needs no deployment scaffolding of its own. Vercel detects `src/main.ts`
-by name, builds the whole application into a single function and runs it on Fluid
-compute, so `app.listen()` behaves the same there as it does locally.
+`main` deploys itself. A push runs the whole suite and then rolls `dev` forward; a `v*` tag — made
+by `npm run release` — does the same and rolls `prod`. Nothing reaches an environment on a red run.
 
-The browser only ever talks to the web domain: the front end calls relative `/api/*` and
-`next.config.mjs` rewrites those to `API_ORIGIN`. That keeps the session cookie
-same-origin, which is why `sameSite: 'lax'` works and no CORS configuration is involved.
-
-API environment variables:
-
-| Variable | Value |
-|---|---|
-| `DATABASE_URL` | Neon **pooled** endpoint (`-pooler` host), `?sslmode=require&connection_limit=1&pgbouncer=true` |
-| `DIRECT_URL` | Neon direct endpoint — migrations only |
-| `SESSION_SECRET` | required; without it the app silently falls back to the development key |
-| `WEB_ORIGIN` | the web project's URL, used to build password-reset links |
-
-Migrations do not run at deploy time. `.github/workflows/migrate.yml` applies them with
-`prisma migrate deploy` on every merge to `main`, using the `DIRECT_DATABASE_URL` secret.
+**[`docs/deployment.md`](docs/deployment.md) is the runbook**: the topology, first-time setup, every
+`make` target, the CI/CD pipeline, releasing, rolling back, what to do when a deploy fails, and the
+Terraform layout.
 
 ## Hiring
 

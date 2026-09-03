@@ -6,8 +6,20 @@ import { AccountMenu } from './AccountMenu';
 export interface NavbarProps extends React.HTMLAttributes<HTMLElement> {
   trackerCounter?: string;
   onOpenTracker?: () => void;
-  /** Draws the mini tracker. False in a product with no timesheets. Default true. */
+  /**
+   * Draws the mini tracker. Default true.
+   *
+   * It is a boolean rather than a node because the pill is the same pill everywhere; what
+   * differs is whether there is anything to show. A product with no timesheets passes
+   * `false` once, and a product whose tracker only exists while it runs passes the answer
+   * to that question.
+   */
   tracker?: boolean;
+  /** §75 — `data-testid` for the tracker pill, beside `AccountMenu`'s own testId props. */
+  trackerTestId?: string;
+  /** §92 — whether the panel the pill discloses is open. Reaches `MiniTracker`'s
+   *  `aria-expanded`, for the same reason `trackerTestId` reaches its `data-testid`. */
+  trackerExpanded?: boolean;
   /** Opens the navigation drawer below the breakpoint; draws the hamburger when given. */
   onMenuClick?: () => void;
   /** Replaces the default `AccountMenu`. */
@@ -31,7 +43,7 @@ export interface NavbarProps extends React.HTMLAttributes<HTMLElement> {
  * show, and the account row is where a screen needs its own items and its own test hooks.
  */
 export function Navbar({
-  trackerCounter = '00:00:00', onOpenTracker, tracker = true, onMenuClick,
+  trackerCounter = '00:00:00', onOpenTracker, tracker = true, trackerTestId, trackerExpanded, onMenuClick,
   account, userName, onAccountNavigate, children, className, style, ...rest
 }: NavbarProps) {
   return (
@@ -45,7 +57,7 @@ export function Navbar({
           <MenuIcon />
         </button>
       )}
-      {tracker && <div style={{ /* @literal cancels the pill's own leading offset; the pair is one measurement */ marginLeft: -15 }}><MiniTracker counter={trackerCounter} onClick={onOpenTracker} /></div>}
+      {tracker && <div style={{ /* @literal cancels the pill's own leading offset; the pair is one measurement */ marginLeft: -15 }}><MiniTracker counter={trackerCounter} onClick={onOpenTracker} expanded={trackerExpanded} data-testid={trackerTestId} /></div>}
       {children}
       <div style={{ marginLeft: 'auto' }}>
         {account !== undefined ? account : <AccountMenu name={userName} onNavigate={onAccountNavigate} />}

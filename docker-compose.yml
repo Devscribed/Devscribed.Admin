@@ -1,6 +1,6 @@
-# Local Postgres for development and the integration suite. Production runs on Neon,
-# which speaks the same wire protocol, so this is the same connection path — only the
-# host differs.
+# Local Postgres for development and the integration suite. Deployed environments run RDS
+# PostgreSQL, which speaks the same wire protocol, so this is the same connection path —
+# only the host differs.
 #
 #   docker compose up -d
 #

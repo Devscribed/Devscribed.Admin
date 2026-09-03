@@ -81,7 +81,7 @@ test.describe('Vacancies', () => {
     await signIn(page, org.email);
 
     // Not the list route — one nested beneath it, so the match is prefix and not equality.
-    await page.goto(`/org/${org.organizationId}/hiring/vacancies/${vacancy.id}`);
+    await page.goto(`/org/${org.orgId}/hiring/vacancies/${vacancy.id}`);
     await expect(page.getByTestId('vacancy-detail')).toBeVisible();
 
     await expect(page.getByRole('button', { name: 'Hiring', exact: true })).toHaveAttribute(
@@ -135,7 +135,7 @@ test.describe('Vacancies', () => {
     await bookInterview(request, vacancy.publicSlug);
 
     await signIn(page, org.email);
-    await page.goto(`/org/${org.organizationId}/hiring/vacancies/${vacancy.id}`);
+    await page.goto(`/org/${org.orgId}/hiring/vacancies/${vacancy.id}`);
     // The count the detail page used to print is the board's own, one screen down.
     await expect(page.getByTestId('board-column-count-scheduled')).toHaveText('1');
 
@@ -186,7 +186,7 @@ test.describe('Vacancies', () => {
     await bookInterview(request, withCandidates.publicSlug);
 
     await signIn(page, org.email);
-    await page.goto(`/org/${org.organizationId}/hiring/vacancies/${withCandidates.id}`);
+    await page.goto(`/org/${org.orgId}/hiring/vacancies/${withCandidates.id}`);
 
     await page.getByTestId('vacancy-actions-menu').click();
     const blocked = page.getByTestId('vacancy-action-delete');
@@ -220,7 +220,7 @@ test.describe('Vacancies', () => {
     await page.keyboard.press('Escape');
 
     // A vacancy nobody has applied to deletes outright.
-    await page.goto(`/org/${org.organizationId}/hiring/vacancies/${empty.id}`);
+    await page.goto(`/org/${org.orgId}/hiring/vacancies/${empty.id}`);
     await page.getByTestId('vacancy-actions-menu').click();
     await page.getByTestId('vacancy-action-delete').click();
     await expect(page.getByTestId('vacancy-delete-confirm')).toContainText(
@@ -251,13 +251,13 @@ test.describe('Vacancies', () => {
     const closed = await createVacancy(request, org, { title: 'React Native Engineer' });
 
     await signIn(page, org.email);
-    await page.goto(`/org/${org.organizationId}/hiring/vacancies/${closed.id}`);
+    await page.goto(`/org/${org.orgId}/hiring/vacancies/${closed.id}`);
     await page.getByTestId('vacancy-actions-menu').click();
     await page.getByTestId('vacancy-action-close').click();
     await page.getByTestId('vacancy-close-confirm-button').click();
     await expect(page.getByTestId('toast-vacancy-closed')).toBeVisible();
 
-    await page.goto(`/org/${org.organizationId}/hiring/vacancies`);
+    await page.goto(`/org/${org.orgId}/hiring/vacancies`);
     const rows = page.getByTestId('vacancies-list');
     await expect(rows).toContainText('DotNet Engineer');
 
@@ -304,7 +304,7 @@ test.describe('Vacancies', () => {
     await bookInterview(request, busy.publicSlug);
 
     await signIn(page, org.email);
-    await page.goto(`/org/${org.organizationId}/hiring/vacancies`);
+    await page.goto(`/org/${org.orgId}/hiring/vacancies`);
     await expect(page.getByTestId(`vacancy-row-${open.id}`)).toBeVisible();
 
     // Opening the menu is not opening the row.
@@ -374,7 +374,7 @@ test.describe('Vacancies', () => {
     await createVacancy(request, org, { title: 'Kept React Engineer' });
 
     await signIn(page, org.email);
-    await page.goto(`/org/${org.organizationId}/hiring/vacancies`);
+    await page.goto(`/org/${org.orgId}/hiring/vacancies`);
 
     await page.getByTestId(`vacancy-actions-menu-${doomed.id}`).click();
     await page.getByTestId(`vacancy-action-delete-${doomed.id}`).click();
@@ -404,7 +404,7 @@ test.describe('Vacancies', () => {
     await bookInterview(request, vacancy.publicSlug);
 
     await signIn(page, org.email);
-    await page.goto(`/org/${org.organizationId}/hiring/vacancies/${vacancy.id}`);
+    await page.goto(`/org/${org.orgId}/hiring/vacancies/${vacancy.id}`);
 
     // Edit lives in the menu now — the header's one button is the booking link, because
     // copying it is the reason to open a vacancy (01 §08.28).
@@ -454,7 +454,7 @@ test.describe('Vacancies', () => {
     await bookInterview(request, long.publicSlug);
 
     await signIn(page, org.email);
-    await page.goto(`/org/${org.organizationId}/hiring/vacancies/${long.id}`);
+    await page.goto(`/org/${org.orgId}/hiring/vacancies/${long.id}`);
 
     // The board is on this route, under the header, with the candidate on it.
     await expect(page.getByTestId('board')).toBeVisible();
@@ -475,7 +475,7 @@ test.describe('Vacancies', () => {
     await expect(page.getByTestId('board')).toBeVisible();
 
     // A vacancy with no description offers to write one, and opens the same dialog.
-    await page.goto(`/org/${org.organizationId}/hiring/vacancies/${short.id}`);
+    await page.goto(`/org/${org.orgId}/hiring/vacancies/${short.id}`);
     await expect(page.getByTestId('vacancy-description')).toHaveCount(0);
     await expect(page.getByTestId('vacancy-description-toggle')).toHaveCount(0);
     await page.getByTestId('vacancy-add-description').click();
@@ -489,7 +489,7 @@ test.describe('Vacancies', () => {
     // Back goes to the list, and it is a real link rather than a button that navigates.
     await expect(page.getByTestId('vacancy-back-link')).toHaveAttribute(
       'href',
-      `/org/${org.organizationId}/hiring/vacancies`,
+      `/org/${org.orgId}/hiring/vacancies`,
     );
     await page.getByTestId('vacancy-back-link').click();
     await expect(page).toHaveURL(/\/hiring\/vacancies$/);
@@ -525,12 +525,12 @@ test.describe('Vacancies', () => {
         }
 
         // The not-found state, not a permission error and not any vacancy data.
-        await page.goto(`/org/${org.organizationId}/hiring/vacancies`);
+        await page.goto(`/org/${org.orgId}/hiring/vacancies`);
         await expect(page.getByTestId('vacancies-list')).toHaveCount(0);
         await expect(page.getByTestId('vacancies-empty-state')).toHaveCount(0);
         expect(await page.content()).not.toContain('Senior React Engineer');
 
-        await page.goto(`/org/${org.organizationId}/hiring/vacancies/${vacancy.id}`);
+        await page.goto(`/org/${org.orgId}/hiring/vacancies/${vacancy.id}`);
         await expect(page.getByTestId('vacancy-detail')).toHaveCount(0);
         expect(await page.content()).not.toContain(vacancy.publicSlug);
       });

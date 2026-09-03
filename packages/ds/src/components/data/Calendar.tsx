@@ -22,6 +22,13 @@ export interface CalendarProps extends Omit<React.HTMLAttributes<HTMLDivElement>
   /** The dates that may be chosen. Everything else renders disabled. */
   availableDates?: CalendarDate[];
   selected?: CalendarDate | null;
+  /**
+   * §86 — a chosen *span*, drawn as one block. Set both ends for a committed range, or only
+   * `rangeStart` while the second click is still outstanding. Independent of `selected`: a
+   * grid draws one or the other, never both.
+   */
+  rangeStart?: CalendarDate | null;
+  rangeEnd?: CalendarDate | null;
   onSelect?: (date: CalendarDate) => void;
   /** Called by the month controls and by `PageUp` / `PageDown`. */
   onMonthChange?: (month: CalendarMonth) => void;
@@ -38,6 +45,8 @@ interface DayProps {
   date: CalendarDate | null;
   selectable: boolean;
   selected: boolean;
+  /** §86 — inside the chosen span. Painted solid, so a run of days reads as one block. */
+  inRange: boolean;
   today: boolean;
   tabStop: boolean;
   onSelect?: (date: CalendarDate) => void;
@@ -64,6 +73,12 @@ interface DayProps {
  *    booking window.
  * 3. **It is a keyboard grid.** Arrows move by day and by week, `Home`/`End` to the ends of the
  *    week, `PageUp`/`PageDown` between months — so focus needs a ring, and takes the system's.
+ *
+ * §86 — **it also draws a span.** `rangeStart` / `rangeEnd` paint a run of days as one solid
+ * block, which is the reading §72 named when it chose the tint for a single date and said the
+ * solid fill belongs to a range. Both live here rather than in a second grid: a report's range
+ * picker and a booking's day picker are the same seven columns with the same keyboard, and two
+ * implementations of that is two months that drift apart.
  *
  * Deliberately presentational. Availability, the booking window and the zone they were reckoned
  * in are business rules; they belong to whatever fetched them, and arrive here as props.
@@ -123,6 +138,8 @@ export function Calendar({
   weeks = [],
   availableDates = [],
   selected = null,
+  rangeStart = null,
+  rangeEnd = null,
   onSelect,
   onMonthChange,
   minDate,
@@ -146,7 +163,14 @@ export function Calendar({
   // Only a date the visible month actually renders can hold the tab stop: a selection made in
   // another month would otherwise take the grid out of the tab order entirely.
   const visible = (date: CalendarDate | null | undefined) => (date && ordered.includes(date) ? date : null);
-  const tabStop = visible(selected) || visible(focused) || ordered[0] || null;
+  /* §86 — with a range on display the span's start owns the tab stop, for the same reason the
+     single selection does: Tab lands on the answer already given. */
+  const tabStop = visible(selected) || visible(rangeStart) || visible(focused) || ordered[0] || null;
+
+  /* An ISO day is lexicographically ordered, so a span is a string comparison. A half-made
+     range — one click in — highlights only its start. */
+  const within = (date: CalendarDate | null) =>
+    !!date && !!rangeStart && (rangeEnd ? date >= rangeStart && date <= rangeEnd : date === rangeStart);
 
   const canPrev = !loading && (!minDate || month > minDate.slice(0, 7));
   const canNext = !loading && (!maxDate || month < maxDate.slice(0, 7));
@@ -303,6 +327,7 @@ export function Calendar({
                   date={date}
                   selectable={!!date && available.has(date)}
                   selected={date === selected}
+                  inRange={within(date)}
                   today={date === today}
                   tabStop={date === tabStop}
                   onSelect={onSelect}
@@ -331,7 +356,7 @@ export function Calendar({
   );
 }
 
-function Day({ date, selectable, selected, today, tabStop, onSelect, onFocus }: DayProps) {
+function Day({ date, selectable, selected, inRange, today, tabStop, onSelect, onFocus }: DayProps) {
   const [hover, setHover] = React.useState(false);
   const [focus, setFocus] = React.useState(false);
 
@@ -339,7 +364,7 @@ function Day({ date, selectable, selected, today, tabStop, onSelect, onFocus }: 
   if (!date) return <span role="gridcell" className="ds-calendar-day" />;
 
   const day = Number(date.slice(8));
-  const state = selected ? 'selected' : selectable ? 'available' : 'unavailable';
+  const state = selected || inRange ? 'selected' : selectable ? 'available' : 'unavailable';
 
   return (
     <span role="gridcell" style={{ display: 'block' }}>
@@ -352,7 +377,7 @@ function Day({ date, selectable, selected, today, tabStop, onSelect, onFocus }: 
            through one cell at a time. The opposite call to §22's menu row — there the whole
            point is that a blocked action stays readable, and here there is nothing to read. */
         disabled={!selectable}
-        aria-selected={selected || undefined}
+        aria-selected={selected || inRange || undefined}
         aria-current={today ? 'date' : undefined}
         // The number alone says nothing about the date or whether it can be chosen.
         aria-label={`${spokenDate(date)}, ${state}${today ? ', today' : ''}`}
@@ -385,7 +410,7 @@ function Day({ date, selectable, selected, today, tabStop, onSelect, onFocus }: 
 
              Today is a border at 45% of the same hue — present, and never mistaken for the
              selection. */
-          border: selected
+          border: selected || inRange
             ? 'var(--border-width-control) solid var(--color-blue)'
             : today
               ? 'var(--border-width-control) solid color-mix(in oklch, var(--color-blue) 45%, transparent)'
@@ -394,16 +419,26 @@ function Day({ date, selectable, selected, today, tabStop, onSelect, onFocus }: 
           /* §72 — an unavailable day is **not filled**. A grey block on every weekend reads as
              a second kind of selection, and a month with four bookable days was mostly blocks.
              Faint ink on the panel's own ground is what "nothing here" looks like. */
-          backgroundColor: selected
-            ? 'color-mix(in oklch, var(--color-blue) 12%, transparent)'
-            : selectable && hover
-              ? 'var(--color-row-hover)'
-              : 'transparent',
-          color: selected
+          /* §86 — a range is **solid**, where a single selection is a tint. §72 chose the tint
+             for one chosen day and said why the other reading belongs to a span: ten tinted
+             cells in a row do not read as one block, they read as ten faint marks, and the
+             reader has to count them to find the ends. The solid fill is the same
+             `--color-blue`, at full strength, and it is the only place in the system a run of
+             cells is painted as a unit. */
+          backgroundColor: inRange
             ? 'var(--color-blue)'
-            : selectable
-              ? 'var(--text-primary)'
-              : 'color-mix(in oklch, var(--color-gray) 55%, var(--color-white))',
+            : selected
+              ? 'color-mix(in oklch, var(--color-blue) 12%, transparent)'
+              : selectable && hover
+                ? 'var(--color-row-hover)'
+                : 'transparent',
+          color: inRange
+            ? 'var(--text-on-accent)'
+            : selected
+              ? 'var(--color-blue)'
+              : selectable
+                ? 'var(--text-primary)'
+                : 'color-mix(in oklch, var(--color-gray) 55%, var(--color-white))',
           cursor: selectable ? 'pointer' : 'default',
           transition: 'background-color var(--duration-fast) var(--ease-standard)',
         }}

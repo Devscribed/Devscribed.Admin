@@ -50,10 +50,11 @@
 }
 
 /*
- * The toggle's own 160px, stated here. `ToggleButton` is a block that caps itself at 160
- * (decisions §49) — and a block at `width: 100%` inside a shrink-to-fit flex item is 100% of
- * nothing, so both segments collapsed onto each other. The width has to be stated by whatever
- * the flex row measures, which is this wrapper.
+ * The toggle needs a definite width from whatever the flex row measures: `ToggleButton` is a
+ * block at `width: 100%`, and a block at 100% inside a shrink-to-fit flex item is 100% of
+ * nothing, so both segments collapse onto each other (decisions §49). This wrapper is what
+ * states it. The control caps itself at `max-content` (§87), so it takes its own width inside
+ * the slot rather than stretching to fill it.
  */
 .booking-format {
   display: flex;
@@ -843,5 +844,26 @@
     flex-direction: column-reverse;
     align-items: stretch;
     gap: var(--space-5);
+  }
+}
+
+/*
+ * The running-timer dot (spec 12). It is here rather than appended to `<head>` from the
+ * component, which is §69's rule and the reason this animation had never once run: the
+ * name `tt-pulse` was written at the call site and defined nowhere at all, so the dot that
+ * exists to say a timer is live has been sitting perfectly still since it was written.
+ *
+ * The design system's own pulse — `ds-pulse-loader` in `base.css` — is a loader's, staggered
+ * across three dots. This is one dot breathing on its own, so it is the app's.
+ */
+@keyframes tt-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.8);
   }
 }

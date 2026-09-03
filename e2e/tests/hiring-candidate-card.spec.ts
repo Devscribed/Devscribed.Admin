@@ -11,7 +11,7 @@ import {
   signIn,
   uniqueEmail,
   type InviteLink,
-  type Registered,
+  type RegisteredOrganization,
 } from './helpers';
 
 /**
@@ -30,7 +30,7 @@ test.describe('Candidate card', () => {
   async function seed(
     request: APIRequestContext,
     prefix: string,
-  ): Promise<{ org: Registered; invite: InviteLink }> {
+  ): Promise<{ org: RegisteredOrganization; invite: InviteLink }> {
     const org = await registerOrganization(request, uniqueEmail(prefix));
     const vacancy = await createVacancy(request, org, { title: 'Senior React Engineer' });
     await bookInterview(request, vacancy.publicSlug, {
@@ -237,7 +237,7 @@ test.describe('Candidate card', () => {
     await signIn(page, org.email);
 
     await page.goto(
-      `/org/${org.organizationId}/hiring/candidates/00000000-0000-4000-8000-000000000000`,
+      `/org/${org.orgId}/hiring/candidates/00000000-0000-4000-8000-000000000000`,
     );
 
     await expect(page.getByTestId('candidate-card')).toHaveCount(0);
@@ -391,7 +391,7 @@ test.describe('Candidate card', () => {
     });
 
     await signIn(page, org.email);
-    await page.goto(`/org/${org.organizationId}/hiring/candidates`);
+    await page.goto(`/org/${org.orgId}/hiring/candidates`);
 
     // The scope tab is where the count lives now (03 §05.20).
     const count = page.getByTestId('candidates-scope-all');
@@ -448,7 +448,7 @@ test.describe('Candidate card', () => {
       email: uniqueEmail('jane'),
     });
     const invite = await latestInviteLink(request);
-    const detail = `/org/${org.organizationId}/hiring/vacancies/${vacancy.id}`;
+    const detail = `/org/${org.orgId}/hiring/vacancies/${vacancy.id}`;
 
     await signIn(page, org.email);
 

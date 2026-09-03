@@ -52,7 +52,7 @@ import {
   rememberCandidateList,
 } from '@/hiring/candidate-list';
 import { rememberCandidateOrigin } from '@/hiring/candidate-origin';
-import { valuesOf } from '@/hiring/select';
+import { valuesOf } from '@/select';
 import { useMediaQuery } from '@/hiring/useMediaQuery';
 import { useToasts } from '@/hiring/useToasts';
 import type {

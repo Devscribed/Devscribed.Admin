@@ -1,0 +1,395 @@
+{
+  "status": "blocked",
+  "reviewedUpTo": "bf667484b713f704e5cde7a9603a5cfce5b7ec4a",
+  "covered": {
+    "slice": 34,
+    "read": [
+      "apps/api/test/requests.spec.ts",
+      "apps/api/src/requests/requests.service.ts",
+      "e2e/tests/requests.spec.ts",
+      "packages/validation/src/requests.ts",
+      "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx",
+      "apps/web/app/org/[orgId]/requests/page.tsx",
+      "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx",
+      "packages/validation/src/requests.test.ts",
+      "apps/api/src/requests/vacation-request-feed.service.ts",
+      "apps/web/app/org/[orgId]/requests/[requestId]/DeclineRequestModal.tsx",
+      "apps/api/src/requests/requests.controller.ts",
+      "apps/web/app/org/[orgId]/requests/[requestId]/ReassignRequestModal.tsx",
+      "apps/api/test/requests-page.spec.ts",
+      "specs/user-management/10-organization-requests-page.md",
+      "apps/web/app/org/[orgId]/requests/RequestRow.tsx",
+      "apps/api/src/requests/requests.serializer.ts",
+      "apps/api/prisma/schema.prisma",
+      "apps/api/prisma/migrations/20260901140000_requests_01_requests/migration.sql",
+      "apps/api/src/requests/requests.dto.ts",
+      "apps/web/app/org/[orgId]/requests/types.ts",
+      "scripts/wf.mjs",
+      "apps/web/app/org/[orgId]/requests/[requestId]/RequestHistory.tsx",
+      "packages/validation/src/index.ts",
+      "apps/web/src/layout/requests-badge-context.tsx",
+      "apps/web/app/org/[orgId]/requests/[requestId]/RequestThread.tsx",
+      "specs/requests/01-requests.md",
+      "apps/api/src/requests/request-events.service.ts",
+      "scripts/ship.mjs",
+      "packages/validation/src/roles.ts",
+      "packages/validation/src/roles.test.ts",
+      "apps/web/src/layout/Sidebar.tsx",
+      "e2e/tests/requests-page.spec.ts",
+      "apps/api/src/app.module.ts",
+      "specs/requests/README.md"
+    ],
+    "unreached": []
+  },
+  "shards": [
+    {
+      "shard": 1,
+      "findings": 6,
+      "kept": 5,
+      "sweeps": {
+        "1": 6,
+        "2": 4,
+        "3": 11,
+        "8": 22,
+        "10": 9
+      }
+    },
+    {
+      "shard": 2,
+      "findings": 6,
+      "kept": 6,
+      "sweeps": {
+        "7": 13,
+        "8": 13,
+        "10": 9
+      }
+    },
+    {
+      "shard": 3,
+      "findings": 6,
+      "kept": 6,
+      "sweeps": {
+        "3": 12,
+        "8": 43,
+        "9": 6
+      }
+    }
+  ],
+  "sweep5": {
+    "requirements": 47,
+    "artefacts": 141,
+    "missing": [],
+    "detail": "Walked the spec's sections in order and proved each named artefact where the spec puts it. Actors -> Organization.nextRequestNumber (schema.prisma:169, migration.sql:11). Roles matrix -> 6 capabilities, lowercase-dashed in CAPABILITY_MATRIX (index.ts:582-712) and PascalCase in roles.ts, grants matching the matrix row for row. Functional requirements 1-47 -> validators and parsers in packages/validation/src/requests.ts, service methods in requests.service.ts, 11 routes in requests.controller.ts. Data Model -> 3 tables, 21+6+11 columns, 6 indexes incl. the unique (organizationId, number), 9 FKs with the stated onDelete. New Enums -> a deliberate 'none', and none exist. Error Messages -> 31 REQUEST_MESSAGES keys, text matching the table word for word, extended in place with no duplicate key. Required data-testid -> all 42 present under apps/web (4 via template literal, checked by hand) and referenced from e2e. Test Cases -> all 41 ids (6 UNIT, 22 INT, 13 E2E) referenced in code. 'What this spec does not send' (requirement 47) -> negative artefact confirmed: no file under apps/api/src/mail is in the diff and the requests module imports no mail service. No section contributed zero artefacts except Out of Scope and Known Gaps, which state non-goals."
+  },
+  "sweep9": {
+    "pairs": 20,
+    "disagreeing": [
+      "specs/user-management/10-organization-requests-page.md:136 and :140 vs specs/requests/01-requests.md:229 (requirement 42) and spec 10's own :71 and :251 - see F2",
+      "CLAUDE.md:66 design-system rule vs apps/web/app/org/[orgId]/requests/page.tsx:383 - see F1"
+    ],
+    "detail": "Agreeing pairs: spec testid list <-> apps/web; spec testid list <-> e2e selectors; REQUEST_MESSAGES text <-> spec Error Messages table; lowercase-dashed capabilities <-> PascalCase grants; badge read (counts.waitingOnMe, vacation.pendingCount) <-> server envelope; requirement 42 mapping <-> vacationStatusesFor; requirement 43 <-> compareRequestRows key order; requirement 33 <-> isRequestOverdue/todayInTimeZone; controller path :orgId <-> session.organizationId at all 11 call sites; OrgScopeGuard 404 <-> CLAUDE.md auth rule; serializer DTOs <-> apps/web types.ts; schema.prisma <-> migration.sql; sidebar row <-> page reachable by every role (no dead links); retired parseRequestStatusFilter <-> zero product callers; requirement 42's third bullet <-> e2e/tests/requests-page.spec.ts selecting Open before acting; client validators <-> server re-validation of the same functions; DS gaps table <-> the three native controls' tokens; reassign route ViewAllRequests <-> the matrix row."
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "target": "code",
+      "severity": "blocker",
+      "rule": "CLAUDE.md/design-system",
+      "file": "apps/web/app/org/[orgId]/requests/page.tsx",
+      "symbol": "RequestsPage error banner",
+      "line": 383,
+      "claim": "The list error banner this spec adds styles its border with the literal '1px solid var(--error-500)'. It is the only hardcoded size introduced anywhere in this change's new code, and the design system already ships a token holding exactly that value.",
+      "witness": {
+        "kind": "rule",
+        "detail": "CLAUDE.md:66 — '**Design system.** Import from `@ds` ... **No hardcoded colors or sizes** — use tokens (`var(--sp-8)`, `var(--fs-14)`, `var(--text-muted)`).' Restated by specs/requests/01-requests.md:701 — 'No hardcoded colour or size; tokens only.' The token exists: `1_DS for dev/tokens/radii.css:13` defines `--border-hair:1px`. `git diff f06c7d8...HEAD -- apps/web | grep '^+' ` shows this is the one added line carrying a px literal; the four siblings T3 fixed now read `var(--border-crisp) solid ...`.",
+        "source": "CLAUDE.md:66"
+      },
+      "suggestedFix": "border: `var(--border-hair) solid var(--error-500)`. Leave page.tsx:612 alone — it carries the same literal but is spec 10's deduction chip, present verbatim at f06c7d8 and untouched by this diff."
+    },
+    {
+      "id": "F2",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "specs/requests/01-requests.md requirement 42",
+      "file": "specs/user-management/10-organization-requests-page.md",
+      "symbol": "Flow: Manager reviews requests from Requests page",
+      "line": 136,
+      "claim": "Two statements in spec 10's Flow still describe the retired behaviour and carry no amendment marker, while the amendment banner this diff carries asserts that every overruled statement is marked in place. Step 2 (:136) says the page loads 'pending vacation requests'; the default is now `all`. Step 6 (:140) tells the reader to change the filter to 'Approved' or 'All'; neither label is drawn any more. The implementation follows requirement 42 and spec 10's own amended :71 and :251, so no code change can satisfy both texts — this is two spec statements contradicting each other, not a defect in the code.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/requests/01-requests.md:229 (requirement 42) — 'Both `type` and `status` default to `all`' and the six-value vocabulary. specs/user-management/10-organization-requests-page.md:71 (marked '**amended by requests/01 requirement 42**, was pending') and :251 (options 'All statuses' (default), 'Open', 'Answered', 'Granted', 'Declined', 'Cancelled') say the same. Against them, :136 'System loads the Requests page showing pending vacation requests across all org members.' and :140 'Manager changes filter to \"Approved\" or \"All\"'. The banner at :26 states 'Every statement this overrules is marked in place, each beside the text it corrects' and enumerates the marked statements; the Flow is not among them. The shipped control agrees with :71/:251 — apps/web/app/org/[orgId]/requests/page.tsx:103 seeds status from `parseRequestStatusQuery(...) ?? 'all'` and :35-42 lists the six labels.",
+        "source": "specs/requests/01-requests.md:229"
+      },
+      "suggestedFix": "A person marks both in place in the file's established style — step 2 gets '**Amended by requests/01 requirement 42:** the default view is every status, not pending only', step 6's values become 'Granted' or 'All statuses' — and adds 'the Flow' to the banner's list at :26-32. No code change."
+    },
+    {
+      "id": "F3",
+      "target": "code",
+      "severity": "blocker",
+      "rule": "CLAUDE.md/agent-prompts-are-rules-only",
+      "file": "scripts/ship.mjs",
+      "symbol": "promptFor",
+      "line": 131,
+      "claim": "The prompt strings this diff adds carry history and justification rather than rules. Lines 131-132 emit a heading naming a prior run id and the sentence 'These blockers are older than the working tree and were raised before the spec was corrected'; line 174 emits 'never from what an agent appeared to open, which cannot be told from a journal of tool calls', which is why the rule exists. Every pre_implement, implement and review invocation pays for those sentences. The rule form is already present beside them at :133-135 ('Verify each against the current code first ... Do not take any of them as a current fact'), so nothing is lost by deleting the prose.",
+      "witness": {
+        "kind": "rule",
+        "detail": "CLAUDE.md:158-166 — '**Agent prompts are rules only.** ... Never put in a prompt: measurements, counts, timings or costs from this project; what happened on an earlier run, or what some agent did last time; why a rule exists, what it replaced, or a link to the reasoning. Write the conclusion, not the evidence for it. ... Every sentence of justification is paid for on every invocation and changes no behaviour.' The offending strings are added by this diff: `git diff f06c7d8...HEAD -- scripts/ship.mjs` shows :131-132 and :174 as `+` lines. The findings payload itself is not at issue — it is the workflow's documented mechanism; the history and reasoning wrapped around it are.",
+        "source": "CLAUDE.md:163"
+      },
+      "suggestedFix": "Reduce the carried heading to '## Carried findings' plus the existing verify-first rule at :133-135, dropping the run id, 'older than the working tree' and 'before the spec was corrected'. At :174 keep 'It is derived from the commit each earlier verdict names as judged and the files it reported unreached' and delete the clause after the dash. The reasoning belongs in docs/adr/, which is where CLAUDE.md sends it; the code comments at :118-123 already hold it and cost nothing per invocation."
+    },
+    {
+      "id": "N1",
+      "target": "spec",
+      "severity": "note",
+      "rule": ".claude/skills/spec/references/checklist.md:78 (a rubric, not one of the three blocking sources, so this cannot block)",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "Test Cases preamble",
+      "line": 910,
+      "claim": "This diff adds a new `## DS gaps` section at :718 and does not account for it in the Test Cases preamble, which lists the sections that have no case of their own and then enumerates the ten that are covered. DS gaps appears in neither list.",
+      "witness": {
+        "kind": "rule",
+        "detail": "checklist.md:78 — 'Every `##` section has at least one test case, or an explicit note saying it has none and why. Verification Plan is the standing exception.' The section exists at specs/requests/01-requests.md:718; the exhaustive preamble is at :910-917.",
+        "source": ".claude/skills/spec/references/checklist.md:78"
+      },
+      "suggestedFix": "One sentence in the preamble adding **DS gaps** to the no-case list: it records two absent `@ds` primitives and the token contract their native replacements carry, which is a design-system record rather than a behaviour."
+    },
+    {
+      "id": "N2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md requirement 45",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "requirement 36",
+      "line": 184,
+      "claim": "Requirement 36's new wording rests twice on 'requirement 45 enumerates its contents exhaustively'. It does not: the spec's own inbox wireframe at :411-418 draws type, priority and needed-by on each row, and RequestRow.tsx:110-115 renders them. The conclusion requirement 36 draws is right and the code matches it; only the exhaustiveness premise is false, and a later reader taking it literally would read the shipped row as non-compliant.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Requirement 45 (specs/requests/01-requests.md:259) lists six things. The wireframe at :411-418 shows 'access · blocked · needed by 2 Sep (overdue)'. apps/web/app/org/[orgId]/requests/RequestRow.tsx:110 renders type, accessKind, priority and neededBy in addition.",
+        "source": "specs/requests/01-requests.md:259"
+      },
+      "suggestedFix": "Reword requirement 36 to say requirement 45 enumerates the row's contents and names no control among them — the claim the argument actually needs — or widen requirement 45 to name what the wireframe already draws."
+    },
+    {
+      "id": "N3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "specs/requests/01-requests.md UI Description state table",
+      "file": "apps/web/app/org/[orgId]/requests/page.tsx",
+      "symbol": "RequestsPage project filter",
+      "line": 351,
+      "claim": "The project filter renders only for a holder of `list-assigned-projects`, which `viewer` does not hold, so a viewer sees a third control absent that the spec's permission-limited row does not name.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Sign in as a viewer and open /org/{orgId}/requests: requests-type-filter and requests-status-filter render, the project Select does not, because canListProjects is false at page.tsx:96. The spec's viewer row (01-requests.md:714) predicts only two absences: 'requests-new-btn absent; scope control absent'.",
+        "source": "specs/requests/01-requests.md:714"
+      },
+      "suggestedFix": "Add 'project filter absent' to the viewer row, with the reason — `list-assigned-projects` is not granted, so the choices cannot be fetched."
+    },
+    {
+      "id": "N4",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement",
+      "file": "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx",
+      "symbol": "load",
+      "line": 172,
+      "claim": "load() distinguishes only 200 and 404. Any other failure leaves detail null and notFound false, and the screen renders a bare back link with no message and no retry, indefinitely — the same DOM as the pre-load state, so a reader cannot tell a failure from a slow load. The list screen was given a banner and a retry control for exactly this case.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "With the API returning 500 for GET /api/organizations/{orgId}/requests/{requestId}, the browser shows request-detail-page containing only the '← Requests' link. The spec's UI Description has an 'Error (list)' row and no detail-screen equivalent, so no rule is broken.",
+        "source": "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx:76"
+      },
+      "suggestedFix": "Give the detail screen the list's banner-and-retry treatment and add its row to the UI Description state table, or state deliberately in the spec that a non-404 failure there renders nothing."
+    },
+    {
+      "id": "N5",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement",
+      "file": "apps/api/src/requests/vacation-request-feed.service.ts",
+      "symbol": "countAll",
+      "line": 123,
+      "claim": "countAll is the lifted spec-10 totalCount and has no caller anywhere: `grep -rn countAll apps packages e2e` returns only the declaration. Spec 10 as amended says the retired counter appears nowhere in the codebase; the identifier is gone from the envelope but the query that produced it still ships.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "The only call site of VacationRequestFeedService in apps/ is requests.service.ts:252 (listFeed). No route reaches countAll.",
+        "source": "apps/api/src/requests/vacation-request-feed.service.ts:123"
+      },
+      "suggestedFix": "Delete countAll, or say in the comment why an uncalled counter is kept."
+    },
+    {
+      "id": "N6",
+      "target": "code",
+      "severity": "note",
+      "rule": "CLAUDE.md/testing (demoted: no testid exists to use, so the fix is a design-system change, not a change to this diff)",
+      "file": "e2e/tests/requests.spec.ts",
+      "symbol": "chooseOption",
+      "line": 186,
+      "claim": "Four selections reach a control by ARIA role rather than by testid — requests.spec.ts:186, :626, :657 and requests-page.spec.ts:147. The @ds Select renders its options with role='option' and no data-testid, so no id exists to select by; eight pre-existing suites already do this.",
+      "witness": {
+        "kind": "rule",
+        "detail": "CLAUDE.md:71 — 'Selectors are `data-testid` only, and the ids are named in the specs.' The DS Select's options carry none, which is why every existing suite does the same.",
+        "source": "CLAUDE.md:71"
+      },
+      "suggestedFix": "Give @ds Select options a testid derived from the field's, recorded as a DS gap, or carve out DS listbox options in CLAUDE.md — which is what the tree already assumes."
+    },
+    {
+      "id": "N7",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement",
+      "file": "packages/validation/src/requests.ts",
+      "symbol": "validateRequestDescription",
+      "line": 113,
+      "claim": "A non-string description is reported with descriptionTooLong, so POST …/requests with {\"description\": 42} answers 400 'Description must be 5000 characters or fewer' about a value that is not too long. The spec's Error Messages table has no key for a malformed type.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "validateRequestDescription(42) returns { valid: false, error: REQUEST_MESSAGES.descriptionTooLong } at requests.ts:113, copied into fields.description at :306.",
+        "source": "packages/validation/src/requests.ts:113"
+      },
+      "suggestedFix": "Treat a non-string description as absent, matching validateRequestMessageBody at :235, or add a spec message for a malformed value."
+    },
+    {
+      "id": "N8",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement against requirement 9's three legal answers",
+      "file": "packages/validation/src/requests.ts",
+      "symbol": "validateNewRequest",
+      "line": 317,
+      "claim": "A non-string projectId is silently coerced to null: POST with {\"projectId\": 42} returns 201 with project null and the caller is never told the project was dropped. Requirement 9 makes three answers legal for a project id — accepted, 400 archived, 404 foreign; forgetting it is a fourth.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "validateNewRequest({type:'question',title:'…',assigneeKind:'member',assigneeMembershipId:'m-1',projectId:42}, today) returns valid:true with value.projectId === null (requests.ts:317-320). The same body with a string id would have been resolved and could have answered 404.",
+        "source": "packages/validation/src/requests.ts:317"
+      },
+      "suggestedFix": "Let a present-but-non-string projectId fall through to the server lookup so it answers 404 like any unknown id."
+    },
+    {
+      "id": "N9",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement",
+      "file": "apps/api/src/requests/request-events.service.ts",
+      "symbol": "record",
+      "line": 40,
+      "claim": "record(tx: Prisma.TransactionClient, …) cannot enforce the invariant its comment states: PrismaService extends PrismaClient, which is structurally assignable to Prisma.TransactionClient, so a future caller passing this.prisma compiles and writes the event outside any transaction. All six current call sites pass a real tx, so nothing is wrong today.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/requests/01-requests.md:390 (State Machine invariant 4) — 'Every transition writes exactly one `RequestEvent` with `action = \\'status_changed\\'` in the same transaction as the status column.' Call sites requests.service.ts:389, 455, 538, 563, 673, 761 all comply.",
+        "source": "specs/requests/01-requests.md:390"
+      },
+      "suggestedFix": "Nothing required now; if the seam is worth closing it needs a nominal wrapper type or a lint rule, and the comment should say the type is documentation rather than a guard."
+    },
+    {
+      "id": "N10",
+      "target": "code",
+      "severity": "note",
+      "rule": "CLAUDE.md/validation (raised only so the next reader does not mistake it for copy)",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "listRequests",
+      "line": 175,
+      "claim": "The 400 for an unknown scope/status/type carries fields: { status: 'unknown_value' }, a literal defined in the service rather than in packages/validation. It is a machine code and not user-facing copy — the spec's Error Messages table has no key for it, and an unknown value can only arrive from a hand-edited URL — so no message escaped the package.",
+      "witness": {
+        "kind": "rule",
+        "detail": "CLAUDE.md:58 — 'Rules and message text live in `packages/validation` ... Never write a user-facing validation message inline.' The literal is pinned as the contract by apps/api/test/requests-page.spec.ts:435.",
+        "source": "CLAUDE.md:58"
+      },
+      "suggestedFix": "None needed; if the codes multiply, export them from packages/validation as a codes object rather than as copy."
+    },
+    {
+      "id": "N11",
+      "target": "spec",
+      "severity": "note",
+      "rule": "none — scope observation from sweep 5",
+      "file": "scripts/wf.mjs",
+      "symbol": "carriedBlockers",
+      "line": 318,
+      "claim": "The --carry / --no-carry feature (wf.mjs +71, ship.mjs +52) answers no requirement of this spec, no task in the handoff and no row in the area README's blast radius, yet it sits in this spec's diff and every review pass must judge it against a spec that says nothing about it. It deploys nothing — CLAUDE.md's deploy note puts scripts/ among the paths copied into no image — so the cost is review, not release.",
+      "witness": {
+        "kind": "rule",
+        "detail": "handoff.json tasks T1-T10 name files under apps/web, packages/validation, apps/api and e2e only; the summary says the open work is 'the delta between commit 3d46cb3's corrections and the code, plus the one carried code blocker'.",
+        "source": ".workflow/runs/2026-09-01T16-08-11_requests-01-requests/handoff.json"
+      },
+      "suggestedFix": "Land pipeline tooling on its own branch, or record it as a deliberate out-of-band change so the next reviewer is not asked to judge it against requests/01."
+    },
+    {
+      "id": "N12",
+      "target": "spec",
+      "severity": "note",
+      "rule": "CLAUDE.md/testing",
+      "file": "apps/api/test/requests.spec.ts",
+      "symbol": "narrows by project and by a case-insensitive title match, leaving the counters alone",
+      "line": 1003,
+      "claim": "This integration case carries no TC id and no numbered case in the spec covers it; its own comment concedes as much. It covers requirement 42's projectId and q filters, which the spec's Test Cases section assigns to no case, so the spec and the suite disagree about what is covered.",
+      "witness": {
+        "kind": "test",
+        "detail": "CLAUDE.md:72 — 'Test cases are numbered in the specs (`TC-01-E2E-03`) and the code references those ids.' TC-01-INT-22 (specs/requests/01-requests.md:1150) is the last numbered integration case and covers status and type only.",
+        "source": "CLAUDE.md:72"
+      },
+      "suggestedFix": "A person adds TC-01-INT-23 covering requirement 42's projectId and q filters and the counters' immunity to them, and the test references it."
+    },
+    {
+      "id": "N13",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — judgement",
+      "file": "apps/api/src/requests/requests.service.ts",
+      "symbol": "requireCaller",
+      "line": 859,
+      "claim": "requireCaller throws a bare ForbiddenException when the session's membership is missing, inactive, or in another organization — the one refusal in this service with no { error, message } envelope behind it, and a 403 where the surrounding convention for 'not yours to see' is 404. Reachable only if a membership is soft-deleted or moved mid-session before SessionGuard revokes, which no edge case in the spec covers.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "requests.service.ts:859 throws `new ForbiddenException()` with no body, while :184, :309, :506 and :607 all throw { error: 'forbidden', message: REQUEST_MESSAGES.* }. The spec's Error Messages table has no row for 'caller has no active membership'.",
+        "source": "apps/api/src/requests/requests.service.ts:859"
+      },
+      "suggestedFix": "Confirm SessionGuard makes it unreachable and say so, or give it the envelope and a named message so no route answers with a body the spec does not describe."
+    },
+    {
+      "id": "N14",
+      "target": "code",
+      "severity": "note",
+      "rule": "none — internal consistency of a string this change edits",
+      "file": "scripts/ship.mjs",
+      "symbol": "promptFor, case 'review'",
+      "line": 178,
+      "claim": "The review-ledger to review-slice rename was applied at :152 and :174 but not to the prose at :178, which still reads 'The ledger has already confirmed with git diff that it has not moved'. The reviewer is told to run one tool and then told what a differently-named one already did.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Run a review stage with attempts > 0: the prompt says 'Run `node scripts/review-slice.mjs`' at :174 and 'The ledger has already confirmed...' at :178. `ls scripts/` shows review-slice.mjs and no review-ledger.mjs.",
+        "source": "scripts/ship.mjs:178"
+      },
+      "suggestedFix": "Replace 'The ledger' with 'The worklist' at :178."
+    }
+  ],
+  "dismissedShardClaims": [
+    {
+      "id": "S1-F4",
+      "claim": "TC-01-INT-13's route 1 is a tautology because Honolulu and Kiritimati share a calendar date for roughly 14 of every 24 hours.",
+      "whyDismissed": "The arithmetic is wrong. Honolulu is UTC-10 and Kiritimati UTC+14, exactly 24 hours apart, so the eastern local date is the western date plus one at every instant and `westToday < eastToday` is always true — the assertion at apps/api/test/requests.spec.ts:753 always demands overdue: true. Both dates are computed in the test with Intl directly, not through the code under test, so an isRequestOverdue that always returned false would fail it. The case is deterministic and guards what the spec's corrected TC-01-INT-13 asks for."
+    },
+    {
+      "id": "S3-F3",
+      "claim": "The unaccounted `## DS gaps` section is a blocker.",
+      "whyDismissed": "Demoted to N1. The rule it cites lives in .claude/skills/spec/references/checklist.md, which is not one of the three sources a blocking finding may cite. It reaches the human as a note instead."
+    }
+  ],
+  "carriedBlockersChecked": [
+    {
+      "id": "T1 (review 3 F1)",
+      "closed": true,
+      "evidence": "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx:51 now reads `const role: Role = normalizeRole(session.role)`, matching page.tsx:93 and requests-badge-context.tsx:41. No `session.role as Role` remains in the file."
+    },
+    {
+      "id": "T2",
+      "closed": true,
+      "evidence": "DeclineRequestModal.tsx:164 carries data-testid=\"request-detail-decline-error\", and TC-01-E2E-05 (e2e/tests/requests.spec.ts) now asserts that id visible plus request-detail-status still reading 'Open', instead of the reason field being visible."
+    },
+    {
+      "id": "T3",
+      "closed": true,
+      "evidence": "All eight literals in the three named files are gone: NewRequestModal.tsx:329/337 and :419/427, DeclineRequestModal.tsx:142/146 and [requestId]/page.tsx:383/391 now use var(--border-crisp) and var(--sp-6). members/[memberId]/RejectRequestModal.tsx was correctly left alone. One literal of the same class survives elsewhere — F1."
+    }
+  ]
+}

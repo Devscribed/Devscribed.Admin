@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { VALID, registerAccount, uniqueEmail } from './helpers';
 
 /** Signs in through the UI and waits for the app shell to settle. */

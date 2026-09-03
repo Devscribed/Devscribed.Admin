@@ -120,7 +120,7 @@ test.describe('Hiring — candidates, assigned to me', () => {
 
     // And asking for the whole database by hand does not produce it: the scope is
     // resolved on the server, and the screen only reflects what came back.
-    await page.goto(`/org/${org.organizationId}/hiring/candidates?scope=all`);
+    await page.goto(`/org/${org.orgId}/hiring/candidates?scope=all`);
     await expect(page.getByTestId('candidates-list')).toBeVisible();
     await expect(page.getByText('Ann Lee')).toBeVisible();
     expect(await page.content()).not.toContain('Jane Doe');
@@ -144,7 +144,7 @@ test.describe('Hiring — candidates, assigned to me', () => {
       `hiring/vacancies/${others.id}`,
       `hiring/vacancies/${theirs.id}/board`,
     ]) {
-      await page.goto(`/org/${org.organizationId}/${path}`);
+      await page.goto(`/org/${org.orgId}/${path}`);
       await expect(page.getByTestId('vacancies-list')).toHaveCount(0);
       await expect(page.getByTestId('vacancy-detail')).toHaveCount(0);
       await expect(page.getByTestId('board')).toHaveCount(0);
@@ -175,7 +175,7 @@ test.describe('Hiring — candidates, assigned to me', () => {
     });
 
     await signIn(page, interviewer.email);
-    await page.goto(`/org/${org.organizationId}/hiring/my-interviews`);
+    await page.goto(`/org/${org.orgId}/hiring/my-interviews`);
 
     await page.waitForURL('**/hiring/candidates?scope=mine');
     await expect(page.getByTestId('candidates-list')).toBeVisible();
@@ -200,7 +200,7 @@ test.describe('Hiring — candidates, assigned to me', () => {
     // The not-found state, not an empty list: the screen's existence is not advertised
     // to somebody it will never serve (03 §07.34).
     for (const path of ['hiring/candidates', 'hiring/candidates?scope=mine']) {
-      await page.goto(`/org/${org.organizationId}/${path}`);
+      await page.goto(`/org/${org.orgId}/${path}`);
       await expect(page.getByTestId('candidates-list')).toHaveCount(0);
       await expect(page.getByTestId('candidates-scope-tabs')).toHaveCount(0);
     }

@@ -14,9 +14,9 @@ import {
 import { Badge, CloseIcon, IconButton, Select, TextInput, type SelectOption } from '@devscribed/ds';
 import { focusByTestId } from '@/field-error';
 import { CriterionDialog } from '@/hiring/CriterionDialog';
-import { valueOf } from '@/hiring/select';
+import { valueOf } from '@/select';
 import type { CardCriterion, Criterion } from '@/hiring/types';
-import { SectionHeading } from './SectionHeading';
+import { SectionHeading } from '@/SectionHeading';
 
 /**
  * The criteria assessed on one application (spec 04 §05).

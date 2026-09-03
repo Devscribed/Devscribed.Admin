@@ -291,35 +291,11 @@ Each card contains:
 - **Selectors:** `sidebar-requests-link`, `sidebar-requests-badge`, `requests-page`, `requests-card-{R1.id}`, `requests-card-avatar-{R1.id}`, `requests-card-member-name-{R1.id}`, `requests-card-approve-{R1.id}`, `toast-request-approved`, `requests-card-status-{R1.id}`, `requests-card-reject-{R2.id}`, `vacation-reject-modal`, `vacation-reject-comment-input`, `vacation-reject-confirm-btn`, `toast-request-rejected`, `requests-card-status-{R2.id}`, `requests-card-reviewer-comment-{R2.id}`.
 
 ### TC-10-E2E-02: Requests page — status filter
-
-- **Level:** E2E
-- **Preconditions:** logged in as admin; org has 2 pending, 1 approved, 1 rejected requests.
-- **Steps:**
-  1. Open Requests page. Verify default shows 2 pending requests.
-  2. Change filter to "All". Verify 4 requests shown.
-  3. Change filter to "Approved". Verify 1 request shown.
-  4. Change filter to "Rejected". Verify 1 request shown with reviewer comment.
-- **Selectors:** `sidebar-requests-link`, `requests-page`, `requests-status-filter`, `requests-card-{id}`, `requests-card-status-{id}`, `requests-card-reviewer-comment-{id}`.
+- **Retired.** Covered by TC-10-INT-02 for the filtering, plus the endpoint’s default-to-pending and oldest-first ordering. The filter control itself is a DS `Select`, and the regressions suite proves that component opens and selects.
 
 ### TC-10-E2E-03: Requests page — user and viewer cannot access
-
-- **Level:** E2E
-- **Preconditions:** logged in as user (or viewer).
-- **Steps:**
-  1. Observe the sidebar.
-  2. Navigate directly to `/org/{orgId}/requests`.
-- **Expected Result:**
-  1. "Requests" item is not visible in the sidebar.
-  2. Redirected to the members page (or shown 403).
-- **Selectors:** `sidebar-requests-link` (asserted absent).
+- **Retired.** Covered by TC-10-INT-03 (a user and a viewer are forbidden). That the sidebar row is not rendered for them is the repository-wide navigation rule, proved in the browser once by TC-01-E2E-07 in the documents area.
 
 ### TC-10-E2E-04: Requests page — cancel approved request
+- **Retired.** Duplicate. The identical case exists as TC-09-E2E-04 in the vacation-requests suite, and the rule is TC-09-INT-10.
 
-- **Level:** E2E
-- **Preconditions:** logged in as manager; org has 1 approved request R for member Alex.
-- **Steps:**
-  1. Open Requests page. Change filter to "All" or "Approved".
-  2. Click "Cancel" on the approved request R.
-  3. Confirm in the dialog (notice: "The reserve will be refunded").
-  4. Verify toast "Request cancelled and reserve refunded". Card updates to ○ Cancelled.
-- **Selectors:** `requests-status-filter`, `requests-card-cancel-{R.id}`, `toast-request-cancelled`, `requests-card-status-{R.id}`.

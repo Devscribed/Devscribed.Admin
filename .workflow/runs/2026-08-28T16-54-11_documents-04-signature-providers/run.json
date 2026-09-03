@@ -1,0 +1,160 @@
+{
+  "runId": "2026-08-28T16-54-11_documents-04-signature-providers",
+  "spec": "specs/documents/04-signature-providers.md",
+  "specSha": "1a6ed08c71cbdd11f76e4b09954e2460a14848df18fc5ea1d9db63dabc7f8347",
+  "task": "documents-04-signature-providers",
+  "branch": "spec/signwell-provider",
+  "baseRef": "57d55acd03b825aeed9c85836e85138f12b01be1",
+  "status": "aborted",
+  "createdAt": "2026-08-28T16:54:11.899Z",
+  "updatedAt": "2026-09-01T14:40:17.935Z",
+  "stages": {
+    "preflight": {
+      "status": "passed",
+      "attempts": 1
+    },
+    "pre_implement": {
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-08-28T16:54:12.059Z",
+      "endedAt": "2026-08-28T17:11:18.859Z",
+      "lastVerdict": "pass"
+    },
+    "implement": {
+      "status": "running",
+      "attempts": 1,
+      "startedAt": "2026-08-28T17:11:18.947Z"
+    },
+    "static_gate": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "review": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "qa": {
+      "status": "pending",
+      "attempts": 0
+    }
+  },
+  "budget": {
+    "codeAttempts": 0,
+    "handoffReplans": 0,
+    "infra": 0
+  },
+  "findingHistory": {},
+  "contested": [],
+  "notes": [
+    {
+      "stage": "pre_implement",
+      "id": "N1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/internal-inconsistency",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "Flows / Flow: First signer signs, step 5",
+      "claim": "The 'First signer signs' flow still tells the implementer to consume SignWell's SignWellEmbed SDK event, while requirement 15 - added by the same commit that fixed the CSP defect - says that SDK is deliberately not loaded. Requirement 15 governs, the shipped code follows it, and the CSP makes the other reading unimplementable, so this does not block; it is drift left over from an earlier draft and should be corrected before it teaches the next reader the opposite decision.",
+      "witness": {
+        "kind": "rule",
+        "source": "specs/documents/04-signature-providers.md:896 versus :295",
+        "detail": "Line 896 reads '5. The `SignWellEmbed` `completed` event fires in the parent page; we show our own confirmation and **do not** treat the message as state'. Line 295, inside requirement 15, reads \"SignWell's `SignWellEmbed` SDK is deliberately **not** loaded... `frame-src` is widened; `script-src` is not.\" The two cannot both be followed: loading the SDK requires a script from www.signwell.com, and the policy in apps/web/next.config.mjs adds that origin to frame-src only, so the vendor script is refused by script-src and no SDK listener can ever run on that page. The implementation resolves it the way requirement 15 and edge cases 19-20 demand - apps/web/app/sign/[token]/EmbeddedSigning.tsx:14 states it is 'a plain <iframe> and **not** the vendor's SignWellEmbed SDK', and line 76 checks event.origin before reading anything. The previous run's pre-implement note P2 asked for exactly this sentence to be settled; requirement 15 was added and the flow was not updated with it."
+      },
+      "suggestedFix": "In the 'First signer signs' flow, replace 'The `SignWellEmbed` `completed` event fires in the parent page' with 'The widget posts a `completed` message; our listener checks `event.origin` against the embed host before reading it', so the flow, requirement 15, edge case 20 and the Blast Radius CSP row all describe one mechanism."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "N2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/missing-ds-gaps-table",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "UI Description / DS gaps",
+      "claim": "CLAUDE.md requires anything missing from the design system to be recorded in that spec's 'DS gaps' table, and two shipped code comments say they have done so, but spec 04 contains no such table - nor does any spec in the documents area. The two gaps this screen found (no Skeleton primitive, no selectable option row) are carried in this run's handoff.dsGaps, so nothing is lost in this run; the convention is what is missing.",
+      "witness": {
+        "kind": "rule",
+        "source": "CLAUDE.md:59 versus specs/documents/04-signature-providers.md (no 'DS gaps' section in 1553 lines)",
+        "detail": "CLAUDE.md:59 reads 'Anything missing goes *into* the design system and is recorded in that spec's \"DS gaps\" table, never improvised per screen.' `grep -n 'DS gap' specs/documents/04-signature-providers.md` returns nothing, and the same grep over specs/documents/*.md returns nothing for any of the four specs - the area index marks the Design column '-' for all of them, while every user-management spec carries its DS gaps table in a paired .design.md. Meanwhile apps/web/app/org/[orgId]/settings/signing/ProviderOption.tsx:12 says the composed option row 'is recorded in this spec's DS gaps table rather than improvised silently' and apps/web/app/org/[orgId]/settings/signing/page.tsx:216 says the skeleton is 'a carried gap, recorded in this spec's DS gaps table'. Both name a table that does not exist, so a reader who goes looking finds nothing, and the next screen needing an option row has no recorded reason not to copy the local one."
+      },
+      "suggestedFix": "Either add a 'DS gaps' subsection to spec 04's UI Description carrying the two gaps - no Skeleton primitive, and no selectable option row (bordered row with radio, title, description, trailing status pill, disabled state) - with what closes each, or state in specs/documents/README.md that this area records DS gaps in the implementing handoff and correct the two code comments to say so."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "N3",
+      "target": "self",
+      "severity": "note",
+      "rule": "self/plan-shaped-by-resumed-run",
+      "file": ".workflow/runs/2026-08-28T16-54-11_documents-04-signature-providers/handoff.json",
+      "symbol": "runContext",
+      "claim": "This handoff is not a from-zero build plan, and a reader who expects one will misread it. The branch already carries a full implementation of this spec from commit 1b77b06; the run was resumed with baseRef 57d55ac after commit 2201c91 fixed six spec defects and touched no application code. Planning a rebuild would have told the implementer to write files that already exist, so every task states what exists at which path and what remains - which is verification against the amended requirement numbers, one runbook deliverable, and three stale citations.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "git log on spec/signwell-provider: 57d55ac (diff base, spec fix from the first run) -> 1b77b06 'Spec 04: a session-scoped SigningProvider port, and SignWell behind it' (65 files, the implementation) -> 2201c91 'Close the six spec defects the first run found' (specs/ and scripts/ only, no apps/ or packages/ change). Checking each of the six fixes against the tree: envelope-download-btn and signing-signature-canvas are the ids the code and its E2E case already use (apps/web/app/org/[orgId]/documents/[envelopeId]/page.tsx:259, apps/web/src/documents/SignaturePad.tsx:161); frame-src is already widened by one build-time origin in apps/web/next.config.mjs with script-src untouched; the void path already deletes then settles without a re-read (apps/api/src/documents/envelopes.service.ts:1325 then the transaction at 1327); the enum-count assertion is already 17 (packages/validation/src/envelopes.test.ts); providerKey is already written at send (envelopes.service.ts:897, inside the transaction that sets status = sent). Only backward compatibility 3's runbook consequence has nothing answering it: docs/deployment.md:84 still says 'the deploy and the migration are independent and either order must work' and :278 still says a green rollout with a red migration means 'the environment is not broken, the schema is behind', which the amended spec says is false for this migration because Prisma names columns in its SELECT and every Envelope, EnvelopeSigner and Organization read fails with 42703 until it lands. That is task T1's real work; the two stale 'delete-then-converge' comments and the stale testid comment are T8 and T11."
+      },
+      "suggestedFix": "None needed from a human. Recorded so the reviewer, who will diff all 65 files from 57d55ac, knows the plan deliberately describes existing code rather than proposing to write it again, and so a reader of the run digest can tell this apart from a plan that quietly dropped the hard part."
+    }
+  ],
+  "halt": {
+    "reason": "abandoned",
+    "detail": "Orchestrator stopped; agent process killed. Superseded by a later run."
+  },
+  "preflight": {
+    "at": "2026-08-28T16:54:12.013Z",
+    "checks": [
+      {
+        "name": "branch-not-protected",
+        "ok": true,
+        "detail": "on \"spec/signwell-provider\""
+      },
+      {
+        "name": "spec-unchanged",
+        "ok": true,
+        "detail": "spec sha256 matches the one recorded at init"
+      },
+      {
+        "name": "api-env-present",
+        "ok": true,
+        "detail": "apps/api/.env exists (untracked — a fresh worktree does not get one)"
+      },
+      {
+        "name": "node-modules-present",
+        "ok": true,
+        "detail": "dependencies installed"
+      },
+      {
+        "name": "e2e-ports-free",
+        "ok": true,
+        "detail": "3000 and 4000 are free for the e2e suite"
+      },
+      {
+        "name": "prisma-client-generated",
+        "ok": true,
+        "detail": "prisma client generated (postinstall runs it from apps/api)"
+      },
+      {
+        "name": "migration-baseline",
+        "ok": true,
+        "detail": "12 migrations recorded as the baseline"
+      },
+      {
+        "name": "worktree-clean",
+        "ok": true,
+        "detail": "nothing in flight outside .workflow/"
+      }
+    ],
+    "migrations": [
+      "20260724114549_init",
+      "20260824080000_documents_templates",
+      "20260824090000_documents_envelopes",
+      "20260824100000_documents_member_profile",
+      "20260826121829_add_invitations_and_job_title",
+      "20260827090541_spec_06_account_settings",
+      "20260827093348_spec_07_member_financials",
+      "20260827120241_spec_08_vacation_reserve",
+      "20260827123444_spec_09_vacation_requests",
+      "20260827145447_spec_11_projects",
+      "20260827153333_spec_12_time_tracking",
+      "20260828140000_spec_04_signature_providers"
+    ]
+  }
+}

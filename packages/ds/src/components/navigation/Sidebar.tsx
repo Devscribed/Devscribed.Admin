@@ -11,6 +11,9 @@ export interface SidebarSubItem {
   testId?: string;
   /** Overrides the `activeSub` match — pass it when a router owns the current-row question. */
   active?: boolean;
+  /** §76 — a count on the row. Falsy draws nothing; there is no pill that says zero. */
+  badge?: number;
+  badgeTestId?: string;
 }
 
 export interface SidebarItem {
@@ -73,6 +76,8 @@ interface SubItemProps {
   testId?: string;
   active?: boolean;
   last?: boolean;
+  badge?: number;
+  badgeTestId?: string;
   onClick?: RowSelect;
   onNavigate?: SidebarNavigate;
   parent?: string;
@@ -153,7 +158,7 @@ function TopLink({ Icon, title, href, testId, active, onClick, onNavigate }: Top
   );
 }
 
-function SubItem({ label, href, testId, active, last, onClick, onNavigate, parent }: SubItemProps) {
+function SubItem({ label, href, testId, active, last, badge, badgeTestId, onClick, onNavigate, parent }: SubItemProps) {
   const [hover, setHover] = React.useState(false);
   return (
     <li style={{ marginBottom: last ? 0 : 'var(--space-6)' }}>
@@ -164,8 +169,17 @@ function SubItem({ label, href, testId, active, last, onClick, onNavigate, paren
         data-testid={testId}
         aria-current={active ? 'page' : undefined}
         onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-        style={{ padding: 'var(--space-1) var(--space-5)', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', fontSize: 'var(--font-size-s)', fontWeight: 500, backgroundColor: active ? 'var(--color-blue-tint)' : 'transparent', color: active || hover ? 'var(--color-blue)' : 'var(--text-secondary)' }}>
+        style={{ padding: 'var(--space-1) var(--space-5)', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 'var(--space-3)', fontSize: 'var(--font-size-s)', fontWeight: 500, backgroundColor: active ? 'var(--color-blue-tint)' : 'transparent', color: active || hover ? 'var(--color-blue)' : 'var(--text-secondary)' }}>
         {label}
+        {/* §76 — the count rides on the row rather than beside it, so it moves with the row
+            and disappears with it. Zero draws nothing: a pill reading `0` is a claim that
+            there is something to look at. */}
+        {!!badge && (
+          <span data-testid={badgeTestId}
+            style={{ /* @literal an 18px capsule sized to two digits, below the scale's first step */ marginLeft: 'auto', minWidth: 18, height: 18, padding: '0 var(--space-2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius-pill)', backgroundColor: 'var(--color-blue)', color: 'var(--text-on-accent)', fontSize: 'var(--font-size-xs)', fontWeight: 600, lineHeight: 1 }}>
+            {badge}
+          </span>
+        )}
       </a>
     </li>
   );
@@ -201,6 +215,7 @@ function SubMenu({ Icon, title, subs, active, defaultOpen, defaultSub, onSelectS
         <ul style={{ /* @literal the pull-up under a section title and the gap after it are this list's own overlap, not scale steps */ marginTop: -20, marginLeft: 'var(--space-3)', marginBottom: 28, paddingLeft: 'var(--space-5)', borderLeft: 'var(--border-width-hairline) solid var(--text-secondary)', listStyle: 'none' }}>
           {subs.map((s, i) => (
             <SubItem key={s.label} label={s.label} href={s.href} testId={s.testId} parent={title}
+              badge={s.badge} badgeTestId={s.badgeTestId}
               active={s.active != null ? s.active : s.label === clickedSub} last={i === subs.length - 1}
               onNavigate={onNavigate}
               onClick={() => { setClickedSub(s.label); if (onSelectSub) onSelectSub(title, s.label); }} />

@@ -18,6 +18,13 @@ export interface TabItem {
   testId?: string;
   /** `id` of the panel this tab shows, wired as `aria-controls`. */
   controls?: string;
+  /**
+   * §94 — shown, and not openable. `aria-disabled` rather than the `disabled` attribute, so
+   * the tab keeps its place in the strip and can still be reached and read; the arrow keys
+   * step over it, because selection follows focus here and landing on it would open a panel
+   * that is not the reader's to see.
+   */
+  disabled?: boolean;
 }
 
 export interface PageTabsProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange'> {
@@ -34,6 +41,7 @@ interface TabButtonProps {
   isActive: boolean;
   testId?: string;
   controls?: string;
+  disabled?: boolean;
   onSelect: () => void;
   children?: React.ReactNode;
 }
@@ -41,6 +49,8 @@ interface TabButtonProps {
 /** A tab is a bare string, or an object carrying the parts a string cannot say. */
 const valueOf = (tab: string | TabItem): string => (typeof tab === 'object' && tab !== null ? tab.value : tab);
 const labelOf = (tab: string | TabItem): React.ReactNode => (typeof tab === 'object' && tab !== null ? tab.label : tab);
+const disabledOf = (tab: string | TabItem): boolean =>
+  typeof tab === 'object' && tab !== null ? tab.disabled === true : false;
 
 /**
  * PageTabs — the underline tab row.
@@ -69,26 +79,39 @@ export function PageTabs({
   ...rest
 }: PageTabsProps) {
   const values = tabs.map(valueOf);
-  const [internal, setInternal] = React.useState<string | undefined>(active ?? values[0]);
-  React.useEffect(() => { setInternal(active ?? values[0]); }, [active, values.join('|')]);
+  const blocked = tabs.map(disabledOf);
+  /* §94 — the fallback is the first tab that can be opened, not the first tab. */
+  const firstOpenable = values.find((_, at) => !blocked[at]);
+  const [internal, setInternal] = React.useState<string | undefined>(active ?? firstOpenable);
+  React.useEffect(() => { setInternal(active ?? firstOpenable); }, [active, values.join('|')]);
   const current = active ?? internal;
 
   const select = (value: string) => {
+    if (blocked[values.indexOf(value)]) return;
     setInternal(value);
     if (onChange) onChange(value);
   };
 
   /* Arrow keys move between tabs and select as they go — the tab's own panel is already
      rendered, so selection following focus is what the pattern asks for and what stops a
-     keyboard user having to press twice for what a pointer does once. */
+     keyboard user having to press twice for what a pointer does once. §94 — and they step
+     *over* a disabled tab rather than onto it, since arriving would mean selecting it. */
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const at = values.indexOf(current as string);
-    let next: string | null | undefined = null;
-    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = values[at - 1];
-    else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = values[at + 1];
-    else if (event.key === 'Home') next = values[0];
-    else if (event.key === 'End') next = values[values.length - 1];
-    if (next === null || next === undefined) return;
+    /** The next openable tab from `from`, walking by `step`. */
+    const seek = (from: number, step: number): string | undefined => {
+      for (let index = from; index >= 0 && index < values.length; index += step) {
+        if (!blocked[index]) return values[index];
+      }
+      return undefined;
+    };
+    let next: string | undefined;
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = seek(at - 1, -1);
+    else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = seek(at + 1, 1);
+    else if (event.key === 'Home') next = seek(0, 1);
+    else if (event.key === 'End') next = seek(values.length - 1, -1);
+    else return;
+    if (next === undefined) return;
     event.preventDefault();
     select(next);
     const buttons = event.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]');
@@ -114,6 +137,7 @@ export function PageTabs({
             isActive={isActive}
             testId={tab && (tab as TabItem).testId}
             controls={tab && (tab as TabItem).controls}
+            disabled={blocked[values.indexOf(value)]}
             onSelect={() => select(value)}
           >
             {labelOf(tab)}
@@ -124,7 +148,7 @@ export function PageTabs({
   );
 }
 
-function TabButton({ value, isActive, testId, controls, onSelect, children }: TabButtonProps) {
+function TabButton({ value, isActive, testId, controls, disabled, onSelect, children }: TabButtonProps) {
   const [focused, setFocused] = React.useState(false);
   return (
     <button
@@ -132,10 +156,15 @@ function TabButton({ value, isActive, testId, controls, onSelect, children }: Ta
       role="tab"
       aria-selected={isActive}
       aria-controls={controls}
+      /* §94 — `aria-disabled`, never the attribute. A `disabled` button is unreachable and
+         unreadable, and the reason to draw this tab at all is that the reader should see the
+         panel exists. Omitted rather than set false when it is openable, so nothing has to
+         read an attribute to learn there is no restriction. */
+      aria-disabled={disabled || undefined}
       /* One tab stop for the strip: Tab reaches the chosen tab, arrows change it. */
       tabIndex={isActive ? 0 : -1}
       data-testid={testId}
-      onClick={onSelect}
+      onClick={disabled ? undefined : onSelect}
       /* §68 — a keyboard's ring, not a pointer's. A click focuses the button too, and the
          glow it left sat on the tab until something else was clicked. */
       onFocus={(event) => setFocused(isKeyboardFocus(event.currentTarget))}
@@ -150,7 +179,9 @@ function TabButton({ value, isActive, testId, controls, onSelect, children }: Ta
         paddingBottom: 0,
         paddingTop: 'var(--space-1)',
         marginRight: 'var(--space-7)',
-        cursor: 'pointer',
+        /* §94 — the same two values every blocked control in the system takes. */
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.6 : 1,
         /* §58 — a column, so the label sits at the top of the box and the bar under it.
            A `<button>` centres its content, and a chosen tab is 16px taller than an unchosen
            one, so centring pushed every unchosen label 8px down and moved the whole row when

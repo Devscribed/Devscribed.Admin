@@ -1,0 +1,187 @@
+{
+  "runId": "2026-09-01T12-17-50_requests-01-requests",
+  "spec": "specs/requests/01-requests.md",
+  "specSha": "98a0441e8ba4d1e1100768affdb44dc979fad3e978570dc1fdb3d3a7b5881b99",
+  "task": "requests-01-requests",
+  "branch": "spec/requests",
+  "baseRef": "ec97c8f87c5cc5e7478686cd8b47d5ffa7af8ec6",
+  "headAtInit": "ec97c8f87c5cc5e7478686cd8b47d5ffa7af8ec6",
+  "status": "halted",
+  "createdAt": "2026-09-01T12:17:50.458Z",
+  "updatedAt": "2026-09-01T12:31:17.722Z",
+  "stages": {
+    "preflight": {
+      "status": "passed",
+      "attempts": 1
+    },
+    "pre_implement": {
+      "status": "blocked",
+      "attempts": 1,
+      "startedAt": "2026-09-01T12:17:50.608Z",
+      "endedAt": "2026-09-01T12:31:17.670Z",
+      "lastVerdict": "blocked"
+    },
+    "implement": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "static_gate": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "review": {
+      "status": "pending",
+      "attempts": 0
+    },
+    "qa": {
+      "status": "pending",
+      "attempts": 0
+    }
+  },
+  "budget": {
+    "codeAttempts": 0,
+    "handoffReplans": 0,
+    "infra": 0
+  },
+  "findingHistory": {
+    "spec/contradiction@specs/requests/01-requests.md#req-9": 1,
+    "spec/ambiguous-requirement@specs/requests/01-requests.md#req-42": 1,
+    "spec/ambiguous-requirement@specs/requests/01-requests.md#req-23": 1
+  },
+  "contested": [],
+  "notes": [
+    {
+      "stage": "pre_implement",
+      "id": "N1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "AC-3",
+      "claim": "AC-3 and Backward Compatibility 5, read literally, forbid requirements 37 and 38 and the case that asserts them.",
+      "witness": {
+        "kind": "rule",
+        "detail": "AC-3: 'No role sees a request, a vacation row, or a control that it cannot see before this spec ships.' README Backward Compatibility 5: 'No role gains visibility of anything it cannot see today.' Requirement 38 makes the sidebar Requests row render for every signed-in member, and TC-01-E2E-10 asserts it is present for all four roles, citing a measured count of 0 for a `user` before this spec. A `user` therefore gains a nav row, a page and their own request rows. The plan reads both criteria as being about pre-existing DATA — vacation rows and other people's requests — which is how their named observers (TC-01-INT-18, TC-01-E2E-08) test them.",
+        "source": "specs/requests/01-requests.md:700 and specs/requests/README.md (Backward Compatibility 5)"
+      },
+      "suggestedFix": "Narrow AC-3 to 'no role sees a vacation row, or a request it is not party to, that it cannot see today' so the criterion and requirement 38 stop disagreeing on paper."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "N2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-premise",
+      "file": "specs/requests/README.md",
+      "symbol": "Blast Radius — packages/validation",
+      "claim": "The blast radius reads as though REQUEST_MESSAGES were a new export; it already exists and holds spec 09's vacation-request strings.",
+      "witness": {
+        "kind": "rule",
+        "detail": "'**`packages/validation`.** Three new capabilities in `MemberCapability` **and** `Capability`, plus `REQUEST_MESSAGES`.' The const is defined at packages/validation/src/index.ts:1746 with 21 spec-09 keys (startInPast, insufficientBalance, cancelForbidden, reviewForbidden, …) and is imported by apps/web/app/org/[orgId]/requests/page.tsx and packages/validation/src/vacation-requests.test.ts. None of this spec's 30 keys collides with them, so the plan extends the existing const in place; a rename would touch every vacation call site, which this spec forbids.",
+        "source": "packages/validation/src/index.ts:1746"
+      },
+      "suggestedFix": "Say 'extends `REQUEST_MESSAGES` (packages/validation/src/index.ts:1746, spec 09's) with 30 keys' so the next reader does not create a second export."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "N3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "req-43",
+      "claim": "Requirement 43's comparator and TC-01-UNIT-04's stated principle agree only for the row configuration the case happens to describe.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Requirement 43 orders by 'blocking and non-terminal first, then overdue, then priority descending, then lastActivityAt descending' — there is no key that says terminal rows sort last. TC-01-UNIT-04 expects 'the terminal row sorts below every non-terminal one despite being blocking', which the literal comparator delivers only because the case's terminal row is neither overdue nor (implicitly) high-priority. Rows [granted+urgent, open+normal] sort granted-first under the requirement and last under the case's principle.",
+        "source": "specs/requests/01-requests.md:196 (req 43) and the TC-01-UNIT-04 body"
+      },
+      "suggestedFix": "Either add 'non-terminal before terminal' as the first sort key in requirement 43, or fix the terminal row's priority and lastActivityAt in TC-01-UNIT-04 so the case tests the comparator as written."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "N4",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "GET …/requests response",
+      "claim": "`counts.total` is undefined, and `type=vacation` has no stated effect on the `requests[]` array.",
+      "witness": {
+        "kind": "rule",
+        "detail": "The response carries `\"counts\": { \"waitingOnMe\": 1, \"total\": 3 }` and no requirement says whether `total` is org-wide or the count matching the active filters — today's equivalent, `totalCount`, is deliberately computed from the unfiltered set (apps/api/src/requests/requests.service.ts). Requirement 42 admits `type=vacation` while requirement 41 says vacation rows are not `Request` rows in this release, so the filter selects a section rather than filtering the array. The plan mirrors today's unfiltered `total` and treats `type=vacation` as an empty `requests[]` plus the unchanged vacation block.",
+        "source": "specs/requests/01-requests.md:442-465"
+      },
+      "suggestedFix": "State both in the API contract — one sentence each."
+    }
+  ],
+  "halt": {
+    "reason": "spec-defect",
+    "detail": "pre_implement found a defect in the spec: spec/contradiction (specs/requests/01-requests.md); spec/ambiguous-requirement (specs/requests/01-requests.md); spec/ambiguous-requirement (specs/requests/01-requests.md)",
+    "at": "2026-09-01T12:31:17.721Z"
+  },
+  "preflight": {
+    "at": "2026-09-01T12:17:50.563Z",
+    "checks": [
+      {
+        "name": "branch-not-protected",
+        "ok": true,
+        "detail": "on \"spec/requests\""
+      },
+      {
+        "name": "spec-unchanged",
+        "ok": true,
+        "detail": "spec sha256 matches the one recorded at init"
+      },
+      {
+        "name": "api-env-present",
+        "ok": true,
+        "detail": "apps/api/.env exists (untracked — a fresh worktree does not get one)"
+      },
+      {
+        "name": "node-modules-present",
+        "ok": true,
+        "detail": "dependencies installed"
+      },
+      {
+        "name": "e2e-ports-free",
+        "ok": true,
+        "detail": "3000 and 4000 are free for the e2e suite"
+      },
+      {
+        "name": "prisma-client-generated",
+        "ok": true,
+        "detail": "prisma client generated (postinstall runs it from apps/api)"
+      },
+      {
+        "name": "migration-baseline",
+        "ok": true,
+        "detail": "17 migrations recorded as the baseline"
+      },
+      {
+        "name": "worktree-clean",
+        "ok": true,
+        "detail": "nothing in flight outside .workflow/"
+      }
+    ],
+    "migrations": [
+      "20260724114549_init",
+      "20260824080000_documents_templates",
+      "20260824090000_documents_envelopes",
+      "20260824100000_documents_member_profile",
+      "20260826121829_add_invitations_and_job_title",
+      "20260827090541_spec_06_account_settings",
+      "20260827093348_spec_07_member_financials",
+      "20260827120241_spec_08_vacation_reserve",
+      "20260827123444_spec_09_vacation_requests",
+      "20260827145447_spec_11_projects",
+      "20260827153333_spec_12_time_tracking",
+      "20260828120000_spec_13_kanban",
+      "20260828140000_spec_04_signature_providers",
+      "20260828140000_spec_14_collaboration",
+      "20260831130000_activity_label_snapshot",
+      "20260831140000_spec_15_time_task_link",
+      "20260901120000_spec_org_01_clients"
+    ]
+  }
+}

@@ -12,6 +12,13 @@
   --color-blue-lighter: #E8F2FE; /* logo lockup background */
   --color-blue-tint: #F4F7FF;    /* active sidebar sub-item background */
   --color-tracker-blue: #2AA7FF; /* floating tracker widget accent (distinct from primary blue) */
+  /* §91 — a day the organisation is closed, and a colour of its own rather than a status.
+     It shares today's pigment with `--color-warning`, and it is a separate name for the
+     reason stated at the top of this file: a surface and a status must be able to move
+     apart. A holiday is not a warning — nothing is going badly on the 25th of December —
+     and the calendar it marks already spends blue on today and red on the now-line, so
+     those two are unavailable to it as well as wrong. */
+  --color-holiday: #FFD02B;
   --color-gray: #64748B;
   --color-gray-light: #E7E7E7;
   --color-gray-lighter: #E8E8E8;
@@ -34,6 +41,30 @@
   --color-error-outline: rgba(234, 78, 61, 0.45);
   --color-info-tint: rgba(0, 182, 255, 0.1);
   --color-error-tint: rgba(216, 0, 39, 0.1);
+  /* §91 — the holiday hue at 10%, which is the same derivation `--color-info-tint` and
+     `--color-error-tint` take. It tints a whole day column behind the entries logged on it,
+     so it has to be a wash rather than a fill. */
+  --color-holiday-tint: rgba(255, 208, 43, 0.1);
+
+  /* §93 — the six grounds a person's avatar can take, and the ink that goes on each.
+     A person is not a status, so none of these is drawn from the status palette; they are
+     a *category* ramp in §59's sense, saying only "not the one beside it". The hues are
+     spread evenly and every one of them stays at least 25° away from the four the system
+     has already given a meaning — error, warning, success and blue — so no avatar reads
+     as a claim about how its owner is going. Ground and ink are the same hue at two steps,
+     which is what keeps the initials legible on all six without a per-hue exception. */
+  --avatar-1-surface: oklch(0.9 0.07 55);
+  --avatar-1-text: oklch(0.42 0.14 55);
+  --avatar-2-surface: oklch(0.9 0.07 130);
+  --avatar-2-text: oklch(0.42 0.14 130);
+  --avatar-3-surface: oklch(0.9 0.07 195);
+  --avatar-3-text: oklch(0.42 0.14 195);
+  --avatar-4-surface: oklch(0.9 0.07 285);
+  --avatar-4-text: oklch(0.42 0.14 285);
+  --avatar-5-surface: oklch(0.9 0.07 325);
+  --avatar-5-text: oklch(0.42 0.14 325);
+  --avatar-6-surface: oklch(0.9 0.07 350);
+  --avatar-6-text: oklch(0.42 0.14 350);
 
   /* Semantic aliases */
   --surface-page: var(--color-white);
@@ -57,6 +88,11 @@
 
   --border-default: var(--color-gray-light);
   --border-subtle: var(--color-border-subtle);
+  /* §91 — a holiday's ground and its edge. There is no `--text-holiday`: ink on this hue is
+     `--text-primary`, which is the call §32 already made for `Badge`'s warning tone — white
+     on a yellow this light is not a legibility trade-off but an absence of text. */
+  --surface-holiday: var(--color-holiday-tint);
+  --border-holiday: var(--color-holiday);
 
   --action-primary: var(--color-blue);
   --action-primary-text: var(--color-white);

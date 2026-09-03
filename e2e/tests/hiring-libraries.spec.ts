@@ -12,7 +12,7 @@ import {
   signIn,
   uniqueEmail,
   type InviteLink,
-  type Registered,
+  type RegisteredOrganization,
   type SeededVacancy,
 } from './helpers';
 
@@ -33,7 +33,7 @@ test.describe('Category library', () => {
     const react = await createCategory(request, org, 'React');
     await signIn(page, org.email);
 
-    await page.goto(`/org/${org.organizationId}/hiring/vacancies`);
+    await page.goto(`/org/${org.orgId}/hiring/vacancies`);
     await page.getByTestId('vacancy-new-button').click();
     await expect(page.getByTestId('vacancy-dialog')).toBeVisible();
 
@@ -55,7 +55,7 @@ test.describe('Category library', () => {
     await createCategory(request, org, 'React');
     await signIn(page, org.email);
 
-    await page.goto(`/org/${org.organizationId}/hiring/vacancies`);
+    await page.goto(`/org/${org.orgId}/hiring/vacancies`);
     await page.getByTestId('vacancy-new-button').click();
 
     // `React Native` is a different name, not a case variant of `React`.
@@ -95,7 +95,7 @@ test.describe('Category library', () => {
 
     await expect(page.getByTestId(`category-name-${react.id}`)).toHaveText('React.js');
     // Renaming propagates because the assignment references the row, not the string.
-    await page.goto(`/org/${org.organizationId}/hiring/vacancies`);
+    await page.goto(`/org/${org.orgId}/hiring/vacancies`);
     await expect(page.getByTestId(`vacancy-category-chip-${react.id}`).first()).toHaveText(
       'React.js',
     );
@@ -110,7 +110,7 @@ test.describe('Category library', () => {
     const reactjs = await createCategory(request, org, 'ReactJS');
     await signIn(page, org.email);
 
-    await page.goto(`/org/${org.organizationId}/hiring/settings`);
+    await page.goto(`/org/${org.orgId}/hiring/settings`);
     await page.getByTestId(`category-actions-${reactjs.id}`).click();
     await page.getByTestId(`category-rename-${reactjs.id}`).click();
     await page.getByTestId('category-name-input').fill('react');
@@ -136,7 +136,7 @@ test.describe('Category library', () => {
     });
     await signIn(page, org.email);
 
-    await page.goto(`/org/${org.organizationId}/hiring/settings`);
+    await page.goto(`/org/${org.orgId}/hiring/settings`);
     await page.getByTestId(`category-actions-${senior.id}`).click();
     await page.getByTestId(`category-delete-${senior.id}`).click();
 
@@ -151,7 +151,7 @@ test.describe('Category library', () => {
     // The vacancy survives without it — a label was removed, not a record. The header's
     // meta line simply loses its chips: there is no "No categories." to draw when the
     // rest of the line is still there (01 §08.28).
-    await page.goto(`/org/${org.organizationId}/hiring/vacancies/${vacancy.id}`);
+    await page.goto(`/org/${org.orgId}/hiring/vacancies/${vacancy.id}`);
     await expect(page.getByTestId('vacancy-detail')).toBeVisible();
     await expect(page.getByTestId('vacancy-detail-categories')).toHaveCount(0);
     await expect(page.getByTestId('vacancy-detail')).toContainText('Pat Owner');
@@ -167,7 +167,7 @@ test.describe('Category library', () => {
     const english = await createCriterion(request, org, { name: 'English' });
     await signIn(page, org.email);
 
-    await page.goto(`/org/${org.organizationId}/hiring/settings`);
+    await page.goto(`/org/${org.orgId}/hiring/settings`);
 
     // Each label carries its whole library's size — these are two libraries, not two
     // slices of one list, so a search over one says nothing about the other.
@@ -201,7 +201,7 @@ test.describe('Category library', () => {
     const org = await registerOrganization(request, uniqueEmail('lib-empty'));
     await signIn(page, org.email);
 
-    await page.goto(`/org/${org.organizationId}/hiring/settings`);
+    await page.goto(`/org/${org.orgId}/hiring/settings`);
 
     // Inline creation is the primary path, so the copy says so rather than pointing at
     // the button on this screen.
@@ -223,7 +223,7 @@ test.describe('Criteria library', () => {
   async function seed(
     request: APIRequestContext,
     prefix: string,
-  ): Promise<{ org: Registered; vacancy: SeededVacancy; invite: InviteLink }> {
+  ): Promise<{ org: RegisteredOrganization; vacancy: SeededVacancy; invite: InviteLink }> {
     const org = await registerOrganization(request, uniqueEmail(prefix));
     const vacancy = await createVacancy(request, org, { title: 'Senior React Engineer' });
     await bookInterview(request, vacancy.publicSlug, {
@@ -265,7 +265,7 @@ test.describe('Criteria library', () => {
 
     // The criterion is in the library and on this application, waiting for a value.
     const criteria = await request.get(
-      `${API}/api/organizations/${org.organizationId}/hiring/criteria`,
+      `${API}/api/organizations/${org.orgId}/hiring/criteria`,
     );
     const [english] = (await criteria.json()).criteria;
     expect(english.name).toBe('English');
@@ -307,7 +307,7 @@ test.describe('Criteria library', () => {
     });
 
     await signIn(page, org.email);
-    await page.goto(`/org/${org.organizationId}/hiring/settings`);
+    await page.goto(`/org/${org.orgId}/hiring/settings`);
     // The two libraries are the toolbar's two tabs; criteria is the second.
     await page.getByTestId('libraries-tab-criteria').click();
 
@@ -337,7 +337,7 @@ test.describe('Criteria library', () => {
 
     // Restoring returns it to the autocomplete — archiving is reversible, which is the
     // whole reason it exists instead of a delete.
-    await page.goto(`/org/${org.organizationId}/hiring/settings`);
+    await page.goto(`/org/${org.orgId}/hiring/settings`);
     await page.getByTestId('libraries-tab-criteria').click();
     await page.getByTestId(`criterion-actions-${english.id}`).click();
     await page.getByTestId(`criterion-restore-${english.id}`).click();
@@ -366,7 +366,7 @@ test.describe('Criteria library', () => {
       values: ['A1', 'A2', 'B1'],
     });
     await signIn(page, org.email);
-    await page.goto(`/org/${org.organizationId}/hiring/settings`);
+    await page.goto(`/org/${org.orgId}/hiring/settings`);
     await page.getByTestId('libraries-tab-criteria').click();
 
     await page.getByTestId(`criterion-actions-${english.id}`).click();
@@ -416,7 +416,7 @@ test.describe('Criteria library', () => {
     const org = await registerOrganization(request, uniqueEmail('criteria-rename'));
     const english = await createCriterion(request, org, { name: 'English', values: ['A1', 'B1'] });
     await signIn(page, org.email);
-    await page.goto(`/org/${org.organizationId}/hiring/settings`);
+    await page.goto(`/org/${org.orgId}/hiring/settings`);
     await page.getByTestId('libraries-tab-criteria').click();
 
     await page.getByTestId(`criterion-actions-${english.id}`).click();
@@ -440,7 +440,7 @@ test.describe('Criteria library', () => {
     const org = await registerOrganization(request, uniqueEmail('criteria-empty'));
     await signIn(page, org.email);
 
-    await page.goto(`/org/${org.organizationId}/hiring/settings`);
+    await page.goto(`/org/${org.orgId}/hiring/settings`);
     await page.getByTestId('libraries-tab-criteria').click();
 
     // Inline creation is the primary path, so the copy points at an interview rather than

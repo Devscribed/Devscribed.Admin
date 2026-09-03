@@ -13,8 +13,30 @@
     "test:e2e": "npm run test --workspace @devscribed/e2e",
     "dev": "npm run dev --workspace @devscribed/api & npm run dev --workspace @devscribed/web",
     "build": "npm run build --workspaces --if-present",
+    "release": "release-it",
+    "release:dry": "release-it --dry-run",
+    "spec": "node scripts/claude-cmd.mjs spec",
+    "refine": "node scripts/claude-cmd.mjs refine",
+    "bug": "node scripts/claude-cmd.mjs bug",
+    "ship": "node scripts/claude-cmd.mjs ship",
+    "ship:run": "node scripts/ship.mjs",
+    "board": "node scripts/run-watch.mjs --open",
+    "watch": "node scripts/run-watch.mjs",
+    "wf": "node scripts/wf.mjs",
+    "wf:status": "node scripts/wf.mjs status",
+    "wf:log": "node scripts/wf.mjs log",
+    "gate": "node scripts/static-gate.mjs",
+    "reap": "node scripts/reap-stale-servers.mjs",
+    "reap:dry": "node scripts/reap-stale-servers.mjs --dry-run",
+    "coverage": "node scripts/handoff-coverage.mjs",
     "ds:equiv": "node scripts/ds-equiv.js",
     "ds:tokens": "node scripts/ds-token-resolve.js",
     "ds:check": "node scripts/ds-adherence.js"
+  },
+  "devDependencies": {
+    "release-it": "21.0.2"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.252"
   }
 }

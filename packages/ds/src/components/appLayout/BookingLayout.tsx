@@ -8,6 +8,11 @@ export interface BookingLayoutProps extends React.HTMLAttributes<HTMLDivElement>
   wordmark?: React.ReactNode;
   /** §46 — test id for that node. The shell draws it, so only the shell can tag it. */
   wordmarkTestId?: string;
+  /**
+   * §78 — raises the column cap for a surface that is not prose. Off by default, because the
+   * default is the right one for everything the caller writes themselves.
+   */
+  wide?: boolean;
   children?: React.ReactNode;
 }
 
@@ -31,8 +36,18 @@ export interface BookingLayoutProps extends React.HTMLAttributes<HTMLDivElement>
  * 40px/16px page padding, the 30px gap under the wordmark. A candidate who books and then comes
  * back through the link in their invite must land on the page they recognise, and the public
  * screens share this shell for exactly that reason.
+ *
+ * §78 — **`wide`, for a surface this product did not draw.** The signing page embeds a
+ * provider's widget, which renders a whole page of a contract inside itself; at the 880px
+ * column that page is a stamp in the middle of an empty screen. So `wide` raises the cap, and
+ * `clamp` carries it there rather than a breakpoint — there is no width at which a document
+ * should suddenly jump. It also closes the gap under the wordmark, for the same one reason the
+ * width changes: the widget brings its own header, its own toolbar and its own name for the
+ * document, so every band above it pushes the thing the reader came for further down a screen
+ * it already fills. The caller's own prose keeps the air; a surface that is already a page
+ * does not need ours.
  */
-export function BookingLayout({ wordmark, wordmarkTestId, style, children, ...rest }: BookingLayoutProps) {
+export function BookingLayout({ wordmark, wordmarkTestId, wide = false, style, children, ...rest }: BookingLayoutProps) {
   return (
     <div
       {...rest}
@@ -43,7 +58,7 @@ export function BookingLayout({ wordmark, wordmarkTestId, style, children, ...re
         /* Top-aligned, where `AuthLayout` centres: a login card is short and a booking page is
            taller than the viewport, so centring would push the vacancy title off the top. */
         display: 'flex', flexDirection: 'column', alignItems: 'center',
-        gap: 'var(--space-10)',
+        gap: wide ? 'var(--space-6)' : 'var(--space-10)',
         fontFamily: 'var(--font-family-base)',
         ...style,
       }}
@@ -60,7 +75,18 @@ export function BookingLayout({ wordmark, wordmarkTestId, style, children, ...re
           {wordmark}
         </div>
       )}
-      <div style={{ width: '100%', maxWidth: 880, boxSizing: 'border-box' }}>{children}</div>
+      <div
+        style={{
+          width: '100%', boxSizing: 'border-box',
+          /* @literal §46's column is 880 — what two `1fr 1fr` picker cards need side by side —
+             and §78's cap is 1180, which is a page of a contract at a readable size. Both are
+             measures of the content, not steps on the spacing scale, and there is no token
+             that could move them without moving something unrelated. */
+          maxWidth: wide ? 'clamp(880px, 100%, 1180px)' : 880,
+        }}
+      >
+        {children}
+      </div>
     </div>
   );
 }

@@ -1,0 +1,37 @@
+{
+  "status": "blocked",
+  "findings": [
+    {
+      "id": "F1",
+      "target": "spec",
+      "severity": "blocker",
+      "rule": "specs/documents/04-signature-providers.md/Required data-testid Attributes",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "Required data-testid Attributes",
+      "line": 1118,
+      "claim": "spec 04's required-testid list names two ids that spec 02 already names differently for the same two controls, while spec 04 requirement 10 and acceptance criterion 2 forbid editing spec 02's suite - so no implementation can satisfy both specs at once, and the implementer has (correctly) shipped spec 02's ids while spec 04 still asks for others",
+      "witness": {
+        "kind": "rule",
+        "detail": "Spec 04 lists 'Envelope detail: envelope-provider, envelope-test-badge, envelope-download-button, envelope-certificate-link' (specs/documents/04-signature-providers.md:1118) and 'Signing page: ... sign-test-badge, sign-signature-canvas (asserted absent under SignWell)' (:1116), and TC-04-E2E-05 repeats envelope-download-button at :1513 with TC-04-E2E-02 repeating sign-signature-canvas at :1489. Spec 02 names the same two controls differently and shipped them that way: 'Header actions: envelope-void-btn, envelope-download-btn (visible only when canDownload)' (specs/documents/02-envelopes-and-signing.md:1435, repeated at :1501) and 'signing-signature-canvas' (specs/documents/02-envelopes-and-signing.md:1467, :1528, :1886). Spec 03 also depends on the spec 02 spelling (specs/documents/03-field-autofill.md:769). The code carries spec 02's ids - apps/web/app/org/[orgId]/documents/[envelopeId]/page.tsx:259 renders data-testid=\"envelope-download-btn\" and apps/web/src/documents/SignaturePad.tsx:161 renders data-testid=\"signing-signature-canvas\" - and shipped tests assert them (e2e/tests/field-autofill.spec.ts:436, e2e/tests/envelopes-signing.spec.ts:115). Renaming to satisfy spec 04 would edit those two shipped E2E cases, which spec 04 requirement 10 calls 'a defect of this spec's implementation' (:1513 region, requirement 10 at :230) and acceptance criterion 2 states as 'Spec 02's integration and E2E suites pass unedited'. Leaving them, as the diff does, leaves e2e/tests/signature-providers.spec.ts:323-326 carrying a comment that the selector it uses is not the one spec 04 names. CLAUDE.md:'Selectors are data-testid only, and the ids are named in the specs' makes the list binding, so the two documents contradict and a human has to pick the spelling.",
+        "source": "specs/documents/04-signature-providers.md:1118"
+      },
+      "suggestedFix": "amend spec 04's Required data-testid list and TC-04-E2E-02/05 selector lines to the ids spec 02 already defines - envelope-download-btn and signing-signature-canvas - or, if the rename is wanted, say so in spec 02 as well and accept the edit to its E2E suite"
+    },
+    {
+      "id": "F2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "specs/documents/04-signature-providers.md/Backward Compatibility 3",
+      "file": "specs/documents/04-signature-providers.md",
+      "symbol": "Backward Compatibility 3",
+      "line": 1151,
+      "claim": "the migration is genuinely additive, but the stated mechanism for deploy-order safety - 'new code tolerates the old schema because every added column has a default it can assume' - is not how the generated Prisma client behaves, so the roll-out window is louder than the spec claims",
+      "witness": {
+        "kind": "scenario",
+        "detail": "make deploy-<env> rolls services out before prisma migrate deploy (CLAUDE.md, 'Watch out for'). In that window the new API is serving against the pre-migration schema. Prisma enumerates columns in its SELECT rather than using SELECT *, so EnvelopesService.load (apps/api/src/documents/envelopes.service.ts, include: { signers, organization, ... }) asks for Envelope.providerTestMode / providerStatus / providerSyncedAt / providerError and EnvelopeSigner.providerRef, and SigningSettingsService.get asks for Organization.signatureProviderKey - every one of which is created by this migration. Until migrate deploy lands, those reads fail with 42703 rather than reading a default, so the document list and detail screens 500 for that window. The migration itself is additive and the rollback direction is fine; what is wrong is the sentence in backward compatibility 3 that says the new code tolerates the old schema. Worth a human's decision because the same shape is true of specs 01-03 and is a property of the deploy runbook, not of this diff.",
+        "source": "specs/documents/04-signature-providers.md:1151"
+      },
+      "suggestedFix": "restate backward compatibility 3 as 'additive, so a rollback needs no schema change' and let the runbook cover the roll-out window, or change the deploy order for migrations that add columns the new code reads on every request"
+    }
+  ]
+}

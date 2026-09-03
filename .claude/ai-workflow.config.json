@@ -1,0 +1,84 @@
+{
+  "$comment": "Spec-to-ship pipeline. Stages can be switched off individually; the routing engine in scripts/wf.mjs skips a disabled stage without changing how the rest behave.",
+  "stages": {
+    "preflight": {
+      "enabled": true
+    },
+    "pre_implement": {
+      "enabled": true,
+      "agent": "pre-implementer",
+      "model": "opus",
+      "effort": "high"
+    },
+    "implement": {
+      "enabled": true,
+      "agent": "implementer",
+      "model": "opus"
+    },
+    "static_gate": {
+      "enabled": true,
+      "script": "scripts/static-gate.mjs"
+    },
+    "review": {
+      "$comment": "profile picks how the shards read. `open` gives each shard open-ended judgement and no checklist; `sweeps` gives it the enumerate-then-judge method in .claude/skills/code-review/SKILL.md. shardSize is the largest number of files one shard is handed.",
+      "enabled": true,
+      "agent": "code-reviewer",
+      "model": "opus",
+      "profile": "open",
+      "shardSize": 15,
+      "profiles": {
+        "open": {
+          "shardAgent": "review-shard-open",
+          "shardModel": "opus",
+          "shardEffort": "medium"
+        },
+        "sweeps": {
+          "shardAgent": "review-shard",
+          "shardModel": "sonnet",
+          "shardEffort": "medium"
+        }
+      }
+    },
+    "qa": {
+      "enabled": true,
+      "agent": "qa",
+      "model": "sonnet",
+      "levels": [
+        "unit",
+        "int",
+        "e2e"
+      ],
+      "skipE2eIfLowerFailed": true
+    }
+  },
+  "convergence": {
+    "$comment": "Retry is the exception. Only a finding that is addressed to code, carries a witness, and is uncontested is ever retried.",
+    "maxCodeAttempts": 8,
+    "maxHandoffReplans": 1,
+    "infraRetries": 3,
+    "autoContestAfter": 2
+  },
+  "breakers": {
+    "$comment": "Fuses, not checks. They understand nothing about the code and therefore cannot be wrong about it.",
+    "stageTimeoutMin": {
+      "pre_implement": 20,
+      "implement": 45,
+      "review": 20,
+      "qa": 30
+    },
+    "runTimeoutMin": 180,
+    "runTokenCap": 3000000
+  },
+  "isolation": {
+    "$comment": "Worktrees isolate files and nothing else. Ports, both databases, the mail sink and .local-storage are shared, so runs are serialised until those are per-run too.",
+    "concurrentRuns": 1,
+    "e2eEnv": {
+      "CI": "1"
+    },
+    "testDatabaseTemplate": "postgresql://devscribed:devscribed@localhost:5433/devscribed_test_${runId}"
+  },
+  "protectedBranches": [
+    "main"
+  ],
+  "branchPrefix": "spec/"
+}

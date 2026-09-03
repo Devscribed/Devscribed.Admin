@@ -62,7 +62,9 @@ Any new person can sign up for Devscribed.Admin and, as part of signing up, crea
 10. The organization's `createdAt` and the membership's "joined" date are recorded at creation time.
 11. The user's timezone is auto-detected from the browser at signup (via `Intl.DateTimeFormat().resolvedOptions().timeZone`) and stored on the account.
 12. Email verification of the creator's own address is not required to complete signup in this release.
-13. **Email format validation:** email must conform to a standard `local@domain.tld` pattern (at least one character before `@`, a domain with at least one dot, and a TLD). Email must not exceed 254 characters. Validation is enforced both client-side (on blur and on submit) and server-side on the API.
+13. **Email format validation:** email must conform to a standard `local@domain.tld` pattern (a local part, a domain with at least one dot, and a TLD). Email must not exceed 254 characters. Validation is enforced both client-side (on blur and on submit) and server-side on the API.
+
+    **The local part is ASCII**, restricted to the unquoted set RFC 5322 permits — letters, digits, and ``!#$%&'*+/=?^_`{|}~-`` — as dot-separated atoms, so a dot may not lead, trail, or repeat. Two consequences are deliberate: **plus-addressing is accepted** (`user+contracts@gmail.com`), and **quoted local parts are refused** (`"john doe"@example.com` is legal RFC 5322 and accepted almost nowhere). The domain rule already required Latin letters in the TLD; before BUG-002 the local part required nothing, so `фывфывфыв@gmail.com` was accepted here and refused later by the signature provider at the send. **This rule governs every address the product stores** — signup, invitation, account settings, and envelope signers — and lives in one place, `packages/validation`.
 14. **Field-specific error messages:** each validation rule produces a specific, deterministic error message. The complete set:
 
     | Field | Rule | Error message |
@@ -263,6 +265,10 @@ Each field is a labeled text input with:
   6. Validate `"user@example.com"` (valid).
   7. Validate a 254-character email (boundary — valid).
   8. Validate a 255-character email (over limit).
+  9. Validate `"фывфывфыв@gmail.com"` (non-ASCII local part — BUG-002).
+  10. Validate `"\"john doe\"@example.com"` (quoted local part).
+  11. Validate `".user@example.com"`, `"user.@example.com"` and `"us..er@example.com"` (misplaced dots).
+  12. Validate `"user+contracts@gmail.com"` and ``"a!#$%&'*+/=?^_`{|}~-b@example.com"`` (plus-addressing and the rest of the permitted set).
 - **Expected Result:**
   1. Empty → invalid ("Email is required").
   2. No `@` → invalid ("Enter a valid email address").
@@ -272,6 +278,10 @@ Each field is a labeled text input with:
   6. `"user@example.com"` → valid.
   7. 254 chars → valid (boundary).
   8. 255 chars → invalid ("Email must be at most 254 characters").
+  9. Non-ASCII local part → invalid ("Enter a valid email address").
+  10. Quoted local part → invalid ("Enter a valid email address").
+  11. All three misplaced-dot forms → invalid ("Enter a valid email address").
+  12. Both → valid.
 
 ### TC-01-UNIT-07: Password error messages are rule-specific
 - **Level:** Unit
@@ -344,19 +354,7 @@ Each field is a labeled text input with:
 - **Selectors:** `signup-form`, `signup-org-name-input`, `signup-first-name-input`, `signup-last-name-input`, `signup-email-input`, `signup-password-input`, `signup-submit-button`, `members-list`, `member-row-{id}`.
 
 ### TC-01-E2E-02: Signup with validation errors shows inline errors with specific messages
-- **Level:** E2E
-- **Preconditions:** none.
-- **Steps:**
-  1. Open the signup form.
-  2. Leave all fields empty and verify the submit button is enabled.
-  3. Enter org name "Acme", first name "Pat2" (invalid digit), last name "Owner", email "not-an-email", password "short".
-  4. Tab through all fields to trigger blur validation.
-- **Expected Result:**
-  1. Submit button is enabled with empty fields.
-  2. `field-error-firstName` shows "First name may contain only letters, hyphens, apostrophes, and spaces".
-  3. `field-error-email` shows "Enter a valid email address".
-  4. `field-error-password` shows "Password must be at least 8 characters".
-- **Selectors:** `signup-form`, `signup-submit-button`, `signup-first-name-input`, `signup-email-input`, `signup-password-input`, `field-error-firstName`, `field-error-email`, `field-error-password`.
+- **Retired.** Covered by TC-01-INT-04, which asserts the same per-field errors from the endpoint that decides them. The message strings themselves live in `packages/validation` and are unit-tested there; a browser re-reading them proves only that the shared copy was imported.
 
 ### TC-01-E2E-03: Inline validation fires on blur and clears on correction
 - **Level:** E2E
@@ -376,62 +374,31 @@ Each field is a labeled text input with:
 - **Selectors:** `signup-form`, `signup-email-input`, `field-error-email`.
 
 ### TC-01-E2E-04: Password show/hide toggle
-- **Level:** E2E
-- **Preconditions:** none.
-- **Steps:**
-  1. Open the signup form.
-  2. Type `"Passw0rd"` into the password field.
-  3. Verify the password input type is `password` (masked).
-  4. Click the password toggle (`signup-password-toggle`).
-  5. Verify the password input type is `text` (visible) and the value is `"Passw0rd"`.
-  6. Click the toggle again.
-  7. Verify the password input type is `password` (masked again).
-- **Expected Result:**
-  1. Default state is masked (`type="password"`).
-  2. After first toggle click, password is visible (`type="text"`).
-  3. After second toggle click, password is masked again.
-- **Selectors:** `signup-form`, `signup-password-input`, `signup-password-toggle`.
+- **Retired.** Duplicate mechanism. The password reveal toggle is one component used on both signed-out screens, and TC-02-E2E-09 proves it on the login form — including that the value survives the toggle and focus returns to the input.
 
 ### TC-01-E2E-05: Duplicate email shows server error in banner
-- **Level:** E2E
-- **Preconditions:** an account already exists for `owner@acme.com`.
-- **Steps:**
-  1. Open the signup form.
-  2. Fill all fields with valid data, using email `owner@acme.com`.
-  3. Submit the form.
-  4. Verify the error banner appears.
-  5. Verify the form fields retain their values.
-- **Expected Result:**
-  1. `signup-error-banner` shows "This email is already registered".
-  2. All form fields retain the values entered in step 2.
-  3. The submit button re-enables after the error.
-- **Selectors:** `signup-form`, `signup-org-name-input`, `signup-first-name-input`, `signup-last-name-input`, `signup-email-input`, `signup-password-input`, `signup-submit-button`, `signup-error-banner`.
+- **Retired.** Covered by TC-01-INT-02 for the rule (a duplicate email is rejected with no partial write). That a server error reaches the form at all is the browser half, and TC-02-E2E-02 is the one case kept to prove it.
 
 ### TC-01-E2E-06: Submitting an invalid form surfaces every error and focuses the first one
-- **Level:** E2E
-- **Preconditions:** none.
-- **Steps:**
-  1. Open the signup form. Verify the submit button is enabled.
-  2. Click "Create account" with all fields empty.
-  3. Fill only organization name with "Acme Inc" and click "Create account" again.
-  4. Fill all remaining fields with valid values and clear the email field, then click "Create account".
-- **Expected Result:**
-  1. Submit is enabled on an empty form.
-  2. After step 2 all five inline errors are shown ("Organization name is required", "First name is required", "Last name is required", "Email is required", "Password is required"), focus is in `signup-org-name-input`, and no request is sent.
-  3. After step 3 the organization-name error is gone, the other four remain, and focus is in `signup-first-name-input`.
-  4. After step 4 only `field-error-email` shows "Email is required", focus is in `signup-email-input`, and no request is sent.
-- **Selectors:** `signup-form`, `signup-org-name-input`, `signup-first-name-input`, `signup-last-name-input`, `signup-email-input`, `signup-password-input`, `signup-submit-button`.
+- **Retired.** Duplicate mechanism. "Submit is never disabled, clicking an invalid form shows every error and focuses the first" is one repository-wide rule; TC-02-E2E-07 proves it once, on the cheapest form in the product.
 
-### TC-01-E2E-07: Navigation from login page to signup
+### TC-01-E2E-07: The login and signup pages link to each other
 - **Level:** E2E
 - **Preconditions:** none.
 - **Steps:**
   1. Open the login page (`/login`).
   2. Click the "Create an account" link.
   3. Verify the browser navigates to `/signup` and the signup form is displayed.
+  4. Click the "Sign in" link on the signup page.
+  5. Verify the browser navigates back to `/login` and the login form is displayed.
 - **Expected Result:**
   1. After clicking the link, the URL is `/signup`.
   2. The signup form (`signup-form`) is visible with all expected fields.
-- **Selectors:** `login-signup-link`, `signup-form`, `signup-org-name-input`, `signup-first-name-input`, `signup-last-name-input`, `signup-email-input`, `signup-password-input`, `signup-submit-button`.
+  3. After clicking "Sign in", the URL is `/login` and `login-form` is visible.
+- **Selectors:** `login-signup-link`, `signup-form`, `signup-org-name-input`, `signup-first-name-input`, `signup-last-name-input`, `signup-email-input`, `signup-password-input`, `signup-submit-button`, `signup-login-link`, `login-form`.
+
+> Step 4 was added when the reverse leg's own E2E test was retired: it is the same "no dead
+> links" rule on a page this case has already loaded, so proving it here costs three
+> assertions instead of a second browser.
 
 > The "Create an account" link on `/login` carries `login-signup-link`, not `signup-login-link`. The `signup-` prefix means "on the signup screen", so the reverse link needed the reverse prefix; spec 02 named it correctly and this spec was corrected to match. `signup-login-link` still names the "Sign in" link on `/signup`.

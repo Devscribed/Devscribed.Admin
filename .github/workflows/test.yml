@@ -1,0 +1,199 @@
+name: Tests
+
+# The documents area adds roughly sixty test cases, and until this workflow existed nothing
+# in CI ran a single one of them. The area README calls this a merge blocker rather than a
+# follow-up, so it runs on every pull request as well as on main.
+#
+# **This is the only place the suite runs.** `deploy.yml` does not call it and does not
+# test what it deploys, so a change is proved green on its pull request and merged, never
+# on the way out. That is only true while every change reaches `main` through a pull
+# request: turn on branch protection for `main` requiring these checks, because a push
+# straight to `main` deploys code no suite has run.
+#
+# There is no `push` trigger for the same reason there is no `workflow_call` one — a merge
+# to `main` re-runs nothing, so the whole suite, Playwright included, runs once per change
+# rather than twice.
+#
+# ---------------------------------------------------------------------------------------
+# Wall clock
+#
+# The suite is what a reviewer waits on before merging. It used to be 6m40s, and
+# essentially all of that was one E2E job running 120 browser tests two at a time on a
+# two-core runner.
+#
+# The E2E suite is **sharded across runners** rather than made to go faster on one. Each
+# shard is a separate runner with its own Postgres service container, which is what makes
+# it safe: the E2E suite mints accounts in a shared database and would not survive two
+# shards pointed at one server. Nothing about the tests themselves changed — only how many
+# machines run them.
+#
+# The integration suite is one runner. It sharded across two until that stopped being worth
+# a second machine: `jest --maxWorkers=4` already parallelises it inside the runner, each
+# worker on its own database, so a shard bought a fraction of a suite that is not the long
+# pole in exchange for a whole extra `npm ci` and Postgres.
+#
+#   unit          ~40s
+#   integration   ~2m30s
+#   e2e           3 shards   ~3m each
+#
+# so the run is about three minutes, and an E2E shard is roughly its own setup. Shards past
+# three would mostly buy more `npm ci`.
+# ---------------------------------------------------------------------------------------
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The integration suite's database. The host is the runner, since the service container
+  # publishes its port there, and the port is the container's own
+  # 5432 — the 5433/5434 remapping in docker-compose.yml only exists to dodge a
+  # developer's local Postgres.
+  TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/devscribed_test
+
+jobs:
+  # Pure functions only — no database, no browser. It fails in seconds when a shared
+  # validation rule drifts, which is the cheapest possible signal.
+  unit:
+    name: Unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:unit
+
+  integration:
+    name: Integration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: devscribed_test
+        ports: ['5432:5432']
+        # Without this the first `prisma migrate reset` races the server's own
+        # initialisation and fails with a connection error.
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build --workspace @devscribed/validation
+      - name: API integration suite
+        env:
+          # test/global-setup.ts resets this database before every run, which is exactly
+          # what a disposable service container is for.
+          TEST_DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+        # One job, one Postgres, the whole suite. `jest --maxWorkers=4` already parallelises
+        # it inside the runner — `test/global-setup.ts` gives each worker its own database
+        # by TEMPLATE copy — so a second runner bought little for a whole extra `npm ci`
+        # and service container. This job sharded across two until that was true.
+        run: npm run test --workspace @devscribed/api
+
+  e2e:
+    name: E2E ${{ matrix.shard }}/3
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          # `devscribed_e2e`, the name `e2e/environment.ts` insists on. The container is
+          # created with it so that `prisma migrate deploy` only has to migrate.
+          POSTGRES_DB: devscribed_e2e
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # The one name the suite reads. `e2e/environment.ts` derives the database from
+      # `apps/api/.env` when this is unset and falls back to a developer's compose port,
+      # 5433 — a port nothing listens on here, which fails the run at the API's `predev`
+      # migration with `P1001` and never reaches a test. Both the Playwright webServer and
+      # `e2e/global-setup.ts` take `DATABASE_URL` from this, so naming it once is enough.
+      E2E_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/devscribed_e2e
+      SESSION_SECRET: ci-only-secret
+      # The sink transport is what makes signing and reset mail readable from a test;
+      # `/api/test/*` stays 404 under any real transport and in production.
+      MAIL_TRANSPORT: memory
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build --workspace @devscribed/validation
+
+      # Keyed on the resolved Playwright version, because that version is exactly what
+      # decides which browser revisions the install step would download. A hit turns a
+      # twenty-second download into a two-second restore, on every shard.
+      - name: Resolve the Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('playwright-core/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ms-playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
+      # `npx playwright install` downloads the browser revisions pinned by the **hoisted**
+      # playwright-core, the one `@playwright/test` brings in. The API's PDF renderer
+      # imports playwright-core too, and when its range resolves to a different version npm
+      # nests a second copy — one that asks for a headless-shell revision nothing ever
+      # downloaded. `LocalChromiumPdfRenderer` then quietly degrades to its Latin-1
+      # fallback writer, and the only symptom is a signed PDF that is merely *small*: one
+      # E2E case fails on a byte count, and nothing anywhere names the cause.
+      #
+      # That happened, so the invariant is asserted rather than assumed. `@playwright/test`
+      # in e2e/package.json and `playwright-core` in apps/api/package.json stay on the same
+      # minor, and if they drift CI says so in a sentence instead of in a byte count.
+      - name: One Playwright in the tree
+        run: |
+          set -euo pipefail
+          copies="$(find . -path ./.git -prune -o -name playwright-core -type d -print)"
+          count="$(printf '%s' "${copies}" | grep -c . || true)"
+          if [ "${count}" != 1 ]; then
+            printf '%s\n' "${copies}"
+            echo "::error::Found ${count} copies of playwright-core; expected 1. Align @playwright/test (e2e) and playwright-core (apps/api) to the same minor."
+            exit 1
+          fi
+
+      # `--with-deps` also installs the shared system libraries, which the cache above does
+      # not hold; the browser download is the part a cache hit skips.
+      - run: npx playwright install --with-deps chromium
+
+      # Playwright's webServer starts both dev servers itself; the API's `predev` applies
+      # the migrations, so there is no separate migrate step here.
+      #
+      # Named workspace, not the root `test:e2e` alias — see the integration job for why.
+      - run: npm run test --workspace @devscribed/e2e -- --shard=${{ matrix.shard }}/3
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-${{ matrix.shard }}
+          path: e2e/playwright-report/
+          retention-days: 7

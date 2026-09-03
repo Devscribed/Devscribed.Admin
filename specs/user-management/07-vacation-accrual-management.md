@@ -290,6 +290,19 @@ Each member of an organization can have **financial settings** that track their 
 - `403 Forbidden`: `viewer` role, or `user` viewing another member's vacation — `{ "error": "forbidden", "message": "You do not have permission to view this member's vacation data" }`.
 - `404 Not Found`: member not found — `{ "error": "not_found", "message": "Member not found" }`.
 
+### Member-detail response addition: `canViewVacation`
+
+This spec extends the spec-05 member-detail response (`GET /api/organizations/{orgId}/members/{memberId}`) with one server-computed boolean, **`canViewVacation`**, which drives whether the Vacation tab renders as enabled or as a disabled placeholder (the panel's data still comes from the `GET .../vacation` call above, made only when the tab is activated):
+
+```
+canViewVacation =
+  targetStatus === 'active' &&
+  ( can(callerRole, 'view-vacation')                       // admin/manager, any member
+    || (isSelf && can(callerRole, 'view-own-vacation-balance')) )  // user, own membership only
+```
+
+So the tab is enabled for `admin`/`manager` on any active member and for `user` on their own active membership; it stays a disabled placeholder for `viewer`, for `user` viewing another member, and for any removed member.
+
 ### PUT /api/organizations/{orgId}/members/{memberId}/vacation/financials
 
 **Authentication:** required. Caller must be `admin` or `manager` with `active` membership.
@@ -333,6 +346,8 @@ Returns the effective percentage (auto-calculated or manual).
 3. **VacationDaysPerYear**: required, integer, min `1`, max `365`. Error: "Vacation days per year must be between 1 and 365".
 4. **Currency**: required, 3 uppercase letters, must be a valid ISO 4217 code. Error: "Invalid currency code".
 5. **VacationReservePercent** (when manual): required, decimal, min `0.01`, max `99.99`, two decimal places. Error: "Reserve percentage must be between 0.01 and 99.99".
+
+> **Currency default (resolved during implementation).** The modal pre-fills Currency with `"USD"` in create mode (matching the modal mock) and provides no way to clear it, so the field is never empty from the UI. The `"Invalid currency code"` rule therefore only guards server-side input (an API caller sending a bad code); there is no empty-currency inline error reachable through the modal. Changing the currency to another ISO 4217 code is done by picking from the (scrollable) dropdown.
 
 Client-side validation: field-level validation on blur/submit for all numeric fields. Auto-calc preview updates on field change.
 
@@ -383,9 +398,11 @@ Server-side validation: all rules enforced regardless of UI state.
 
 **Edit Financial Settings modal (`vacation-financials-modal`):**
 - Fields: Monthly salary input (`vacation-salary-input`), Client hourly rate input (`vacation-rate-input`), Currency dropdown (`vacation-currency-select`), Vacation days per year input (`vacation-days-input`), Reserve % mode toggle (`vacation-reserve-mode-auto`, `vacation-reserve-mode-manual`), Reserve % input (`vacation-reserve-percent-input`, enabled only in manual mode).
+- The Currency dropdown defaults to `"USD"` in create mode and is not clearable (see the Currency-default note under Validation Rules). Vacation days per year defaults to `20`.
 - Auto-calc preview (`vacation-reserve-preview`): shown when auto mode is selected, displays the computed percentage in real time as salary/rate/days change.
 - Save button (`vacation-financials-save-btn`). Cancel button (`vacation-financials-cancel-btn`).
 - Inline errors beneath each field (`field-error-{fieldName}`).
+- On a network/server error the modal surfaces an error toast (`toast-financials-error`, added during implementation for parity with the success toast).
 
 ### Vacation Tab States
 
@@ -434,6 +451,7 @@ Server-side validation: all rules enforced regardless of UI state.
 
 **Toasts:**
 - `toast-financials-saved`
+- `toast-financials-error` (added during implementation — the error-toned toast for a network/server failure on save, mirroring the success toast)
 
 ## Out of Scope
 
@@ -571,24 +589,8 @@ Server-side validation: all rules enforced regardless of UI state.
 - **Selectors:** `member-detail-tab-vacation`.
 
 ### TC-07-E2E-03: User cannot see another member's vacation data
-
-- **Level:** E2E
-- **Preconditions:** logged in as user Alex; another member "Jane" exists.
-- **Steps:**
-  1. Navigate to Jane's member detail.
-  2. Observe the tab bar.
-- **Expected Result:**
-  1. Vacation tab is disabled for Alex on Jane's profile.
-- **Selectors:** `member-detail-tab-vacation`.
+- **Retired.** Covered by TC-07-INT-07 — a user sees their own vacation in days and gets a 403 on anyone else’s. The tab being absent rather than erroring is the rendering rule TC-07-E2E-02 proves on the viewer.
 
 ### TC-07-E2E-04: Financial settings validation errors in modal
+- **Retired.** Covered by TC-07-INT-03, which asserts every invalid field against its own message. The modal’s inline-error mechanism is TC-01-E2E-03.
 
-- **Level:** E2E
-- **Preconditions:** logged in as admin; member with no financials.
-- **Steps:**
-  1. Open Vacation tab → click "Set up financials".
-  2. Leave all fields empty and click "Save changes".
-  3. Verify inline errors appear for salary, rate, currency.
-  4. Enter salary "0", rate "-1". Verify specific error messages.
-  5. Enter valid values. Verify errors clear and save succeeds.
-- **Selectors:** `vacation-financials-modal`, `vacation-salary-input`, `vacation-rate-input`, `vacation-currency-select`, `vacation-financials-save-btn`, `field-error-monthlySalary`, `field-error-clientHourlyRate`, `field-error-currency`, `toast-financials-saved`.

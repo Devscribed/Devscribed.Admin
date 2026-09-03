@@ -7,6 +7,19 @@
 :root {
   --font-family-base: 'Poppins', sans-serif;
 
+  /* §77 — the second family, and the only one. It is for text the reader will *type or copy
+     back* — a `{{placeholder}}`, a template's source, a key quoted in a message — where the
+     glyphs have to be told apart one by one and the width has to be even. It is a platform
+     stack rather than a webfont: nothing is fetched for it, and every platform in the stack
+     already ships a face designed for exactly this.
+
+     It is **not** for numbers. A column of figures that needs to line up wants
+     `font-variant-numeric: tabular-nums` on the base family — same face as everything around
+     it, even digit widths — because a number in a report is not code and should not read as
+     code. Reaching for this family to align a column is the mistake it exists to be told
+     apart from. */
+  --font-family-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+
   /* The weights, and the one role each has. */
   --font-weight-light: 300;
   --font-weight-regular: 400;

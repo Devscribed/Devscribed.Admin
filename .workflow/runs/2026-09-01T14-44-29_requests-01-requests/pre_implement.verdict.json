@@ -1,0 +1,95 @@
+{
+  "stage": "pre_implement",
+  "status": "pass",
+  "spec": "specs/requests/01-requests.md",
+  "handoff": ".workflow/runs/2026-09-01T14-44-29_requests-01-requests/handoff.json",
+  "coverage": {
+    "requirements": "47/47",
+    "cases": "41/41",
+    "sections": "20/20"
+  },
+  "carriedFindings": [
+    {
+      "id": "F1",
+      "from": "2026-09-01T12-44-23_requests-01-requests#review",
+      "disposition": "still present",
+      "verifiedAt": "apps/api/src/requests/requests.service.ts:522 (tx.requestMessage.create in the decline branch) and :548 (the only events.record in that block, action 'status_changed'). The matching call postMessage makes is at :455. No message_posted event is written for a decline.",
+      "plannedAs": "T4 writes the event; T7 extends TC-01-INT-11 to assert both counts separately, which is why the suite did not catch it"
+    },
+    {
+      "id": "F2",
+      "from": "2026-09-01T12-44-23_requests-01-requests#review",
+      "disposition": "still present",
+      "verifiedAt": "apps/web/app/org/[orgId]/requests/page.tsx:87 `const role = session.role as Role`, then can(role, ...) at :88, :89 and :90. session-context.tsx:33 types role as `string` and nothing normalizes it; packages/validation/src/index.ts:717 returns false for an unknown key. requests-badge-context.tsx:38 has the same un-normalized read, currently harmless only because neither `member` nor `user` holds view-requests.",
+      "plannedAs": "T5 — normalize once, or call hasCapability, which normalizes internally at roles.ts:154"
+    },
+    {
+      "id": "F3",
+      "from": "2026-09-01T12-44-23_requests-01-requests#review",
+      "disposition": "already fixed",
+      "verifiedAt": "commit ffa814d 'docs(specs): fix the two spec defects review found, and amend spec 10'. specs/user-management/10-organization-requests-page.md:305 now reads `- **Retired.**` and names TC-01-INT-18 and TC-01-E2E-08; the note at :329 that had justified itself by the now-false TC-10-INT-03 has been repaired to name the same two cases; TC-10-INT-01 and TC-10-INT-02 carry the vocabulary amendment.",
+      "plannedAs": "T9, listed so the plan accounts for it — no further work owed"
+    },
+    {
+      "id": "F4",
+      "from": "2026-09-01T12-44-23_requests-01-requests#review",
+      "disposition": "still present",
+      "verifiedAt": "e2e/tests/requests.spec.ts, the closing block of TC-01-E2E-11: page.reload(), then expect(sidebar-requests-link).toBeVisible(), then expect(sidebar-requests-badge).toHaveCount(0). requests-badge-context.tsx:39 initialises badgeCount to 0 and Sidebar.tsx:88 renders the badge only when it is truthy, so the node is absent before the GET resolves and the assertion passes on its first poll. The anchor renders synchronously from the session and says nothing about the fetch.",
+      "plannedAs": "T8 — anchor on the response before asserting the absence"
+    },
+    {
+      "id": "F5",
+      "from": "2026-09-01T12-44-23_requests-01-requests#review",
+      "disposition": "still present",
+      "verifiedAt": "e2e/tests/requests.spec.ts TC-01-E2E-08, the `user` half: openRequestsPage (defined at :157-163) waits only for requests-page, the outer div rendered before any fetch, and requests-vacation-section renders only from data.vacation. The toHaveCount(0) therefore passes while the list request is still in flight. The requests-scope-toggle assertion beside it is sound and needs no change.",
+      "plannedAs": "T8 — wait for a node only the response can draw, then assert the absence"
+    }
+  ],
+  "findings": [
+    {
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/README.md",
+      "symbol": "Cross-Spec Side Effects, row 1",
+      "claim": "the area README states that requests addressed to a soft-deleted member 'surface in the reassignment filter', and spec 01 requirement 36 states that no such filter exists — two clear rules that no implementation satisfies at once",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/requests/README.md:84 — 'Member soft-deleted | user-management/04 | Requests they raised or hold are retained and readable; open requests **addressed to** them are flagged `assigneeInactive` and surface in the reassignment filter | 01'. specs/requests/01-requests.md requirement 36 — 'There is no reassignment **filter**: requirement 42 enumerates the filters exhaustively and this is not one of them, so a request needing reassignment is found by its banner and not by narrowing the list.' Requirement 42 lists the filters as type, status, projectId and q, with no reassignment value in either closed set, and an unknown value is a 400 rather than a fallback — so a caller could not even express the filter the README promises. The README is the stale side: specs/requests/02-client-participants.md:160 defers to 'spec 01 requirement 36' for exactly this behaviour, and its edge case 18 (:446) says a request addressed to a removed client user 'is offered for reassignment' with no mention of a filter.",
+        "source": "specs/requests/README.md:84 against specs/requests/01-requests.md requirement 36"
+      },
+      "suggestedFix": "amend the README row to read 'flagged `assigneeInactive`, which draws the reassign banner and the reassign control (requirement 36); there is no reassignment filter'. Not a blocker: requirement 36 names the README's claim and overrules it in the same sentence, so the plan compiles unambiguously — T4 and T6 build the banner and no filter."
+    },
+    {
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/missing-section",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "UI Description",
+      "claim": "the UI Description requires anything missing from the design system to be 'recorded in a DS-gaps table', and the spec contains no such table, so the one real gap this feature meets has nowhere in the spec to be recorded",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/requests/01-requests.md, UI Description opening paragraph: 'Anything missing goes into the design system and is recorded in a DS-gaps table, not improvised here.' `grep -n '^## ' specs/requests/01-requests.md` lists twenty headings and none of them is DS gaps; documents and user-management specs carry one. The gap is real and checkable: apps/web/src/ds.ts exports Input and no Textarea, so this feature's three multi-line fields each style a raw <textarea> with a 1.5px border and 12px padding — the only two hardcoded sizes in the feature (NewRequestModal.tsx:329,337; DeclineRequestModal.tsx:142,146; [requestId]/page.tsx:378,386). Four screens already shipped the same workaround, so the gap predates this spec.",
+        "source": "specs/requests/01-requests.md UI Description, against apps/web/src/ds.ts"
+      },
+      "suggestedFix": "add a DS gaps table to spec 01 naming the missing Textarea and its resolution (add it to the design system, export it from the barrel). Not a blocker: the gap is recorded in handoff.dsGaps meanwhile and the plan forbids widening it."
+    },
+    {
+      "id": "P3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/stale-reference",
+      "file": "specs/requests/01-requests.md",
+      "symbol": "req-42",
+      "claim": "requirement 42 and the README both cite parseRequestStatusFilter at packages/validation/src/index.ts:1878; at the diff base it is at :1893",
+      "witness": {
+        "kind": "rule",
+        "detail": "`git show f06c7d8:packages/validation/src/index.ts | grep -n parseRequestStatusFilter` returns 1893, not 1878. The symbol is in the named file and the behaviour the spec attributes to it is exactly right — the fallback to `pending` for any unknown value is asserted at packages/validation/src/requests-page.test.ts:42-50 — so only the line number is stale. Recorded rather than silently corrected because a fifteen-line drift is how a citation stops being checkable.",
+        "source": "specs/requests/01-requests.md requirement 42 and specs/requests/README.md Blast Radius"
+      },
+      "suggestedFix": "cite the symbol without the line, or refresh it to :1893. No effect on the plan; the premise is recorded with the corrected line in handoff.premises."
+    }
+  ]
+}

@@ -36,9 +36,9 @@ import { CancelInterviewDialog } from '@/hiring/CancelInterviewDialog';
 import { formatDuration, formatFileSize } from '@/hiring/format';
 import { RescheduleDialog } from '@/hiring/RescheduleDialog';
 import { VacancyStatusBadge } from '@/hiring/StatusBadge';
-import { valueOf } from '@/hiring/select';
+import { valueOf } from '@/select';
 import type { CardApplication } from '@/hiring/types';
-import { SectionHeading } from './SectionHeading';
+import { SectionHeading } from '@/SectionHeading';
 
 /**
  * One application: what the candidate and the calendar already settled, read-only, and

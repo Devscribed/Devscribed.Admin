@@ -77,7 +77,7 @@ test.describe('Hiring — the team reschedules and cancels', () => {
 
     // The interviewer's own list — the scope their old screen became — and the row that
     // opens the one candidate they may see.
-    await page.goto(`/org/${org.organizationId}/hiring/candidates?scope=mine`);
+    await page.goto(`/org/${org.orgId}/hiring/candidates?scope=mine`);
     await expect(page.getByTestId('candidates-list')).toBeVisible();
     await page.getByTestId('candidates-list').getByRole('link').first().click();
     await page.waitForURL('**/hiring/candidates/**');

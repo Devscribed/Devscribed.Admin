@@ -6,7 +6,7 @@ import {
   registerOrganization,
   signIn,
   uniqueEmail,
-  type Registered,
+  type RegisteredOrganization,
   type SeededVacancy,
 } from './helpers';
 
@@ -31,7 +31,7 @@ test.describe('Board', () => {
   test.use({ viewport: { width: 1600, height: 900 } });
 
   interface Seed {
-    org: Registered;
+    org: RegisteredOrganization;
     vacancy: SeededVacancy;
     path: string;
   }
@@ -57,7 +57,7 @@ test.describe('Board', () => {
     return {
       org,
       vacancy,
-      path: `/org/${org.organizationId}/hiring/vacancies/${vacancy.id}`,
+      path: `/org/${org.orgId}/hiring/vacancies/${vacancy.id}`,
     };
   }
 
@@ -378,7 +378,7 @@ test.describe('Board', () => {
     const vacancy = await createVacancy(request, org, { title: 'Senior React Engineer' });
 
     await signIn(page, org.email);
-    await page.goto(`/org/${org.organizationId}/hiring/vacancies/${vacancy.id}`);
+    await page.goto(`/org/${org.orgId}/hiring/vacancies/${vacancy.id}`);
 
     // One screen: the vacancy's header and its board, with no navigation between them.
     await expect(page.getByTestId('vacancy-detail')).toBeVisible();
@@ -407,11 +407,11 @@ test.describe('Board', () => {
 
     await signIn(page, seeded.org.email);
     await page.goto(
-      `/org/${seeded.org.organizationId}/hiring/vacancies/${seeded.vacancy.id}/board`,
+      `/org/${seeded.org.orgId}/hiring/vacancies/${seeded.vacancy.id}/board`,
     );
 
     await expect(page).toHaveURL(
-      `/org/${seeded.org.organizationId}/hiring/vacancies/${seeded.vacancy.id}`,
+      `/org/${seeded.org.orgId}/hiring/vacancies/${seeded.vacancy.id}`,
     );
     await expect(page.getByTestId('vacancy-detail')).toBeVisible();
     await expect(card(page, only.applicationId)).toBeVisible();
