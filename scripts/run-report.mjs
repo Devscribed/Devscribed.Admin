@@ -30,6 +30,11 @@
  * and never for "who ran it" — attribution goes through session ids taken from (1) and (2).
  *
  *   node scripts/run-report.mjs [runId] [--out <path>] [--json] [--open]
+ *   node scripts/run-report.mjs --from-json <payload> --out <path>
+ *
+ * The page is the one thing here that is not about a run: `--from-json` renders whatever
+ * payload it is handed, which is how `refine-report.mjs` draws a refine loop without a second
+ * copy of this markup drifting away from it.
  */
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
