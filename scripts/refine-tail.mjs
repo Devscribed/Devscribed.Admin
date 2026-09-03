@@ -29,7 +29,12 @@ if (!stem) {
 }
 
 const min = (ms) => `${(ms / 60000).toFixed(1)}m`;
-const money = (n) => `$${n.toFixed(2)}`;
+/**
+ * `null` is the honest answer for a gate still running: cost reaches the log only in the
+ * closing summary, so there is none to report until it arrives. Printing `$0.00` there said
+ * the pass was free, which is what this watcher exists to contradict.
+ */
+const money = (n) => (n == null ? '$—' : `$${n.toFixed(2)}`);
 
 /** What the loop looks like right now, as one line. Identical lines are not printed twice. */
 function snapshot() {
