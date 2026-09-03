@@ -89,9 +89,16 @@ const add = (rule, file, line, message, fix) =>
 
 /* ── parsing ──────────────────────────────────────────────────────────────── */
 
+/**
+ * `core.autocrlf` is on and there is no `.gitattributes`, so every checkout on Windows hands
+ * these files back with CRLF endings. JavaScript's `.` never matches `\r`, so a trailing one
+ * defeats every anchored pattern below — the requirement headings match nothing, the bundle
+ * reads as having no rules at all, and the lint reports every id as undefined. Normalizing
+ * here is what makes the parse independent of who checked the file out.
+ */
 function read(file) {
   if (!fs.existsSync(file)) return null;
-  return fs.readFileSync(file, 'utf8').split('\n');
+  return fs.readFileSync(file, 'utf8').split(/\r?\n/);
 }
 
 /** Strip markdown emphasis, code ticks and links so a pattern can match the sentence. */
