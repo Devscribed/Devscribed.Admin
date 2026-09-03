@@ -48,10 +48,22 @@ What you do is either side of the run:
 - **While** — it prints each gate as it goes. Let it run.
 - **After** — read the outcome and explain it.
 
+## Watching it go
+
+`npm run board` opens on the specs. Pick one, and everything run against it is under it — this
+loop included, live: which round, which gate, what it has spent, and how long it has been quiet.
+The ledger is written between gates rather than at the end of a round, so a gate that has been
+thinking for a quarter of an hour is on the board rather than absent from it.
+
 ## Reading the outcome
 
 The ledger is `.workflow/refine/<area>-<nn>.loop.json`: every round, what each gate found, and the
 commit it produced.
+
+**Every gate is its own commit** — `refine(<stem>): round 2 T1 pre-implement — blocked, 2 spec
+finding(s)` — carrying the verdict and the plan it wrote. The spec bundle rides with the fixer's
+commit and no other, so the range the next round is judged against holds repairs and nothing else.
+A loop leaves nothing untracked behind it, on any exit.
 
 `pass` means the spec is deliverable. Say what the rounds changed and hand over any notes — notes
 reach the person and stop nothing.

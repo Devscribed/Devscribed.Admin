@@ -61,6 +61,15 @@ docker-compose.override.yml
 # needs, so the committed record still answers "what did the reviewer actually see?".
 .workflow/runs/*/stages/*.prompt.md
 
+# The same rule for a refine loop, which writes the same two kinds of thing under a different
+# path. Its verdicts, handoffs and reports are the record of why a spec says what it says and
+# are committed; the raw agent transcripts are hundreds of kilobytes a gate and are not.
+.workflow/refine/*.probe/*/*.log
+.workflow/refine/*.probe/*/stages/*.log
+# Built for one reader, from files that are committed.
+.workflow/refine/*.payload.json
+.workflow/refine/*.report.html
+
 # Where the last local E2E run put its servers. A note for a person, not a source of
 # truth: see e2e/environment.ts.
 e2e/.last-ports.json

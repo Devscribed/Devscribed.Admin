@@ -72,22 +72,42 @@ function headSha() {
   try { return git('rev-parse', 'HEAD'); } catch { return null; }
 }
 
-/** A round is a commit. Without one the next pass has no boundary and re-judges everything. */
-function commitRound(spec, ledger, round, verdict, fix) {
-  const files = [spec, ...bundleMembers(spec), '.workflow/refine'];
+/**
+ * Every gate is a commit.
+ *
+ * A round used to be one, and a round that stopped at T0 or T1 was none at all — so the
+ * verdict that halted the loop, the plan it was compiled from and the ledger recording it sat
+ * untracked until somebody swept them up by hand, or lost them. A gate is the smallest thing
+ * that produced a judgement, so it is the thing that gets committed: what it wrote, at the
+ * moment it wrote it, whether or not the round it belongs to ever finished.
+ *
+ * The spec bundle rides with the fixer's commit and no other. Only the fixer edits the
+ * document, and keeping that in one commit is what lets the next round be judged against a
+ * range that holds nothing but repairs.
+ */
+function commitGate(ledger, { round, gate, summary, spec }) {
+  if (dryRun) return null;
+  const files = ['.workflow/refine', ...(spec ? [spec, ...bundleMembers(spec)] : [])];
   try { git('add', '--', ...files.filter((f) => existsSync(join(ROOT, f)))); } catch { /* nothing staged */ }
   const staged = git('diff', '--cached', '--name-only');
   if (!staged) return null;
-  const n = verdict.findings?.filter((f) => f.severity === 'blocker').length ?? 0;
-  const decided = fix?.decided?.length ?? 0;
-  const body = [
-    `refine(${ledger.stem}): round ${round}`,
-    '',
-    `${n} blocker(s) repaired${decided ? `, ${decided} settled by deciding` : ''}.`,
-    'Judged against the previous round\'s commit, not the document.',
-  ].join('\n');
-  git('commit', '-q', '-m', body);
+  git('commit', '-q', '-m', `refine(${ledger.stem}): round ${round} ${gate} — ${summary}`);
   return headSha();
+}
+
+/**
+ * The round's own copy of a verdict written to a shared path.
+ *
+ * `spec-refiner` and `spec-fixer` write to one file each, which the next round overwrites, so
+ * without this only the last round of a loop has any findings on disk — and a commit that
+ * carries a verdict the next round will replace records nothing durable.
+ */
+function keepVerdict(ledger, round, gate, from) {
+  const src = join(ROOT, from);
+  if (!existsSync(src)) return;
+  const dir = join(ROOT, '.workflow/refine', `${ledger.stem}.probe`, String(round));
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, `${gate}.verdict.json`), readFileSync(src));
 }
 
 /* ── the bundle ───────────────────────────────────────────────────────────── */
@@ -116,6 +136,9 @@ function loadLedger(spec) {
 }
 
 function saveLedger(l) {
+  /* `--dry-run` prints what each gate would run and changes nothing — the ledger included,
+     now that it is written between gates rather than once at the end. */
+  if (dryRun) return;
   mkdirSync(dirname(l.path), { recursive: true });
   const { path, ...rest } = l;
   writeFileSync(path, `${JSON.stringify(rest, null, 2)}\n`);
@@ -125,6 +148,10 @@ function finish(ledger, status, reason, detail) {
   ledger.status = status;
   ledger.outcome = { reason, detail, at: new Date().toISOString() };
   saveLedger(ledger);
+  /* The loop leaves nothing behind it uncommitted, on any exit. A stop at T0 or T1 used to
+     leave its verdict, its plan and the ledger untracked, which is how a person ends up with
+     a working copy full of artefacts nobody can attribute to a round. */
+  commitGate(ledger, { round: ledger.rounds.length, gate: 'loop', summary: `${status} — ${reason}` });
   step(status === 'pass' ? 'pass' : `stopped: ${reason}`);
   if (detail) note(detail);
   say('');
@@ -158,12 +185,15 @@ const nested = process.env.CLAUDECODE === '1' || !!process.env.CLAUDE_CODE_ENTRY
 
 async function runAgent({ agent, model, prompt, verdictPath, timeoutMin, logStem }) {
   const abs = join(ROOT, verdictPath);
+  note(`${nested ? 'sdk query' : 'claude -p'} --agent ${agent}${model ? ` --model ${model}` : ''}  (fuse ${timeoutMin}m)`);
+  /* Before the delete, not after: a dry run that removes the last verdict of a loop has
+     destroyed the only copy of what the judge found, which is the opposite of changing
+     nothing. */
+  if (dryRun) { note(`would write ${verdictPath}`); return { status: 'pass', findings: [], dryRun: true }; }
+
   if (existsSync(abs)) rmSync(abs); // a stale verdict read as this pass's answer is the worst failure available
   mkdirSync(dirname(abs), { recursive: true });
   mkdirSync(dirname(join(ROOT, logStem)), { recursive: true });
-
-  note(`${nested ? 'sdk query' : 'claude -p'} --agent ${agent}${model ? ` --model ${model}` : ''}  (fuse ${timeoutMin}m)`);
-  if (dryRun) { note(`would write ${verdictPath}`); return { status: 'pass', findings: [], dryRun: true }; }
 
   const started = Date.now();
   const outcome = nested
@@ -317,15 +347,23 @@ async function main() {
   if (request) ledger.request = request;
 
   for (let round = ledger.rounds.length + 1; round <= rounds; round += 1) {
-    const record = { round, startedAt: new Date().toISOString(), head: headSha() };
+    /* Recorded before the first gate runs, not after the last one.
+       The ledger is what the board reads, and a record written only when a round ends says
+       `blocked` — the state the previous round stopped in — for as long as this one is
+       thinking, which on T1 is a quarter of an hour of reporting the opposite of the truth. */
+    const record = { round, startedAt: new Date().toISOString(), head: headSha(), status: 'running' };
+    ledger.rounds.push(record);
+    ledger.status = 'running';
+    saveLedger(ledger);
 
     /* T0 — decidable, free, and its repairs delete text rather than add it. */
     const lint = gateLint(spec);
     if (lint.error) finish(ledger, 'error', 'lint-error', lint.error);
     record.lint = lint.findings.length;
+    saveLedger(ledger);
+    commitGate(ledger, { round, gate: 'T0 spec-lint', summary: lint.findings.length ? `${lint.findings.length} finding(s)` : 'clean' });
     if (lint.findings.length) {
       for (const f of lint.findings.slice(0, 20)) note(`${f.file}:${f.line}  ${f.rule} — ${f.message}`);
-      ledger.rounds.push(record);
       finish(ledger, 'blocked', 'lint',
         `${lint.findings.length} lint finding(s). Every one has a mechanical repair and no judgement in it; `
         + 'fix them and run again rather than paying a model to edit text.');
@@ -338,9 +376,14 @@ async function main() {
       if (plan.status === 'error') finish(ledger, 'error', 'plan-error', plan.error);
       const specFindings = (plan.findings ?? []).filter((f) => f.target === 'spec' && f.severity === 'blocker');
       record.plan = { status: plan.status, specBlockers: specFindings.length };
+      saveLedger(ledger);
+      commitGate(ledger, {
+        round,
+        gate: 'T1 pre-implement',
+        summary: `${plan.status}${specFindings.length ? `, ${specFindings.length} spec finding(s)` : ''}`,
+      });
       if (specFindings.length) {
         for (const f of specFindings) note(`${f.rule ?? 'spec'} — ${f.claim ?? f.summary ?? ''}`);
-        ledger.rounds.push(record);
         finish(ledger, 'blocked', 'spec-defect',
           `${specFindings.length} finding(s) the pipeline would halt on: ${specFindings.map((f) => f.rule ?? '?').join('; ')}`);
       }
@@ -348,7 +391,7 @@ async function main() {
     }
 
     /* T2 — one judge, on what the first two could not decide. */
-    if (skip.has('t2')) { ledger.rounds.push(record); break; }
+    if (skip.has('t2')) { record.status = 'skipped-t2'; saveLedger(ledger); break; }
     const since = round > 1 ? ledger.rounds[round - 2]?.commit ?? null : null;
     const verdict = await gateJudge(spec, ledger, round, request, since);
     if (verdict.status === 'error') finish(ledger, 'error', 'judge-error', verdict.error);
@@ -357,11 +400,13 @@ async function main() {
     const notes = (verdict.findings ?? []).length - blockers.length;
     record.judge = { status: verdict.status, mode: verdict.mode ?? (since ? 'diff' : 'full'), blockers: blockers.length, notes };
     record.keys = blockers.map(keyOf);
+    saveLedger(ledger);
+    keepVerdict(ledger, round, 'judge', `.workflow/refine/${ledger.stem}.verdict.json`);
+    commitGate(ledger, { round, gate: 'T2 spec-refiner', summary: `${blockers.length} blocker(s), ${notes} note(s)` });
     note(`${blockers.length} blocker(s), ${notes} note(s)`);
     for (const f of blockers) note(`${f.id ?? '-'}  ${f.rule} — ${f.symbol ?? f.file}`);
 
     if (!blockers.length) {
-      ledger.rounds.push(record);
       finish(ledger, 'pass', 'pass',
         notes ? `${notes} note(s) for the person with the spec; none of them stops anything.` : 'no findings.');
     }
@@ -371,29 +416,36 @@ async function main() {
     if (previous?.keys) {
       const survived = record.keys.filter((k) => previous.keys.includes(k));
       if (survived.length) {
-        ledger.rounds.push(record);
         finish(ledger, 'blocked', 'stuck-finding',
           `${survived.join(', ')} survived a repair — the requirement is ambiguous or the finding is wrong. A person decides.`);
       }
       if (blockers.length >= previous.judge.blockers) {
-        ledger.rounds.push(record);
         finish(ledger, 'blocked', 'not-converging',
           `round ${round - 1} left ${previous.judge.blockers} blocker(s), round ${round} found ${blockers.length}. `
           + 'A loop that does not shrink is judging the document again rather than the repair.');
       }
     }
 
-    if (noFix) { ledger.rounds.push(record); finish(ledger, 'blocked', 'verdict-only', 'stopped before the fixer, as asked.'); }
+    if (noFix) { finish(ledger, 'blocked', 'verdict-only', 'stopped before the fixer, as asked.'); }
 
     const fix = await repair(spec, ledger, round);
     if (fix.status === 'error') finish(ledger, 'error', 'fixer-error', fix.error);
     record.fix = { fixed: fix.fixed?.length ?? 0, decided: fix.decided?.length ?? 0, left: fix.left?.length ?? 0 };
     note(`fixed ${record.fix.fixed}, decided ${record.fix.decided}, left ${record.fix.left}`);
 
-    /* The round is committed whatever comes next: the commit is the next pass's boundary. */
-    record.commit = dryRun ? null : commitRound(spec, ledger, round, verdict, fix);
+    /* The round ends in the fixer's commit, and that commit is the next pass's boundary: it is
+       the one that carries the document's repairs, which is what the next judge is given a
+       range of. */
     record.endedAt = new Date().toISOString();
-    ledger.rounds.push(record);
+    record.status = 'done';
+    saveLedger(ledger);
+    keepVerdict(ledger, round, 'fix', `.workflow/refine/${ledger.stem}.fix.json`);
+    record.commit = commitGate(ledger, {
+      round,
+      gate: 'fix spec-fixer',
+      spec,
+      summary: `${record.fix.fixed} fixed, ${record.fix.decided} decided, ${record.fix.left} left`,
+    });
     saveLedger(ledger);
 
     if (fix.left?.length) {

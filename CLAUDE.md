@@ -31,8 +31,9 @@ npm run refine -- <spec path>      # /refine — a stranger judges the spec, bef
 npm run bug    -- <what is broken> # /bug
 npm run ship   -- <spec path>      # /ship — the skill, which checks the branch and reads the outcome
 npm run ship:run -- <spec path>    # scripts/ship.mjs alone, no model either side
-npm run board                      # the run report, opened in a browser — pick the run in the page
+npm run board                      # the board: specs → what was run against one → that run
 npm run watch                      # the same, without opening anything
+npm run specs                      # the same index, printed
 ```
 
 Under yarn the `--` is unnecessary: `yarn spec projects and their members`. Install with npm
