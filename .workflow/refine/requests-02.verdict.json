@@ -1,0 +1,192 @@
+{
+  "status": "blocked",
+  "mode": "full",
+  "spec": "specs/requests/02-request-topics.md",
+  "request": "Employees pick a request topic from presets the organization curates (VPN, Claude, Question, Other for staff; Access, Other for clients), and the screens say Pending / In progress / Completed / Closed",
+  "read": {
+    "specs": [
+      "specs/requests/02-request-topics.md",
+      "specs/requests/02-request-topics.contracts.md",
+      "specs/requests/02-request-topics.cases.md",
+      "specs/requests/README.md"
+    ],
+    "files": [
+      "packages/validation/src/requests.ts",
+      "packages/validation/src/index.ts",
+      "packages/validation/src/roles.ts",
+      "apps/api/prisma/schema.prisma",
+      "apps/api/src/requests/requests.service.ts",
+      "apps/api/src/requests/requests.serializer.ts",
+      "apps/api/src/auth/capability.guard.ts",
+      "apps/api/src/signup/signup.service.ts",
+      "apps/api/test/requests.spec.ts",
+      "apps/api/prisma/migrations/20260901120000_spec_org_01_clients/migration.sql",
+      "apps/web/app/org/[orgId]/requests/page.tsx",
+      "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx",
+      "apps/web/src/layout/Sidebar.tsx",
+      "apps/web/src/ds.ts",
+      ".claude/skills/spec/references/checklist.md"
+    ]
+  },
+  "sweeps": {
+    "currency": 58,
+    "contradiction": 24,
+    "selfSufficiency": 44,
+    "testability": 61,
+    "selfDescription": 12,
+    "obligations": 47,
+    "scope": 9
+  },
+  "findings": [
+    {
+      "id": "R1",
+      "severity": "blocker",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/requests/02-request-topics.md",
+      "symbol": "REQ-02-022",
+      "line": 210,
+      "claim": "The spec forbids the caller from sending `type` or `accessKind` and never states that spec 01's kind validation stops running on this route. As written no request can be created at all: the live create validator refuses a body with no `type`.",
+      "witness": {
+        "kind": "rule",
+        "detail": "REQ-02-022 (02-request-topics.md:210): 'IF POST …/requests carries `type` or `accessKind`, THEN THE SYSTEM SHALL answer 400 with REQUEST_MESSAGES.classifierNotAccepted.' TC-02-INT-10 (02-request-topics.cases.md:281) then raises a request 'sending no `type`' and expects 201 with a stored `type` of `access`. The create path is `validateNewRequest`, which calls `validateRequestKind` at packages/validation/src/requests.ts:299. That function, at :143-145, sets `fields.type = REQUEST_MESSAGES.typeUnknown` whenever `type` is not one of REQUEST_TYPES — `undefined` is not — and at :147-149 sets `fields.accessKind = REQUEST_MESSAGES.accessKindRequired` when `type === 'access'` and no `accessKind` was given. A body obeying REQ-02-022 is refused 400 on both counts, so the 201 that REQ-02-021, AC-5, TC-02-INT-10 and TC-02-INT-12 all observe is unreachable. The spec's Data Model (contracts.md:188-190) says only that '`type` is now written by the server; `accessKind` is written on no new row' — it never says that spec 01's Validation Rules 3 and 4 no longer run here, which is the rule the implementer must obey.",
+        "source": "specs/requests/02-request-topics.md:210 against packages/validation/src/requests.ts:143-149,299"
+      },
+      "suggestedFix": "State in this spec what replaces spec 01's kind validation on POST …/requests: that `type` and `accessKind` are no longer validated from the body, that `type` is set from the topic after the body check, and that a request under an `access` topic is created with `accessKind` null. Name the messages that are no longer emitted by this route."
+    },
+    {
+      "id": "R2",
+      "severity": "blocker",
+      "rule": "spec/stale-statement",
+      "file": "specs/requests/02-request-topics.contracts.md",
+      "symbol": "Seed Data",
+      "line": 231,
+      "claim": "The seed is said to cover the retired `accessKind` vocabulary so that nothing previously classifiable becomes unclassifiable. Two of the eight stored access kinds have no access topic.",
+      "witness": {
+        "kind": "rule",
+        "detail": "contracts.md:231-233: 'The staff set covers what the retired `accessKind` vocabulary covered, plus the two the request named, so nothing an organization could classify before becomes unclassifiable.' `ACCESS_KINDS` at packages/validation/src/requests.ts:34-43 is repository, environment, server, vpn, saas, admin_panel, documentation, other. The staff seed (contracts.md:219-227) is VPN, Claude, Repository, Environment, Server, Admin panel, Documentation, Question, Other. `saas` has no seeded topic of any type, and `other` has no seeded topic of type `access` — the seeded `Other` at :227 carries type `question`. An organization that raised a SaaS access request, or an `other` access request, before this spec has no topic to raise one under afterwards.",
+        "source": "specs/requests/02-request-topics.contracts.md:231 against packages/validation/src/requests.ts:34-43"
+      },
+      "suggestedFix": "Either add the missing rows to the seed table (a `SaaS` access topic, and an access-type row for `other`), or delete the coverage claim at :231-233 and record the dropped kinds in Known Gaps."
+    },
+    {
+      "id": "R3",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/02-request-topics.contracts.md",
+      "symbol": "Screens against DS gaps",
+      "line": 305,
+      "claim": "The Settings mock draws a drag handle on every row; the DS gaps table says no drag primitive exists and that up and down controls ship instead. The screen the implementer builds cannot satisfy both.",
+      "witness": {
+        "kind": "rule",
+        "detail": "The catalogue mock draws a `⠿` drag handle on each row and no other ordering control (contracts.md:305-309, e.g. ':305 │  ⠿  VPN               access                        [ Rename ] [ Archive ]   │'). The DS gaps table (contracts.md:369) reads: 'No drag-handle or reorder list primitive | The catalogue's ordering control | Up and down controls on each row, each issuing one `PATCH` — keyboard-reachable, and no pointer-only interaction | A `SortableList` in `@ds` with a keyboard contract'. Neither `SortableList` nor any drag primitive is exported from `@ds` (grep over apps/web/src/ds.ts and '1_DS for dev' returns nothing for either name). An implementer drawing the mock builds a pointer-only handle the design system cannot supply; one obeying the DS gaps row draws two controls the mock never shows, and neither has a `data-testid` in the Required list.",
+        "source": "specs/requests/02-request-topics.contracts.md:305 against :369"
+      },
+      "suggestedFix": "Redraw the mock with the up and down controls the DS gaps row commits to, and add their `data-testid`s to the Required list. Naming the winner here is a recommendation, not a resolution — a person decides which control ships."
+    },
+    {
+      "id": "R4",
+      "severity": "blocker",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/requests/02-request-topics.contracts.md",
+      "symbol": "PATCH …/request-topics/{topicId}",
+      "line": 63,
+      "claim": "'`type` is not accepted' on the rename route has two readings — refuse with 400, or ignore silently — and they produce materially different implementations.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "contracts.md:62-63: 'Accepts `name` and `sortOrder`. Accepts `audience` only when it equals the stored value (REQ-02-004). `type` is not accepted.' Given a curator sending `PATCH …/request-topics/{topicId}` with body `{ \"name\": \"VPN\", \"type\": \"question\" }`: reading one answers `400` (the sibling field `audience` is refused with `REQUEST_TOPIC_MESSAGES.audienceImmutable` under REQ-02-004, and REQ-02-022's Decided paragraph at 02-request-topics.md:213-214 sets the project's stance — 'refused rather than ignored. A silent drop turns a caller working from a stale contract into a request classified as something nobody chose'); reading two answers `200` having dropped the field. Both satisfy the text. The Routes table for this route (contracts.md:17) lists no message for a supplied `type`, and the Error Messages table has no row for one, so the refusing implementer must invent user-facing message text, which the repository's conventions forbid.",
+        "source": "specs/requests/02-request-topics.contracts.md:63 against :17 and 02-request-topics.md:213"
+      },
+      "suggestedFix": "Say which it is. If it is refused, add a `REQUEST_TOPIC_MESSAGES.typeImmutable` row to the Error Messages table, list it on the PATCH route, and give it a case; if it is ignored, say 'ignored' rather than 'not accepted'."
+    },
+    {
+      "id": "R5",
+      "severity": "note",
+      "rule": "spec/missing-artefact",
+      "file": "specs/requests/02-request-topics.md",
+      "symbol": "REQ-02-028",
+      "line": 250,
+      "claim": "History entries are named as a reader of the status-label map, and a case asserts their text, but no `data-testid` exists for one and the contracts' own enumeration of the readers omits history.",
+      "witness": {
+        "kind": "rule",
+        "detail": "REQ-02-028 (02-request-topics.md:248-250) names four surfaces: 'the list, the detail screen, its history entries and the filter control all read'. The Status Labels section (contracts.md:138-139) enumerates three: 'read by the list rows, the detail header and the filter control'. TC-02-E2E-04 (cases.md:483) asserts 'the history entry for the change reads Closed rather than the stored value', but its Selectors line (cases.md:484) is only `requests-status-filter`, `request-row-{id}-status`, `request-detail-status`, and the Required data-testid table (contracts.md:259-287) carries no id for a history entry. The repository's convention is that selectors are `data-testid` only and the ids are named in the specs, so the assertion cannot be written as specified.",
+        "source": "specs/requests/02-request-topics.md:250 against specs/requests/02-request-topics.contracts.md:138 and cases.md:484"
+      },
+      "suggestedFix": "Add a history-entry `data-testid` to the Required list and to TC-02-E2E-04's Selectors, and make the two enumerations of the map's readers agree."
+    },
+    {
+      "id": "R6",
+      "severity": "note",
+      "rule": "spec/missing-artefact",
+      "file": "specs/requests/02-request-topics.md",
+      "symbol": "State Machine — reorder",
+      "line": 274,
+      "claim": "The `reorder` transition is declared for both states and fired by no test case, and its screen control has no `data-testid`.",
+      "witness": {
+        "kind": "rule",
+        "detail": "The state machine declares 'active | reorder | `sortOrder` is written; `updatedAt` moves.' (02-request-topics.md:274) and 'archived | reorder | `sortOrder` is written. It takes effect if the topic is ever restored.' (:278). REQ-02-009's cases are TC-02-UNIT-04 (the comparator) and TC-02-INT-03, which sets `sortOrder` on create only; no case sends a `PATCH` that changes `sortOrder` on an existing topic, so neither transition is ever fired. The Required data-testid table (contracts.md:259-287) carries no id for the up/down controls the DS gaps row commits to, and TC-02-E2E-01 does not exercise reordering.",
+        "source": "specs/requests/02-request-topics.md:274 against specs/requests/02-request-topics.cases.md:174-184"
+      },
+      "suggestedFix": "Add an integration case that reorders an existing topic and reads the catalogue back, and give the ordering controls ids in the Required list."
+    },
+    {
+      "id": "R7",
+      "severity": "note",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/requests/02-request-topics.md",
+      "symbol": "REQ-02-019",
+      "line": 186,
+      "claim": "The requirement covers an archived topic and a topic of another organization; its case also asserts a well-formed id that names no row, which no rule states.",
+      "witness": {
+        "kind": "rule",
+        "detail": "REQ-02-019 (02-request-topics.md:186-187): 'IF `topicId` names a topic that is archived or belongs to another organization, THEN THE SYSTEM SHALL answer 400 with REQUEST_MESSAGES.topicUnavailable.' Edge case 6 (contracts.md:381) and the Security section (contracts.md:398-400) each name the same two branches. TC-02-INT-13 (cases.md:320) adds a third: 'Then raise one whose `topicId` is a well-formed id that names no row', expecting the same 400 and the same body. A reviewer checking the code against REQ-02-019 has no rule for that branch.",
+        "source": "specs/requests/02-request-topics.md:186 against specs/requests/02-request-topics.cases.md:320"
+      },
+      "suggestedFix": "Widen REQ-02-019 to 'names no active topic of the caller's organization', which covers all three branches in one sentence."
+    },
+    {
+      "id": "R8",
+      "severity": "note",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/requests/02-request-topics.contracts.md",
+      "symbol": "POST …/requests — the `topic` member",
+      "line": 99,
+      "claim": "`topic` is defined by two different keys in adjacent sentences, and the state one of them describes is said elsewhere to be unreachable.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "contracts.md:97-100: '`topic` is `null` on a request raised before this spec. `topic.name` is the snapshot `topicLabel` … `topic.status` is read from the catalogue row … and is `null` when the row is gone.' A request raised after this spec whose topic row was deleted directly has `topicLabel` set and `topicId` null (the FK is `SetNull`, contracts.md:185). Is its `topic` then `null`, as for a pre-spec request, or `{ name: <topicLabel>, status: null }`? The two readings return different response shapes for the same row, and TC-02-INT-02 (cases.md:166-172) creates exactly that state by deleting every `RequestTopic` row. The Data Model also states '`SetNull` never fires in practice: there is no route that deletes a topic', so the branch at :99-100 describes a state the spec says the product cannot reach.",
+        "source": "specs/requests/02-request-topics.contracts.md:99 against :185 and cases.md:166"
+      },
+      "suggestedFix": "Say whether `topic` is keyed on `topicId` or on `topicLabel`, and delete the 'when the row is gone' clause if no route can reach it."
+    },
+    {
+      "id": "R9",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/requests/02-request-topics.md",
+      "symbol": "REQ-02-017",
+      "line": 171,
+      "claim": "'WHILE an audience has no active topic' does not say which audience gates the new-request form.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "REQ-02-017 (02-request-topics.md:171-172): 'WHILE an audience has no active topic, THE SYSTEM SHALL render the new-request form's topic picker as REQUEST_TOPIC_MESSAGES.pickerEmpty and draw no submit control.' Take an organization with all nine staff topics active and both client topics archived. Reading one — the audience relevant to the addressee — leaves the form usable; reading two — any audience — replaces the picker with the empty copy and removes the submit control, making the form unusable although every staff topic is available. AC-16 (:329), edge case 13 (contracts.md:388) and TC-02-E2E-06 (cases.md:502) all say 'staff', so the narrow reading is the intended one but the requirement does not say it.",
+        "source": "specs/requests/02-request-topics.md:171 against :329"
+      },
+      "suggestedFix": "Name the audience the form reads — the addressee's — in REQ-02-017 itself."
+    },
+    {
+      "id": "R10",
+      "severity": "note",
+      "rule": "spec/missing-artefact",
+      "file": "specs/requests/02-request-topics.cases.md",
+      "symbol": "Verification Plan",
+      "line": 13,
+      "claim": "The Verification Plan pins a port pair, which the spec checklist forbids because the harness chooses the ports.",
+      "witness": {
+        "kind": "rule",
+        "detail": "cases.md:13 and cases.md:70 both record `E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1`. The spec checklist item at .claude/skills/spec/references/checklist.md:120-122 is marked (blocks): 'The Verification Plan records routes, states and observers — never a port, a database name or a connection string. The harness chooses those, and a spec that pins one sends the next run at a server this repository does not publish.' Noted rather than blocked because CLAUDE.md prescribes that same pair for an agent's E2E run and the suite steps both ports by 100 until a free pair answers, so nothing is sent at an unpublished server today.",
+        "source": "specs/requests/02-request-topics.cases.md:13 against .claude/skills/spec/references/checklist.md:120"
+      },
+      "suggestedFix": "Record the command without the port assignments, or say that the pair shown is whatever the harness chose on that run."
+    }
+  ]
+}
