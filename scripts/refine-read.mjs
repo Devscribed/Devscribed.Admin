@@ -121,36 +121,6 @@ export function parseAgentLog(path, { full = false } = {}) {
   };
 }
 
-/**
- * An agent log read as the summary object the CLI writes, whichever shape it is in.
- *
- * `claude -p --output-format json` writes one JSON document; run from inside a Claude session
- * the orchestrators use the SDK and append one message per line, and the summary is the last
- * `result` message. Readers that `JSON.parse` the whole file get `null` for every SDK log —
- * which the board turned into "the stage was killed", with no cost and no turns, on stages that
- * had passed. Returning the same shape from both keeps every caller unchanged.
- *
- * `null` means *no answer yet*: no file, or a stream with no `result` in it. That is a stage
- * still running or one killed before it answered, and the caller decides which.
- */
-export function agentSummary(path) {
-  const text = readIf(path);
-  if (text == null) return null;
-  try { return JSON.parse(text); } catch { /* the SDK writes JSONL */ }
-
-  const msgs = [];
-  for (const line of text.split('\n')) {
-    if (!line) continue;
-    try {
-      const m = JSON.parse(line);
-      if (m && typeof m === 'object' && m.type) msgs.push(m);
-    } catch { /* a partial last line is the normal state of a file being appended to */ }
-  }
-  const result = [...msgs].reverse().find((m) => m.type === 'result');
-  if (!result) return null;
-  return { ...result, session_id: result.session_id ?? msgs.find((m) => m.session_id)?.session_id ?? null };
-}
-
 /* ── one loop ─────────────────────────────────────────────────────────────── */
 
 /** Every stem with something on disk — a ledger, or a probe from a loop still on its first round. */

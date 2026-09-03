@@ -18,7 +18,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { agentSummary, readLoop, refineStems } from './refine-read.mjs';
+import { readLoop, refineStems } from './refine-read.mjs';
 
 const jsonIf = (p) => {
   try { return JSON.parse(readFileSync(p, 'utf8')); } catch { return null; }
@@ -34,7 +34,7 @@ function logCost(path) {
   if (!st) return 0;
   const key = `${path}|${st.mtimeMs}|${st.size}`;
   if (costCache.has(key)) return costCache.get(key);
-  const v = +(agentSummary(path)?.total_cost_usd ?? 0);
+  const v = +(jsonIf(path)?.total_cost_usd ?? 0);
   costCache.set(key, v);
   return v;
 }

@@ -41,8 +41,6 @@ import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { agentSummary } from './refine-read.mjs';
-
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const RUNS = join(ROOT, '.workflow', 'runs');
 
@@ -181,7 +179,7 @@ function collectSteps() {
 
     const stem = join(stagesDir, `${stage}.attempt-${attempt}`);
     const start = jsonIf(`${stem}.start.json`);
-    const log = agentSummary(`${stem}.log`);
+    const log = jsonIf(`${stem}.log`);
     const verdict = jsonIf(`${stem}.json`);
     const prompt = clip(readIf(`${stem}.prompt.md`));
     const report = clip(readIf(`${stem}.md`)) ?? clip(readIf(join(stagesDir, `${stage}.md`)));
