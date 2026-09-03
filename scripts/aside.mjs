@@ -95,14 +95,29 @@ if (gitIn(WORKTREE, 'diff', '--cached', '--name-only')) {
   say(`moved  nothing new — ${branch} already carries this content`);
 }
 
-/* Back on the run's branch: whatever the baseRef had, or nothing if it had nothing. */
+/**
+ * Back on the run's branch: the *commit* goes back to the baseRef, the *file* does not.
+ *
+ * The first version of this restored both, and the first machinery it was used on was the
+ * static gate — which the run spawns from the working tree at every stage. Taking the fix off
+ * the disk hands the next stage the broken gate again. So the tracked content is reset and the
+ * new content is written back over it, leaving the path modified and uncommitted: invisible to
+ * a reviewer diffing `baseRef...HEAD`, and in force for every stage that starts after it.
+ *
+ * A path the baseRef never had is untracked instead, which is the same thing by another name.
+ */
 for (const p of moved) {
   const existedAtBase = (() => {
     try { git('cat-file', '-e', `${ref}:${p}`); return true; } catch { return false; }
   })();
-  if (existedAtBase) git('checkout', ref, '--', p);
-  else { rmSync(join(ROOT, p), { force: true }); try { git('rm', '-q', '--cached', '--', p); } catch { /* was never tracked */ } }
-  say(`here   ${p} — ${existedAtBase ? 'restored to the baseRef' : 'removed'}`);
+  if (existedAtBase) {
+    git('checkout', ref, '--', p);
+    copyFileSync(join(ROOT, WORKTREE, p), join(ROOT, p));
+    say(`here   ${p} — HEAD back at the baseRef, the change kept in the working tree`);
+  } else {
+    try { git('rm', '-q', '--cached', '--', p); } catch { /* was never tracked */ }
+    say(`here   ${p} — untracked, the change kept in the working tree`);
+  }
 }
 
 rmSync(stash, { recursive: true, force: true });

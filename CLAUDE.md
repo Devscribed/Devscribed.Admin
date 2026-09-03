@@ -201,14 +201,15 @@ file no handoff task names and no requirement asks for. The run then halts on wo
 nothing to do with the spec.
 
 Machinery changes go to a `build/*` branch instead. `node scripts/aside.mjs build/<topic>
-<path>...` moves the working-tree content of those paths onto that branch, in a worktree of its
-own, and restores them here to the state the run's baseRef had. Merge the `build/*` branch when
-the run is over.
+<path>...` commits the working-tree content of those paths onto that branch, in a worktree of
+its own, and puts **HEAD** back to the run's baseRef for them while leaving the change in the
+working tree, uncommitted. Merge the `build/*` branch when the run is over.
 
-**This does not slow the run down or hold it back.** Every stage reads its scripts and agent
+**The change stays in force for the run.** Every stage spawns its scripts and reads its agent
 definitions from the working tree when it starts, so what governs a run is what is on disk, not
-what its branch has committed. A change already on disk when a stage begins is already
-governing it, and moving it aside afterwards does not take it away.
+what its branch has committed. That is the whole reason `aside` resets the commit and not the
+file: the first machinery it was used on was the static gate, and taking a gate fix off the disk
+hands the next stage the broken gate again.
 
 **Never `git add -A` while an agent is working.** Its half-written files land in your commit,
 and your files land in the commit the gate makes for it — both have happened. Stage the paths
