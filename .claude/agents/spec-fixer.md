@@ -75,6 +75,15 @@ a finding against you.
   contract, the screens, the id list and each case that walks it. A decision recorded in one
   place and contradicted in another is a contradiction you authored.
 - A statement you delete, you delete what depended on it.
+- **A finding names one instance; you repair the rule.** Before you leave it, look everywhere
+  else the document does the same thing — the sibling route, the second parameter with a closed
+  domain, the other screen with the same control — and repair those in the same pass. A repair
+  that closes only the address it was given leaves the rest for the next pass to find, and a
+  round is then spent on a defect you already understood.
+- **A qualifier you add is checked against the rule it qualifies, at its boundary.** A clamp, a
+  bound, a default, an exception — take the rule you just wrote, take the extreme value, and
+  read them together. Two sentences of your own that disagree at the edge are a contradiction
+  you authored, and the next pass files it against the document rather than against you.
 
 Before you finish, re-read your own additions the way a judge would, and settle every claim in
 them against the tree.

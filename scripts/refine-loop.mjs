@@ -167,6 +167,11 @@ function loadLedger(spec) {
     }
   } else if (existsSync(path)) {
     const l = JSON.parse(readFileSync(path, 'utf8'));
+    /* A round that never finished is not a round. It carries no commit, so leaving it in place
+       shifts the numbering and leaves the next round with no range to judge — which silently
+       turns the resumed run into another full pass, the one thing the range exists to avoid.
+       Dropping it is what makes a stopped loop resumable at the round it stopped in. */
+    while (l.rounds?.length && l.rounds[l.rounds.length - 1].status === 'running') l.rounds.pop();
     if (l.spec === spec) return { ...l, path };
   }
   return { spec, stem, path, startedAt: new Date().toISOString(), rounds: [], status: 'running' };
@@ -274,6 +279,37 @@ function closingWords(logStem) {
 }
 
 /**
+ * A verdict an agent printed instead of writing.
+ *
+ * Only a fenced JSON block that parses and carries the two fields every verdict has is taken.
+ * A loose brace-scan over a markdown report finds an example from the prompt or a fragment of a
+ * table and hands the loop a verdict nobody wrote, which is worse than no verdict at all.
+ */
+function verdictFromMessage(logStem) {
+  const text = closingText(logStem);
+  if (!text) return null;
+  for (const m of text.matchAll(/```(?:json)?\s*\n([\s\S]*?)```/g)) {
+    try {
+      const v = JSON.parse(m[1]);
+      if (v && typeof v === 'object' && typeof v.status === 'string' && Array.isArray(v.findings)) return v;
+    } catch { /* a fenced block that is not the verdict */ }
+  }
+  return null;
+}
+
+/** The whole of the final message, where `closingWords` takes only its tail. */
+function closingText(logStem) {
+  try {
+    const lines = readFileSync(join(ROOT, `${logStem}.log`), 'utf8').split('\n').filter(Boolean);
+    for (let i = lines.length - 1; i >= 0; i -= 1) {
+      const m = JSON.parse(lines[i]);
+      if (m.type === 'result' && m.result) return String(m.result);
+    }
+  } catch { /* no result message */ }
+  return null;
+}
+
+/**
  * One agent, one artefact.
  *
  * **The prompt is written before the agent is dispatched**, next to the log it will produce.
@@ -316,6 +352,17 @@ async function runAgent({ agent, model, prompt, verdictPath, timeoutMin, logStem
         note(last.error);
         continue;
       }
+    }
+
+    /* The final message, when it carries the verdict the file does not. An agent that judged
+       correctly and answered in the wrong channel has done the expensive part; throwing that
+       away and paying for the pass again buys nothing. Only a fenced block that parses and
+       looks like a verdict is taken — prose about a verdict is not one. */
+    const salvaged = verdictFromMessage(stem);
+    if (salvaged) {
+      note(`no verdict file — recovered the JSON from its final message`);
+      writeFileSync(abs, `${JSON.stringify(salvaged, null, 2)}\n`);
+      return salvaged;
     }
 
     const said = closingWords(stem);
@@ -440,6 +487,16 @@ async function gateJudge(spec, ledger, round, request, since) {
         `is what ships and the disagreement is your finding.`,
       ].join('\n')
       : 'Judge the document in full. This is its first pass.',
+    '',
+    /* Where to put the answer, in the prompt and not only in the definition. Twice a range pass
+       has ended in a markdown report addressed to whoever dispatched it: told to check two
+       records and never told what to produce, the agent produces the natural artefact of
+       checking. A pass that judges correctly and writes nowhere costs the same as one that
+       failed, and its verdict — `clear` on both occasions — is lost. */
+    `Write your verdict to \`${verdictPath}\`. That file is the only output of this pass: a`,
+    `judgement that is not in it did not happen, whatever you say in your final message. Write it`,
+    `even when nothing blocks — \`"status": "pass"\` with an empty \`findings\` array is a verdict`,
+    `and is the outcome this loop is looking for. Then print the same JSON and nothing after it.`,
   ].join('\n');
 
   return runAgent({
