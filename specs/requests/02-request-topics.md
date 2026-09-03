@@ -106,9 +106,6 @@ IF a create or rename call would leave two topics of the same organization and a
 names equal ignoring case, THEN THE SYSTEM SHALL answer `409` with
 `REQUEST_TOPIC_MESSAGES.nameDuplicate`.
 
-**Decided:** per audience, because "Access" is a natural staff topic and is also the client
-default; forbidding that pair buys nothing.
-
 #### REQ-02-007 — curating requires the capability
 
 IF a caller without `manage-request-topics` calls any topic write route, THEN THE SYSTEM
@@ -118,9 +115,6 @@ SHALL answer `403` with `REQUEST_TOPIC_MESSAGES.manageForbidden`.
 
 WHERE the caller holds an active membership of the organization, THE SYSTEM SHALL answer
 `GET …/request-topics` with `200`.
-
-**Decided:** the catalogue is a list of words the organization chose, and gating it would
-stop a `user` raising a request at all.
 
 #### REQ-02-009 — order is curated, not alphabetical
 
@@ -161,10 +155,22 @@ THE SYSTEM SHALL expose no route that removes a `RequestTopic` row.
 WHEN an organization is created, THE SYSTEM SHALL write the default topics in the same
 transaction as the `Organization` row.
 
-#### REQ-02-016 — organizations that predate this spec
+#### REQ-02-016 — an organization holding no topics at all
 
-WHEN the migration introducing `RequestTopic` runs, THE SYSTEM SHALL insert the same default
-topics for every organization that already exists.
+WHEN an audience of an organization is read and holds no `RequestTopic` row of any status,
+THE SYSTEM SHALL write that audience's default topics before answering.
+
+**Decided:** the migration writes the same rows, but it is a materialization and not the
+mechanism — a read that finds nothing seeds, so a skipped migration or an older dump heals
+itself. Archived rows are rows, so a catalogue emptied by archiving is never re-seeded.
+
+#### REQ-02-031 — reordering is one call over one audience
+
+WHEN a curator submits an audience's topic ids in a new order, THE SYSTEM SHALL rewrite every
+named topic's `sortOrder` in one transaction.
+
+**Decided:** one press sends the whole new order to its own route. One `PATCH` per moved row
+would leave a failure between two writes showing an order nobody chose.
 
 #### REQ-02-017 — an audience with no active topic
 
@@ -305,14 +311,14 @@ Invariants:
 | The `client` audience can be curated but no request can be addressed to a client yet, so a `client` topic is unreachable from the new-request form | The audience is what makes the catalogue's second half worth seeding and manageable before it is needed, and the mismatch refusal is a live, tested rule rather than a dormant one | Spec 03, which makes a client an addressee and admits `client` topics to the picker |
 | Existing requests carry no `topicId` and no `topicLabel` | The columns are nullable and the screens fall back to the request's stored `type` for those rows, so nothing is lost and no backfill guesses at a topic nobody chose | Nothing needs to. The set is closed the moment this spec ships |
 | A topic's `type` cannot be corrected after creation | Changing it would make the type filter disagree with the requests already raised under the topic. Archive and re-create is the honest path | A migration that rewrites `type` on the topic and every request under it, if the need is ever real |
-| Ordering is a single integer per topic with no gap strategy | The catalogue is a handful of rows curated by hand; a reorder rewrites the affected rows in one transaction | A fractional or linked ordering, if a catalogue ever grows past what one screen shows |
+| Ordering is a single integer per topic with no gap strategy | The catalogue is a handful of rows curated by hand, and a reorder rewrites the whole audience in one transaction rather than nudging neighbours | A fractional or linked ordering, if a catalogue ever grows past what one screen shows |
 
 ## Acceptance Criteria
 
 | # | Criterion | Observed by |
 |---|---|---|
 | AC-1 | A newly signed-up organization has a usable staff catalogue before anybody opens Settings. | TC-02-INT-01 |
-| AC-2 | An organization that existed before this spec has the same catalogue after the migration, with no request rewritten. | TC-02-INT-02 |
+| AC-2 | An organization holding no topics — because it predates this spec, or because its rows went missing — has the full catalogue on the next read, with no request rewritten. | TC-02-INT-02 |
 | AC-3 | Two topics of one organization and audience cannot share a name that differs only in case. | TC-02-INT-05 |
 | AC-4 | A `user` can read the catalogue and cannot change it. | TC-02-INT-07 |
 | AC-5 | A request created under a topic carries the topic's kind, which the caller never sent. | TC-02-INT-10 |
@@ -324,6 +330,7 @@ Invariants:
 | AC-11 | The list, the detail screen and the filter control show the same four words for the same request. | TC-02-UNIT-05, TC-02-E2E-04 |
 | AC-12 | A closed request still says which way it closed. | TC-02-E2E-04 |
 | AC-13 | Two concurrent archives of one topic produce one write and one refusal. | TC-02-INT-16 |
+| AC-17 | A reorder is one call and one transaction: either every named topic moves or none does. | TC-02-INT-22, TC-02-E2E-01 |
 | AC-14 | A topic id from another organization is refused with the same answer as an archived one, and no request is created. | TC-02-INT-13 |
 | AC-15 | A `user` opening Settings sees no Request topics row and the route answers 403 to their write. | TC-02-INT-07, TC-02-E2E-05 |
 | AC-16 | An organization whose catalogue holds no active staff topic gets a form that says so instead of one that fails on submit. | TC-02-E2E-06 |
