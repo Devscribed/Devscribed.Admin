@@ -11,6 +11,11 @@
       "lint": 0
     }
   ],
-  "status": "running",
-  "request": "Employees pick a request topic from presets the organization curates (VPN, Claude, Question, Other for staff; Access, Other for clients), and the screens say Pending / In progress / Completed / Closed"
+  "status": "error",
+  "request": "Employees pick a request topic from presets the organization curates (VPN, Claude, Question, Other for staff; Access, Other for clients), and the screens say Pending / In progress / Completed / Closed",
+  "outcome": {
+    "reason": "judge-error",
+    "detail": "spec-refiner produced no verdict at .workflow/refine/requests-02.verdict.json (result success)",
+    "at": "2026-09-03T07:33:42.306Z"
+  }
 }
