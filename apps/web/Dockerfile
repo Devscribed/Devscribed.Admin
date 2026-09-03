@@ -26,7 +26,6 @@ RUN npm ci
 
 COPY packages/validation packages/validation
 COPY apps/web apps/web
-COPY ["1_DS for dev", "1_DS for dev"]
 
 # Where /api/* is proxied to, and it has to be set HERE rather than on the running task.
 #
