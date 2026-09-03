@@ -1,0 +1,49 @@
+{
+  "stage": "pre_implement",
+  "spec": "specs/requests/03-client-participants.md",
+  "status": "pass",
+  "findings": [
+    {
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": null,
+      "file": "specs/requests/03-client-participants.md",
+      "symbol": "REQ-03-035",
+      "claim": "A decline writes two RequestEvents in one transaction, so a per-event reading of REQ-03-035 produces two outbox rows per recipient for one decline, and no case asserts the count either way.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "apps/api/src/requests/requests.service.ts:534 records a `message_posted` event for the decline reason AND a `status_changed` event in the same transaction. REQ-03-035 says one RequestNotification row per recipient is written 'in the same transaction as the RequestEvent', and REQ-03-039's uniqueness key is ([eventId, recipientKind, recipientId]) — both are per event, so a decline notifies its recipient twice. TC-03-INT-21 exercises decline and asserts nothing about the outbox; TC-03-INT-24 asserts counts for create, message and answer only. The plan follows the spec's own words (one row per notifiable event, field_changed excluded), and either reading ships green."
+      },
+      "suggestedFix": "if one notification per decline is wanted rather than two, say so in REQ-03-035 and add a count assertion to TC-03-INT-21"
+    },
+    {
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": null,
+      "file": "specs/requests/03-client-participants.cases.md",
+      "symbol": "TC-03-INT-24",
+      "claim": "TC-03-INT-24 and TC-03-INT-26 together fix the dispatch shape: delivery cannot be awaited in the request path, so TC-03-INT-24 must wait for the drain rather than reading the rows the instant the route answers.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "TC-03-INT-26 requires 'the route answers before the double is released', which forbids awaiting deliver() before responding. TC-03-INT-24 then asserts every row reads status `skipped`, handledAt set and attempts at one after three calls. Read literally and immediately, the second assertion races the first requirement. Both hold if the case polls for the terminal state; the plan schedules dispatch after the commit without awaiting it and says so in T6 and T10."
+      },
+      "suggestedFix": "none required — recorded so the case author does not read the outbox synchronously and conclude the dispatcher is broken"
+    },
+    {
+      "id": "P3",
+      "target": "spec",
+      "severity": "note",
+      "rule": null,
+      "file": "specs/requests/03-client-participants.cases.md",
+      "symbol": "TC-03-E2E-01",
+      "claim": "Where a client contact lands after signing in is asserted by a case but stated by no requirement, and the two screens that decide it hardcode a destination the contact is refused.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "apps/web/app/login/LoginForm.tsx:92 and apps/web/app/accept-invite/AcceptInviteScreen.tsx:322 both push `/org/{orgId}/members`, which REQ-03-019 answers 404 for a client principal. REQ-03-015 states the accept's redirectTo but nothing states the sign-in landing; TC-03-E2E-01 observes it ('Signing in lands on the requests screen'). The contracts amend GET /api/me and leave POST /api/login's body alone, so the plan branches on the principal read from /api/me rather than adding a field to the login response."
+      },
+      "suggestedFix": "none required — the behaviour is derivable and is planned; noted so nobody later reads the added branch as unrequested work"
+    }
+  ]
+}

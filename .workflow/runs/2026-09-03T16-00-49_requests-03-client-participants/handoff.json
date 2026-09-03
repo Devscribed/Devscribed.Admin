@@ -1,0 +1,494 @@
+{
+  "spec": {
+    "path": "specs/requests/03-client-participants.md",
+    "sha256": "bbc07854cd24deeb78d7192922b0ce4612e0f7638c64d67537139ef06feea9ab",
+    "dependsOn": ["requests/01", "requests/02", "organization/01", "user-management/03"],
+    "bundle": [
+      "specs/requests/03-client-participants.contracts.md",
+      "specs/requests/03-client-participants.cases.md"
+    ]
+  },
+
+  "summary": "A person at a client becomes a signed-in principal of the organization through a new ClientMembership row — never a role on Membership — so a member of staff can address a request to them and watch it answered in the product. Six pieces: (1) one additive migration adding ClientMembership and RequestNotification and four nullable columns; (2) the shared validation half — CLIENT_USER_MESSAGES, a ClientCapability union of its own, the `client` addressee kind and the `client` invitation role; (3) principal resolution on the session plus the rule that a client principal is answered 404 on every organization route except the requests list, their own request, its answer/decline/message routes, and create and grant (which answer named 403s); (4) the contacts routes on a client, the client branch of invitation acceptance, and the mirrored refusal that stops a client contact being invited to staff; (5) client-addressed requests end to end — the project rules, the topic audience rule, party/answer/decline/message/grant; (6) the notification port: one outbox row per recipient written in the transaction that wrote the event, delivered after the commit by an adapter that delivers nothing. The web half gives the contact a shell that is the requests screens with the rest of the navigation withheld, and gives staff an addressee-kind control in the new-request modal and a contacts section on client detail.",
+
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Schema and the one migration — ClientMembership, RequestNotification, four nullable columns",
+      "files": [
+        "apps/api/prisma/schema.prisma",
+        "apps/api/prisma/migrations/20260903130000_requests_03_client_participants/migration.sql"
+      ],
+      "requirements": ["REQ-03-001", "REQ-03-020", "REQ-03-033", "REQ-03-035", "REQ-03-039"],
+      "dependsOn": [],
+      "description": "Add `ClientMembership` (id, accountId @unique FK Cascade, organizationId FK Cascade, clientId FK Cascade, status @default(\"active\"), invitedByMembershipId? FK SetNull, joinedAt, removedAt?, removedByAccountId? FK SetNull; @@index([organizationId, status]), @@index([clientId, status])) and `RequestNotification` (id, organizationId FK Cascade, requestId FK Cascade, eventId FK Cascade, recipientKind, recipientId with NO foreign key, channel @default(\"none\"), providerKey?, providerRef?, status @default(\"pending\"), attempts Int @default(0), lastError?, handledAt?, createdAt; @@unique([eventId, recipientKind, recipientId]), @@index([organizationId, status, createdAt])). Add four nullable columns: Invitation.clientId (FK Client, SetNull), Request.assigneeClientMembershipId (FK, SetNull), RequestMessage.authorClientMembershipId (FK, SetNull), RequestEvent.actorClientMembershipId (FK, SetNull). No column changes type or nullability, nothing is renamed or dropped, no NOT NULL is added to an existing table, and no data is backfilled. `recipientId` deliberately carries no FK so a notification survives the principal it points at being removed.",
+      "migration": {
+        "additive": true,
+        "note": "One migration. `infra/deploy.sh` registers the migrate task definition and runs `infra/migrate.sh` (lines 175-185) and only then `tf apply`s the services (lines 187-192), so the schema changes while the PREVIOUS image is still serving; the migrate step is skipped entirely when `api` is not among the changed services. Two unreferenced tables and four nullable columns are invisible to that code, which is what makes the window safe."
+      },
+      "allCallSites": [],
+      "concurrency": {
+        "rows": ["ClientMembership", "RequestNotification"],
+        "lock": "none at DDL time; the constraints are the concurrency mechanism — `ClientMembership.accountId @unique` for two concurrent accepts, `RequestNotification @@unique([eventId, recipientKind, recipientId])` for a replayed event",
+        "reread": []
+      },
+      "testCases": ["TC-03-INT-01", "TC-03-INT-28", "TC-03-INT-30"]
+    },
+
+    {
+      "id": "T2",
+      "title": "packages/validation — CLIENT_USER_MESSAGES, the client capability list, the client addressee kind and the client invitation role",
+      "files": [
+        "packages/validation/src/index.ts",
+        "packages/validation/src/requests.ts",
+        "packages/validation/src/roles.ts",
+        "packages/validation/src/requests.test.ts",
+        "packages/validation/src/roles.test.ts",
+        "packages/validation/src/clients.test.ts"
+      ],
+      "requirements": ["REQ-03-016", "REQ-03-017", "REQ-03-020", "REQ-03-021", "REQ-03-024"],
+      "dependsOn": [],
+      "description": "Add `CLIENT_USER_MESSAGES` as a NEW export in packages/validation/src/index.ts (emailInvalid, alreadyLinked, alreadyRemoved, principalConflict, clientCannotCreate) with the text from the Error Messages table verbatim. Add three NEW KEYS to the existing `REQUEST_MESSAGES` const in place — clientProjectRequired, clientProjectMismatch, notOnProject — never a second export. Add a `ClientCapability` union and a flat readonly `CLIENT_CAPABILITIES` list holding exactly `read-own-requests`, `answer-request`, `decline-request`, `post-request-message`: values that belong to NEITHER staff union, so `MemberCapability` gains nothing, `Capability` gains nothing, `ROLE_CAPABILITIES` gains no row and `CAPABILITY_MATRIX` gains no column. Widen `REQUEST_ASSIGNEE_KINDS` to ['member','client'] and give `validateRequestAssignee`/`validateNewRequest` the client branch: `assigneeClientMembershipId` required when the kind is `client` (REQUEST_MESSAGES.assigneeInvalid), `projectId` required when the kind is `client` (REQUEST_MESSAGES.clientProjectRequired), an unknown kind still refused. Widen the invitation role set so `client` is accepted for a contact invitation without letting it be assigned through the staff invite body — `isValidRole` governs the staff-facing set and the client value must not become assignable there. This task adds NO role-keyed lookup for a client: a principal-kind resolver is the caller's job (T3, T7).",
+      "allCallSites": [
+        "packages/validation/src/requests.ts:219 validateRequestAssignee",
+        "packages/validation/src/requests.ts:307 validateNewRequest",
+        "packages/validation/src/index.ts:327 isValidRole",
+        "packages/validation/src/index.ts:763 can"
+      ],
+      "concurrency": null,
+      "testCases": ["TC-03-UNIT-01", "TC-03-UNIT-02"]
+    },
+
+    {
+      "id": "T3",
+      "title": "The principal — resolution on the session, sign-in, the identity answer, and 404 on every other organization route",
+      "files": [
+        "apps/api/src/auth/session.guard.ts",
+        "apps/api/src/auth/org-scope.guard.ts",
+        "apps/api/src/auth/login.service.ts",
+        "apps/api/src/auth/principal.ts",
+        "apps/api/src/auth/allow-client-principal.decorator.ts",
+        "apps/api/src/members/me.controller.ts",
+        "apps/api/src/requests/requests.controller.ts"
+      ],
+      "requirements": [
+        "REQ-03-002", "REQ-03-003", "REQ-03-004", "REQ-03-005", "REQ-03-007",
+        "REQ-03-017", "REQ-03-019", "REQ-03-027", "REQ-03-032"
+      ],
+      "dependsOn": ["T1", "T2"],
+      "description": "Resolve the principal kind from the database on every request and put it on the request alongside the session — the cookie's fields do not change and no cookie minted before this spec becomes invalid. `SessionGuard` already re-reads the account for the security stamp, so the memberships and client memberships are read in that same query rather than in a second one. Sign-in: resolve the principal by REQ-03-002's decision table (staff row wins; an active client row alone resolves the client principal and issues the cookie for that client's organization; every other cell is the existing `AUTH_MESSAGES.deactivated`, still decided BEFORE the password compare so no answer becomes a password oracle). `GET /api/me`: one shape for both principals — `principal: \"member\"|\"client\"`, `client: {id,name}|null`, `role` null for a client — adding members and removing none. REQ-03-019: a client principal is answered a bare 404 on every organization route except the seven the spec names; implement it at the one choke point every `api/organizations/:orgId` controller already shares (`OrgScopeGuard`), with an explicit opt-in decorator on the seven exempt handlers, so a route added later is refused by default. Create and grant are the two exceptions that answer 403 — their bodies are decided in the service (T5), because REQ-03-027's ordering is part of the rule. Roles are in transition: any staff role read on this path goes through `normalizeRole()` (`packages/validation/src/roles.ts`), and a client principal must reach NEITHER `hasCapability` (which would normalize its absent role to `viewer` and hand back a set including ViewOwnRequests) NOR `can` — REQ-03-017 is an ordering rule and the kind is asked first.",
+      "allCallSites": [
+        "apps/api/src/clients/clients.controller.ts",
+        "apps/api/src/documents/autofill.controller.ts",
+        "apps/api/src/documents/document-templates.controller.ts",
+        "apps/api/src/documents/envelopes.controller.ts",
+        "apps/api/src/holidays/holidays.controller.ts",
+        "apps/api/src/kanban/activity.controller.ts",
+        "apps/api/src/kanban/board.controller.ts",
+        "apps/api/src/kanban/comments.controller.ts",
+        "apps/api/src/kanban/labels.controller.ts",
+        "apps/api/src/kanban/tasks.controller.ts",
+        "apps/api/src/kanban/watchers.controller.ts",
+        "apps/api/src/mail/outbox.controller.ts",
+        "apps/api/src/members/member-profile.controller.ts",
+        "apps/api/src/members/members.controller.ts",
+        "apps/api/src/organizations/signing-settings.controller.ts",
+        "apps/api/src/projects/projects.controller.ts",
+        "apps/api/src/requests/request-topics.controller.ts",
+        "apps/api/src/requests/requests.controller.ts",
+        "apps/api/src/time-tracking/time-tracking.controller.ts",
+        "apps/api/src/vacation/vacation.controller.ts"
+      ],
+      "concurrency": {
+        "rows": ["Account", "Membership", "ClientMembership"],
+        "lock": "none — these are reads. The stamp comparison in SessionGuard is the revocation mechanism and is re-read per request",
+        "reread": ["Account.securityStamp", "Membership.status", "ClientMembership.status"]
+      },
+      "testCases": [
+        "TC-03-INT-03", "TC-03-INT-04", "TC-03-INT-05", "TC-03-INT-08",
+        "TC-03-INT-09", "TC-03-INT-13"
+      ]
+    },
+
+    {
+      "id": "T4",
+      "title": "Client contacts — invite, list, remove — and the two-ended principal conflict on invitation",
+      "files": [
+        "apps/api/src/clients/client-contacts.controller.ts",
+        "apps/api/src/clients/client-contacts.service.ts",
+        "apps/api/src/clients/clients.service.ts",
+        "apps/api/src/invitations/invitations.service.ts",
+        "apps/api/src/invitations/invitations.controller.ts",
+        "apps/api/src/app.module.ts"
+      ],
+      "requirements": [
+        "REQ-03-001", "REQ-03-006", "REQ-03-007", "REQ-03-008", "REQ-03-009",
+        "REQ-03-010", "REQ-03-011", "REQ-03-012", "REQ-03-013", "REQ-03-014",
+        "REQ-03-042", "REQ-03-015"
+      ],
+      "dependsOn": ["T1", "T2", "T3"],
+      "description": "Three routes on the client: POST contacts (201), GET contacts (200), DELETE contacts/{contactId} (200). Capability is decided IN THE SERVICE and a caller lacking it gets a bare 404 — never a 403 naming the capability — reusing the discipline of `ClientsService.requireManageCapability` (:360) and `requireViewCapability` (:369); the staff role goes through `normalizeRole()` inside `can`, so the legacy `member` value is refused exactly as `user` is. Queries scope by `session.organizationId`, never the path parameter. Invite: refuse an archived client 400 CLIENT_MESSAGES.clientArchived; refuse an address already holding a ClientMembership at another client of the organization, or an active one at this client, 409 CLIENT_USER_MESSAGES.alreadyLinked whatever the other row's status; write an `Invitation` carrying the client's id and role `client`, invalidating every other pending invitation for that address in the organization — staff or client — in the same transaction, which is the `updateMany` at invitations.service.ts:105 extended, not a second mechanism. Reuse the existing token: SHA-256 hash, seven-day expiry, the same accept screen and the mail sink's existing `invitation` message type. Accept: the `client` branch creates ONE active ClientMembership or returns the account's existing row to `active` with removedAt/removedByAccountId cleared, writes NO Membership, and answers redirectTo `/requests`; an account already holding an active Membership or an active ClientMembership of any organization is 409 CLIENT_USER_MESSAGES.principalConflict with nothing written. REQ-03-042 mirrors it at the other end: a STAFF invitation written for, or accepted by, an account holding an active ClientMembership of any organization is 409 principalConflict, writing neither the invitation nor the Membership — the existing duplicate check at invitations.service.ts:90 reads staff rows only and must not be relied on. Remove: status → removed with removedAt and removedByAccountId, and `Account.securityStamp` rotated IN THE SAME TRANSACTION so there is no window in which the row is removed and the stamp is not; removing an already-removed contact is 409 alreadyRemoved. `status` on the list row is `invited` while a pending invitation exists with no accepted row, `active` once accepted, `removed` after a removal.",
+      "allCallSites": [
+        "apps/api/src/invitations/invitations.service.ts:58 createInvitation",
+        "apps/api/src/invitations/invitations.service.ts:181 accept",
+        "apps/api/src/invitations/invitations.service.ts:208 acceptNewAccount",
+        "apps/api/src/invitations/invitations.service.ts:253 acceptExistingAccount"
+      ],
+      "concurrency": {
+        "rows": ["ClientMembership", "Invitation", "Account"],
+        "lock": "one transaction per write. `ClientMembership.accountId @unique` is the backstop for two concurrent accepts of the same address; the removal's status write and the securityStamp rotation share one transaction (REQ-03-006); the invitation's supersession `updateMany` and its `create` share one transaction (REQ-03-011), which is the shape invitations.service.ts:105 already uses",
+        "reread": ["ClientMembership.status", "Invitation.status", "Client.status"]
+      },
+      "testCases": [
+        "TC-03-INT-01", "TC-03-INT-02", "TC-03-INT-06", "TC-03-INT-07",
+        "TC-03-INT-08", "TC-03-INT-09", "TC-03-INT-10", "TC-03-INT-11",
+        "TC-03-INT-12", "TC-03-INT-31"
+      ]
+    },
+
+    {
+      "id": "T5",
+      "title": "Client-addressed requests — create rules, party, list, transitions and the thread",
+      "files": [
+        "apps/api/src/requests/requests.service.ts",
+        "apps/api/src/requests/requests.serializer.ts",
+        "apps/api/src/requests/requests.dto.ts",
+        "apps/api/src/requests/request-events.service.ts"
+      ],
+      "requirements": [
+        "REQ-03-020", "REQ-03-021", "REQ-03-022", "REQ-03-023", "REQ-03-024",
+        "REQ-03-025", "REQ-03-026", "REQ-03-027", "REQ-03-028", "REQ-03-029",
+        "REQ-03-030", "REQ-03-031", "REQ-03-032", "REQ-03-033", "REQ-03-034"
+      ],
+      "dependsOn": ["T1", "T2", "T3"],
+      "description": "Create: REQ-03-027 first — a client principal is 403 CLIENT_USER_MESSAGES.clientCannotCreate BEFORE the route consults any capability, so a client never receives REQUEST_MESSAGES.createForbidden (the sentence written for a viewer) and a malformed body is not answered as a validation error. Then the existing order, which the answers make observable and which the current code already follows: body shape together, then the topic row (REQUEST_MESSAGES.topicUnavailable for archived / another organization's / no row, audience never compared), then the audience comparison (topicAudienceMismatch, all four cells of the decision table), then the addressee (`assigneeClientMembershipId` naming a contact of the CALLER's organization — an unknown id and one of another organization are alike and answer a bare 404, and only then is a removed contact of the caller's own organization 400 assigneeInactive), then the project last (clientProjectRequired when absent, clientProjectMismatch when not linked to the addressee's client, notOnProject when the requester holds no ProjectMember row — an admin is NOT carved out). Read: a client principal is a party to a request whose addressee they are, and to nothing else — a request they are not the addressee of is 404, identical to one that does not exist. List: a client principal receives only requests addressed to them for `scope=mine`, `scope=all` and no scope alike (200, never the 403 a member without view-all-requests gets), the response carries NO `vacation` member, `counts.waitingOnMe` is the count of non-terminal requests addressed to them, and any other `scope` value is the 400 validation_error every principal receives, decided before the caller's kind is looked at. Answer, decline and message keep the two tests they apply to a member — party, and for answer and decline the addressee — evaluated against the row re-read with FOR UPDATE (`lockRequest`, :848), whichever kind the actor is; the events and the decline's reason message carry `actorKind`/`authorKind` of `client` and the client membership id, with display names still snapshotted into the label columns. Grant is 403 REQUEST_MESSAGES.notYoursToGrant for a client principal. A request whose addressee has since been removed reports its assignee inactive and is cancelled by nothing. The serializer's `assignee` member gains `kind: \"client\"`, the contact's display name and `clientName`, and never the contact's email address.",
+      "allCallSites": [
+        "apps/api/src/requests/requests.service.ts:154 listRequests",
+        "apps/api/src/requests/requests.service.ts:274 getRequest",
+        "apps/api/src/requests/requests.service.ts:317 createRequest",
+        "apps/api/src/requests/requests.service.ts:465 postMessage",
+        "apps/api/src/requests/requests.service.ts:534 transition",
+        "apps/api/src/requests/requests.service.ts:625 patchRequest",
+        "apps/api/src/requests/requests.service.ts:756 reassignRequest",
+        "apps/api/src/requests/requests.service.ts:894 requireCaller"
+      ],
+      "concurrency": {
+        "rows": ["Request", "Organization"],
+        "lock": "SELECT … FOR UPDATE on the Request row inside the writing transaction (requests.service.ts:848), and FOR UPDATE on the Organization row for nextRequestNumber at create — both unchanged; state-machine invariant 3 extends the first to a client actor without a second mechanism",
+        "reread": ["status", "requesterMembershipId", "assigneeMembershipId", "assigneeClientMembershipId", "answeredAt", "resolvedAt"]
+      },
+      "testCases": [
+        "TC-03-INT-14", "TC-03-INT-15", "TC-03-INT-16", "TC-03-INT-17",
+        "TC-03-INT-18", "TC-03-INT-19", "TC-03-INT-20", "TC-03-INT-21",
+        "TC-03-INT-22", "TC-03-INT-23", "TC-03-INT-32", "TC-03-INT-33",
+        "TC-03-INT-34", "TC-03-INT-35"
+      ]
+    },
+
+    {
+      "id": "T6",
+      "title": "The notification port — outbox written with the event, delivered after the commit, by an adapter that delivers nothing",
+      "files": [
+        "apps/api/src/requests/request-notifier.ts",
+        "apps/api/src/requests/null-request-notifier.ts",
+        "apps/api/src/requests/request-notifier.provider.ts",
+        "apps/api/src/requests/request-notifications.service.ts",
+        "apps/api/src/requests/requests.service.ts",
+        "apps/api/src/core.module.ts",
+        "apps/api/src/app.module.ts"
+      ],
+      "requirements": [
+        "REQ-03-035", "REQ-03-036", "REQ-03-037", "REQ-03-038",
+        "REQ-03-039", "REQ-03-040", "REQ-03-041"
+      ],
+      "dependsOn": ["T1", "T5"],
+      "description": "Declare `RequestNotifier` as an abstract class used as its own DI token — the shape MailService already uses (apps/api/src/mail/mail.service.ts:152) with its driver chosen in a sibling `*.provider.ts` and registered global, exactly as apps/api/src/mail/mail.provider.ts and core.module.ts do. `deliver(notification)` takes the row's id, organization, request, event action, recipient kind and recipient id and answers a DeliveryOutcome of status delivered|skipped|failed with a channel and optional providerKey/providerRef. `NullRequestNotifier` ships: it marks every row `skipped`, channel `none`, provider key null, and makes no outbound call of any kind. Outbox rows are written IN THE SAME TRANSACTION as the RequestEvent that caused them, one per recipient, for created / status_changed / assignee_changed / message_posted — `field_changed` is not in REQ-03-035's list and notifies nobody. Recipients are the request's requester and the addressee AS THE TRANSACTION LEAVES IT, other than the principal who caused the event, and nobody else: a holder of view-all-requests who is neither receives nothing, and a reassignment therefore notifies the incoming addressee and not the outgoing one. No recipient address is stored anywhere on the row, and `lastError` never holds one. Delivery runs only AFTER the transaction has committed and is not awaited by the route — a slow or hanging provider must never hold a row lock on a request, and a notifier that throws leaves the request, its status and its events exactly as committed with the row at `failed` and `lastError` set. `attempts` is incremented and the provider reference recorded BEFORE the next attempt; a row is retried only from `failed`; the uniqueness constraint means a replayed event can never manufacture a second row. No read path — list, detail, badge — consults the outbox.",
+      "allCallSites": [
+        "apps/api/src/requests/requests.service.ts:317 createRequest (created)",
+        "apps/api/src/requests/requests.service.ts:465 postMessage (message_posted)",
+        "apps/api/src/requests/requests.service.ts:534 transition (status_changed for answer, grant, decline, cancel; plus the decline reason's message_posted)",
+        "apps/api/src/requests/requests.service.ts:756 reassignRequest (assignee_changed)"
+      ],
+      "concurrency": {
+        "rows": ["RequestNotification"],
+        "lock": "none. The insert rides the writing transaction's existing FOR UPDATE on the Request row; the @@unique([eventId, recipientKind, recipientId]) index is the mechanism REQ-03-039 names, and a duplicate insert is rejected by it rather than by a check-then-write",
+        "reread": ["status", "attempts"]
+      },
+      "testCases": [
+        "TC-03-INT-24", "TC-03-INT-25", "TC-03-INT-26", "TC-03-INT-27",
+        "TC-03-INT-28", "TC-03-INT-29", "TC-03-INT-30"
+      ]
+    },
+
+    {
+      "id": "T7",
+      "title": "The client's shell — identity, navigation, where sign-in lands, and the requests screens for a client principal",
+      "files": [
+        "apps/web/src/layout/session-context.tsx",
+        "apps/web/src/layout/Sidebar.tsx",
+        "apps/web/src/layout/requests-badge-context.tsx",
+        "apps/web/app/org/[orgId]/layout.tsx",
+        "apps/web/app/login/LoginForm.tsx",
+        "apps/web/app/accept-invite/AcceptInviteScreen.tsx",
+        "apps/web/app/org/[orgId]/requests/page.tsx",
+        "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx"
+      ],
+      "requirements": [
+        "REQ-03-005", "REQ-03-015", "REQ-03-017", "REQ-03-018", "REQ-03-019",
+        "REQ-03-026", "REQ-03-029", "REQ-03-030", "REQ-03-031", "REQ-03-032",
+        "REQ-03-033", "REQ-03-034", "REQ-03-041"
+      ],
+      "dependsOn": ["T3", "T5"],
+      "description": "The session gains `principal` and `client` and `role` becomes nullable; nothing renders until the identity endpoint answers, so no member-only navigation is ever painted and then removed. Sidebar: the requests destination is the ONLY organization navigation entry for a client principal — `nav-members` is drawn unconditionally today (Sidebar.tsx:71-77) and is the entry that has to be gated; a destination the caller cannot use is neither drawn nor reachable by typing. Every role-keyed helper on this surface is reached only after the principal kind has been resolved (REQ-03-017): Sidebar.tsx:180, requests/page.tsx:117-119, requests/[requestId]/page.tsx:47-49, requests-badge-context.tsx:41. Post-auth landing: LoginForm.tsx:92 and AcceptInviteScreen.tsx:322 both hardcode `/org/{orgId}/members`, which a client principal is refused; both branch on the principal from `/api/me` — the pattern AcceptInviteScreen already uses — and the login response body is NOT amended, because the contracts amend `/api/me` and leave `POST /api/login` alone. Requests list for a client: no scope control, no vacation section, no control for raising a request, an empty state whose copy does not mention scopes or filters they do not have; the two side reads that would 404 (projects at page.tsx:224, topics at page.tsx:251) are not issued at all. Request detail for a client: the answer, decline, composer and thread controls are drawn and the grant control is not. The screen learns it is the addressee from the principal kind and the fact that the request loaded — every request a client principal can read is one addressed to them (REQ-03-034, REQ-03-029) — because `myMembershipId` comes from the members list ([requestId]/page.tsx:86), which answers a client principal 404. Removed mid-visit: the next call answers 401 and the shell sends them to sign-in; nothing is drawn from a stale response. All components come from `@ds` via apps/web/src/ds.ts, tokens only, no hardcoded colour or size, light theme.",
+      "allCallSites": [
+        "apps/web/src/layout/Sidebar.tsx:180 useSession().role → can/hasCapability",
+        "apps/web/app/org/[orgId]/requests/page.tsx:117 can(role,'create-request')",
+        "apps/web/app/org/[orgId]/requests/page.tsx:118 can(role,'view-all-requests')",
+        "apps/web/app/org/[orgId]/requests/page.tsx:119 can(role,'list-assigned-projects')",
+        "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx:48 can(role,'view-all-requests')",
+        "apps/web/src/layout/requests-badge-context.tsx:41 can(normalizeRole(session.role),'view-requests')"
+      ],
+      "concurrency": null,
+      "testCases": ["TC-03-E2E-01", "TC-03-E2E-02", "TC-03-E2E-03", "TC-03-E2E-05"]
+    },
+
+    {
+      "id": "T8",
+      "title": "Client detail — the contacts section",
+      "files": [
+        "apps/web/app/org/[orgId]/clients/[clientId]/page.tsx",
+        "apps/web/app/org/[orgId]/clients/[clientId]/ClientContactsSection.tsx",
+        "apps/web/app/org/[orgId]/clients/[clientId]/InviteContactModal.tsx",
+        "apps/web/app/org/[orgId]/clients/types.ts"
+      ],
+      "requirements": ["REQ-03-008", "REQ-03-010", "REQ-03-013"],
+      "dependsOn": ["T4"],
+      "description": "A Contacts section below the projects list on client detail, for a contact manager. Ids: client-contacts-section, client-contacts-empty-state, client-contact-invite-btn, client-contact-invite-modal, client-contact-invite-email, client-contact-invite-submit, client-contact-invite-error-email, client-contact-row-{id}, client-contact-row-{id}-remove-btn (drawn while the contact is active). Loading is a skeleton inside the section while the client's own details render behind it. The empty state says what a contact is for and carries the invite control beside it. The submit control shows an in-flight state and is disabled ONLY for the duration of the call — never for validation: clicking an invalid form shows every error and focuses the first invalid field. An address that already contacts a client of the organization keeps the modal open with the error under the field and the typed address intact, and the message is CLIENT_USER_MESSAGES.alreadyLinked from packages/validation, never written inline. `@ds` via apps/web/src/ds.ts, tokens only, light theme.",
+      "allCallSites": [],
+      "concurrency": null,
+      "testCases": ["TC-03-E2E-01", "TC-03-E2E-03"]
+    },
+
+    {
+      "id": "T9",
+      "title": "The new-request modal — the addressee kind, the contact picker, and the per-audience catalogue",
+      "files": [
+        "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx",
+        "apps/web/app/org/[orgId]/requests/types.ts"
+      ],
+      "requirements": [
+        "REQ-03-020", "REQ-03-021", "REQ-03-022", "REQ-03-024", "REQ-03-027"
+      ],
+      "dependsOn": ["T5"],
+      "description": "Insert the addressee kind above the addressee itself; About, Title, Description, Project, Priority, Needed by and the blocking checkbox keep their positions and their ids. `request-new-assignee-kind` is a `Select` labelled To with two options — NOT a Toggle, which reads as a view switch among labelled fields; `request-new-assignee-client` is a `Select` whose option label is a ReactNode rendering the person's name over their client's, which `1_DS for dev/components/forms/Select.d.ts:3` already types as `React.ReactNode`, so nothing is improvised per screen and there is no DS gap. `request-new-assignee-member` is absent when the client kind is chosen. Choosing the client kind re-reads the catalogue with `audience=client`, clears the chosen topic (a topic of the other audience is one the server will refuse) and keeps title, description, priority, needed-by and blocking; it narrows the project control to projects the requester is assigned to AND that belong to the chosen contact's client, and makes the project required. The narrowings are conveniences — the server decides. When the chosen audience has no active topic the picker is replaced by REQUEST_TOPIC_MESSAGES.pickerEmpty and `request-new-submit` is not drawn, evaluated PER AUDIENCE rather than once for the modal; switching back restores both. A failed catalogue read claims nothing: the picker is neither filled nor replaced by the empty copy. `request-new-error-assignee` is new and is shown when no addressee is chosen, with focus moved to the control and the submit control still enabled.",
+      "allCallSites": [
+        "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx:160 the audience=staff catalogue read",
+        "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx:196 the create body"
+      ],
+      "concurrency": null,
+      "testCases": ["TC-03-E2E-04"]
+    },
+
+    {
+      "id": "T10",
+      "title": "The cases — unit, integration and E2E",
+      "files": [
+        "packages/validation/src/roles.test.ts",
+        "packages/validation/src/requests.test.ts",
+        "apps/api/test/client-participants.spec.ts",
+        "apps/api/test/request-notifications.spec.ts",
+        "e2e/tests/client-participants.spec.ts"
+      ],
+      "requirements": ["REQ-03-002", "REQ-03-036", "REQ-03-039", "REQ-03-040", "REQ-03-041"],
+      "dependsOn": ["T4", "T5", "T6", "T7", "T8", "T9"],
+      "description": "Selectors are data-testid only and the ids are the ones the contracts name. Each case references its TC id. The integration suites reach every state through this spec's own product routes and the helpers that already exist — this spec owes NO test fixture and adds nothing under apps/api/src/test-support/. Notifier doubles are registered with `overrideProvider`, the pattern apps/api/test/clients.spec.ts:136 already uses for the mail transport, and reproduce the port's own table of outcomes rather than the spec's prose. TC-03-INT-24 must WAIT for the post-commit drain rather than reading the rows the instant the route answers, because TC-03-INT-26 requires the route to answer before the double is released — the same shape both cases describe. Message assertions quote the Error Messages table literally rather than importing the constant, as apps/api/test/requests.spec.ts already does, so an assertion can fail when the wording drifts. TC-03-E2E-03 mutates the contact's session state and is marked serial. An agent runs the files its diff touches, never the whole suite: `npm test -- test/client-participants.spec.ts` from apps/api, and `E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/client-participants.spec.ts tests/regressions.spec.ts` from e2e. `e2e/tests/app-shell.spec.ts:22` asserts `nav-members` for an admin and is the regression witness that gating it did not remove the row for staff.",
+      "allCallSites": [],
+      "concurrency": null,
+      "testCases": [
+        "TC-03-UNIT-01", "TC-03-UNIT-02",
+        "TC-03-INT-01", "TC-03-INT-02", "TC-03-INT-03", "TC-03-INT-04", "TC-03-INT-05",
+        "TC-03-INT-06", "TC-03-INT-07", "TC-03-INT-08", "TC-03-INT-09", "TC-03-INT-10",
+        "TC-03-INT-11", "TC-03-INT-12", "TC-03-INT-13", "TC-03-INT-14", "TC-03-INT-15",
+        "TC-03-INT-16", "TC-03-INT-17", "TC-03-INT-18", "TC-03-INT-19", "TC-03-INT-20",
+        "TC-03-INT-21", "TC-03-INT-22", "TC-03-INT-23", "TC-03-INT-24", "TC-03-INT-25",
+        "TC-03-INT-26", "TC-03-INT-27", "TC-03-INT-28", "TC-03-INT-29", "TC-03-INT-30",
+        "TC-03-INT-31", "TC-03-INT-32", "TC-03-INT-33", "TC-03-INT-34", "TC-03-INT-35",
+        "TC-03-E2E-01", "TC-03-E2E-02", "TC-03-E2E-03", "TC-03-E2E-04", "TC-03-E2E-05"
+      ]
+    }
+  ],
+
+  "reuse": [
+    { "what": "org scoping, 404 not 403, path orgId never a selector", "where": "apps/api/src/auth/org-scope.guard.ts" },
+    { "what": "session cookie plus the securityStamp re-read that makes revocation instant", "where": "apps/api/src/auth/session.guard.ts" },
+    { "what": "capability refused as a bare 404 in the service, not the guard's fixed 403", "where": "apps/api/src/clients/clients.service.ts:360 requireManageCapability, :369 requireViewCapability" },
+    { "what": "role normalization the legacy `member` value depends on", "where": "packages/validation/src/roles.ts normalizeRole" },
+    { "what": "invitation token: generation, SHA-256 storage, seven-day expiry", "where": "apps/api/src/invitations/invitation-token.ts" },
+    { "what": "one live pending invitation per (email, org), invalidated in the writing transaction", "where": "apps/api/src/invitations/invitations.service.ts:105" },
+    { "what": "the accept screen, the mail sink and its `invitation` message type", "where": "apps/web/app/accept-invite/AcceptInviteScreen.tsx, apps/api/src/mail/mail.service.ts sendInvitation" },
+    { "what": "a port declared as an abstract class used as its own DI token, driver chosen in a sibling provider, registered global", "where": "apps/api/src/mail/mail.service.ts:152, apps/api/src/mail/mail.provider.ts, apps/api/src/core.module.ts" },
+    { "what": "the row lock every status write is evaluated against", "where": "apps/api/src/requests/requests.service.ts:848 lockRequest" },
+    { "what": "the append-only event writer that always takes the caller's transaction", "where": "apps/api/src/requests/request-events.service.ts" },
+    { "what": "topic → audience → addressee → project ordering the create route already answers in", "where": "apps/api/src/requests/requests.service.ts:317-400" },
+    { "what": "the empty-catalogue picker and the submit control that is not drawn", "where": "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx:255-292" },
+    { "what": "Select whose option label is a ReactNode — what makes the two-line contact picker need no new primitive", "where": "1_DS for dev/components/forms/Select.d.ts:3" },
+    { "what": "E2E helpers every case's preconditions are reached through", "where": "e2e/tests/helpers.ts signupOrg, createBareAccount, latestInvitationToken, inviteAndAcceptViaApi, createProjectViaApi, assignProjectMembersViaApi, listRequestTopicsViaApi, archiveRequestTopicViaApi" },
+    { "what": "replacing a provider with a double in an integration test", "where": "apps/api/test/clients.spec.ts:136" }
+  ],
+
+  "buildFromZero": [
+    "ClientMembership — the model, its migration, and the service that writes it",
+    "The three client-contacts routes and their controller",
+    "The `client` branch of invitation acceptance, and REQ-03-042's refusal at the staff invitation's write and accept",
+    "Principal resolution on the session, and the decorator that names the seven routes a client principal may reach",
+    "The client branch of sign-in and of GET /api/me",
+    "CLIENT_USER_MESSAGES and the ClientCapability union with its flat CLIENT_CAPABILITIES list — neither name exists in the tree today",
+    "The client addressee on a request: assigneeClientMembershipId, the project rules, the audience rule, party/answer/decline/message",
+    "RequestNotification, the RequestNotifier port, NullRequestNotifier, and the post-commit dispatcher",
+    "The contacts section and invite modal on client detail",
+    "The addressee-kind control and the client contact picker in the new-request modal",
+    "The client shell: sidebar gating, the post-auth landing branch, and the requests screens for a principal with no role"
+  ],
+
+  "testCases": {
+    "unit": ["TC-03-UNIT-01", "TC-03-UNIT-02"],
+    "int": [
+      "TC-03-INT-01", "TC-03-INT-02", "TC-03-INT-03", "TC-03-INT-04", "TC-03-INT-05",
+      "TC-03-INT-06", "TC-03-INT-07", "TC-03-INT-08", "TC-03-INT-09", "TC-03-INT-10",
+      "TC-03-INT-11", "TC-03-INT-12", "TC-03-INT-13", "TC-03-INT-14", "TC-03-INT-15",
+      "TC-03-INT-16", "TC-03-INT-17", "TC-03-INT-18", "TC-03-INT-19", "TC-03-INT-20",
+      "TC-03-INT-21", "TC-03-INT-22", "TC-03-INT-23", "TC-03-INT-24", "TC-03-INT-25",
+      "TC-03-INT-26", "TC-03-INT-27", "TC-03-INT-28", "TC-03-INT-29", "TC-03-INT-30",
+      "TC-03-INT-31", "TC-03-INT-32", "TC-03-INT-33", "TC-03-INT-34", "TC-03-INT-35"
+    ],
+    "e2e": ["TC-03-E2E-01", "TC-03-E2E-02", "TC-03-E2E-03", "TC-03-E2E-04", "TC-03-E2E-05"]
+  },
+
+  "testIds": [
+    "client-contacts-section",
+    "client-contacts-empty-state",
+    "client-contact-invite-btn",
+    "client-contact-invite-modal",
+    "client-contact-invite-email",
+    "client-contact-invite-submit",
+    "client-contact-invite-error-email",
+    "client-contact-row-{id}",
+    "client-contact-row-{id}-remove-btn",
+    "request-new-assignee-kind",
+    "request-new-assignee-client",
+    "request-new-assignee-member",
+    "request-new-error-assignee",
+    "request-new-project",
+    "request-new-topic",
+    "request-new-topic-empty",
+    "request-new-submit",
+    "requests-page",
+    "sidebar-requests-link",
+    "nav-members",
+    "nav-projects",
+    "nav-clients",
+    "request-detail-page",
+    "request-detail-assignee",
+    "request-detail-answer-btn",
+    "request-detail-decline-btn",
+    "request-detail-decline-reason",
+    "request-detail-decline-confirm",
+    "request-detail-grant-btn",
+    "request-detail-composer",
+    "request-detail-thread",
+    "requests-new-btn"
+  ],
+
+  "sections": {
+    "Summary": "no task — orientation. The two things it introduces, the ClientMembership principal and the notification port, are T1/T3/T4 and T6.",
+    "Actors & Preconditions": "T3, T4 — the client contact and the contact manager are the two new callers; T5 restates the requester's precondition (assigned to the project) as REQ-03-023.",
+    "Roles & Permission Matrix": "T2, T3 — the matrix itself is in the contracts file and adds no role, no staff capability and no matrix column; the client column is the flat CLIENT_CAPABILITIES list resolved from the principal kind.",
+    "Functional Requirements": "T1, T2, T3, T4, T5, T6, T7, T8, T9 — every REQ-03-001…042 is assigned to at least one task.",
+    "State Machine": "T4 (the contact's own lifecycle and its transition table), T5 (invariant 3 — every status write re-reads the row FOR UPDATE and tests the actor guard against that read, whichever principal kind the actor is), T3/T4 (invariant 1, enforced at both writes by REQ-03-014 and REQ-03-042, never by the schema).",
+    "Out of Scope": "no task — six exclusions. A client raising a request is refused by REQ-03-027 (T5); actual mail and per-contact preferences are a later adapter spec (T6 ships the port and nothing that sends); a contact belonging to more than one client or organization, client-side attachments, a client seeing tasks/time/reports, and self-service sign-up are built nowhere and no route admits them.",
+    "Known Gaps": "no task — five accepted gaps, each one a thing deliberately not built: no delivery, no reassignment of a removed contact's requests, no separately designed client shell, the contact's address visible to view-clients holders, and delivery attempted only while the API is being called. Nothing here asks for code.",
+    "Acceptance Criteria": "T10 — all 17 criteria are observed by the cases named in the Observed-by column, and every one of those cases is claimed above.",
+    "Routes": "T3, T4, T5 — the guard chain, the success codes and the error bodies of every amended and every new route.",
+    "Error Messages": "T2 — every row is placed in `messages` below with its module and the route that emits it.",
+    "Data Model": "T1 — one additive migration.",
+    "The notification port": "T6 — the port's members, its two adapters and the retry policy.",
+    "Validation Rules": "T2 (the client half of rules 1, 5, 8, 13), T4 (rules 2, 3, 4), T5 (rules 6, 7, 9, 10, 11, 12) — the server re-validates every rule and the server-only ones have no client-side half at all.",
+    "Required data-testid Attributes": "T7, T8, T9 — listed in `testIds`.",
+    "Screens": "T8 (the contacts section), T9 (the modal with a client addressee), T7 (what a client contact sees).",
+    "UI Description": "T7, T8, T9 — every surface row.",
+    "DS gaps": "no task — the spec records NONE, and both controls in doubt are built from primitives apps/web/src/ds.ts already exports; `dsGaps` below is empty and anything found missing during implementation goes INTO the design system, never improvised per screen.",
+    "Edge Cases": "T3 (8, 9, 16, 17), T4 (1, 2, 3, 4), T5 (5, 6, 7, 10, 11, 15, 18, 19), T6 (12, 13, 14), T9 (20).",
+    "Security": "T3 (the 404 discipline and the ordering that keeps the role-keyed helpers unreachable), T4 (revocation through securityStamp), T5 (request existence not enumerable), T6 (no address stored, none in lastError) — the spec adds no unauthenticated route of its own.",
+    "Verification Plan": "T10 — the rig is walked through this spec's own routes and the existing helpers; no fixture is owed.",
+    "Test Cases": "T10 — all 42 claimed."
+  },
+
+  "messages": [
+    { "context": "Contact email is not a valid address", "text": "Enter a valid email address", "module": "packages/validation/src/index.ts CLIENT_USER_MESSAGES.emailInvalid (new)", "emittedBy": "apps/api/src/clients/client-contacts.service.ts — POST …/clients/{clientId}/contacts (400)" },
+    { "context": "The address already contacts a client of this organization", "text": "This person is already a contact of a client in this workspace", "module": "packages/validation/src/index.ts CLIENT_USER_MESSAGES.alreadyLinked (new)", "emittedBy": "apps/api/src/clients/client-contacts.service.ts — POST …/contacts (409)" },
+    { "context": "Removing a contact that is already removed", "text": "This contact has already been removed", "module": "packages/validation/src/index.ts CLIENT_USER_MESSAGES.alreadyRemoved (new)", "emittedBy": "apps/api/src/clients/client-contacts.service.ts — DELETE …/contacts/{contactId} (409)" },
+    { "context": "The address already holds a principal somewhere", "text": "This email address already belongs to somebody in a workspace", "module": "packages/validation/src/index.ts CLIENT_USER_MESSAGES.principalConflict (new)", "emittedBy": "apps/api/src/invitations/invitations.service.ts — POST /api/invitations/accept and POST /api/invitations (409). Names no address and no organization." },
+    { "context": "A client contact calls the create route", "text": "Client contacts cannot raise requests", "module": "packages/validation/src/index.ts CLIENT_USER_MESSAGES.clientCannotCreate (new)", "emittedBy": "apps/api/src/requests/requests.service.ts:317 — POST …/requests (403), decided before any capability is consulted" },
+    { "context": "A client-addressed request names no project", "text": "Choose the project this request belongs to", "module": "packages/validation/src/index.ts REQUEST_MESSAGES.clientProjectRequired (new key on the existing const)", "emittedBy": "apps/api/src/requests/requests.service.ts:317 — POST …/requests (400)" },
+    { "context": "The project does not belong to the addressee's client", "text": "That project does not belong to this client", "module": "packages/validation/src/index.ts REQUEST_MESSAGES.clientProjectMismatch (new key)", "emittedBy": "apps/api/src/requests/requests.service.ts:317 — POST …/requests (400)" },
+    { "context": "The requester is not assigned to the named project", "text": "You can only ask a client about a project you are assigned to", "module": "packages/validation/src/index.ts REQUEST_MESSAGES.notOnProject (new key)", "emittedBy": "apps/api/src/requests/requests.service.ts:317 — POST …/requests (400)" },
+    { "context": "Inviting a contact to an archived client", "text": "This client is archived and cannot be assigned to new projects.", "module": "packages/validation/src/index.ts:2226 CLIENT_MESSAGES.clientArchived (exists)", "emittedBy": "apps/api/src/clients/client-contacts.service.ts — POST …/contacts (400)" },
+    { "context": "Sign-in with no active principal", "text": "Your account has been deactivated. Contact your administrator.", "module": "packages/validation/src/index.ts:222 AUTH_MESSAGES.deactivated (exists)", "emittedBy": "apps/api/src/auth/login.service.ts:38 — POST /api/login (400), body unchanged for every case that remains a refusal" },
+    { "context": "Unknown email or wrong password", "text": "Invalid email or password", "module": "packages/validation/src/index.ts:219 AUTH_MESSAGES.invalidCredentials (exists)", "emittedBy": "apps/api/src/auth/login.service.ts:49" },
+    { "context": "A superseded, used or unknown invitation token", "text": "This invitation is no longer valid", "module": "packages/validation/src/index.ts:343 INVITE_MESSAGES.tokenInvalid (exists)", "emittedBy": "apps/api/src/invitations/invitations.service.ts findPendingInvitation — POST /api/invitations/accept (400)" },
+    { "context": "No addressee chosen, or an addressee id of the wrong shape", "text": "Choose who this request is for", "module": "packages/validation/src/index.ts:1863 REQUEST_MESSAGES.assigneeInvalid (exists)", "emittedBy": "apps/api/src/requests/requests.service.ts:317" },
+    { "context": "The named contact is removed", "text": "That person is no longer active in this organization", "module": "packages/validation/src/index.ts:1864 REQUEST_MESSAGES.assigneeInactive (exists)", "emittedBy": "apps/api/src/requests/requests.service.ts:317" },
+    { "context": "The topic's audience does not match the addressee's kind", "text": "That topic cannot be used for this addressee", "module": "packages/validation/src/index.ts:1889 REQUEST_MESSAGES.topicAudienceMismatch (exists)", "emittedBy": "apps/api/src/requests/requests.service.ts:390" },
+    { "context": "Archived topic, another organization's topic, or none", "text": "That topic is not available", "module": "packages/validation/src/index.ts:1888 REQUEST_MESSAGES.topicUnavailable (exists)", "emittedBy": "apps/api/src/requests/requests.service.ts:378" },
+    { "context": "A member without create-request calls the create route", "text": "You do not have permission to create requests", "module": "packages/validation/src/index.ts:1850 REQUEST_MESSAGES.createForbidden (exists)", "emittedBy": "apps/api/src/requests/requests.service.ts:322 — reached only after the client refusal, and never answered to a client principal" },
+    { "context": "A member without view-all-requests asks for scope=all", "text": "You do not have permission to view other people's requests", "module": "packages/validation/src/index.ts:1851 REQUEST_MESSAGES.scopeForbidden (exists)", "emittedBy": "apps/api/src/requests/requests.service.ts:180 — never answered to a client principal, who receives 200 with their own rows" },
+    { "context": "A client principal calls the grant route", "text": "Only the person who asked can confirm this", "module": "packages/validation/src/index.ts:1872 REQUEST_MESSAGES.notYoursToGrant (exists)", "emittedBy": "apps/api/src/requests/requests.service.ts:534 transition" },
+    { "context": "Someone other than the addressee answers or declines", "text": "Only the person this is addressed to can answer it / decline it", "module": "packages/validation/src/index.ts:1871,1873 REQUEST_MESSAGES.notYoursToAnswer, notYoursToDecline (exist)", "emittedBy": "apps/api/src/requests/requests.service.ts:534 transition" },
+    { "context": "Declining with no reason", "text": "Say why you cannot provide this", "module": "packages/validation/src/index.ts:1877 REQUEST_MESSAGES.declineReasonRequired (exists)", "emittedBy": "apps/api/src/requests/requests.service.ts:534 transition" },
+    { "context": "Acting on a request already closed", "text": "This request has already been closed", "module": "packages/validation/src/index.ts:1869 REQUEST_MESSAGES.alreadyTerminal (exists)", "emittedBy": "apps/api/src/requests/requests.service.ts:534 transition" },
+    { "context": "Posting on a closed thread", "text": "This request is closed", "module": "packages/validation/src/index.ts:1868 REQUEST_MESSAGES.threadClosed (exists)", "emittedBy": "apps/api/src/requests/requests.service.ts:465 postMessage" },
+    { "context": "The chosen audience has no active topic", "text": "No request topics are available. An admin or manager can add one in Settings.", "module": "packages/validation/src/request-topics.ts REQUEST_TOPIC_MESSAGES.pickerEmpty (exists)", "emittedBy": "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx — screen copy, per audience" },
+    { "context": "A retired classifier field is sent", "text": "The request kind is set by the topic and cannot be sent", "module": "packages/validation/src/index.ts REQUEST_MESSAGES.classifierNotAccepted (exists)", "emittedBy": "apps/api/src/requests/requests.service.ts:317 via validateNewRequest" }
+  ],
+
+  "premises": [
+    { "claim": "the migration runs before the services roll out, so the previous code serves against the new schema; it is skipped on a web-only deploy", "verifiedAt": "infra/deploy.sh:175-185 (migrate, guarded on api being among the changed services) then infra/deploy.sh:187-192 (tf apply)" },
+    { "claim": "GET /api/me answers null today for an account with no staff membership, which the shell reads as signed out", "verifiedAt": "apps/api/src/members/me.controller.ts:27, apps/web/app/org/[orgId]/layout.tsx:45-49" },
+    { "claim": "nav-members is drawn unconditionally, where every other row asks a capability", "verifiedAt": "apps/web/src/layout/Sidebar.tsx:71-77" },
+    { "claim": "sign-in refuses an account with no active Membership, and does so before comparing the password", "verifiedAt": "apps/api/src/auth/login.service.ts:35-40" },
+    { "claim": "hasCapability normalizes an absent role to viewer and viewer holds ViewOwnRequests, while can answers false for a role its matrix has no row for", "verifiedAt": "packages/validation/src/roles.ts normalizeRole and ROLE_CAPABILITIES.viewer; packages/validation/src/index.ts:763" },
+    { "claim": "the legacy role value `member` therefore holds neither manage-clients nor view-clients, so this spec needs no role migration", "verifiedAt": "packages/validation/src/index.ts:620 CAPABILITY_MATRIX is keyed admin|manager|user|viewer only" },
+    { "claim": "manager holds manage-clients and view-clients, which TC-03-INT-12's `every manager call succeeds` depends on", "verifiedAt": "packages/validation/src/index.ts manager row, 'manage-clients': true, 'view-clients': true" },
+    { "claim": "the staff invitation's existing duplicate check reads staff rows only", "verifiedAt": "apps/api/src/invitations/invitations.service.ts:90-95" },
+    { "claim": "Invitation.role is a free-form String, so accepting `client` is a validation change and not a migration", "verifiedAt": "apps/api/prisma/schema.prisma:112" },
+    { "claim": "Request.assigneeMembershipId is already nullable and assigneeKind was written to hold a second value", "verifiedAt": "apps/api/prisma/schema.prisma:1147-1151" },
+    { "claim": "MailService is an abstract class used as its own DI token — the shape the notification port copies", "verifiedAt": "apps/api/src/mail/mail.service.ts:152, apps/api/src/mail/mail.provider.ts, apps/api/src/core.module.ts" },
+    { "claim": "today's refusal of a client addressee is 400 with assigneeMembershipId: 'Choose who this request is for', whichever audience the topic has", "verifiedAt": "packages/validation/src/requests.ts:74 REQUEST_ASSIGNEE_KINDS = ['member'], :219 validateRequestAssignee — the body check refuses the kind before the topic row is read (apps/api/src/requests/requests.service.ts:336 vs :373)" },
+    { "claim": "the modal already replaces the picker with pickerEmpty and draws no submit control when the audience is empty", "verifiedAt": "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx:255-266 and :281-292" },
+    { "claim": "the design system's Select takes a ReactNode option label, which is why the two-line contact picker is no DS gap", "verifiedAt": "1_DS for dev/components/forms/Select.d.ts:3" },
+    { "claim": "every controller mounted under api/organizations/:orgId already applies OrgScopeGuard, so REQ-03-019 has exactly one choke point", "verifiedAt": "apps/api/src/auth/org-scope.guard.ts plus every controller listed in T3.allCallSites" },
+    { "claim": "a provider is replaced with a double in an integration test through overrideProvider", "verifiedAt": "apps/api/test/clients.spec.ts:136, apps/api/test/requests.spec.ts:270" },
+    { "claim": "every state the cases need is reachable through existing helpers, so this spec owes no test fixture", "verifiedAt": "e2e/tests/helpers.ts:734 signupOrg, :794 latestInvitationToken, :898 createBareAccount, :921 inviteAndAcceptViaApi, :1128 createProjectViaApi, :1148 assignProjectMembersViaApi, :1180 listRequestTopicsViaApi, :1212 archiveRequestTopicViaApi" },
+    { "claim": "an account holding an active ClientMembership cannot acquire a staff Membership through signup either, so REQ-03-002's unreachable cell has no third writer", "verifiedAt": "apps/api/prisma/schema.prisma:32 Account.email @unique and apps/api/src/signup/signup.service.ts:36" }
+  ],
+
+  "doubleBehaviours": [
+    { "behaviour": "deliver() answers status `skipped` with channel `none` and a null provider key, and makes no outbound call — the shipped NullRequestNotifier", "whyItMatters": "REQ-03-038 and TC-03-INT-24: every row must reach a terminal state with attempts at one and nothing must reach the mail sink" },
+    { "behaviour": "deliver() answers `delivered` with channel `email`, a provider key and a provider reference", "whyItMatters": "TC-03-INT-30 — the row stores all three and reads back delivered with no migration and no rule changed, which is what makes the port a port" },
+    { "behaviour": "deliver() throws on every call", "whyItMatters": "REQ-03-040, TC-03-INT-27, edge case 12 — the request, its status and its events stay exactly as committed; the row sits at failed with lastError set and no recipient address in it" },
+    { "behaviour": "deliver() records whether a database transaction is open when it is entered, observes that its own outbox row is already committed, and blocks until released", "whyItMatters": "REQ-03-037, TC-03-INT-26 — the route must answer before the double is released, so a hanging provider can never hold a row lock on a request" },
+    { "behaviour": "deliver() never returns, leaving every row pending", "whyItMatters": "REQ-03-041, TC-03-INT-29 — the list, the detail, the counts and the badge must be exactly what they are when every row is handled; no read path consults the outbox" }
+  ],
+
+  "dsGaps": [],
+
+  "risks": [
+    { "risk": "REQ-03-019 is enforced at OrgScopeGuard, which every organization route in the product passes through. A mistake there refuses staff everywhere, and the failure is loud but total.", "mitigation": "the refusal is keyed on the resolved principal being `client` and nothing else, the seven exempt handlers opt in explicitly so a new route fails closed, and TC-03-INT-13 asserts the admin call still answers 200 beside every client 404 — the 404 is about the principal, not about the route being broken." },
+    { "risk": "The dispatcher runs after every request-mutating call. Awaiting it would make a hanging provider hold the route, and not awaiting it makes TC-03-INT-24's assertion racy.", "mitigation": "dispatch is scheduled after the commit and is not awaited (TC-03-INT-26), and TC-03-INT-24 waits for the drain rather than reading the instant the route answers. With the shipped adapter there is no I/O at all." },
+    { "risk": "A decline writes two events in one transaction (message_posted and status_changed), so reading REQ-03-035 per event produces two outbox rows per recipient for one decline. No case asserts the count.", "mitigation": "planned as the spec's own words say — one row per recipient per notifiable RequestEvent, with field_changed notifying nobody — and recorded as note N1 for a person." },
+    { "risk": "The request detail screen learns who the caller is from GET …/members, which a client principal is refused, so the answer and decline controls would not be drawn.", "mitigation": "for a client principal the members read is not issued at all and the addressee test is the fact that the request loaded — REQ-03-034 makes every readable request theirs. No new endpoint field is invented." },
+    { "risk": "LoginForm and AcceptInviteScreen both hardcode /org/{orgId}/members, which a contact cannot reach, so a signed-in contact would land on a 404.", "mitigation": "both branch on the principal from /api/me, which the contracts do amend; POST /api/login's body is left exactly as it is, since the contracts do not amend it." },
+    { "risk": "Gating nav-members could remove the row for staff, which no case in this spec would catch.", "mitigation": "e2e/tests/app-shell.spec.ts:22 already asserts nav-members for an admin and is the regression witness; TC-03-E2E-02 asserts the admin's sidebar draws members, projects and clients beside the contact's, so the absence is proven to be the principal's." },
+    { "risk": "A client principal can still reach /account/settings, which is not an organization route and which this spec does not gate.", "mitigation": "the page resolves /api/me and renders the shell, whose navigation is now the requests entry alone, and the account routes carry no organization scope, so nothing about the staff product is exposed. Recorded here rather than silently assumed." }
+  ]
+}
