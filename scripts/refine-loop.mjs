@@ -202,7 +202,38 @@ function gateLint(spec) {
  */
 const nested = process.env.CLAUDECODE === '1' || !!process.env.CLAUDE_CODE_ENTRYPOINT;
 
-async function runAgent({ agent, model, prompt, verdictPath, timeoutMin, logStem }) {
+/**
+ * The closing message of an agent's own log — what it said instead of doing the job.
+ *
+ * A gate that ends with no verdict is not a silent failure: the agent said something, and that
+ * something is the whole diagnosis. Without it the operator gets "produced no verdict" and has
+ * to go parse two megabytes of JSONL to find out that the model wrote a status report.
+ */
+function closingWords(logStem) {
+  try {
+    const lines = readFileSync(join(ROOT, `${logStem}.log`), 'utf8').split('\n').filter(Boolean);
+    for (let i = lines.length - 1; i >= 0; i -= 1) {
+      const m = JSON.parse(lines[i]);
+      if (m.type === 'result' && m.result) return String(m.result).replace(/\s+/g, ' ').slice(0, 400);
+    }
+  } catch { /* a CLI log is plain text and has no result message */ }
+  return null;
+}
+
+/**
+ * One agent, one artefact.
+ *
+ * **The prompt is written before the agent is dispatched**, next to the log it will produce.
+ * What an agent was handed is the first thing anybody asks when it does something strange, and
+ * reconstructing it afterwards from this file is reading the code that built it rather than the
+ * bytes that were sent — the two drift, and the drift is invisible exactly when it matters.
+ *
+ * **A pass that produces no verdict is retried once.** It is not a failed judgement: the model
+ * ran with the right tools and did not do the job, which is an infrastructure failure with the
+ * same shape as a timeout. Spending the round on it wastes the gates that already passed, and
+ * the operator learns nothing they can act on.
+ */
+async function runAgent({ agent, model, prompt, verdictPath, timeoutMin, logStem, attempts = 2 }) {
   const abs = join(ROOT, verdictPath);
   note(`${nested ? 'sdk query' : 'claude -p'} --agent ${agent}${model ? ` --model ${model}` : ''}  (fuse ${timeoutMin}m)`);
   /* Before the delete, not after: a dry run that removes the last verdict of a loop has
@@ -210,22 +241,40 @@ async function runAgent({ agent, model, prompt, verdictPath, timeoutMin, logStem
      nothing. */
   if (dryRun) { note(`would write ${verdictPath}`); return { status: 'pass', findings: [], dryRun: true }; }
 
-  if (existsSync(abs)) rmSync(abs); // a stale verdict read as this pass's answer is the worst failure available
   mkdirSync(dirname(abs), { recursive: true });
   mkdirSync(dirname(join(ROOT, logStem)), { recursive: true });
+  writeFileSync(join(ROOT, `${logStem}.prompt.md`), prompt);
 
-  const started = Date.now();
-  const outcome = nested
-    ? await runViaSDK({ agent, model, prompt, timeoutMin, logStem })
-    : runViaCLI({ agent, model, prompt, timeoutMin, logStem });
-  note(`${Math.round((Date.now() - started) / 1000)}s, ${outcome.exitNote}`);
+  let last = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    if (existsSync(abs)) rmSync(abs); // a stale verdict read as this pass's answer is the worst failure available
+    const stem = attempt === 1 ? logStem : `${logStem}.retry-${attempt - 1}`;
+    if (attempt > 1) writeFileSync(join(ROOT, `${stem}.prompt.md`), prompt);
 
-  if (!existsSync(abs)) {
-    return { status: 'error', error: `${agent} produced no verdict at ${verdictPath} (${outcome.exitNote})` };
+    const started = Date.now();
+    const outcome = nested
+      ? await runViaSDK({ agent, model, prompt, timeoutMin, logStem: stem })
+      : runViaCLI({ agent, model, prompt, timeoutMin, logStem: stem });
+    note(`${Math.round((Date.now() - started) / 1000)}s, ${outcome.exitNote}`);
+
+    if (existsSync(abs)) {
+      try { return JSON.parse(readFileSync(abs, 'utf8')); } catch (e) {
+        last = { status: 'error', error: `${agent} wrote a verdict that is not valid JSON: ${e.message}` };
+        note(last.error);
+        continue;
+      }
+    }
+
+    const said = closingWords(stem);
+    last = {
+      status: 'error',
+      error: `${agent} produced no verdict at ${verdictPath} (${outcome.exitNote})`
+        + (said ? `. It ended by saying: "${said}"` : ''),
+    };
+    note(attempt < attempts ? `no verdict — retrying once (${outcome.exitNote})` : 'no verdict');
+    if (said) note(`it said: ${said.slice(0, 160)}`);
   }
-  try { return JSON.parse(readFileSync(abs, 'utf8')); } catch (e) {
-    return { status: 'error', error: `${agent} wrote a verdict that is not valid JSON: ${e.message}` };
-  }
+  return last;
 }
 
 function runViaCLI({ agent, model, prompt, timeoutMin, logStem }) {
@@ -299,6 +348,14 @@ async function gatePlan(spec, ledger, round) {
 
 /* ── T2 ───────────────────────────────────────────────────────────────────── */
 
+/* The previous round's own copies. `keepVerdict` writes them into the round that produced them
+   precisely so a later pass can be handed them: the shared paths are overwritten every round
+   and by the time round two runs they hold round two's own emptiness. */
+const lastVerdictPath = (ledger, round) =>
+  `.workflow/refine/${ledger.stem}.probe/${round - 1}/judge.verdict.json`;
+const lastFixPath = (ledger, round) =>
+  `.workflow/refine/${ledger.stem}.probe/${round - 1}/fix.verdict.json`;
+
 async function gateJudge(spec, ledger, round, request, since) {
   step(`T2  spec-refiner  (round ${round}${since ? `, judging ${since.slice(0, 8)}..HEAD` : ', full'})`);
   const verdictPath = `.workflow/refine/${ledger.stem}.verdict.json`;
@@ -308,10 +365,27 @@ async function gateJudge(spec, ledger, round, request, since) {
     request || 'no request given',
     '',
     since
-      ? `Judge the change: this document has already been judged in full and repaired. The range `
+      ? [
+        `Judge the change: this document has already been judged in full and repaired. The range `
         + `is \`${since}..HEAD\`. Sweep the lines that commit changed and the rules those lines `
         + `touch, plus contradiction across the whole document. A statement outside the range is a `
-        + `statement an earlier pass accepted.`
+        + `statement an earlier pass accepted.`,
+        ``,
+        /* What the repair was answering, and what it says it did. Judging a repair without them
+           is judging a diff whose purpose is invisible: the same finding gets filed again
+           because the change reads as unmotivated, and the loop halts on `stuck-finding` over a
+           question the fixer settled on purpose. These are the claim and the receipt — check
+           them against the document, never accept them. A finding recorded as fixed that the
+           text does not carry is the most valuable thing you can find in this pass. */
+        `What that repair was answering is in \`${lastVerdictPath(ledger, round)}\`, and what the`,
+        `fixer says it did about each finding — including what it settled by deciding, and the`,
+        `alternative it rejected — is in \`${lastFixPath(ledger, round)}\`. Read both.`,
+        ``,
+        `They are a claim to check, never a conclusion to accept. A finding listed as fixed is`,
+        `fixed only if the document now carries the repair; a decision recorded there is one the`,
+        `fixer made, not one you are bound by. Where the record and the text disagree, the text`,
+        `is what ships and the disagreement is your finding.`,
+      ].join('\n')
       : 'Judge the document in full. This is its first pass.',
   ].join('\n');
 
@@ -331,7 +405,21 @@ async function repair(spec, ledger, round) {
   step(`fix  spec-fixer  (round ${round})`);
   const verdictPath = `.workflow/refine/${ledger.stem}.verdict.json`;
   const fixPath = `.workflow/refine/${ledger.stem}.fix.json`;
-  const prompt = `${spec}\n${verdictPath}`;
+  /* The output path is named here, as it is for the pre-implementer. It used to be sent as two
+     bare paths and the agent had to derive where to write from its own definition; it repaired
+     the whole verdict across four files, made 52 edits, and never called Write once. An agent
+     told what to read and not where to put the answer is being asked to guess the one thing the
+     orchestrator will check. */
+  const prompt = [
+    `Repair every finding in the verdict.`,
+    ``,
+    `Spec: \`${spec}\` — its bundle members beside it are part of it.`,
+    `Verdict: \`${verdictPath}\``,
+    ``,
+    `Write your record of the repair to \`${fixPath}\`, in the schema from your agent definition,`,
+    `and print the same JSON. The loop reads that file and nothing else: a repair you made and`,
+    `did not record there is a repair the loop cannot see, and the round stops as an error.`,
+  ].join('\n');
   return runAgent({
     agent: 'spec-fixer',
     model: RC.fixerModel ?? 'opus',

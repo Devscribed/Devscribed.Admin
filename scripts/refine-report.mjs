@@ -81,7 +81,7 @@ for (const round of loop.rounds) {
       costUsd: log?.costUsd ?? 0,
       stopReason: log?.stopReason ?? null,
       tokens: log?.tokens ?? { out: 0, cacheRead: 0, cacheWrite: 0 },
-      prompt: null,
+      prompt: g.prompt ?? null,
       result: log?.result ?? fixSummary ?? text?.text ?? null,
       report: g.report ?? null,
       status: g.verdict?.status
@@ -98,7 +98,7 @@ for (const round of loop.rounds) {
       handoff: g.handoff ?? false,
       tools: log?.tools ?? [],
       byTool: (log?.tools ?? []).reduce((a, t) => ({ ...a, [t.tool]: (a[t.tool] ?? 0) + 1 }), {}),
-      has: { prompt: false, log: !!(log || text), verdict: !!g.verdict, report: !!g.report, start: false },
+      has: { prompt: !!g.prompt, log: !!(log || text), verdict: !!g.verdict, report: !!g.report, start: false },
     });
   }
 }

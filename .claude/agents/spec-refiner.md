@@ -108,10 +108,20 @@ it names a commit range — `<sha>..HEAD` — that a repair produced. Nothing el
 file lying in `.workflow/`, not what you can infer from the git log. A range means the document
 has already been judged in full and repaired, and what has **not** been judged is that repair.
 
-**Never read `.workflow/refine/`.** What an earlier judge concluded and what a repair decided are
-exactly the context you are kept out of: a decision recorded there is not a decision you may
-accept, and a finding filed there is not one you may assume is gone. Everything you assert still
-comes from a file you opened.
+**Read nothing under `.workflow/refine/` that your prompt did not name.** On a range pass it
+names two files: the verdict the repair was answering, and the fixer's record of what it did
+about each finding. Read those. Judging a repair without knowing what it repaired means the
+change reads as unmotivated, the same finding gets filed a second time, and the loop halts on
+`stuck-finding` over a question somebody settled on purpose.
+
+**They are a claim, not a conclusion.** A finding recorded as fixed is fixed only if the document
+now carries the repair — check it in the text, and a record that says otherwise is itself the
+finding, and the most valuable one this pass can produce. A decision the fixer recorded is one
+the fixer made; it binds you to nothing. Everything you assert still comes from a file you
+opened, and the spec is the file that ships.
+
+Nothing else in that directory is yours: not an older round's verdict, not another spec's, not a
+file you found by listing the directory.
 
 Read the change with `git show <sha>..HEAD -- <spec and its bundle members>`, plus
 `git diff HEAD -- <spec>` for anything not yet committed.

@@ -185,6 +185,9 @@ export function readLoop(root, stem, { full = false } = {}) {
         ...g,
         round: n,
         log,
+        /* Written by the loop before the agent is dispatched. It is the first thing anybody
+           wants when a gate does something strange, and the board is where they look. */
+        prompt: logPath && full ? readIf(logPath.replace(/\.log$/, '.prompt.md')) : null,
         verdict,
         decided: decided ?? null,
         report: full ? readIf(join(dir, 'stages', `${g.gate}.md`)) : null,

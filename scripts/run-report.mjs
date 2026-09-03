@@ -1001,7 +1001,9 @@ function paneReceived(s) {
   '</dl>';
   const prompt = s.prompt
     ? '<h4 style="margin:16px 0 8px;font-size:13px">Промпт, который получил агент</h4><pre class="txt">' + esc(s.prompt) + '</pre>'
-    : '<div class="note-callout">Промпт не записан: этот прогон старше, чем захват входных данных в <span class="mono">ship.mjs</span>. У новых прогонов здесь будет ровно то, что видел агент.</div>';
+    : (s.script
+      ? '<div class="note-callout">Скрипт-гейт: ни промпта, ни модели. Только вердикт.</div>'
+      : '<div class="note-callout">Промпт не записан: этот прогон старше, чем захват входных данных. Оба оркестратора — <span class="mono">ship.mjs</span> и <span class="mono">refine-loop.mjs</span> — пишут промпт до того, как дёрнут агента, так что у новых прогонов здесь будет ровно то, что он получил.</div>');
   return routeHtml(s) + meta + prompt;
 }
 
