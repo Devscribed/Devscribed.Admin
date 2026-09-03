@@ -27,7 +27,8 @@ No environment repair was needed at the checkout this was walked on.
 | A second member holding `user` | `inviteAndAcceptViaApi` (`e2e/tests/helpers.ts`) | yes | yes |
 | An invitation token, out of band | `latestInvitationToken` (`e2e/tests/helpers.ts`) | yes | yes — the sink answered `200` carrying `type`, `to`, `organizationName`, `organizationId`, `role`, `token` and `acceptUrl` |
 | An account holding no principal | `createBareAccount` (`e2e/tests/helpers.ts`) | yes | yes — signing in answered `400 {"message":"Your account has been deactivated. Contact your administrator."}`, which is the refusal REQ-03-003 must stop applying to a contact |
-| Today's refusal of a client addressee | `POST /api/organizations/{orgId}/requests` with `assigneeKind: "client"` | yes | yes — `400 {"error":"validation_error","fields":{"assigneeMembershipId":"Choose who this request is for"}}` |
+| Today's refusal of a client addressee | `POST /api/organizations/{orgId}/requests` with `assigneeKind: "client"` | yes | yes — `400 {"error":"validation_error","fields":{"assigneeMembershipId":"Choose who this request is for"}}`, re-walked after the topic catalogue shipped and identical under a client topic and a staff one |
+| A client-audience topic to raise the request under | `GET /api/organizations/{orgId}/request-topics?audience=client&status=active` | yes — seeded | yes — `200` with `Access` (`access`) and `Other` (`question`), so no case creates a topic |
 | A client contact row | this spec's contacts route | created here | not run — the route is new |
 | A signed-in client principal | accept a `client` invitation, then sign in | created here | not run — the principal does not exist yet |
 | A request addressed to a client | this spec's amended create route | created here | not run |
@@ -92,9 +93,47 @@ cd e2e && E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 PW_WORKERS=1 \
   1 passed (20.6s)
 ```
 
-The two `400`s are the refusals this spec replaces, and the `/api/me` body is the shape
-REQ-03-005 extends. Both are quoted rather than described because the cases assert against
-them.
+### Re-walked after the topic catalogue shipped
+
+The rig above was walked while the create route still took `type` and `accessKind`. That
+route now takes a topic, so a second throwaway spec, `e2e/tests/_probe-03-clients.spec.ts`,
+re-walked the cells that could have moved: what the catalogue answers for the client audience,
+and whether the two refusals this spec replaces still read the same. It was deleted
+afterwards.
+
+```
+cd e2e && E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 PW_WORKERS=1 \
+  npx playwright test tests/_probe-03-clients.spec.ts --reporter=list
+
+[probe] GET request-topics?audience=client => 200 {"topics":[
+        {"id":"…","audience":"client","type":"access","name":"Access","sortOrder":10,"status":"active", …},
+        {"id":"…","audience":"client","type":"question","name":"Other","sortOrder":20,"status":"active", …}]}
+[probe] GET request-topics?audience=staff => 200 9 topic(s)
+[probe] POST requests assigneeKind=client, client topic => 400
+        {"error":"validation_error","fields":{"assigneeMembershipId":"Choose who this request is for"}}
+[probe] POST requests assigneeKind=client, staff topic => 400
+        {"error":"validation_error","fields":{"assigneeMembershipId":"Choose who this request is for"}}
+[probe] POST requests, pre-02 body => 400 {"error":"validation_error","fields":{
+        "type":"The request kind is set by the topic and cannot be sent",
+        "accessKind":"The request kind is set by the topic and cannot be sent",
+        "topicId":"Choose what this request is about",
+        "assigneeMembershipId":"Choose who this request is for"}}
+[probe] login with no principal => 400
+        {"message":"Your account has been deactivated. Contact your administrator."}
+  ✓  1 [chromium] › tests\_probe-03-clients.spec.ts (980ms)
+  1 passed (15.6s)
+```
+
+Three things this settles. Every organization is seeded with the two client topics
+REQ-03-024's `client` rows need, so no case has to create one. The refusal of a client
+addressee is **unchanged** and is unchanged *whichever* audience the topic has — the body
+check refuses the kind before the topic row is read — which is why the client rows of
+REQ-03-024's table cannot be observed until `client` is an accepted addressee kind, and why
+TC-03-INT-18 has to raise a real client request to reach the audience comparison at all. And
+the sign-in refusal REQ-03-003 replaces still reads verbatim as it did.
+
+The `400`s and the `/api/me` body are quoted rather than described because the cases assert
+against them.
 
 ## Test Cases
 
@@ -102,23 +141,28 @@ them.
 
 - **Level:** Unit
 - **Covers:** REQ-03-016
-- **Steps:** Read the exported client capability list, and probe it for
-  `view-own-requests`, `answer-request`, `decline-request`, `post-request-message`,
-  `create-request`, `view-all-requests` and `manage-clients`.
-- **Expected Result:** The first four are held and the last three are not. The list is a flat
-  readonly array with no role key anywhere in its shape, so there is no second row for a future
-  author to populate by accident.
+- **Steps:** Read the exported client capability list, and probe it for `read-own-requests`,
+  `answer-request`, `decline-request`, `post-request-message`, `create-request`,
+  `view-all-requests`, `view-own-requests` and `manage-clients`.
+- **Expected Result:** The first four are held and the last four are not — including
+  `view-own-requests`, which is a member capability that no client value is spelled as. The
+  list is a flat readonly array with no role key anywhere in its shape, so there is no second
+  row for a future author to populate by accident.
 
 ### TC-03-UNIT-02
 
 - **Level:** Unit
 - **Covers:** REQ-03-017
-- **Steps:** Resolve capabilities for a principal of kind `client` carrying a role of
-  `admin`, then for kind `client` with a role of `null`, then for kind `member` with a role of
-  `admin`.
+- **Steps:** Resolve rights for a principal of kind `client` carrying a role of `admin`, then
+  for kind `client` with a role of `null`, then for kind `member` with a role of `admin`. Then
+  call the staff helpers directly with the same absent role, to record what the ordering rule
+  is protecting against.
 - **Expected Result:** Both client cases return the client list and ignore the role entirely;
   the member case returns the admin capabilities. A role value can never widen a client
-  principal, which is what makes the kind the first question.
+  principal, which is what makes the kind the first question. The direct calls show why: with
+  a role of `null`, `hasCapability` answers `true` for `ViewOwnRequests` — the absent role
+  normalizes to `viewer` — while `can` answers `false`. A client principal that reached either
+  helper would be answered by a role it does not have, and one of the two would grant.
 
 ### TC-03-INT-01
 
@@ -287,9 +331,12 @@ them.
 - **Asserts:** `POST /api/organizations/{orgId}/requests` → 403
   CLIENT_USER_MESSAGES.clientCannotCreate
 - **Steps:** As a signed-in client contact, post a well-formed request body naming a
-  client-audience topic and another contact as the addressee.
-- **Expected Result:** `403` with the named message, and no request is created. The refusal is
-  the principal's, not the body's, so a well-formed body cannot slip through.
+  client-audience topic and another contact as the addressee. Then post an empty body.
+- **Expected Result:** Both answer `403` with `CLIENT_USER_MESSAGES.clientCannotCreate` and
+  create nothing. The refusal is the principal's, not the body's, so a well-formed body cannot
+  slip through and a malformed one is not answered as a validation error. The message is
+  asserted to be that one and **not** `REQUEST_MESSAGES.createForbidden`, which is what a
+  capability check reached first would answer.
 
 ### TC-03-INT-15
 
@@ -336,12 +383,16 @@ them.
 - **Asserts:** `POST /api/organizations/{orgId}/requests` → 400
   REQUEST_MESSAGES.topicAudienceMismatch;
   `POST /api/organizations/{orgId}/requests` → 201
-- **Steps:** Raise all four combinations of topic audience and addressee kind: a staff topic to
-  a member, a staff topic to a client contact, a client topic to a member, and a client topic
-  to a client contact.
+- **Steps:** Raise all four combinations of topic audience and addressee kind, under the two
+  seeded client topics and a seeded staff one: a staff topic to a member, a staff topic to a
+  client contact, a client topic to a member, and a client topic to a client contact. Then
+  archive the client topic and raise the fourth combination again.
 - **Expected Result:** The two matching combinations answer `201`; the two crossed ones answer
-  `400` with the named message and create nothing. Every cell of the audience decision table
-  is exercised.
+  `400` with `REQUEST_MESSAGES.topicAudienceMismatch` and create nothing. Every cell of the
+  audience decision table is exercised. The archived repeat answers `400` with
+  `REQUEST_MESSAGES.topicUnavailable` and not the mismatch, so an archived topic of either
+  audience is refused by the same sentence and the audience of an unavailable topic is not
+  disclosed.
 
 ### TC-03-INT-19
 
@@ -598,13 +649,21 @@ them.
 - **Level:** E2E
 - **Covers:** REQ-03-020
 - **Steps:** As a member assigned to a project of a client with a contact, open the
-  new-request modal, choose the client addressee kind, submit with no contact chosen, then
-  choose the contact and the project and submit.
-- **Expected Result:** The addressee control offers colleagues and clients. The empty
-  submission shows the addressee error, focuses the control, and leaves the submit control
-  enabled. Once chosen, the project control offers only projects of that contact's client that
-  the requester is assigned to, and the submission creates the request.
+  new-request modal and read the topic control. Choose the client addressee kind and read it
+  again. Submit with no contact chosen, then choose the contact and the project and submit.
+- **Expected Result:** The addressee control offers colleagues and clients, and the member
+  picker gives way to the contact picker when the client kind is chosen. The topic control
+  offers the staff catalogue before the switch and the two seeded client topics after it, with
+  any previously chosen topic cleared. The empty submission shows the addressee error, focuses
+  the control, and leaves the submit control enabled. Once chosen, the project control offers
+  only projects of that contact's client that the requester is assigned to, and the submission
+  creates the request. Finally, archive both client topics from Settings and reopen the modal:
+  choosing the client kind replaces the topic control with the empty-catalogue copy and draws
+  no submit control, while choosing the colleague kind restores both — the state is per
+  audience, not per modal.
 - **Selectors:** `request-new-assignee-kind`, `request-new-assignee-client`,
+  `request-new-assignee-member` (absent after the switch), `request-new-topic`,
+  `request-new-topic-empty`, `request-new-submit` (absent on the empty audience),
   `request-new-error-assignee`, `request-new-project`
 
 ### TC-03-E2E-05

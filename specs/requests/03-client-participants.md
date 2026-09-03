@@ -34,15 +34,14 @@ the members list, project assignment, time tracking — where a client row would
 and be quietly wrong everywhere.
 
 Two things bound the surface. A client-addressed request must name a **project** the requester
-is assigned to and that belongs to the addressee's client. And a client principal sees **only
-requests they are party to** — no members, no projects, no vacation, no other client.
+is assigned to and that belongs to the addressee's client; and a client principal sees **only
+requests they are party to** — no members, projects, vacation or other client.
 
 This spec also introduces the **notification port**: every event a party should learn about
 writes an outbox row in the transaction that caused it, and a `RequestNotifier` delivers them
-afterwards. The adapter that ships delivers nothing, so adding email later is an adapter and a
-channel value, not a migration and not a change to any rule below.
-
-Blast radius and backward compatibility for this spec are in [README.md](README.md).
+afterwards. The adapter that ships delivers nothing, so adding email later is an adapter and
+a channel value, not a migration and not a change to any rule below. Blast radius and
+backward compatibility for this spec are in [README.md](README.md).
 
 ## Actors & Preconditions
 
@@ -58,20 +57,9 @@ no unauthenticated route, no token and no rate limiter.
 
 ## Roles & Permission Matrix
 
-| Capability | admin | manager | user | viewer | client contact |
-|---|---|---|---|---|---|
-| Invite and remove client contacts | ✅ | ✅ | ❌ | ❌ | ❌ |
-| Raise a request, to a colleague or to a client contact | ✅ | ✅ | ✅ | ❌ | ❌ |
-| Read a request they are party to | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Read every request in the organization | ✅ | ✅ | ❌ | ❌ | ❌ |
-| Mark a request answered, as its addressee | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Decline a request, as its addressee | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Mark a request granted | requester or admin | requester | requester | requester | ❌ |
-| Post a message on a request they are party to | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Reach any organization screen other than requests | ✅ | ✅ | ✅ | ✅ | ❌ |
-
-A client contact holds no role at all: their capabilities come from the principal kind
-(REQ-03-016), so no value of `Membership.role` can produce them by accident.
+The matrix is in the contracts file. A client contact holds no role at all: their rights come
+from the principal kind (REQ-03-016), so no value of `Membership.role` can produce them by
+accident.
 
 ## Functional Requirements
 
@@ -145,6 +133,7 @@ IF a caller without `manage-clients` invites a client contact, THEN THE SYSTEM S
 
 WHEN a contact manager invites a client contact, THE SYSTEM SHALL write an `Invitation`
 carrying the client's id and the role value `client`.
+
 #### REQ-03-010 — an archived client takes no contacts
 
 IF the named client is archived, THEN THE SYSTEM SHALL answer `400` with
@@ -179,26 +168,40 @@ principal between the two, and the accept is the write that would break REQ-03-0
 
 WHEN a `client` invitation is accepted, THE SYSTEM SHALL answer with a `redirectTo` of
 `/requests`.
+
 ### Capability and navigation
 
-#### REQ-03-016 — client capabilities are a flat set
+#### REQ-03-016 — client capabilities are a flat set of their own
 
-THE SYSTEM SHALL resolve a client principal's capabilities from a single exported list, not
-from a role table.
+THE SYSTEM SHALL resolve a client principal's capabilities from a single exported list whose
+values belong to no staff capability union, not from a role table.
+
+**Decided:** a union of its own, because the staff unions are keyed by role in a table the
+compiler forces every role to answer for — so a value added there is one four staff roles
+must each be refused, for a right no role can hold.
+
 #### REQ-03-017 — the principal kind is asked first
 
-WHEN a capability is checked, THE SYSTEM SHALL resolve the principal kind before consulting
-any role.
+WHEN a right is checked, THE SYSTEM SHALL resolve the principal kind before calling any
+role-keyed helper.
+
+**Decided:** an ordering rule, because the role-keyed helpers do not fail closed on a
+principal with no role: one answers a client the viewer set rather than nothing.
 
 #### REQ-03-018 — the client's navigation
 
 WHILE the signed-in principal is a client contact, THE SYSTEM SHALL render the requests
 destination as the only organization navigation entry.
 
+**Decided:** Members is the entry that has to be gated for this to hold. Every other row asks
+a capability a caller with no role is refused and drops out on its own; Members is drawn
+unconditionally, because until now only staff could reach the shell.
+
 #### REQ-03-019 — every other organization route
 
 IF a client principal calls an organization route this spec does not grant them, THEN THE
 SYSTEM SHALL answer `404`.
+
 ### Addressing a request to a client
 
 #### REQ-03-020 — the addressee kind
@@ -210,6 +213,7 @@ WHEN a request carries `assigneeKind` of `client`, THE SYSTEM SHALL require
 
 IF a request addressed to a client carries no `projectId`, THEN THE SYSTEM SHALL answer `400`
 with `REQUEST_MESSAGES.clientProjectRequired`.
+
 #### REQ-03-022 — the project belongs to the addressee's client
 
 IF the named project is not linked to the addressee's client, THEN THE SYSTEM SHALL answer
@@ -237,6 +241,12 @@ answer `400` with `REQUEST_MESSAGES.topicAudienceMismatch`.
 | client | member | `400` with `REQUEST_MESSAGES.topicAudienceMismatch`. |
 | client | client | The request is created `201`. |
 
+Every row above is a topic that is **active and in the caller's organization**, named by a
+body whose own fields are valid; a topic that is archived, belongs to another organization or
+names no row at all is `400` with `REQUEST_MESSAGES.topicUnavailable` and its audience is
+never compared. So the mismatch is reachable only once `client` is an accepted addressee
+kind, which is what makes the `client` rows above observable at all.
+
 #### REQ-03-025 — an inactive contact at creation
 
 IF `assigneeClientMembershipId` names a removed contact, THEN THE SYSTEM SHALL answer `400`
@@ -250,13 +260,24 @@ the request's assignee as inactive and cancel nothing.
 #### REQ-03-027 — a client contact does not raise requests
 
 IF a client principal calls the create route, THEN THE SYSTEM SHALL answer `403` with
-`CLIENT_USER_MESSAGES.clientCannotCreate`.
+`CLIENT_USER_MESSAGES.clientCannotCreate`, decided before the route consults any capability.
+
+**Decided:** the ordering is part of the rule. Asking `create-request` first answers a client
+`REQUEST_MESSAGES.createForbidden` — the sentence a viewer gets — which tells a contact they
+are staff with too small a role. That check is the route's first statement today, so the
+order is a change and not an arrangement that happens to hold.
+
 ### What a client may do with a request
 
 #### REQ-03-028 — a client contact is party to their own requests
 
 WHERE a request's addressee is the calling client principal, THE SYSTEM SHALL treat that
 principal as a party to it.
+
+**Decided:** the party test is already the whole of the read rule and already answers a
+principal with no role correctly — not a party and no `ViewAllRequests` reads `404`. This
+spec adds the client half of "party", not a second authorization scheme: answer, decline and
+message keep the two tests they apply to a member.
 
 #### REQ-03-029 — the client's list
 
@@ -277,6 +298,7 @@ it to `declined`.
 
 IF a client principal calls the grant route, THEN THE SYSTEM SHALL answer `403` with
 `REQUEST_MESSAGES.notYoursToGrant`.
+
 #### REQ-03-033 — a client writes in the thread
 
 WHEN the addressee client principal posts a message on a non-terminal request, THE SYSTEM
@@ -321,6 +343,7 @@ reject it on the outbox's uniqueness constraint.
 
 IF the notifier fails, THEN THE SYSTEM SHALL leave the request, its status and its events
 exactly as the committed transaction wrote them.
+
 #### REQ-03-041 — nothing waits on a scheduler
 
 THE SYSTEM SHALL leave every read path — the list, the detail screen and the sidebar badge —
@@ -328,23 +351,8 @@ authoritative whether or not any outbox row has ever been delivered.
 
 ## State Machine
 
-The client contact's own lifecycle. The request's lifecycle is unchanged by this spec.
-
-`decision-table: keys=(state, event) domains=(state: none|active|removed, event: invite|accept|remove)`
-
-| state | event | Outcome |
-|---|---|---|
-| none | invite | An `Invitation` is written; no `ClientMembership` yet. |
-| none | accept | A valid token with no existing row writes an active `ClientMembership`. |
-| none | remove | `404`; there is no contact to remove. |
-| active | invite | `409` `CLIENT_USER_MESSAGES.alreadyLinked`; nothing is written. |
-| active | accept | `409` `CLIENT_USER_MESSAGES.principalConflict`; the existing row is untouched. |
-| active | remove | `status` → `removed`, and the account's `securityStamp` rotates in the same transaction. |
-| removed | invite | An `Invitation` is written; accepting it restores the row to `active`. |
-| removed | accept | The existing row returns to `active`; no second row is created. |
-| removed | remove | `409` `CLIENT_USER_MESSAGES.alreadyRemoved`; nothing is written. |
-
-Invariants:
+The client contact's own lifecycle, whose transition table is in the contracts file. The
+request's lifecycle is unchanged by this spec. Its invariants:
 
 1. An account never holds an active `Membership` and an active `ClientMembership` at once.
 2. A `ClientMembership` moves between `active` and `removed` and is never deleted.
