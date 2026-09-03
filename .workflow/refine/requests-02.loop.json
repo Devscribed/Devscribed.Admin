@@ -1,0 +1,16 @@
+{
+  "spec": "specs/requests/02-request-topics.md",
+  "stem": "requests-02",
+  "startedAt": "2026-09-03T06:57:01.920Z",
+  "rounds": [
+    {
+      "round": 1,
+      "startedAt": "2026-09-03T06:57:01.921Z",
+      "head": "01efadb289369e40c8ca82b551825d93cedd8eec",
+      "status": "running",
+      "lint": 0
+    }
+  ],
+  "status": "running",
+  "request": "Employees pick a request topic from presets the organization curates (VPN, Claude, Question, Other for staff; Access, Other for clients), and the screens say Pending / In progress / Completed / Closed"
+}
