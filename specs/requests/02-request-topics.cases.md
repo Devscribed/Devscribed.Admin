@@ -28,7 +28,7 @@ both current at the checkout this was walked on.
 | A request that predates this spec | any request created today | yes | yes — the `201` body carries no `topic` member, which is exactly the shape the fallback in edge case 8 must handle |
 | A request in `declined` and in `cancelled` | the existing transition routes | yes | routes exist and are exercised by `apps/api/test/requests.spec.ts` |
 | A topic in `active` and in `archived` | this spec's own routes | created here | no — the routes are new, and each case drives the real transition rather than seeding a status |
-| An organization holding no topic rows | delete them directly, the state an organization predating this spec is in | yes | not run — the table is new, and the harness applies every migration before any test body, which is why REQ-02-016 puts the mechanism on the read path rather than in the migration |
+| An organization that predates the topics migration | the E2E database's rows, migrated by `e2e/global-setup.ts` before each run | yes | not run — the migration does not exist yet. TC-02-INT-02 is the case that proves it |
 | An organization with no active staff topic | archive every seeded staff topic through this spec's own route | created here | no — the route is new |
 
 ### Access this needs
@@ -42,7 +42,7 @@ both current at the checkout this was walked on.
 | Acceptance criterion | Observer | Level | Proven at spec time |
 |---|---|---|---|
 | AC-1 | TC-02-INT-01 | Integration | `signupOrg` proven; the seed is new |
-| AC-2 | TC-02-INT-02 | Integration | the seeded-then-emptied state is reachable with a direct delete; the read path that heals it is new |
+| AC-2 | TC-02-INT-02 | Integration | not run — the migration does not exist yet |
 | AC-3 | TC-02-INT-05 | Integration | new; the functional-unique device is the one `Client` already uses |
 | AC-4 | TC-02-INT-07 | Integration | the `user` role is reachable — invited and accepted in the rehearsal |
 | AC-5 | TC-02-INT-10 | Integration | today's `201` body shape captured in the rehearsal |
@@ -57,8 +57,6 @@ both current at the checkout this was walked on.
 | AC-14 | TC-02-INT-13 | Integration | the cross-organization `404` convention is proven today by `apps/api/test/org-scope.spec.ts` |
 | AC-15 | TC-02-INT-07, TC-02-E2E-05 | Integration + E2E | the Settings destination was reached as admin in the rehearsal |
 | AC-16 | TC-02-E2E-06 | E2E | new |
-| AC-17 | TC-02-INT-22, TC-02-INT-23, TC-02-E2E-01 | Integration + E2E | new |
-| AC-18 | TC-02-INT-24 | Integration (concurrency) | new; the concurrent-caller pattern is in daily use in `apps/api/test/requests.spec.ts` |
 
 ### Rehearsal
 
@@ -165,20 +163,11 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
 - **Level:** Integration
 - **Covers:** REQ-02-016
 - **Asserts:** `GET /api/organizations/{orgId}/request-topics` → 200
-- **Steps:** Sign up an organization and raise a request under a seeded topic. Delete every
-  `RequestTopic` row of that organization directly, which is the state an organization
-  predating this spec is in before anything materializes its catalogue. Read the catalogue,
-  then read it again.
-- **Expected Result:** The first read answers with the full seeded catalogue for both
-  audiences, written before it answered. The second read writes nothing further. The request
-  raised earlier still carries its `topicLabel` and its stored `type`, and its `topicId` now
-  names no row — the response's `topic.name` is the snapshot and `topic.status` is null, which
-  is the shape a screen must render. No `Request` row is rewritten by the seeding.
-
-  The harness applies every migration before any test body runs and offers no way back, so a
-  test cannot observe the migration itself. It does not need to: REQ-02-016 makes the read path
-  the mechanism and the migration a materialization of it, and this case observes the
-  mechanism.
+- **Steps:** Against a database holding an organization and at least one request created
+  before this migration, run the migration, then read the catalogue for that organization.
+- **Expected Result:** The organization has the full seeded catalogue. Every pre-existing
+  `Request` row still has its original `type` and `accessKind`, and both `topicId` and
+  `topicLabel` are null. No request row is written by the migration.
 
 ### TC-02-INT-03
 
@@ -227,13 +216,10 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
   `PATCH /api/organizations/{orgId}/request-topics/{topicId}` → 400
   REQUEST_TOPIC_MESSAGES.audienceImmutable
 - **Steps:** As an admin, rename a seeded staff topic. Then send the same route
-  `audience: "staff"`, then `audience: "client"`, then `audience: "partner"`, then
-  `sortOrder: 999`.
+  `audience: "staff"`, then `audience: "client"`.
 - **Expected Result:** The rename succeeds and `updatedAt` moves. Sending the stored audience
-  succeeds and changes nothing. Both the other audience **and the nonsense one** answer `400`
-  with `audienceImmutable` — never `audienceUnknown`, which this route does not emit — so one
-  input reaches one rule. The `sortOrder` is ignored and the row's order is unchanged: a rename
-  can never reorder, because ordering has its own route.
+  succeeds and changes nothing. Sending the other audience answers `400` and leaves the row
+  untouched.
 
 ### TC-02-INT-07
 
@@ -436,73 +422,23 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
 - **Expected Result:** Every call answers `404` with no message naming the resource, identical
   to the answer for a path id that never existed. Nothing is read and nothing is written.
 
-### TC-02-INT-22
-
-- **Level:** Integration
-- **Covers:** REQ-02-031
-- **Asserts:** `PATCH /api/organizations/{orgId}/request-topics/order` → 200;
-  `PATCH /api/organizations/{orgId}/request-topics/order` → 400
-  REQUEST_TOPIC_MESSAGES.orderIncomplete;
-  `PATCH /api/organizations/{orgId}/request-topics/order` → 403
-  REQUEST_TOPIC_MESSAGES.manageForbidden;
-  `GET /api/organizations/{orgId}/request-topics` → 200
-- **Steps:** As an admin, archive one staff topic so the audience holds both statuses. Send the
-  staff audience's ids reversed. Read the catalogue. Then send a list omitting one id, one
-  naming an id twice, one naming a client topic among the staff ids, and one naming a topic of
-  another organization, and one naming a valid id in the middle of an otherwise complete list
-  for the wrong audience. Send a valid list as a member holding `user`.
-- **Expected Result:** The reversal answers `200` and the catalogue reads back in the new order,
-  archived row included. Each malformed list answers `400` and writes **no** `sortOrder` at all
-  — including the one whose first ids were valid, which is what "either every named topic moves
-  or none does" means on the path a test can drive. The `user` call answers `403`. Atomicity
-  under a concurrent writer is TC-02-INT-23's half; no case here injects a fault, because this
-  spec's Verification Plan lists no mechanism that could.
-
-### TC-02-INT-23
-
-- **Level:** Integration
-- **Covers:** REQ-02-031
-- **Asserts:** `PATCH /api/organizations/{orgId}/request-topics/order` → 200;
-  `GET /api/organizations/{orgId}/request-topics` → 200
-- **Steps:** Build two different valid orderings of the staff audience. Send both concurrently
-  from two sessions without awaiting the first. Read the catalogue.
-- **Expected Result:** Both answer `200`. The stored order equals one of the two submitted
-  lists **exactly** — never a mixture of the two, and never an order neither caller sent. Each
-  call rewrote the whole audience in one transaction, so the later writer wins whole.
-
-### TC-02-INT-24
-
-- **Level:** Integration
-- **Covers:** REQ-02-016
-- **Asserts:** `GET /api/organizations/{orgId}/request-topics` → 200
-- **Steps:** Sign up an organization and delete every `RequestTopic` row of it directly. Issue
-  two reads of the staff audience concurrently, without awaiting the first. Read once more
-  afterwards and count the rows.
-- **Expected Result:** Both reads answer `200` with the same rows and neither answers `500`.
-  Exactly one seeded catalogue exists — the count matches the default list, with no duplicate
-  and no unique-index failure. One writer held the `Organization` row lock; the other re-read a
-  non-zero count inside its own transaction and wrote nothing.
-
 ### TC-02-E2E-01
 
 - **Level:** E2E
-- **Covers:** REQ-02-006, REQ-02-010, REQ-02-012, REQ-02-030, REQ-02-031
+- **Covers:** REQ-02-006, REQ-02-010, REQ-02-012, REQ-02-030
 - **Steps:** Sign in as an admin. Follow the Settings › Request topics navigation row. Switch
   to the client audience and back. Add a staff topic, then attempt to add a second with the
-  same name in a different case. Move the second staff row up with its move control, then
-  reload the page. Archive a topic from its row, then restore it from the archived list.
+  same name in a different case. Archive a topic from its row, then restore it from the
+  archived list.
 - **Expected Result:** The page renders the seeded staff topics in order. The duplicate
   submission keeps the modal open, draws the duplicate message under the name field, and
-  leaves the typed value in place. The move swaps the row with the one above it and survives
-  the reload, and the first row draws no move-up control. The archive moves the row to the
-  archived list and the restore moves it back. The audience control is drawn when adding and
-  not when renaming.
+  leaves the typed value in place. The archive moves the row to the archived list and the
+  restore moves it back. The audience control is drawn when adding and not when renaming.
 - **Selectors:** `settings-tab-request-topics`, `request-topics-page`,
   `request-topics-audience-staff`, `request-topics-audience-client`, `request-topics-add-btn`,
   `request-topic-modal`, `request-topic-name`, `request-topic-audience`, `request-topic-type`,
   `request-topic-submit`, `request-topic-error-name`, `request-topic-row-{id}`,
-  `request-topic-row-{id}-archive-btn`, `request-topic-row-{id}-restore-btn`,
-  `request-topic-row-{id}-move-up-btn`, `request-topic-row-{id}-move-down-btn`
+  `request-topic-row-{id}-archive-btn`, `request-topic-row-{id}-restore-btn`
 
 ### TC-02-E2E-02
 
@@ -537,16 +473,12 @@ The third line is the one this spec turns into a refusal, and TC-02-INT-11 is wh
 - **Level:** E2E
 - **Covers:** REQ-02-028, REQ-02-029
 - **Steps:** Build four requests and drive them to `open`, `answered`, `granted` and
-  `cancelled`, driving one of them through `answered` first so its history holds a status
-  change. Open the requests list, read each row's status, open the status filter, select
-  Closed, then open the cancelled request and read its history.
+  `cancelled`. Open the requests list, read each row's status, open the status filter, select
+  Closed, then open the cancelled request.
 - **Expected Result:** The rows read Pending, In progress, Completed and Closed. The filter
   offers exactly those four words plus an all-statuses entry, and selecting Closed leaves the
-  cancelled request in the list. The detail header reads Closed with `cancelled` beside it, and
-  the history entry for the change reads Pending → In progress rather than the stored values —
-  the fourth surface reads the same map as the other three.
-- **Selectors:** `requests-status-filter`, `request-row-{id}-status`, `request-detail-status`,
-  `request-detail-history`
+  cancelled request in the list. The detail header reads Closed with `cancelled` beside it.
+- **Selectors:** `requests-status-filter`, `request-row-{id}-status`, `request-detail-status`
 
 ### TC-02-E2E-05
 

@@ -53,7 +53,6 @@ are the ones the staff invitation uses.
   "contacts": [
     {
       "id": "…",
-      "kind": "membership",
       "email": "stakeholder@acme.example",
       "displayName": "Dana Stone",
       "status": "active",
@@ -64,17 +63,8 @@ are the ones the staff invitation uses.
 }
 ```
 
-A contact who has not accepted yet has no `ClientMembership` to be identified by, so the list
-carries **two kinds of row** and says which each is rather than leaving a caller to guess:
-
-| `kind` | `status` | `id` names | Removable |
-|---|---|---|---|
-| `invitation` | `invited` | the pending `Invitation` | no — the remove control is not drawn, and the id is refused by the remove route with `404` |
-| `membership` | `active` | the `ClientMembership` | yes |
-| `membership` | `removed` | the `ClientMembership` | no — already removed, `409` |
-
-`displayName` is the invited hint until acceptance and the account's own name afterwards.
-`joinedAt` is null on an `invitation` row.
+`status` is `invited` while a pending invitation exists with no accepted row, `active` once
+accepted, and `removed` after a removal.
 
 ### `GET /api/me` — amended
 
@@ -132,7 +122,7 @@ a case author asserting a body never leaves this bundle.
 |---|---|---|---|
 | `CLIENT_USER_MESSAGES.inviteForbidden` | `POST /api/organizations/{orgId}/clients/{clientId}/contacts`, `DELETE /api/organizations/{orgId}/clients/{clientId}/contacts/{contactId}` | You do not have permission to manage client contacts | yes |
 | `CLIENT_USER_MESSAGES.emailInvalid` | `POST /api/organizations/{orgId}/clients/{clientId}/contacts` | Enter a valid email address | yes |
-| `CLIENT_USER_MESSAGES.alreadyLinked` | `POST /api/organizations/{orgId}/clients/{clientId}/contacts` | This person is already a client contact in this organization | yes |
+| `CLIENT_USER_MESSAGES.alreadyLinked` | `POST /api/organizations/{orgId}/clients/{clientId}/contacts` | This person is already a contact of this client | yes |
 | `CLIENT_USER_MESSAGES.alreadyRemoved` | `DELETE /api/organizations/{orgId}/clients/{clientId}/contacts/{contactId}` | This contact has already been removed | yes |
 | `CLIENT_USER_MESSAGES.principalConflict` | `POST /api/invitations/accept` | This email address already belongs to somebody in a workspace | yes |
 | `CLIENT_USER_MESSAGES.clientCannotCreate` | `POST /api/organizations/{orgId}/requests` | Client contacts cannot raise requests | yes |
@@ -272,7 +262,7 @@ retried, because nothing ever fails.
 | # | Field | Constraint | Message | Server-only |
 |---|---|---|---|---|
 | 1 | contact `email` | Required, a valid address, normalized to lowercase | `CLIENT_USER_MESSAGES.emailInvalid` | no |
-| 2 | contact `email` | Holds no active `ClientMembership` in the organization, for this client or any other | `CLIENT_USER_MESSAGES.alreadyLinked` | yes |
+| 2 | contact `email` | Not already an active contact of this client | `CLIENT_USER_MESSAGES.alreadyLinked` | yes |
 | 3 | the named client | Active | `CLIENT_MESSAGES.clientArchived` | yes |
 | 4 | accepting account | Holds no other active principal | `CLIENT_USER_MESSAGES.principalConflict` | yes |
 | 5 | `assigneeClientMembershipId` | Present when `assigneeKind` is `client` | `REQUEST_MESSAGES.assigneeInvalid` | no |
@@ -298,7 +288,7 @@ client-side half at all. Submit controls are never disabled for validation.
 | `client-contact-invite-submit` | Client detail | present |
 | `client-contact-invite-error-email` | Client detail | present on an address already contacting this client |
 | `client-contact-row-{id}` | Client detail | present |
-| `client-contact-row-{id}-remove-btn` | Client detail | present while the contact is active, absent on an `invitation` row |
+| `client-contact-row-{id}-remove-btn` | Client detail | present while the contact is active |
 | `request-new-assignee-kind` | New request modal | present for a member holding `create-request` |
 | `request-new-assignee-client` | New request modal | present when the client addressee kind is chosen |
 | `request-new-error-assignee` | New request modal | present when no addressee is chosen |
@@ -416,8 +406,6 @@ Light theme only.
 | 9 | A client principal calls the create-request route directly | `403` `CLIENT_USER_MESSAGES.clientCannotCreate`, and the control is not drawn. |
 | 10 | A client principal calls the grant route on their own request | `403` `REQUEST_MESSAGES.notYoursToGrant`. The control is not drawn for them. |
 | 11 | Two contacts of the same client are addressed by two requests on one project | Both exist independently; a contact sees only the one addressed to them. |
-| 11a | The remove route is called with the id of a row whose kind is `invitation` | `404`, identical to an id that names nothing. The pending invitation is unaffected; it is superseded by inviting again or expires on its own. |
-| 11b | An address already contacting a **different** client of the organization is invited | `409` `CLIENT_USER_MESSAGES.alreadyLinked`, the same answer and the same body as re-inviting to this one, so the refusal never says which client the person works for. |
 | 12 | The notifier throws on every row | The requests, their statuses and their events are exactly as committed. Rows sit at `failed` with `lastError` set, and the screens are unaffected. |
 | 13 | The same event is dispatched twice | The second write is rejected by the uniqueness constraint. Exactly one row per event and recipient exists, whatever the dispatcher did. |
 | 14 | A recipient's principal is removed before delivery | The row is marked `skipped`. No address is looked up and none is stored. |

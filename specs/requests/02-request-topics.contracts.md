@@ -17,7 +17,6 @@ with no body message, identical to a row that does not exist.
 | `PATCH /api/organizations/{orgId}/request-topics/{topicId}` | session, org scope, `ManageRequestTopics` | `200` | `400` `REQUEST_TOPIC_MESSAGES.nameRequired`, `REQUEST_TOPIC_MESSAGES.nameTooLong`, `REQUEST_TOPIC_MESSAGES.audienceImmutable`; `403` `REQUEST_TOPIC_MESSAGES.manageForbidden`; `404`; `409` `REQUEST_TOPIC_MESSAGES.nameDuplicate` |
 | `PATCH /api/organizations/{orgId}/request-topics/{topicId}/archive` | session, org scope, `ManageRequestTopics` | `200` | `403` `REQUEST_TOPIC_MESSAGES.manageForbidden`; `404`; `409` `REQUEST_TOPIC_MESSAGES.statusUnchanged` |
 | `PATCH /api/organizations/{orgId}/request-topics/{topicId}/restore` | session, org scope, `ManageRequestTopics` | `200` | `403` `REQUEST_TOPIC_MESSAGES.manageForbidden`; `404`; `409` `REQUEST_TOPIC_MESSAGES.statusUnchanged` |
-| `PATCH /api/organizations/{orgId}/request-topics/order` | session, org scope, `ManageRequestTopics` | `200` | `400` `REQUEST_TOPIC_MESSAGES.audienceUnknown`, `REQUEST_TOPIC_MESSAGES.orderIncomplete`; `403` `REQUEST_TOPIC_MESSAGES.manageForbidden`; `404` |
 | `POST /api/organizations/{orgId}/requests` | session, org scope, `CreateRequest` | `201` | `400` `REQUEST_MESSAGES.topicRequired`, `REQUEST_MESSAGES.topicUnavailable`, `REQUEST_MESSAGES.topicAudienceMismatch`, `REQUEST_MESSAGES.classifierNotAccepted`; `403` `REQUEST_MESSAGES.createForbidden`; `404` |
 | `GET /api/organizations/{orgId}/requests` | session, org scope | `200` | `403` `REQUEST_MESSAGES.scopeForbidden`; `404` |
 | `PATCH /api/organizations/{orgId}/requests/{requestId}` | session, org scope | `200` | `400` `REQUEST_MESSAGES.fieldImmutable`; `403` `REQUEST_MESSAGES.editForbidden`; `404` |
@@ -60,23 +59,8 @@ list without the caller computing anything.
 
 ### `PATCH /api/organizations/{orgId}/request-topics/{topicId}`
 
-Accepts `name`. Accepts `audience` only when it equals the stored value; **any** other value,
-including one outside the closed set, answers `400`
-`REQUEST_TOPIC_MESSAGES.audienceImmutable` (REQ-02-004), so no input reaches a second rule. `type`
-and `sortOrder` are not accepted — ordering has its own route, so a rename can never reorder.
-`200` with `{ "topic": { … } }`.
-
-### `PATCH /api/organizations/{orgId}/request-topics/order`
-
-```json
-{ "audience": "staff", "topicIds": ["…", "…", "…"] }
-```
-
-`topicIds` must name **every** topic of that audience, whatever its status, exactly once;
-anything else is `400` `REQUEST_TOPIC_MESSAGES.orderIncomplete` and nothing is written. Each
-named topic's `sortOrder` is rewritten to its index times ten, in one transaction, so an
-interrupted reorder leaves the order the curator last chose. `200` with the audience's topics
-in their new order (REQ-02-031).
+Accepts `name` and `sortOrder`. Accepts `audience` only when it equals the stored value
+(REQ-02-004). `type` is not accepted. `200` with `{ "topic": { … } }`.
 
 ### `PATCH …/request-topics/{topicId}/archive` · `/restore`
 
@@ -128,14 +112,13 @@ one already there.
 
 | Export | Route | Message | New |
 |---|---|---|---|
-| `REQUEST_TOPIC_MESSAGES.audienceUnknown` | `GET /api/organizations/{orgId}/request-topics`, `POST /api/organizations/{orgId}/request-topics`, `PATCH /api/organizations/{orgId}/request-topics/order` | Choose a valid audience | yes |
+| `REQUEST_TOPIC_MESSAGES.audienceUnknown` | `GET /api/organizations/{orgId}/request-topics`, `POST /api/organizations/{orgId}/request-topics` | Choose a valid audience | yes |
 | `REQUEST_TOPIC_MESSAGES.audienceImmutable` | `PATCH /api/organizations/{orgId}/request-topics/{topicId}` | A topic cannot change audience after it is created | yes |
 | `REQUEST_TOPIC_MESSAGES.typeUnknown` | `POST /api/organizations/{orgId}/request-topics` | Choose whether this topic is an access or a question | yes |
 | `REQUEST_TOPIC_MESSAGES.nameRequired` | `POST /api/organizations/{orgId}/request-topics`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}` | Enter a topic name | yes |
 | `REQUEST_TOPIC_MESSAGES.nameTooLong` | `POST /api/organizations/{orgId}/request-topics`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}` | Topic name must be 60 characters or fewer | yes |
 | `REQUEST_TOPIC_MESSAGES.nameDuplicate` | `POST /api/organizations/{orgId}/request-topics`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}` | A topic with this name already exists for this audience | yes |
-| `REQUEST_TOPIC_MESSAGES.manageForbidden` | `POST /api/organizations/{orgId}/request-topics`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}/archive`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}/restore`, `PATCH /api/organizations/{orgId}/request-topics/order` | You do not have permission to manage request topics | yes |
-| `REQUEST_TOPIC_MESSAGES.orderIncomplete` | `PATCH /api/organizations/{orgId}/request-topics/order` | Send every topic of this audience, once each | yes |
+| `REQUEST_TOPIC_MESSAGES.manageForbidden` | `POST /api/organizations/{orgId}/request-topics`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}/archive`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}/restore` | You do not have permission to manage request topics | yes |
 | `REQUEST_TOPIC_MESSAGES.statusUnchanged` | `PATCH /api/organizations/{orgId}/request-topics/{topicId}/archive`, `PATCH /api/organizations/{orgId}/request-topics/{topicId}/restore` | This topic is already in that state | yes |
 | `REQUEST_TOPIC_MESSAGES.pickerEmpty` | — | There are no request topics yet. An admin can add one in Settings. | yes |
 | `REQUEST_MESSAGES.topicRequired` | `POST /api/organizations/{orgId}/requests` | Choose what this request is about | yes |
@@ -149,11 +132,6 @@ one already there.
 
 `REQUEST_TOPIC_MESSAGES.pickerEmpty` carries no route: it is screen copy for REQ-02-017 and
 no endpoint emits it.
-
-`REQUEST_TOPIC_MESSAGES.audienceUnknown` deliberately does **not** list the rename route.
-Audience is not a settable field there, so every value that is not the stored one — including
-one outside the closed set — is `REQUEST_TOPIC_MESSAGES.audienceImmutable`, so no input
-reaches a second rule (REQ-02-002, REQ-02-004).
 
 ## Status Labels
 
@@ -248,14 +226,8 @@ the migration (REQ-02-016). `createdByAccountId` is `null` on each.
 
 The staff set covers what the retired `accessKind` vocabulary covered, plus the two the
 request named, so nothing an organization could classify before becomes unclassifiable. Every
-row is the organization's own from the moment it is written: renaming or archiving any of them
-is an ordinary edit.
-
-The migration writes the same rows for every organization that already exists, but nothing
-depends on it having run: REQ-02-016 seeds an audience holding no row of any status on the next
-read, so the migration is a materialization of what the read path would do anyway. Archived
-rows are rows, so a catalogue emptied by archiving is never re-seeded, and the seed is
-therefore applied at most once per audience per organization.
+row is the organization's own from the moment it is written: renaming or archiving any of
+them is an ordinary edit, and the seed is never re-applied.
 
 ## Validation Rules
 
@@ -266,7 +238,7 @@ therefore applied at most once per audience per organization.
 | 3 | topic `audience` on rename | Equal to the stored value | `REQUEST_TOPIC_MESSAGES.audienceImmutable` | yes |
 | 4 | topic `type` | One of `access`, `question` | `REQUEST_TOPIC_MESSAGES.typeUnknown` | no |
 | 5 | topic `name` uniqueness | Unique per organization and audience, ignoring case | `REQUEST_TOPIC_MESSAGES.nameDuplicate` | yes |
-| 6 | order `topicIds` | Names every topic of the audience exactly once, whatever its status | `REQUEST_TOPIC_MESSAGES.orderIncomplete` | yes |
+| 6 | topic `sortOrder` | Optional integer, 0–32767 | `REQUEST_TOPIC_MESSAGES.nameRequired` is not used here; an out-of-range value is clamped to the bound | yes |
 | 7 | request `topicId` | Required | `REQUEST_MESSAGES.topicRequired` | no |
 | 8 | request `topicId` | An active topic in the caller's organization | `REQUEST_MESSAGES.topicUnavailable` | yes |
 | 9 | request `topicId` | Audience matching the addressee kind | `REQUEST_MESSAGES.topicAudienceMismatch` | yes |
@@ -289,8 +261,6 @@ field.
 | `request-topics-add-btn` | Settings › Request topics | present |
 | `request-topic-row-{id}` | Settings › Request topics | present |
 | `request-topic-row-{id}-archive-btn` | Settings › Request topics | present while active |
-| `request-topic-row-{id}-move-up-btn` | Settings › Request topics | present, and absent on the first row of an audience |
-| `request-topic-row-{id}-move-down-btn` | Settings › Request topics | present, and absent on the last row of an audience |
 | `request-topic-row-{id}-restore-btn` | Settings › Request topics | present while archived |
 | `request-topic-modal` | Settings › Request topics | present while adding or renaming |
 | `request-topic-name` | Settings › Request topics | present |
@@ -304,7 +274,6 @@ field.
 | `requests-topic-filter` | Requests list | present |
 | `request-row-{id}-topic` | Requests list | present when the request carries a topic |
 | `request-detail-topic` | Request detail | present when the request carries a topic |
-| `request-detail-history` | Request detail | present, rendering each status change through the label map |
 | `requests-new-btn` | Requests list | present for a requester |
 | `request-new-modal` | Requests list | present while raising a request |
 | `request-new-submit` | New request modal | present, and absent when the picker is empty |
@@ -389,7 +358,7 @@ Light theme only, as everywhere else this release.
 
 | Gap | Where it bites | What ships instead | What closes it |
 |---|---|---|---|
-| No drag-handle or reorder list primitive | The catalogue's ordering control | Up and down controls on each row. A press swaps the row with its neighbour in the list the screen holds and sends the whole audience's new order to the order route — keyboard-reachable, and no pointer-only interaction | A `SortableList` in `@ds` with a keyboard contract |
+| No drag-handle or reorder list primitive | The catalogue's ordering control | Up and down controls on each row, each issuing one `PATCH` — keyboard-reachable, and no pointer-only interaction | A `SortableList` in `@ds` with a keyboard contract |
 | No segmented-control primitive | The Staff / Client audience switch | Two `Button`s with an aria-pressed state, carrying `var(--sp-*)` and `var(--fs-*)` tokens | A `SegmentedControl` in `@ds`, adopted by this screen and the requests scope toggle together |
 
 ## Edge Cases
@@ -408,10 +377,6 @@ Light theme only, as everywhere else this release.
 | 10 | `status=declined` from a saved link | Accepted, returning only declined requests. The control shows Closed as the nearest selection. |
 | 11 | A topic name is submitted as `"  VPN   profile "` | Stored as `VPN profile`; a second topic submitted as `vpn profile` is `409` `REQUEST_TOPIC_MESSAGES.nameDuplicate`. |
 | 12 | Two curators archive one topic at the same instant | The row lock serializes them: one write, one `409` `REQUEST_TOPIC_MESSAGES.statusUnchanged`. |
-| 12a | Two curators reorder one audience at the same instant | Each call rewrites every row of the audience in one transaction, so the later one wins whole. Neither leaves an order nobody chose. |
-| 12b | A reorder omits a topic, names one twice, or names one of the other audience | `400` `REQUEST_TOPIC_MESSAGES.orderIncomplete`, and no `sortOrder` is written. |
-| 12c | Two first reads of an unseeded audience arrive together | The `Organization` row lock serializes them. One writes the catalogue; the other re-reads a non-zero count inside its own transaction, writes nothing, and both answer `200` with the same rows. Neither sees a unique-index failure. |
-| 12d | A rename sends `audience: "partner"` | `400` `REQUEST_TOPIC_MESSAGES.audienceImmutable`, not `audienceUnknown`. Audience is not settable on that route, so every value that is not the stored one is the same refusal. |
 | 13 | The catalogue's last active staff topic is archived | The Settings screen shows an empty staff list; the new-request picker shows `REQUEST_TOPIC_MESSAGES.pickerEmpty` and draws no submit control. |
 | 14 | A `viewer` calls `GET …/request-topics` | `200` with the catalogue. Reading the words is not a privilege; raising a request still is. |
 | 15 | `PATCH …/requests/{requestId}` carries `topicId` | `400` `REQUEST_MESSAGES.fieldImmutable`. The title, description, priority, blocking flag and needed-by date stay editable. |
