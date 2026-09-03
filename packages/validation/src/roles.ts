@@ -92,7 +92,14 @@ export type Capability =
   // what `can(role, ...)` reads, and the spec requires both.
   | 'CreateRequest'
   | 'ViewOwnRequests'
-  | 'ViewAllRequests';
+  | 'ViewAllRequests'
+  // Requests spec 02 — the request-topic catalogue. Duplicates
+  // `manage-request-topics` in the lowercase-dashed `MemberCapability` union for the
+  // same reason every capability above is duplicated: this set is what
+  // `@RequireCapability` decorators name, the other is what `can(role, ...)` reads.
+  // The refusal itself is raised in the topics service, because it must carry
+  // `REQUEST_TOPIC_MESSAGES.manageForbidden` and `CapabilityGuard`'s message is fixed.
+  | 'ManageRequestTopics';
 
 /**
  * Permission matrix from spec 01 and spec 02, "Roles & Permission Matrix".
@@ -129,6 +136,7 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     'CreateRequest',
     'ViewOwnRequests',
     'ViewAllRequests',
+    'ManageRequestTopics',
   ],
   manager: [
     'ViewDocumentTemplates',
@@ -161,6 +169,9 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     'CreateRequest',
     'ViewOwnRequests',
     'ViewAllRequests',
+    // Requests spec 02's matrix gives a manager the same curating rights as an admin:
+    // the catalogue is the vocabulary of the day-to-day work the role exists for.
+    'ManageRequestTopics',
   ],
   // Requests spec 01 is the first spec to put anything in these two rows. A member
   // reading and editing *their own* contract details is still authorized below by

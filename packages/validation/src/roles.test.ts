@@ -68,6 +68,8 @@ describe('ROLE_CAPABILITIES matrix', () => {
         'CreateRequest',
         'ViewOwnRequests',
         'ViewAllRequests',
+        // Requests spec 02: curating the topic catalogue.
+        'ManageRequestTopics',
       ],
       manager: [
         'ViewDocumentTemplates',
@@ -93,6 +95,8 @@ describe('ROLE_CAPABILITIES matrix', () => {
         'CreateRequest',
         'ViewOwnRequests',
         'ViewAllRequests',
+        // Requests spec 02: a manager curates the catalogue as an admin does.
+        'ManageRequestTopics',
       ],
       // Spec 03's "user (own)" column is not a row here — see `canReadProfile` below.
       // Requests spec 01 is the first spec to put anything in these two rows: everybody
@@ -153,6 +157,7 @@ describe('capabilitiesFor', () => {
       'CreateRequest',
       'ViewOwnRequests',
       'ViewAllRequests',
+      'ManageRequestTopics',
     ]);
     expect(capabilitiesFor('manager')).toEqual([
       'ViewDocumentTemplates',
@@ -171,6 +176,7 @@ describe('capabilitiesFor', () => {
       'CreateRequest',
       'ViewOwnRequests',
       'ViewAllRequests',
+      'ManageRequestTopics',
     ]);
     // `member` normalizes to `user`, and `null` to `viewer` — both rows are non-empty
     // since requests spec 01, so each is asserted against the role it normalizes to

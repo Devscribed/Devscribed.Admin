@@ -333,11 +333,11 @@ describe('validateNewRequest', () => {
   const today = '2026-09-02';
 
   it('reports every failing field at once, not the first', () => {
-    const result = validateNewRequest({ type: 'access', assigneeKind: 'member' }, today);
+    const result = validateNewRequest({ assigneeKind: 'member' }, today);
     expect(result.valid).toBe(false);
     expect(result.fields).toEqual({
+      topicId: REQUEST_MESSAGES.topicRequired,
       title: REQUEST_MESSAGES.titleRequired,
-      accessKind: REQUEST_MESSAGES.accessKindRequired,
       assigneeMembershipId: REQUEST_MESSAGES.assigneeInvalid,
     });
   });
@@ -345,7 +345,7 @@ describe('validateNewRequest', () => {
   it('rejects a needed-by date in the past at creation', () => {
     const result = validateNewRequest(
       {
-        type: 'question',
+        topicId: 't-1',
         title: 'Which invoice template?',
         assigneeKind: 'member',
         assigneeMembershipId: 'm-1',
@@ -359,8 +359,7 @@ describe('validateNewRequest', () => {
   it('normalizes a valid body, defaulting priority and blocking', () => {
     const result = validateNewRequest(
       {
-        type: 'access',
-        accessKind: 'saas',
+        topicId: 't-1',
         title: '  Claude   seat ',
         assigneeKind: 'member',
         assigneeMembershipId: 'm-1',
@@ -369,8 +368,7 @@ describe('validateNewRequest', () => {
     );
     expect(result.valid).toBe(true);
     expect(result.value).toEqual({
-      type: 'access',
-      accessKind: 'saas',
+      topicId: 't-1',
       title: 'Claude seat',
       description: null,
       priority: 'normal',

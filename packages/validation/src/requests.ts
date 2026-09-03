@@ -257,6 +257,9 @@ export function validateDeclineReason(raw: unknown): FieldOutcome<string> {
  * ------------------------------------------------------------------ */
 
 export interface NewRequestInput extends RequestKindInput, RequestAssigneeInput {
+  /** Requests spec 02 rule 7. `type` and `accessKind` survive on `RequestKindInput`
+   * only so requirement 22's presence check can read them; neither is validated. */
+  topicId?: unknown;
   title?: unknown;
   description?: unknown;
   priority?: unknown;
@@ -266,8 +269,8 @@ export interface NewRequestInput extends RequestKindInput, RequestAssigneeInput 
 }
 
 export interface NewRequestValue {
-  type: RequestType;
-  accessKind: AccessKind | null;
+  /** Requests spec 02 rule 7 — the only classifier a caller supplies. */
+  topicId: string;
   title: string;
   description: string | null;
   priority: RequestPriority;
@@ -285,10 +288,21 @@ export interface RequestValidationResult<T> {
   value?: T;
 }
 
+/** The two names requests spec 02 requirement 22 refuses on a create body. */
+export const RETIRED_CLASSIFIER_FIELDS: readonly string[] = ['type', 'accessKind'];
+
 /**
  * Rules 1–7 over a create body. Every failing field is reported, never the first one
  * only: the form shows every error at once and focuses the first invalid field
  * (AC-10, edge case 19).
+ *
+ * Requests spec 02 replaced the kind fields with the topic. `type` and `accessKind` are
+ * no longer *validated* here at all — the route answers none of `typeUnknown`,
+ * `accessKindRequired`, `accessKindUnknown` or `accessKindNotAllowed` (requirement 21) —
+ * and their mere presence is refused with `classifierNotAccepted` under the name that was
+ * sent (requirement 22), because a silent drop turns a caller on a stale contract into a
+ * request classified as something nobody chose. `validateRequestKind` itself is untouched
+ * and stays exported; no route calls it on create any more.
  */
 export function validateNewRequest(
   input: NewRequestInput,
@@ -296,8 +310,16 @@ export function validateNewRequest(
 ): RequestValidationResult<NewRequestValue> {
   const fields: Record<string, string> = {};
 
-  const kind = validateRequestKind(input);
-  Object.assign(fields, kind.fields);
+  // Presence, not value: `hasOwnProperty` is the shape `validateRequestEdit` already uses
+  // for an immutable field, so `type: undefined` sent explicitly is still a refusal.
+  for (const field of RETIRED_CLASSIFIER_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(input, field)) {
+      fields[field] = REQUEST_MESSAGES.classifierNotAccepted;
+    }
+  }
+
+  const topicId = typeof input.topicId === 'string' ? input.topicId.trim() : '';
+  if (topicId.length === 0) fields.topicId = REQUEST_MESSAGES.topicRequired;
 
   const title = validateRequestTitle(input.title);
   if (!title.valid) fields.title = title.error;
@@ -325,8 +347,7 @@ export function validateNewRequest(
     valid: true,
     fields,
     value: {
-      type: kind.value!.type,
-      accessKind: kind.value!.accessKind,
+      topicId,
       title: (title as { valid: true; value: string }).value,
       description: (description as { valid: true; value: string | null }).value,
       priority: (priority as { valid: true; value: RequestPriority }).value,
@@ -361,6 +382,10 @@ export const IMMUTABLE_REQUEST_FIELDS: readonly string[] = [
   'number',
   'assigneeKind',
   'assigneeMembershipId',
+  // Requests spec 02 requirement 24 — the topic is chosen once. Changing it would
+  // re-classify a request after the fact while `topicLabel` still records the word it
+  // was raised under.
+  'topicId',
 ];
 
 export interface RequestEditValue {
@@ -430,8 +455,35 @@ export function validateRequestEdit(
 export type RequestScope = 'mine' | 'all';
 export const REQUEST_SCOPES: readonly RequestScope[] = ['mine', 'all'];
 
-export type RequestStatusQuery = 'all' | RequestStatus;
-export const REQUEST_STATUS_QUERIES: readonly RequestStatusQuery[] = ['all', ...REQUEST_STATUSES];
+/**
+ * Requests spec 02 adds `closed`, one filter value over two stored statuses
+ * (REQ-02-027). The five stored values stay in the set: a link somebody saved carrying
+ * `declined` still resolves, and the control simply shows Closed as the nearest
+ * selection.
+ */
+export type RequestStatusQuery = 'all' | 'closed' | RequestStatus;
+export const REQUEST_STATUS_QUERIES: readonly RequestStatusQuery[] = [
+  'all',
+  'closed',
+  ...REQUEST_STATUSES,
+];
+
+/**
+ * The stored statuses one query value selects (REQ-02-027, TC-02-UNIT-06).
+ *
+ * `null` means "refuse with 400" — an unrecognised value is never mapped to a default,
+ * because a closed set is only a contract if breaking it is observable. Every other
+ * value answers with the exact set of stored statuses the list must return: `closed`
+ * expands to the two closures, `all` to every stored status, and each stored status to
+ * itself.
+ */
+export function expandRequestStatusQuery(value: unknown): readonly RequestStatus[] | null {
+  if (value === 'all') return REQUEST_STATUSES;
+  if (value === 'closed') return ['declined', 'cancelled'];
+  return (REQUEST_STATUSES as readonly unknown[]).includes(value)
+    ? [value as RequestStatus]
+    : null;
+}
 
 export type RequestTypeQuery = 'all' | RequestType | 'vacation';
 export const REQUEST_TYPE_QUERIES: readonly RequestTypeQuery[] = [
@@ -480,6 +532,11 @@ export function vacationStatusesFor(status: RequestStatusQuery): readonly string
   switch (status) {
     case 'all':
       return null;
+    // Requests spec 02's `closed` selects both closures on both sections, so one control
+    // on one page still means one thing (edge case 9). A vacation's own vocabulary is
+    // untouched: the card that comes back still reads Rejected or Cancelled.
+    case 'closed':
+      return ['rejected', 'cancelled'];
     case 'open':
       return ['pending'];
     case 'granted':

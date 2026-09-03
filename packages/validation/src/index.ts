@@ -601,7 +601,14 @@ export type MemberCapability =
    */
   | 'create-request'
   | 'view-own-requests'
-  | 'view-all-requests';
+  | 'view-all-requests'
+  /**
+   * Requests spec 02 addition — the organization's catalogue of request topics.
+   * `manage-request-topics`: create, rename, reorder, archive and restore a topic
+   * (admin, manager). Reading the catalogue needs no capability at all — every active
+   * member reads it to fill the picker (REQ-02-008).
+   */
+  | 'manage-request-topics';
 
 /**
  * Pure lookup against spec 04's Roles & Permission Matrix (TC-04-UNIT-05), widened by
@@ -644,6 +651,7 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'create-request': true,
     'view-own-requests': true,
     'view-all-requests': true,
+    'manage-request-topics': true,
   },
   manager: {
     'view-list': true,
@@ -678,6 +686,7 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'create-request': true,
     'view-own-requests': true,
     'view-all-requests': true,
+    'manage-request-topics': true,
   },
   user: {
     'view-list': true,
@@ -712,6 +721,7 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'create-request': true,
     'view-own-requests': true,
     'view-all-requests': false,
+    'manage-request-topics': false,
   },
   viewer: {
     'view-list': true,
@@ -746,6 +756,7 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'create-request': false,
     'view-own-requests': true,
     'view-all-requests': false,
+    'manage-request-topics': false,
   },
 };
 
@@ -1867,7 +1878,69 @@ export const REQUEST_MESSAGES = {
   declineReasonTooLong: 'Reason must be 1000 characters or fewer',
   emptyMine: 'Nothing is waiting on you.',
   emptyFiltered: 'No requests match these filters.',
+
+  /* ---------------------------------------------------------------- *
+   * Requests spec 02 — the topic is the only classifier a caller supplies.
+   * Extended in place exactly as spec 01 extended the vacation keys above; none of
+   * the four collides with a key already here.
+   * ---------------------------------------------------------------- */
+  topicRequired: 'Choose what this request is about',
+  topicUnavailable: 'That topic is not available',
+  topicAudienceMismatch: 'That topic cannot be used for this addressee',
+  classifierNotAccepted: 'The request kind is set by the topic and cannot be sent',
 } as const;
+
+/**
+ * Requests spec 02 — the curated catalogue of request topics.
+ *
+ * A new export rather than more keys on `REQUEST_MESSAGES`: these belong to the topics
+ * routes and to the Settings screen that curates them, and `pickerEmpty` is screen copy
+ * that no route emits at all.
+ */
+export const REQUEST_TOPIC_MESSAGES = {
+  audienceUnknown: 'Choose a valid audience',
+  statusUnknown: 'Choose a valid status',
+  audienceImmutable: 'A topic cannot change audience after it is created',
+  typeUnknown: 'Choose whether this topic is an access or a question',
+  typeImmutable: 'A topic cannot change kind after it is created',
+  nameRequired: 'Enter a topic name',
+  nameTooLong: 'Topic name must be 60 characters or fewer',
+  nameDuplicate: 'A topic with this name already exists for this audience',
+  sortOrderInvalid: 'Enter a whole number for the order',
+  manageForbidden: 'You do not have permission to manage request topics',
+  statusUnchanged: 'This topic is already in that state',
+  /** Screen copy for REQ-02-017; no endpoint emits it. */
+  pickerEmpty: 'No request topics are available. An admin or manager can add one in Settings.',
+} as const;
+
+// Type-only, so it is erased at compile time and adds no runtime edge to the
+// `./requests` <-> `./index` cycle that `REQUEST_MESSAGES` already forms.
+import type { RequestStatus } from './requests';
+
+/**
+ * Requests spec 02 "Status Labels" — the four words the screens use for where a request
+ * stands, over the five statuses that stay in the database exactly as they are.
+ *
+ * Display copy, not a validation message, kept beside the messages so web and API cannot
+ * disagree about the word a status shows as. Read by the list rows, the detail header,
+ * the detail history entries and the filter control (REQ-02-028), and by nothing else:
+ * a vacation card keeps its own stored word (Pending / Approved / Rejected / Cancelled),
+ * which is why this map has an entry for every stored `Request` status and for no
+ * vacation status.
+ *
+ * `closure` is the reason a closed request closed (REQ-02-029) and is `null` wherever
+ * there is nothing to say.
+ */
+export const REQUEST_STATUS_LABELS: Record<
+  RequestStatus,
+  { label: string; closure: string | null }
+> = {
+  open: { label: 'Pending', closure: null },
+  answered: { label: 'In progress', closure: null },
+  granted: { label: 'Completed', closure: null },
+  declined: { label: 'Closed', closure: 'declined' },
+  cancelled: { label: 'Closed', closure: 'cancelled' },
+};
 
 /** Max length of an optional reviewer comment (spec 09 Validation Rule 6). */
 export const REVIEWER_COMMENT_MAX = 500;
@@ -3552,3 +3625,4 @@ export * from './holidays';
  * ------------------------------------------------------------------ */
 
 export * from './requests';
+export * from './request-topics';

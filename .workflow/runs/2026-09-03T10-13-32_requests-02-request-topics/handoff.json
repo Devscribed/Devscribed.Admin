@@ -1,0 +1,437 @@
+{
+  "spec": {
+    "path": "specs/requests/02-request-topics.md",
+    "sha256": "a9e777185dd5a6efe0e4e6b1a43fb04eff6c6f062ba9fb912543b38503994d4d",
+    "bundle": [
+      {
+        "path": "specs/requests/02-request-topics.contracts.md",
+        "sha256": "5dd4591c6c42f0f20a1d56aec797298ff5bd5ce5a78e67c060af43c5f12ccee6"
+      },
+      {
+        "path": "specs/requests/02-request-topics.cases.md",
+        "sha256": "4b5cf31c08ba27bdc0330854cb043573411dd61bd2fe0e6efa0e8942299039ba"
+      }
+    ],
+    "dependsOn": ["requests/01", "user-management/01", "organization/03"]
+  },
+  "summary": "An organization gets a catalogue of request topics it curates itself. One new table (RequestTopic: audience staff|client, type access|question, name, sortOrder, status active|archived) and two new nullable columns on Request (topicId, topicLabel). One new capability registered in both capability unions. Five new routes under /api/organizations/{orgId}/request-topics — read, create, rename/reorder, archive, restore — with no delete of any kind. A Settings screen that curates the catalogue, reachable from a new sidebar row. The requests surface is amended: the topic becomes the only classifier a caller supplies, so POST .../requests requires topicId, refuses a body carrying type or accessKind, writes type from the topic and accessKind null, and snapshots the topic name into topicLabel in the creating transaction; GET .../requests gains a topicId filter and the status value closed over declined+cancelled; PATCH .../requests/{id} refuses topicId. The five stored statuses stay exactly as they are and are relabelled on screen — Pending, In progress, Completed, Closed — from one exported map read by the filter control, the list rows, the detail header and the history entries. Requirement numbers in every task below are the numeric suffix of the spec's ids: requirement 1 is REQ-02-001, requirement 31 is REQ-02-031.",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "packages/validation — topic vocabulary, messages, the capability in both unions, status labels and the status expander",
+      "files": [
+        "packages/validation/src/request-topics.ts",
+        "packages/validation/src/request-topics.test.ts",
+        "packages/validation/src/index.ts",
+        "packages/validation/src/roles.ts",
+        "packages/validation/src/requests.ts",
+        "packages/validation/src/requests.test.ts",
+        "packages/validation/src/roles.test.ts"
+      ],
+      "requirements": [2, 3, 5, 6, 7, 9, 18, 19, 20, 21, 22, 24, 27, 28, 29],
+      "dependsOn": [],
+      "migration": { "additive": true, "note": "no database change in this task" },
+      "description": "New export REQUEST_TOPIC_MESSAGES carrying every row of the Error Messages table, including pickerEmpty, which is screen copy no route emits. Four new keys on the existing REQUEST_MESSAGES const, extended in place exactly as requests spec 01 extended it — topicRequired, topicUnavailable, topicAudienceMismatch, classifierNotAccepted; verified none of the four exists there today. Validators: topic name (trim then collapse whitespace, then 1-60, the shape normalizeClientName already uses at packages/validation/src/index.ts:2189), audience (exact, case-sensitive — TC-02-UNIT-02 requires 'Staff' to fail), type, and sortOrder (integer 0-32767, an out-of-range integer clamped to the bound and answered 200/201, a non-integer refused with sortOrderInvalid — validation rule 6, TC-02-INT-03). A topic status-query parser that refuses an unknown value with statusUnknown and defaults an omitted one to active; it must NOT copy parseClientStatusFilter (index.ts:2232), which silently falls back to 'active' and would make a typo look like an empty catalogue (requirement 2). An exported comparator: sortOrder ascending, then name case-insensitively (requirement 9, TC-02-UNIT-04). An exported status label map keyed by the five stored Request statuses, each with its label and its closure sub-label (none, none, none, declined, cancelled) — display copy kept beside the messages so web and API cannot disagree (requirements 28, 29). An exported expander for the list's status query: closed -> [declined, cancelled], all -> every stored status, each stored status -> itself, anything else rejected rather than defaulted (requirement 27, TC-02-UNIT-06). 'closed' joins REQUEST_STATUS_QUERIES (requests.ts:433-434); adding it makes vacationStatusesFor (requests.ts:479) fail compilation until it maps closed -> ['rejected','cancelled'], which is the seam that keeps the two sections of the page answering one control (edge case 9). Add 'topicId' to IMMUTABLE_REQUEST_FIELDS (requests.ts:357) for requirement 24. Remove the type/accessKind validation from validateNewRequest (requests.ts:293) and add topicId as required there (rule 7, message topicRequired, absent/null/empty all failing), while validateRequestKind itself stays exported and untouched — spec 01's TC-01-UNIT-02 still covers it and no route calls it on create any more. Presence of type or accessKind on a create body is tested with Object.prototype.hasOwnProperty, the shape validateRequestEdit already uses for immutable fields. Register the capability in BOTH unions as clients and holidays did: 'manage-request-topics' in MemberCapability with a CAPABILITY_MATRIX row for all four roles (admin true, manager true, user false, viewer false) and 'ManageRequestTopics' in Capability with ROLE_CAPABILITIES (admin, manager). Every capability check anywhere in this spec runs through normalizeRole() (packages/validation/src/roles.ts) so the legacy 'member' column value maps to 'user'. The three plain unit tests under describe('validateNewRequest') in requests.test.ts assert the retired kind fields and are rewritten onto a topicId body — they carry no TC id and are not spec 01 cases.",
+      "allCallSites": [
+        "packages/validation/src/requests.ts#validateNewRequest",
+        "packages/validation/src/requests.ts#validateRequestEdit",
+        "packages/validation/src/requests.ts#parseRequestStatusQuery",
+        "packages/validation/src/requests.ts#vacationStatusesFor",
+        "packages/validation/src/index.ts#CAPABILITY_MATRIX",
+        "packages/validation/src/roles.ts#ROLE_CAPABILITIES"
+      ],
+      "concurrency": { "rows": [], "lock": "none — pure functions", "reread": [] }
+    },
+    {
+      "id": "T2",
+      "title": "Prisma schema and the two migration files — the RequestTopic table, the two Request columns, and the backfill",
+      "files": [
+        "apps/api/prisma/schema.prisma",
+        "apps/api/prisma/migrations/*_requests_02_request_topics/migration.sql",
+        "apps/api/prisma/migrations/*_requests_02_request_topics_backfill/migration.sql"
+      ],
+      "requirements": [1, 3, 5, 9, 10, 14, 16, 23],
+      "dependsOn": [],
+      "migration": {
+        "additive": true,
+        "note": "Two files, both additive: no rename, no drop, no new NOT NULL on an existing table. File one creates \"RequestTopic\" (id, organizationId FK Organization ON DELETE CASCADE, audience, type, name VARCHAR(60), sortOrder INT DEFAULT 0, status DEFAULT 'active', createdAt, updatedAt, createdByAccountId FK Account ON DELETE SET NULL, archivedAt, archivedByAccountId FK Account ON DELETE SET NULL), the index (organizationId, audience, status), and the functional unique index CREATE UNIQUE INDEX ON \"RequestTopic\" (\"organizationId\", \"audience\", LOWER(\"name\")) written by hand because Prisma cannot express LOWER() in @@unique — the device Client already uses at apps/api/prisma/migrations/20260901120000_spec_org_01_clients/migration.sql:30. It then adds \"Request\".\"topicId\" TEXT NULL REFERENCES \"RequestTopic\"(id) ON DELETE SET NULL and \"Request\".\"topicLabel\" VARCHAR(60) NULL. File two holds only the backfill: INSERT ... SELECT ... WHERE NOT EXISTS, giving the eleven seed rows to every organization holding no RequestTopic row, createdByAccountId NULL, reading and writing no Request row, so executing it twice inserts nothing the second time. Deploy order read from infra/deploy.sh, not from prose about it: the migrate step at infra/deploy.sh:183-184 runs prisma migrate deploy on the NEW image and the service rollout at infra/deploy.sh:187-191 happens after it, so both files execute while the PREVIOUS code is still serving. That code knows neither the table nor the two columns and never reads the table the backfill inserts into, so the window is safe. This run therefore ships two migration files rather than one — required by name in the spec's Seed Data section and by TC-02-INT-02, which executes the backfill by its path; recorded as note P1."
+      },
+      "description": "The audience, type and status columns are documented String columns rather than Prisma enums, matching Client.status and Project.status and this area's recorded product decision. topicId is SetNull rather than Cascade because a request outlives a topic; no route this spec exposes can fire it (requirement 14), and the state it produces — a topicLabel with no topicId — is the one the serializer must still answer for (requirement 23, TC-02-INT-02).",
+      "allCallSites": [
+        "apps/api/prisma/schema.prisma#Request",
+        "apps/api/prisma/schema.prisma#Organization",
+        "apps/api/prisma/schema.prisma#Account"
+      ],
+      "concurrency": {
+        "rows": ["RequestTopic", "Request"],
+        "lock": "none — DDL, plus an idempotent INSERT ... WHERE NOT EXISTS backed by the functional unique index",
+        "reread": []
+      }
+    },
+    {
+      "id": "T3",
+      "title": "Seed the catalogue in the transaction that creates an organization",
+      "files": [
+        "apps/api/src/requests/request-topics.seed.ts",
+        "apps/api/src/signup/signup.service.ts"
+      ],
+      "requirements": [1, 15],
+      "dependsOn": ["T2"],
+      "migration": { "additive": true, "note": "no schema change; rows are written through the client" },
+      "description": "The eleven Seed Data rows are one exported constant list (nine staff, two client, sortOrder 10..90 and 10..20), shared by the signup path and asserted by TC-02-INT-01. apps/api/src/signup/signup.service.ts:42 already opens a $transaction that creates the Account, the Organization and the admin Membership; the topics are written inside it, so a failure rolls the organization back rather than producing one without a catalogue (requirement 15). tx.organization.create at signup.service.ts:46 is the only organization-creating call site in apps/api/src, verified by grep, so seeding there covers the requirement entirely. The seed helper takes organizationId as a required argument with no default; there is no session at signup time, and createdByAccountId is null on every seeded row — which is what TC-02-INT-01 asserts, through the database, since the documented GET response shape carries no createdByAccountId.",
+      "allCallSites": ["apps/api/src/signup/signup.service.ts#signup"],
+      "concurrency": {
+        "rows": ["RequestTopic", "Organization", "Account", "Membership"],
+        "lock": "the signup $transaction that already exists; no row lock, because the organization row is created inside it and no other writer can see it yet",
+        "reread": []
+      }
+    },
+    {
+      "id": "T4",
+      "title": "API — the request-topics module: read, create, rename, reorder, archive, restore",
+      "files": [
+        "apps/api/src/requests/request-topics.controller.ts",
+        "apps/api/src/requests/request-topics.service.ts",
+        "apps/api/src/requests/request-topics.dto.ts",
+        "apps/api/src/app.module.ts"
+      ],
+      "requirements": [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+      "dependsOn": ["T1", "T2"],
+      "migration": { "additive": true, "note": "no schema change" },
+      "description": "One controller registered flat in app.module.ts beside RequestsController, ClientsController and HolidaysController: @Controller('api/organizations/:orgId') @UseGuards(SessionGuard, OrgScopeGuard). Capability is checked inside the service rather than by CapabilityGuard, because the refusal must carry REQUEST_TOPIC_MESSAGES.manageForbidden and CapabilityGuard's message is fixed and never names the resource (apps/api/src/auth/capability.guard.ts:12-24) — the same reason RequestsController already gives for createForbidden. The check is can(normalizeRole(membership.role), 'manage-request-topics') against the live membership row, never a copy in the cookie, and it answers 403 (requirement 7, TC-02-INT-07) — deliberately NOT the 404 ClientsService answers for a missing capability, because this spec names the message and its cases assert it. Every service method takes organizationId as a required argument with no default and it is always session.organizationId; the path :orgId is checked by OrgScopeGuard and is never a selector, so a topic of another organization answers a bare 404 identical to one that never existed (requirement 1, TC-02-INT-21). Read: audience optional (omitted returns both audiences), status defaulting to active, an unknown value in either refused with 400 audienceUnknown / statusUnknown and never silently defaulted; ordered by T1's comparator; open to every active member including a viewer (requirement 8, edge case 14). Create: sortOrder optional, defaulting to the highest stored sortOrder in that audience plus ten, counting rows of every status and clamped to the 32767 bound; a case-folded pre-check answers 409 nameDuplicate and a lost race surfaces as Prisma P2002 mapped to the same 409, the isUniqueViolation shape at apps/api/src/clients/clients.service.ts:392. Rename/reorder (one PATCH) accepts name and sortOrder, and accepts audience and type only when each equals the stored value; a different one is 400 audienceImmutable / typeImmutable, answered BEFORE the name-uniqueness check, so a call carrying both a changed audience and a duplicate name answers audienceImmutable and writes nothing (Validation Rules, TC-02-INT-06). An archived topic may still be renamed and reordered through the route — the screen simply draws no such control (State Machine, TC-02-INT-22). Archive and restore take no body, answer 409 statusUnchanged when the status would not change (requirement 13), and write/clear archivedAt and archivedByAccountId. No DELETE handler and no service method that removes a row (requirement 14, TC-02-INT-20). The write routes return { topic: { … } } in the documented row shape; archivedAt, archivedByAccountId and createdByAccountId are NOT added to that shape — TC-02-INT-01 and TC-02-INT-08 observe them through the database, which is where the cases put them.",
+      "allCallSites": [
+        "apps/api/src/requests/request-topics.service.ts#listTopics",
+        "apps/api/src/requests/request-topics.service.ts#createTopic",
+        "apps/api/src/requests/request-topics.service.ts#updateTopic",
+        "apps/api/src/requests/request-topics.service.ts#archiveTopic",
+        "apps/api/src/requests/request-topics.service.ts#restoreTopic",
+        "apps/api/src/requests/requests.service.ts#createRequest",
+        "apps/api/src/requests/requests.service.ts#listRequests",
+        "apps/api/src/signup/signup.service.ts#signup",
+        "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+        "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx",
+        "apps/web/app/org/[orgId]/requests/page.tsx"
+      ],
+      "concurrency": {
+        "rows": ["RequestTopic"],
+        "lock": "SELECT \"id\", \"status\", \"audience\", \"type\", \"name\", \"sortOrder\" FROM \"RequestTopic\" WHERE \"id\" = $1 AND \"organizationId\" = $2 FOR UPDATE inside the transaction of every writer of an existing row — rename, reorder, archive and restore — the shape RequestsService.lockRequest already uses on Request (apps/api/src/requests/requests.service.ts#lockRequest). State Machine invariant 5 puts rename and reorder under the lock as well as archive and restore, so the plan locks all four rather than only the two the status guard needs.",
+        "reread": ["status", "audience", "type", "name", "sortOrder"],
+        "note": "Invariant 3: the status guard is evaluated against the locked read, never against a copy loaded earlier, so two concurrent archives produce one 200 and one 409 statusUnchanged whichever arrived first (TC-02-INT-16, AC-13). The row lock does not serialize TC-02-INT-16's second half — two renames of two DIFFERENT rows to one name — where the functional unique index is the arbiter and the loser's P2002 becomes 409 nameDuplicate (edge case 1). The other writers of a RequestTopic row are the signup seed (T3) and the backfill migration (T2); both only ever insert, and neither can collide with a row a curator holds, because the seed runs before the organization is visible and the backfill inserts only where no row exists."
+      }
+    },
+    {
+      "id": "T5",
+      "title": "API — the requests surface amended: topic in, classifier out, status=closed, topicId filter, the topic member",
+      "files": [
+        "apps/api/src/requests/requests.service.ts",
+        "apps/api/src/requests/requests.controller.ts",
+        "apps/api/src/requests/requests.serializer.ts",
+        "apps/api/src/requests/requests.dto.ts"
+      ],
+      "requirements": [18, 19, 20, 21, 22, 23, 24, 25, 26, 27],
+      "dependsOn": ["T1", "T2", "T4"],
+      "migration": { "additive": true, "note": "no schema change" },
+      "description": "createRequest: topicId required, with absent, null and empty string all answering 400 topicRequired under the topicId field (TC-02-INT-18). The topic is then looked up active and in the caller's own organization, and every other outcome — archived, another organization's, no row at all — is one 400 topicUnavailable with one body (requirement 19, TC-02-INT-13); this is the deliberate exception to the module's 404-for-cross-organization rule, and it leaks nothing because all three answers are identical. Only on a topic found active is the audience compared with the addressee's kind, so an archived client topic answers topicUnavailable and never topicAudienceMismatch (requirement 20 and its Decided note, TC-02-INT-12). type is written from the topic and accessKind is written null even under an access topic (requirement 21); a body carrying either name is 400 classifierNotAccepted keyed under the name that was sent, and neither is validated as a body field, so the route can no longer answer typeUnknown, accessKindRequired, accessKindUnknown or accessKindNotAllowed (requirement 22, TC-02-INT-11). topicLabel is written from the topic's name inside the same transaction as the Request row (requirement 23) and is never rewritten by any later writer (requirement 25, invariant 4). patchRequest refuses topicId with 400 fieldImmutable through T1's IMMUTABLE_REQUEST_FIELDS while title, description, priority, blocking and neededBy stay editable (requirement 24, TC-02-INT-19). listRequests gains topicId — an equality filter on the stored column inside the existing organization scope, so a cross-organization topicId returns an empty array rather than another organization's rows (requirement 26, TC-02-INT-15) — and accepts status=closed, expanded to declined+cancelled through T1's expander while the five stored values still resolve for a saved link (requirement 27, TC-02-INT-17, edge case 10). REQUEST_ROW_INCLUDE gains the topic relation and toRequestRow gains one member and removes none: topic is keyed on topicLabel — null exactly when the request carries no label — with name from the snapshot label and id, audience, type and status read from the row topicId names, all four null when a label outlives its topicId.",
+      "allCallSites": [
+        "apps/api/src/requests/requests.service.ts#createRequest",
+        "apps/api/src/requests/requests.service.ts#patchRequest",
+        "apps/api/src/requests/requests.service.ts#listRequests",
+        "apps/api/src/requests/requests.service.ts#getRequest",
+        "apps/api/src/requests/requests.service.ts#transition",
+        "apps/api/src/requests/requests.service.ts#reassignRequest",
+        "apps/api/src/requests/requests.serializer.ts#REQUEST_ROW_INCLUDE",
+        "apps/api/src/requests/requests.serializer.ts#toRequestRow",
+        "apps/api/src/requests/requests.controller.ts#listRequests",
+        "apps/api/src/requests/vacation-request-feed.service.ts#listFeed"
+      ],
+      "concurrency": {
+        "rows": ["Request", "Organization", "RequestTopic"],
+        "lock": "createRequest keeps its SELECT \"nextRequestNumber\" … FOR UPDATE on the Organization row and adds no second lock; every other writer of a Request row (postMessage, transition, patchRequest, reassignRequest) already re-reads it FOR UPDATE through lockRequest, and none of them touches topicId or topicLabel",
+        "reread": ["nextRequestNumber"],
+        "note": "The topic is read before the transaction, exactly as the assignee membership and the project are read before it today. A topic archived in that window yields a request under an archived topic — a readable, filterable, snapshot-named state requirement 10 makes lossless, not a violation of any invariant. topicId and topicLabel are written once at creation (invariant 4), so no later writer re-reads them under a lock."
+      }
+    },
+    {
+      "id": "T6",
+      "title": "Web — Settings › Request topics, and the sidebar row that reaches it",
+      "files": [
+        "apps/web/app/org/[orgId]/settings/request-topics/page.tsx",
+        "apps/web/app/org/[orgId]/settings/request-topics/RequestTopicModal.tsx",
+        "apps/web/app/org/[orgId]/settings/request-topics/types.ts",
+        "apps/web/src/layout/Sidebar.tsx"
+      ],
+      "requirements": [4, 5, 6, 9, 10, 11, 12, 13, 30],
+      "dependsOn": ["T1", "T4"],
+      "migration": { "additive": true, "note": "no schema change" },
+      "description": "A 'use client' page fetching /api/... with credentials: 'same-origin' — no API route and no server action. The sidebar row joins the existing Settings group at apps/web/src/layout/Sidebar.tsx:155-180 beside Signing and Holidays, gated on the new capability so no role sees a destination its routes refuse (requirement 30); the group already drops its label when a role holds no row in it. A caller without the capability who types the address is redirected to /org/{orgId}/members and nothing of the screen is drawn in the meantime — the pattern already written at apps/web/app/org/[orgId]/settings/holidays/page.tsx:59-64 and :172, copied rather than reinvented (TC-02-E2E-05). Two audience lists ordered by the API, with an archived section below each. Ordering is up/down controls, each issuing exactly one PATCH of that row's sortOrder and no other row's — up sends the sortOrder of the row above minus one, down sends the row below's plus one — with the server clamping to 0..32767; the first row of an audience draws no up control and the last no down one, and an archived row draws neither and no rename control. The add/rename modal draws the audience and type controls when adding and neither when renaming (requirement 4). A duplicate name keeps the modal open with request-topic-error-name under the field and the typed value intact. The submit control is disabled only for the duration of an in-flight call, never for validation; an invalid submission renders every field error and moves focus to the first invalid field. Everything comes from @ds through apps/web/src/ds.ts, tokens only, no hardcoded colour or size, light theme. The two DS gaps are shipped as the spec's table commits: up/down controls instead of a drag handle, and two aria-pressed Buttons instead of a segmented control.",
+      "allCallSites": ["apps/web/src/layout/Sidebar.tsx#buildGroups"],
+      "concurrency": {
+        "rows": [],
+        "lock": "none — one PATCH per press, then a re-read of the catalogue",
+        "reread": []
+      }
+    },
+    {
+      "id": "T7",
+      "title": "Web — the topic picker, the topic filter, and the four words on the requests screens",
+      "files": [
+        "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx",
+        "apps/web/app/org/[orgId]/requests/page.tsx",
+        "apps/web/app/org/[orgId]/requests/RequestRow.tsx",
+        "apps/web/app/org/[orgId]/requests/types.ts",
+        "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx",
+        "apps/web/app/org/[orgId]/requests/[requestId]/RequestHistory.tsx"
+      ],
+      "requirements": [17, 21, 22, 26, 28, 29, 31],
+      "dependsOn": ["T1", "T5"],
+      "migration": { "additive": true, "note": "no schema change" },
+      "description": "The modal loses request-new-type (NewRequestModal.tsx:277) and request-new-access-kind (:293) entirely, stops sending type and accessKind (:176-177), and gains request-new-topic ('About'), filled from GET .../request-topics?audience=staff&status=active — the addressee's audience, which is staff for every request this spec can raise, and active only, so neither an archived nor a client topic is ever offered. When that read returns no topic the picker is replaced by request-new-topic-empty carrying REQUEST_TOPIC_MESSAGES.pickerEmpty and no submit control is drawn at all (requirement 17, TC-02-E2E-06). Submitting with no topic chosen renders request-new-error-topic, focuses the picker and leaves the submit control enabled. The list's topic filter (requests-topic-filter) is filled from a SECOND read carrying status=all, each archived entry marked archived, so the control that finds requests raised under a retired topic still offers it while the picker does not (requirement 31, TC-02-E2E-03). STATUS_OPTIONS (page.tsx:35) and REQUEST_STATUS_META (RequestRow.tsx:8) are both deleted and their four readers take T1's map instead: the filter control (page.tsx:345), the row badge (RequestRow.tsx:63), the detail header ([requestId]/page.tsx:183) and the history entry (RequestHistory.tsx#describe, which today prints the raw stored value in 'marked it ${newValue}'). The filter offers All statuses, Pending, In progress, Completed and Closed and sends all, open, answered, granted and closed; a saved link carrying declined or cancelled still filters on it and the control shows Closed as the nearest selection. Wherever a request's own status is rendered — the row badge and the detail header — a declined or cancelled request shows the closure sub-label beside Closed as the list mock draws it (requirement 29); the filter control and the history entry carry the label alone. A request with no topic (raised before this spec) falls back to its stored type as its About value, drawn outside request-row-{id}-topic, which the testid table scopes to a request that carries a topic (edge case 8, note P3). The vacation cards keep their own vocabulary and are deliberately not routed through the map.",
+      "allCallSites": [
+        "apps/web/app/org/[orgId]/requests/page.tsx#STATUS_OPTIONS",
+        "apps/web/app/org/[orgId]/requests/RequestRow.tsx#REQUEST_STATUS_META",
+        "apps/web/app/org/[orgId]/requests/[requestId]/page.tsx#RequestDetailPage",
+        "apps/web/app/org/[orgId]/requests/[requestId]/RequestHistory.tsx#describe",
+        "apps/web/src/layout/requests-badge-context.tsx#refresh"
+      ],
+      "concurrency": {
+        "rows": [],
+        "lock": "none",
+        "reread": [],
+        "note": "requests-badge-context.tsx:46 fetches the list with no status parameter and reads only counts, so neither the new filter value nor the vocabulary reaches it."
+      }
+    },
+    {
+      "id": "T8",
+      "title": "Cases — write this spec's suites and amend the ones it breaks by design",
+      "files": [
+        "packages/validation/src/request-topics.test.ts",
+        "apps/api/test/request-topics.spec.ts",
+        "apps/api/test/requests.spec.ts",
+        "e2e/tests/request-topics.spec.ts",
+        "e2e/tests/requests.spec.ts",
+        "e2e/tests/requests-page.spec.ts",
+        "e2e/tests/helpers.ts"
+      ],
+      "requirements": [22, 28],
+      "dependsOn": ["T5", "T6", "T7"],
+      "migration": { "additive": true, "note": "no schema change" },
+      "description": "The spec's 34 live cases: six unit in packages/validation, twenty-two integration in apps/api/test/request-topics.spec.ts (with the create-path ones — TC-02-INT-10 to -19 — sitting where the requests suite already reaches that route), and six E2E across e2e/tests/request-topics.spec.ts and e2e/tests/requests.spec.ts. TC-02-INT-01 and TC-02-INT-08 read createdByAccountId, archivedAt and archivedByAccountId through prisma, not off the wire — the documented response shape does not carry them. TC-02-INT-02 deletes the organization's topic rows and then executes the backfill migration file by its path under apps/api/prisma/migrations/ with $executeRawUnsafe, statement by statement; the harness has applied every migration before a test body runs (apps/api/test/global-setup.ts:28). TC-02-INT-07's manager half is written as create, rename, archive, restore on one topic, the one order in which every write succeeds — a restore against an active topic is 409 by requirement 13 (note P5). Two existing suites break by design and are rewritten rather than deleted, because they guard behaviour this spec keeps. (a) Bodies posting the retired classifier: apps/api/test/requests.spec.ts (eleven occurrences of type: 'access' / accessKind) and e2e/tests/requests.spec.ts:109 — every POST .../requests now sends topicId and neither classifier, which needs a helper that reads a seeded topic id for an organization. (b) Assertions on the retired words: e2e/tests/requests.spec.ts asserts 'Open' (229, 390, 526), 'Answered' (247, 253), 'Granted' (255, 589, 590), 'Declined' (395) and 'Cancelled' (422, 426) and selects filter options named Open (626) and Granted (657); e2e/tests/requests-page.spec.ts:147 selects the option named Open. Every one becomes Pending / In progress / Completed / Closed, and the two option selections become Pending and Completed. (c) The retired controls: e2e/tests/requests.spec.ts:210-211 drives request-new-type and request-new-access-kind and :284 asserts request-new-error-accessKind; those cases move onto the topic picker and request-new-error-topic, keeping what they were for — that the create form shows every error and stays submittable. Tests are run targeted, never whole: npm test -- test/<file>.spec.ts from apps/api (Jest 29 takes a positional path), and E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 npx playwright test tests/<file>.spec.ts tests/regressions.spec.ts from e2e.",
+      "allCallSites": [
+        "apps/api/test/requests.spec.ts",
+        "e2e/tests/requests.spec.ts",
+        "e2e/tests/requests-page.spec.ts",
+        "packages/validation/src/requests.test.ts"
+      ],
+      "concurrency": {
+        "rows": ["RequestTopic"],
+        "lock": "TC-02-INT-16 fires two archives without awaiting the first, from two sessions, which is what proves T4's row lock",
+        "reread": []
+      }
+    }
+  ],
+  "reuse": [
+    { "what": "org scoping and 404-not-403; the path orgId checked and never used as a selector", "where": "apps/api/src/auth/org-scope.guard.ts" },
+    { "what": "session attach and the securityStamp re-read on every request", "where": "apps/api/src/auth/session.guard.ts" },
+    { "what": "capability checked in the service so the refusal can carry a named message, because CapabilityGuard's message is fixed", "where": "apps/api/src/auth/capability.guard.ts:12-24" },
+    { "what": "role normalization across the admin/member to admin|manager|user|viewer transition", "where": "packages/validation/src/roles.ts#normalizeRole" },
+    { "what": "a capability registered in both unions", "where": "packages/validation/src/index.ts#MemberCapability, packages/validation/src/roles.ts#Capability" },
+    { "what": "a hand-written functional LOWER(name) unique index for case-insensitive per-organization uniqueness", "where": "apps/api/prisma/migrations/20260901120000_spec_org_01_clients/migration.sql:26-30" },
+    { "what": "Prisma P2002 mapped to the same 409 the pre-check answers", "where": "apps/api/src/clients/clients.service.ts:392" },
+    { "what": "trim + whitespace-collapse before the length checks, and the archive/restore audit column shape", "where": "packages/validation/src/index.ts#normalizeClientName, apps/api/src/clients/clients.service.ts#archiveClient" },
+    { "what": "FOR UPDATE re-read inside the writing transaction, with the guard evaluated against that read", "where": "apps/api/src/requests/requests.service.ts#lockRequest" },
+    { "what": "the number allocated under a lock on the Organization row inside the creating transaction", "where": "apps/api/src/requests/requests.service.ts#createRequest" },
+    { "what": "the row shape, the Prisma include validator and the serializer declared once so query and wire cannot drift", "where": "apps/api/src/requests/requests.serializer.ts#REQUEST_ROW_INCLUDE" },
+    { "what": "a settings screen gated by capability that redirects an unauthorized caller to the members list and draws nothing meanwhile", "where": "apps/web/app/org/[orgId]/settings/holidays/page.tsx:59-64, :172" },
+    { "what": "the Settings sidebar group that drops its label when a role holds no row in it", "where": "apps/web/src/layout/Sidebar.tsx:155-180" },
+    { "what": "the signup transaction that already writes Account, Organization and Membership together", "where": "apps/api/src/signup/signup.service.ts:42-49" },
+    { "what": "flat controller registration", "where": "apps/api/src/app.module.ts:94-122" },
+    { "what": "e2e fixtures for signup, invite/accept and role change", "where": "e2e/tests/helpers.ts:734 signupOrg, :921 inviteAndAcceptViaApi, :160 setMembershipRole" },
+    { "what": "the client barrel every screen imports the design system through", "where": "apps/web/src/ds.ts" }
+  ],
+  "buildFromZero": [
+    "The RequestTopic table, its functional unique index, and the two nullable Request columns.",
+    "A second migration file holding only the backfill insert — idempotent, and executable by path from a test.",
+    "The eleven-row seed constant and its insertion into the signup transaction.",
+    "RequestTopicsController and RequestTopicsService: five routes, none of which exists in any shape today.",
+    "REQUEST_TOPIC_MESSAGES, the four topic validators, the ordering comparator, and a status parser that refuses rather than defaults.",
+    "The status label map and the status-query expander, replacing two hardcoded lists in the web app.",
+    "The Settings › Request topics screen, its modal, its up/down ordering controls and its sidebar row.",
+    "The topic picker and the empty-catalogue state in the new-request modal, and the topic filter on the list.",
+    "The topic member on every request row, including the label-outlives-its-topic case.",
+    "packages/validation/src/request-topics.test.ts, apps/api/test/request-topics.spec.ts and e2e/tests/request-topics.spec.ts."
+  ],
+  "testCases": {
+    "unit": [
+      "TC-02-UNIT-01",
+      "TC-02-UNIT-02",
+      "TC-02-UNIT-03",
+      "TC-02-UNIT-04",
+      "TC-02-UNIT-05",
+      "TC-02-UNIT-06"
+    ],
+    "int": [
+      "TC-02-INT-01",
+      "TC-02-INT-02",
+      "TC-02-INT-03",
+      "TC-02-INT-04",
+      "TC-02-INT-05",
+      "TC-02-INT-06",
+      "TC-02-INT-07",
+      "TC-02-INT-08",
+      "TC-02-INT-09",
+      "TC-02-INT-10",
+      "TC-02-INT-11",
+      "TC-02-INT-12",
+      "TC-02-INT-13",
+      "TC-02-INT-14",
+      "TC-02-INT-15",
+      "TC-02-INT-16",
+      "TC-02-INT-17",
+      "TC-02-INT-18",
+      "TC-02-INT-19",
+      "TC-02-INT-20",
+      "TC-02-INT-21",
+      "TC-02-INT-22"
+    ],
+    "e2e": [
+      "TC-02-E2E-01",
+      "TC-02-E2E-02",
+      "TC-02-E2E-03",
+      "TC-02-E2E-04",
+      "TC-02-E2E-05",
+      "TC-02-E2E-06"
+    ]
+  },
+  "testIds": [
+    "settings-tab-request-topics",
+    "request-topics-page",
+    "request-topics-audience-staff",
+    "request-topics-audience-client",
+    "request-topics-add-btn",
+    "request-topic-row-{id}",
+    "request-topic-row-{id}-up-btn",
+    "request-topic-row-{id}-down-btn",
+    "request-topic-row-{id}-rename-btn",
+    "request-topic-row-{id}-archive-btn",
+    "request-topic-row-{id}-restore-btn",
+    "request-topic-modal",
+    "request-topic-name",
+    "request-topic-audience",
+    "request-topic-type",
+    "request-topic-submit",
+    "request-topic-error-name",
+    "request-new-topic",
+    "request-new-topic-empty",
+    "request-new-error-topic",
+    "requests-topic-filter",
+    "request-row-{id}-topic",
+    "request-detail-topic",
+    "requests-new-btn",
+    "request-new-modal",
+    "request-new-submit",
+    "requests-status-filter",
+    "request-row-{id}-status",
+    "request-detail-status",
+    "request-detail-history",
+    "requests-page"
+  ],
+  "sections": {
+    "Summary": "T4, T5 — the catalogue, and the rule that the topic is the only classifier a caller supplies",
+    "Actors & Preconditions": "T4 (the curator and requester checks), T3 (an organization born carrying a catalogue)",
+    "Roles & Permission Matrix": "T1 (both capability unions and the four matrix rows), T4 (the server checks), T6 (the sidebar row and the redirect)",
+    "Functional Requirements": "T1, T2, T3, T4, T5, T6, T7 — requirements 1 to 31, each assigned to at least one task",
+    "State Machine": "T4 — the archive/restore guards under the row lock, and invariant 5's lock on rename and reorder too; invariant 4 is T5's write-once topicLabel",
+    "Out of Scope": "no task — per-topic fields, routing, service levels, icons, usage counts and retiring accessKind are excluded; the plan adds none of them, and T5 leaves every stored accessKind value untouched",
+    "Known Gaps": "no task — five recorded decisions rather than work (the client audience nothing can select yet, legacy requests with no topic, an uncorrectable type, the access kinds the seed omits, and single-integer ordering). The ordering gap is what T6's clamp-and-tie behaviour implements",
+    "Acceptance Criteria": "T8 — every criterion is observed by a case listed in testCases: AC-1 T3, AC-2 T2, AC-3/4 T4, AC-5/6/9/14 T5, AC-7/8 T4+T5, AC-10 T5, AC-11/12 T7, AC-13 T4, AC-15/16 T6+T7",
+    "Routes": "T4 (the five new topic routes), T5 (the three amended requests routes)",
+    "Error Messages": "T1 — REQUEST_TOPIC_MESSAGES as a new export, four new keys on REQUEST_MESSAGES extended in place",
+    "Status Labels": "T1 (the map and the expander), T7 (its four readers)",
+    "Data Model": "T2",
+    "Seed Data": "T3 (the signup insert), T2 (the backfill file)",
+    "Validation Rules": "T1 (rules 1, 2, 4, 6, 7 and the client's copy of 1, 2, 4, 7), T4 (rules 3, 3a, 5 and the immutability-before-uniqueness order), T5 (rules 8, 9, 10)",
+    "Required data-testid Attributes": "T6, T7 — every id listed in testIds",
+    "Screens": "T6 (the catalogue screen and its ordering controls), T7 (the amended modal and list)",
+    "UI Description": "T6, T7",
+    "DS gaps": "T6 — both recorded in dsGaps and shipped as the spec's table commits; nothing is improvised per screen",
+    "Edge Cases": "T4 (1, 11, 12, 13, 14), T5 (2, 5, 6, 7, 8, 15), T7 (3, 4, 9, 10)",
+    "Security": "T4, T5 — the guard chains, session-scoped queries, 404 for a cross-organization topic route and the one deliberate 400 on create; no unauthenticated route, no token, no rate limiter, no PII",
+    "Verification Plan": "T8 — the rows marked as not existing today are tasks: the backfill file TC-02-INT-02 executes by path (T2) and the topic routes every other case drives (T4). The access table names no credential and no third-party system",
+    "Test Cases": "T8, and the suite files named in each task"
+  },
+  "messages": [
+    { "context": "unknown audience on a read or a create", "module": "packages/validation/src/index.ts#REQUEST_TOPIC_MESSAGES.audienceUnknown", "emittedBy": "apps/api/src/requests/request-topics.service.ts#listTopics, #createTopic" },
+    { "context": "unknown status on a read", "module": "REQUEST_TOPIC_MESSAGES.statusUnknown", "emittedBy": "request-topics.service.ts#listTopics" },
+    { "context": "audience changed on a rename", "module": "REQUEST_TOPIC_MESSAGES.audienceImmutable", "emittedBy": "request-topics.service.ts#updateTopic" },
+    { "context": "unknown type on a create", "module": "REQUEST_TOPIC_MESSAGES.typeUnknown", "emittedBy": "request-topics.service.ts#createTopic" },
+    { "context": "type changed on a rename", "module": "REQUEST_TOPIC_MESSAGES.typeImmutable", "emittedBy": "request-topics.service.ts#updateTopic" },
+    { "context": "name absent or blank", "module": "REQUEST_TOPIC_MESSAGES.nameRequired", "emittedBy": "request-topics.service.ts#createTopic, #updateTopic" },
+    { "context": "name over 60 characters", "module": "REQUEST_TOPIC_MESSAGES.nameTooLong", "emittedBy": "request-topics.service.ts#createTopic, #updateTopic" },
+    { "context": "name already held in that audience, ignoring case", "module": "REQUEST_TOPIC_MESSAGES.nameDuplicate", "emittedBy": "request-topics.service.ts#createTopic, #updateTopic — the pre-check and the P2002 path both" },
+    { "context": "sortOrder that is not an integer", "module": "REQUEST_TOPIC_MESSAGES.sortOrderInvalid", "emittedBy": "request-topics.service.ts#createTopic, #updateTopic" },
+    { "context": "caller without manage-request-topics on any write route", "module": "REQUEST_TOPIC_MESSAGES.manageForbidden", "emittedBy": "request-topics.service.ts — all four write methods" },
+    { "context": "an archive or restore that would not change the status", "module": "REQUEST_TOPIC_MESSAGES.statusUnchanged", "emittedBy": "request-topics.service.ts#archiveTopic, #restoreTopic" },
+    { "context": "the addressee's audience has no active topic", "module": "REQUEST_TOPIC_MESSAGES.pickerEmpty", "emittedBy": "no route — screen copy read by apps/web/app/org/[orgId]/requests/NewRequestModal.tsx" },
+    { "context": "create with no topic", "module": "REQUEST_MESSAGES.topicRequired — a new key on the existing export", "emittedBy": "apps/api/src/requests/requests.service.ts#createRequest" },
+    { "context": "topic archived, foreign, or naming no row", "module": "REQUEST_MESSAGES.topicUnavailable", "emittedBy": "requests.service.ts#createRequest" },
+    { "context": "topic audience not matching the addressee", "module": "REQUEST_MESSAGES.topicAudienceMismatch", "emittedBy": "requests.service.ts#createRequest" },
+    { "context": "create body carrying type or accessKind", "module": "REQUEST_MESSAGES.classifierNotAccepted", "emittedBy": "requests.service.ts#createRequest, keyed under the name that was sent" },
+    { "context": "patch carrying topicId", "module": "REQUEST_MESSAGES.fieldImmutable — exists today at packages/validation/src/index.ts:1865", "emittedBy": "packages/validation/src/requests.ts#validateRequestEdit through IMMUTABLE_REQUEST_FIELDS" },
+    { "context": "create forbidden, scope forbidden, edit forbidden", "module": "REQUEST_MESSAGES.createForbidden, .scopeForbidden, .editForbidden — all exist today", "emittedBy": "requests.service.ts — unchanged by this spec" }
+  ],
+  "premises": [
+    { "claim": "migrations run from the new image before terraform rolls the services out, so both migration files execute while the previous code is still serving", "verifiedAt": "infra/deploy.sh:183-184 (migrate) then infra/deploy.sh:187-191 (apply)" },
+    { "claim": "a functional LOWER(name) unique index is this repository's device for case-insensitive per-organization uniqueness, because Prisma cannot express it in @@unique", "verifiedAt": "apps/api/prisma/migrations/20260901120000_spec_org_01_clients/migration.sql:26-30" },
+    { "claim": "a lost uniqueness race surfaces as Prisma P2002 and is mapped to the same 409 the pre-check answers", "verifiedAt": "apps/api/src/clients/clients.service.ts:392" },
+    { "claim": "CapabilityGuard's refusal message is fixed and never names the resource, which is why a spec that names its message checks capability in the service", "verifiedAt": "apps/api/src/auth/capability.guard.ts:12-24" },
+    { "claim": "signup is the only place an Organization row is created, so seeding there satisfies requirement 15 entirely", "verifiedAt": "apps/api/src/signup/signup.service.ts:46 — the only match for organization.create or organization.upsert in apps/api/src, apps/api/test, e2e and scripts" },
+    { "claim": "the four request-status render sites are the filter control, the row badge, the detail header and the history entry, and the history prints the raw stored value today", "verifiedAt": "apps/web/app/org/[orgId]/requests/page.tsx:35 and :345, RequestRow.tsx:8 and :63, [requestId]/page.tsx:183, [requestId]/RequestHistory.tsx#describe (case 'status_changed')" },
+    { "claim": "the new-request modal draws request-new-type and request-new-access-kind today and sends type and accessKind", "verifiedAt": "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx:277, :293, :176-177" },
+    { "claim": "the api and e2e suites both post type: 'access' with an accessKind today, so the refusal is a real change and not a restatement", "verifiedAt": "apps/api/test/requests.spec.ts (11 occurrences), e2e/tests/requests.spec.ts:109" },
+    { "claim": "e2e/tests/requests.spec.ts drives request-new-type and asserts request-new-error-accessKind, and both e2e suites select status options by the retired words", "verifiedAt": "e2e/tests/requests.spec.ts:210, :211, :284, :626, :657; e2e/tests/requests-page.spec.ts:147" },
+    { "claim": "GET .../requests already accepts the five stored statuses and all, so closed is added rather than replacing anything, and the vacation mapping is an exhaustive switch that will fail compilation until closed is mapped", "verifiedAt": "packages/validation/src/requests.ts:433-434, :479-494" },
+    { "claim": "none of the names this spec adds collides: manage-request-topics and ManageRequestTopics are absent from both unions, and topicRequired, topicUnavailable, topicAudienceMismatch and classifierNotAccepted are absent from REQUEST_MESSAGES", "verifiedAt": "packages/validation/src/index.ts#MemberCapability (506-604) and #REQUEST_MESSAGES (1807-1871), packages/validation/src/roles.ts#Capability (51-96)" },
+    { "claim": "the integration harness applies every migration before a test body runs, so TC-02-INT-02 can execute the backfill file by its path", "verifiedAt": "apps/api/test/global-setup.ts:28-37" },
+    { "claim": "the @ds barrel exports no drag, sortable or segmented-control primitive", "verifiedAt": "apps/web/src/ds.ts:11-32 — twenty-one exports, none of them either; the upstream barrel at '1_DS for dev/index.js' exports the same twenty-one components" },
+    { "claim": "signupOrg, inviteAndAcceptViaApi and setMembershipRole exist and are the routes to an admin, a user and a manager or viewer", "verifiedAt": "e2e/tests/helpers.ts:734, :921, :160" },
+    { "claim": "an unauthorized caller who types a settings address is redirected to /org/{orgId}/members and nothing of the screen is drawn meanwhile", "verifiedAt": "apps/web/app/org/[orgId]/settings/holidays/page.tsx:59-64, :172" },
+    { "claim": "the requests sidebar badge reads only counts and sends no status, so the vocabulary change does not reach it", "verifiedAt": "apps/web/src/layout/requests-badge-context.tsx:46" }
+  ],
+  "doubleBehaviours": [],
+  "dsGaps": [
+    {
+      "missing": "No drag-handle or reorder-list primitive in @ds",
+      "resolution": "Ships as up and down controls on each active row, each issuing one PATCH of that row's sortOrder — keyboard-reachable, with no pointer-only interaction. Closed by a SortableList in @ds with a keyboard contract; recorded here and in the spec's DS gaps table, never improvised per screen."
+    },
+    {
+      "missing": "No segmented-control primitive in @ds",
+      "resolution": "Ships as two @ds Buttons carrying an aria-pressed state and var(--sp-*) / var(--fs-*) tokens. Closed by a SegmentedControl in @ds adopted by this screen and the requests scope toggle together — that toggle draws @ds Tabs today (apps/web/app/org/[orgId]/requests/page.tsx:321-329)."
+    }
+  ],
+  "risks": [
+    {
+      "risk": "POST .../requests stops accepting type and accessKind, which breaks every existing caller by design — two suites and one screen.",
+      "mitigation": "Enumerated and owned by T8: apps/api/test/requests.spec.ts, e2e/tests/requests.spec.ts:109 and NewRequestModal.tsx. TC-02-INT-11 is the witness that the refusal is real, since the same body answers 201 today."
+    },
+    {
+      "risk": "The status vocabulary breaks assertions in suites this spec does not own — thirteen in e2e/tests/requests.spec.ts and one in e2e/tests/requests-page.spec.ts — none of which the blast radius names.",
+      "mitigation": "Line-numbered in T8 and in the premises, so they are found before the code is written rather than by a red suite after it."
+    },
+    {
+      "risk": "Two migration files in one run, against this pipeline's usual one-per-run.",
+      "mitigation": "Required by name in the spec's Seed Data section and by TC-02-INT-02, which executes the backfill by path — impossible if it shares a file with the CREATE TABLE. Both files are additive and the backfill is idempotent. Raised as note P1 so a person decides rather than the implementer."
+    },
+    {
+      "risk": "A topic archived between the create route's topic lookup and its transaction produces a request under an archived topic.",
+      "mitigation": "Planned as the spec is written: the topic is read before the transaction exactly as the assignee and the project are today, and no lock is added. Requirement 10 makes that state lossless — the request keeps its snapshot name, stays readable and stays filterable. Recorded in T5's concurrency."
+    },
+    {
+      "risk": "The default sortOrder is the highest stored value in the audience plus ten, which can exceed the 32767 bound, and the spec does not say whether archived rows count toward that highest value.",
+      "mitigation": "Clamp the computed default to the bound, and count every row of the audience regardless of status so a restore cannot collide with something created after it. Recorded as note P2; neither choice is observable in any case of this spec."
+    },
+    {
+      "risk": "Locking the row on rename and reorder as invariant 5 requires costs a query per write and is asserted by no case.",
+      "mitigation": "Taken anyway — the invariant is unconditional and the cost is one SELECT inside a transaction the write already needs. The name race it does not settle is settled by the functional unique index, which TC-02-INT-16 does assert."
+    }
+  ]
+}

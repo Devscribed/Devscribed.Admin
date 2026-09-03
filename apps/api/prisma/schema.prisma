@@ -75,6 +75,9 @@ model Account {
   holidaysCreated           Holiday[]                    @relation("HolidaysCreated")
   /// Requests spec 01 — the account that moved a request into a terminal status.
   requestsResolved          Request[]                    @relation("RequestResolvedBy")
+  /// Requests spec 02 — audit back-relations for the RequestTopic entity.
+  requestTopicsCreated      RequestTopic[]               @relation("RequestTopicsCreated")
+  requestTopicsArchived     RequestTopic[]               @relation("RequestTopicsArchived")
 }
 
 /// Pending email-change confirmation grant (spec 06). The account's email is only
@@ -183,6 +186,8 @@ model Organization {
   holidays          Holiday[]
   /// Requests spec 01 — the organization's requests.
   requests          Request[]
+  /// Requests spec 02 — the organization's own catalogue of request topics.
+  requestTopics     RequestTopic[]
 }
 
 /// Links an account to its organization. One per account — single-org-per-user (FR-8).
@@ -1162,12 +1167,23 @@ model Request {
   resolvedByAccountId   String?
   /// Sort key. Updated by any message, status change or reassignment.
   lastActivityAt        DateTime  @default(now())
+  /// Requests spec 02 requirement 18 — the topic the request was raised under. Nullable
+  /// so requests that predate that spec need no backfill; `SetNull` is the correct
+  /// semantics for a hard delete that no route this product exposes can perform
+  /// (requirement 14), and the state it would leave — a `topicLabel` with no `topicId` —
+  /// is one the serializer still answers for.
+  topicId               String?
+  /// Requests spec 02 requirement 23 — snapshot of the topic's name at creation, written
+  /// once inside the creating transaction and never rewritten by any topic write
+  /// (requirement 25).
+  topicLabel            String?   @db.VarChar(60)
 
   organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project      Project?         @relation(fields: [projectId], references: [id], onDelete: SetNull)
   requester    Membership       @relation("RequestRequester", fields: [requesterMembershipId], references: [id], onDelete: Cascade)
   assignee     Membership?      @relation("RequestAssignee", fields: [assigneeMembershipId], references: [id], onDelete: SetNull)
   resolvedBy   Account?         @relation("RequestResolvedBy", fields: [resolvedByAccountId], references: [id], onDelete: SetNull)
+  topic        RequestTopic?    @relation(fields: [topicId], references: [id], onDelete: SetNull)
   messages     RequestMessage[]
   events       RequestEvent[]
 
@@ -1220,4 +1236,53 @@ model RequestEvent {
   actor   Membership? @relation("RequestEventActor", fields: [actorMembershipId], references: [id], onDelete: SetNull)
 
   @@index([requestId, createdAt])
+}
+
+/// Requests spec 02 — one entry in an organization's curated catalogue of request
+/// topics: the presets a person picks instead of typing a category.
+///
+/// `audience`, `type` and `status` are documented `String` columns rather than Prisma
+/// enums, following `Client.status` and `Project.status`, so a third audience is an
+/// additive validation change rather than a migration of the column.
+///
+/// Uniqueness needs a functional index Prisma cannot express: two topics of one
+/// organization and audience may not hold names equal ignoring case (REQ-02-006), and a
+/// plain `@@unique` would be case-sensitive. The `UNIQUE (organizationId, audience,
+/// LOWER(name))` index is written by hand in the migration SQL, the device `Client`
+/// already uses for its per-organization name uniqueness.
+///
+/// Archiving is the only removal — there is no hard delete and no route that performs
+/// one (REQ-02-014).
+model RequestTopic {
+  id                  String    @id @default(uuid())
+  /// Scope key. A required argument with no default on every service method
+  /// (REQ-02-001).
+  organizationId      String
+  /// 'staff' | 'client'.
+  audience            String
+  /// 'access' | 'question'. Written onto every request raised under the topic
+  /// (REQ-02-021).
+  type                String
+  /// Trimmed and whitespace-collapsed on write; 1-60 characters.
+  name                String    @db.VarChar(60)
+  /// Ascending. Ties break on name, case-insensitively (REQ-02-009).
+  sortOrder           Int       @default(0)
+  /// 'active' | 'archived'. `active` is the only status a topic may be created in.
+  status              String    @default("active")
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  /// Audit, set from the session. `null` on a seeded row, which nobody created.
+  createdByAccountId  String?
+  /// Set on archive, cleared on restore.
+  archivedAt          DateTime?
+  /// Set on archive, cleared on restore.
+  archivedByAccountId String?
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    Account?     @relation("RequestTopicsCreated", fields: [createdByAccountId], references: [id], onDelete: SetNull)
+  archivedBy   Account?     @relation("RequestTopicsArchived", fields: [archivedByAccountId], references: [id], onDelete: SetNull)
+  requests     Request[]
+
+  /// The picker's query: one audience of one organization, active only.
+  @@index([organizationId, audience, status])
 }
