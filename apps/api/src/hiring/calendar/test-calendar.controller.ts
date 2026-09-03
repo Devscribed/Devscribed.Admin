@@ -1,4 +1,4 @@
-import { Controller, Get, NotFoundException } from '@nestjs/common';
+import { Controller, Get, NotFoundException, Query } from '@nestjs/common';
 import { CalendarProvider } from './calendar-provider';
 import { FakeCalendarProvider } from './fake-calendar.provider';
 
@@ -18,8 +18,13 @@ import { FakeCalendarProvider } from './fake-calendar.provider';
 export class TestCalendarController {
   constructor(private readonly calendar: CalendarProvider) {}
 
+  /**
+   * `mailbox` narrows to one interviewer's calendar, as `/api/test/mail/latest?email=`
+   * narrows the sink to one address. The fake is one process shared by every worker of
+   * a run, so "the latest event" without it is whichever test booked last.
+   */
   @Get('latest')
-  latest() {
+  latest(@Query('mailbox') mailbox?: string) {
     if (
       process.env.NODE_ENV === 'production' ||
       !(this.calendar instanceof FakeCalendarProvider)
@@ -27,7 +32,10 @@ export class TestCalendarController {
       throw new NotFoundException();
     }
 
-    const events = this.calendar.created();
+    const wanted = mailbox?.trim().toLowerCase();
+    const events = this.calendar
+      .created()
+      .filter((entry) => wanted === undefined || entry.mailbox.trim().toLowerCase() === wanted);
     const event = events[events.length - 1];
     if (!event) throw new NotFoundException('No event has been created');
 

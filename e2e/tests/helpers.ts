@@ -1690,9 +1690,16 @@ export interface InviteLink {
  * Reading it from the event is the calendar's equivalent of reading a reset link out of
  * the mail sink — a test that assembled the URL from ids it got elsewhere would be
  * testing a link nobody is ever sent.
+ *
+ * `mailbox` is the interviewer's address, and it is not optional: the fake calendar is
+ * one process shared by every worker, so the latest event without it is whichever test
+ * booked last (ADR 0012).
  */
-export async function latestInviteLink(request: APIRequestContext): Promise<InviteLink> {
-  const response = await request.get(`${API}/api/test/calendar/latest`);
+export async function latestInviteLink(
+  request: APIRequestContext,
+  mailbox: string,
+): Promise<InviteLink> {
+  const response = await request.get(`${API}/api/test/calendar/latest`, { params: { mailbox } });
   if (!response.ok()) {
     throw new Error(`Precondition failed: no calendar event (${response.status()})`);
   }
@@ -1724,10 +1731,14 @@ export interface ManageLink {
  * Read from the calendar event rather than assembled from a token obtained some other
  * way, for the same reason `latestInviteLink` is: the invite is the only channel this
  * release has, so a test that built the URL itself would be testing a link nobody is
- * ever sent (07 §03.14).
+ * ever sent (07 §03.14). Narrowed to the interviewer's `mailbox` for the same reason
+ * `latestInviteLink` is.
  */
-export async function latestManageLink(request: APIRequestContext): Promise<ManageLink> {
-  const response = await request.get(`${API}/api/test/calendar/latest`);
+export async function latestManageLink(
+  request: APIRequestContext,
+  mailbox: string,
+): Promise<ManageLink> {
+  const response = await request.get(`${API}/api/test/calendar/latest`, { params: { mailbox } });
   if (!response.ok()) {
     throw new Error(`Precondition failed: no calendar event (${response.status()})`);
   }
