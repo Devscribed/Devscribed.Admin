@@ -1,0 +1,14 @@
+{
+  "runId": "refine-requests-03-2",
+  "dir": ".workflow/refine/requests-03.probe/2",
+  "spec": "specs/requests/03-client-participants.md",
+  "specSha": null,
+  "status": "pre_implement",
+  "task": "compile this spec into a plan; this is a refine probe, not a ship run",
+  "stages": {
+    "pre_implement": {
+      "status": "running",
+      "attempts": 0
+    }
+  }
+}
