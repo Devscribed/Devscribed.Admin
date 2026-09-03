@@ -1,56 +1,58 @@
 {
-  "status": "blocked",
-  "mode": "full",
+  "status": "pass",
+  "mode": "range",
   "spec": "specs/requests/02-request-topics.md",
+  "range": "2fdce098424fb686dbaf0a370042c8096766eae0..HEAD",
   "request": "Employees pick a request topic from presets the organization curates (VPN, Claude, Question, Other for staff; Access, Other for clients), and the screens say Pending / In progress / Completed / Closed",
   "read": {
     "specs": [
       "specs/requests/02-request-topics.md",
       "specs/requests/02-request-topics.contracts.md",
       "specs/requests/02-request-topics.cases.md",
-      "specs/requests/README.md"
+      "specs/requests/README.md",
+      "specs/requests/03-client-participants.md",
+      "specs/requests/03-client-participants.contracts.md"
     ],
     "files": [
-      "packages/validation/src/index.ts",
-      "packages/validation/src/roles.ts",
-      "packages/validation/src/requests.ts",
-      "apps/api/prisma/schema.prisma",
-      "apps/api/src/requests/requests.service.ts",
-      "apps/api/src/requests/requests.controller.ts",
-      "apps/api/src/requests/requests.serializer.ts",
-      "apps/api/src/auth/capability.guard.ts",
-      "apps/api/test/global-setup.ts",
-      "apps/api/test/org-scope.spec.ts",
-      "apps/api/test/requests.spec.ts",
-      "apps/web/src/ds.ts",
-      "apps/web/src/layout/Sidebar.tsx",
-      "apps/web/app/org/[orgId]/requests/page.tsx",
-      "apps/web/app/org/[orgId]/requests/RequestRow.tsx",
-      "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx",
-      "apps/web/app/org/[orgId]/requests/[requestId]/RequestHistory.tsx",
       "e2e/tests/helpers.ts",
+      "e2e/tests/holidays.spec.ts",
+      "e2e/tests/requests.spec.ts",
       "e2e/tests/members-list.spec.ts",
       "e2e/tests/member-detail.spec.ts",
-      "e2e/tests/requests.spec.ts",
-      "CLAUDE.md",
-      ".claude/skills/spec/references/blocking-criteria.md"
+      "e2e/tests/field-autofill.spec.ts",
+      "scripts/spec-lint.mjs",
+      "scripts/refine-loop.mjs",
+      ".claude/skills/spec/references/blocking-criteria.md",
+      ".workflow/refine/requests-02.probe/1/judge.verdict.json",
+      ".workflow/refine/requests-02.probe/1/fix.verdict.json",
+      ".workflow/refine/requests-02.probe/2/judge.verdict.json",
+      ".workflow/refine/requests-02.loop.json"
     ]
   },
   "sweeps": {
-    "currency": 58,
-    "contradiction": 26,
-    "selfSufficiency": 44,
-    "testability": 45,
-    "selfDescription": 12,
-    "obligations": 70,
-    "scope": 6
+    "currency": 9,
+    "contradiction": 31,
+    "selfSufficiency": 11,
+    "testability": 17,
+    "selfDescription": 5,
+    "obligations": 12,
+    "scope": 3
+  },
+  "repairAudit": {
+    "R1": "fixed — the Proven cell now names holidays.spec.ts for manager and requests.spec.ts for viewer; both calls exist (holidays.spec.ts:190 'manager', requests.spec.ts:297,537 'viewer') and members-list.spec.ts is gone from the cell",
+    "N1": "settled in the document — the State Machine's archived|rename row now carries the decision and the rejected alternative, and it agrees with the testid row, the Screens paragraph and TC-02-E2E-01; the transition gained an observer in TC-02-INT-22",
+    "N2": "settled in the document — the Seed Data Decided now names the reversal cost on both sides; the nine-row staff seed stands with its rationale and rejected alternative",
+    "N3": "fixed — TC-02-INT-16 now fires two concurrent renames to one name (edge 1) and TC-02-INT-02 now writes a request row with topicId and topicLabel both null (edge 8); both cases carry the new Steps and the matching Expected Result",
+    "N4": "settled in the document — REQ-02-031 states the filter reads status=all with archived entries marked, carried into the requests-topic-filter testid row, a UI Description row and TC-02-E2E-03's Covers",
+    "N5": "settled in the document — REQ-02-020 now fires only on a topic REQ-02-019 has found active, validation rule 9 matches, and the sibling ordering on the topic write is stated in the contracts; the observer added for that sibling ordering is the one note below",
+    "N6": "no edit, and none needed — REQ-02-021, the Data Model paragraph and Out of Scope state the accessKind change in this spec's own text"
   },
   "criteria": {
     "S-01": "clear",
     "S-02": "clear",
     "S-03": "clear",
     "S-04": "clear",
-    "S-05": "blocked",
+    "S-05": "clear",
     "S-06": "clear",
     "S-07": "clear",
     "S-08": "clear",
@@ -58,11 +60,11 @@
     "S-10": "clear",
     "S-11": "clear",
     "S-12": "clear",
-    "S-13": "note",
-    "S-14": "note",
+    "S-13": "clear",
+    "S-14": "clear",
     "S-15": "clear",
     "S-16": "clear",
-    "S-17": "note",
+    "S-17": "clear",
     "S-18": "clear",
     "S-19": "clear",
     "S-20": "clear",
@@ -84,14 +86,14 @@
     "S-36": "clear",
     "S-37": "clear",
     "S-38": "clear",
-    "S-39": "n/a",
+    "S-39": "clear",
     "S-40": "clear",
     "S-41": "clear",
-    "S-42": "note",
+    "S-42": "clear",
     "S-43": "clear",
     "S-44": "note",
     "S-45": "clear",
-    "S-46": "note",
+    "S-46": "clear",
     "S-47": "clear",
     "S-48": "clear",
     "S-49": "clear",
@@ -102,119 +104,24 @@
     "S-54": "n/a",
     "S-55": "clear",
     "S-56": "clear",
-    "S-57": "note"
+    "S-57": "clear"
   },
   "findings": [
     {
-      "id": "R1",
-      "severity": "blocker",
-      "criterion": "S-05",
-      "rule": "spec/stale-statement",
-      "file": "specs/requests/02-request-topics.cases.md",
-      "symbol": "Verification Plan, 'Reaching the states the cases need', the viewer/manager row",
-      "line": 25,
-      "claim": "The Proven column says the role-setting route is 'in daily use by e2e/tests/members-list.spec.ts'. That file neither calls setMembershipRole nor drives the members PUT; the helper's callers are field-autofill.spec.ts, holidays.spec.ts and requests.spec.ts, and the PUT is driven directly by member-detail.spec.ts. The one cell whose job is to name the evidence names a file that carries none, so a reader who checks it finds the state unproven.",
-      "witness": {
-        "kind": "command",
-        "detail": "$ grep -rn setMembershipRole e2e --include=*.ts | grep -v helpers.ts  ->  e2e/tests/field-autofill.spec.ts:8,32,152; e2e/tests/holidays.spec.ts:9,190; e2e/tests/requests.spec.ts:13,297,537 (members-list.spec.ts absent).  $ grep -n 'put(|PUT|members/' e2e/tests/members-list.spec.ts  ->  no output.  $ grep -n 'request.put' e2e/tests/member-detail.spec.ts  ->  54:  const response = await request.put(",
-        "source": "specs/requests/02-request-topics.cases.md:25 against e2e/tests/members-list.spec.ts"
-      },
-      "suggestedFix": "Name a file that does drive it — e2e/tests/member-detail.spec.ts for the PUT, or e2e/tests/holidays.spec.ts / e2e/tests/requests.spec.ts for setMembershipRole — or delete the citation and leave the cell at 'yes'."
-    },
-    {
       "id": "N1",
       "severity": "note",
-      "criterion": "S-13",
-      "rule": "spec/contradiction",
-      "file": "specs/requests/02-request-topics.md",
-      "symbol": "State Machine, the 'archived | rename' row",
-      "line": 279,
-      "claim": "The state machine keeps renaming legal on an archived topic on the ground that 'correcting a spelling must not require restoring it', while the Screens section removes the rename control from every archived row and TC-02-E2E-01 asserts the archived row draws none of the three controls. In the product a curator therefore cannot correct that spelling without restoring the topic, which is the one thing the transition's justification says must not be required. Each statement is implementable at its own layer — route allows, screen does not offer — so this is a note; but the transition is fired by no case and by no screen, and which of the two to drop is a person's decision.",
-      "witness": {
-        "kind": "rule",
-        "detail": "02-request-topics.md:279 — 'archived | rename | The name is written. An archived topic is still named on old requests, and correcting a spelling must not require restoring it.' 02-request-topics.contracts.md:389 — 'The archived list draws neither, and draws no rename control: the route accepts a sortOrder and a name on an archived topic, and the screen offers restoring it instead.'",
-        "source": "specs/requests/02-request-topics.md:279 against specs/requests/02-request-topics.contracts.md:389"
-      },
-      "suggestedFix": "Either drop the spelling justification and say the archived rename exists for API callers only, or draw the rename control on archived rows and give the transition a case."
-    },
-    {
-      "id": "N2",
-      "severity": "note",
-      "criterion": "S-42",
-      "rule": "spec/scope-gap",
-      "file": "specs/requests/02-request-topics.contracts.md",
-      "symbol": "Seed Data",
-      "line": 278,
-      "claim": "The request enumerates the staff presets as VPN, Claude, Question and Other; the seed writes nine staff topics, adding Repository, Environment, Server, Admin panel and Documentation. The widening is deliberate and its rationale is recorded, and it is neither a new route nor a migration of its own, so it is a note — but the request named the list explicitly and every organization created after this ships is born with the longer one, which is worth a person's confirmation.",
-      "witness": {
-        "kind": "rule",
-        "detail": "Request: '(VPN, Claude, Question, Other for staff; Access, Other for clients)'. Seed Data table (contracts:265-276): staff VPN, Claude, Repository, Environment, Server, Admin panel, Documentation, Question, Other — nine rows where the request named four.",
-        "source": "specs/requests/02-request-topics.contracts.md:278"
-      },
-      "suggestedFix": "Confirm the nine-row staff seed, or trim it to the four the request named and leave the rest to a curator."
-    },
-    {
-      "id": "N3",
-      "severity": "note",
-      "criterion": "S-46",
+      "criterion": "S-44",
       "rule": "spec/missing-artefact",
-      "file": "specs/requests/02-request-topics.contracts.md",
-      "symbol": "Edge Cases 1 and 8",
-      "line": 453,
-      "claim": "Edge case 1 (two curators renaming to the same name at the same instant, the unique-index violation mapped to 409) and edge case 8 (a request raised before this spec, topic null, the row falling back to the stored type) have no case. TC-02-INT-05 covers the sequential duplicate and TC-02-INT-16 the concurrent archive; TC-02-INT-02's request carries a topicLabel, so no case observes a row with neither topicId nor topicLabel — which is every request row that exists today.",
-      "witness": {
-        "kind": "rule",
-        "detail": "contracts:453 edge 1, contracts:460 edge 8. No case in 02-request-topics.cases.md fires two renames concurrently, and TC-02-INT-02 asserts a topic member whose name is the label — the labelled row, never the label-less one.",
-        "source": "specs/requests/02-request-topics.contracts.md:453 and :460"
-      },
-      "suggestedFix": "Add the two assertions to cases that already reach the state — the concurrent rename beside TC-02-INT-16, the label-less row beside TC-02-INT-02 — or say in one line why each needs none."
-    },
-    {
-      "id": "N4",
-      "severity": "note",
-      "criterion": "S-17",
-      "rule": "spec/incomplete-decision",
-      "file": "specs/requests/02-request-topics.md",
-      "symbol": "REQ-02-011 against TC-02-E2E-03",
-      "line": 134,
-      "claim": "REQ-02-011 removes an archived topic from GET .../request-topics?status=active, and an omitted status means active (REQ-02-002). The only statement that the requests-list topic filter still offers an archived topic lives inside TC-02-E2E-03's expected result; no requirement, no contract row and no testid row says which catalogue read requests-topic-filter performs. An implementer who fills the filter from the same read as the picker satisfies every requirement and fails that case.",
-      "witness": {
-        "kind": "rule",
-        "detail": "02-request-topics.md:134 — 'WHILE a topic is archived, THE SYSTEM SHALL omit it from the response to GET .../request-topics?status=active.' 02-request-topics.cases.md:514 — 'The picker no longer offers the archived topic. The topic filter still offers it and still returns the request.' contracts:332 carries only 'requests-topic-filter | Requests list | present'.",
-        "source": "specs/requests/02-request-topics.md:134 against specs/requests/02-request-topics.cases.md:514"
-      },
-      "suggestedFix": "State that the list's topic filter reads status=all and marks the archived entries, while the picker reads status=active."
-    },
-    {
-      "id": "N5",
-      "severity": "note",
-      "criterion": "S-17",
-      "rule": "spec/ambiguous-requirement",
-      "file": "specs/requests/02-request-topics.md",
-      "symbol": "REQ-02-019 against REQ-02-020",
-      "line": 184,
-      "claim": "A topicId naming an archived topic of the client audience, on a request addressed to a member, satisfies the antecedent of both refusals — REQ-02-019 (topicUnavailable) and REQ-02-020 (topicAudienceMismatch) — and no rule states which fires. Both are 400 under topicId, so the readings differ only in the message a caller reads, and no case decides it: TC-02-INT-12 uses an active client topic, TC-02-INT-13 an archived topic of the caller's own audience.",
+      "file": "specs/requests/02-request-topics.cases.md",
+      "symbol": "TC-02-INT-06, the step and expected result added for the immutability-before-uniqueness ordering",
+      "line": 243,
+      "claim": "The ordering rule the repair added — a topic write answers the audience or kind immutability violation before the name-uniqueness one — is observed by a call that cannot fail if the ordering is implemented backwards. The step sends `audience: \"client\"` on a staff topic together with a name another seeded staff topic holds, and uniqueness is per organization and audience. An implementation that checks uniqueness first against the audience the body asks for finds no client topic holding that name, falls through and answers the same `400` `audienceImmutable`; only an implementation that checks uniqueness first against the stored audience answers `409`. The contracts sentence leaves the same gap: 'a name another topic of that audience already holds' does not say whether 'that audience' is the stored one or the one the body sent, and the two readings disagree about whether a duplicate exists at all. The prescribed answer is the same under both readings, so no implementation is materially different and this is not an ambiguity that blocks — but the case bought to pin the ordering pins it against one of the two backwards implementations only.",
       "witness": {
         "kind": "scenario",
-        "detail": "POST .../requests with assigneeKind 'member' and a topicId that is archived and carries audience 'client'. Reading A: the topic never resolves as active, so REQUEST_MESSAGES.topicUnavailable. Reading B: the row is loaded and its audience compared, so REQUEST_MESSAGES.topicAudienceMismatch. Both satisfy the text as written, and a test asserting either would be defensible.",
-        "source": "specs/requests/02-request-topics.md:184 against :193"
+        "detail": "Seeded staff topics include Claude; seeded client topics are Access and Other (contracts, Seed Data). PATCH a staff topic with { audience: 'client', name: 'Claude' }. Reading A, uniqueness evaluated on the requested audience 'client': no client topic is named Claude, so no 409 exists to be answered first and the case passes even with uniqueness checked before immutability. Reading B, uniqueness evaluated on the stored audience 'staff': Claude is taken, so uniqueness-first answers 409 and the case fails. The name `Other` is seeded in both audiences and would be a duplicate under either reading.",
+        "source": "specs/requests/02-request-topics.cases.md:243 and :249 against specs/requests/02-request-topics.contracts.md:304 and the Seed Data table at :265-276"
       },
-      "suggestedFix": "Say in REQ-02-020 that the audience check runs only against a topic REQ-02-019 has already found active, so an archived topic answers topicUnavailable whatever its audience."
-    },
-    {
-      "id": "N6",
-      "severity": "note",
-      "rule": "spec/divergence",
-      "file": "specs/requests/02-request-topics.md",
-      "symbol": "REQ-02-021",
-      "line": 205,
-      "claim": "REQ-02-021 writes accessKind as null on every new request, including under a topic whose type is access, where the shipped model documents that column as required when type = 'access' and validateNewRequest enforces it today. The newest spec governs and the Summary names the change; this is recorded only so a person confirms that access requests raised from now on carry no access kind at all.",
-      "witness": {
-        "kind": "rule",
-        "detail": "02-request-topics.md:205 — 'THE SYSTEM SHALL write type from the chosen topic's type and write accessKind as null, including under a topic whose type is access.' apps/api/prisma/schema.prisma:1134 — 'Required when type = access, absent otherwise. One of repository, environment, server, vpn, saas, admin_panel, documentation, other.'",
-        "source": "specs/requests/02-request-topics.md:205"
-      },
-      "suggestedFix": "None required."
+      "suggestedFix": "Send the duplicate as `Other`, which the seed holds in both audiences, so the 409 exists under either reading of the uniqueness scope; and say in the contracts sentence which audience's names the uniqueness check considers on a write that also asks to change the audience."
     }
   ]
 }
