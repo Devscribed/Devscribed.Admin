@@ -78,6 +78,11 @@ model Account {
   /// Requests spec 02 — audit back-relations for the RequestTopic entity.
   requestTopicsCreated      RequestTopic[]               @relation("RequestTopicsCreated")
   requestTopicsArchived     RequestTopic[]               @relation("RequestTopicsArchived")
+  /// Requests spec 03 — the client-contact principal this account holds, if any. At
+  /// most one, by the `@unique` on `ClientMembership.accountId`.
+  clientMembership          ClientMembership?            @relation("ClientMembershipAccount")
+  /// Requests spec 03 — audit back-relation for a removed client contact.
+  clientMembershipsRemoved  ClientMembership[]           @relation("ClientMembershipsRemoved")
 }
 
 /// Pending email-change confirmation grant (spec 06). The account's email is only
@@ -126,8 +131,13 @@ model Invitation {
   /// Set when the invitation is accepted; null while unused.
   usedAt    DateTime?
 
+  /// Requests spec 03 — set on a client-contact invitation, null on a staff one.
+  /// Nullable, so every existing row stays valid without a backfill.
+  clientId  String?
+
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   inviterMembership Membership   @relation(fields: [inviterMembershipId], references: [id], onDelete: Cascade)
+  client            Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
   // Supersession lookup: at most one live `pending` invitation per (email, org).
   @@index([email, organizationId, status])
@@ -188,6 +198,10 @@ model Organization {
   requests          Request[]
   /// Requests spec 02 — the organization's own catalogue of request topics.
   requestTopics     RequestTopic[]
+  /// Requests spec 03 — the client contacts who are signed-in principals here.
+  clientMemberships ClientMembership[]
+  /// Requests spec 03 — the notification outbox.
+  requestNotifications RequestNotification[]
 }
 
 /// Links an account to its organization. One per account — single-org-per-user (FR-8).
@@ -228,6 +242,8 @@ model Membership {
   requestsAssigned    Request[]                    @relation("RequestAssignee")
   requestMessages     RequestMessage[]             @relation("RequestMessageAuthor")
   requestEvents       RequestEvent[]               @relation("RequestEventActor")
+  /// Requests spec 03 — the client contacts this member invited (audit).
+  clientMembershipsInvited ClientMembership[]      @relation("ClientMembershipsInvited")
 
   @@index([organizationId])
 }
@@ -807,8 +823,52 @@ model Client {
   createdBy    Account      @relation("ClientsCreated", fields: [createdByAccountId], references: [id])
   archivedBy   Account?     @relation("ClientsArchived", fields: [archivedByAccountId], references: [id])
   projects     Project[]
+  /// Requests spec 03 — the people at this client who hold a principal here.
+  contacts     ClientMembership[]
+  /// Requests spec 03 — invitations written for a contact of this client.
+  invitations  Invitation[]
 
   @@index([organizationId, status])
+}
+
+/// Requests spec 03 (REQ-03-001) — what makes a person at a client a signed-in principal
+/// of the organization. A table of its own rather than a role on `Membership`, so every
+/// staff-membership query — accrual, the members list, project assignment, time
+/// tracking — is incapable of returning a client by construction.
+model ClientMembership {
+  id                    String    @id @default(uuid())
+  /// One client contact per account, as a schema fact. It says nothing about the staff
+  /// row: `Membership.accountId` is `@unique` too, and two unique constraints on two
+  /// tables cannot express mutual exclusion between them. That exclusion is a rule —
+  /// REQ-03-014 and REQ-03-042 — enforced at both writes, never by the schema.
+  accountId             String    @unique
+  /// Scope key.
+  organizationId        String
+  /// The client this person works for.
+  clientId              String
+  /// 'active' | 'removed'. Removal is a soft delete; there is no hard delete.
+  status                String    @default("active")
+  /// Audit — the membership of the contact manager who invited them.
+  invitedByMembershipId String?
+  /// Set when the invitation is accepted.
+  joinedAt              DateTime  @default(now())
+  /// Set on removal, cleared on restore.
+  removedAt             DateTime?
+  /// Set on removal, cleared on restore.
+  removedByAccountId    String?
+
+  account      Account      @relation("ClientMembershipAccount", fields: [accountId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  client       Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  invitedBy    Membership?  @relation("ClientMembershipsInvited", fields: [invitedByMembershipId], references: [id], onDelete: SetNull)
+  removedBy    Account?     @relation("ClientMembershipsRemoved", fields: [removedByAccountId], references: [id], onDelete: SetNull)
+
+  requestsAssigned Request[]        @relation("RequestClientAssignee")
+  requestMessages  RequestMessage[] @relation("RequestMessageClientAuthor")
+  requestEvents    RequestEvent[]   @relation("RequestEventClientActor")
+
+  @@index([organizationId, status])
+  @@index([clientId, status])
 }
 
 /// Spec organization/03 — a paid public holiday in an organization's calendar. A
@@ -1150,6 +1210,8 @@ model Request {
   /// Required while `assigneeKind = 'member'`. Nullable in the column so spec 02's
   /// second addressee kind needs no column change.
   assigneeMembershipId  String?
+  /// Requests spec 03 — required while `assigneeKind = 'client'`, null otherwise.
+  assigneeClientMembershipId String?
   /// 'low' | 'normal' | 'high' | 'urgent'.
   priority              String    @default("normal")
   blocking              Boolean   @default(false)
@@ -1184,8 +1246,12 @@ model Request {
   assignee     Membership?      @relation("RequestAssignee", fields: [assigneeMembershipId], references: [id], onDelete: SetNull)
   resolvedBy   Account?         @relation("RequestResolvedBy", fields: [resolvedByAccountId], references: [id], onDelete: SetNull)
   topic        RequestTopic?    @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  /// Requests spec 03 — the client contact this request is addressed to.
+  assigneeClientMembership ClientMembership? @relation("RequestClientAssignee", fields: [assigneeClientMembershipId], references: [id], onDelete: SetNull)
   messages     RequestMessage[]
   events       RequestEvent[]
+  /// Requests spec 03 — the outbox rows this request's events produced.
+  notifications RequestNotification[]
 
   @@unique([organizationId, number])
   @@index([organizationId, status])
@@ -1198,15 +1264,18 @@ model Request {
 model RequestMessage {
   id                 String   @id @default(uuid())
   requestId          String
-  /// 'member' only in this spec; the same seam as `Request.assigneeKind`.
+  /// 'member' | 'client'. The same seam as `Request.assigneeKind`.
   authorKind         String
   authorMembershipId String?
+  /// Requests spec 03 — set when `authorKind` is `client`.
+  authorClientMembershipId String?
   /// Plain text, 1-5000 chars.
   body               String   @db.Text
   createdAt          DateTime @default(now())
 
   request Request     @relation(fields: [requestId], references: [id], onDelete: Cascade)
   author  Membership? @relation("RequestMessageAuthor", fields: [authorMembershipId], references: [id], onDelete: SetNull)
+  clientAuthor ClientMembership? @relation("RequestMessageClientAuthor", fields: [authorClientMembershipId], references: [id], onDelete: SetNull)
 
   @@index([requestId, createdAt])
 }
@@ -1217,9 +1286,11 @@ model RequestMessage {
 model RequestEvent {
   id                String   @id @default(uuid())
   requestId         String
-  /// 'member' | 'system'.
+  /// 'member' | 'client' | 'system'.
   actorKind         String
   actorMembershipId String?
+  /// Requests spec 03 — set when `actorKind` is `client`.
+  actorClientMembershipId String?
   /// 'created' | 'status_changed' | 'assignee_changed' | 'field_changed' | 'message_posted'.
   action            String
   /// Set for `field_changed`.
@@ -1234,8 +1305,54 @@ model RequestEvent {
 
   request Request     @relation(fields: [requestId], references: [id], onDelete: Cascade)
   actor   Membership? @relation("RequestEventActor", fields: [actorMembershipId], references: [id], onDelete: SetNull)
+  clientActor ClientMembership? @relation("RequestEventClientActor", fields: [actorClientMembershipId], references: [id], onDelete: SetNull)
+  /// Requests spec 03 — the outbox rows this event caused.
+  notifications RequestNotification[]
 
   @@index([requestId, createdAt])
+}
+
+/// Requests spec 03 — the notification outbox. One row is what a future adapter reads;
+/// nothing else is added when a channel arrives. Written in the same transaction as the
+/// `RequestEvent` that caused it (REQ-03-035) and delivered only after that transaction
+/// has committed (REQ-03-037).
+model RequestNotification {
+  id             String    @id @default(uuid())
+  /// Scope key.
+  organizationId String
+  requestId      String
+  /// The event that caused it. Deleting a request removes both.
+  eventId        String
+  /// 'member' | 'client'.
+  recipientKind  String
+  /// The membership or client-membership id. **No foreign key**: a notification must
+  /// survive the principal it points at being removed, the same reason the event trail
+  /// snapshots display names.
+  recipientId    String
+  /// 'none' today. An adapter writes its own value.
+  channel        String    @default("none")
+  /// Which adapter handled the row.
+  providerKey    String?
+  /// The provider's own id for the message it sent, recorded before the next attempt.
+  providerRef    String?
+  /// 'pending' | 'delivered' | 'skipped' | 'failed'.
+  status         String    @default("pending")
+  /// Incremented before each delivery attempt.
+  attempts       Int       @default(0)
+  /// The failure text, never the recipient's address.
+  lastError      String?
+  /// Set when the row leaves `pending`.
+  handledAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  request      Request      @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  event        RequestEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  /// REQ-03-039's mechanism — a replayed event can never manufacture a second row.
+  @@unique([eventId, recipientKind, recipientId])
+  /// The dispatcher's query.
+  @@index([organizationId, status, createdAt])
 }
 
 /// Requests spec 02 — one entry in an organization's curated catalogue of request

@@ -11,9 +11,12 @@ export type RequestEventAction =
 
 export interface RecordRequestEventInput {
   requestId: string;
-  /** `member` for anything a person did; `system` exists for a future actor that is not one. */
-  actorKind: 'member' | 'system';
+  /** `member` or `client` for anything a person did; `system` exists for a future actor
+   * that is not one. */
+  actorKind: 'member' | 'client' | 'system';
   actorMembershipId: string | null;
+  /** Requests spec 03 — set exactly when `actorKind` is `client`. */
+  actorClientMembershipId?: string | null;
   action: RequestEventAction;
   field?: string | null;
   oldValue?: string | null;
@@ -37,12 +40,18 @@ export interface RecordRequestEventInput {
  */
 @Injectable()
 export class RequestEventsService {
-  async record(tx: Prisma.TransactionClient, input: RecordRequestEventInput): Promise<void> {
-    await tx.requestEvent.create({
+  /**
+   * Returns the id of the event just written. Requests spec 03's outbox rows carry it
+   * and are written in this same transaction, so a notifiable event without its rows is
+   * not a state the system can produce (REQ-03-035).
+   */
+  async record(tx: Prisma.TransactionClient, input: RecordRequestEventInput): Promise<string> {
+    const event = await tx.requestEvent.create({
       data: {
         requestId: input.requestId,
         actorKind: input.actorKind,
         actorMembershipId: input.actorMembershipId,
+        actorClientMembershipId: input.actorClientMembershipId ?? null,
         action: input.action,
         field: input.field ?? null,
         oldValue: input.oldValue ?? null,
@@ -50,6 +59,8 @@ export class RequestEventsService {
         oldLabel: input.oldLabel ?? null,
         newLabel: input.newLabel ?? null,
       },
+      select: { id: true },
     });
+    return event.id;
   }
 }

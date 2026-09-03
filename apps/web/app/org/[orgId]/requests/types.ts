@@ -54,10 +54,13 @@ export interface RequestProject {
 }
 
 export interface RequestAssignee {
+  /** `member` or, since requests spec 03, `client`. */
   kind: string;
   id: string | null;
   displayName: string | null;
-  /** The addressee's membership is no longer active (requirement 36). */
+  /** The addressee's client, for a client addressee; `null` for a colleague. */
+  clientName: string | null;
+  /** The addressee's row is no longer active (requirement 36, REQ-03-026). */
   inactive: boolean;
 }
 

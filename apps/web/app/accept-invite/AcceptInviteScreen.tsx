@@ -319,7 +319,12 @@ export function AcceptInviteScreen() {
       const response = await fetch('/api/me', { credentials: 'same-origin' });
       const session = await response.json().catch(() => null);
       if (session?.organization?.id) {
-        router.push(`/org/${session.organization.id}/members`);
+        // Requests spec 03 REQ-03-015 — a client contact lands on the requests screen,
+        // which is the only organization screen they may reach; the members destination
+        // would answer them 404. The principal comes from the same read that already
+        // resolves the organization.
+        const destination = session.principal === 'client' ? 'requests' : 'members';
+        router.push(`/org/${session.organization.id}/${destination}`);
         router.refresh();
         return;
       }

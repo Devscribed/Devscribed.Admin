@@ -13,14 +13,18 @@ export interface RequestRequesterDto {
 }
 
 /**
- * Who the request is addressed to. `kind` is `member` throughout this spec; `inactive`
- * is a read of the membership's status, not a column — member removal is a soft delete,
- * so the FK's SetNull never fires (requirement 36).
+ * Who the request is addressed to. `kind` is `member` or, since requests spec 03,
+ * `client`; `inactive` is a read of that row's status, not a column — removal is a soft
+ * delete on both sides, so the FK's SetNull never fires (requirement 36, REQ-03-026).
+ *
+ * `clientName` is the addressee's client, present for a client addressee and `null` for
+ * a colleague. The contact's email address is never carried here.
  */
 export interface RequestAssigneeDto {
   kind: string;
   id: string | null;
   displayName: string | null;
+  clientName: string | null;
   inactive: boolean;
 }
 

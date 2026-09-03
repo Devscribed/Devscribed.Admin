@@ -10,6 +10,7 @@ import { useToast } from '@/toast';
 import { CLIENT_MESSAGES, can, type Role } from '@devscribed/validation';
 import { ArchiveClientDialog } from '../ArchiveClientDialog';
 import { ClientModal } from '../ClientModal';
+import { ClientContactsSection } from './ClientContactsSection';
 import type { ClientDetailResponse, ClientProjectRow, ClientSummary, ClientStatus } from '../types';
 
 const STATUS_META: Record<ClientStatus, { tone: 'active' | 'inactive'; label: string }> = {
@@ -292,6 +293,15 @@ export default function ClientDetailPage({
                 )}
               </div>
             </div>
+
+            {/* Requests spec 03 — the people at this client a request can be addressed
+                to. Below the projects list, and its own read, so the client's details
+                render while it loads. */}
+            <ClientContactsSection
+              orgId={orgId}
+              clientId={clientId}
+              clientArchived={state.client.status === 'archived'}
+            />
           </div>
         </Card>
       )}

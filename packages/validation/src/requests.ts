@@ -66,12 +66,12 @@ export function isTerminalRequestStatus(status: string): boolean {
 }
 
 /**
- * `member` is the only addressee kind this spec accepts. The column exists so spec 02's
- * `client` is an additive validation change rather than a column change; until then an
- * unknown kind is rejected rather than ignored (TC-01-UNIT-03).
+ * The two addressee kinds. Requests spec 03 adds `client`, which is the additive
+ * validation change the column was written to allow; an unknown kind is still rejected
+ * rather than ignored (TC-01-UNIT-03).
  */
-export type RequestAssigneeKind = 'member';
-export const REQUEST_ASSIGNEE_KINDS: readonly RequestAssigneeKind[] = ['member'];
+export type RequestAssigneeKind = 'member' | 'client';
+export const REQUEST_ASSIGNEE_KINDS: readonly RequestAssigneeKind[] = ['member', 'client'];
 
 export const REQUEST_TITLE_MIN = 3;
 export const REQUEST_TITLE_MAX = 200;
@@ -209,25 +209,66 @@ export function validateRequestNeededBy(
 export interface RequestAssigneeInput {
   assigneeKind?: unknown;
   assigneeMembershipId?: unknown;
+  /** Requests spec 03 — required while the kind is `client`. */
+  assigneeClientMembershipId?: unknown;
 }
 
+/** The addressee a valid body names: one id, under the kind that selects it. */
+export type RequestAssigneeValue =
+  | { assigneeKind: 'member'; assigneeMembershipId: string; assigneeClientMembershipId: null }
+  | { assigneeKind: 'client'; assigneeMembershipId: null; assigneeClientMembershipId: string };
+
 /**
- * Rule 7 — the addressee is structurally valid: kind `member` with a membership id
- * present. Whether that membership is active and in the caller's organization is rule 8
- * and is decidable only server-side (TC-01-UNIT-03).
+ * Rules 7 (spec 01) and 5/13 (spec 03) — the addressee is structurally valid: a known
+ * kind, with the id that kind selects present. Whether the row it names is active and in
+ * the caller's organization is decidable only server-side.
+ *
+ * The field the failure is reported under is the id the chosen kind requires, so a form
+ * shows the error beside the control the caller was actually using. An unknown kind is
+ * reported under the member id, which is the control the modal opens with.
  */
 export function validateRequestAssignee(
   input: RequestAssigneeInput,
-): FieldOutcome<{ assigneeKind: RequestAssigneeKind; assigneeMembershipId: string }> {
+): FieldOutcome<RequestAssigneeValue> {
   const kind = input.assigneeKind;
-  const id = input.assigneeMembershipId;
   if (!(REQUEST_ASSIGNEE_KINDS as readonly unknown[]).includes(kind)) {
     return { valid: false, error: REQUEST_MESSAGES.assigneeInvalid };
   }
+  if (kind === 'client') {
+    const clientId = input.assigneeClientMembershipId;
+    if (typeof clientId !== 'string' || clientId.trim().length === 0) {
+      return { valid: false, error: REQUEST_MESSAGES.assigneeInvalid };
+    }
+    return {
+      valid: true,
+      value: {
+        assigneeKind: 'client',
+        assigneeMembershipId: null,
+        assigneeClientMembershipId: clientId,
+      },
+    };
+  }
+  const id = input.assigneeMembershipId;
   if (typeof id !== 'string' || id.trim().length === 0) {
     return { valid: false, error: REQUEST_MESSAGES.assigneeInvalid };
   }
-  return { valid: true, value: { assigneeKind: 'member', assigneeMembershipId: id } };
+  return {
+    valid: true,
+    value: {
+      assigneeKind: 'member',
+      assigneeMembershipId: id,
+      assigneeClientMembershipId: null,
+    },
+  };
+}
+
+/**
+ * Which field of a create body an addressee failure is reported under: the id the chosen
+ * kind requires. An unknown or absent kind falls to the member id — the control the
+ * modal opens with, and the field spec 01's callers already read.
+ */
+export function requestAssigneeFieldFor(kind: unknown): string {
+  return kind === 'client' ? 'assigneeClientMembershipId' : 'assigneeMembershipId';
 }
 
 /** Rule 10 — a message body is required, 1–5000 characters, plain text. */
@@ -277,7 +318,10 @@ export interface NewRequestValue {
   blocking: boolean;
   neededBy: string | null;
   assigneeKind: RequestAssigneeKind;
-  assigneeMembershipId: string;
+  /** Present exactly when the kind is `member`. */
+  assigneeMembershipId: string | null;
+  /** Requests spec 03 — present exactly when the kind is `client`. */
+  assigneeClientMembershipId: string | null;
   projectId: string | null;
 }
 
@@ -334,12 +378,20 @@ export function validateNewRequest(
   if (!neededBy.valid) fields.neededBy = neededBy.error;
 
   const assignee = validateRequestAssignee(input);
-  if (!assignee.valid) fields.assigneeMembershipId = assignee.error;
+  if (!assignee.valid) fields[requestAssigneeFieldFor(input.assigneeKind)] = assignee.error;
 
   const projectId =
     typeof input.projectId === 'string' && input.projectId.trim().length > 0
       ? input.projectId
       : null;
+
+  // Requests spec 03 rule 8 — a request addressed to a client names a project. Body
+  // shape, so it is reported alongside the addressee rather than after it; whether the
+  // project belongs to that client and whether the requester works on it are stored-row
+  // questions the server decides afterwards (rules 9 and 10).
+  if (input.assigneeKind === 'client' && projectId === null) {
+    fields.projectId = REQUEST_MESSAGES.clientProjectRequired;
+  }
 
   if (Object.keys(fields).length > 0) return { valid: false, fields };
 
@@ -353,10 +405,11 @@ export function validateNewRequest(
       priority: (priority as { valid: true; value: RequestPriority }).value,
       blocking: input.blocking === true,
       neededBy: (neededBy as { valid: true; value: string | null }).value,
-      assigneeKind: 'member',
-      assigneeMembershipId: (
-        assignee as { valid: true; value: { assigneeMembershipId: string } }
-      ).value.assigneeMembershipId,
+      assigneeKind: (assignee as { valid: true; value: RequestAssigneeValue }).value.assigneeKind,
+      assigneeMembershipId: (assignee as { valid: true; value: RequestAssigneeValue }).value
+        .assigneeMembershipId,
+      assigneeClientMembershipId: (assignee as { valid: true; value: RequestAssigneeValue }).value
+        .assigneeClientMembershipId,
       projectId,
     },
   };

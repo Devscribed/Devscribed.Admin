@@ -5,6 +5,8 @@ import { MailService } from './mail/mail.service';
 import { pdfRendererProvider } from './pdf/pdf.provider';
 import { PdfRenderer } from './pdf/pdf-renderer';
 import { PrismaService } from './prisma.service';
+import { RequestNotifier } from './requests/request-notifier';
+import { requestNotifierProvider } from './requests/request-notifier.provider';
 import { JobQueue } from './queue/job-queue';
 import { jobQueueProvider } from './queue/queue.provider';
 import { InternalSigningProvider } from './signature/internal-signing-provider';
@@ -56,6 +58,10 @@ import { fileStorageProvider } from './storage/storage.provider';
     pdfRendererProvider,
     jobQueueProvider,
     signWellHttpClientProvider,
+    // Requests spec 03 — the notification port. Registered here for the same reason
+    // every other port is: one instance for the whole application, so a test that
+    // overrides the token overrides the one the routes call.
+    requestNotifierProvider,
     InternalSigningProvider,
     SignWellSigningProvider,
     SigningProviderRegistry,
@@ -68,6 +74,7 @@ import { fileStorageProvider } from './storage/storage.provider';
     PdfRenderer,
     JobQueue,
     SignWellHttpClient,
+    RequestNotifier,
     InternalSigningProvider,
     SignWellSigningProvider,
     SigningProviderRegistry,

@@ -462,6 +462,11 @@ describe('Requests (requests spec 01)', () => {
     }
 
     // Edge case 7 — an addressee kind that is not `member`, and a missing id.
+    //
+    // Requests spec 03 governs the `client` kind now: it is an accepted addressee kind,
+    // so this body fails on the id THAT kind selects and on the project a client-addressed
+    // request must name (REQ-03-020, REQ-03-021). The kind itself is no longer the
+    // refusal, which is exactly what edge case 19 of that spec says this answer replaces.
     const badKind = await post(
       user,
       admin.organizationId,
@@ -469,7 +474,20 @@ describe('Requests (requests spec 01)', () => {
       newRequestBody(admin, topicId, { assigneeKind: 'client' }),
     );
     expect(badKind.status).toBe(400);
-    expect(badKind.body.fields).toEqual({ assigneeMembershipId: COPY.assigneeInvalid });
+    expect(badKind.body.fields).toEqual({
+      assigneeClientMembershipId: COPY.assigneeInvalid,
+      projectId: 'Choose the project this request belongs to',
+    });
+
+    // A kind outside the two is still refused by the body check, under the member id.
+    const unknownKind = await post(
+      user,
+      admin.organizationId,
+      '',
+      newRequestBody(admin, topicId, { assigneeKind: 'vendor' }),
+    );
+    expect(unknownKind.status).toBe(400);
+    expect(unknownKind.body.fields).toEqual({ assigneeMembershipId: COPY.assigneeInvalid });
 
     const noAssignee = await post(
       user,

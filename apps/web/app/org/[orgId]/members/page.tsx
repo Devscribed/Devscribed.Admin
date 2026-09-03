@@ -203,7 +203,9 @@ export default function MembersPage({ params }: { params: Promise<{ orgId: strin
       {canInvite && (
         <InviteModal
           open={inviteOpen}
-          callerRole={session.role}
+          // A client contact never reaches this screen (REQ-03-019); the session's role
+          // is nullable for that principal alone.
+          callerRole={session.role ?? ''}
           onClose={() => setInviteOpen(false)}
           onInvited={() => void load()}
         />

@@ -23,11 +23,19 @@ export function Modal({ open, title, onClose, actions, children, width = 420, st
           width: '100%', maxWidth: width,
           background: 'var(--bg-panel)', border: '1px solid var(--border)',
           borderRadius: 'var(--radius-2xl)', boxShadow: 'var(--shadow-modal)',
-          padding: '24px 26px', ...style,
+          padding: '24px 26px',
+          // A dialog never grows past the viewport: its body scrolls instead, so the
+          // title and the actions are reachable however many fields the form has. A
+          // form long enough to push its own Save button off-screen has no way back —
+          // the overlay is `position: fixed`, so there is nothing for the page to
+          // scroll.
+          maxHeight: 'calc(100vh - 40px)',
+          display: 'flex', flexDirection: 'column',
+          ...style,
         }}>
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          marginBottom: 18,
+          marginBottom: 18, flex: '0 0 auto',
         }}>
           <div style={{
             fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 'var(--fs-20)',
@@ -40,9 +48,11 @@ export function Modal({ open, title, onClose, actions, children, width = 420, st
             }}><Close /></button>
           )}
         </div>
-        {children}
+        {/* The one part that scrolls. `minHeight: 0` is what lets a flex child shrink
+            below its content and actually take the overflow. */}
+        <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto' }}>{children}</div>
         {actions && (
-          <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>{actions}</div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 20, flex: '0 0 auto' }}>{actions}</div>
         )}
       </div>
     </div>

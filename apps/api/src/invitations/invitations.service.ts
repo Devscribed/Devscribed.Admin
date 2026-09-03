@@ -6,9 +6,11 @@ import {
   Logger,
 } from '@nestjs/common';
 import {
+  CLIENT_USER_MESSAGES,
   INVITE_MESSAGES,
   Role,
   canAssignRole,
+  isClientInvitationRole,
   isSelfInvitation,
   validateInviteAcceptNewAccount,
   validateInviteCreate,
@@ -26,10 +28,24 @@ import {
 
 const BCRYPT_ROUNDS = 12;
 
+/**
+ * Where each principal lands after accepting. The staff destination is the one this
+ * route has always answered; requests spec 03 REQ-03-015 adds the client's, which is the
+ * only organization screen a contact may reach.
+ */
+const STAFF_REDIRECT = '/members';
+const CLIENT_REDIRECT = '/requests';
+
 export interface AcceptResult {
   accountId: string;
   organizationId: string;
   securityStamp: string;
+  /**
+   * Where the accept screen lands the new principal. Requests spec 03 REQ-03-015 sends a
+   * client contact to the requests destination, which is the only organization screen
+   * they may reach; a member of staff keeps the members destination.
+   */
+  redirectTo: string;
 }
 
 export interface ValidateResult {
@@ -91,10 +107,22 @@ export class InvitationsService {
 
     const invitee = await this.prisma.account.findUnique({
       where: { email },
-      include: { memberships: { where: { organizationId: caller.organizationId, status: 'active' } } },
+      include: {
+        memberships: { where: { organizationId: caller.organizationId, status: 'active' } },
+        // Requests spec 03 REQ-03-042 — the duplicate check above reads staff rows only,
+        // and of this organization only, so it cannot see the principal that matters here.
+        clientMembership: true,
+      },
     });
     if (invitee && invitee.memberships.length > 0) {
       throw new BadRequestException({ message: INVITE_MESSAGES.alreadyMember });
+    }
+    // REQ-03-042 — a staff invitation is never written for an address holding an active
+    // `ClientMembership` of ANY organization. Refused here as well as at the accept
+    // because the account may acquire the client principal in between; neither the
+    // invitation nor the membership is written.
+    if (invitee?.clientMembership?.status === 'active') {
+      throw this.principalConflict();
     }
 
     const organization = await this.prisma.organization.findUniqueOrThrow({
@@ -183,13 +211,208 @@ export class InvitationsService {
 
     const account = await this.prisma.account.findUnique({
       where: { email: record.email },
-      include: { memberships: true },
+      // Requests spec 03 — the other principal the account may already hold. Read here
+      // so both branches below decide against one snapshot of both tables.
+      include: { memberships: true, clientMembership: true },
     });
+
+    // State-machine invariant 1 — an account never holds an active `Membership` and an
+    // active `ClientMembership` at once. It is a rule, not a schema fact: two unique
+    // constraints on two tables cannot express mutual exclusion between them, so it is
+    // enforced at every write — REQ-03-014 from the client side, REQ-03-042 from the
+    // staff side — and refuses before anything is written.
+    if (account) this.requireNoConflictingPrincipal(record.role, account);
+
+    if (isClientInvitationRole(record.role)) {
+      return account
+        ? this.acceptClientExistingAccount(record, account, dto)
+        : this.acceptClientNewAccount(record, dto);
+    }
 
     if (!account) {
       return this.acceptNewAccount(record, dto);
     }
     return this.acceptExistingAccount(record, account, dto);
+  }
+
+  /**
+   * REQ-03-014 and REQ-03-042 — the two ends of one rule, with the same answer at both.
+   *
+   * The rule: no account ever holds two active principals. The question this asks: does
+   * the accepting account already hold an active principal that the invitation in hand
+   * would give it a second of — an active `Membership` or an active `ClientMembership`
+   * of ANY organization for a client invitation, an active `ClientMembership` of any
+   * organization for a staff one. Nothing is written either way, and the message names
+   * no address and no organization.
+   */
+  private requireNoConflictingPrincipal(
+    role: string,
+    account: {
+      memberships: Array<{ status: string }>;
+      clientMembership: { status: string } | null;
+    },
+  ): void {
+    const holdsStaff = account.memberships.some((row) => row.status === 'active');
+    const holdsContact = account.clientMembership?.status === 'active';
+    const conflict = isClientInvitationRole(role) ? holdsStaff || holdsContact : holdsContact;
+    if (conflict) throw this.principalConflict();
+  }
+
+  /**
+   * REQ-03-012 — accepting a `client` invitation creates ONE active `ClientMembership`
+   * and writes no `Membership`. The invitation is marked used in the same transaction.
+   */
+  private async acceptClientNewAccount(
+    record: {
+      id: string;
+      email: string;
+      organizationId: string;
+      clientId: string | null;
+      inviterMembershipId: string;
+    },
+    dto: InviteAcceptDto,
+  ): Promise<AcceptResult> {
+    const clientId = this.requireInvitationClient(record);
+
+    const validation = validateInviteAcceptNewAccount({
+      firstName: typeof dto.firstName === 'string' ? dto.firstName : '',
+      lastName: typeof dto.lastName === 'string' ? dto.lastName : '',
+      password: typeof dto.password === 'string' ? dto.password : '',
+    });
+    if (!validation.valid) {
+      throw new BadRequestException({ errors: validation.errors });
+    }
+    const { firstName, lastName, password } = validation.value;
+    const timezone =
+      typeof dto.timezone === 'string' && dto.timezone.trim() ? dto.timezone.trim() : null;
+    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    const joinedAt = new Date();
+
+    const account = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.account.create({
+        data: { email: record.email, passwordHash, firstName, lastName, timezone },
+      });
+      await tx.clientMembership.create({
+        data: {
+          accountId: created.id,
+          organizationId: record.organizationId,
+          clientId,
+          status: 'active',
+          invitedByMembershipId: record.inviterMembershipId,
+          joinedAt,
+        },
+      });
+      await tx.invitation.update({
+        where: { id: record.id },
+        data: { status: 'used', usedAt: joinedAt },
+      });
+      return created;
+    });
+
+    return {
+      accountId: account.id,
+      organizationId: record.organizationId,
+      securityStamp: account.securityStamp,
+      redirectTo: CLIENT_REDIRECT,
+    };
+  }
+
+  /**
+   * REQ-03-012 for an account that already exists: the row it holds returns to `active`
+   * rather than a second one being written, so the requests addressed to that contact
+   * are theirs again (TC-03-INT-11).
+   */
+  private async acceptClientExistingAccount(
+    record: {
+      id: string;
+      email: string;
+      organizationId: string;
+      clientId: string | null;
+      inviterMembershipId: string;
+    },
+    account: {
+      id: string;
+      passwordHash: string;
+      securityStamp: string;
+      clientMembership: { id: string; clientId: string; status: string } | null;
+    },
+    dto: InviteAcceptDto,
+  ): Promise<AcceptResult> {
+    const clientId = this.requireInvitationClient(record);
+
+    const password = typeof dto.password === 'string' ? dto.password : '';
+    const passwordMatches = await bcrypt.compare(password, account.passwordHash);
+    if (!passwordMatches) {
+      throw new BadRequestException({ message: INVITE_MESSAGES.incorrectPassword });
+    }
+
+    const existing = account.clientMembership;
+    // REQ-03-013's rule at the accepting end: a removed row belongs to the client it was
+    // written for, and no invitation moves it. The invite route already refuses this
+    // address, so reaching this is the row having moved in between.
+    if (existing && existing.clientId !== clientId) {
+      throw new ConflictException({
+        error: 'already_linked',
+        message: CLIENT_USER_MESSAGES.alreadyLinked,
+      });
+    }
+
+    const now = new Date();
+    await this.prisma.$transaction(async (tx) => {
+      if (existing) {
+        await tx.clientMembership.update({
+          where: { id: existing.id },
+          data: {
+            status: 'active',
+            joinedAt: now,
+            removedAt: null,
+            removedByAccountId: null,
+            invitedByMembershipId: record.inviterMembershipId,
+          },
+        });
+      } else {
+        await tx.clientMembership.create({
+          data: {
+            accountId: account.id,
+            organizationId: record.organizationId,
+            clientId,
+            status: 'active',
+            invitedByMembershipId: record.inviterMembershipId,
+            joinedAt: now,
+          },
+        });
+      }
+      await tx.invitation.update({
+        where: { id: record.id },
+        data: { status: 'used', usedAt: now },
+      });
+    });
+
+    return {
+      accountId: account.id,
+      organizationId: record.organizationId,
+      securityStamp: account.securityStamp,
+      redirectTo: CLIENT_REDIRECT,
+    };
+  }
+
+  /**
+   * A `client` invitation names the client it was written for (REQ-03-009). A row that
+   * does not is one no route in this product writes, and it is answered as a token that
+   * cannot be acted on rather than guessed at.
+   */
+  private requireInvitationClient(record: { clientId: string | null }): string {
+    if (!record.clientId) {
+      throw new BadRequestException({ message: INVITE_MESSAGES.tokenInvalid });
+    }
+    return record.clientId;
+  }
+
+  private principalConflict(): ConflictException {
+    return new ConflictException({
+      error: 'principal_conflict',
+      message: CLIENT_USER_MESSAGES.principalConflict,
+    });
   }
 
   /**
@@ -247,6 +470,7 @@ export class InvitationsService {
       accountId: account.id,
       organizationId: record.organizationId,
       securityStamp: account.securityStamp,
+      redirectTo: STAFF_REDIRECT,
     };
   }
 
@@ -295,6 +519,7 @@ export class InvitationsService {
         accountId: account.id,
         organizationId: record.organizationId,
         securityStamp: account.securityStamp,
+        redirectTo: STAFF_REDIRECT,
       };
     }
 
@@ -314,6 +539,7 @@ export class InvitationsService {
         accountId: account.id,
         organizationId: record.organizationId,
         securityStamp: account.securityStamp,
+        redirectTo: STAFF_REDIRECT,
       };
     }
 
@@ -357,6 +583,7 @@ export class InvitationsService {
       accountId: account.id,
       organizationId: record.organizationId,
       securityStamp: account.securityStamp,
+      redirectTo: STAFF_REDIRECT,
     };
   }
 

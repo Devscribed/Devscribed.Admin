@@ -27,11 +27,33 @@ export interface SessionFeatures {
   mailOutbox: boolean;
 }
 
+/** The client a contact works for. `null` for a member of staff (REQ-03-005). */
+export interface SessionClient {
+  id: string;
+  name: string;
+}
+
+/**
+ * Requests spec 03 — one shape answers both principals, so every screen branches on a
+ * value that is always present rather than inferring a kind from what is missing.
+ *
+ * `role` is `null` for a client contact, who holds none: their rights come from the
+ * principal kind, and no value of `Membership.role` produces them (REQ-03-016). Asking
+ * the kind first is the ordering rule REQ-03-017 states — a role-keyed helper answers a
+ * principal with no role the viewer set, which grants rather than refuses.
+ */
 export interface Session {
   account: SessionAccount;
   organization: SessionOrganization;
-  role: string;
+  role: string | null;
+  principal: 'member' | 'client';
+  client: SessionClient | null;
   features: SessionFeatures;
+}
+
+/** True while the signed-in principal is a client contact. */
+export function isClientPrincipal(session: Session): boolean {
+  return session.principal === 'client';
 }
 
 const SessionContext = createContext<Session | null>(null);

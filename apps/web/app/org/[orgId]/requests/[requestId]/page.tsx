@@ -44,9 +44,14 @@ export default function RequestDetailPage({
   // `member`, which `can()` does not know: `CAPABILITY_MATRIX['member']` is undefined and
   // every capability comes back false. Normalizing first is what makes this screen ask the
   // same question the server answers about the same account, as the list page does.
+  //
+  // Requests spec 03 REQ-03-017 — the kind first. A client contact holds no role, and a
+  // role-keyed helper would answer them as a `viewer`; they are the addressee of every
+  // request they can read (REQ-03-034), which is what the controls below are drawn from.
+  const isContact = session.principal === 'client';
   const role: Role = normalizeRole(session.role);
-  const canViewAll = can(role, 'view-all-requests');
-  const isAdmin = role === 'admin';
+  const canViewAll = !isContact && can(role, 'view-all-requests');
+  const isAdmin = !isContact && role === 'admin';
 
   const [detail, setDetail] = useState<RequestDetailData | null>(null);
   const [notFound, setNotFound] = useState(false);
@@ -80,6 +85,11 @@ export default function RequestDetailPage({
   }, [load]);
 
   useEffect(() => {
+    // The members list is a staff read, and a client contact is answered 404 there
+    // (REQ-03-019), so the request that cannot succeed is not sent. They learn who they
+    // are from the principal instead: every request a contact can read is one addressed
+    // to them.
+    if (isContact) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -97,7 +107,7 @@ export default function RequestDetailPage({
     return () => {
       cancelled = true;
     };
-  }, [orgId]);
+  }, [orgId, isContact]);
 
   async function act(action: 'answer' | 'grant' | 'cancel'): Promise<void> {
     if (busy) return;
@@ -181,15 +191,21 @@ export default function RequestDetailPage({
   const tone = STATUS_TONE[request.status] ?? 'neutral';
   const status = statusLabelOf(request.status);
   const terminal = isTerminalRequestStatus(request.status);
-  const isRequester = myMembershipId !== null && request.requester.membershipId === myMembershipId;
-  const isAssignee = myMembershipId !== null && request.assignee.id === myMembershipId;
+  const isRequester = !isContact && myMembershipId !== null && request.requester.membershipId === myMembershipId;
+  // A client contact is the addressee of every request they can read (REQ-03-034), which
+  // is how this screen knows it without a members read it would be refused.
+  const isAssignee = isContact
+    ? true
+    : myMembershipId !== null && request.assignee.id === myMembershipId;
   const isParty = isRequester || isAssignee || canViewAll;
 
   // A control the caller cannot use is not drawn (UI Description, read-only row).
   const showAnswer = !terminal && request.status === 'open' && (isAdmin || isAssignee);
-  const showGrant = !terminal && (isAdmin || isRequester);
+  // REQ-03-032 — the grant control is never drawn for a contact, and the route answers
+  // them 403 if it is asked anyway.
+  const showGrant = !terminal && !isContact && (isAdmin || isRequester);
   const showDecline = !terminal && (isAdmin || isAssignee);
-  const showCancel = !terminal && (isAdmin || isRequester);
+  const showCancel = !terminal && !isContact && (isAdmin || isRequester);
   const showReassign = !terminal && canViewAll;
   const showComposer = !terminal && isParty;
 
@@ -266,6 +282,9 @@ export default function RequestDetailPage({
               {request.project && <span>Project: {request.project.name}</span>}
               <span data-testid="request-detail-assignee">
                 To: {request.assignee.displayName ?? 'Unassigned'}
+                {/* A client addressee is named with the client they work for, so a
+                    requester can tell two contacts of two clients apart. */}
+                {request.assignee.clientName && ` · ${request.assignee.clientName}`}
               </span>
               <span>From: {request.requester.displayName}</span>
             </div>
@@ -286,8 +305,15 @@ export default function RequestDetailPage({
             {request.assignee.inactive && (
               <div data-testid="request-detail-assignee-inactive-banner">
                 <InfoBanner tone="warning">
-                  The person this request is addressed to is no longer active. Reassign it to
-                  someone else.
+                  {request.assignee.kind === 'client'
+                    ? // A removed contact's requests are flagged and not reassigned: this
+                      // release has no reassign path that accepts a client addressee, so
+                      // the banner names who it was for rather than offering an action
+                      // that does not exist.
+                      `${request.assignee.displayName ?? 'This contact'}${
+                        request.assignee.clientName ? ` at ${request.assignee.clientName}` : ''
+                      } is no longer an active contact.`
+                    : 'The person this request is addressed to is no longer active. Reassign it to someone else.'}
                 </InfoBanner>
               </div>
             )}

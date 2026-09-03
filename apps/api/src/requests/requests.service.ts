@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  CLIENT_USER_MESSAGES,
   REQUEST_MESSAGES,
   can,
   canReadRequest,
@@ -30,6 +31,10 @@ import type { Prisma } from '@prisma/client';
 import type { SessionPayload } from '../auth/session.service';
 import { PrismaService } from '../prisma.service';
 import { RequestEventsService } from './request-events.service';
+import {
+  RequestNotificationsService,
+  type NotificationRecipient,
+} from './request-notifications.service';
 import type {
   RequestDetailDto,
   RequestMessageDto,
@@ -49,6 +54,7 @@ import { VacationRequestFeedService } from './vacation-request-feed.service';
 
 /** The caller, resolved from the session — never from anything in the URL or the body. */
 interface Caller {
+  kind: 'member';
   membershipId: string;
   accountId: string;
   organizationId: string;
@@ -61,12 +67,32 @@ interface Caller {
   isAdmin: boolean;
 }
 
+/**
+ * Requests spec 03 — the other principal that reaches these routes. A client contact
+ * holds no role at all, which is why they carry none here: every branch asks the kind
+ * first, and no role-keyed helper is ever reached with one (REQ-03-017).
+ */
+interface ClientCaller {
+  kind: 'client';
+  clientMembershipId: string;
+  clientId: string;
+  accountId: string;
+  organizationId: string;
+  timezone: string | null;
+  displayName: string;
+}
+
+type AnyCaller = Caller | ClientCaller;
+
 /** The columns the state-machine guards are evaluated against, read under the row lock. */
 interface LockedRequest {
   id: string;
   status: string;
   requesterMembershipId: string;
+  assigneeKind: string;
   assigneeMembershipId: string | null;
+  /** Requests spec 03 — the client half of the addressee, read under the same lock. */
+  assigneeClientMembershipId: string | null;
   answeredAt: Date | null;
   resolvedAt: Date | null;
 }
@@ -83,15 +109,20 @@ const TRANSITIONS: Record<
   {
     to: RequestStatus;
     from: readonly string[];
-    actor: (caller: Caller, row: LockedRequest) => boolean;
+    actor: (caller: AnyCaller, row: LockedRequest) => boolean;
     forbiddenMessage: string;
   }
 > = {
   answer: {
     to: 'answered',
     from: ['open'],
-    // Requirement 23 — the addressee, or an admin acting for them.
-    actor: (caller, row) => caller.isAdmin || row.assigneeMembershipId === caller.membershipId,
+    // Requirement 23 — the addressee, or an admin acting for them. Requests spec 03
+    // REQ-03-030 gives the addressee client contact the same test, against the same
+    // locked row: the guard is who the row is addressed to, whichever kind that is.
+    actor: (caller, row) =>
+      caller.kind === 'client'
+        ? row.assigneeClientMembershipId === caller.clientMembershipId
+        : caller.isAdmin || row.assigneeMembershipId === caller.membershipId,
     forbiddenMessage: REQUEST_MESSAGES.notYoursToAnswer,
   },
   grant: {
@@ -99,20 +130,30 @@ const TRANSITIONS: Record<
     from: ['open', 'answered'],
     // Requirement 24 — the requester or an admin, and NOBODY else: not the addressee,
     // not a manager who is not the requester. Only the person who needs the access
-    // knows whether it works.
-    actor: (caller, row) => caller.isAdmin || row.requesterMembershipId === caller.membershipId,
+    // knows whether it works. A client contact is never the requester (REQ-03-027), so
+    // REQ-03-032's 403 is this same guard rather than a second rule.
+    actor: (caller, row) =>
+      caller.kind === 'client'
+        ? false
+        : caller.isAdmin || row.requesterMembershipId === caller.membershipId,
     forbiddenMessage: REQUEST_MESSAGES.notYoursToGrant,
   },
   decline: {
     to: 'declined',
     from: ['open', 'answered'],
-    actor: (caller, row) => caller.isAdmin || row.assigneeMembershipId === caller.membershipId,
+    actor: (caller, row) =>
+      caller.kind === 'client'
+        ? row.assigneeClientMembershipId === caller.clientMembershipId
+        : caller.isAdmin || row.assigneeMembershipId === caller.membershipId,
     forbiddenMessage: REQUEST_MESSAGES.notYoursToDecline,
   },
   cancel: {
     to: 'cancelled',
     from: ['open', 'answered'],
-    actor: (caller, row) => caller.isAdmin || row.requesterMembershipId === caller.membershipId,
+    actor: (caller, row) =>
+      caller.kind === 'client'
+        ? false
+        : caller.isAdmin || row.requesterMembershipId === caller.membershipId,
     forbiddenMessage: REQUEST_MESSAGES.notYoursToCancel,
   },
 };
@@ -140,6 +181,7 @@ export class RequestsService {
     private readonly prisma: PrismaService,
     private readonly events: RequestEventsService,
     private readonly vacationFeed: VacationRequestFeedService,
+    private readonly notifications: RequestNotificationsService,
   ) {}
 
   /* ---------------------------------------------------------------- *
@@ -182,35 +224,48 @@ export class RequestsService {
     }
 
     // Requirement 40 — the server is the gate; the absent control is a convenience.
-    if (scope === 'all' && !can(caller.role, 'view-all-requests')) {
+    // The kind is asked first (REQ-03-017): a client principal is never answered this
+    // 403, because `scope=all` widens nothing they could ever be granted (REQ-03-029).
+    if (caller.kind === 'member' && scope === 'all' && !can(caller.role, 'view-all-requests')) {
       throw new ForbiddenException({
         error: 'forbidden',
         message: REQUEST_MESSAGES.scopeForbidden,
       });
     }
 
+    // REQ-03-029 — a client contact receives only the requests addressed to them, for
+    // `scope=mine`, `scope=all` and no scope alike.
     const scopeWhere: Prisma.RequestWhereInput =
-      scope === 'all'
-        ? { organizationId }
-        : {
-            organizationId,
-            OR: [
-              { requesterMembershipId: caller.membershipId },
-              { assigneeMembershipId: caller.membershipId },
-            ],
-          };
+      caller.kind === 'client'
+        ? { organizationId, assigneeClientMembershipId: caller.clientMembershipId }
+        : scope === 'all'
+          ? { organizationId }
+          : {
+              organizationId,
+              OR: [
+                { requesterMembershipId: caller.membershipId },
+                { assigneeMembershipId: caller.membershipId },
+              ],
+            };
 
     // Both counters are computed BEFORE type/status/projectId/q are applied, and
     // neither is a count of the `requests` array. A badge that moved when someone
     // narrowed a filter would be reporting the view rather than the work.
+    const waitingOnMeWhere: Prisma.RequestWhereInput =
+      caller.kind === 'client'
+        ? {
+            organizationId,
+            assigneeClientMembershipId: caller.clientMembershipId,
+            status: { in: ['open', 'answered'] },
+          }
+        : {
+            organizationId,
+            assigneeMembershipId: caller.membershipId,
+            status: { in: ['open', 'answered'] },
+          };
+
     const [waitingOnMe, total] = await Promise.all([
-      this.prisma.request.count({
-        where: {
-          organizationId,
-          assigneeMembershipId: caller.membershipId,
-          status: { in: ['open', 'answered'] },
-        },
-      }),
+      this.prisma.request.count({ where: waitingOnMeWhere }),
       this.prisma.request.count({ where: scopeWhere }),
     ]);
 
@@ -256,8 +311,9 @@ export class RequestsService {
 
     // The vacation section keeps its own capability (requirement 41): a `user` sees the
     // page and their own requests, and does not see anyone's vacation — the section is
-    // absent entirely, not empty.
-    if (can(caller.role, 'view-requests')) {
+    // absent entirely, not empty. The kind is asked before the capability, so a client
+    // contact's response carries no `vacation` member at all (REQ-03-029).
+    if (caller.kind === 'member' && can(caller.role, 'view-requests')) {
       // `status` filters both sections through requirement 42's fixed mapping, because
       // one control on one page must not mean two things. A `type` of `access` or
       // `question` selects no vacation row, and the section renders empty rather than
@@ -282,7 +338,10 @@ export class RequestsService {
       include: REQUEST_ROW_INCLUDE,
     });
     if (!row) throw new NotFoundException();
-    if (!canReadRequest(caller.rawRole, this.isParty(caller, row))) throw new NotFoundException();
+    // REQ-03-034 — a request a client principal is not the addressee of is 404, identical
+    // to one that does not exist. `requireParty` asks the kind before the role-keyed
+    // helper, which is the whole of the ordering rule.
+    this.requireParty(caller, row);
 
     const [messages, events] = await Promise.all([
       this.prisma.requestMessage.findMany({
@@ -319,7 +378,20 @@ export class RequestsService {
     organizationId: string,
     body: Record<string, unknown>,
   ): Promise<RequestRowDto> {
-    const caller = await this.requireCaller(session, organizationId);
+    const resolved = await this.requireCaller(session, organizationId);
+
+    // REQ-03-027 — the ordering is part of the rule. A client contact is refused here,
+    // before any capability is consulted and before the body is looked at, so they never
+    // receive `createForbidden` (the sentence written for a viewer) and a malformed body
+    // is not answered as a validation error.
+    if (resolved.kind === 'client') {
+      throw new ForbiddenException({
+        error: 'forbidden',
+        message: CLIENT_USER_MESSAGES.clientCannotCreate,
+      });
+    }
+    const caller = resolved;
+
     if (!can(caller.role, 'create-request')) {
       throw new ForbiddenException({
         error: 'forbidden',
@@ -357,29 +429,49 @@ export class RequestsService {
     }
 
     // Rule 9 — compared only on a topic rule 8 has found active, so an archived client
-    // topic answers `topicUnavailable` and never `topicAudienceMismatch` (requirement 20).
-    // `member` is the only addressee kind a request may carry as this spec ships, so the
-    // audience it must match is `staff`.
-    if (topic.audience !== 'staff') {
+    // topic answers `topicUnavailable` and never `topicAudienceMismatch` (requirement 20,
+    // edge case 18). Requests spec 03 REQ-03-024 makes the audience the addressee's kind:
+    // `staff` for a colleague, `client` for a client contact, all four cells of the
+    // table decided here.
+    const requiredAudience = input.assigneeKind === 'client' ? 'client' : 'staff';
+    if (topic.audience !== requiredAudience) {
       throw new BadRequestException({
         error: 'validation_error',
         fields: { topicId: REQUEST_MESSAGES.topicAudienceMismatch },
       });
     }
 
-    // Rule 8 (spec 01) — an active membership in the CALLER's organization. One in another
-    // organization answers 404, identical to a non-existent id, so ids cannot be probed
-    // across organizations; a removed one is the validation case instead.
-    const assignee = await this.prisma.membership.findUnique({
-      where: { id: input.assigneeMembershipId },
-      select: { id: true, status: true, organizationId: true },
-    });
-    if (!assignee || assignee.organizationId !== organizationId) throw new NotFoundException();
-    if (assignee.status !== 'active') {
-      throw new BadRequestException({
-        error: 'validation_error',
-        fields: { assigneeMembershipId: REQUEST_MESSAGES.assigneeInactive },
+    // The addressee row. Both kinds answer alike across organizations: an id of another
+    // organization and one that names nothing are both a bare 404, so ids cannot be
+    // probed across organizations; a removed row of the caller's OWN organization is the
+    // validation case instead, and only after the 404 (spec 01 rule 8, REQ-03-020,
+    // REQ-03-025).
+    let contactClientId: string | null = null;
+    if (input.assigneeKind === 'client') {
+      const contact = await this.prisma.clientMembership.findUnique({
+        where: { id: input.assigneeClientMembershipId! },
+        select: { id: true, status: true, organizationId: true, clientId: true },
       });
+      if (!contact || contact.organizationId !== organizationId) throw new NotFoundException();
+      if (contact.status !== 'active') {
+        throw new BadRequestException({
+          error: 'validation_error',
+          fields: { assigneeClientMembershipId: REQUEST_MESSAGES.assigneeInactive },
+        });
+      }
+      contactClientId = contact.clientId;
+    } else {
+      const assignee = await this.prisma.membership.findUnique({
+        where: { id: input.assigneeMembershipId! },
+        select: { id: true, status: true, organizationId: true },
+      });
+      if (!assignee || assignee.organizationId !== organizationId) throw new NotFoundException();
+      if (assignee.status !== 'active') {
+        throw new BadRequestException({
+          error: 'validation_error',
+          fields: { assigneeMembershipId: REQUEST_MESSAGES.assigneeInactive },
+        });
+      }
     }
 
     // Rule 9 — same split, for the same reason: only an archived project in the caller's
@@ -387,7 +479,7 @@ export class RequestsService {
     if (input.projectId) {
       const project = await this.prisma.project.findUnique({
         where: { id: input.projectId },
-        select: { id: true, status: true, organizationId: true },
+        select: { id: true, status: true, organizationId: true, clientId: true },
       });
       if (!project || project.organizationId !== organizationId) throw new NotFoundException();
       if (project.status !== 'active') {
@@ -396,8 +488,39 @@ export class RequestsService {
           fields: { projectId: REQUEST_MESSAGES.projectUnavailable },
         });
       }
+
+      if (input.assigneeKind === 'client') {
+        // REQ-03-022 — the project belongs to the addressee's client. A project with no
+        // client link at all is refused by the same sentence, so neither answer says
+        // whether the project exists (edge case 7).
+        if (project.clientId !== contactClientId) {
+          throw new BadRequestException({
+            error: 'validation_error',
+            fields: { projectId: REQUEST_MESSAGES.clientProjectMismatch },
+          });
+        }
+        // REQ-03-023 — the requester works on that project. An admin is not carved out:
+        // that would remove the only rule keeping a client's inbox to people they work
+        // with. It is a gate at creation, not a standing condition (edge case 6).
+        const assignment = await this.prisma.projectMember.findUnique({
+          where: {
+            projectId_membershipId: {
+              projectId: project.id,
+              membershipId: caller.membershipId,
+            },
+          },
+          select: { id: true },
+        });
+        if (!assignment) {
+          throw new BadRequestException({
+            error: 'validation_error',
+            fields: { projectId: REQUEST_MESSAGES.notOnProject },
+          });
+        }
+      }
     }
 
+    const notificationIds: string[] = [];
     const created = await this.prisma.$transaction(async (tx) => {
       // Serialize `nextRequestNumber` allocation on the organization row.
       const orgRows = await tx.$queryRaw<{ nextRequestNumber: number }[]>`
@@ -427,6 +550,8 @@ export class RequestsService {
           requesterMembershipId: caller.membershipId,
           assigneeKind: input.assigneeKind,
           assigneeMembershipId: input.assigneeMembershipId,
+          // Requests spec 03 — one of the two is set, decided by the kind above.
+          assigneeClientMembershipId: input.assigneeClientMembershipId,
           priority: input.priority,
           blocking: input.blocking,
           neededBy: input.neededBy ? new Date(`${input.neededBy}T00:00:00.000Z`) : null,
@@ -441,17 +566,32 @@ export class RequestsService {
         data: { nextRequestNumber: number + 1 },
       });
 
-      await this.events.record(tx, {
+      const eventId = await this.events.record(tx, {
         requestId: request.id,
-        actorKind: 'member',
-        actorMembershipId: caller.membershipId,
+        ...this.actorColumns(caller),
         action: 'created',
         newValue: 'open',
         newLabel: caller.displayName,
       });
 
+      // REQ-03-035 — the outbox rows ride the transaction that wrote the event, against
+      // the row as that transaction leaves it.
+      notificationIds.push(
+        ...(await this.notifications.record(tx, {
+          organizationId,
+          requestId: request.id,
+          eventId,
+          action: 'created',
+          recipients: this.notifications.recipientsFor(request, this.actorRecipient(caller)),
+        })),
+      );
+
       return request;
     });
+
+    // REQ-03-037 — after the commit, and not awaited: the route answers whatever the
+    // notifier does.
+    this.notifications.dispatch(notificationIds);
 
     // `lastActivityAt` defaults to the same instant as `createdAt` (TC-01-INT-01).
     return toRequestRow(created, today);
@@ -470,6 +610,7 @@ export class RequestsService {
   ): Promise<RequestMessageDto> {
     const caller = await this.requireCaller(session, organizationId);
 
+    const notificationIds: string[] = [];
     const message = await this.prisma.$transaction(async (tx) => {
       const locked = await this.lockRequest(tx, organizationId, requestId);
       this.requireParty(caller, locked);
@@ -490,11 +631,15 @@ export class RequestsService {
         });
       }
 
+      const actor = this.actorColumns(caller);
       const created = await tx.requestMessage.create({
         data: {
           requestId,
-          authorKind: 'member',
-          authorMembershipId: caller.membershipId,
+          // REQ-03-033 — a contact's message carries `authorKind` of `client` and their
+          // client-membership id; the columns are the same seam the addressee uses.
+          authorKind: actor.actorKind,
+          authorMembershipId: actor.actorMembershipId,
+          authorClientMembershipId: actor.actorClientMembershipId,
           body: parsed.value,
         },
         include: REQUEST_MESSAGE_INCLUDE,
@@ -507,16 +652,27 @@ export class RequestsService {
 
       // The author's display name is snapshotted so the trail renders correctly after
       // the author is removed or renamed (requirement 20).
-      await this.events.record(tx, {
+      const eventId = await this.events.record(tx, {
         requestId,
-        actorKind: 'member',
-        actorMembershipId: caller.membershipId,
+        ...actor,
         action: 'message_posted',
         newLabel: caller.displayName,
       });
 
+      notificationIds.push(
+        ...(await this.notifications.record(tx, {
+          organizationId,
+          requestId,
+          eventId,
+          action: 'message_posted',
+          recipients: this.notifications.recipientsFor(locked, this.actorRecipient(caller)),
+        })),
+      );
+
       return created;
     });
+
+    this.notifications.dispatch(notificationIds);
 
     return toRequestMessage(message);
   }
@@ -541,6 +697,7 @@ export class RequestsService {
     const caller = await this.requireCaller(session, organizationId);
     const rule = TRANSITIONS[action];
 
+    const notificationIds: string[] = [];
     const updated = await this.prisma.$transaction(async (tx) => {
       const locked = await this.lockRequest(tx, organizationId, requestId);
       this.requireParty(caller, locked);
@@ -562,6 +719,9 @@ export class RequestsService {
       }
 
       const now = new Date();
+      const actor = this.actorColumns(caller);
+      const actorRecipient = this.actorRecipient(caller);
+      const recipients = this.notifications.recipientsFor(locked, actorRecipient);
 
       // A decline's reason is written as a message in the same transaction as the
       // status, so a refusal cannot exist without an explanation in the thread
@@ -577,8 +737,9 @@ export class RequestsService {
         await tx.requestMessage.create({
           data: {
             requestId,
-            authorKind: 'member',
-            authorMembershipId: caller.membershipId,
+            authorKind: actor.actorKind,
+            authorMembershipId: actor.actorMembershipId,
+            authorClientMembershipId: actor.actorClientMembershipId,
             body: reason.value,
           },
         });
@@ -590,13 +751,22 @@ export class RequestsService {
         // exists, which requirement 21 makes visible. This is an event of a *different*
         // action alongside the single `status_changed` recorded below, not a second
         // status change: invariant 4 (exactly one `status_changed` per transition) holds.
-        await this.events.record(tx, {
+        const messageEventId = await this.events.record(tx, {
           requestId,
-          actorKind: 'member',
-          actorMembershipId: caller.membershipId,
+          ...actor,
           action: 'message_posted',
           newLabel: caller.displayName,
         });
+
+        notificationIds.push(
+          ...(await this.notifications.record(tx, {
+            organizationId,
+            requestId,
+            eventId: messageEventId,
+            action: 'message_posted',
+            recipients,
+          })),
+        );
       }
 
       await tx.request.update({
@@ -615,21 +785,32 @@ export class RequestsService {
         },
       });
 
-      await this.events.record(tx, {
+      const eventId = await this.events.record(tx, {
         requestId,
-        actorKind: 'member',
-        actorMembershipId: caller.membershipId,
+        ...actor,
         action: 'status_changed',
         oldValue: locked.status,
         newValue: rule.to,
         newLabel: caller.displayName,
       });
 
+      notificationIds.push(
+        ...(await this.notifications.record(tx, {
+          organizationId,
+          requestId,
+          eventId,
+          action: 'status_changed',
+          recipients,
+        })),
+      );
+
       return tx.request.findUniqueOrThrow({
         where: { id: requestId },
         include: REQUEST_ROW_INCLUDE,
       });
     });
+
+    this.notifications.dispatch(notificationIds);
 
     return toRequestRow(updated, todayInTimeZone(caller.timezone));
   }
@@ -645,7 +826,9 @@ export class RequestsService {
     requestId: string,
     body: Record<string, unknown>,
   ): Promise<RequestRowDto> {
-    const caller = await this.requireCaller(session, organizationId);
+    // Editing is a staff route: REQ-03-019 does not name it, so a client principal is
+    // already answered 404 by the guard and is answered the same here.
+    const caller = this.requireMemberCaller(await this.requireCaller(session, organizationId));
     const today = todayInTimeZone(caller.timezone);
 
     const updated = await this.prisma.$transaction(async (tx) => {
@@ -725,6 +908,8 @@ export class RequestsService {
         data.lastActivityAt = new Date();
         await tx.request.update({ where: { id: requestId }, data });
         for (const change of edited) {
+          // `field_changed` is not among the actions REQ-03-035 names, so it writes no
+          // outbox row and notifies nobody.
           await this.events.record(tx, {
             requestId,
             actorKind: 'member',
@@ -759,8 +944,12 @@ export class RequestsService {
     requestId: string,
     body: Record<string, unknown>,
   ): Promise<RequestRowDto> {
-    const caller = await this.requireCaller(session, organizationId);
+    // Reassignment is a staff route, and it takes a colleague: a reassign path that
+    // accepts a client addressee is named in Known Gaps as not built, so a body naming
+    // one is refused with the answer this route already gives it.
+    const caller = this.requireMemberCaller(await this.requireCaller(session, organizationId));
 
+    const notificationIds: string[] = [];
     const updated = await this.prisma.$transaction(async (tx) => {
       const locked = await this.lockRequest(tx, organizationId, requestId);
       this.requireParty(caller, locked);
@@ -773,10 +962,10 @@ export class RequestsService {
       }
 
       const parsed = validateRequestAssignee(body);
-      if (!parsed.valid) {
+      if (!parsed.valid || parsed.value.assigneeKind !== 'member') {
         throw new BadRequestException({
           error: 'validation_error',
-          fields: { assigneeMembershipId: parsed.error },
+          fields: { assigneeMembershipId: REQUEST_MESSAGES.assigneeInvalid },
         });
       }
 
@@ -809,11 +998,14 @@ export class RequestsService {
         data: {
           assigneeKind: parsed.value.assigneeKind,
           assigneeMembershipId: next.id,
+          // The other half of the addressee is cleared, so exactly one of the two is
+          // ever set on a row.
+          assigneeClientMembershipId: null,
           lastActivityAt: new Date(),
         },
       });
 
-      await this.events.record(tx, {
+      const eventId = await this.events.record(tx, {
         requestId,
         actorKind: 'member',
         actorMembershipId: caller.membershipId,
@@ -824,11 +1016,33 @@ export class RequestsService {
         newLabel: displayNameOf(next.account),
       });
 
+      // REQ-03-036 — the addressee AS THE TRANSACTION LEAVES IT, so a reassignment
+      // notifies the incoming addressee and not the outgoing one.
+      notificationIds.push(
+        ...(await this.notifications.record(tx, {
+          organizationId,
+          requestId,
+          eventId,
+          action: 'assignee_changed',
+          recipients: this.notifications.recipientsFor(
+            {
+              requesterMembershipId: locked.requesterMembershipId,
+              assigneeKind: 'member',
+              assigneeMembershipId: next.id,
+              assigneeClientMembershipId: null,
+            },
+            this.actorRecipient(caller),
+          ),
+        })),
+      );
+
       return tx.request.findUniqueOrThrow({
         where: { id: requestId },
         include: REQUEST_ROW_INCLUDE,
       });
     });
+
+    this.notifications.dispatch(notificationIds);
 
     return toRequestRow(updated, todayInTimeZone(caller.timezone));
   }
@@ -851,7 +1065,8 @@ export class RequestsService {
     requestId: string,
   ): Promise<LockedRequest> {
     const rows = await tx.$queryRaw<LockedRequest[]>`
-      SELECT "id", "status", "requesterMembershipId", "assigneeMembershipId",
+      SELECT "id", "status", "requesterMembershipId", "assigneeKind",
+             "assigneeMembershipId", "assigneeClientMembershipId",
              "answeredAt", "resolvedAt"
       FROM "Request"
       WHERE "id" = ${requestId} AND "organizationId" = ${organizationId}
@@ -861,11 +1076,17 @@ export class RequestsService {
     return row;
   }
 
-  /** The requester, the addressee, or a holder of `view-all-requests`. */
-  private isParty(
-    caller: Caller,
-    row: { requesterMembershipId: string; assigneeMembershipId: string | null },
-  ): boolean {
+  /**
+   * The requester, the addressee, or a holder of `view-all-requests` — for a member.
+   *
+   * For a client contact it is one test and only one: the request is addressed to them
+   * (REQ-03-028). There is no widening capability a contact could hold, so a request
+   * they are not the addressee of is not theirs (REQ-03-034).
+   */
+  private isParty(caller: AnyCaller, row: PartyColumns): boolean {
+    if (caller.kind === 'client') {
+      return row.assigneeClientMembershipId === caller.clientMembershipId;
+    }
     return (
       row.requesterMembershipId === caller.membershipId ||
       row.assigneeMembershipId === caller.membershipId
@@ -877,24 +1098,32 @@ export class RequestsService {
    * that does not exist. A party the route then forbids gets the 403 named for that
    * route — and no route ever answers both for the same caller (AC-16).
    */
-  private requireParty(
-    caller: Caller,
-    row: { requesterMembershipId: string; assigneeMembershipId: string | null },
-  ): void {
-    if (!canReadRequest(caller.rawRole, this.isParty(caller, row))) {
+  private requireParty(caller: AnyCaller, row: PartyColumns): void {
+    const party = this.isParty(caller, row);
+    // The kind is asked before any role-keyed helper: `canReadRequest` normalizes an
+    // absent role to `viewer`, which would answer a client principal from a role they do
+    // not hold (REQ-03-017, edge case 17).
+    if (caller.kind === 'client') {
+      if (!party) throw new NotFoundException();
+      return;
+    }
+    if (!canReadRequest(caller.rawRole, party)) {
       throw new NotFoundException();
     }
   }
 
   /**
-   * The caller's own membership, resolved from the session. `organizationId` is passed
-   * in rather than read from the path so the scope key can never be defaulted; it is the
+   * The caller's own principal, resolved from the session. `organizationId` is passed in
+   * rather than read from the path so the scope key can never be defaulted; it is the
    * session's organization, which `OrgScopeGuard` has already matched against the URL.
+   *
+   * The staff row wins, as REQ-03-002's table says, and the client row is read only when
+   * there is no active staff one.
    */
   private async requireCaller(
     session: SessionPayload,
     organizationId: string,
-  ): Promise<Caller> {
+  ): Promise<AnyCaller> {
     const membership = await this.prisma.membership.findUnique({
       where: { accountId: session.accountId },
       select: {
@@ -907,22 +1136,90 @@ export class RequestsService {
       },
     });
     if (
-      !membership ||
-      membership.status !== 'active' ||
-      membership.organizationId !== organizationId
+      membership &&
+      membership.status === 'active' &&
+      membership.organizationId === organizationId
     ) {
-      throw new ForbiddenException();
+      const role = normalizeRole(membership.role);
+      return {
+        kind: 'member',
+        membershipId: membership.id,
+        accountId: membership.accountId,
+        organizationId: membership.organizationId,
+        role,
+        rawRole: membership.role,
+        timezone: membership.account.timezone,
+        displayName: displayNameOf(membership.account),
+        isAdmin: role === 'admin',
+      };
     }
-    const role = normalizeRole(membership.role);
-    return {
-      membershipId: membership.id,
-      accountId: membership.accountId,
-      organizationId: membership.organizationId,
-      role,
-      rawRole: membership.role,
-      timezone: membership.account.timezone,
-      displayName: displayNameOf(membership.account),
-      isAdmin: role === 'admin',
-    };
+
+    const contact = await this.prisma.clientMembership.findUnique({
+      where: { accountId: session.accountId },
+      select: {
+        id: true,
+        status: true,
+        organizationId: true,
+        clientId: true,
+        accountId: true,
+        account: { select: { firstName: true, lastName: true, timezone: true } },
+      },
+    });
+    if (contact && contact.status === 'active' && contact.organizationId === organizationId) {
+      return {
+        kind: 'client',
+        clientMembershipId: contact.id,
+        clientId: contact.clientId,
+        accountId: contact.accountId,
+        organizationId: contact.organizationId,
+        timezone: contact.account.timezone,
+        displayName: displayNameOf(contact.account),
+      };
+    }
+
+    throw new ForbiddenException();
   }
+
+  /**
+   * The caller as a member of staff, for the routes REQ-03-019 does not open to a client
+   * principal at all. A contact is answered the same bare 404 `OrgScopeGuard` already
+   * gives them, so the two layers cannot disagree about what a contact sees.
+   */
+  private requireMemberCaller(caller: AnyCaller): Caller {
+    if (caller.kind !== 'member') throw new NotFoundException();
+    return caller;
+  }
+
+  /** Who the caller is, as a notification recipient — the actor of the events they cause. */
+  private actorRecipient(caller: AnyCaller): NotificationRecipient {
+    return caller.kind === 'client'
+      ? { kind: 'client', id: caller.clientMembershipId }
+      : { kind: 'member', id: caller.membershipId };
+  }
+
+  /** The actor columns of an event or a message, for whichever kind the caller is. */
+  private actorColumns(caller: AnyCaller): {
+    actorKind: 'member' | 'client';
+    actorMembershipId: string | null;
+    actorClientMembershipId: string | null;
+  } {
+    return caller.kind === 'client'
+      ? {
+          actorKind: 'client',
+          actorMembershipId: null,
+          actorClientMembershipId: caller.clientMembershipId,
+        }
+      : {
+          actorKind: 'member',
+          actorMembershipId: caller.membershipId,
+          actorClientMembershipId: null,
+        };
+  }
+}
+
+/** The addressee and requester columns every party test is evaluated against. */
+interface PartyColumns {
+  requesterMembershipId: string;
+  assigneeMembershipId: string | null;
+  assigneeClientMembershipId: string | null;
 }

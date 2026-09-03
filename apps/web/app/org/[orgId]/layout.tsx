@@ -51,9 +51,14 @@ export default function OrgLayout({
       const features = {
         mailOutbox: session.features?.mailOutbox === true,
       };
+      // Requests spec 03 — the principal kind, read from the one endpoint that answers
+      // it. Nothing renders until it has, so no member-only navigation is ever painted
+      // and then removed.
+      const principal = session.principal === 'client' ? 'client' : 'member';
+      const client = principal === 'client' ? (session.client ?? null) : null;
       setResolution(
         session.organization.id === orgId
-          ? { state: 'ready', session: { ...session, features } }
+          ? { state: 'ready', session: { ...session, features, principal, client } }
           : { state: 'gone' },
       );
     }

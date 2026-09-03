@@ -106,7 +106,14 @@ describe('TC-01-UNIT-03 — addressee', () => {
   it('accepts kind member with a membership id', () => {
     expect(
       validateRequestAssignee({ assigneeKind: 'member', assigneeMembershipId: 'm-1' }),
-    ).toEqual({ valid: true, value: { assigneeKind: 'member', assigneeMembershipId: 'm-1' } });
+    ).toEqual({
+      valid: true,
+      value: {
+        assigneeKind: 'member',
+        assigneeMembershipId: 'm-1',
+        assigneeClientMembershipId: null,
+      },
+    });
   });
 
   it('rejects kind member with no membership id', () => {
@@ -116,7 +123,7 @@ describe('TC-01-UNIT-03 — addressee', () => {
     });
   });
 
-  it('rejects kind client with an id — `client` is not yet a valid kind', () => {
+  it('rejects kind client carrying a MEMBERSHIP id — that kind selects the other id', () => {
     expect(
       validateRequestAssignee({ assigneeKind: 'client', assigneeMembershipId: 'c-1' }),
     ).toEqual({ valid: false, error: 'Choose who this request is for' });
@@ -380,6 +387,7 @@ describe('validateNewRequest', () => {
       neededBy: null,
       assigneeKind: 'member',
       assigneeMembershipId: 'm-1',
+      assigneeClientMembershipId: null,
       projectId: null,
     });
   });
@@ -451,5 +459,121 @@ describe('REQUEST_MESSAGES', () => {
     expect(REQUEST_MESSAGES.emptyFiltered).toBe('No requests match these filters.');
     // Spec 09's keys are still on the same object.
     expect(REQUEST_MESSAGES.toastApproved).toBe('Request approved');
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Requests spec 03 — a request addressed to a client contact.
+ *
+ * Validation rules 5, 8 and 13: the kind is one of two, the id that kind selects is
+ * present, and a client-addressed request names a project. Everything else about a
+ * client addressee needs stored rows and has no client-side half at all.
+ * ------------------------------------------------------------------ */
+
+describe('the client addressee (requests spec 03 rules 5, 8, 13)', () => {
+  const today = '2026-09-02';
+
+  it('accepts kind client with a client-membership id', () => {
+    expect(
+      validateRequestAssignee({
+        assigneeKind: 'client',
+        assigneeClientMembershipId: 'cm-1',
+      }),
+    ).toEqual({
+      valid: true,
+      value: {
+        assigneeKind: 'client',
+        assigneeMembershipId: null,
+        assigneeClientMembershipId: 'cm-1',
+      },
+    });
+  });
+
+  it('rejects kind client with no client-membership id', () => {
+    expect(validateRequestAssignee({ assigneeKind: 'client' })).toEqual({
+      valid: false,
+      error: 'Choose who this request is for',
+    });
+  });
+
+  it('still rejects a kind outside the two', () => {
+    expect(
+      validateRequestAssignee({ assigneeKind: 'vendor', assigneeMembershipId: 'm-1' }),
+    ).toEqual({ valid: false, error: 'Choose who this request is for' });
+  });
+
+  it('reports a client addressee failure under the id that kind selects', () => {
+    const result = validateNewRequest(
+      { topicId: 't-1', title: 'Warehouse access', assigneeKind: 'client', projectId: 'p-1' },
+      today,
+    );
+    expect(result.valid).toBe(false);
+    expect(result.fields).toEqual({
+      assigneeClientMembershipId: 'Choose who this request is for',
+    });
+  });
+
+  it('requires a project for a client addressee and reports it with the body shape', () => {
+    const result = validateNewRequest(
+      { topicId: 't-1', title: 'Warehouse access', assigneeKind: 'client' },
+      today,
+    );
+    expect(result.valid).toBe(false);
+    expect(result.fields).toEqual({
+      assigneeClientMembershipId: 'Choose who this request is for',
+      projectId: 'Choose the project this request belongs to',
+    });
+  });
+
+  it('leaves the project optional for a member addressee', () => {
+    const result = validateNewRequest(
+      {
+        topicId: 't-1',
+        title: 'Warehouse access',
+        assigneeKind: 'member',
+        assigneeMembershipId: 'm-1',
+      },
+      today,
+    );
+    expect(result.valid).toBe(true);
+    expect(result.value?.projectId).toBeNull();
+  });
+
+  it('normalizes a valid client-addressed body', () => {
+    const result = validateNewRequest(
+      {
+        topicId: 't-1',
+        title: 'Warehouse access',
+        assigneeKind: 'client',
+        assigneeClientMembershipId: 'cm-1',
+        projectId: 'p-1',
+      },
+      today,
+    );
+    expect(result.valid).toBe(true);
+    expect(result.value).toEqual({
+      topicId: 't-1',
+      title: 'Warehouse access',
+      description: null,
+      priority: 'normal',
+      blocking: false,
+      neededBy: null,
+      assigneeKind: 'client',
+      assigneeMembershipId: null,
+      assigneeClientMembershipId: 'cm-1',
+      projectId: 'p-1',
+    });
+  });
+
+  it('carries this spec"s three new message keys on the same object', () => {
+    expect(REQUEST_MESSAGES.clientProjectRequired).toBe(
+      'Choose the project this request belongs to',
+    );
+    expect(REQUEST_MESSAGES.clientProjectMismatch).toBe(
+      'That project does not belong to this client',
+    );
+    expect(REQUEST_MESSAGES.notOnProject).toBe(
+      'You can only ask a client about a project you are assigned to',
+    );
   });
 });

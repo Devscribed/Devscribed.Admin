@@ -50,11 +50,35 @@ interface NavGroup {
  */
 function navigation(
   orgId: string,
+  principal: 'member' | 'client',
   role: string,
   badgeCount: number,
   features: SessionFeatures,
 ): NavGroup[] {
   const groups: NavGroup[] = [];
+
+  // Requests spec 03 REQ-03-018 — for a client contact the requests destination is the
+  // only organization navigation entry there is. The kind is asked before any role-keyed
+  // helper below (REQ-03-017), which would answer a principal with no role the viewer
+  // set; and every other destination answers them 404, so drawing one would be a dead
+  // link.
+  if (principal === 'client') {
+    return [
+      {
+        label: 'People',
+        entries: [
+          {
+            testId: 'sidebar-requests-link',
+            label: 'Requests',
+            href: `/org/${orgId}/requests`,
+            icon: <InboxIcon />,
+            badge: badgeCount || undefined,
+            badgeTestId: 'sidebar-requests-badge',
+          },
+        ],
+      },
+    ];
+  }
 
   if (can(role as Role, 'view-time-tracking')) {
     groups.push({
@@ -202,9 +226,9 @@ function navigation(
 export function Sidebar({ orgId }: { orgId: string }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { role, features } = useSession();
+  const { principal, role, features } = useSession();
   const { badgeCount } = usePendingRequests();
-  const groups = navigation(orgId, role, badgeCount, features);
+  const groups = navigation(orgId, principal, role ?? '', badgeCount, features);
 
   /**
    * `/documents` is a prefix of `/documents/templates`, so a plain `startsWith` would

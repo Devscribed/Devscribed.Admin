@@ -1,6 +1,7 @@
 import { isRequestOverdue } from '@devscribed/validation';
 import type { Prisma } from '@prisma/client';
 import type {
+  RequestAssigneeDto,
   RequestDetailDto,
   RequestEventDto,
   RequestMessageDto,
@@ -23,6 +24,17 @@ export const REQUEST_ROW_INCLUDE = {
   assignee: {
     select: { id: true, status: true, account: { select: { firstName: true, lastName: true } } },
   },
+  /* Requests spec 03 — the client half of the addressee. The contact's display name and
+     their client's name are read; their email address is not, and no request response
+     carries it. */
+  assigneeClientMembership: {
+    select: {
+      id: true,
+      status: true,
+      client: { select: { id: true, name: true } },
+      account: { select: { firstName: true, lastName: true } },
+    },
+  },
   _count: { select: { messages: true } },
 } satisfies Prisma.RequestInclude;
 
@@ -32,6 +44,8 @@ export type RequestWithRelations = Prisma.RequestGetPayload<{
 
 export const REQUEST_MESSAGE_INCLUDE = {
   author: { select: { id: true, account: { select: { firstName: true, lastName: true } } } },
+  /* Requests spec 03 — a message a client contact wrote carries the other author column. */
+  clientAuthor: { select: { id: true, account: { select: { firstName: true, lastName: true } } } },
 } satisfies Prisma.RequestMessageInclude;
 
 export type RequestMessageWithAuthor = Prisma.RequestMessageGetPayload<{
@@ -40,6 +54,8 @@ export type RequestMessageWithAuthor = Prisma.RequestMessageGetPayload<{
 
 export const REQUEST_EVENT_INCLUDE = {
   actor: { select: { id: true, account: { select: { firstName: true, lastName: true } } } },
+  /* Requests spec 03 — an event a client contact caused carries the other actor column. */
+  clientActor: { select: { id: true, account: { select: { firstName: true, lastName: true } } } },
 } satisfies Prisma.RequestEventInclude;
 
 export type RequestEventWithActor = Prisma.RequestEventGetPayload<{
@@ -82,19 +98,49 @@ export function toRequestRow(row: RequestWithRelations, today: string): RequestR
       membershipId: row.requesterMembershipId,
       displayName: row.requester ? displayNameOf(row.requester.account) : '',
     },
-    assignee: {
-      kind: row.assigneeKind,
-      id: row.assigneeMembershipId,
-      displayName: row.assignee ? displayNameOf(row.assignee.account) : null,
-      // Member removal is a soft delete (`status = 'removed'`), so this is a status read
-      // and never a null FK — requirement 36 and edge case 11.
-      inactive: row.assignee ? row.assignee.status !== 'active' : true,
-    },
+    assignee: toRequestAssignee(row),
     createdAt: row.createdAt.toISOString(),
     lastActivityAt: row.lastActivityAt.toISOString(),
     answeredAt: row.answeredAt ? row.answeredAt.toISOString() : null,
     resolvedAt: row.resolvedAt ? row.resolvedAt.toISOString() : null,
     messageCount: row._count.messages,
+  };
+}
+
+/**
+ * Who the request is addressed to, for whichever kind it carries.
+ *
+ * Requests spec 03: a client addressee answers with the contact's display name, their
+ * client's name and the same `inactive` read — a removal is a soft delete there too, so
+ * a request whose contact has been removed reports its assignee inactive and is
+ * cancelled by nothing (REQ-03-026). The contact's email address is never carried.
+ */
+export function toRequestAssignee(
+  row: Pick<
+    RequestWithRelations,
+    'assigneeKind' | 'assigneeMembershipId' | 'assignee' | 'assigneeClientMembershipId' | 'assigneeClientMembership'
+  >,
+): RequestAssigneeDto {
+  if (row.assigneeKind === 'client') {
+    const contact = row.assigneeClientMembership;
+    return {
+      kind: 'client',
+      id: row.assigneeClientMembershipId,
+      displayName: contact ? displayNameOf(contact.account) : null,
+      clientName: contact ? contact.client.name : null,
+      inactive: contact ? contact.status !== 'active' : true,
+    };
+  }
+  return {
+    kind: row.assigneeKind,
+    id: row.assigneeMembershipId,
+    displayName: row.assignee ? displayNameOf(row.assignee.account) : null,
+    // The client name belongs to a client addressee alone; one shape answers both, so a
+    // screen reads the same member whichever kind it is looking at.
+    clientName: null,
+    // Member removal is a soft delete (`status = 'removed'`), so this is a status read
+    // and never a null FK — requirement 36 and edge case 11.
+    inactive: row.assignee ? row.assignee.status !== 'active' : true,
   };
 }
 
@@ -125,13 +171,16 @@ export function toRequestTopicMember(
 }
 
 export function toRequestMessage(message: RequestMessageWithAuthor): RequestMessageDto {
+  const author = message.author ?? message.clientAuthor;
   return {
     id: message.id,
     body: message.body,
     createdAt: message.createdAt.toISOString(),
     author: {
+      // The membership id of a staff author, and null for a client contact — the thread
+      // shows a name, and a contact has no membership to name.
       membershipId: message.authorMembershipId,
-      displayName: message.author ? displayNameOf(message.author.account) : null,
+      displayName: author ? displayNameOf(author.account) : null,
     },
   };
 }
@@ -148,7 +197,9 @@ export function toRequestEvent(event: RequestEventWithActor): RequestEventDto {
     createdAt: event.createdAt.toISOString(),
     actor: {
       membershipId: event.actorMembershipId,
-      displayName: event.actor ? displayNameOf(event.actor.account) : null,
+      displayName: (event.actor ?? event.clientActor)
+        ? displayNameOf((event.actor ?? event.clientActor)!.account)
+        : null,
     },
   };
 }

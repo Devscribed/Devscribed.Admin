@@ -183,6 +183,59 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
   viewer: ['ViewOwnRequests'],
 };
 
+/* ------------------------------------------------------------------ *
+ * Requests spec 03 — the client contact, whose rights come from the principal kind and
+ * from no role at all (REQ-03-016, REQ-03-017).
+ *
+ * A union of its own, and a flat list rather than a table: a value added to a staff
+ * union is one every staff role must then be refused, for a right no role can hold. So
+ * `Capability` gains nothing, `ROLE_CAPABILITIES` gains no row, `MemberCapability` gains
+ * nothing and `CAPABILITY_MATRIX` gains no column.
+ * ------------------------------------------------------------------ */
+
+export type ClientCapability =
+  | 'read-own-requests'
+  | 'answer-request'
+  | 'decline-request'
+  | 'post-request-message';
+
+/** Every right a client principal holds, and nothing else. */
+export const CLIENT_CAPABILITIES: readonly ClientCapability[] = [
+  'read-own-requests',
+  'answer-request',
+  'decline-request',
+  'post-request-message',
+];
+
+/** Which kind of principal a session resolves to. Read from the database per request. */
+export type PrincipalKind = 'member' | 'client';
+
+/**
+ * The caller, as an authorization question. `role` is the raw `Membership.role` column
+ * for a member and is `null` for a client contact, who holds no role at all.
+ */
+export interface Principal {
+  kind: PrincipalKind;
+  role: string | null;
+}
+
+/**
+ * REQ-03-017 — the principal kind is asked FIRST, and a client principal never reaches a
+ * role-keyed helper.
+ *
+ * That ordering is the whole rule. `normalizeRole` maps an unrecognised value — `null`
+ * included — to `viewer`, so `hasCapability` would answer a client principal with the
+ * viewer set, which holds `ViewOwnRequests`: a grant, not a refusal. This function is
+ * where the two questions are kept apart, so no call site has to remember to ask them in
+ * the right order.
+ */
+export function capabilitiesForPrincipal(
+  principal: Principal,
+): readonly Capability[] | readonly ClientCapability[] {
+  if (principal.kind === 'client') return CLIENT_CAPABILITIES;
+  return ROLE_CAPABILITIES[normalizeRole(principal.role)];
+}
+
 /** Accepts the raw role string so call sites cannot forget to normalize first. */
 export function hasCapability(role: string | null | undefined, capability: Capability): boolean {
   return ROLE_CAPABILITIES[normalizeRole(role)].includes(capability);

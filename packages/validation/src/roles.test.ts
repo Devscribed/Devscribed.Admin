@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { can, type Role } from './index';
 import {
+  CLIENT_CAPABILITIES,
   ROLE_CAPABILITIES,
+  capabilitiesForPrincipal,
   canEditProfile,
   canReadProfile,
   canReadProfilePii,
@@ -391,5 +394,61 @@ describe('spec 04 signing-settings capabilities', () => {
   it('never lets a manager change the provider while letting them send documents', () => {
     expect(hasCapability('manager', 'ManageEnvelopes')).toBe(true);
     expect(hasCapability('manager', 'ManageSigningSettings')).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * Requests spec 03 — the client contact, whose rights come from the principal kind.
+ * ------------------------------------------------------------------ */
+
+describe('TC-03-UNIT-01 — the client capability list', () => {
+  const held = ['read-own-requests', 'answer-request', 'decline-request', 'post-request-message'];
+  const notHeld = ['create-request', 'view-all-requests', 'view-own-requests', 'manage-clients'];
+
+  it('holds exactly the four rights a client contact has', () => {
+    for (const capability of held) {
+      expect((CLIENT_CAPABILITIES as readonly string[]).includes(capability)).toBe(true);
+    }
+    for (const capability of notHeld) {
+      expect((CLIENT_CAPABILITIES as readonly string[]).includes(capability)).toBe(false);
+    }
+    expect([...CLIENT_CAPABILITIES].sort()).toEqual([...held].sort());
+  });
+
+  it('is a flat readonly array with no role key anywhere in its shape', () => {
+    expect(Array.isArray(CLIENT_CAPABILITIES)).toBe(true);
+    for (const entry of CLIENT_CAPABILITIES) expect(typeof entry).toBe('string');
+  });
+
+  it('spells no client right the way a staff one is spelled', () => {
+    for (const capability of CLIENT_CAPABILITIES) {
+      for (const role of ['admin', 'manager', 'user', 'viewer'] as NormalizedRole[]) {
+        expect((ROLE_CAPABILITIES[role] as readonly string[]).includes(capability)).toBe(false);
+      }
+    }
+  });
+});
+
+describe('TC-03-UNIT-02 — the principal kind is asked first', () => {
+  it('answers a client principal the client list, whatever role it carries', () => {
+    expect(capabilitiesForPrincipal({ kind: 'client', role: 'admin' })).toEqual(
+      CLIENT_CAPABILITIES,
+    );
+    expect(capabilitiesForPrincipal({ kind: 'client', role: null })).toEqual(CLIENT_CAPABILITIES);
+  });
+
+  it('answers a member principal from the role table', () => {
+    expect(capabilitiesForPrincipal({ kind: 'member', role: 'admin' })).toEqual(
+      ROLE_CAPABILITIES.admin,
+    );
+  });
+
+  it('records what the ordering rule protects against', () => {
+    // With no role at all the two staff helpers disagree, and one of them GRANTS: an
+    // absent role normalizes to `viewer`, which holds ViewOwnRequests. A client
+    // principal that reached either would be answered by a role it does not have.
+    expect(hasCapability(null, 'ViewOwnRequests')).toBe(true);
+    expect(can(normalizeRole(null), 'view-own-requests')).toBe(true);
+    expect(can('client' as unknown as Role, 'view-own-requests')).toBe(false);
   });
 });

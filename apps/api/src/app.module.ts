@@ -29,6 +29,8 @@ import { MemberProfileController } from './members/member-profile.controller';
 import { MemberProfileService } from './members/member-profile.service';
 import { MembersController } from './members/members.controller';
 import { MembersService } from './members/members.service';
+import { ClientContactsController } from './clients/client-contacts.controller';
+import { ClientContactsService } from './clients/client-contacts.service';
 import { ClientsController } from './clients/clients.controller';
 import { ClientsService } from './clients/clients.service';
 import { HolidaysController } from './holidays/holidays.controller';
@@ -40,6 +42,7 @@ import { RequestTopicsService } from './requests/request-topics.service';
 import { RequestsController } from './requests/requests.controller';
 import { RequestsService } from './requests/requests.service';
 import { RequestEventsService } from './requests/request-events.service';
+import { RequestNotificationsService } from './requests/request-notifications.service';
 import { VacationRequestFeedService } from './requests/vacation-request-feed.service';
 import { SignupController } from './signup/signup.controller';
 import { SignupService } from './signup/signup.service';
@@ -111,6 +114,10 @@ import { VacationService } from './vacation/vacation.service';
     RequestTopicsController,
     ProjectsController,
     ClientsController,
+    // Requests spec 03 — the contacts of one client. Its own controller rather than more
+    // handlers on ClientsController: the two surfaces answer to different capabilities
+    // on the read side, and the contact is a principal rather than part of the record.
+    ClientContactsController,
     HolidaysController,
     TimeTrackingController,
     AccrualController,
@@ -150,9 +157,11 @@ import { VacationService } from './vacation/vacation.service';
     RequestsService,
     RequestTopicsService,
     RequestEventsService,
+    RequestNotificationsService,
     VacationRequestFeedService,
     ProjectsService,
     ClientsService,
+    ClientContactsService,
     HolidaysService,
     TimeTrackingService,
     AccrualService,

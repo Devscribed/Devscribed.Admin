@@ -329,6 +329,28 @@ export function isValidRole(input: string): input is Role {
 }
 
 /**
+ * Requests spec 03 — the value an invitation to a client contact carries in
+ * `Invitation.role`. It is deliberately NOT a member of `Role`: `isValidRole` governs
+ * the staff-facing set that `POST /api/invitations` accepts in its body, so `client`
+ * can never be assigned through the staff invite form, and no `Membership.role` can
+ * ever hold it.
+ */
+export const CLIENT_INVITATION_ROLE = 'client';
+
+/** The values `Invitation.role` may hold: the four staff roles, plus `client`. */
+export type InvitationRole = Role | typeof CLIENT_INVITATION_ROLE;
+
+export const INVITATION_ROLE_VALUES: readonly InvitationRole[] = [
+  ...ROLE_VALUES,
+  CLIENT_INVITATION_ROLE,
+];
+
+/** True for a stored invitation written for a client contact (REQ-03-009). */
+export function isClientInvitationRole(role: string | null | undefined): boolean {
+  return role === CLIENT_INVITATION_ROLE;
+}
+
+/**
  * Whole-request outcome messages for spec 03 — self-invitation, role authority,
  * already-a-member, token validity, and accept-time password check. Field-level
  * messages (email, role, name, password) live in `MESSAGES`, following the
@@ -1888,6 +1910,15 @@ export const REQUEST_MESSAGES = {
   topicUnavailable: 'That topic is not available',
   topicAudienceMismatch: 'That topic cannot be used for this addressee',
   classifierNotAccepted: 'The request kind is set by the topic and cannot be sent',
+
+  /* ---------------------------------------------------------------- *
+   * Requests spec 03 — a request addressed to a client contact. Three more keys on the
+   * same const, extended in place exactly as specs 01 and 02 extended it; none of the
+   * three collides with a key already here.
+   * ---------------------------------------------------------------- */
+  clientProjectRequired: 'Choose the project this request belongs to',
+  clientProjectMismatch: 'That project does not belong to this client',
+  notOnProject: 'You can only ask a client about a project you are assigned to',
 } as const;
 
 /**
@@ -2241,6 +2272,36 @@ export const CLIENT_MESSAGES = {
     `Archive ${name}? ${n} active project(s) will keep this client on their records, ` +
     `but you won't be able to select this client on new projects until it is restored.`,
 } as const;
+
+/**
+ * Requests spec 03 — the client contact as a signed-in principal.
+ *
+ * A new export rather than more keys on `CLIENT_MESSAGES`: these belong to the contacts
+ * routes, to invitation acceptance and to the create route's refusal of a contact, none
+ * of which is about managing the client record itself.
+ *
+ * `principalConflict` names no address and no organization, so it tells a stranger
+ * holding a valid token nothing about who else uses the address beyond the fact that the
+ * accept did not proceed.
+ */
+export const CLIENT_USER_MESSAGES = {
+  emailInvalid: 'Enter a valid email address',
+  alreadyLinked: 'This person is already a contact of a client in this workspace',
+  alreadyRemoved: 'This contact has already been removed',
+  principalConflict: 'This email address already belongs to somebody in a workspace',
+  clientCannotCreate: 'Client contacts cannot raise requests',
+} as const;
+
+/**
+ * Requests spec 03 validation rule 1 — the invited contact's address: required, a valid
+ * address, normalized to lowercase. One message covers absent and malformed alike, so
+ * the form says the same thing however the field is wrong. The pattern and the length
+ * cap are the ones every other address in the product is held to.
+ */
+export function validateClientContactEmail(input: unknown): FieldResult {
+  const result = validateEmail(typeof input === 'string' ? input : '');
+  return result.valid ? result : fail(CLIENT_USER_MESSAGES.emailInvalid);
+}
 
 /** Max length of a client name in Unicode codepoints (spec organization/01 Rule 2). */
 export const CLIENT_NAME_MAX = 120;

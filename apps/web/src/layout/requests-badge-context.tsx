@@ -38,7 +38,11 @@ export function RequestsBadgeProvider({ children }: { children: ReactNode }) {
   // The session carries `Membership.role` verbatim, and the database still holds the
   // legacy `member`, which `can()` does not know. Normalizing first keeps this read
   // answering the same question the server does about the same account.
-  const canSeeVacation = can(normalizeRole(session.role), 'view-requests');
+  // The kind is asked first (REQ-03-017): a client contact holds no role, and the
+  // response they receive carries no vacation half at all — so there is nothing to ask a
+  // role-keyed helper about, and asking would answer them from the viewer set.
+  const canSeeVacation =
+    session.principal === 'member' && can(normalizeRole(session.role), 'view-requests');
   const [badgeCount, setBadgeCount] = useState(0);
 
   const refresh = useCallback(async (): Promise<void> => {

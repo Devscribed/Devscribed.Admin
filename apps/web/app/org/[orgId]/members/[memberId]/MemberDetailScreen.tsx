@@ -271,7 +271,7 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
                 <ContractDetails
                   orgId={orgId}
                   memberId={detail.id}
-                  role={session.role}
+                  role={session.role ?? ''}
                   isSelf={detail.isSelf}
                 />
               </DocumentsToastProvider>

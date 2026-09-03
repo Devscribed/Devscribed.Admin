@@ -115,10 +115,16 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
   // every capability comes back false. Normalizing first is what makes the matrix hold
   // against today's data, so the controls this page draws match the ones the server
   // grants the same account.
+  //
+  // Requests spec 03 REQ-03-017 — the principal kind is resolved before any of the
+  // role-keyed reads below. A client contact holds no role, and `normalizeRole` would
+  // answer them as a `viewer`; every control those helpers gate is one they do not have,
+  // and the two side reads are routes that answer them 404.
+  const isContact = session.principal === 'client';
   const role: Role = normalizeRole(session.role);
-  const canCreate = can(role, 'create-request');
-  const canScopeAll = can(role, 'view-all-requests');
-  const canListProjects = can(role, 'list-assigned-projects');
+  const canCreate = !isContact && can(role, 'create-request');
+  const canScopeAll = !isContact && can(role, 'view-all-requests');
+  const canListProjects = !isContact && can(role, 'list-assigned-projects');
 
   // A `scope=all` arriving in the URL for a caller without the capability is read as
   // `mine`: the server would refuse it, and there is nothing to be gained by asking.
@@ -138,7 +144,11 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
   const [data, setData] = useState<OrgRequestsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  // `clientId` rides along for requests spec 03: the new-request modal narrows the
+  // project control to the chosen contact's client, and the list's own filter ignores it.
+  const [projects, setProjects] = useState<{ id: string; name: string; clientId: string | null }[]>(
+    [],
+  );
   const [topics, setTopics] = useState<TopicOption[]>([]);
   const [newOpen, setNewOpen] = useState(false);
 
@@ -226,9 +236,13 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
         });
         if (!response.ok) return;
         const body = (await response.json()) as {
-          projects: { id: string; name: string }[];
+          projects: { id: string; name: string; clientId: string | null }[];
         };
-        if (!cancelled) setProjects(body.projects.map((p) => ({ id: p.id, name: p.name })));
+        if (!cancelled) {
+          setProjects(
+            body.projects.map((p) => ({ id: p.id, name: p.name, clientId: p.clientId ?? null })),
+          );
+        }
       } catch {
         // No project choices; the filter simply has nothing to offer.
       }
@@ -245,6 +259,9 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
    * cannot serve both without hiding those requests from the control that finds them.
    */
   useEffect(() => {
+    // The catalogue is a staff read: REQ-03-019 answers a client contact 404 there, and
+    // a request that cannot succeed is not sent.
+    if (isContact) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -273,7 +290,7 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
     return () => {
       cancelled = true;
     };
-  }, [orgId]);
+  }, [orgId, isContact]);
 
   /** Update one vacation card's fields in place (keeps it visible under the filter). */
   const patchVacation = useCallback((id: string, changes: Partial<OrgRequest>): void => {
@@ -377,6 +394,10 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
       />
 
       <div style={{ maxWidth: 820, margin: '0 auto', width: '100%' }}>
+        {/* A client contact's list is one list: no scope control, and none of the filters
+            either — the topic catalogue behind one of them is a route they are answered
+            404 on, and the others narrow a view that is already only their own requests. */}
+        {!isContact && (
         <div
           style={{
             display: 'flex',
@@ -453,6 +474,7 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
             />
           </div>
         </div>
+        )}
 
         {error && (
           <div

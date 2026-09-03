@@ -25,6 +25,26 @@ interface TopicOption {
   name: string;
 }
 
+/**
+ * Requests spec 03 — one offer in the contact picker: a person, and the client they work
+ * for. The option label renders both, which the design system's `Select` already types as
+ * a `ReactNode`, so the two-line option needs no new primitive.
+ */
+interface ContactOption {
+  id: string;
+  displayName: string;
+  clientId: string;
+  clientName: string;
+}
+
+/** Which kind of addressee the request is for. */
+type AssigneeKind = 'member' | 'client';
+
+const ASSIGNEE_KIND_OPTIONS: { value: AssigneeKind; label: string }[] = [
+  { value: 'member', label: 'Colleague' },
+  { value: 'client', label: 'Client' },
+];
+
 const microLabel: CSSProperties = {
   display: 'block',
   fontFamily: 'var(--font-display)',
@@ -44,19 +64,23 @@ const FIELD_ORDER = [
   'topicId',
   'title',
   'description',
+  'projectId',
   'assigneeMembershipId',
+  'assigneeClientMembershipId',
   'priority',
   'neededBy',
 ] as const;
 
-/** Inline field error. Only `title` and `topicId` carry test ids the spec names. */
+/** Inline field error. Only the four the specs name carry a test id. */
 function FieldError({ field, message }: { field: string; message: string }) {
   const testId =
     field === 'title'
       ? 'request-new-error-title'
       : field === 'topicId'
         ? 'request-new-error-topic'
-        : undefined;
+        : field === 'assigneeMembershipId' || field === 'assigneeClientMembershipId'
+          ? 'request-new-error-assignee'
+          : undefined;
   return (
     <div
       id={`request-new-error-${field}`}
@@ -91,7 +115,7 @@ export function NewRequestModal({
 }: {
   orgId: string;
   open: boolean;
-  projects: { id: string; name: string }[];
+  projects: { id: string; name: string; clientId: string | null }[];
   onClose: () => void;
   onCreated: (request: RequestRowData) => void;
 }) {
@@ -102,15 +126,21 @@ export function NewRequestModal({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [projectId, setProjectId] = useState('');
+  const [assigneeKind, setAssigneeKind] = useState<AssigneeKind>('member');
   const [assigneeMembershipId, setAssigneeMembershipId] = useState('');
+  const [assigneeClientMembershipId, setAssigneeClientMembershipId] = useState('');
   const [priority, setPriority] = useState('normal');
   const [blocking, setBlocking] = useState(false);
   const [neededBy, setNeededBy] = useState('');
 
   const [members, setMembers] = useState<MemberOption[]>([]);
+  const [contacts, setContacts] = useState<ContactOption[]>([]);
   // `null` while the catalogue has not been read yet, so an empty picker is never drawn
-  // before the answer arrives.
-  const [topics, setTopics] = useState<TopicOption[] | null>(null);
+  // before the answer arrives. Kept PER AUDIENCE: switching back to one already read must
+  // restore what it offered, and a failed read for one must not empty the other.
+  const [topicsByAudience, setTopicsByAudience] = useState<
+    Record<AssigneeKind, TopicOption[] | null>
+  >({ member: null, client: null });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -121,6 +151,7 @@ export function NewRequestModal({
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const assigneeRef = useRef<HTMLDivElement>(null);
   const priorityRef = useRef<HTMLDivElement>(null);
+  const projectRef = useRef<HTMLDivElement>(null);
   const topicRef = useRef<HTMLDivElement>(null);
   const neededByRef = useRef<HTMLInputElement | null>(null);
 
@@ -131,13 +162,16 @@ export function NewRequestModal({
     setTitle('');
     setDescription('');
     setProjectId('');
+    setAssigneeKind('member');
     setAssigneeMembershipId('');
+    setAssigneeClientMembershipId('');
     setPriority('normal');
     setBlocking(false);
     setNeededBy('');
     setFieldErrors({});
     setFormError(null);
     setSaving(false);
+    setTopicsByAudience({ member: null, client: null });
 
     let cancelled = false;
     void (async () => {
@@ -154,30 +188,102 @@ export function NewRequestModal({
       }
     })();
 
-    /* The picker's own read: the addressee's audience, and active only. `member` is the
-       only addressee kind a request may carry as this spec ships, so that audience is
-       `staff` — neither an archived topic nor a client one is ever offered here. The
-       list's topic FILTER reads the same route with `status=all`, which is a different
-       question and deliberately a second read (REQ-02-031). */
+    return () => {
+      cancelled = true;
+    };
+  }, [open, orgId]);
+
+  /* The picker's own read: the addressee's audience, and active only — `staff` for a
+     colleague and `client` for a client contact, re-issued when the kind is switched
+     (REQ-03-024). Neither an archived topic nor one of the other audience is ever offered
+     here. The list's topic FILTER reads the same route with `status=all`, which is a
+     different question and deliberately a second read (REQ-02-031). */
+  useEffect(() => {
+    if (!open) return;
+    if (topicsByAudience[assigneeKind] !== null) return;
+    const audience = assigneeKind === 'client' ? 'client' : 'staff';
+    let cancelled = false;
     void (async () => {
       try {
         const response = await fetch(
-          `/api/organizations/${orgId}/request-topics?audience=staff&status=active`,
+          `/api/organizations/${orgId}/request-topics?audience=${audience}&status=active`,
           { credentials: 'same-origin' },
         );
         if (!response.ok) return;
         const data = (await response.json()) as { topics: TopicOption[] };
-        if (!cancelled) setTopics(data.topics.map((t) => ({ id: t.id, name: t.name })));
+        if (!cancelled) {
+          setTopicsByAudience((prev) => ({
+            ...prev,
+            [assigneeKind]: data.topics.map((t) => ({ id: t.id, name: t.name })),
+          }));
+        }
       } catch {
         // The picker stays in its loading state rather than claiming the catalogue is
         // empty: "no topics" is a statement, and a failed read has not made it.
       }
     })();
-
     return () => {
       cancelled = true;
     };
-  }, [open, orgId]);
+  }, [open, orgId, assigneeKind, topicsByAudience]);
+
+  /* The contact picker's offers: the active contacts of the organization's active
+     clients, read only once the client kind has been chosen. The narrowing this fills is
+     a convenience — the server decides who may be addressed (REQ-03-020). */
+  useEffect(() => {
+    if (!open || assigneeKind !== 'client' || contacts.length > 0) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch(`/api/organizations/${orgId}/clients?status=active`, {
+          credentials: 'same-origin',
+        });
+        if (!response.ok) return;
+        const body = (await response.json()) as { clients: { id: string; name: string }[] };
+        const collected: ContactOption[] = [];
+        for (const client of body.clients) {
+          const contactsResponse = await fetch(
+            `/api/organizations/${orgId}/clients/${client.id}/contacts`,
+            { credentials: 'same-origin' },
+          );
+          if (!contactsResponse.ok) continue;
+          const contactsBody = (await contactsResponse.json()) as {
+            contacts: { id: string; displayName: string | null; email: string; status: string }[];
+          };
+          for (const contact of contactsBody.contacts) {
+            if (contact.status !== 'active') continue;
+            collected.push({
+              id: contact.id,
+              displayName: contact.displayName ?? contact.email,
+              clientId: client.id,
+              clientName: client.name,
+            });
+          }
+        }
+        if (!cancelled) setContacts(collected);
+      } catch {
+        // The picker offers nothing; the server refuses a request with no addressee and
+        // the inline error says so.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, orgId, assigneeKind, contacts.length]);
+
+  /**
+   * Switching the addressee kind clears the chosen topic — a topic of the other audience
+   * is one the server will refuse — and leaves the title, description, priority,
+   * needed-by and blocking values exactly where they are.
+   */
+  function chooseAssigneeKind(value: string): void {
+    const kind: AssigneeKind = value === 'client' ? 'client' : 'member';
+    if (kind === assigneeKind) return;
+    setAssigneeKind(kind);
+    setTopicId('');
+    setProjectId('');
+    setFieldErrors({});
+  }
 
   function focusFirstInvalid(errors: Record<string, string>): void {
     const first = FIELD_ORDER.find((field) => errors[field]);
@@ -185,7 +291,9 @@ export function NewRequestModal({
       topicId: topicRef.current?.querySelector('button') ?? null,
       title: titleRef.current?.querySelector('input') ?? null,
       description: descriptionRef.current,
+      projectId: projectRef.current?.querySelector('button') ?? null,
       assigneeMembershipId: assigneeRef.current?.querySelector('button') ?? null,
+      assigneeClientMembershipId: assigneeRef.current?.querySelector('button') ?? null,
       priority: priorityRef.current?.querySelector('button') ?? null,
       neededBy: neededByRef.current,
     };
@@ -203,8 +311,16 @@ export function NewRequestModal({
       title,
       description: description.trim().length > 0 ? description : undefined,
       projectId: projectId.length > 0 ? projectId : undefined,
-      assigneeKind: 'member',
-      assigneeMembershipId: assigneeMembershipId.length > 0 ? assigneeMembershipId : undefined,
+      assigneeKind,
+      // Exactly one addressee id is sent, the one the chosen kind selects.
+      assigneeMembershipId:
+        assigneeKind === 'member' && assigneeMembershipId.length > 0
+          ? assigneeMembershipId
+          : undefined,
+      assigneeClientMembershipId:
+        assigneeKind === 'client' && assigneeClientMembershipId.length > 0
+          ? assigneeClientMembershipId
+          : undefined,
       priority,
       blocking,
       neededBy: neededBy.length > 0 ? neededBy : undefined,
@@ -249,8 +365,21 @@ export function NewRequestModal({
   }
 
   // Only once the read has actually come back: a picker that has not been filled yet is
-  // not an empty catalogue.
+  // not an empty catalogue. Evaluated PER AUDIENCE, so switching to a kind whose
+  // catalogue is empty replaces the picker and withdraws the submit control, and
+  // switching back restores both (REQ-03-024, edge case 20).
+  const topics = topicsByAudience[assigneeKind];
   const pickerEmpty = topics !== null && topics.length === 0;
+
+  // A client-addressed request names a project of the addressee's client, so the control
+  // offers only those. The narrowing is a convenience; the server decides (REQ-03-022).
+  const chosenContact = contacts.find((contact) => contact.id === assigneeClientMembershipId);
+  const projectOptions =
+    assigneeKind === 'client'
+      ? projects.filter(
+          (project) => chosenContact !== undefined && project.clientId === chosenContact.clientId,
+        )
+      : projects;
 
   return (
     <Modal
@@ -380,12 +509,15 @@ export function NewRequestModal({
             )}
           </div>
 
-          <div>
+          <div ref={projectRef}>
             <Select
               label="Project"
               value={projectId}
-              placeholder="Any"
-              options={projects.map((project) => ({ value: project.id, label: project.name }))}
+              placeholder={assigneeKind === 'client' ? 'Choose a project' : 'Any'}
+              options={projectOptions.map((project) => ({
+                value: project.id,
+                label: project.name,
+              }))}
               onChange={setProjectId}
               error={fieldErrors.projectId}
               data-testid="request-new-project"
@@ -395,20 +527,68 @@ export function NewRequestModal({
             )}
           </div>
 
-          <div ref={assigneeRef}>
+          {/* The addressee kind, above the addressee itself. A labelled `Select` like
+              every other field of this modal — a segmented control among them would read
+              as a view switch rather than a field. */}
+          <div>
             <Select
-              label="For"
-              value={assigneeMembershipId}
-              placeholder="Choose a person"
-              options={members.map((member) => ({ value: member.id, label: member.fullName }))}
-              onChange={setAssigneeMembershipId}
-              error={fieldErrors.assigneeMembershipId}
-              data-testid="request-new-assignee-member"
+              label="To"
+              value={assigneeKind}
+              options={ASSIGNEE_KIND_OPTIONS}
+              onChange={chooseAssigneeKind}
+              data-testid="request-new-assignee-kind"
             />
-            {fieldErrors.assigneeMembershipId && (
+          </div>
+
+          <div ref={assigneeRef}>
+            {assigneeKind === 'client' ? (
+              <Select
+                label="For"
+                value={assigneeClientMembershipId}
+                placeholder="Choose a contact"
+                options={contacts.map((contact) => ({
+                  value: contact.id,
+                  // A `ReactNode` label: the person's name over their client's, which the
+                  // design system's `Select` already accepts.
+                  label: (
+                    <span style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span>{contact.displayName}</span>
+                      <span style={{ fontSize: 'var(--fs-12)', color: 'var(--text-muted)' }}>
+                        {contact.clientName}
+                      </span>
+                    </span>
+                  ),
+                }))}
+                onChange={(value) => {
+                  setAssigneeClientMembershipId(value);
+                  // A project of the previous contact's client is one the server would
+                  // refuse, so the choice does not survive a change of addressee.
+                  setProjectId('');
+                }}
+                error={fieldErrors.assigneeClientMembershipId}
+                data-testid="request-new-assignee-client"
+              />
+            ) : (
+              <Select
+                label="For"
+                value={assigneeMembershipId}
+                placeholder="Choose a person"
+                options={members.map((member) => ({ value: member.id, label: member.fullName }))}
+                onChange={setAssigneeMembershipId}
+                error={fieldErrors.assigneeMembershipId}
+                data-testid="request-new-assignee-member"
+              />
+            )}
+            {(fieldErrors.assigneeMembershipId || fieldErrors.assigneeClientMembershipId) && (
               <FieldError
-                field="assigneeMembershipId"
-                message={fieldErrors.assigneeMembershipId}
+                field={
+                  assigneeKind === 'client' ? 'assigneeClientMembershipId' : 'assigneeMembershipId'
+                }
+                message={
+                  (assigneeKind === 'client'
+                    ? fieldErrors.assigneeClientMembershipId
+                    : fieldErrors.assigneeMembershipId) as string
+                }
               />
             )}
           </div>

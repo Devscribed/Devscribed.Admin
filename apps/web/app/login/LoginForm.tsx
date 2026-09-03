@@ -37,6 +37,28 @@ const VALIDATORS = { email: validateEmail, password: validatePasswordPresent };
 const toneFor = (message: string) =>
   message === AUTH_MESSAGES.deactivated ? ('warning' as const) : ('error' as const);
 
+/**
+ * Which screen the signed-in principal lands on. A client contact is refused the members
+ * destination (REQ-03-019), so the kind decides — read from `/api/me`, the endpoint that
+ * answers it, exactly as the shell and the accept screen already resolve it. The sign-in
+ * response body is not amended for this.
+ */
+async function landingFor(organizationId: string): Promise<string> {
+  try {
+    const response = await fetch('/api/me', { credentials: 'same-origin' });
+    if (response.ok) {
+      const session = await response.json().catch(() => null);
+      if (session?.organization?.id === organizationId && session?.principal === 'client') {
+        return 'requests';
+      }
+    }
+  } catch {
+    // The members destination is what every principal but a contact lands on, and the
+    // shell resolves the identity again on arrival.
+  }
+  return 'members';
+}
+
 export function LoginForm() {
   const router = useRouter();
   const [values, setValues] = useState<Values>(EMPTY);
@@ -89,7 +111,7 @@ export function LoginForm() {
         // The session cookie is httpOnly, so the organization has to come back in the
         // body for the client to know which /org/{id}/… route to land on.
         const { organizationId } = await response.json();
-        router.push(`/org/${organizationId}/members`);
+        router.push(`/org/${organizationId}/${await landingFor(organizationId)}`);
         router.refresh();
         return;
       }
