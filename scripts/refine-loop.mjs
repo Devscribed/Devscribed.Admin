@@ -147,13 +147,23 @@ function loadLedger(spec) {
        range into them is a range into nothing. The record is kept under its start time; only
        the live names are freed. */
     const l = JSON.parse(readFileSync(path, 'utf8'));
-    const tag = (l.startedAt ?? new Date().toISOString()).replace(/[:.]/g, '-');
-    renameSync(path, join(ROOT, '.workflow/refine', `${stem}.loop.${tag}.json`));
+    /* Two loops that shared a ledger share its start time, so the name an archive would take
+       can already be occupied — and on Windows that rename fails with EPERM rather than
+       overwriting, which loses the whole run to an error nobody can read. The suffix is only
+       ever reached by a collision. */
+    const stamp = (l.startedAt ?? new Date().toISOString()).replace(/[:.]/g, '-');
+    const free = (suffix) => {
+      const at = (t) => join(ROOT, '.workflow/refine', `${stem}${suffix.replace('%', t)}`);
+      let tag = stamp;
+      for (let n = 2; existsSync(at(tag)); n += 1) tag = `${stamp}-${n}`;
+      return at(tag);
+    };
+    renameSync(path, free('.loop.%.json'));
     const probe = join(ROOT, '.workflow/refine', `${stem}.probe`);
-    if (existsSync(probe)) renameSync(probe, join(ROOT, '.workflow/refine', `${stem}.probe.${tag}`));
+    if (existsSync(probe)) renameSync(probe, free('.probe.%'));
     for (const f of ['verdict', 'fix']) {
       const shared = join(ROOT, '.workflow/refine', `${stem}.${f}.json`);
-      if (existsSync(shared)) renameSync(shared, join(ROOT, '.workflow/refine', `${stem}.${f}.${tag}.json`));
+      if (existsSync(shared)) renameSync(shared, free(`.${f}.%.json`));
     }
   } else if (existsSync(path)) {
     const l = JSON.parse(readFileSync(path, 'utf8'));
