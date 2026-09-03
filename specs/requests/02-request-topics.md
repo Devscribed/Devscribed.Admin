@@ -25,15 +25,15 @@ bundle:
 
 An organization keeps its own catalogue of **request topics** — the presets a person picks
 instead of typing a category. A topic belongs to one **audience**, `staff` or `client`; it
-declares the request kind it produces, `access` or `question`; and an admin or manager
-creates, renames, reorders and archives it in Settings. Raising a request means choosing a
-topic, and the request keeps a snapshot of the topic's name forever after, so renaming or
-archiving a topic never rewrites what an old request says it was about.
+declares the request kind it produces, `access` or `question`; and an admin or manager creates,
+renames, reorders and archives it in Settings. Raising a request means choosing a topic, and
+the request keeps a snapshot of the topic's name forever after, so renaming or archiving a
+topic never rewrites what an old request says it was about.
 
-The one structural decision that shapes everything below: **the topic is the only classifier
-a caller supplies.** The `type` column keeps its meaning and is written by the server from the
-chosen topic; `accessKind` is no longer accepted on the way in. Two dials that both answer
-"what is this about" drift apart, invisibly, until somebody filters on the wrong one.
+The structural decision that shapes everything below: **the topic is the only classifier a
+caller supplies.** `type` keeps its meaning and is written by the server from the chosen topic;
+`accessKind` is no longer accepted on the way in, because two dials that both answer "what is
+this about" drift apart invisibly until somebody filters on the wrong one.
 
 It also fixes the words the screens use for where a request stands — **Pending, In progress,
 Completed, Closed** — over statuses that stay in the database exactly as they are.
@@ -60,10 +60,9 @@ There is no non-account actor. Every route is behind `SessionGuard` and `OrgScop
 | See the Settings › Request topics row | ✅ | ✅ | ❌ | ❌ |
 | See a topic's snapshot name on a request | ✅ | ✅ | ✅ | ✅ |
 
-`manage-request-topics` sits with `manage-clients` and `manage-holidays` rather than with the
-admin-only `delete-holidays`: whoever curates the client list curates this, and nothing here
-destroys a record. Every check runs against `normalizeRole()`
-(`packages/validation/src/roles.ts`), so the legacy `member` value maps to `user`.
+`manage-request-topics` sits with `manage-clients`, not with admin-only `delete-holidays`:
+nothing here destroys a record. Every check runs against `normalizeRole()`
+(`packages/validation/src/roles.ts`), so legacy `member` maps to `user`.
 
 ## Functional Requirements
 
@@ -71,9 +70,8 @@ destroys a record. Every check runs against `normalizeRole()`
 
 #### REQ-02-001 — a topic belongs to one organization
 
-THE SYSTEM SHALL scope every read and write of a `RequestTopic` by
-`session.organizationId`, which is a required argument with no default on every method of
-the topics service.
+THE SYSTEM SHALL scope every read and write of a `RequestTopic` by `session.organizationId`,
+a required argument with no default on every method of the topics service.
 
 #### REQ-02-002 — the audience is a closed set
 
@@ -85,9 +83,6 @@ THE SYSTEM SHALL answer `400` with `REQUEST_TOPIC_MESSAGES.audienceUnknown`.
 THE SYSTEM SHALL store on every topic a `type` of `access` or `question`, which is the value
 written onto a request raised under it.
 
-**Decided:** the list's type filter already turns on this distinction, so a topic that could
-not declare it would leave the filter guessing.
-
 #### REQ-02-004 — the audience and the kind are immutable
 
 IF a rename call carries an `audience` different from the stored one, THEN THE SYSTEM SHALL
@@ -97,12 +92,10 @@ IF a rename call carries a `type` different from the stored one, THEN THE SYSTEM
 `400` with `REQUEST_TOPIC_MESSAGES.typeImmutable`. A `type` equal to the stored value is
 accepted and changes nothing, exactly as the stored `audience` is.
 
-**Decided:** moving a topic between audiences silently re-addresses every future request
-raised under it. Archiving and re-creating is one more click and leaves a trail.
-
-**Decided:** a different `type` is refused rather than dropped, the stance REQ-02-022 takes on
-the same classifier at the other end. Rejected: answering `200` having ignored the field, which
-leaves a caller believing the topic now produces a kind it does not.
+**Decided:** both are refused rather than dropped, as REQ-02-022 does at the other end: moving
+a topic between audiences re-addresses every future request raised under it, and archiving and
+re-creating leaves a trail. Rejected: answering `200` having ignored the field, which leaves a
+caller believing the topic produces a kind it does not.
 
 #### REQ-02-005 — the name
 
@@ -114,8 +107,7 @@ IF a create or rename call would leave two topics of the same organization and a
 names equal ignoring case, THEN THE SYSTEM SHALL answer `409` with
 `REQUEST_TOPIC_MESSAGES.nameDuplicate`.
 
-**Decided:** per audience, because "Access" is a natural staff topic and is also the client
-default; forbidding that pair buys nothing.
+**Decided:** per audience — "Access" is a natural staff topic and the client default.
 
 #### REQ-02-007 — curating requires the capability
 
@@ -126,9 +118,6 @@ SHALL answer `403` with `REQUEST_TOPIC_MESSAGES.manageForbidden`.
 
 WHERE the caller holds an active membership of the organization, THE SYSTEM SHALL answer
 `GET …/request-topics` with `200`.
-
-**Decided:** the catalogue is a list of words the organization chose, and gating it would
-stop a `user` raising a request at all.
 
 #### REQ-02-009 — order is curated, not alphabetical
 
@@ -181,12 +170,9 @@ new-request form's topic picker as `REQUEST_TOPIC_MESSAGES.pickerEmpty` and draw
 control. That audience is `staff`, `member` being the only addressee kind a request may carry
 as this spec ships (REQ-02-020); an empty `client` audience leaves the form usable.
 
-**Decided:** correctness does not depend on the seed having run — an emptied catalogue gets a
-screen that says so, not a form that fails on submit.
-
-**Decided:** the form reads one audience, the addressee's. Rejected: emptying the form when
-*any* audience has no active topic, which would withdraw a working staff picker over a half of
-the catalogue the form cannot reach.
+**Decided:** an emptied catalogue gets a screen that says so, and the form reads one audience —
+the addressee's. Rejected: emptying it when *any* audience is empty, which withdraws a working
+staff picker over half a catalogue the form cannot reach.
 
 ### Raising a request under a topic
 
@@ -197,12 +183,12 @@ IF `POST …/requests` carries no `topicId`, THEN THE SYSTEM SHALL answer `400` 
 
 #### REQ-02-019 — an unusable topic
 
-IF `topicId` names no active topic of the caller's organization — because it is archived,
-because it belongs to another organization, or because it names no row at all — THEN THE
-SYSTEM SHALL answer `400` with `REQUEST_MESSAGES.topicUnavailable`.
+IF `topicId` names no active topic of the caller's organization, whether because it is
+archived, because it belongs to another organization, or because it names no row at all, THEN
+THE SYSTEM SHALL answer `400` with `REQUEST_MESSAGES.topicUnavailable`.
 
-**Decided:** one answer for all three. A topic id names a word the organization publishes
-inside itself, so there is nothing to enumerate and nobody the split would inform.
+**Decided:** one answer for all three; a topic id names a word the organization publishes
+inside itself, so a split would inform nobody.
 
 #### REQ-02-020 — the audience must match the addressee
 
@@ -221,19 +207,17 @@ answer `400` with `REQUEST_MESSAGES.topicAudienceMismatch`.
 WHEN a request is created, THE SYSTEM SHALL write `type` from the chosen topic's `type` and
 write `accessKind` as `null`, including under a topic whose `type` is `access`.
 
-THE SYSTEM SHALL NOT validate `type` or `accessKind` as body fields on `POST …/requests`. The
-absence check of REQ-02-022 is the only reading either name gets there, and a body that carries
-neither is valid: the kind is read from the topic after that check. So `POST …/requests`
-answers with none of `REQUEST_MESSAGES.typeUnknown`, `REQUEST_MESSAGES.accessKindRequired`,
-`REQUEST_MESSAGES.accessKindUnknown` or `REQUEST_MESSAGES.accessKindNotAllowed`.
+THE SYSTEM SHALL NOT validate `type` or `accessKind` as body fields on `POST …/requests`, and
+SHALL emit no message about the shape of either. REQ-02-022's absence check is the only reading
+either name gets there; the kind is read from the topic after it.
 
 #### REQ-02-022 — a supplied kind is refused
 
 IF `POST …/requests` carries `type` or `accessKind`, THEN THE SYSTEM SHALL answer `400` with
 `REQUEST_MESSAGES.classifierNotAccepted`.
 
-**Decided:** refused rather than ignored. A silent drop turns a caller working from a stale
-contract into a request classified as something nobody chose.
+**Decided:** refused rather than ignored — a silent drop turns a caller on a stale contract
+into a request classified as something nobody chose.
 
 #### REQ-02-023 — the label is snapshotted
 
@@ -262,9 +246,6 @@ WHEN `GET …/requests` carries `topicId`, THE SYSTEM SHALL return only requests
 WHEN `GET …/requests` carries `status=closed`, THE SYSTEM SHALL return requests whose status
 is `declined` or `cancelled`.
 
-**Decided:** the control needs a value meaning "ended without being granted". Every stored
-status stays accepted here, so a link somebody saved still resolves.
-
 #### REQ-02-028 — the four words
 
 THE SYSTEM SHALL render `open` as Pending, `answered` as In progress, `granted` as
@@ -276,8 +257,7 @@ that the list, the detail screen, its history entries and the filter control all
 WHILE a request's status is `declined` or `cancelled`, THE SYSTEM SHALL render the reason
 for the closure beside the Closed label as `declined` or `cancelled` respectively.
 
-**Decided:** collapsing them entirely is the one thing the shorter vocabulary would lose,
-and the audit trail already tells them apart.
+**Decided:** collapsing them entirely is the one thing the shorter vocabulary would lose.
 
 #### REQ-02-030 — the Settings row
 
@@ -303,22 +283,19 @@ Invariants:
 
 1. `active` is the only status a topic may be created in.
 2. Neither status is terminal; a topic moves between them without limit.
-3. Every archive and restore re-reads the topic row with `FOR UPDATE` inside its transaction
-   and evaluates the status guard against that read, never against a copy loaded earlier.
+3. Every archive and restore re-reads the row with `FOR UPDATE` inside its transaction and
+   evaluates the status guard against that read, never against a copy loaded earlier.
 4. `topicLabel` on a `Request` is written once, at creation, and no topic write may alter it.
 5. Writers of a `RequestTopic` row are the create, rename, reorder, archive and restore
    handlers plus the seed; each writer of an existing row takes the row lock.
 
 ## Out of Scope
 
-- **Per-topic fields.** A topic that asks "which repository?" with its own form is the
-  obvious next want; every request keeps one free-text description instead.
+- **Per-topic fields.** Every request keeps one free-text description instead.
 - **Per-topic routing.** No rule says "VPN goes to ops"; the requester picks the person.
 - **Per-topic service levels**, and **icons or colours**. A topic is a word and a kind.
-- **Topic usage counts** in the catalogue screen — knowing a topic is unused before archiving
-  it is worth having, and is not built.
-- **Retiring `accessKind` from the database.** The column and its values stay on requests
-  that already carry them.
+- **Topic usage counts** in the catalogue screen — worth having, and not built.
+- **Retiring `accessKind`.** The column and its values stay on requests that carry them.
 
 ## Known Gaps
 
