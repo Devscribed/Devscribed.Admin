@@ -86,7 +86,16 @@
         "decided": 6,
         "left": 0
       },
-      "endedAt": "2026-09-03T09:05:13.585Z"
+      "endedAt": "2026-09-03T09:05:13.585Z",
+      "commit": "63204135930ede7d5f2387e4f83d2e878af60081",
+      "growth": 37
+    },
+    {
+      "round": 2,
+      "startedAt": "2026-09-03T09:05:13.712Z",
+      "head": "63204135930ede7d5f2387e4f83d2e878af60081",
+      "status": "running",
+      "lint": 0
     }
   ],
   "status": "running",
