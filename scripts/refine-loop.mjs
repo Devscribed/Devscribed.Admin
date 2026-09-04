@@ -7,14 +7,15 @@
  * Three gates, and only the last two cost a model:
  *
  *   T0  spec-lint          a script. Pointers, joins, cross-product completeness.
- *   T2  spec-refiner       one judge. Full on the first round; from the second, the range the
- *                          previous repair produced, and nothing else.
+ *   T2  the judge          spec-review or spec-refiner, by profile. Full on the first round;
+ *                          from the second, the range the previous repair produced and nothing
+ *                          else.
  *   T1  pre-implement      the spec compiled into a plan, by the agent the pipeline runs. It
  *                          runs once, after a clean T2 verdict, as the last gate — it reads the
  *                          whole document every time and cannot be given a range, so it is
  *                          not the gate the loop converges on.
  *
- * Whichever gate blocked, `spec-fixer` repairs that verdict, the round is committed, and the
+ * Whichever gate blocked, the profile's fixer repairs that verdict, the round is committed, and the
  * next round's judge is given **that commit** as a range. A finding blocks only under the
  * closed rule list; a blocker filed under any other rule is demoted to a note here, whichever
  * agent wrote it.
@@ -25,6 +26,7 @@
  * halts for a person instead of spending another pass.
  *
  * Options:
+ *   --profile <name>   which judge and fixer run, and whether the judge shards its reading
  *   --rounds <n>       judged rounds before stopping (default from config)
  *   --request <text>   the request the spec answers; without it the Summary is the request
  *   --skip <gates>     comma-separated: t1, t2
@@ -40,11 +42,13 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { enforceCriteria, readRegister } from './criteria.mjs';
+import { stageProfile } from './profiles.mjs';
+import { bundleMembers, stemFor } from './spec-paths.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const argv = process.argv.slice(2);
-const VALUE_FLAGS = new Set(['rounds', 'request', 'skip', 'permission-mode']);
+const VALUE_FLAGS = new Set(['rounds', 'request', 'skip', 'permission-mode', 'profile', 'plan-profile']);
 const flag = (n) => argv.includes(`--${n}`);
 const opt = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
 
@@ -59,6 +63,24 @@ const specArg = (() => {
 
 const cfg = JSON.parse(readFileSync(join(ROOT, '.claude/ai-workflow.config.json'), 'utf8'));
 const RC = cfg.refine ?? {};
+
+/**
+ * The shape of the pass: which judge, which fixer, and whether the judge shards its reading.
+ * Configuration, overridable for one run with `--profile`, and recorded in the ledger — so a
+ * result can be attributed to the shape that produced it rather than to the config file as it
+ * stands today. An unknown name fails here rather than silently running the default.
+ */
+const profileName = opt('profile', RC.profile ?? 'solo');
+if (RC.profiles && !RC.profiles[profileName]) {
+  process.stderr.write(`refine: no profile "${profileName}" — have ${Object.keys(RC.profiles).join(', ')}\n`);
+  process.exit(1);
+}
+const PROFILE = { name: profileName, ...(RC.profiles?.[profileName] ?? {}) };
+const JUDGE_AGENT = PROFILE.judgeAgent ?? 'spec-review';
+const JUDGE_MODEL = PROFILE.judgeModel ?? RC.judgeModel ?? 'opus';
+const FIXER_AGENT = PROFILE.fixerAgent ?? 'spec-fixer-minimal';
+const FIXER_MODEL = PROFILE.fixerModel ?? RC.fixerModel ?? 'opus';
+
 const rounds = Number(opt('rounds', RC.rounds ?? 2));
 const skip = new Set((opt('skip', '') || '').split(',').filter(Boolean));
 const dryRun = flag('dry-run');
@@ -112,7 +134,7 @@ function commitGate(ledger, { round, gate, summary, spec }) {
 /**
  * The round's own copy of a verdict written to a shared path.
  *
- * `spec-refiner` and `spec-fixer` write to one file each, which the next round overwrites, so
+ * The judge and the fixer write to one file each, which the next round overwrites, so
  * without this only the last round of a loop has any findings on disk — and a commit that
  * carries a verdict the next round will replace records nothing durable.
  */
@@ -126,16 +148,8 @@ function keepVerdict(ledger, round, gate, from) {
 
 /* ── the bundle ───────────────────────────────────────────────────────────── */
 
-const bundleMembers = (spec) => {
-  const base = spec.replace(/\.md$/, '');
-  return [`${base}.contracts.md`, `${base}.cases.md`, `${base}.design.md`];
-};
-
-/** `specs/requests/02-client-participants.md` -> `requests-02` */
-function stemFor(spec) {
-  const m = spec.match(/specs\/([^/]+)\/(\d+)/);
-  return m ? `${m[1]}-${m[2]}` : spec.replace(/[^\w]+/g, '-');
-}
+/* The bundle's members and the ledger's stem come from `spec-paths.mjs`, because `wf init` looks
+   the same ledger up to find out whether this spec was ever judged. */
 
 /* ── the ledger ───────────────────────────────────────────────────────────── */
 
@@ -172,9 +186,17 @@ function loadLedger(spec) {
        turns the resumed run into another full pass, the one thing the range exists to avoid.
        Dropping it is what makes a stopped loop resumable at the round it stopped in. */
     while (l.rounds?.length && l.rounds[l.rounds.length - 1].status === 'running') l.rounds.pop();
-    if (l.spec === spec) return { ...l, path };
+    if (l.spec === spec) return { ...l, path, profile: PROFILE.name, judgeAgent: JUDGE_AGENT, fixerAgent: FIXER_AGENT };
   }
-  return { spec, stem, path, startedAt: new Date().toISOString(), rounds: [], status: 'running' };
+  return {
+    spec, stem, path,
+    startedAt: new Date().toISOString(),
+    profile: PROFILE.name,
+    judgeAgent: JUDGE_AGENT,
+    fixerAgent: FIXER_AGENT,
+    rounds: [],
+    status: 'running',
+  };
 }
 
 function saveLedger(l) {
@@ -259,6 +281,26 @@ function gateLint(spec) {
  * outer executable, so it runs in-process. Same reasoning as `ship.mjs`.
  */
 const nested = process.env.CLAUDECODE === '1' || !!process.env.CLAUDE_CODE_ENTRYPOINT;
+
+/**
+ * The model that actually answered, from the run's own `init` event.
+ *
+ * `--model` is a request, not a guarantee: the SDK reports what it opened the session with, and
+ * that is the only record of what was paid for. Falls back to the first assistant message, which
+ * carries the same field, and comes back null for a CLI log that has neither.
+ */
+function modelOf(logStem) {
+  try {
+    for (const line of readFileSync(join(ROOT, `${logStem}.log`), 'utf8').split('\n')) {
+      if (!line) continue;
+      let m;
+      try { m = JSON.parse(line); } catch { continue; }
+      if (m.type === 'system' && m.subtype === 'init' && m.model) return m.model;
+      if (m.type === 'assistant' && m.message?.model) return m.message.model;
+    }
+  } catch { /* no log, or not JSONL */ }
+  return null;
+}
 
 /**
  * The closing message of an agent's own log — what it said instead of doing the job.
@@ -346,8 +388,29 @@ async function runAgent({ agent, model, prompt, verdictPath, timeoutMin, logStem
       : runViaCLI({ agent, model, prompt, timeoutMin, logStem: stem });
     note(`${Math.round((Date.now() - started) / 1000)}s, ${outcome.exitNote}`);
 
+    /* What actually answered, from the run's own init event. The model is an argument to every
+       gate and the ledger used to record only what was asked for: two passes on this repository
+       were judged by a model other than the configured one, and the substitution was findable
+       only by grepping a raw JSONL log. A calibration made from such a ledger calibrates the
+       wrong judge. */
+    const ran = modelOf(stem);
+    if (ran) note(`answered by ${ran}${ran !== model && model ? ` — asked for ${model}` : ''}`);
+
     if (existsSync(abs)) {
-      try { return JSON.parse(readFileSync(abs, 'utf8')); } catch (e) {
+      try {
+        const verdict = JSON.parse(readFileSync(abs, 'utf8'));
+        verdict.ranOn = ran ?? null;
+        if (RC.requireJudgeModel && model && ran && ran !== model && !ran.includes(model)) {
+          last = {
+            status: 'error',
+            ranOn: ran,
+            error: `${agent} was dispatched on ${model} and answered on ${ran}`,
+          };
+          note(last.error);
+          continue;
+        }
+        return verdict;
+      } catch (e) {
         last = { status: 'error', error: `${agent} wrote a verdict that is not valid JSON: ${e.message}` };
         note(last.error);
         continue;
@@ -436,9 +499,12 @@ async function gatePlan(spec, ledger, round) {
     + `Nothing is implemented yet and nothing will be implemented from this plan — it is run to `
     + `find out whether the spec can be compiled at all.`;
 
+  /* The same compiler the pipeline runs, read the same way — the point of running T1 here is
+     that it is the pipeline's own gate, not a second opinion configured separately. */
+  const planStage = stageProfile(cfg, 'pre_implement', opt('plan-profile', null));
   return runAgent({
-    agent: 'pre-implementer',
-    model: cfg.stages.pre_implement?.model,
+    agent: planStage.agent ?? 'pre-implementer-strict',
+    model: planStage.model,
     prompt,
     verdictPath,
     timeoutMin: cfg.breakers?.stageTimeoutMin?.pre_implement ?? 45,
@@ -457,12 +523,20 @@ const lastFixPath = (ledger, round) =>
   `.workflow/refine/${ledger.stem}.probe/${round - 1}/fix.verdict.json`;
 
 async function gateJudge(spec, ledger, round, request, since) {
-  step(`T2  spec-refiner  (round ${round}${since ? `, judging ${since.slice(0, 8)}..HEAD` : ', full'})`);
+  step(`T2  ${JUDGE_AGENT}  (round ${round}${since ? `, judging ${since.slice(0, 8)}..HEAD` : ', full'}, profile ${PROFILE.name})`);
   const verdictPath = `.workflow/refine/${ledger.stem}.verdict.json`;
   const prompt = [
     spec,
     '',
     request || 'no request given',
+    '',
+    /* The shape of the pass reaches the judge as a command rather than as a paragraph. It prints
+       the bundle, the criteria families, which of them go to shards and which stay, and the
+       shard agent and model to use — all derived from the register and the config, so the judge
+       picks none of it and two passes over one document shard the same way. */
+    `Run \`node scripts/spec-slice.mjs ${spec}${since ? ` --since ${since}` : ''}`
+    + ` --profile ${PROFILE.name}\` first. It gives you the bundle, the criteria families and`,
+    `the shape of this pass. That shape is configuration; do not choose your own.`,
     '',
     since
       ? [
@@ -500,19 +574,19 @@ async function gateJudge(spec, ledger, round, request, since) {
   ].join('\n');
 
   return runAgent({
-    agent: 'spec-refiner',
-    model: RC.judgeModel ?? 'opus',
+    agent: JUDGE_AGENT,
+    model: JUDGE_MODEL,
     prompt,
     verdictPath,
     timeoutMin: RC.timeoutMin ?? 45,
-    logStem: `.workflow/refine/${ledger.stem}.probe/${round}/spec-refiner`,
+    logStem: `.workflow/refine/${ledger.stem}.probe/${round}/${JUDGE_AGENT}`,
   });
 }
 
 /* ── repair ───────────────────────────────────────────────────────────────── */
 
 async function repair(spec, ledger, round) {
-  step(`fix  spec-fixer  (round ${round})`);
+  step(`fix  ${FIXER_AGENT}  (round ${round})`);
   const verdictPath = `.workflow/refine/${ledger.stem}.verdict.json`;
   const fixPath = `.workflow/refine/${ledger.stem}.fix.json`;
   /* The output path is named here, as it is for the pre-implementer. It used to be sent as two
@@ -531,12 +605,12 @@ async function repair(spec, ledger, round) {
     `did not record there is a repair the loop cannot see, and the round stops as an error.`,
   ].join('\n');
   return runAgent({
-    agent: 'spec-fixer',
-    model: RC.fixerModel ?? 'opus',
+    agent: FIXER_AGENT,
+    model: FIXER_MODEL,
     prompt,
     verdictPath: fixPath,
     timeoutMin: RC.timeoutMin ?? 45,
-    logStem: `.workflow/refine/${ledger.stem}.probe/${round}/spec-fixer`,
+    logStem: `.workflow/refine/${ledger.stem}.probe/${round}/${FIXER_AGENT}`,
   });
 }
 
@@ -559,6 +633,12 @@ const BLOCKING_RULES = new Set(RC.blockingRules ?? [
  * a different surface every pass — which is where a loop that never converges comes from.
  */
 const SPEC_CRITERIA = readRegister(ROOT, 'spec');
+/* A register that is there and yields nothing is a broken register, not an absent one, and
+   running on it turns every demotion and every coverage check off without a word. Refuse. */
+if (SPEC_CRITERIA.exists && !SPEC_CRITERIA.ids.size) {
+  process.stderr.write(`refine: ${SPEC_CRITERIA.path} parsed to zero criteria — the register is unreadable, so nothing would be enforced\n`);
+  process.exit(1);
+}
 
 /**
  * Demote every blocker outside the closed list, in place, and return the demoted ones.
@@ -675,6 +755,29 @@ async function main() {
       const since = round > 1 ? ledger.rounds[round - 2]?.commit ?? null : null;
       verdict = await gateJudge(spec, ledger, round, request, since);
       if (verdict.status === 'error') finish(ledger, 'error', 'judge-error', verdict.error);
+      /* A judged pass that reports no criterion did not run one. The register says so — "a
+         criterion missing from the map was not run" — and the judge's own definition repeats
+         it, so recording such a pass as a pass makes the gate optional in exactly the case
+         where it silently did nothing. The map must be present, not complete: a diff pass
+         carrying an earlier round's answers forward still passes. */
+      if (!dryRun && RC.requireCriteriaMap && SPEC_CRITERIA.ids.size
+          && !Object.keys(verdict.criteria ?? {}).length) {
+        record.judge = { status: 'judge-error', criteria: null, ranOn: verdict.ranOn ?? null };
+        saveLedger(ledger);
+        finish(ledger, 'error', 'judge-error',
+          `the verdict carries no criteria map, so no enumerated criterion was run. `
+          + `Re-run the round; a pass that reports nothing is not a pass.`);
+      }
+      /* A profile that shards and a verdict that shows no shard mean the judge read everything
+         itself. That is a different pass from the one that was asked for and paid for, and the
+         only place it is visible is here. */
+      if (!dryRun && PROFILE.shardAgent && !(verdict.shards ?? []).length) {
+        record.judge = { status: 'judge-error', agent: JUDGE_AGENT, ranOn: verdict.ranOn ?? null };
+        saveLedger(ledger);
+        finish(ledger, 'error', 'judge-error',
+          `profile ${PROFILE.name} dispatches ${PROFILE.shardAgent}, and the verdict records no shard. `
+          + `The judge read the bundle itself; re-run, or use --profile solo deliberately.`);
+      }
       const demoted = enforceRules(verdict, { criteria: true });
       const shift = criteriaShift(ledger, round, verdict);
       const blockers = blockersOf(verdict);
@@ -682,13 +785,18 @@ async function main() {
       record.judge = {
         status: verdict.status,
         mode: verdict.mode ?? (since ? 'diff' : 'full'),
+        agent: JUDGE_AGENT,
+        askedFor: JUDGE_MODEL,
+        ranOn: verdict.ranOn ?? null,
+        admitted: verdict.admitted ?? null,
+        shards: (verdict.shards ?? []).length,
         blockers: blockers.length,
         notes,
         criteria: verdict.criteria ?? null,
       };
       saveLedger(ledger);
       keepVerdict(ledger, round, 'judge', `.workflow/refine/${ledger.stem}.verdict.json`);
-      commitGate(ledger, { round, gate: 'T2 spec-refiner', summary: `${blockers.length} blocker(s), ${notes} note(s)` });
+      commitGate(ledger, { round, gate: `T2 ${JUDGE_AGENT}`, summary: `${blockers.length} blocker(s), ${notes} note(s)` });
       note(`${blockers.length} blocker(s), ${notes} note(s)`);
       if (shift) {
         note(`criteria reported ${shift.reported}/${SPEC_CRITERIA.ids.size}`
@@ -774,7 +882,7 @@ async function main() {
     keepVerdict(ledger, round, 'fix', `.workflow/refine/${ledger.stem}.fix.json`);
     record.commit = commitGate(ledger, {
       round,
-      gate: 'fix spec-fixer',
+      gate: `fix ${FIXER_AGENT}`,
       spec,
       summary: `${record.fix.fixed} fixed, ${record.fix.decided} decided, ${record.fix.left} left`,
     });

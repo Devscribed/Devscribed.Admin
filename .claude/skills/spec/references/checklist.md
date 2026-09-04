@@ -22,8 +22,8 @@ Every item carries one of three marks, and the mark is what decides who reads it
 | **(note)** | the author; the judge holds a criterion for it | A note. The gap is real and the reviewer and QA meet it again against code that exists; a document counting itself is answered with new text that the next pass then has to judge. |
 | **(author)** | the author alone | Craft. It makes the spec better and no judge files a finding about it — either because a script already decided it, because it lives in a document the judge may not file against, or because the only repair is a route, a lock or a case that the fixer is forbidden to add. |
 
-**This page is the author's. `spec-refiner` is not given it.** What a judge may block on is the
-register in [blocking-criteria.md](blocking-criteria.md) — the same ground as the `(blocks)` and
+**This page is the author's. The judge is not given it.** What a judge may block on is the
+register in [admission-criteria.md](../../spec-review/references/admission-criteria.md) — the same ground as the `(blocks)` and
 `(note)` items, written as checks with ids, plus the repository conventions a spec may not
 overrule. A rubric of ninety items handed to a judge that can file under seven rules drains
 everything it cannot place into `spec/missing-artefact`, and a spec grows a section per round.

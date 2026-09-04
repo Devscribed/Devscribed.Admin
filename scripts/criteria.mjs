@@ -1,8 +1,8 @@
 /**
  * criteria — the closed registers a judge may block under, read from the register itself.
  *
- * Two documents carry them: `.claude/skills/spec/references/blocking-criteria.md` for the spec
- * refiner and `.claude/skills/code-review/references/blocking-criteria.md` for the review. Each
+ * Two documents carry them: `.claude/skills/spec-review/references/admission-criteria.md` for the
+ * spec judge and `.claude/skills/code-review/references/blocking-criteria.md` for the review. Each
  * is a set of markdown tables whose first cell is the id, so adding a criterion is an edit to
  * the page a judge reads and nothing else — there is no second list here to keep in step.
  *
@@ -16,7 +16,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export const REGISTERS = {
-  spec: '.claude/skills/spec/references/blocking-criteria.md',
+  spec: '.claude/skills/spec-review/references/admission-criteria.md',
   review: '.claude/skills/code-review/references/blocking-criteria.md',
 };
 
@@ -27,16 +27,22 @@ const cache = new Map();
  *
  * A register that cannot be read comes back empty, and an empty register enforces nothing —
  * a missing file must not turn every blocker in the repository into a note without saying so.
- * Callers check `ids.size` before enforcing.
+ * Callers check `ids.size` before enforcing, and `exists` tells them which of the two they have:
+ * a page that is absent, or a page that is there and yielded no criteria. The second is a
+ * broken register and callers must refuse rather than run unenforced.
  */
 export function readRegister(root, which) {
   const path = join(root, REGISTERS[which]);
   const key = `${which}:${path}`;
   if (cache.has(key)) return cache.get(key);
 
-  const out = { path: REGISTERS[which], ids: new Set(), severity: new Map() };
-  if (existsSync(path)) {
-    for (const line of readFileSync(path, 'utf8').split('\n')) {
+  const out = { path: REGISTERS[which], ids: new Set(), severity: new Map(), exists: existsSync(path) };
+  if (out.exists) {
+    /* Split on either ending. A checkout that materialises these pages with CRLF leaves a `\r`
+       at the end of every row, and `.` does not match a carriage return — so the row regex below
+       matches nothing, every register reads as empty, and enforcement turns itself off in
+       silence. That is the one failure a gate must not have. */
+    for (const line of readFileSync(path, 'utf8').split(/\r?\n/)) {
       const m = line.match(/^\|\s*((?:S|CR)-\d+)\s*\|(.*)$/);
       if (!m) continue;
       out.ids.add(m[1]);

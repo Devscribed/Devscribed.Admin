@@ -31,6 +31,7 @@
     "reap:dry": "node scripts/reap-stale-servers.mjs --dry-run",
     "coverage": "node scripts/handoff-coverage.mjs",
     "spec:lint": "node scripts/spec-lint.mjs",
+    "spec:slice": "node scripts/spec-slice.mjs",
     "refine:loop": "node scripts/refine-loop.mjs"
   },
   "devDependencies": {

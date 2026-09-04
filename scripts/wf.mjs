@@ -41,6 +41,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
 import { enforceCriteria, readRegister } from './criteria.mjs';
+import { bundleMembers, stemFor } from './spec-paths.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const WF = join(ROOT, '.workflow');
@@ -110,8 +111,12 @@ function parseArgs(argv) {
     if (a.startsWith('--')) {
       const key = a.slice(2);
       const next = argv[i + 1];
-      if (next === undefined || next.startsWith('--')) out[key] = true;
-      else { out[key] = next; i++; }
+      const value = next === undefined || next.startsWith('--') ? true : (i++, next);
+      /* A repeated flag collects rather than overwrites: `--profile implement=solo
+         --profile review=sweeps` names two stages, and keeping only the last would silently
+         run one of them in a shape nobody asked for. */
+      if (key in out) out[key] = [].concat(out[key], value);
+      else out[key] = value;
     } else out._.push(a);
   }
   return out;
@@ -198,6 +203,11 @@ function witnessDefect(f) {
  * named is not met by a different objection over the same diff.
  */
 const REVIEW_CRITERIA = readRegister(ROOT, 'review');
+/* Present but unparseable is a broken register, not a missing one: enforcement would switch
+   itself off and every blocker would stand unanchored, with nothing in the log to say so. */
+if (REVIEW_CRITERIA.exists && !REVIEW_CRITERIA.ids.size) {
+  fail(`${REVIEW_CRITERIA.path} parsed to zero criteria — the register is unreadable, so no finding would be anchored`);
+}
 const isRequirementId = (id) => /^REQ-[A-Za-z0-9-]+$/.test(id);
 
 /**
@@ -405,6 +415,54 @@ function findCarrySource(specRel) {
   return null;
 }
 
+/**
+ * Whether this spec was ever judged, and whether the judgement still covers what is on disk.
+ *
+ * The pipeline used to read nothing about refine at all: a spec whose loop died mid-gate, or
+ * whose last verdict reported no criterion, entered a run indistinguishable from one that had
+ * cleared every gate. Both have happened, and the run that followed spent five stages on a
+ * document nothing had admitted.
+ *
+ * Returns null when the spec is admitted, or the reason it is not.
+ */
+function refineGate(specRel) {
+  const rc = config().refine ?? {};
+  if (rc.shipRequiresRefine === false) return null;
+
+  const stem = stemFor(specRel);
+  const ledgerPath = join(WF, 'refine', `${stem}.loop.json`);
+  if (!existsSync(ledgerPath)) {
+    return `no refine ledger at .workflow/refine/${stem}.loop.json — this spec has not been judged`;
+  }
+
+  let ledger;
+  try { ledger = read(ledgerPath); } catch (e) { return `the refine ledger will not parse: ${e.message}`; }
+
+  if (ledger.spec && ledger.spec !== specRel) {
+    return `the ledger at .workflow/refine/${stem}.loop.json judged ${ledger.spec}, not this spec`;
+  }
+  if (ledger.status !== 'pass') {
+    const why = ledger.outcome?.reason ? `: ${ledger.outcome.reason}` : '';
+    return `the last refine loop ended "${ledger.status}"${why} — it never admitted this spec`;
+  }
+
+  /* A pass covers the text it judged. The bundle moving afterwards is the ordinary case — a
+     person answers a note by hand — and it is exactly the case where the verdict no longer
+     describes what the pipeline is about to build. */
+  const judged = [...(ledger.rounds ?? [])].reverse().find((r) => r.commit)?.commit;
+  if (!judged) return 'no round of that loop produced a commit, so there is nothing it judged';
+  const paths = [specRel, ...bundleMembers(specRel)].filter((p) => existsSync(resolve(ROOT, p)));
+  let moved;
+  try { moved = git('diff', '--name-only', `${judged}..HEAD`, '--', ...paths); } catch {
+    return `the commit that judged this spec (${judged.slice(0, 8)}) is not reachable from HEAD`;
+  }
+  if (moved) {
+    return `the bundle changed after the round that judged it (${judged.slice(0, 8)}): `
+      + moved.split('\n').join(', ');
+  }
+  return null;
+}
+
 function cmdInit(args) {
   const specRel = args.spec;
   if (!specRel) fail('init needs --spec <path>');
@@ -419,6 +477,15 @@ function cmdInit(args) {
   if (existsSync(LOCK)) {
     fail(`another run holds ${relative(ROOT, LOCK)} (${readFileSync(LOCK, 'utf8').trim()}). Runs share ports and databases, so they are serialised.`);
   }
+
+  const unrefined = typeof args['accept-unrefined'] === 'string' ? args['accept-unrefined'] : null;
+  const notAdmitted = refineGate(specRel);
+  if (notAdmitted && !unrefined) {
+    fail(`${notAdmitted}.\n`
+      + `    Run it: node scripts/refine-loop.mjs ${specRel}\n`
+      + `    Or start anyway: --accept-unrefined "<why>" — the reason is recorded in run.json and printed by every stage.`);
+  }
+  if (notAdmitted) process.stdout.write(`wf: starting an unrefined spec — ${notAdmitted}. Reason given: ${unrefined}\n`);
 
   /* `--carry <runId>` pins the source; `--no-carry` turns it off for a deliberately clean
      run; neither means "find it yourself". */
@@ -446,6 +513,15 @@ function cmdInit(args) {
        gate asking "what did *this run* change" rather than "what does the diff contain". */
     headAtInit: git('rev-parse', 'HEAD'),
     status: 'preflight',
+    /* The shape each stage ran in, and the reason if this run started on a spec nothing
+       admitted. Both are read back by the board and by anyone comparing two runs: a result
+       that cannot be attributed to a shape measures nothing. */
+    profiles: Object.fromEntries(
+      (Array.isArray(args.profile) ? args.profile : args.profile ? [args.profile] : [])
+        .map((p) => String(p).split('='))
+        .filter((p) => p.length === 2),
+    ),
+    unrefined: notAdmitted ? { reason: unrefined, why: notAdmitted } : null,
     createdAt: now(),
     updatedAt: now(),
     stages: Object.fromEntries(STAGES.map((s) => [s, { status: 'pending', attempts: 0 }])),

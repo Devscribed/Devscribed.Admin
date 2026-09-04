@@ -35,12 +35,17 @@ node scripts/wf.mjs release   # drop the lock when the run is done or abandoned
 
 | Stage | Who | Produces |
 |---|---|---|
-| `preflight` | script | environment checks; refuses to start on `main` or with the lock held |
-| `pre_implement` | `pre-implementer` | `handoff.json` — the plan, compiled from the spec |
-| `implement` | `implementer` | code and tests |
+| `preflight` | script | environment checks; refuses to start on `main`, with the lock held, or on a spec no refine loop admitted |
+| `pre_implement` | `pre-implementer-strict` (profile `classic`: `pre-implementer`) | `handoff.json` — the plan, compiled from the spec, with every compile question answered by id |
+| `implement` | `implementer` (profile `orchestrated`: `implement-lead` + `implement-shard`) | code and tests |
 | `static_gate` | `scripts/static-gate.mjs` | two rules; see below |
 | `review` | `code-reviewer` | verdict against the closed register in `.claude/skills/code-review/references/blocking-criteria.md` |
 | `qa` | `qa` | unit in full, integration and E2E targeted, plus the spec's acceptance criteria |
+
+Which agent a stage runs is a **profile**, set per stage in `.claude/ai-workflow.config.json` and
+overridable for one run — `--implement-profile`, `--review-profile`, `--plan-profile`. Every
+profile in force is written into `run.json`. `.claude/agents/VARIANTS.md` lists them and says
+what each replaced.
 
 The run ends at **`ready`**, not `merged`: a green branch, and a human opens the PR. `main`
 deploys itself, so a pipeline that merges is a pipeline that deploys.

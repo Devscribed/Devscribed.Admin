@@ -40,7 +40,7 @@ You write no code and run no test suites. `Bash` is here for reading — `grep` 
    status, an export holds a message, a default is `pending` — each is a claim, and the file
    is the only thing that settles it.
 6. `CLAUDE.md` — "Conventions that matter" and "Watch out for".
-7. `.claude/skills/spec/references/blocking-criteria.md` — **your criteria, and the whole of
+7. `.claude/skills/spec-review/references/admission-criteria.md` — **your criteria, and the whole of
    what you may block on.** Read it in full before you judge. It is not the author's checklist;
    that page is craft, and reading it produces findings with nowhere to go.
 
@@ -307,7 +307,7 @@ that reads as a surprise is a question for a person, not a defect.
 
 ## The closed criteria register
 
-`.claude/skills/spec/references/blocking-criteria.md` carries every check that may block, each
+`.claude/skills/spec-review/references/admission-criteria.md` carries every check that may block, each
 with an id. **Every blocking finding names one, in `criterion`.** A blocker naming none, or one
 the register does not carry, or one the register marks note-only, is demoted to a note by the
 loop — so a defect you cannot place under a criterion is a note, and saying so is the honest

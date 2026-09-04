@@ -144,14 +144,14 @@ acceptance criteria, test cases through E2E, and a verification route walked bef
 were written. Specs are written in English.
 
 **A spec is judged by somebody who did not write it.** `/spec` ends by dispatching the
-`spec-refiner` agent on a clean context — it is given the spec path and the request, and nothing
+`spec-review` agent on a clean context — it is given the spec path and the request, and nothing
 else — which asks three questions the author cannot ask of their own work: is every claim about
 this repository still true, do two clear statements disagree, and what has this spec just made
 false in the documents around it. `npm run refine -- <spec path>` runs the same judgement on any
 spec at any time, which is what a spec that has sat while the code moved needs.
 
 **A judge blocks only under a criterion somebody wrote down.** Both judges work from a closed
-register — `.claude/skills/spec/references/blocking-criteria.md` for the refiner,
+register — `.claude/skills/spec-review/references/admission-criteria.md` for the spec judge,
 `.claude/skills/code-review/references/blocking-criteria.md` for the review — and every blocking
 finding names an id from it. A blocker naming none, or one the register marks note-only, is
 demoted to a note by the script that reads the verdict. Anything outside a register is still
@@ -193,6 +193,19 @@ contests halts the run for a person instead of spending another attempt. The run
 
 The pipeline stops at a green branch. It never merges and never pushes — see the note about
 `main` above.
+
+**A run refuses to start on a spec nothing admitted.** `wf init` reads the spec's refine ledger:
+a loop that is not a `pass`, or a bundle that changed after the round that judged it, stops the
+run before any model is paid. `--accept-unrefined "<why>"` overrides it and the reason is
+recorded in `run.json`.
+
+**Which agent a stage runs is a profile, not a constant.** Each stage names its default in
+`.claude/ai-workflow.config.json` and takes an override for one run — `--profile` for refine,
+`--implement-profile`, `--review-profile`, `--plan-profile` for ship. So one run goes parallel on
+sonnet shards and the next goes synchronous on one opus agent, with no edit between them, and
+every profile in force is written into the ledger or `run.json`. Every agent a new one replaced
+is kept and still selectable: [.claude/agents/VARIANTS.md](.claude/agents/VARIANTS.md) lists them
+and says what each changed.
 
 **While a run is in flight, its branch carries the spec's work and nothing else.** The reviewer
 diffs `baseRef...HEAD`, so anything else committed there is handed to it as part of the change

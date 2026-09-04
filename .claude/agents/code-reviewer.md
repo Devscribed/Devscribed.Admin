@@ -67,7 +67,7 @@ spend reading before they start is a minute added to the end.
 
 1. Divide the slice into groups of the size the slice's **How to shard** section gives, balanced
    by changed lines. That number and the shard agent are configuration; neither is yours to pick.
-2. Dispatch every group **in a single message containing one `Task` call per group**, with the
+2. Dispatch every group **in a single message containing one `Agent` call per group**, with the
    `subagent_type` the slice named. All of them in that one message — calls sent in separate
    messages run one after another, and the whole point is that they do not. Give each its file
    list, the base sha, the spec path and its shard number. They return their verdicts to you as

@@ -19,7 +19,7 @@
  * runs the orchestrator and explains the outcome. `npm run ship:run` is the orchestrator on
  * its own, with no model either side of it.
  *
- * `refine` judges a spec before any of that. It dispatches one `spec-refiner` on a clean
+ * `refine` judges a spec before any of that. It dispatches the spec judge on a clean
  * context and applies what comes back; `/spec` dispatches the same agent as its last step.
  */
 
