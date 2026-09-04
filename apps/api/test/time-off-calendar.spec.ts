@@ -666,9 +666,9 @@ describe('Vacation calendar (time off spec 01)', () => {
     const response = await calendar(admin.cookies, admin.organizationId, month());
     expect(response.status).toBe(200);
     expect(response.body.holidays).toHaveLength(2);
-    const byId = new Map(response.body.holidays.map((h: any) => [h.id, h]));
-    expect((byId.get(plHoliday.id) as any).appliesToAllInView).toBe(false);
-    expect((byId.get(globalHoliday.id) as any).appliesToAllInView).toBe(true);
+    const holidayRow = (id: string) => response.body.holidays.find((h: any) => h.id === id);
+    expect(holidayRow(plHoliday.id).appliesToAllInView).toBe(false);
+    expect(holidayRow(globalHoliday.id).appliesToAllInView).toBe(true);
 
     expect(rowFor(response.body, polish.membershipId).holidayIds.sort()).toEqual(
       [plHoliday.id, globalHoliday.id].sort(),
