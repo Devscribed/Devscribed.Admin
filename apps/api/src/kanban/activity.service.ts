@@ -46,7 +46,7 @@ export class ActivityService {
     await this.access.requireProjectAccess(caller, project, KANBAN_MESSAGES.boardPermissionDenied);
     await this.requireTask(project.id, taskId);
 
-    const rows = await this.prisma.taskActivity.findMany({
+    const entries = await this.prisma.taskActivity.findMany({
       where: { taskId },
       include: {
         actor: { include: { account: { select: { firstName: true, lastName: true } } } },
@@ -54,7 +54,7 @@ export class ActivityService {
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
     return {
-      activity: rows.map((r) => ({
+      activity: entries.map((r) => ({
         id: r.id,
         action: r.action,
         actor: {

@@ -55,14 +55,14 @@ export class CommentsService {
     await this.access.requireProjectAccess(caller, project, KANBAN_MESSAGES.boardPermissionDenied);
     await this.requireTask(project.id, taskId);
 
-    const rows = await this.prisma.taskComment.findMany({
+    const comments = await this.prisma.taskComment.findMany({
       where: { taskId },
       include: {
         author: { include: { account: { select: { firstName: true, lastName: true } } } },
       },
       orderBy: { createdAt: 'asc' },
     });
-    return { comments: rows.map((r) => this.toSummary(r)) };
+    return { comments: comments.map((r) => this.toSummary(r)) };
   }
 
   async createComment(
