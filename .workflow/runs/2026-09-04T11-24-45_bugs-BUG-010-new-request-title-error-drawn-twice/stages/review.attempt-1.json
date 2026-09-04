@@ -1,0 +1,18 @@
+{
+  "verdict": "pass",
+  "reviewedUpTo": "9bd490c98c7957802e5c6b2b86104d4127434618",
+  "covered": {
+    "read": [
+      "apps/web/app/org/[orgId]/requests/NewRequestModal.tsx",
+      "apps/web/src/field-error.tsx",
+      "e2e/tests/requests.spec.ts"
+    ],
+    "unreached": []
+  },
+  "findings": [],
+  "notes": [
+    "Diff matches the Fix Approach in BUG-010 verbatim: errorNodeById added to field-error.tsx, NewRequestModal.tsx passes the tagged node into Input's error prop for Title only and drops the sibling FieldError for that field, and the regression assertion is added to TC-01-E2E-02 at the location the report specifies.",
+    "FieldError remains imported/used for topicId, description, projectId, and other fields in NewRequestModal.tsx (Select/native controls), consistent with the report's rejection of removing it outright.",
+    "No other files in the diff (aside from the .workflow run directory, excluded)."
+  ]
+}

@@ -19,6 +19,11 @@ export function hintNode(id: string, message: string) {
   return (<span id={id}>{message}</span>) as unknown as string;
 }
 
+/** The same node where the spec names the id itself, not the `field-error-*` scheme. */
+export function errorNodeById(id: string, message: string) {
+  return (<span id={id} data-testid={id}>{message}</span>) as unknown as string;
+}
+
 /** Moves focus to the field the validator named, by its test id. */
 export function focusByTestId(testId: string): void {
   document.querySelector<HTMLInputElement>(`[data-testid="${testId}"]`)?.focus();

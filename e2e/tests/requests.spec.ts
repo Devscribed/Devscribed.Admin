@@ -295,6 +295,9 @@ test.describe('requests/01 — Requests', () => {
     // Every error at once, and the topic is now the first field in reading order, so it
     // is the one that takes focus.
     await expect(page.getByTestId('request-new-error-title')).toBeVisible();
+    await expect(
+      page.getByTestId('request-new-modal').getByText('Enter a title', { exact: true }),
+    ).toHaveCount(1);
     await expect(page.getByTestId('request-new-error-topic')).toBeVisible();
     await expect(page.getByTestId('request-new-topic')).toBeFocused();
     await expect(page.getByTestId('request-new-submit')).toBeEnabled();
