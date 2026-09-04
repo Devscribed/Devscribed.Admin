@@ -11,9 +11,19 @@
       "startedAt": "2026-09-04T07:05:36.245Z",
       "head": "4cf47882341fae084171d95df1075fdecc48c690",
       "status": "running",
-      "lint": 0
+      "lint": 0,
+      "judge": {
+        "status": "judge-error",
+        "agent": "spec-review",
+        "ranOn": "claude-opus-5"
+      }
     }
   ],
-  "status": "running",
-  "request": "Employees pick a request topic from presets the organization curates (VPN, Claude, Question, Other for staff; Access, Other for clients), and the screens say Pending / In progress / Completed / Closed"
+  "status": "error",
+  "request": "Employees pick a request topic from presets the organization curates (VPN, Claude, Question, Other for staff; Access, Other for clients), and the screens say Pending / In progress / Completed / Closed",
+  "outcome": {
+    "reason": "judge-error",
+    "detail": "profile sharded dispatches spec-review-shard, and the verdict records no shard. The judge read the bundle itself; re-run, or use --profile solo deliberately.",
+    "at": "2026-09-04T07:18:58.341Z"
+  }
 }
