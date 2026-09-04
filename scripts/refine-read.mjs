@@ -106,15 +106,31 @@ export function parseAgentLog(path, { full = false } = {}) {
     model: result ? Object.keys(result.modelUsage ?? {})[0] ?? null
       : msgs.filter((m) => m.type === 'assistant').slice(-1)[0]?.message?.model ?? null,
     turns: result?.num_turns ?? msgs.filter((m) => m.type === 'assistant').length,
-    costUsd: +(result?.total_cost_usd ?? 0).toFixed(2),
-    apiSec: Math.round((result?.duration_api_ms ?? 0) / 1000),
+    /**
+     * `null`, not zero, when the stream carries no `result`.
+     *
+     * Cost and token totals exist only in that closing message, so a stage killed by its fuse
+     * has none — and zero is a claim, the wrong one: a 45-minute pass over 345 turns rendered
+     * as free is how the most expensive stage of a run became the cheapest-looking one.
+     *
+     * They cannot be reconstructed from the stream either, and the attempt was measured rather
+     * than assumed: every assistant message carries `usage`, but those are per-chunk deltas
+     * under a different accounting from the result's. Summed over one pre-implement pass they
+     * give 880 output tokens where the result reports 63,715, and 15.8M cache reads where it
+     * reports 8.9M — wrong by 72x one way and 1.8x the other. So this reports what the stream
+     * does settle — turns, calls, timing — and says nothing about what it does not.
+     */
+    costUsd: result ? +(result.total_cost_usd ?? 0).toFixed(2) : null,
+    apiSec: result ? Math.round((result.duration_api_ms ?? 0) / 1000) : null,
     stopReason: result?.stop_reason ?? null,
     subtype: result?.subtype ?? null,
-    tokens: {
-      out: usage.output_tokens ?? 0,
-      cacheRead: usage.cache_read_input_tokens ?? 0,
-      cacheWrite: usage.cache_creation_input_tokens ?? 0,
-    },
+    tokens: result
+      ? {
+        out: usage.output_tokens ?? 0,
+        cacheRead: usage.cache_read_input_tokens ?? 0,
+        cacheWrite: usage.cache_creation_input_tokens ?? 0,
+      }
+      : null,
     result: full ? (result?.result ?? null) : null,
     calls: full ? tools.length : msgs.reduce((a, m) => a + (m.message?.content ?? []).filter((c) => c.type === 'tool_use').length, 0),
     tools,

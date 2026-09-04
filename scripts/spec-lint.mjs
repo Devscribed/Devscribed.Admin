@@ -301,6 +301,7 @@ function parseContracts(lines, file) {
   const routes = new Map(); // "POST /api/x" -> { statuses:Set, messages:Set, line }
   const messages = new Map(); // export -> { routes:Set, text, line }
   const testids = new Map(); // id -> { line, asserted }
+  const matrix = []; // { label, granted:Set<role>, line } from the permission matrix
 
   const secs = sections(lines, 2);
   for (const sec of secs) {
@@ -309,7 +310,7 @@ function parseContracts(lines, file) {
     if (title.startsWith('routes')) {
       const { rows, header } = tableAfter(body, 0);
       const ci = (n) => header.findIndex((h) => plain(h).toLowerCase() === n);
-      const [cRoute, cOk, cErr] = [ci('route'), ci('success'), ci('errors')];
+      const [cRoute, cOk, cErr, cGuards] = [ci('route'), ci('success'), ci('errors'), ci('guards')];
       for (const row of rows) {
         const key = plain(row.cells[cRoute] ?? '');
         if (!ROUTE_RE.test(key)) {
@@ -324,7 +325,31 @@ function parseContracts(lines, file) {
           for (const s of txt.match(/\b[1-5]\d\d\b/g) ?? []) statuses.add(s);
           for (const e of txt.match(/\b(?:[A-Z][A-Z0-9_]*_)?MESSAGES\.[\w.]+/g) ?? []) messagesHere.add(e);
         }
-        routes.set(key, { statuses, messages: messagesHere, line: sec.start + row.line });
+        /* Lowercase-dashed capability names out of the Guards cell — `view-clients`,
+           `create-request`. The PascalCase spelling of the same right is the decorator's, and
+           the matrix below is written in neither, so only this shape is comparable. */
+        const guards = new Set(
+          (plain(row.cells[cGuards] ?? '').match(/\b[a-z]+(?:-[a-z]+)+\b/g) ?? [])
+            .filter((g) => !['org-scope', 'no-guard'].includes(g)),
+        );
+        routes.set(key, { statuses, messages: messagesHere, guards, line: sec.start + row.line });
+      }
+    }
+    /* The permission matrix, as data. Each row is one capability sentence and one verdict per
+       role column, which is what lets a role's grant be checked against the guard on the route
+       that grant needs. */
+    if (title.startsWith('roles')) {
+      const { rows, header } = tableAfter(body, 0);
+      const roles = header.slice(1).map((h) => plain(h).toLowerCase().trim());
+      for (const row of rows) {
+        const label = plain(row.cells[0] ?? '');
+        if (!label) continue;
+        const granted = new Set();
+        roles.forEach((role, i) => {
+          const cell = plain(row.cells[i + 1] ?? '');
+          if (cell.includes('✅')) granted.add(role);
+        });
+        matrix.push({ label, granted, line: sec.start + row.line });
       }
     }
     if (title.startsWith('error messages')) {
@@ -356,7 +381,7 @@ function parseContracts(lines, file) {
       }
     }
   }
-  return { routes, messages, testids };
+  return { routes, messages, testids, matrix };
 }
 
 /* ── cases ────────────────────────────────────────────────────────────────── */
