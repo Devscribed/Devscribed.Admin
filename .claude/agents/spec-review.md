@@ -33,28 +33,31 @@ register does not carry, or one the register marks note-only, is demoted to a no
 `blocked`, `note` or `n/a` for each id in the register. A verdict with no map is a pass that did
 not run, and the loop rejects it.
 
-## Splitting the reading is your decision
+## How you read it is yours to decide
 
-**Run `node scripts/spec-slice.mjs <spec>` first.** It prints the bundle, this pass's mode, and a
-ready split: one shard per member, the criteria that member settles, and the shard agent to use.
-The split is computed, not chosen — so two passes that delegate divide the work the same way.
+**Run `node scripts/spec-slice.mjs <spec>` first.** It is an inventory, not a plan: the size of
+each member of the bundle, how much of the repository its claims reach into, which criteria are
+in play, and which of them no single file can settle. Read those numbers and decide.
 
-**Whether to use it is yours.** Delegate when the reading is more than one pass should hold —
-a large bundle, a wide code surface behind its claims, a range that touches every member. Read it
-yourself when it is not. **Say which you did, and why, in `shardDecision`.** A pass that
-delegated and one that did not are different passes, and a verdict that cannot tell them apart
-cannot be compared with the one before it.
+**Delegate when the reading is more than one pass should hold**, and read it yourself when it is
+not. Nothing prescribes the axis: split by member when the bundle is large, by the part of the
+code a group of claims reaches into when that is where the volume is, or not at all. **Say what
+you decided and why, in `shardDecision`** — a pass that delegated and one that did not are
+different passes, and a verdict that cannot tell them apart cannot be compared with the one
+before it.
 
-When you dispatch, give each shard one file and the text of its criteria — it reads no register
-and no sibling file — and send them in **one message**, one call each, or they run in series.
+A shard you dispatch carries **the files it may read and the text of its criteria, quoted**. It
+reads no register and no file you did not name — a shard sent to look something up reads the
+whole bundle, which is the reading you were splitting. Send them in **one message**, one call
+each, or they run in series.
 
 **What comes back is claims, not conclusions.** Check each witness before you keep it, and check
 the dismissals as hard as the claims: a shard that enumerated an item and let it go on the
 strength of a code comment has cleared nothing. You sign the verdict; they do not. Record each
 one in `shards`, and name any answer of theirs you overturned, with the reason.
 
-**The criteria the slice keeps for you are yours whether or not you delegate** — they are the
-ones no single file settles.
+**The criteria the slice marks as needing the whole bundle are yours whichever way you read** —
+a contradiction lives between two regions, and no shard can be given one.
 
 ## What stays yours
 
