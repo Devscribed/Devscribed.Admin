@@ -98,12 +98,15 @@ sense `infra/deploy.sh` relies on, so the new-schema-then-new-code order it enfo
 the reverse — old code against the new schema — is safe too.
 
 **Shared code that breaks on contact.** `packages/validation/src/roles.ts` gains one capability,
-`ViewTimeOffCalendar`, and its lowercase-dashed twin. Neither country write adds one — they reuse
-`ManageHolidays` and `edit-detail`, which already grant exactly the admin and manager who set
-them. `Capability` is a union typed against `ROLE_CAPABILITIES`, so adding a member forces every
-role's list to be revisited at compile time, which is the intended behaviour and the reason the
-type is shaped that way. Adding a capability is otherwise backward-compatible: no existing
-capability is removed, renamed or regranted.
+`ViewTimeOffCalendar`, and `packages/validation/src/index.ts` gains its lowercase-dashed twin
+`view-time-off-calendar` in `MemberCapability` — the spelling the calendar's own gate reads,
+through `can()` on the normalized role, so a membership still storing `member` is read as `user`. Neither country write adds one — they reuse `ManageHolidays` and
+`edit-detail`, which already grant exactly the admin and manager who set them. `Capability` is a
+union typed against `ROLE_CAPABILITIES` and `MemberCapability` one typed against
+`CAPABILITY_MATRIX`, so adding a member to either forces every role's entry to be revisited at
+compile time, which is the intended behaviour and the reason both types are shaped that way.
+Adding a capability is otherwise backward-compatible: no existing capability is removed, renamed
+or regranted.
 
 **Two shipped member routes change shape.** `GET .../members/{memberId}` gains `countryCode` in
 its explicit projection and `PUT .../members/{memberId}` gains it in its body. Both keep every
@@ -175,8 +178,9 @@ renamed or moved.
    by the reports and holidays E2E suites, which this area does not touch and which must stay
    green; the member detail screen is covered by neither, so TC-01-INT-27 and TC-01-E2E-08 are
    what enforce it there.
-4. **The `Capability` enum only gains members.** No role loses a capability it holds today, and
-   `viewer` gains nothing. Enforced by the compile-time exhaustiveness of `ROLE_CAPABILITIES`.
+4. **Both capability unions only gain members.** No role loses a capability it holds today, and
+   `viewer` gains nothing: its `view-time-off-calendar` entry is `false`. Enforced by the
+   compile-time exhaustiveness of `ROLE_CAPABILITIES` and `CAPABILITY_MATRIX`.
 5. **Vacation math is untouched.** This area writes no `VacationRequest` and no
    `VacationReserveTransaction`, and recomputes no `workingDays`. Enforced by TC-01-INT-10, which
    asserts the frozen count survives a window that shows only part of the request.
