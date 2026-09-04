@@ -21,8 +21,9 @@ export interface CardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 't
   padded?: boolean;
   /**
    * Clips content to the card's radius. Default true, which is what rounds an edge-to-edge
-   * `Table`'s corners — and what cuts off a `Select` popover opened inside the card. Set
-   * `false` on any card that hosts one.
+   * `Table`'s corners — and what cuts off a `Popover` drawn with its portal off inside the
+   * card. Set `false` on a card that hosts one. A `Select` needs nothing: its list is a
+   * portal (§95) and is clipped by nothing it sits in.
    */
   clip?: boolean;
   children?: React.ReactNode;
@@ -66,8 +67,9 @@ export function Card({
           : { border: '1px solid var(--border-default)', borderRadius: 'var(--radius-l)' }),
         fontFamily: 'var(--font-family-base)',
         /* Clipping is what rounds an edge-to-edge `Table`'s square corners to the card's own
-           radius — and it is also what cuts off any popover opened inside the card, since a
-           `Select` drops its list into the card's box. A card that hosts one turns it off. */
+           radius — and it is also what cuts off a `Popover` drawn with its portal off, which
+           hangs inside the card's box. A card that hosts one turns it off. A `Select`'s list is
+           a portal (§95), so it is clipped by nothing here. */
         overflow: clip ? 'hidden' : 'visible',
         ...style,
       }}

@@ -44,7 +44,7 @@ test.describe('Manage booking', () => {
       email: candidate,
     });
 
-    const manage = await latestManageLink(request);
+    const manage = await latestManageLink(request, org.email);
     expect(manage.slug).toBe(vacancy.publicSlug);
 
     // The hiring manager has already formed a view and dragged the card. Cancelling
@@ -144,8 +144,8 @@ test.describe('Manage booking', () => {
       email: candidate,
     });
 
-    const manage = await latestManageLink(request);
-    const invite = await latestInviteLink(request);
+    const manage = await latestManageLink(request, org.email);
+    const invite = await latestInviteLink(request, org.email);
 
     await page.goto(manage.path);
     const before = (await page.getByTestId('manage-booking-when').textContent())!;
@@ -256,8 +256,8 @@ test.describe('Manage booking', () => {
       email: candidate,
     });
 
-    const manage = await latestManageLink(request);
-    const invite = await latestInviteLink(request);
+    const manage = await latestManageLink(request, org.email);
+    const invite = await latestInviteLink(request, org.email);
     await page.goto(manage.path);
 
     const when = page.getByTestId('manage-booking-when');
@@ -316,8 +316,8 @@ test.describe('Manage booking', () => {
       email: candidate,
     });
 
-    const manage = await latestManageLink(request);
-    const invite = await latestInviteLink(request);
+    const manage = await latestManageLink(request, org.email);
+    const invite = await latestInviteLink(request, org.email);
 
     // Two moves and one CV replacement, in that order, so the newest entry is the
     // replacement and the timeline has to interleave its two sources correctly.

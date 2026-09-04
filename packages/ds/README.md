@@ -185,8 +185,9 @@ it, and the numbered ones (`§n`) are collected in
 
 - **Second person, direct, no fluff.** Labels and actions are short nouns and verbs: "Add time",
   "Log out", "Save". No exclamation points.
-- **Sentence case everywhere except nav section titles**, which are Title Case. Tab labels are
-  the one place text is uppercase, and it is done with `text-transform`, not typed that way.
+- **Sentence case everywhere except nav section titles**, which are Title Case. Tab labels and a
+  panel card's micro-label title (§66) are the two places text is uppercase, and both are done
+  with `text-transform`, not typed that way.
 - **No emoji**, anywhere — not in labels, not in toasts, not as an icon.
 - **Errors are terse and factual.** A validation message is prefixed with a bare `*` and states
   the problem: `*Required`, not a friendly sentence.

@@ -208,6 +208,8 @@ test.describe('Category library', () => {
     await expect(page.getByTestId('categories-empty')).toHaveText(
       'No categories yet. Add one when you create a vacancy.',
     );
+    // On the page's own ground: the card is the table's, and there is no table.
+    await expect(page.getByTestId('categories-list')).toHaveCount(0);
   });
 });
 
@@ -231,7 +233,7 @@ test.describe('Criteria library', () => {
       lastName: 'Doe',
       email: uniqueEmail('candidate'),
     });
-    return { org, vacancy, invite: await latestInviteLink(request) };
+    return { org, vacancy, invite: await latestInviteLink(request, org.email) };
   }
 
   /** TC-H06-E2E-01 — create a scale criterion inline, mid-interview, then assess it. */
@@ -286,7 +288,7 @@ test.describe('Criteria library', () => {
       email: uniqueEmail('candidate'),
       slotIndex: 1,
     });
-    const second = await latestInviteLink(request);
+    const second = await latestInviteLink(request, org.email);
     await page.goto(second.path);
     await page.getByTestId('card-criteria-add').click();
     await page.getByTestId('card-criteria-autocomplete').fill('Eng');

@@ -151,8 +151,8 @@ a real route and not a modal over the board.
 18. Both are **shared, not per-author** — one field every permitted member sees and edits, last
     write wins. Per-author timestamped entries are a different product, and one person is on the
     call.
-19. A failed save never discards the text in the editor. The indicator switches to an error with a
-    retry, and the content stays.
+19. A failed save never discards the text in the editor. The failure is announced with a retry
+    that stays until it is used or dismissed, and the content stays.
 20. Both are **internal**. Neither is ever shown to a candidate or included in any candidate-facing
     page or email.
 
@@ -217,8 +217,10 @@ a real route and not a modal over the board.
 
 39. Fully operable by keyboard and screen reader: the CV actions, both text editors, the criteria
     autocomplete and its value controls, and the status control are all properly labelled.
-40. Save outcomes and errors are announced via a polite live region — including autosaves, which
-    must not announce so often that they become noise.
+40. An explicit save is announced via a polite live region. A routine autosave is **not**
+    announced — a region that spoke every two seconds would become noise over an interview, and
+    the visible indicator carries that case. A failed save is announced once, by the toast that
+    carries its retry, and not by the region as well.
 
 ## Screens
 
@@ -281,8 +283,9 @@ Additional application sections are collapsed by default; the most recent is exp
 
 ### Alt flow: a save fails
 
-- The indicator becomes an error with a retry. The text stays in the editor, unchanged, and no
-  further autosave fires until the retry succeeds or the member edits again.
+- An error toast carrying a retry appears and stands until it is used or dismissed; the indicator
+  goes quiet rather than repeating it. The text stays in the editor, unchanged, and no further
+  autosave fires until the retry succeeds or the member edits again.
 
 ### Alt flow: a `user` interviewer opens a candidate with two applications
 
@@ -396,21 +399,31 @@ Streams the file with its stored content type and the original filename in
 | Actions menu | "Delete candidate" |
 | Delete confirmation | as [03 §11.62](03-candidate-database.md) — one wording, two doors |
 | Delete failed | "Something went wrong. Please try again." |
+| Load failed | "Something went wrong. Please try again." — on the toast and in the state that stays, with `Retry` inside it |
+| No applications | "No applications yet." |
 | Email copied | "Email copied" |
 | Clipboard refused | "The clipboard is unavailable. Select the address to copy it." |
 
-The page announces on **two** surfaces, split by grain, and the split is the reason both exist.
+The page announces on **one** surface: every outcome and every failure above is a toast
+([§54](../design-system/decisions.md)), floating over the page rather than sitting in its flow.
+An outcome — a status moved, an interview rescheduled or called off, an email copied — is untyped;
+a failure paints `error` and takes `role="alert"`, because a refusal rendered in a success green
+would be a message contradicting its own words. Three rows above are not announcements and are
+drawn in place: the two length errors are the field's own error slot under its `TextArea`, and
+"No criteria recorded yet." is the criteria section's empty state. The criteria picker's two
+notes — a refused assessment's reason and "Already assessed" — are the picker's own field-level
+messages beside the control, not announcements either ([04 design](04-candidate-card.design.md#the-announcement-surface)).
 
-The banner under `PageHeader` reports what happened to an **application** — a status moved, an
-interview rescheduled or called off. It sits in flow, above the sections it is about, which is
-where [§24](../design-system/decisions.md) put it. A failure there paints `error` and takes
-`role="alert"`; an outcome paints `success` and takes `role="status"` — a refusal rendered in the
-success green would be a banner contradicting its own words.
+It used to be two surfaces, split by grain, with the application-grain outcomes in a banner under
+`PageHeader`. That banner pushed every section below it down by its own height, and the section
+below it holds the interview notes a member is typing into during a call — which is the one
+thing this screen exists not to do. A toast changes nothing in the body, whatever it reports
+([ADR 0010](../../docs/adr/0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md)).
 
-A **toast** reports what the header's own controls did: the copy, and a delete that was refused.
-Neither changes anything in the body, and pushing every section down by a banner's height to say
-"Email copied" would move the interview notes under a hand that is typing into them — which is the
-one thing this screen exists not to do.
+A failure that can be retried carries its retry: a failed save's toast holds `Retry` and stands
+until it, the ×, or another route to a saved field takes it down (§37); a failed load's toast
+leaves, and the page shows the failure in its own place with `Retry` inside it, so the way back
+does not leave with the toast.
 
 ## UI Notes
 
@@ -433,8 +446,17 @@ one thing this screen exists not to do.
     `card-conclusion-input`, `card-conclusion-save`, `card-conclusion-saved-at`
   - `card-criteria-list`, `card-criteria-add`, `card-criteria-autocomplete`,
     `card-criterion-{criterionId}`, `card-criterion-value-{criterionId}`,
-    `card-criterion-remove-{criterionId}`, `card-criteria-empty`
+    `card-criterion-remove-{criterionId}`, `card-criteria-empty`, `card-criteria-note`,
+    `card-criteria-error`
   - `card-save-error`, `card-save-retry`, `card-loading`
+  - `card-load-error`, `card-load-retry`, `toast-card-load-failed`, `candidate-no-applications`
+  - `card-status-toast`, `toast-interview-rescheduled`, `toast-interview-cancelled`
+- **Covered elsewhere.** The failed load — `toast-card-load-failed`, `card-load-error`,
+  `card-load-retry` — and the loader standing on the page's own ground (`card-loading`) are the
+  same mechanism every hiring screen draws from the same component, and it is tested once, on
+  the cheapest page that exercises it: [03 TC-H03-E2E-11](03-candidate-database.md). This spec
+  adds no case for it. `candidate-no-applications` is not reachable by any path this product
+  takes — a booking is what creates a candidate — and has no case either.
 
 ## Out of Scope
 
@@ -604,8 +626,8 @@ one thing this screen exists not to do.
   1. Type into Conclusion and wait for the autosave.
   2. Restore the endpoint and press Retry.
 - **Expected Result:**
-  1. An error with a retry appears; the typed text is still in the editor.
-  2. After the retry the indicator shows a successful save.
+  1. An error toast with a retry appears and stands; the typed text is still in the editor, which keeps focus, and nothing under the field is drawn.
+  2. After the retry the toast is gone and the indicator shows a successful save.
 - **Selectors:** `card-conclusion-input`, `card-save-error`, `card-save-retry`, `card-conclusion-saved-at`.
 
 ### TC-H04-E2E-05: The CV downloads through the authenticated endpoint
@@ -675,3 +697,15 @@ one thing this screen exists not to do.
 - **Expected Result:**
   1. The clipboard holds the address, a toast says `Email copied`, and nothing on the page moves — no section shifts, and focus stays where it was.
 - **Selectors:** `candidate-email`, `candidate-email-copy`, `toast-email-copied`.
+
+### TC-H04-E2E-11: A status change confirms with a toast and prompts for the conclusion
+- **Level:** E2E
+- **Preconditions:** logged in as `admin`; one candidate reached through the invite's deep link.
+- **Steps:**
+  1. Change the application's status to `Didn't pass`.
+  2. Reload.
+- **Expected Result:**
+  1. A toast reads "Moved to Didn't pass"; nothing in the body moves, and focus lands on the conclusion field — prompted, never required.
+  2. The member is still on the card, and the status survives the reload.
+- **Selectors:** `application-status-select-{applicationId}`, `application-status-option-{applicationId}-{status}`, `card-status-toast`, `card-conclusion-input`.
+- **Covered elsewhere:** the reschedule toast on this route, `toast-interview-rescheduled`, is asserted by [07 TC-H07-E2E-03](07-manage-booking.md); the cancel toast, `toast-interview-cancelled`, by the team-cancel case beside it in the same suite (`e2e/tests/team-scheduling.spec.ts`), which 07 has not numbered.

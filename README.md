@@ -381,9 +381,11 @@ opens the card with that application's section expanded, signing the visitor in 
 arrive without a session and returning them to it afterwards. An `admin` or `manager` also reaches
 a card through the candidate database, and a `user` interviewer through My interviews — the invite
 is no longer their only route, which is exactly why that screen exists. The E2E suite still reads
-the link out of `GET /api/test/calendar/latest` rather than assembling it, the same way it reads a
-reset link out of the mail sink. Both endpoints answer only behind their stand-in implementation
-and never in production.
+the link out of `GET /api/test/calendar/latest?mailbox=` rather than assembling it, the same way it
+reads a reset link out of the mail sink — and, like the sink's `?email=`, the mailbox is the
+interviewer's own: the fake calendar is one process shared by every worker of a run, so the latest
+event without it is whichever test booked last ([ADR 0012](docs/adr/0012-a-test-reads-its-own-interviewers-calendar.md)).
+Both endpoints answer only behind their stand-in implementation and never in production.
 
 **Interview notes and the conclusion autosave, and a failure stops the loop.** Both are plain text,
 both are shared fields with last-write-wins, and both write about two seconds after typing stops.

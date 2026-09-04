@@ -125,6 +125,45 @@ test.describe.configure({ timeout: 90_000 });
 test.describe('organization/03 — Holidays', () => {
   // TC-03-E2E-01 — the add journey: modal → toast → the row under its month band.
   // Earns E2E: a multi-control modal, the month grouping, and the row landing in it.
+  /**
+   * TC-03-E2E-06 — opening the country select does not make the modal scroll.
+   *
+   * BUG-007: the select's list used to drop into the dialog's own scroll box, so the panel
+   * grew a scrollbar and clipped the list at its bottom edge. The list has to float over the
+   * dialog: the panel's scrollable height must not change when the list opens.
+   */
+  test('opening the country select does not scroll or clip the modal', async ({
+    page,
+    request,
+  }) => {
+    const adminEmail = uniqueEmail('admin');
+    await signupOrg(request, { orgName: 'Acme Inc', email: adminEmail });
+    await signInUi(page, adminEmail);
+    await openHolidaysPage(page);
+
+    await page.getByTestId('holidays-empty-primary-cta').click();
+    const modal = page.getByTestId('holiday-modal');
+    await expect(modal).toBeVisible();
+
+    const scrollable = () =>
+      modal.evaluate((panel) => ({ scrollHeight: panel.scrollHeight, clientHeight: panel.clientHeight }));
+    const before = await scrollable();
+    expect(before.scrollHeight, 'the closed dialog fits its own box').toBeLessThanOrEqual(before.clientHeight);
+
+    await page.getByTestId('holiday-country-select').click();
+    const list = page.getByRole('listbox', { name: 'Country' });
+    await expect(list).toBeVisible();
+
+    // The list floats over the dialog rather than extending it: nothing to scroll to.
+    const after = await scrollable();
+    expect(after.scrollHeight, 'the open list adds nothing to the dialog scroll box').toBeLessThanOrEqual(after.clientHeight);
+    // And the whole list is on screen, not cut off at the panel's edge.
+    const box = (await list.boundingBox())!;
+    const viewport = page.viewportSize()!;
+    expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+    await expect(page.getByRole('option', { name: 'Afghanistan' })).toBeVisible();
+  });
+
   test('admin adds a global holiday and sees it under its month band', async ({
     page,
     request,

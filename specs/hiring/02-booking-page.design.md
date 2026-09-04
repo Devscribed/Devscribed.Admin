@@ -200,8 +200,9 @@ Validation messages are **not** here — they belong to
 | Not found | This link doesn't lead anywhere. |
 
 **Sentence case throughout, and no uppercase anywhere on this screen.** the earlier design set every
-micro-label in `UPPERCASE` with `--ls-wider`; the system's content rule spends its one uppercase
-treatment on `PageTabs`, which this page does not use. The labels are now the field labels the system
+micro-label in `UPPERCASE` with `--ls-wider`; the system's content rule spends its uppercase on
+`PageTabs` and on a panel `Card`'s own micro-label `title` ([§66](../design-system/decisions.md)),
+neither of which this page draws by hand. The labels are now the field labels the system
 draws — 12px, `--text-secondary`, sentence case.
 
 Voice is otherwise unchanged: no exclamation marks, no emoji, and errors stay terse — the system prefixes

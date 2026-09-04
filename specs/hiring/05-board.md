@@ -294,10 +294,17 @@ Errors:
     `board-card-when-{applicationId}`,
     `board-card-cancelled-{applicationId}`, `board-card-no-conclusion-{applicationId}`
   - `board-empty-state`, `board-loading`, `board-load-error`, `board-load-retry`,
-    `board-live-region`, `toast-move-failed`, `toast-board-stale`
-- A failed **move** is a toast; a board that could not be **read** keeps its place in the flow with
-  a retry. The first is an event that is over, the second is a state that is still true, and a
-  message that timed out over an empty region would leave nothing saying why it is empty.
+    `toast-board-load-failed`, `board-live-region`, `toast-move-failed`, `toast-board-stale`
+- A failed **move** is a toast. A board that could not be **read** is a toast too, and the region
+  the board would have filled shows an empty state with a retry inside it. The first is an event
+  that is over; the second is a state that is still true, and a message that timed out over an
+  empty region would leave nothing saying why it is empty — so what stays is the state, not the
+  announcement.
+- The board's empty state and its first load stand on the region's own ground, never inside a card.
+- **Covered elsewhere.** The failed load — `toast-board-load-failed`, `board-load-error`,
+  `board-load-retry` — is the mechanism every hiring screen draws from the same component, tested
+  once on the cheapest page that exercises it: [03 TC-H03-E2E-11](03-candidate-database.md). This
+  spec adds no case for it.
 
 ## Out of Scope
 

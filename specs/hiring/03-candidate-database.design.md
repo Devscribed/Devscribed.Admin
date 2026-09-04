@@ -40,9 +40,8 @@ who, how to reach them, what for, when, where they got to, and what can be done 
   Candidates                                                          ← PageHeader
   Times in Europe/Minsk
   ──────────────────────────────────────────────────────────────────────────
-  ALL (128)  ASSIGNED TO ME (4)   [🔍 Search name or email…] [Filters (3)]  ← TableToolbar
+  ALL (12)  ASSIGNED TO ME (4)    [🔍 Search name or email…] [Filters (3)]  ← TableToolbar
   ═════════
-  12 of 128 candidates
   ┌────────────────────────────────────────────────────────────────────────┐
   │ Name           │ Email        │ Vacancy      │ Interview date│Status│ ⋮ │
   │ Jane Doe       │jane@examp.com│ Senior React │  26 Aug 2026  │Sched.│ ⋮ │
@@ -51,9 +50,9 @@ who, how to reach them, what for, when, where they got to, and what can be done 
                               ‹  1  2  3  ›                                  ← Pagination
 ```
 
-- The row above the table is the system's own `TableToolbar` — the geometry Projects, Clients, Members,
-  ToDo, Policies and Holidays all share: the strip on the left, a 250px search and the actions on
-  the right, 20px gaps, 20px down to the table. It gained nothing but the ability to be *addressed*
+- The row above the table is the system's own `TableToolbar` — the geometry the vacancies list and
+  the libraries draw too: the strip on the left, a 250px search and the actions on the right, 20px
+  gaps, 20px down to the table. It gained nothing but the ability to be *addressed*
   ([§52](../design-system/decisions.md)); every number in it is the system's.
 - `Filters` is a `Button variant="primary"`, and it carries its own count — `Filters (3)`. The
   count is what buys the hiding: a filter nobody can see is a filter nobody can undo. The search is
@@ -61,24 +60,33 @@ who, how to reach them, what for, when, where they got to, and what can be done 
 - **The filter `Card` is gone**, and with it the last of the four `--bg-panel-2` uses in the token
   map. It was `--surface-sunken` with `clip={false}` — the surface
   [§12](../design-system/decisions.md) was written for and the only thing that ever exercised
-  it. The prop stays on `Card`; the argument for it is unchanged, and the next list that opens a
-  control inside a card will need it. Nothing on this screen does any more.
-- **There is no count line.** A later pass removed it. Each scope tab already carries its own
-  count, computed under the filters that are applied — `All (12)` beside `Assigned to me (4)` — so
-  a line under the strip repeating the active tab's number was the same fact twice, and the one it
-  repeated is the one already in the reader's eye. What survives is the half a tab cannot show:
-  while a request is in flight the row holds a `Preloader` and the word `Counting…`, announced
-  politely, so a filter change is acknowledged before its rows arrive. It keeps
-  `candidates-count`, because what that id names is the announcement, not the number.
+  it. The prop stays on `Card` for a `Popover` drawn with its portal off; a `Select` no longer
+  needs it anywhere, because its list is a portal now ([§95](../design-system/decisions.md),
+  [BUG-007](../bugs/BUG-007-select-list-scrolls-the-modal-it-opens-in.md)). Nothing on this
+  screen opens a control inside a card any more.
+- **There is no count line, and nothing stands in its place.** A later pass removed the line.
+  Each scope tab already carries its own count, computed under the filters that are applied —
+  `All (12)` beside `Assigned to me (4)` — so a line under the strip repeating the active tab's
+  number was the same fact twice, and the one it repeated is the one already in the reader's eye.
+  For a while a `Preloader` and the word `Counting…` appeared in the line's place while a request
+  was in flight; that row is gone too ([ADR 0010](../../docs/adr/0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md)).
+  It appeared above the table and moved it, on every filter change, to say what the dimmed rows
+  already say — a request is in flight — and the tab counts move when the answer lands. There is
+  no `candidates-count` any more: nothing on the screen is that announcement.
   `Clear all` left with the filters: it is `Clear filters` now, at the bottom of the drawer, beside
   the controls it clears.
 - The table is edge to edge inside a `Card padded={false}`, the same surface the vacancies list
   uses ([01](01-vacancies.design.md)): the card gives the table its border and rounds its first and
-  last rows, and the loader sits inside it rather than replacing it. **An empty state does not.**
-  The card is the *table's* — drawn around a sentence it is a bordered white slab the height of the
-  viewport with one line of grey text near the top — so when there are no rows the `EmptyState`
-  stands on the page's own ground, and the way out of it (`Clear filters`, 160px, inside the state
-  rather than under it) is part of what the state says ([§65](../design-system/decisions.md)). The page strip sits **outside** it, under the card — it is a control about
+  last rows, **and it is drawn only around rows.** The card is the *table's* — drawn around a
+  sentence it is a bordered white slab the height of the viewport with one line of grey text near
+  the top, and drawn around three dots it is the same slab around nothing — so the first load's
+  `Preloader` and every empty state stand on the page's own ground, and the way out of an empty
+  state is part of what the state says ([§65](../design-system/decisions.md)): a `Button` inside
+  it, 160px, reading `Clear filters` — `candidates-clear-all`, which is **not** the drawer's
+  `Clear filters` (§09.50). It empties the filters **and** the search, because either can be what
+  matched nobody, and a way out that left the search standing would change nothing. This is the shape every hiring list takes
+  ([ADR 0010](../../docs/adr/0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md)).
+  The page strip sits **outside** the card, under it — it is a control about
   the list rather than a part of it, and the last row keeps its own border either way.
 
 ## The columns
@@ -126,7 +134,8 @@ who, how to reach them, what for, when, where they got to, and what can be done 
   `--color-blue` with a white glyph while open. Nothing about it is drawn here.
 - It is named for the person — `Actions for Jane Doe` — because twenty-five rows draw one glyph.
 - `Cancel interview` and `Delete candidate` take `Popover`'s `danger` row, which is `--status-error`
-  ink. This is the one place in the app that opt-in is used; no other menu in the app has a destructive row.
+  ink — the same opt-in every destructive menu row in the app takes, the vacancies list's
+  `Delete vacancy` and the members list's included.
 - The two destructive rows are **not** adjacent by accident. `View candidate` sits between them
   because the menu is grouped by what an item is *about* — three interview actions, then the two
   about the person — and a `Delete candidate` immediately under `Cancel interview` would put the
@@ -137,7 +146,7 @@ who, how to reach them, what for, when, where they got to, and what can be done 
   would run off the viewport.
 - The interview actions are **absent** on a cancelled row rather than disabled — there is nothing
   there to enable — and `Reschedule` and `Cancel` are absent on a **past** one for the same reason
-  ([03 §10.54](03-candidate-database.md)). `View in calendar` stays either way.
+  ([03 §10.54](03-candidate-database.md)). `View in calendar` stays on an interview that is ahead and on one that is past, and goes with the other two on a cancelled row.
 - `Delete candidate` is **absent** for a caller who may not manage hiring, on the same principle
   and for a different reason: it is not that there is nothing to delete, it is that this is not
   their decision ([03 §11.60](03-candidate-database.md)). A disabled row would advertise an
@@ -187,7 +196,7 @@ who, how to reach them, what for, when, where they got to, and what can be done 
 - `Show results` is `Button variant="primary"`; `Clear filters` sits under it, and only while
   something is applied. Stacked rather than side by side, so the one that undoes work is never
   adjacent to the one that merely dismisses.
-- Nothing here applies anything. Every control fires on change, the count under the toolbar moves
+- Nothing here applies anything. Every control fires on change, the tab counts in the toolbar move
   while the drawer is still open, and `Show results` just gets the panel out of the way.
 
 ## The criteria filter chip
@@ -242,8 +251,7 @@ who, how to reach them, what for, when, where they got to, and what can be done 
 | Value | `Select` \| `TextInput` | by type | `criteria-filter-value-{index}` |
 | Archived marker | `Badge` | `status="inactive"`, `outlined` | `criteria-filter-archived-{index}` |
 | Show results / Clear filters | `Button` | `variant="primary"` / default | `candidates-filters-apply` · `candidates-clear-filters` |
-| Counting indicator | native `<p>` + `Preloader size={8}` — **only while a request is in flight** | `aria-live="polite"` | `candidates-count` |
-| List | `Card padded={false}` > `Table` | `columns`, `rows`, **`busy`** | `candidates-list` |
+| List | `Card padded={false}` > `Table` — **drawn only around rows** | `columns`, `rows`, **`busy`** | `candidates-list` |
 | Assessed-criteria labels on a row | **`Badge status="neutral" size="s"`** ([§59](../design-system/decisions.md)), name in `--text-secondary` and value in `--text-primary` | — | `candidate-criterion-{id}-{criterionId}` |
 | Vacancy + interviewer | native two-line cell | — | `candidate-vacancy-{id}` · `candidate-interviewer-{id}` |
 | Interview date | native two-line cell | `align: 'center'` (§18) | `candidate-latest-{id}` |
@@ -253,8 +261,9 @@ who, how to reach them, what for, when, where they got to, and what can be done 
 | **Pagination** | `Pagination` | `page`, `pageCount`, `onChange`, `pageTestId` (§53) | `candidates-pagination` · `candidates-page-{n}` |
 | **Toast** | `ToastHost` > `Toast` | `tone`, `onDismiss` (§54) | `toast-calendar-{id}` · `toast-interview-cancelled` |
 | Cancel dialog | `Modal` + `FormActions` | the candidate card's own component | `application-cancel-dialog-{id}` |
-| Loading | `Preloader` | — | `candidates-loading` |
-| Empty / no results | `EmptyState` | — | `candidates-empty-state` · `candidates-no-results` |
+| Loading | `Preloader` — centred on the page's own ground, no card | `aria-hidden`, a polite region beside it | `candidates-loading` |
+| Empty / no results | `EmptyState` — on the page's own ground; the no-results state holds a `Button` that empties the filters and the search | — | `candidates-empty-state` · `candidates-no-results` · `candidates-clear-all` |
+| Load failure | `Toast tone="error"` in `ToastHost`, and `EmptyState` + retry `Button` in the table's place | the toast leaves; the state stays with the way back inside it (§65) | `toast-candidates-load-failed` · `candidates-error` · `candidates-retry` |
 
 ## Status badges
 
@@ -328,9 +337,8 @@ card and the candidate card already use for the same mark.
 | Operators · number | is · is not · at least · at most |
 | Operators · boolean | is yes · is no |
 | Operators · text | contains · is |
-| Count, unfiltered | {n} candidates |
-| Count, filtered | {matched} of {total} candidates |
 | Clear filters | Clear filters |
+| Load failure retry | Try again |
 | Column headers | Name · Email · Vacancy · Interview date · Status · Actions |
 | Assessed-criteria chip | {criterion}: {value} |
 | Application count | {n} applications |
@@ -355,8 +363,9 @@ Operator wording is deliberately plain English rather than `>=`. `at least B1` i
 interviewer would say; `English >= B1` is what a database would.
 
 Column headers and group labels are **sentence case**. the earlier design set them in uppercase; the system's
-`Table` header is 16px semibold as written, and its only uppercase treatment anywhere is
-`PageTabs`.
+`Table` header is 16px semibold as written, and its uppercase treatments are two — `PageTabs`,
+and a panel `Card`'s own micro-label `title` ([§66](../design-system/decisions.md)) — neither of
+which a screen paints by hand.
 
 ## Pagination
 
@@ -407,39 +416,52 @@ This is the first screen with more than one thing to confirm, and it is where th
 
 `InfoBanner` is a static panel inside the content: no enter, no exit, no queue, no notion of time.
 One confirmation could live in the flow — [§24](../design-system/decisions.md) put the
-candidate card's under its `PageHeader` and it is still there. Three cannot: a panel that pushed
-the table down on every row action would move the list under the hand that is working it.
+candidate card's under its `PageHeader` for a while, and it has since moved to a toast as well
+([04 design](04-candidate-card.design.md#the-announcement-surface)). Three never could: a panel
+that pushed the table down on every row action would move the list under the hand that is
+working it.
 
 So `Toast` + `ToastHost` are built here ([§54](../design-system/decisions.md)), and Phases 6, 7 and 9
-each add more on top of them.
+each add more on top of them. **The queue is the application's one provider** in the root layout
+(`apps/web/src/toast.tsx`), shared with every screen in the product; no hiring screen mounts a
+host of its own, so there is one column in the corner whichever screen raised the message
+([ADR 0011](../../docs/adr/0011-one-toast-queue-and-it-stacks.md)).
 
-`{name} deleted` is the first of those, and it is also the only toast in the product raised by a
-screen other than the one the action was taken on: the candidate card cannot report its own delete,
+`{name} deleted` is the first of those, and it is a toast raised by a screen other than the one
+the action was taken on — as `Vacancy created` is on the vacancy screen — because it has to be:
+the candidate card cannot report its own delete,
 because it `404`s the instant the flag is set. The name is handed across that one navigation and
 **taken** rather than read, so it announces itself once and a reload of the list says nothing
 ([03 §11.65](03-candidate-database.md)).
 
-- Bottom-right, 25px in, 360px wide, stacked in a column with the oldest at the top. **They stack
-  rather than replace**: two actions taken inside five seconds are two things that happened.
-- The paint is `InfoBanner`'s, unchanged — the same status line over the same 10%-of-status fill,
-  the same mark, the same `--font-size-xs` in `--text-tertiary`, the same `IconButton` dismiss.
-- 0.3s ease-in-out in and out, which is `--duration-hover` and `--ease-standard` — every other
-  motion in the system.
-- They withdraw themselves after 5s, and the timer **holds while the pointer is over one or focus
-  is inside it**: a message somebody is reading is not taken away mid-sentence.
-- `ToastHost` is the `role="status"` `aria-live="polite"` region, not each message: a nested pair
-  would announce one arrival twice.
+- Top-right, `1em` in, a 320px column, stacked with the oldest at the top — the host's own
+  geometry ([§54](../design-system/decisions.md)). **They stack rather than replace**, even under
+  the same test id: two actions taken inside a few seconds are two things that happened. This
+  is the whole product's rule now, not this screen's ([ADR 0011](../../docs/adr/0011-one-toast-queue-and-it-stacks.md)),
+  and its cost is the tests': a case that repeats an action inside one clock locates the plate
+  it means rather than the id alone.
+- The paint is the plate's own and deliberately not the app's tokens ([§54](../design-system/decisions.md)):
+  an untyped message is white with no mark, a typed one takes its status fill, white ink and a
+  mark, and every plate carries a × as well as dismissing on click.
+- A bounce in from the right over 0.7s, and no exit: the host drops an entry the moment it is
+  dismissed, so an animation on the way out would delay the next one on the way in.
+- They withdraw themselves after **3400ms**, a reading speed, and the timer **holds while the
+  pointer is over the column**: a message somebody is reading is not taken away mid-sentence.
+  One entry may override the clock — `autoClose: 0` leaves it standing, which is what a failure
+  that carries its own retry needs ([04 design](04-candidate-card.design.md#states)).
+- Each plate carries `role="alert"` on its message; the host is a labelled column, not a live
+  region of its own, so an arrival is announced once.
 
 ## Interactions
 
 - **Search** debounces 300 ms then refetches, carrying the current filters. The count updates with
   the result, never optimistically.
 - **Every filter change refetches immediately** — filters are discrete choices, unlike typing.
-- **The count is the feedback.** No spinner replaces the table on a refilter; the rows stay,
-  `Table busy` dims them and sets `aria-busy`, and the count shows a `Preloader` in place of the
-  number, so the list does not collapse and reflow under the reader. This is also what makes the
-  drawer work: the panel covers a strip of the list, not the count, so a filter's effect is
-  legible without closing it.
+- **The dimmed rows are the feedback.** No spinner replaces the table on a refilter and nothing
+  appears above it; the rows stay, `Table busy` dims them and sets `aria-busy`, and the tab counts
+  move when the answer lands, so the list does not collapse, reflow or shift under the reader.
+  This is also what makes the drawer work: the panel covers a strip of the list, not the tab
+  strip, so a filter's effect is legible without closing it.
 - **The drawer opens on the button and closes four ways** — the button's own `Escape`, the scrim,
   the close cross and `Show results`. None of them is *Apply*; there is nothing to apply.
 - **Removing a chip** widens the result set in place.
@@ -452,8 +474,8 @@ because it `404`s the instant the flag is set. The name is handed across that on
   work — **except inside the actions menu**, which sits within the row by construction. The row
   asks whether the press landed in the menu rather than relying on containment, because the menu is
   a portal and is not a descendant of the anchor at all.
-- **A page change is a request like any other**: the rows dim, the count holds its number, and the
-  new page replaces the old one when it arrives.
+- **A page change is a request like any other**: the rows dim, the tab counts hold their numbers,
+  and the new page replaces the old one when it arrives.
 - **`View in calendar` raises a toast and does nothing else** — and the toast says so, rather than
   describing a navigation this product cannot make. The interview's entry is the interviewer's own
   mailbox event and there is no deep link into one to offer ([03 §10.55](03-candidate-database.md)).
@@ -464,7 +486,7 @@ My interviews is not a screen any more — it is a `PageTabs` strip above this l
 the old screen drew has an answer here.
 
 ```
-  ALL (128)  ASSIGNED TO ME (4)   [🔍 Search name or email…] [Filters (3)]
+  ALL (12)  ASSIGNED TO ME (4)    [🔍 Search name or email…] [Filters (3)]
   ═════════
 ```
 
@@ -581,16 +603,18 @@ slot for one, so the call stands on its own second reason.
 - **Cancel** holds a `TextArea` for the optional reason, with the character count in its
   **label row** ([§33](../design-system/decisions.md)) rather than under the field, so the count
   changing never moves the field beneath it.
-- **On the card** they announce their outcome with an `InfoBanner` —
-  [§24](../design-system/decisions.md), in the slot Phase 3 fixed: directly under `PageHeader`,
-  above the page body. `tone="success"` becomes `variant="success"`
-  ([§7](../design-system/decisions.md)).
-- **On this list the outcome is a real toast** ([§54](../design-system/decisions.md)), and the
-  difference is the surface rather than an inconsistency: the card reports one outcome about the
-  one interview filling the screen, and the list reports an outcome about a row that is still
-  there — a banner in the flow would push the table down under the hand working it.
-- The `toast-interview-rescheduled` and `toast-interview-cancelled` test ids are kept in both
+- **On both screens the outcome is a real toast** ([§54](../design-system/decisions.md)). The
+  card's used to be an `InfoBanner` in the slot under `PageHeader`; it is a toast now for the
+  reason this list's always was — a banner in the flow pushes the content down under the hand
+  working it, and on the card that hand is typing interview notes
+  ([04 design](04-candidate-card.design.md#the-announcement-surface)).
+- The `toast-interview-rescheduled` and `toast-interview-cancelled` test ids are the same in both
   places, because they name the announcement rather than the component that draws it.
+- **The reschedule dialog's own failures stay inside it.** Its calendar and slot list report an
+  availability failure as the control specs draw it — a warning banner with the retry beneath —
+  and its form-level server error sits at the top of the form: a picker inside a modal is the
+  dialog's own form, and the dialog is the exclusion
+  ([ADR 0010](../../docs/adr/0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md)).
 
 ## Responsive
 
@@ -620,9 +644,9 @@ scrolls horizontally.
 - Five kinds of filter no longer sit between the top of the page and the table at all — which is
   the accessibility argument for the drawer as much as the visual one. The labelled `<section>`
   that existed to let them be skipped is gone with them.
-- The count is `aria-live="polite"` — it is the primary feedback for a filter change and the one
-  thing that must be announced.
-- `Table busy` dims the body and sets `aria-busy` together, so the dimming is never the only signal.
+- Nothing is announced while a refilter is in flight. `Table busy` dims the body and sets
+  `aria-busy` together, so the dimming is never the only signal, and the tab counts — inside the
+  tabs' own labels — change when the answer lands.
 - The page strip is a named `<nav>`, its current page carries `aria-current="page"`, its arrows
   carry names because they are glyphs, and its `…` is `aria-hidden`.
 - The row's kebab is named for the person it belongs to, so twenty-five identical glyphs are

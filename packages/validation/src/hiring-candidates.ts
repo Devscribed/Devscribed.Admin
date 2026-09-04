@@ -43,8 +43,6 @@ export const CANDIDATE_MESSAGES = {
   empty: 'No candidates yet. Share a booking link to start.',
   /** Filters that match nobody. A different fact from an empty database, and never conflated. */
   noResults: 'No candidates match these filters',
-  /** Said where the count used to be, while a filter change is in flight (03 §05.20). */
-  counting: 'Counting…',
   /** Server-side only: the row is not submitted until it is complete, so nothing in the UI sends it. */
   invalidFilter: "That filter isn't valid for this criterion",
   loadFailed: "We couldn't load candidates. Try again.",

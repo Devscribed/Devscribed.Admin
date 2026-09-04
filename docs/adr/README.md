@@ -24,8 +24,11 @@ likely to be re-litigated.
 | [0009](0009-specs-are-frozen-and-the-newest-one-governs.md)            | Specs are frozen; the newest spec that speaks about a behaviour governs it, and states it in full | current                  |
 | [0009](0009-hiring-storage-and-calendar-are-read-as-given.md)          | Hiring's storage and calendar are read as given, in every environment                          | current                  |
 | [0010](0010-a-chain-of-dependent-specs-ships-one-link-at-a-time.md)    | A chain of dependent specs is refined and shipped one link at a time, in dependency order         | current                  |
+| [0010](0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md) | Hiring's page states stand on the page, and its alerts are toasts | current |
 | [0011](0011-the-board-is-indexed-by-spec-and-a-gate-is-a-commit.md)    | The board is indexed by spec, and every gate of a refine loop is a commit                         | current                  |
+| [0011](0011-one-toast-queue-and-it-stacks.md) | One toast queue for the whole app, and it stacks | current |
 | [0012](0012-a-refine-loop-converges-on-the-judge-and-repairs-by-subtraction.md) | A refine loop converges on the judge, runs the pre-implementer last, and stops when a repair grows the spec | current, amends 0008 |
+| [0012](0012-a-test-reads-its-own-interviewers-calendar.md) | A test reads its own interviewer's calendar, never the run's latest event | current |
 | [0013](0013-a-spec-is-admitted-by-a-judge-that-shards-its-reading.md)  | A spec is admitted by a judge that shards its reading, and the pipeline refuses one nothing admitted | current                  |
 | [0014](0014-a-document-earns-its-pipeline-by-its-weight.md)            | A document earns its pipeline by its weight: the config is keyed by track, validated before a run, with the gates on all three | current                  |
 | [0015](0015-one-core-agent-one-lead-and-the-rules-in-one-place.md)     | One core agent and one lead per family, with the rules every judge obeys written once outside them | current, renames 0002/0004/0008/0012/0013 |

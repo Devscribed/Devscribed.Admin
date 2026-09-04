@@ -357,8 +357,13 @@ reader.
   - `criterion-dialog`, `criterion-name-input`, `criterion-type-{type}`,
     `criterion-value-input-{index}`, `criterion-value-add`, `criterion-value-remove-{index}`,
     `criterion-reorder-confirm`, `criterion-submit-button`
-  - `library-error-banner`, `libraries-retry`, `toast-library-created`,
+  - `libraries-error`, `libraries-retry`, `toast-libraries-load-failed`, `toast-library-created`,
     `toast-criteria-archived`, `toast-criteria-restored`, `toast-library-error`
+- The first load, an empty library, an empty search and a failed load all stand on the page's own
+  ground; the list's card is drawn only around rows, as the candidate database's is
+  ([03 §05.23](03-candidate-database.md)). A failed load is announced by a toast, and the retry
+  stays on the page after the toast has gone. Both are the mechanism every hiring screen shares,
+  tested once in [03 TC-H03-E2E-11](03-candidate-database.md); this spec adds no case for them.
 
 ## Out of Scope
 

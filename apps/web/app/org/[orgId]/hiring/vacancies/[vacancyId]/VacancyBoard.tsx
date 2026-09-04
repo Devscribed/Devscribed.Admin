@@ -13,10 +13,11 @@ import {
   formatShortWhen,
   type ApplicationStatus,
 } from '@devscribed/validation';
-import { BoardCard, BoardColumn, Button, EmptyState, InfoBanner, PageTabs, Preloader } from '@devscribed/ds';
+import { BoardCard, BoardColumn, EmptyState, PageTabs, Preloader } from '@devscribed/ds';
 import type { Board, BoardCardData } from '@/hiring/types';
+import { LoadFailed } from '@/hiring/LoadFailed';
 import { useMediaQuery } from '@/hiring/useMediaQuery';
-import type { QueuedToast } from '@/hiring/useToasts';
+import type { QueuedToast } from '@/toast';
 import { columnWithout, useBoardDrag, withMove, type Placement } from './useBoardDrag';
 
 /** Below this the columns become a tab strip and drag is not attempted at all. */
@@ -68,7 +69,12 @@ export function VacancyBoard({
   const board = state.status === 'ready' ? state.board : null;
   const { drag, pickUp, aimAt, drop, nudge, placementFor, announcement } = useBoardDrag(board);
 
-  /** The card focus returns to once a move has settled, so a keyboard drag keeps its place. */
+  /**
+   * The card focus returns to on every board a move draws — the optimistic one, a revert,
+   * and the one the server answers with — so a keyboard drag keeps its place through the
+   * whole of a move rather than only its first frame. A focused node that a redraw
+   * re-parents or re-orders is blurred, and nothing else puts it back.
+   */
   const refocus = useRef<string | null>(null);
   /** Guards the deferred pick-up below against a drag that is already over. */
   const dragEnded = useRef(false);
@@ -138,11 +144,13 @@ export function VacancyBoard({
 
   useEffect(() => {
     if (!refocus.current || state.status !== 'ready') return;
-    const card = document.querySelector<HTMLElement>(
-      `[data-testid="board-card-${refocus.current}"]`,
-    );
-    refocus.current = null;
-    card?.focus();
+    // Never taken from a control outside the board: a member who has moved on has said
+    // where they are. Focus that a redraw dropped on the body is what this restores.
+    const active = document.activeElement;
+    if (active && active !== document.body && !active.closest('[data-testid="board"]')) return;
+    document
+      .querySelector<HTMLElement>(`[data-testid="board-card-${refocus.current}"]`)
+      ?.focus();
   }, [state]);
 
   const cardHref = useCallback(
@@ -231,18 +239,18 @@ export function VacancyBoard({
 
   if (state.status === 'error') {
     // A board that could not be read is not a move that failed, and must not borrow that
-    // sentence — nothing has been dragged yet. It is also the one message on this screen
-    // that is not transient: a toast that timed out would leave an empty region with
-    // nothing saying why, so this one keeps its place in the flow.
+    // sentence — nothing has been dragged yet. The screen that owns the fetch raised the
+    // toast; this is what stays in the region the board would have filled, with the way
+    // back inside it, so the toast's leaving does not leave an empty half-screen with
+    // nothing saying why.
     return (
-      <InfoBanner variant="error" role="alert" data-testid="board-load-error">
-        <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-          {MESSAGES.generic}
-          <Button onClick={() => void reload()} data-testid="board-load-retry">
-            {HIRING_MESSAGES.card.retry}
-          </Button>
-        </span>
-      </InfoBanner>
+      <LoadFailed
+        message={MESSAGES.generic}
+        retryLabel={HIRING_MESSAGES.card.retry}
+        onRetry={() => void reload()}
+        retryTestId="board-load-retry"
+        data-testid="board-load-error"
+      />
     );
   }
 

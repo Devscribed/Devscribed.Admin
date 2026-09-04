@@ -71,7 +71,7 @@ test.describe('Hiring — the team reschedules and cancels', () => {
       lastName: 'Lee',
       email: uniqueEmail('team-move-candidate'),
     });
-    const invite = await latestInviteLink(request);
+    const invite = await latestInviteLink(request, interviewer.email);
 
     await signIn(page, interviewer.email);
 
@@ -160,8 +160,8 @@ test.describe('Hiring — the team reschedules and cancels', () => {
       lastName: 'Doe',
       email: uniqueEmail('team-cancel-candidate'),
     });
-    const invite = await latestInviteLink(request);
-    const manage = await latestManageLink(request);
+    const invite = await latestInviteLink(request, org.email);
+    const manage = await latestManageLink(request, org.email);
 
     await signIn(page, org.email);
     await page.goto(invite.path);
@@ -237,7 +237,7 @@ test.describe('Hiring — the team reschedules and cancels', () => {
     await bookInterview(request, vacancy.publicSlug, {
       email: uniqueEmail('team-reason-candidate'),
     });
-    const invite = await latestInviteLink(request);
+    const invite = await latestInviteLink(request, org.email);
 
     await signIn(page, org.email);
     await page.goto(invite.path);

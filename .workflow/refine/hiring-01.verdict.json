@@ -1,0 +1,239 @@
+{
+  "status": "blocked",
+  "spec": "specs/hiring/01-vacancies.design.md",
+  "request": "Hiring UI bug fixes on the signed-in screens: remove the candidate database's \"Counting…\" preloader row; draw every page-load preloader and every empty state on the page's own ground rather than inside a card, as the candidate database's empty state already is; report every inline alert as a toast, with a failed load also drawing an empty state carrying the retry and a failed autosave's toast standing until dismissed. Dialog form-level errors and the public booking and manage pages are excluded.",
+  "read": {
+    "specs": [
+      "specs/hiring/01-vacancies.design.md",
+      "specs/hiring/01-vacancies.md",
+      "specs/hiring/README.md",
+      "specs/hiring/00-integrations.md",
+      "specs/hiring/03-candidate-database.design.md",
+      "specs/hiring/04-candidate-card.design.md",
+      "specs/hiring/05-board.design.md",
+      "specs/hiring/05-board.md",
+      "specs/hiring/06-libraries.design.md",
+      "specs/hiring/06-libraries.md",
+      "specs/hiring/07-manage-booking.design.md",
+      "specs/design-system/decisions.md",
+      "docs/adr/0010-hiring-page-states-stand-on-the-page-and-alerts-are-toasts.md",
+      "CLAUDE.md",
+      ".claude/skills/spec/references/checklist.md"
+    ],
+    "files": [
+      "apps/web/app/org/[orgId]/hiring/vacancies/page.tsx",
+      "apps/web/app/org/[orgId]/hiring/vacancies/[vacancyId]/page.tsx",
+      "apps/web/app/org/[orgId]/hiring/vacancies/[vacancyId]/VacancyBoard.tsx",
+      "apps/web/app/org/[orgId]/hiring/vacancies/VacancyDialog.tsx",
+      "apps/web/src/hiring/LoadFailed.tsx",
+      "apps/web/src/hiring/useToasts.ts",
+      "apps/web/src/hiring/StatusBadge.tsx",
+      "apps/web/src/layout/PageHeader.tsx",
+      "apps/web/src/layout/Sidebar.tsx",
+      "apps/web/app/globals.css",
+      "apps/web/app/org/[orgId]/projects/page.tsx",
+      "apps/web/app/org/[orgId]/clients/page.tsx",
+      "apps/web/app/org/[orgId]/requests/page.tsx",
+      "packages/ds/src/index.ts",
+      "packages/ds/src/components/feedback/Toast.tsx",
+      "packages/ds/src/components/feedback/EmptyState.tsx",
+      "packages/ds/src/components/feedback/Preloader.tsx",
+      "packages/ds/src/components/core/Badge.tsx",
+      "packages/ds/src/components/core/Card.tsx",
+      "packages/ds/src/components/overlays/Popover.tsx",
+      "packages/ds/src/components/appLayout/AppShell.tsx",
+      "packages/ds/src/components/navigation/PageTabs.tsx",
+      "packages/validation/src/hiring.ts",
+      "e2e/tests/hiring-vacancies.spec.ts"
+    ]
+  },
+  "sweeps": {
+    "currency": 80,
+    "contradiction": 45,
+    "consequence": 30,
+    "obligations": 97,
+    "scope": 8
+  },
+  "findings": [
+    {
+      "id": "R1",
+      "severity": "blocker",
+      "rule": "spec/unamended-consequence",
+      "file": "specs/hiring/01-vacancies.md",
+      "symbol": "Flows · Main flow: create a vacancy, step 5",
+      "line": 324,
+      "claim": "The create flow still announces with a banner and still promises a visible booking link, both of which this spec retires.",
+      "witness": {
+        "kind": "rule",
+        "detail": "01-vacancies.design.md:216 — 'Nothing on either screen is an `InfoBanner` any more except the dialogs' own form-level error.' and :206 — 'The vacancy screen raises `Toast`s.' 01-vacancies.md:324 still reads: '5. On success the dialog closes, the banner reads \"Vacancy created\", and the browser navigates to the new vacancy's detail page with the booking link visible.' The same pass renamed the five Error Messages rows from 'Banner — created' to 'Toast — created' (01-vacancies.md:469-473) and wrote 'Both screens announce with **toasts**' (01-vacancies.md:491), so the flow step is the one statement left asserting the opposite. Its second clause is refuted too: 01-vacancies.design.md:144-146 makes the link a button and 01-vacancies.md:675 says 'Nothing on the page prints the link (§08.28)'.",
+        "source": "specs/hiring/01-vacancies.design.md:216 against specs/hiring/01-vacancies.md:324"
+      },
+      "suggestedFix": "Amend 01-vacancies.md:324 to 'the toast reads \"Vacancy created\"' and drop 'with the booking link visible', or restate it as 'with the copy control on the header'."
+    },
+    {
+      "id": "R2",
+      "severity": "blocker",
+      "rule": "spec/stale-statement",
+      "file": "specs/hiring/01-vacancies.design.md",
+      "symbol": "Accessibility",
+      "line": 537,
+      "claim": "The Accessibility section says every announcement on these screens is polite and `role=\"status\"`; the component that now draws every one of them puts `role=\"alert\"` on each plate and the host is not a live region at all.",
+      "witness": {
+        "kind": "command",
+        "detail": "grep -n 'role=\"alert\"' packages/ds/src/components/feedback/Toast.tsx → '150:      <div role=\"alert\" style={{ … }}>' — every plate. grep -n 'aria-label={label}' → '231:      aria-label={label}' on the host, which carries no `role` and no `aria-live`. Against 01-vacancies.design.md:537 'Announcements are `role=\"status\"`, polite, and never steal focus.' and :525 'Toasts arrive in a polite live region and dismiss themselves'. Both were true of the `InfoBanner` slot (:175, 'Both are `role=\"status\"`, `aria-live=\"polite\"`'), which :216 has now removed — and this pass routes the two new load failures through the same host (:329, :331). The sibling specs amended in the same pass say the opposite in as many words: 03-candidate-database.design.md:439 'Each plate carries `role=\"alert\"` on its message; the host is a labelled column, not a live region of its own' and 04-candidate-card.design.md:528 'Every plate is `role=\"alert\"` today — the host offers no per-entry role'.",
+        "source": "packages/ds/src/components/feedback/Toast.tsx:150 against specs/hiring/01-vacancies.design.md:537"
+      },
+      "suggestedFix": "Restate both bullets as 03 and 04 now do — each plate is `role=\"alert\"`, the host is a labelled column rather than a live region, nothing takes focus — or record the divergence as a DS gap if polite announcement is the wanted behaviour."
+    },
+    {
+      "id": "R3",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/hiring/01-vacancies.design.md",
+      "symbol": "States · Status · open / closed",
+      "line": 427,
+      "claim": "The status pill is specified as a solid fill with white text in the States table and as outlined in the Component map; no implementation draws both.",
+      "witness": {
+        "kind": "rule",
+        "detail": "States (:427) 'Status · open | `Badge status=\"active\"` — solid `--status-success`, white text' and (:428) 'Status · closed | `Badge status=\"inactive\"` — solid `--status-error`, white text'. Component map (:326) 'Status pill | `Badge` | `status=\"active\"` open, `\"inactive\"` closed, **`outlined` for both**'. The two are mutually exclusive paints in the component itself: packages/ds/src/components/core/Badge.tsx:26-29 — solid is `{ backgroundColor: 'var(--status-success)', color: 'var(--text-on-accent)' }`, outlined is `{ border: … solid var(--status-success)', color: 'var(--status-success)' }`. The code sides with the map: apps/web/src/hiring/StatusBadge.tsx:31 passes `outlined`, and its own comment reads 'Outlined, both of them. A solid pill is the system's loudest paint, and neither of these is news.'",
+        "source": "specs/hiring/01-vacancies.design.md:427 against :326"
+      },
+      "suggestedFix": "Rewrite the two States rows as the outlined treatment (hue ink, hairline border), which is what the map, the component and the screen all say."
+    },
+    {
+      "id": "R4",
+      "severity": "blocker",
+      "rule": "spec/stale-statement",
+      "file": "specs/hiring/01-vacancies.design.md",
+      "symbol": "States · Link · copied",
+      "line": 434,
+      "claim": "The copied-link confirmation is specified as a success-toned toast; both screens raise an untyped one, which is the settled vocabulary for a confirmation.",
+      "witness": {
+        "kind": "command",
+        "detail": "grep -n 'linkCopied' on the two screens → apps/web/app/org/[orgId]/hiring/vacancies/page.tsx:219 and apps/web/app/org/[orgId]/hiring/vacancies/[vacancyId]/page.tsx:294, both inside `push({ message: HIRING_MESSAGES.toast.linkCopied, testId: 'toast-link-copied' })` with no `tone`. apps/web/src/hiring/useToasts.ts documents the default: 'Most of what this app confirms is **untyped** — `default`, the white message with no mark … The coloured types are kept for the case that earns one: a request that failed.' The sibling design specs amended in this pass use the same word: 04-candidate-card.design.md:331-332 'The email was copied | `Toast` | untyped' and 07-manage-booking.design.md:206 'Outcome | `ToastHost` > `Toast` … | untyped'. 01-vacancies.design.md:434 still reads 'Toast tone=\"success\"'.",
+        "source": "apps/web/app/org/[orgId]/hiring/vacancies/page.tsx:219 against specs/hiring/01-vacancies.design.md:434"
+      },
+      "suggestedFix": "Say untyped, and reserve `tone=\"error\"` for the failures this spec now names (the two load failures and the refused clipboard)."
+    },
+    {
+      "id": "R5",
+      "severity": "blocker",
+      "rule": "spec/stale-statement",
+      "file": "specs/hiring/01-vacancies.design.md",
+      "symbol": "Component map · Actions · vacancy screen",
+      "line": 345,
+      "claim": "The vacancy screen's kebab is given three different inventories — five rows in the Component map, three in the Copy table, four on the screen.",
+      "witness": {
+        "kind": "command",
+        "detail": "Component map (:345): 'Actions · vacancy screen | `Popover` | the same rows less `Open board`, which is the page it is on' — the six of :323 less one is five, and it keeps `Copy booking link`. Copy (:404): 'Menu items, vacancy screen | Edit vacancy · Close vacancy | Reopen vacancy · Delete vacancy' — three. The screen: sed -n '349,399p' apps/web/app/org/[orgId]/hiring/vacancies/[vacancyId]/page.tsx | grep 'key:' → `booking-page`, `edit`, `close`/`reopen`, `delete` — four, and `Copy booking link` is not among them because it is the header's primary `Button` (:346, and the same file at line 341-348). 01-vacancies.md:264 agrees with neither: '\"⋮\" holds \"Edit vacancy\", \"Close vacancy\" / \"Reopen vacancy\", and \"Delete vacancy\"'.",
+        "source": "specs/hiring/01-vacancies.design.md:345 against :404 and apps/web/app/org/[orgId]/hiring/vacancies/[vacancyId]/page.tsx:360-397"
+      },
+      "suggestedFix": "State the four rows once — Open booking page · Edit vacancy · Close/Reopen vacancy · Delete vacancy — in the map, in Copy and in 01-vacancies.md:264, and say that `Copy booking link` is the button rather than a row."
+    },
+    {
+      "id": "R6",
+      "severity": "blocker",
+      "rule": "spec/contradiction",
+      "file": "specs/hiring/01-vacancies.design.md",
+      "symbol": "Copy · Row menu items",
+      "line": 373,
+      "claim": "The list row's kebab holds six items in the Component map and in the prose, and four in the Copy table.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Component map (:323): 'Row actions | `Popover` | … — six rows: Open board · Copy booking link · Open booking page · Edit vacancy · Close/Reopen vacancy · Delete vacancy'; the prose at :281 depends on the same count — 'the slot exists for a row whose destination needs explaining, and none of these six do.' Copy (:373): 'Row menu items | Copy booking link · Edit vacancy · Close vacancy | Reopen vacancy · Delete vacancy' — `Open board` and `Open booking page` have no copy at all. The code draws six (apps/web/app/org/[orgId]/hiring/vacancies/page.tsx:234-303, keys `board`, `copy`, `booking-page`, `edit`, `close`/`reopen`, `delete`), so the Copy row is the statement that is wrong — but a Copy table that silently omits two of the rows it enumerates is a second answer to the same question.",
+        "source": "specs/hiring/01-vacancies.design.md:323 against :373"
+      },
+      "suggestedFix": "Add `Open board` and `Open booking page` to the Copy row so the two tables enumerate the same six."
+    },
+    {
+      "id": "R7",
+      "severity": "blocker",
+      "rule": "spec/stale-statement",
+      "file": "specs/hiring/01-vacancies.design.md",
+      "symbol": "The blocked action / Open booking page",
+      "line": 308,
+      "claim": "Two passages send the reader to 'the note on §n' in the decisions record; that document has no notes, and the §62 reasoning they point at survives nowhere.",
+      "witness": {
+        "kind": "command",
+        "detail": "grep -n '^#' specs/design-system/decisions.md → only '1:# Design system decisions', '20:## By component', '34:## Decisions'. grep -n 'clip|sliver|zero-width|overflow' specs/design-system/decisions.md returns §12, §37, §55 and §81 — none of them about `Popover`'s panel clipping §62's bubble; the §62 row itself (decisions.md:99) says only that the bubble is shown on hover and on focus and that the meaning stays in the tree. Commit 3e766ee states why: 'eighteen \"a note on §n\" sections … `decisions.md` keeps the 74 and drops the other two.' The two dangling pointers are 01-vacancies.design.md:261 'Full reasoning in the ledger's note on §22.' and :308 'See the decisions record's note on §62.'",
+        "source": "specs/design-system/decisions.md (no note sections) against specs/hiring/01-vacancies.design.md:261 and :308"
+      },
+      "suggestedFix": "Cite the decision rows themselves ([§22], [§62]) and, for §62, either fold the clipping account into that row or keep it here — it exists in no document now. 04-candidate-card.design.md:550 and 06-libraries.design.md:249 carry the same dead pointer."
+    },
+    {
+      "id": "R8",
+      "severity": "blocker",
+      "rule": "spec/stale-statement",
+      "file": "specs/hiring/01-vacancies.design.md",
+      "symbol": "Headings",
+      "line": 225,
+      "claim": "The spec asserts `PageTabs` is the design system's only uppercase treatment; `Card variant=\"panel\"` draws its title uppercase, and the sibling spec amended in this same pass says there are two.",
+      "witness": {
+        "kind": "command",
+        "detail": "grep -n \"textTransform: 'uppercase'\" packages/ds/src/components/core/Card.tsx → '86: lineHeight: var(--line-height-xs), textTransform: uppercase, color: var(--text-secondary),' — the branch taken when `variant === 'panel'` (Card.tsx:83), documented at Card.tsx:46 as 'A panel's title is the small-caps micro label that leads a section rather than headline-6'. 01-vacancies.design.md:225 reads '`SectionLabel` is gone (D4; the system captions nothing, and `PageTabs` is its only uppercase).' 04-candidate-card.design.md:239-241, rewritten in this pass, reads 'The system's uppercase treatments are two — `PageTabs`' labels and `Card variant=\"panel\"`'s own micro-label `title` ([§66])'.",
+        "source": "packages/ds/src/components/core/Card.tsx:86 against specs/hiring/01-vacancies.design.md:225"
+      },
+      "suggestedFix": "Say 'the system's two uppercase treatments are `PageTabs` and a panel `Card`'s title, and neither is a caption', matching 04."
+    },
+    {
+      "id": "R9",
+      "severity": "blocker",
+      "rule": "spec/unamended-consequence",
+      "file": "specs/hiring/01-vacancies.md",
+      "symbol": "Screens · New / Edit vacancy dialog",
+      "line": 299,
+      "claim": "The paired spec's dialog sketch draws a field order and a label casing this spec overrules, and the code follows this spec.",
+      "witness": {
+        "kind": "rule",
+        "detail": "01-vacancies.design.md:338 — 'New / Edit | `Modal` | … Field order **Title · Categories · Interviewer · Interview length · Description**', and :419 'Column headers and card titles move from the earlier design's uppercase micro-caps to the system's sentence case', with the Copy table giving the labels as 'Title', 'Interviewer', 'Interview length', 'Categories', 'Description' (:390-394). 01-vacancies.md:297-307 draws 'TITLE / INTERVIEWER / INTERVIEW LENGTH / CATEGORIES / DESCRIPTION' — interviewer and length above categories, all five in caps. The screen follows the design spec: apps/web/app/org/[orgId]/hiring/vacancies/VacancyDialog.tsx renders `vacancy-title-input` (276), `vacancy-categories-input` (297), `vacancy-interviewer-select` (318), `vacancy-duration-*` (338), `vacancy-description-input` (379).",
+        "source": "specs/hiring/01-vacancies.design.md:338 against specs/hiring/01-vacancies.md:299"
+      },
+      "suggestedFix": "Redraw the sketch in the design's order and sentence case, or mark it beside the diagram as superseded by the Component map row."
+    },
+    {
+      "id": "N1",
+      "severity": "note",
+      "rule": "spec/missing-artefact",
+      "file": "specs/hiring/01-vacancies.design.md",
+      "symbol": "Copy",
+      "line": 366,
+      "claim": "The two retry labels this change introduces are stated only in the States table and appear in no Copy row, though the README gives micro-labels to the design spec.",
+      "witness": {
+        "kind": "rule",
+        "detail": "States (:440) names them in passing — 'an `EmptyState` with a `Try again` (`Retry`, on the vacancy screen) inside'. The Copy table (:366-408) has a row for every other control's words, including 'Copy button', 'Description toggle' and 'No description', and none for these two, nor for either load-failure sentence. specs/hiring/README.md:158 — 'validation messages belong to the business spec; headings, placeholders, hints, and micro-labels belong to the design spec.' In the code the list's label is an inline literal (apps/web/app/org/[orgId]/hiring/vacancies/page.tsx:368, `retryLabel=\"Try again\"`) while the vacancy screen's comes from `HIRING_MESSAGES.card.retry`, so the two screens are already saying different words for the same act with nothing in the spec deciding it.",
+        "source": "specs/hiring/01-vacancies.design.md:440"
+      },
+      "suggestedFix": "Add Copy rows for the retry label on each screen, and decide whether they are one word or two."
+    },
+    {
+      "id": "N2",
+      "severity": "note",
+      "rule": "spec/ambiguous-requirement",
+      "file": "specs/hiring/01-vacancies.design.md",
+      "symbol": "States · Load failure",
+      "line": 440,
+      "claim": "'stands where the table or the screen would be after the toast has gone' reads as sequencing on one reading and as persistence on another.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "A 500 on `GET …/hiring/vacancies`. Reading A: the empty state is drawn immediately and outlives the toast — which is what the Component map says at :329 ('the toast leaves; the state stays with the way back inside it'), what ADR 0010 says ('A load failure says its sentence twice, once on the toast and once in the empty state'), and what the code does (page.tsx:360-372 renders `LoadFailed` on the same tick the toast is pushed). Reading B: the region stays blank for the host's 3400ms and the retry appears only once the plate has withdrawn. Both satisfy the sentence; only one is usable. 06-libraries.design.md:248 carries the same phrasing.",
+        "source": "specs/hiring/01-vacancies.design.md:440 against :329"
+      },
+      "suggestedFix": "'…is drawn with the toast and stays after it has gone.'"
+    },
+    {
+      "id": "N3",
+      "severity": "note",
+      "rule": "spec/missing-artefact",
+      "file": "specs/hiring/01-vacancies.design.md",
+      "symbol": "Component map",
+      "line": 216,
+      "claim": "The dialog's form-level error is now named three times as the one surviving `InfoBanner` on this surface, and it has no Component map row, no variant and no test id.",
+      "witness": {
+        "kind": "rule",
+        "detail": ":180 'The dialog's own error banner is the same component in the same role, at the top of the form.'; :216 'Nothing on either screen is an `InfoBanner` any more except the dialogs' own form-level error.'; :563 'the one banner left — the dialog's form-level error — reports a state'. The Component map (:314-348) has a row for every other part of the dialog including the footer, and none for it. The screen draws `<InfoBanner variant=\"error\" role=\"alert\" aria-live=\"polite\" data-testid=\"vacancy-dialog-error\">` (apps/web/app/org/[orgId]/hiring/vacancies/VacancyDialog.tsx:259); `grep -rn vacancy-dialog-error specs/ e2e/` returns nothing. The sibling spec states its equivalent — 06-libraries.design.md:192 'Dialog error | `InfoBanner` | `variant=\"error\"`, `role=\"alert\"` | `criterion-dialog-error`'.",
+        "source": "specs/hiring/01-vacancies.design.md:216 against apps/web/app/org/[orgId]/hiring/vacancies/VacancyDialog.tsx:259"
+      },
+      "suggestedFix": "Add the row, with `vacancy-dialog-error`, and put the id in 01-vacancies.md's Required list."
+    }
+  ]
+}

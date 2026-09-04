@@ -141,6 +141,8 @@ export const HIRING_MESSAGES = {
      * twelve vacancies that they have none would read as data loss.
      */
     emptyFiltered: 'No vacancies match these filters.',
+    /** The list's one whole-page failure, with the retry beside it. */
+    loadFailed: "We couldn't load vacancies. Try again.",
   },
   booking: {
     firstName: {

@@ -38,7 +38,7 @@ test.describe('Candidate card', () => {
       lastName: 'Doe',
       email: uniqueEmail('candidate'),
     });
-    return { org, invite: await latestInviteLink(request) };
+    return { org, invite: await latestInviteLink(request, org.email) };
   }
 
   /** TC-H04-E2E-01 — notes autosave, then survive a reload. */
@@ -103,9 +103,9 @@ test.describe('Candidate card', () => {
 
     // The same person, two vacancies: one candidate, two applications.
     await bookInterview(request, react.publicSlug, { email: candidate, slotIndex: 0 });
-    const older = await latestInviteLink(request);
+    const older = await latestInviteLink(request, org.email);
     await bookInterview(request, dotnet.publicSlug, { email: candidate, slotIndex: 1 });
-    const newer = await latestInviteLink(request);
+    const newer = await latestInviteLink(request, org.email);
 
     expect(newer.candidateId).toBe(older.candidateId);
 
@@ -188,6 +188,7 @@ test.describe('Candidate card', () => {
     expect(Buffer.concat(chunks).equals(CV_FILE.buffer)).toBe(true);
   });
 
+  /** TC-H04-E2E-11 — a status change confirms with a toast and prompts for the conclusion. */
   test('moves the application on a status change and prompts for a conclusion', async ({
     page,
     request,
@@ -356,7 +357,7 @@ test.describe('Candidate card', () => {
       lastName: 'Fisher',
       email: uniqueEmail('tom'),
     });
-    const invite = await latestInviteLink(request);
+    const invite = await latestInviteLink(request, ines.email);
 
     await signIn(page, ines.email);
     await page.goto(invite.path);
@@ -447,7 +448,7 @@ test.describe('Candidate card', () => {
       lastName: 'Doe',
       email: uniqueEmail('jane'),
     });
-    const invite = await latestInviteLink(request);
+    const invite = await latestInviteLink(request, org.email);
     const detail = `/org/${org.orgId}/hiring/vacancies/${vacancy.id}`;
 
     await signIn(page, org.email);

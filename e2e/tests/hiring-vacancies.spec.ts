@@ -30,6 +30,8 @@ test.describe('Vacancies', () => {
     await clickHiringNav(page, 'nav-vacancies');
     await page.waitForURL('**/hiring/vacancies');
     await expect(page.getByTestId('vacancies-empty-state')).toBeVisible();
+    // On the page's own ground: the card is the table's, and there is no table.
+    await expect(page.getByTestId('vacancies-list')).toHaveCount(0);
 
     await page.getByTestId('vacancy-new-button').click();
     await expect(page.getByTestId('vacancy-dialog')).toBeVisible();

@@ -1,12 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  createAutosave,
-  saveFailedMessage,
-  type Autosave,
-  type AutosaveState,
-} from '@devscribed/validation';
+import { createAutosave, type Autosave, type AutosaveState } from '@devscribed/validation';
 
 export interface UseAutosave {
   /** What the textarea renders. Never replaced by a save, successful or not. */
@@ -37,9 +32,10 @@ export interface UseAutosave {
  * The hook owns three things the loop deliberately does not: the value the textarea
  * renders, the time of the last accepted write, and what gets announced aloud.
  *
- * Announcements follow 04 §09.40 — every failure and every explicit save, and no
- * routine autosave. A live region that spoke every two seconds would talk over the
- * interview it is there to help record; the visible indicator carries that case.
+ * Announcements follow 04 §09.40 — every explicit save, and no routine autosave. A live
+ * region that spoke every two seconds would talk over the interview it is there to help
+ * record; the visible indicator carries that case. A failure is spoken once, by the toast
+ * that carries its retry, so it is not announced from here as well.
  *
  * The editor's text is React state and is never written from a response. A save that
  * fails leaves the field exactly as it was, cursor included, because nothing here ever
@@ -81,10 +77,10 @@ export function useAutosave(options: {
         setSavedAt(at);
         if (asked) setAnnounced(`Saved at ${timeOf(at)}`);
       },
-      onStateChange: (next) => {
-        setState(next);
-        if (next === 'failed') setAnnounced(saveFailedMessage());
-      },
+      // A failure is spoken by the toast that carries its retry — the plate is `role="alert"`
+      // — so it is not repeated here. This region speaks the explicit save, which no toast
+      // reports, and nothing else (04 §09.40).
+      onStateChange: setState,
     });
     loop.current.reset(options.initial);
   }

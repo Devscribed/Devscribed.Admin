@@ -644,21 +644,6 @@
  * idle — it is not rendered at all — because a permanently blank 28px strip under the
  * toolbar is what the number used to justify.
  */
-.candidates-count-row {
-  display: flex;
-  align-items: center;
-  margin-bottom: var(--space-4);
-}
-
-.candidates-count-row > p {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin: 0;
-  font-size: var(--font-size-s);
-  color: var(--text-tertiary);
-}
-
 /*
  * The candidate table's two-line cells (03 §05). `Table`'s own cell is one line, nowrap
  * and clipped (decisions §18, §48); everything below is what a cell holding a stack has to

@@ -29,7 +29,6 @@ import {
   Card,
   ConfirmDialog,
   EmptyState,
-  InfoBanner,
   MenuDrawer,
   Pagination,
   Popover,
@@ -37,12 +36,12 @@ import {
   Select,
   Table,
   TableToolbar,
-  ToastHost,
   type SelectOption,
 } from '@devscribed/ds';
 import { PageHeader } from '@/layout/PageHeader';
 import { useSession } from '@/layout/session-context';
 import { CancelInterviewDialog } from '@/hiring/CancelInterviewDialog';
+import { LoadFailed } from '@/hiring/LoadFailed';
 import { StatusBadge } from '@/hiring/StatusBadge';
 import { takeDeletedCandidate } from '@/hiring/candidate-deleted';
 import {
@@ -54,7 +53,7 @@ import {
 import { rememberCandidateOrigin } from '@/hiring/candidate-origin';
 import { valuesOf } from '@/select';
 import { useMediaQuery } from '@/hiring/useMediaQuery';
-import { useToasts } from '@/hiring/useToasts';
+import { useToast } from '@/toast';
 import type {
   CandidateDatabase,
   CandidateRow,
@@ -98,9 +97,10 @@ const EMPTY_LIBRARY: FilterLibrary = { vacancies: [], categories: [], criteria: 
  * question being asked, and it is the one thing announced.
  *
  * So a refilter never replaces the list with a loader. The rows stay, dimmed and
- * `aria-busy` (`Table busy`, decisions §34), and only the number becomes a `Preloader`: a
- * table that collapsed and re-expanded on every keystroke would reflow the page under the
- * reader for no information at all.
+ * `aria-busy` (`Table busy`, decisions §34), and nothing else is drawn while the answer is
+ * on its way: a table that collapsed and re-expanded on every keystroke would reflow the
+ * page under the reader for no information at all, and a "Counting…" row appearing above
+ * it moved the table for the same nothing.
  *
  * **The filters live in a drawer** (03 §09). Five kinds of filter, one of them a
  * repeatable three-part object, is a query builder sitting on top of a list — and the
@@ -186,7 +186,7 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
    * The dialog is mounted **once for the page**, not once per row: twenty-five rows would
    * otherwise be twenty-five idle dialogs, and only one of them can ever be open.
    */
-  const { toasts, push, dismiss } = useToasts();
+  const { push } = useToast();
   const [cancelling, setCancelling] = useState<CandidateRow | null>(null);
   /**
    * The row whose person is being deleted, and whether the request is in flight.
@@ -358,6 +358,11 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
       }
       if (!response.ok) {
         setPhase('failed');
+        push({
+          message: CANDIDATE_MESSAGES.loadFailed,
+          tone: 'error',
+          testId: 'toast-candidates-load-failed',
+        });
         return;
       }
 
@@ -371,14 +376,20 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
       setScope(body.scope);
       setPhase('ready');
     } catch {
-      if (currentRequest.current === request) setPhase('failed');
+      if (currentRequest.current !== request) return;
+      setPhase('failed');
+      push({
+        message: CANDIDATE_MESSAGES.loadFailed,
+        tone: 'error',
+        testId: 'toast-candidates-load-failed',
+      });
     } finally {
       if (currentRequest.current === request) setPending(false);
     }
-    // One dependency, because there is one question: `address` is already memoised on
+    // One question, one dependency that moves: `address` is already memoised on
     // `criteriaKey` rather than on the array's identity, so a chip touched without being
-    // completed still does not refetch.
-  }, [orgId, address]);
+    // completed still does not refetch. `push` is stable.
+  }, [orgId, address, push]);
 
   useEffect(() => {
     void load();
@@ -941,31 +952,37 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
       </MenuDrawer>
 
       {/*
-        No count line. Each scope tab carries its own count, computed under the filters
-        already applied, so a line under the strip repeating the active tab's number was
-        the same fact twice — and the one it repeated is the one already in the reader's
-        eye. What is left is the half a tab cannot show: that a request is in flight, said
-        where the number used to be and announced politely, so a filter change is still
-        acknowledged before its rows arrive.
+        No count line, and no "Counting…" row where one used to be. Each scope tab carries
+        its own count, computed under the filters already applied, so a line under the strip
+        was the same fact twice — and a row that appeared while a request was in flight moved
+        the table under the reader to say what the dimmed rows already say (`Table busy`).
       */}
-      {pending && page === 1 && (
-        <div className="candidates-count-row">
-          <p aria-live="polite" data-testid="candidates-count">
-            {/* Named, but not a live region of its own: the `<p>` around it already is
-                one, and a nested pair announces the same change twice. */}
-            <Preloader size={8} margin={5} aria-label="Counting candidates" />
-            <span>{CANDIDATE_MESSAGES.counting}</span>
-          </p>
-        </div>
-      )}
 
       {phase === 'failed' ? (
-        <InfoBanner variant="error" data-testid="candidates-error">
-          {CANDIDATE_MESSAGES.loadFailed}{' '}
-          <Button onClick={() => void load()} data-testid="candidates-retry">
-            Try again
-          </Button>
-        </InfoBanner>
+        /*
+          The toast said it; this is what stays. A toast leaves, and a list that could not
+          be read must not leave a blank page behind it, so the failure is drawn where the
+          rows would be, on the page's own ground, with the way back inside it (§65).
+        */
+        <LoadFailed
+          message={CANDIDATE_MESSAGES.loadFailed}
+          retryLabel="Try again"
+          onRetry={() => void load()}
+          retryTestId="candidates-retry"
+          data-testid="candidates-error"
+        />
+      ) : phase === 'loading' && rows.length === 0 ? (
+        /*
+          The first load, on the page's own ground rather than inside the card. The card is
+          the table's, and a bordered white slab holding three dots is a surface drawn
+          around nothing. The dots carry no text, so the announcement is made beside them.
+        */
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-7)' }}>
+          <Preloader data-testid="candidates-loading" aria-hidden />
+          <span aria-live="polite" style={SR_ONLY}>
+            Loading candidates
+          </span>
+        </div>
       ) : rows.length === 0 && phase === 'ready' ? (
         /*
           Nothing to put a surface around. The card is the *table's* — it gives the rows
@@ -1013,9 +1030,9 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
         </EmptyState>
       ) : (
         /*
-          The table's own surface: the card gives the edge-to-edge rows their border and
-          rounds the first and last of them, and the loader sits inside it rather than
-          replacing it.
+          The table's own surface, drawn only around rows: the card gives the edge-to-edge
+          rows their border and rounds the first and last of them. The loader and the empty
+          state stand on the page's own ground above.
         */
         <Card padded={false} data-testid="candidates-list">
           {rows.length > 0 && (
@@ -1216,17 +1233,6 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
               ]}
             />
           )}
-
-          {phase === 'loading' && rows.length === 0 && (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--space-7)' }}>
-              {/* The dots carry no text, so the announcement is made beside them. */}
-              <Preloader data-testid="candidates-loading" aria-hidden />
-              <span aria-live="polite" style={SR_ONLY}>
-                Loading candidates
-              </span>
-            </div>
-          )}
-
         </Card>
       )}
 
@@ -1305,7 +1311,6 @@ export default function CandidatesPage({ params }: { params: Promise<{ orgId: st
         />
       )}
 
-      <ToastHost toasts={toasts} onDismiss={dismiss} />
     </>
   );
 }

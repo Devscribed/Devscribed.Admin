@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { HIRING_MESSAGES } from '@devscribed/validation';
-import { Button, InfoBanner, TextArea } from '@devscribed/ds';
+import { Button, TextArea } from '@devscribed/ds';
 import { timeOf, useAutosave } from '@/hiring/useAutosave';
+import { useToast } from '@/toast';
 
 /** How long "Saved just now" holds before it becomes a clock time (04 §UI Notes). */
 const JUST_NOW_MS = 60_000;
@@ -13,8 +14,9 @@ const JUST_NOW_MS = 60_000;
  *
  * Everything about this component answers to one constraint: someone is on a live call
  * while typing into it. So the saved indicator sits in the label row, which reserves
- * its height whether or not it has text; the failure banner appears *below* the field
- * rather than above it; and neither ever replaces what is in the editor.
+ * its height whether or not it has text; a failed save is reported by a toast floating
+ * over the page rather than by anything drawn under the field; and neither ever replaces
+ * what is in the editor.
  *
  * The label row is `TextArea`'s `trailing` slot (decisions §33), which Phase 4 built one phase
  * early for the cancel dialog's character count — including the part that matters here, the
@@ -44,6 +46,8 @@ export function AutosavingField({
   /** Lets the page ask, on navigation, whether anything is still unsaved. */
   registerDirty?: (isDirty: () => boolean) => () => void;
 }) {
+  /* The app's one toast queue: a failure is raised into it, and taken down again from it. */
+  const { push, dismiss } = useToast();
   const editor = useAutosave({ initial, save });
   const [recent, setRecent] = useState(false);
 
@@ -56,7 +60,51 @@ export function AutosavingField({
 
   useEffect(() => registerDirty?.(editor.isDirty), [registerDirty, editor.isDirty]);
 
-  const failed = editor.state === 'failed';
+  /**
+   * The failure, as a toast that **stands**: `autoClose: 0`, because the plate carries the
+   * retry and a retry that withdrew itself after a few seconds mid-interview would be a way
+   * back that was there and then was not. It leaves when the retry is pressed (the plate
+   * dismisses on any click inside it, the retry's included), when the × is pressed, or —
+   * below — when the field stops being in a failed state by any other route: the `Save`
+   * button under it, or an edit that restarts the autosave.
+   *
+   * Raised from an effect on the *state* rather than from the failing call, so a retry that
+   * fails again raises a fresh plate for a fresh failure, and a success takes the old one
+   * down whichever control produced it. `role="alert"` is the plate's own.
+   */
+  const failureToast = useRef<number | null>(null);
+  const { retry } = editor;
+  useEffect(() => {
+    if (editor.state === 'failed') {
+      failureToast.current = push({
+        tone: 'error',
+        // One id for both fields: it names the announcement, and the spec knows it by this.
+        testId: 'card-save-error',
+        autoClose: 0,
+        message: (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+            {HIRING_MESSAGES.card.saveFailed}
+            <Button onClick={retry} data-testid="card-save-retry">
+              {HIRING_MESSAGES.card.retry}
+            </Button>
+          </span>
+        ),
+      });
+      return;
+    }
+    if (failureToast.current !== null) {
+      dismiss(failureToast.current);
+      failureToast.current = null;
+    }
+  }, [editor.state, push, dismiss, retry, testId]);
+
+  // A field that unmounts — the section collapsed, the page left — takes its plate with it.
+  useEffect(
+    () => () => {
+      if (failureToast.current !== null) dismiss(failureToast.current);
+    },
+    [dismiss],
+  );
 
   return (
     <div>
@@ -108,7 +156,7 @@ export function AutosavingField({
         It is **disabled while there is nothing to save**, which is not a new rule: `useAutosave`
         has always refused a write for text the server already holds, so the button was
         promising work that would not happen. `dirty` is only that refusal, said out loud. A
-        failed save leaves the editor dirty, so `Retry` is not the only way back.
+        failed save leaves the editor dirty, so the toast's `Retry` is not the only way back.
       */}
       <div
         style={{
@@ -129,24 +177,6 @@ export function AutosavingField({
           Save
         </Button>
       </div>
-
-      {failed && (
-        <div style={{ marginTop: 'var(--space-3)' }}>
-          {/*
-            `role="alert"` rather than the page's own announcement slot: this belongs to one
-            field, it appears under that field, and the member is looking at it. The page's
-            banner under `PageHeader` reports what happened to the *page*.
-          */}
-          <InfoBanner variant="error" role="alert" data-testid="card-save-error">
-            <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-              {HIRING_MESSAGES.card.saveFailed}
-              <Button onClick={editor.retry} data-testid="card-save-retry">
-                {HIRING_MESSAGES.card.retry}
-              </Button>
-            </span>
-          </InfoBanner>
-        </div>
-      )}
     </div>
   );
 }
@@ -157,8 +187,8 @@ function indicator(
   recent: boolean,
 ): string {
   if (state === 'saving') return 'Saving…';
-  // A failure is carried by the banner below the field; repeating it up here would say
-  // the same thing twice and leave no room for the last time a save did work.
+  // A failure is carried by the toast; repeating it up here would say the same thing
+  // twice and leave no room for the last time a save did work.
   if (!savedAt) return '';
   return recent ? 'Saved just now' : `Saved ${timeOf(savedAt)}`;
 }

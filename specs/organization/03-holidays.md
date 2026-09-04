@@ -270,6 +270,9 @@ Actions: Cancel + primary Add/Save. Edit modal additionally shows a danger-tone 
 
 - Month bands are `role="rowheader"` for screen-readers.
 - The Add/Edit modal traps focus, `Esc` closes.
+- The country select's list floats over the dialog rather than extending it (design-system
+  [§95](../design-system/decisions.md)): opening it never scrolls or clips the dialog, whatever
+  the dialog's height. `Esc` with the list open closes the list, not the dialog.
 - Country chips carry an `aria-label` with the full country name; the 2-letter code alone is not read.
 - The Time Tracking calendar's holiday marker is announced to a live region on day-cell focus: **"Holiday: {name}. Paid hours: {n}."**
 
@@ -407,3 +410,5 @@ Actions: Cancel + primary Add/Save. Edit modal additionally shows a danger-tone 
   - **Selectors:** `time-cell-{yyyy}-{mm}-{dd}-holiday-marker`.
 - **TC-03-E2E-05: Vacation form hint.** Member submits a vacation request spanning a holiday; sees the non-blocking note explaining vacation is deducted per working day.
   - **Selectors:** `vacation-request-holiday-hint`.
+- **TC-03-E2E-06: Opening the country select does not scroll or clip the modal** ([BUG-007](../bugs/BUG-007-select-list-scrolls-the-modal-it-opens-in.md)). Admin opens **Add holiday** and reads the dialog's `scrollHeight` and `clientHeight`; opens the **Country** field and reads both again and the list's bounding box. Closed and open alike, `scrollHeight <= clientHeight` — the list floats over the dialog and adds nothing to its scroll box — the list's bottom is inside the viewport, and the option `Afghanistan` is visible. Fails against the code before the fix with `Expected: <= 421, Received: 647`.
+  - **Selectors:** `holidays-empty-primary-cta`, `holiday-modal`, `holiday-country-select`, the listbox named `Country`.

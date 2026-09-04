@@ -31,7 +31,7 @@ These three screens plus `/signup` (spec 01) are one visual family. They share o
 - **The cross-account link always lives in `AuthLayout`'s footer**, outside the card, on the well. `/signup` says "Sign in", `/login` says "Create an account", `/forgot-password` and `/reset-password` say "Back to login". A visitor learns one place to look.
 - Fields are stacked at every breakpoint. Submit buttons are `variant="primary"` and pass `style={{ width: '100%' }}` — the system ships one 44px height and no `size` prop, and §1 removed the hardcoded full-bleed width, so full width is now asked for rather than assumed.
 - The submit CTA is **never disabled for validation** — see the shared rule in [README.md](README.md). It is not disabled while in flight either: the system's `preloader` shows the spinner and sets `aria-busy` (§2), and the submit handler guards re-entry.
-- Field labels are **sentence case**. The system's only uppercase is `PageTabs`; its field labels are 12px `--text-secondary`, set by the global `.input-label` rule.
+- Field labels are **sentence case**. The system's uppercase is `PageTabs` and a panel `Card`'s micro-label title (§66); its field labels are 12px `--text-secondary`, set by the global `.input-label` rule.
 
 ---
 
