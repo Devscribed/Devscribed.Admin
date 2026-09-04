@@ -166,9 +166,11 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
         body: JSON.stringify({ countryCode: orgCountry.length > 0 ? orgCountry : null }),
       });
       if (response.ok) {
+        // The picker repaints from what is now STORED, which is the confirmation: no
+        // toast, because this spec names neither an id for one nor a line for it to
+        // carry, and a message invented here is a message nothing governs.
         const body = (await response.json()) as { countryCode: string | null };
         setOrgCountry(body.countryCode ?? ALL_COUNTRIES);
-        showToast('toast-org-country-saved', HOLIDAY_MESSAGES.toastUpdated);
       } else {
         const body = await response.json().catch(() => null);
         const fields = body?.fields as Record<string, string> | undefined;

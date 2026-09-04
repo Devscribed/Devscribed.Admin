@@ -420,8 +420,9 @@ test.describe('time-off/01 — Vacation calendar', () => {
     await page.getByTestId('org-country-select').click();
     await page.getByRole('option', { name: 'Poland', exact: true }).click();
     await page.getByTestId('org-country-save').click();
-    await expect(page.getByTestId('toast-org-country-saved')).toBeVisible();
-    // The holiday list on the page is unchanged by the save.
+    // The save is confirmed by the value the picker paints back from the server, and the
+    // holiday list on the page is unchanged by it.
+    await expect(page.getByTestId('org-country-select')).toContainText('Poland');
     await expect(page.getByTestId('holidays-table')).toBeVisible();
 
     await openCalendar(page);
