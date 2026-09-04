@@ -1,0 +1,358 @@
+{
+  "shard": 1,
+  "file": "specs/time-off/01-vacation-calendar.md",
+  "criteria": {
+    "S-01": "clear",
+    "S-02": "claim",
+    "S-03": "n/a",
+    "S-04": "clear",
+    "S-05": "clear",
+    "S-07": "n/a",
+    "S-08": "n/a",
+    "S-23": "clear",
+    "S-26": "clear",
+    "S-30": "claim",
+    "S-32": "clear",
+    "S-33": "clear",
+    "S-34": "claim",
+    "S-38": "clear",
+    "S-43": "clear",
+    "S-48": "clear",
+    "S-49": "clear",
+    "S-55": "clear",
+    "S-56": "claim"
+  },
+  "enumerated": [
+    {
+      "item": "normalizeRole() exists in packages/validation/src/roles.ts",
+      "settledBy": "packages/validation/src/roles.ts:38 export function normalizeRole",
+      "ok": true
+    },
+    {
+      "item": "ViewHolidays capability today grants only admin/manager (matrix row match)",
+      "settledBy": "packages/validation/src/roles.ts:147,187",
+      "ok": true
+    },
+    {
+      "item": "HOLIDAY_MESSAGES.countryCodeInvalid exists with quoted text",
+      "settledBy": "packages/validation/src/holiday-messages.ts:20 'Country code must be 2 uppercase letters.'",
+      "ok": true
+    },
+    {
+      "item": "HOLIDAY_MESSAGES.countryForbidden cited (REQ-01-035) does not exist in packages/validation today",
+      "settledBy": "grep -rn countryForbidden packages/validation/src -> no hits",
+      "ok": true
+    },
+    {
+      "item": "Organization.countryCode does not exist on Organization model today (spec adds it)",
+      "settledBy": "apps/api/prisma/schema.prisma:174-236, no countryCode field on Organization",
+      "ok": true
+    },
+    {
+      "item": "ViewTimeOffCalendar / ManageOrganizationCountry capabilities do not exist today (spec adds them)",
+      "settledBy": "grep -rn ViewTimeOffCalendar|ManageOrganizationCountry packages/validation apps -> no hits besides this spec's own files",
+      "ok": true
+    },
+    {
+      "item": "VacationRequest.workingDays, .startDate, .endDate, .status fields exist as described",
+      "settledBy": "apps/api/prisma/schema.prisma:738-769",
+      "ok": true
+    },
+    {
+      "item": "MemberProfile.country (alpha-2, nullable) exists",
+      "settledBy": "apps/api/prisma/schema.prisma:634-652",
+      "ok": true
+    },
+    {
+      "item": "Account.phoneCountryCode, Account.timezone, Account.firstDayOfWeek exist",
+      "settledBy": "apps/api/prisma/schema.prisma:37-46",
+      "ok": true
+    },
+    {
+      "item": "ProjectMember model exists with projectId/membershipId as the Teams-scope join",
+      "settledBy": "apps/api/prisma/schema.prisma:1004-1017",
+      "ok": true
+    },
+    {
+      "item": "calculateWorkingDays counts Mon-Fri only, matching REQ-01-032's 'same week' claim",
+      "settledBy": "packages/validation/src/index.ts:1840-1852, dow 1..5",
+      "ok": true
+    },
+    {
+      "item": "REQ-01-026's claim that phoneCountryCode-only resolution is used today by holidays scope=mine and both reports",
+      "settledBy": "apps/api/src/holidays/holidays.service.ts:101-103; apps/api/src/reports/reports.service.ts:552,1047,1884 (loadCaller/resolveSubjectMemberships/buildTimeOffResponse, shared by Amounts Owed and Time Off)",
+      "ok": true
+    },
+    {
+      "item": "Sidebar 'Time off' group with a 'Holidays' row exists today, calendar row can sit above it (REQ-01-003)",
+      "settledBy": "apps/web/src/layout/Sidebar.tsx:141-165",
+      "ok": true
+    },
+    {
+      "item": "REQ-01-018 resolves 'today' from Account.timezone, a nullable column, with no stated fallback",
+      "settledBy": "apps/api/prisma/schema.prisma:37 timezone String?; precedent in specs/user-management/12-time-tracking.md:109 'falling back to UTC when the account has no timezone set' and apps/api/src/reports/reports.service.ts:551 'caller.timezone ?? UTC'",
+      "ok": false
+    },
+    {
+      "item": "REQ-01-033/034 write Organization.countryCode with no stated concurrency line",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:292-300, no mention of a lock or 'no lock needed' line for two admins racing to set the org country",
+      "ok": false
+    },
+    {
+      "item": "Known Gaps row claims organization/03 'already names' resolving the holiday set at submit time and storing which holidays a request counted",
+      "settledBy": "grep -n 'submit time|store which|frozen|snapshot' specs/organization/03-holidays.md -> no hits; the spec only says (line 22, 359) 'a separate future amendment to spec 09' with no such detail",
+      "ok": false
+    },
+    {
+      "item": "REQ-01-001..004 route/nav gate: stated behaviour, not deferred",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:88-107",
+      "ok": true
+    },
+    {
+      "item": "REQ-01-005..013 scope rules: stated behaviour, not deferred",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:111-158",
+      "ok": true
+    },
+    {
+      "item": "REQ-01-014..019 range rules: stated behaviour, not deferred",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:162-197",
+      "ok": true
+    },
+    {
+      "item": "REQ-01-020..025 band rules: stated behaviour, not deferred",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:201-237",
+      "ok": true
+    },
+    {
+      "item": "REQ-01-026..032, 040 country/holiday rules: stated behaviour, not deferred",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:241-288,252-256",
+      "ok": true
+    },
+    {
+      "item": "REQ-01-033..036 org-country write rules: stated behaviour, not deferred",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:292-315",
+      "ok": true
+    },
+    {
+      "item": "REQ-01-037..039 state rules: stated behaviour, not deferred",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:319-332",
+      "ok": true
+    },
+    {
+      "item": "AC1 row-for-every-active-member is a single observation, not a requirement restatement",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:382",
+      "ok": true
+    },
+    {
+      "item": "AC2 viewer refused + no nav row is a single observation",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:383",
+      "ok": true
+    },
+    {
+      "item": "AC3 two-teams union is a single observation",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:384",
+      "ok": true
+    },
+    {
+      "item": "AC4 four-people exact set is a single observation",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:385",
+      "ok": true
+    },
+    {
+      "item": "AC5 solid/hatched band rendering is a single observation",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:386",
+      "ok": true
+    },
+    {
+      "item": "AC6 rejected/cancelled draw nothing is a single observation",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:387",
+      "ok": true
+    },
+    {
+      "item": "AC7 weekend-spanning band continuity + frozen count is a single observation",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:388",
+      "ok": true
+    },
+    {
+      "item": "AC8 country chain resolution incl. null case is a single observation",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:389",
+      "ok": true
+    },
+    {
+      "item": "AC9 partial holiday marks only applicable cells is a single observation",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:390",
+      "ok": true
+    },
+    {
+      "item": "AC10 whole-column holiday shading is a single observation",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:391",
+      "ok": true
+    },
+    {
+      "item": "AC11 setting org country changes coverage for countryless members is a single observation",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:392",
+      "ok": true
+    },
+    {
+      "item": "AC12 manager forbidden from setting org country is a single observation",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:393",
+      "ok": true
+    },
+    {
+      "item": "AC13 range >92 days refused with named-bound message is a single observation",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:394",
+      "ok": true
+    },
+    {
+      "item": "AC14 >100-member scope refused not truncated is a single observation",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:395",
+      "ok": true
+    },
+    {
+      "item": "AC15 empty team/people selection refused is a single observation",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:396",
+      "ok": true
+    },
+    {
+      "item": "AC16 empty month still draws full grid is a single observation",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:397",
+      "ok": true
+    },
+    {
+      "item": "AC17 cross-org read 404 is a single observation",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:398",
+      "ok": true
+    },
+    {
+      "item": "Vocabulary: scope values all/teams/people — stored values given in prose; displayed labels ('All'/'Teams'/'People') given in the cited mock",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:111-129 and 01-vacation-calendar.mock.html:214",
+      "ok": true
+    },
+    {
+      "item": "Vocabulary: window presets Week/2 weeks/Month — stored+displayed given",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:193-197 and mock.html:217",
+      "ok": true
+    },
+    {
+      "item": "Vocabulary: band status pending/approved/rejected/cancelled — outcome (solid/hatched/none) given per member in the state-machine table",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:339-346",
+      "ok": true
+    },
+    {
+      "item": "Vocabulary: kind='vacation' — single constant, no separate displayed label claimed",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:231-237",
+      "ok": true
+    },
+    {
+      "item": "Mention of user-management/09 (Vacation Requests) — reference still carries what implementer needs after reading",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:11,286-288,350-352; cross-checked against specs/user-management/09-vacation-requests.md:43-45 and calculateWorkingDays",
+      "ok": true
+    },
+    {
+      "item": "Mention of user-management/11 (Projects) — Teams=Project/ProjectMember reference still carries what implementer needs",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:12,35-37,116-124; cross-checked against apps/api/prisma/schema.prisma:1004-1017",
+      "ok": true
+    },
+    {
+      "item": "Mention of organization/03 (Holidays) — reference for country-chain replacement still carries what implementer needs",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:13,50-54,241-250; cross-checked against specs/organization/03-holidays.md:72-73",
+      "ok": true
+    },
+    {
+      "item": "Mention of organization/03 in Known Gaps row 1, claiming it names a specific future-amendment shape",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:373; specs/organization/03-holidays.md:22,359 name only 'a separate future amendment to spec 09', no submit-time/storage detail",
+      "ok": false
+    },
+    {
+      "item": "Mention of reports/01 for viewer's 'own time off only' rule — reference still carries what implementer needs",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:81-82; cross-checked against specs/reports/01-reports.md:46",
+      "ok": true
+    },
+    {
+      "item": "Authorization rule ViewTimeOffCalendar: answers for admin/manager/user/viewer target set and normalizeRole() for stored admin/member",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:72-79",
+      "ok": true
+    },
+    {
+      "item": "Authorization rule ManageOrganizationCountry: admin-only, target set given, stored-pair given via normalizeRole()",
+      "settledBy": "specs/time-off/01-vacation-calendar.md:75-79,302-310",
+      "ok": true
+    },
+    {
+      "item": "Invariant 'this replaces the phoneCountryCode-only rule everywhere it is used today' checked against all call sites",
+      "settledBy": "grep -rln phoneCountryCode apps/api/src -> only holidays.service.ts and reports.service.ts (account.service.ts is plain CRUD, not resolution)",
+      "ok": true
+    }
+  ],
+  "counts": {
+    "enumerated": 51,
+    "ok": 47,
+    "claims": 4
+  },
+  "claims": [
+    {
+      "id": "S1-C1",
+      "criterion": "S-34",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/time-off/01-vacation-calendar.md",
+      "symbol": "REQ-01-018",
+      "line": 189,
+      "claim": "REQ-01-018 resolves 'today' from Account.timezone, which is nullable, and states no fallback for a caller with no timezone set — unlike the codebase's own precedent for this exact column.",
+      "witness": {
+        "kind": "rule",
+        "detail": "schema.prisma:37 'timezone String?'; specs/user-management/12-time-tracking.md:109 states the established convention: 'falling back to UTC when the account has no timezone set'; apps/api/src/reports/reports.service.ts:551 does 'caller.timezone ?? \"UTC\"'. REQ-01-018 gives no equivalent fallback.",
+        "source": "specs/time-off/01-vacation-calendar.md:189-191"
+      },
+      "confidence": "medium",
+      "suggestedFix": "State the fallback (e.g. UTC) for a caller whose Account.timezone is null, matching the convention already used for the same column elsewhere."
+    },
+    {
+      "id": "S1-C2",
+      "criterion": "S-56",
+      "rule": "spec/missing-artefact",
+      "file": "specs/time-off/01-vacation-calendar.md",
+      "symbol": "REQ-01-033 / REQ-01-034",
+      "line": 292,
+      "claim": "The organization-country write (REQ-01-033/034) says nothing about two admins racing to set/clear the country concurrently — no lock is stated and no line says a lock is unneeded.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Lines 292-315 describe the write and its refusals but never address a concurrent write.",
+        "source": "specs/time-off/01-vacation-calendar.md:292-315"
+      },
+      "confidence": "low",
+      "suggestedFix": "One line: a plain UPDATE with last-write-wins is fine here since there is no compound invariant across the write, or state the lock if one is wanted."
+    },
+    {
+      "id": "S1-C3",
+      "criterion": "S-30",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/time-off/01-vacation-calendar.md",
+      "symbol": "Known Gaps row 1",
+      "line": 373,
+      "claim": "The Known Gaps table says 'the amendment organization/03 already names: resolve the holiday set at submit time and store which holidays the request counted' — but organization/03 contains no such detail; it only says the fix is 'a separate future amendment to spec 09' with no description of resolving at submit time or storing which holidays counted.",
+      "witness": {
+        "kind": "command",
+        "detail": "grep -n 'submit time|store which|frozen|snapshot' specs/organization/03-holidays.md returns nothing; the only relevant sentences (lines 22, 359) say only 'a separate future amendment to spec 09'.",
+        "source": "specs/organization/03-holidays.md:22,359"
+      },
+      "confidence": "high",
+      "suggestedFix": "State the closing plan as this spec's own claim ('a future amendment to spec 09 would need to...') rather than attributing detail to organization/03 that it does not contain."
+    },
+    {
+      "id": "S1-C4",
+      "criterion": "S-02",
+      "rule": "spec/stale-statement",
+      "file": "specs/time-off/01-vacation-calendar.md",
+      "symbol": "REQ-01-035",
+      "line": 305,
+      "claim": "REQ-01-035 quotes HOLIDAY_MESSAGES.countryForbidden as the 403 message, but this export does not exist in packages/validation/src/holiday-messages.ts today — it is a new addition this spec (or its contracts member) must introduce.",
+      "witness": {
+        "kind": "command",
+        "detail": "grep -rn countryForbidden packages/validation/src returns nothing.",
+        "source": "packages/validation/src/holiday-messages.ts"
+      },
+      "confidence": "low",
+      "suggestedFix": "No action needed if the contracts member adds this export — noted only in case it was assumed to exist already."
+    }
+  ]
+}
