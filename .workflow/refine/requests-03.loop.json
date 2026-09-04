@@ -79,12 +79,26 @@
           "S-57": "clear",
           "S-58": "blocked"
         }
-      }
+      },
+      "gate": "T2",
+      "blockers": 5,
+      "keys": [
+        "spec/incomplete-decision:REQ-03-035 / Routes",
+        "spec/contradiction:State Machine invariant 1",
+        "spec/contradiction:State Machine `none | accept` vs `ClientMembership.accountId`",
+        "spec/incomplete-decision:GET /api/organizations/{orgId}/request-contacts",
+        "spec/untestable-case:TC-03-INT-08"
+      ]
     }
   ],
-  "status": "running",
+  "status": "blocked",
   "profile": "sharded",
   "judgeAgent": "spec-review",
   "fixerAgent": "spec-fixer-minimal",
-  "request": "client contacts can be invited to an organization, raise and receive requests, and see nothing else"
+  "request": "client contacts can be invited to an organization, raise and receive requests, and see nothing else",
+  "outcome": {
+    "reason": "verdict-only",
+    "detail": "stopped before the fixer, as asked.",
+    "at": "2026-09-04T06:49:51.970Z"
+  }
 }
