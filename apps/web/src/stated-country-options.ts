@@ -11,8 +11,8 @@ import { COUNTRY_OPTIONS } from '@devscribed/validation';
  * Deliberately NOT the holiday form's picker. That one is built from the web app's own
  * phone-derived list (`apps/web/src/account-data.ts`, libphonenumber's `getCountries()`),
  * which offers `AC`, `TA` and `XK` — three codes rule 9 refuses — so an admin could pick
- * Kosovo and be told "Enter a valid country" about a value the product itself offered. The
- * holiday form and the holiday list's country filter keep their list: a `Holiday.countryCode`
+ * Kosovo and be refused with `PROFILE_MESSAGES.country.invalid` about a value the product
+ * itself offered. The holiday form and the holiday list's country filter keep their list: a `Holiday.countryCode`
  * may be any two uppercase letters, and a filter that cannot name a row that exists is worse
  * than one offering a rare country.
  *
