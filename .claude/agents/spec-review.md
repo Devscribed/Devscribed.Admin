@@ -39,7 +39,7 @@ not run, and the loop rejects it.
 family assignment and the shard agent and model to use. That shape is configuration; it is not
 yours to pick.
 
-Then, in **one message containing one `Task` call per family**, dispatch every shard the slice
+Then, in **one message containing one `Agent` call per family**, dispatch every shard the slice
 names. All in that one message — calls sent in separate messages run one after another.
 
 Give each shard, and nothing else:
@@ -138,7 +138,10 @@ verdict the repair answered and the fixer's record of what it did; read both, as
 A finding recorded as fixed that the text does not carry is the most valuable thing this pass can
 produce.
 
-Read nothing else under `.workflow/refine/`. Sweep the changed lines and the rules they touch;
+Read nothing else under `.workflow/`. Not an older round's verdict, not another spec's, not a
+pipeline run's findings under `.workflow/runs/`: a judgement borrowed from a gate that ran
+against different text is not this pass's, and a judge that agrees with a previous verdict has
+re-derived nothing. Sweep the changed lines and the rules they touch;
 carry every other criterion's earlier answer forward. **A statement you did not sweep is a
 statement an earlier pass accepted.** Contradiction is the exception: a rule that changed is
 checked against the whole document.

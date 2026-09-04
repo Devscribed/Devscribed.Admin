@@ -21,7 +21,7 @@ The unit is a **task group**: one or more of the handoff's tasks that share a fi
 - **File sets must be disjoint.** Two shards run at once; two shards editing one file lose
   work. Tasks whose `files` globs overlap go in the same group, always.
 - **`dependsOn` orders the waves.** A group runs only after every group it depends on has
-  returned. Dispatch each wave in **one message containing one `Task` call per group**; calls
+  returned. Dispatch each wave in **one message containing one `Agent` call per group**; calls
   sent in separate messages run one after another, which is the whole thing you are avoiding.
 - **A group is small and stated in full.** Its prompt carries the task ids, the requirement ids,
   the exact file list, the `TC-*` ids it owns, and the parts of the spec it must obey. A shard

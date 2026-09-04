@@ -633,6 +633,12 @@ const BLOCKING_RULES = new Set(RC.blockingRules ?? [
  * a different surface every pass — which is where a loop that never converges comes from.
  */
 const SPEC_CRITERIA = readRegister(ROOT, 'spec');
+/* A register that is there and yields nothing is a broken register, not an absent one, and
+   running on it turns every demotion and every coverage check off without a word. Refuse. */
+if (SPEC_CRITERIA.exists && !SPEC_CRITERIA.ids.size) {
+  process.stderr.write(`refine: ${SPEC_CRITERIA.path} parsed to zero criteria — the register is unreadable, so nothing would be enforced\n`);
+  process.exit(1);
+}
 
 /**
  * Demote every blocker outside the closed list, in place, and return the demoted ones.
@@ -761,6 +767,16 @@ async function main() {
         finish(ledger, 'error', 'judge-error',
           `the verdict carries no criteria map, so no enumerated criterion was run. `
           + `Re-run the round; a pass that reports nothing is not a pass.`);
+      }
+      /* A profile that shards and a verdict that shows no shard mean the judge read everything
+         itself. That is a different pass from the one that was asked for and paid for, and the
+         only place it is visible is here. */
+      if (!dryRun && PROFILE.shardAgent && !(verdict.shards ?? []).length) {
+        record.judge = { status: 'judge-error', agent: JUDGE_AGENT, ranOn: verdict.ranOn ?? null };
+        saveLedger(ledger);
+        finish(ledger, 'error', 'judge-error',
+          `profile ${PROFILE.name} dispatches ${PROFILE.shardAgent}, and the verdict records no shard. `
+          + `The judge read the bundle itself; re-run, or use --profile solo deliberately.`);
       }
       const demoted = enforceRules(verdict, { criteria: true });
       const shift = criteriaShift(ledger, round, verdict);

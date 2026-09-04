@@ -28,7 +28,8 @@ added later.
    to a person, because either the requirement is ambiguous or the finding is wrong, and another
    round decides neither.
 7. **A repair is the shortest statement that clears the criterion.** A criterion is not a
-   licence to grow the document: see "Refining is not growing" in `.claude/agents/spec-fixer.md`.
+   licence to grow the document — see the repair order in
+   `.claude/agents/spec-fixer-minimal.md`.
 
 ## Why it is closed
 

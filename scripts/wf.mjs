@@ -203,6 +203,11 @@ function witnessDefect(f) {
  * named is not met by a different objection over the same diff.
  */
 const REVIEW_CRITERIA = readRegister(ROOT, 'review');
+/* Present but unparseable is a broken register, not a missing one: enforcement would switch
+   itself off and every blocker would stand unanchored, with nothing in the log to say so. */
+if (REVIEW_CRITERIA.exists && !REVIEW_CRITERIA.ids.size) {
+  fail(`${REVIEW_CRITERIA.path} parsed to zero criteria — the register is unreadable, so no finding would be anchored`);
+}
 const isRequirementId = (id) => /^REQ-[A-Za-z0-9-]+$/.test(id);
 
 /**
