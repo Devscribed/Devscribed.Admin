@@ -29,9 +29,10 @@ the Teams scope reads, and spec 10 owns the Requests page that reviews what the 
 
 [`specs/organization/`](../organization/README.md) — spec 03 owns the `Holiday` entity, its CRUD
 and its settings page. **Spec 01 here supersedes that spec's member-country rule** (its §14–15,
-`Account.phoneCountryCode` alone) with the three-link chain in REQ-01-026, and adds the
-organization country to that spec's settings page. Nothing else about `Holiday` changes: this area
-adds no holiday field, no holiday route, and no holiday of its own.
+`Account.phoneCountryCode` alone) with REQ-01-026: a country stated on the membership, falling
+back to one stated on the organization, and the phone dropped as a source entirely. It adds the
+organization country to that spec's settings page. Nothing else about `Holiday` changes: this
+area adds no holiday field, no holiday route, and no holiday of its own.
 
 [`specs/reports/`](../reports/README.md) — the Time Off and Amounts Owed reports read the same two
 sources. They are a *table over a range*; the calendar is a *grid over a range*, and neither is
@@ -47,8 +48,8 @@ implementation of it.
 | Absence types | None in this release; every band is `kind: "vacation"` | The catalogue is a spec of its own, and the calendar is useful before it exists | Shipping sick leave and unpaid leave with the calendar, which would have doubled the first release |
 | Who may see the whole organization's absences | `admin`, `manager`, `user` — not `viewer` | Knowing who is away is what a shared calendar is for, and the response carries no reason and no money. `viewer` is excluded because reports/01 already settles that a viewer sees only their own time off | Admin-and-manager-only, which is today's reports gate but makes the calendar useless to the people who plan around each other; and a share-a-project-with-me rule, which is a second authorization model for one screen |
 | A remaining-balance column | Not in this release | It would pull `MemberFinancials`, the reserve ledger and their money-grade capabilities onto a screen that otherwise reads nothing financial | Parity with the wallcharts that show it. The balance stays on the member's Vacation tab |
-| Member holiday country | `MemberProfile.country`, then `Account.phoneCountryCode`, then `Organization.countryCode` | A public holiday is a fact about where somebody lives and works. The address country states that; a phone's country is a contact detail a foreign SIM makes wrong; the organization's is what makes "automatic" true for an organization where nobody filled either in | Keeping `phoneCountryCode` alone, which leaves a member who never entered a phone number outside every national holiday their colleagues get |
-| Where the organization country is set | The existing Holidays settings page, admin-only | It is a property of the holiday calendar — it decides who a country-scoped holiday reaches — so it belongs on the page that holds the calendar, not behind a new Organization screen | A new `My organization` settings route, which the app shell names but nothing ships |
+| Member holiday country | `Membership.countryCode`, falling back to `Organization.countryCode`. Both stated by a person | Which country's public holidays somebody is paid for is a payroll fact, and it is set deliberately rather than guessed. A phone's dial code is a contact detail a foreign SIM makes wrong, and a postal address sits behind a PII capability — neither should decide what a person is paid | Keeping `Account.phoneCountryCode`, which pays a member their national holidays only if they happened to enter a phone number; and reading `MemberProfile.country`, which makes the holidays somebody is paid a side effect of filling in a contract |
+| Where the countries are set | The organization's on the existing Holidays settings page; the member's on their About tab, through the update that already carries their role and job title | Each sits where a reader would look for it, and neither earns a screen or a capability of its own — `ManageHolidays` and `edit-detail` already grant exactly the admin and manager who set them | A new `My organization` settings route, which the app shell names but nothing ships; and a dedicated capability per country, a distinction no grant would express |
 | Window | Week, 2 weeks, Month; API bounded at 92 days | A month of day-wide columns is the density every wallchart in this category settles on, and the bound leaves a Quarter preset addable without a contract change | A Quarter preset now, which needs a second cell renderer for a grid whose columns are too narrow to label |
 | Row limit | A flat cap of 100 with a refusal | A wallchart paginated by member is two half-charts; the scope controls are already the instrument for narrowing | Pagination, and silent truncation |
 
@@ -56,7 +57,7 @@ implementation of it.
 
 | Rule | Defined in | Referenced by |
 |------|-----------|---------------|
-| Member holiday country is `MemberProfile.country` → `Account.phoneCountryCode` → `Organization.countryCode`, first valid alpha-2 wins | 01 (REQ-01-026) | `organization/03` (supersedes its §14), `reports/01` (§18) |
+| Member holiday country is `Membership.countryCode` → `Organization.countryCode`, first valid alpha-2 wins; `Account.phoneCountryCode` is not a source | 01 (REQ-01-026) | `organization/03` (supersedes its §14), `reports/01` (§18) |
 | A holiday applies when its `countryCode` is `null` or matches the member's resolved country, case-insensitively | 01 (REQ-01-028), unchanged from `organization/03` §4 | `reports/01` |
 | Date-only columns are compared against the raw ISO range, never a tz-shifted instant | `reports/01` §2 | 01 (REQ-01-017) |
 | A vacation request's `workingDays` is frozen at submission and never recomputed downstream | `user-management/09` | 01 (REQ-01-024), `reports/01` |
@@ -73,7 +74,7 @@ implementation of it.
 | Member assigned to or removed from a project | `user-management/11` | The Teams scope's row set changes on the next read | 01 |
 | Holiday created, edited or deleted | `organization/03` | The day's shading changes on the next read | 01 |
 | Organization country set or cleared | 01 | Members with no country of their own gain or lose that country's holidays — on the calendar, on the Time Tracking calendar's markers, and in the Amounts Owed payable | 01, `organization/03`, `reports/01` |
-| Member's profile country set | `documents/03` | It now outranks their phone country for holiday matching | 01, `reports/01` |
+| Member's country stated or cleared | 01 | That member gains or loses that country's holidays — on the calendar, on the Time Tracking calendar's markers, and in the Amounts Owed payable | 01, `organization/03`, `reports/01` |
 
 ## Dependency Graph
 
@@ -100,21 +101,28 @@ adding a member forces every role's list to be revisited at compile time — whi
 behaviour and the reason the type is shaped that way. Adding capabilities is otherwise
 backward-compatible: no existing capability is removed, renamed or regranted.
 
-**The country rule moves money, and this is the one to read twice.** Four call sites resolve a
-member's country today, all from `Account.phoneCountryCode` alone, and all four adopt the new
-chain (they are listed with their line numbers in
-[the contracts file](01-vacation-calendar.contracts.md)). The consequence is on **Amounts Owed**:
-a country-scoped holiday adds a paid "Holiday · {name}" row for each member it applies to, so a
-member who resolves to a country for the first time gains those rows and the organization's
-payable rises.
+**The country rule moves money, in both directions, and this is the one to read twice.** Every
+call site that resolves a member's country reads `Account.phoneCountryCode` today, and this area
+drops that source rather than ranking against it (the sites are listed in
+[the contracts file](01-vacation-calendar.contracts.md)). The consequence is on **Amounts Owed**,
+where a country-scoped holiday adds a paid "Holiday · {name}" row for each member it applies to.
 
-Measured on the spec's own probe, in a fixture of five members with one `PL` holiday and one
-global holiday in the month: the `PL` day produced **one** holiday row (`320.00`) because exactly
-one member had a phone country, while the global day produced **five** (`1280.00`). Setting an
-organization country of `PL` would move the first day to the second shape. That is a correction —
-a member with no phone number on file is not thereby exempt from their country's public holidays —
-but it is a correction that changes a finance-facing number, so it is deliberate, admin-gated, and
-inert until an admin sets the country.
+**It can pay less than today.** A member whose only country is their phone's resolves to `null`
+the moment this ships, and stops receiving that country's holiday rows, until somebody states a
+country for them or for the organization. That is the direction to plan for: setting the
+organization country is not an optional nicety here, it is the step that restores and then widens
+what was being paid, and it should be done in the same change window as the deploy.
+
+**It can pay more.** A member who has no phone country — and today therefore receives no national
+holidays at all — gains them as soon as a country covers them. Measured on the spec's own probe,
+in a fixture of five members with one `PL` holiday and one global holiday in the month: the `PL`
+day produced **one** holiday row (`320.00`) because exactly one member had a phone country, while
+the global day produced **five** (`1280.00`). An organization country of `PL` moves the first day
+to the second shape.
+
+Neither direction is a silent drift: both follow from a field a person set, both are evaluated on
+read so nothing is stored wrong in the meantime, and the migration alone changes nothing, because
+both columns land `null`.
 
 **Reports and the Time Tracking calendar change without their specs changing.** The Time Tracking
 weekly and monthly views read `GET /holidays?scope=mine` (organization/03 §10) and will show
@@ -135,13 +143,16 @@ No existing screen's markup or test ids change.
 
 ## Backward Compatibility
 
-1. **`Organization.countryCode` is nullable with no default**, so every organization that predates
-   the migration reads `null` and the third link of the country chain does nothing for them. The
-   enforcing mechanism is the absence of a backfill: nothing sets the column but an admin.
-2. **The country chain is a superset of today's rule.** With `MemberProfile.country` and
-   `Organization.countryCode` both null — which is the state of every row on the day the migration
-   lands — the chain returns exactly `Account.phoneCountryCode`, the value all four call sites use
-   today. Enforced by TC-01-UNIT-01, whose fourth and fifth cases are that state.
+1. **Both country columns are nullable with no default**, so every row that predates the migration
+   reads `null` and behaves identically until somebody states a country. The enforcing mechanism
+   is the absence of a backfill: nothing writes either column but an admin or a manager.
+2. **The country chain is not a superset of today's rule, and this area says so rather than
+   claiming otherwise.** Dropping `Account.phoneCountryCode` narrows the answer for any member
+   whose only country was their phone's: they resolve to `null` until a country is stated. The
+   compensating mechanism is the organization country, which covers every such member at once;
+   the exposure is bounded to holiday rows on Amounts Owed and holiday markers, and touches no
+   vacation balance, no ledger row and no issued PDF. TC-01-INT-12 pins the new resolution
+   including a member whose phone country reaches nothing.
 3. **No existing route, response field or `data-testid` changes.** The calendar's endpoint is new
    (proven: it answers `404` today), and the country endpoint is new. Enforced by the reports and
    holidays E2E suites, which are untouched by this spec and must stay green.
@@ -160,5 +171,5 @@ No existing screen's markup or test ids change.
 | No absence types — every band is a vacation | The calendar is useful with one type, and typing every absence is a design space of its own rather than a field | `specs/time-off/02`, the time-off policy catalogue: a per-organization list of absence types with colours, paid and deducts-from-balance flags, and `VacationRequest.policyId`. It lands by giving REQ-01-025's `kind` more values |
 | No booking or approving from the calendar | The request form and the review controls already exist on surfaces that own their rules; putting a second copy on a read screen doubles them before the type model is settled | A later spec, most sensibly after the policy catalogue, since what a click on an empty cell should create is a question about types |
 | No blackout dates, minimum notice, or a limit on how much of a team may be away at once | Nothing enforces them today either, and the calendar is what makes the clashes visible enough to be worth a rule | A booking-constraints spec, which wants the calendar in front of it rather than behind it |
-| The organization country has no country-picker parity with `MemberProfile.country`, which is a free-text alpha-2 | Both normalize through the same validator, so a mismatch is refused rather than stored | A shared country `Select` in the design system, which the holiday form and the profile form would both take |
+| Three country pickers now exist — the holiday form's, the organization's and the member's — each built per screen | All three write through the same validator, so a mismatch is refused rather than stored, and the option list is the same ISO set | A shared country `Select` in the design system that all three take, which is a design-system chore rather than a rule this area owns |
 | A holiday inside an approved vacation is still deducted as a working day | The frozen `workingDays` contract is what specs 07–09 and every issued report rest on | A later amendment proposed here: resolve the holiday set at submit time and store which holidays the request counted, leaving every issued report's number untouched |

@@ -56,11 +56,16 @@ not.
 requests, `organization/03`'s holidays and this area's projects at once. Its first spec is the
 vacation calendar, a row per member and a column per day.
 
-It **reads and never writes**: no `VacationRequest`, no `VacationReserveTransaction`, and no
-recomputed `workingDays` — spec 09 keeps owning the request lifecycle and spec 08 the ledger. Its
-`Teams` scope is spec 11's `Project` and `ProjectMember` with no new entity, which is the answer
-this repository gives to "team" until something needs departments. Nothing in this area changes
-for it; the only schema it touches is one nullable column on `Organization`.
+It **reads and never writes** the vacation tables: no `VacationRequest`, no
+`VacationReserveTransaction`, and no recomputed `workingDays` — spec 09 keeps owning the request
+lifecycle and spec 08 the ledger. Its `Teams` scope is spec 11's `Project` and `ProjectMember`
+with no new entity, which is the answer this repository gives to "team" until something needs
+departments.
+
+**It touches this area in two places.** `Membership` gains a nullable `countryCode` — the country
+whose public holidays that member is paid for — and spec 05's About tab gains the picker that
+sets it, riding the member update that already carries role and job title. Both are additive:
+the column is nullable with no backfill, and the route keeps every status and message it has.
 
 ## Shared Rules
 

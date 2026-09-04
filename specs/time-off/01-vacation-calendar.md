@@ -36,32 +36,31 @@ weekends shade the days nobody works. The visual acceptance target is
 one; a team is a `Project` and its `ProjectMember` rows (spec `user-management/11`), which is
 already the set of people who work together.
 
-**One structural decision shapes the payload:** every absence band carries a `kind`, and today
-that field is the constant `"vacation"`. A later spec introduces the time-off policy catalogue —
-absence types with their own colours — and it does so by giving `kind` more values, not by
-reshaping this response or this grid.
+**One structural decision shapes the payload:** every absence band carries a `kind`, today the
+constant `"vacation"`. The later time-off policy catalogue lands by giving that field more
+values, not by reshaping this response or this grid.
 
 Beyond the request, this spec adds:
 
-- **`Organization.countryCode`, and a picker for it on the existing Holidays settings page.** The
-  request asks that holidays be resolved automatically from the member's country *or the
-  company's*; the company has no country today, so the second half of that rule has nothing to
-  read. Nullable and additive; no new route of its own beyond the one that writes it.
-- **One shared country-resolution helper, adopted by every call site that already resolves a
-  member's country.** Holidays `scope=mine` and the Amounts Owed and Time Off reports each
-  resolve it from `Account.phoneCountryCode` alone today. Leaving them on the old rule while this
-  screen used a new one would be two answers to one question, so the new chain replaces the old
-  one everywhere. This changes what Amounts Owed pays out — see Blast Radius.
-- **The `ViewTimeOffCalendar` capability**, so the screen has a gate that can be narrowed later
-  without touching it.
+- **A nullable country column on `Membership` and on `Organization`, with a picker for each.**
+  Holidays are asked to follow the member's country or the company's and neither exists today.
+  The member's rides `PUT .../members/{memberId}`, which already ships and simply gains the
+  field; the organization's gets one new route and a control on the Holidays settings page.
+- **One country-resolution helper, adopted by every call site that resolves a member's country.**
+  Holidays `scope=mine` and both reports read `Account.phoneCountryCode` today, and this spec
+  drops that source everywhere rather than ranking against it — one question needs one answer.
+  It moves what Amounts Owed pays in both directions, and pays fewer holidays than today until
+  somebody states a country — see Blast Radius.
+- **The `ViewTimeOffCalendar` capability.** Neither country write adds one: `ManageHolidays` and
+  `edit-detail` already grant exactly the admin and manager who set them.
 
 Blast radius and backward compatibility for this spec are in [README.md](README.md).
 
 ## Actors & Preconditions
 
 - **Actors:** `admin`, `manager` and `user` open the calendar and see every member it is scoped
-  to. `viewer` has no access to it and is shown no navigation row. `admin` alone sets the
-  organization's country.
+  to. `viewer` has no access and is shown no navigation row. `admin` and `manager` state both
+  countries.
 - **Preconditions:** the caller is an `active` member of the organization. Nothing else is
   required — an organization with no holidays, no projects and no vacation requests renders an
   empty grid rather than an error, because "nobody is away" is an answer this screen exists to
@@ -76,7 +75,8 @@ on today's `admin` / `member` column and survive the role-enum migration untouch
 |---|---|---|---|---|
 | `ViewTimeOffCalendar` — open the calendar, any scope | ✅ | ✅ | ✅ | ❌ |
 | `ViewHolidays` — read the organization country | ✅ | ✅ | ❌ | ❌ |
-| `ManageOrganizationCountry` — set the organization country | ✅ | ❌ | ❌ | ❌ |
+| `ManageHolidays` — set the organization country | ✅ | ✅ | ❌ | ❌ |
+| `edit-detail` — set a member's country | ✅ | ✅ | ❌ | ❌ |
 
 `viewer` is refused because reports/01 already settles what a viewer may see of time off: their
 own, and nothing else.
@@ -133,8 +133,8 @@ membership that is `active` in the caller's organization.
 IF `scope` is `teams` or `people` and its selection list is empty, THEN THE SYSTEM SHALL answer
 `422` carrying the message for that scope.
 
-**Decided:** an empty selection is ambiguous between "nothing ticked yet" and "everyone", and
-answering it with an empty grid teaches the reader that their team has nobody in it.
+**Decided:** an empty selection is ambiguous between "nothing ticked yet" and "everyone", and an
+empty grid would teach the reader their team has nobody in it.
 
 #### REQ-01-041 — an unknown scope is refused
 
@@ -159,8 +159,7 @@ THE SYSTEM SHALL order rows by display name, case-insensitively ascending.
 IF a scope resolves to more rows than the row cap the contracts declare, THEN THE SYSTEM SHALL
 answer `422` carrying `TIME_OFF_CALENDAR_MESSAGES.tooManyMembers`.
 
-**Decided:** a cap rather than pagination — a wallchart paginated by member is two half-charts,
-and the scope controls already narrow it.
+**Decided:** a cap, not pagination — a wallchart paginated by member is two half-charts.
 
 ### Which days the grid draws
 
@@ -245,24 +244,24 @@ type from the first commit instead of being retrofitted onto a payload that has 
 
 #### REQ-01-026 — the country chain
 
-THE SYSTEM SHALL resolve a member's holiday country as the first of `MemberProfile.country`,
-`Account.phoneCountryCode`, `Organization.countryCode` that normalizes to a valid ISO 3166-1
-alpha-2 value.
+THE SYSTEM SHALL resolve a member's holiday country as `Membership.countryCode` when it
+normalizes to a valid ISO 3166-1 alpha-2 value, and as `Organization.countryCode` otherwise.
 
-**Decided:** the address country leads because public holidays are a fact about where somebody
-lives and works, while a phone's country is a contact detail that a foreign SIM makes wrong. This
-replaces the `Account.phoneCountryCode`-only rule everywhere it is used today — the holidays
-`scope=mine` read and both reports — so that one question has one answer.
+**Decided:** both links are stated by a person, and nothing is inferred.
+`Account.phoneCountryCode` — today's only source — is dropped rather than ranked: a dial code is
+a contact detail a foreign SIM makes wrong. `MemberProfile.country` is a postal address behind a
+PII capability, and reading it would make the holidays somebody is paid a side effect of filling
+in a contract.
 
 #### REQ-01-040 — a member with no country at all
 
-IF none of the three candidates normalizes to a valid alpha-2 value, THEN THE SYSTEM SHALL
-resolve the member's holiday country to `null`.
+IF neither `Membership.countryCode` nor `Organization.countryCode` normalizes to a valid alpha-2
+value, THEN THE SYSTEM SHALL resolve the member's holiday country to `null`.
 
 #### REQ-01-027 — an unusable candidate is skipped, not fatal
 
-WHEN a candidate in the chain is present but does not normalize to a valid alpha-2 value, THE
-SYSTEM SHALL skip it and continue to the next candidate.
+WHEN `Membership.countryCode` is present but does not normalize to a valid alpha-2 value, THE
+SYSTEM SHALL skip it and read `Organization.countryCode` instead.
 
 #### REQ-01-028 — which holidays reach a member
 
@@ -292,30 +291,51 @@ THE SYSTEM SHALL shade Saturday and Sunday columns as non-working days.
 spec `user-management/09`. A configurable working week would put this screen and the frozen
 `workingDays` on that request into disagreement.
 
-### The organization's country
+### The countries, and who states them
 
-#### REQ-01-033 — setting it
+#### REQ-01-042 — setting a member's country
 
-WHEN an `admin` submits an ISO 3166-1 alpha-2 country, THE SYSTEM SHALL store it on
-`Organization.countryCode`.
+WHEN a caller holding `edit-detail` submits an ISO 3166-1 alpha-2 country for a member, THE
+SYSTEM SHALL store it on `Membership.countryCode`.
+
+**Decided:** a field on the member update that already ships. The screen carrying a member's role
+and job title is where their country belongs, and one field does not earn an endpoint.
+
+#### REQ-01-043 — clearing a member's country
+
+WHEN a caller holding `edit-detail` submits an empty country for a member, THE SYSTEM SHALL store
+`null` on `Membership.countryCode`.
+
+**Decided:** `null` is not a member without holidays — REQ-01-026 reads the organization's
+country for exactly this row, so clearing the field returns them to the default rather than
+stranding them.
+
+#### REQ-01-044 — the member write is refused to everyone else
+
+IF a caller without `edit-detail` submits a member country, THEN THE SYSTEM SHALL answer `403`
+carrying `MEMBER_MESSAGES.editForbidden`.
+
+#### REQ-01-033 — setting the organization's country
+
+WHEN a caller holding `ManageHolidays` submits an ISO 3166-1 alpha-2 country, THE SYSTEM SHALL
+store it on `Organization.countryCode`.
 
 **Decided:** two admins writing at once is last-write-wins; no lock and no version check is added,
 because the write is one column with no read-modify-write.
 
-#### REQ-01-034 — clearing it
+#### REQ-01-034 — clearing the organization's country
 
-WHEN an `admin` submits an empty country, THE SYSTEM SHALL store `null` on
+WHEN a caller holding `ManageHolidays` submits an empty country, THE SYSTEM SHALL store `null` on
 `Organization.countryCode`.
 
-#### REQ-01-035 — the write is admin-only
+#### REQ-01-035 — the write is refused to everyone else
 
-IF a caller holding `ViewHolidays` but not `ManageOrganizationCountry` submits a country, THEN THE
-SYSTEM SHALL answer `403` carrying `HOLIDAY_MESSAGES.countryForbidden`.
+IF a caller without `ManageHolidays` submits a country, THEN THE SYSTEM SHALL answer `404`.
 
-**Decided:** 403 rather than 404, matching the holiday delete beside it — the caller can see the
-page, so pretending it does not exist is the wrong refusal. It is admin-only for the same reason
-delete is: moving the organization's country moves which holidays every member without a country
-of their own receives, and that moves what Amounts Owed pays.
+**Decided:** `ManageHolidays` rather than a capability of its own — it grants exactly the admin
+and manager this write is for, and a separate capability granted to the same two roles is a
+distinction no grant expresses and no case could reach. 404 is what `manage-holidays` already
+answers on the create and edit beside it.
 
 #### REQ-01-036 — an invalid country is refused
 

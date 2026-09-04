@@ -8,18 +8,23 @@ here by id.
 | Route | Guards | Success | Errors |
 |---|---|---|---|
 | `GET /api/organizations/{orgId}/time-off/calendar` | `SessionGuard`, `OrgScopeGuard`; `ViewTimeOffCalendar` checked in the service | `200` | `404` (no capability, REQ-01-002; wrong organization, REQ-01-039) · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeInverted` · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeTooWide` · `422` `TIME_OFF_CALENDAR_MESSAGES.teamsRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.peopleRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.scopeInvalid` · `422` `TIME_OFF_CALENDAR_MESSAGES.tooManyMembers` |
-| `PUT /api/organizations/{orgId}/settings/country` | `SessionGuard`, `OrgScopeGuard`; `ViewHolidays` and `ManageOrganizationCountry` checked in the service | `200` | `404` (no `ViewHolidays`; wrong organization) · `403` `HOLIDAY_MESSAGES.countryForbidden` (REQ-01-035) · `422` `HOLIDAY_MESSAGES.countryCodeInvalid` (REQ-01-036) |
+| `PUT /api/organizations/{orgId}/settings/country` | `SessionGuard`, `OrgScopeGuard`; `ManageHolidays` checked in the service | `200` | `404` (no `ManageHolidays`, REQ-01-035; wrong organization) · `422` `HOLIDAY_MESSAGES.countryCodeInvalid` (REQ-01-036) |
+| `PUT /api/organizations/{orgId}/members/{memberId}` | `SessionGuard`, `OrgScopeGuard`; `edit-detail` checked in the service | `200` | `403` `MEMBER_MESSAGES.editForbidden` (REQ-01-044) · `422` `HOLIDAY_MESSAGES.countryCodeInvalid` (REQ-01-036) · `404` (wrong organization) |
 
-Neither route carries `RequireCapability`. `CapabilityGuard` answers every refusal with `403`, and
-both routes here must answer `404` when the caller lacks the view capability, so the check runs in
-the service instead — the shape `HolidaysService.deleteHoliday` already uses for
-`DELETE /api/organizations/{orgId}/holidays/{holidayId}`, where the view gate answers 404 and the
-delete gate answers 403. On the country write the view gate answers 404 and the action gate
-answers 403 with the tabulated wording.
+No route here carries `RequireCapability`. `CapabilityGuard` answers every refusal with `403`, and
+the calendar must answer `404` when the caller lacks its capability, so the check runs in the
+service instead — the shape `HolidaysService.deleteHoliday` already uses for
+`DELETE /api/organizations/{orgId}/holidays/{holidayId}`.
 
-**Decided:** 404 with the check in the service. Keeping `RequireCapability` and accepting its
-`403` was rejected, because the calendar's refusal must be byte-identical to a wrong-organization
-read (REQ-01-002, REQ-01-039).
+**Decided:** 404 for the calendar and for the organization-country write. The calendar's refusal
+must be byte-identical to a wrong-organization read (REQ-01-002, REQ-01-039), and
+`manage-holidays` already answers 404 on the holiday create and edit the country control sits
+beside. **The member country is the exception and keeps its route's existing 403** —
+`PUT .../members/{memberId}` ships that refusal today for role and job title, and one route does
+not get two refusal shapes because a field was added to it.
+
+**That third row is an existing route.** It gains `countryCode` in its body and changes in no
+other way: same guards, same statuses, same messages for everything it already accepts.
 
 ### `GET /api/organizations/{orgId}/time-off/calendar`
 
@@ -85,10 +90,11 @@ REQ-01-029 and emits the holidays that reached each member, so the rule has one 
 `appliesToAllInView` is what REQ-01-030 and REQ-01-031 branch on, computed against the rows this
 response carries and no others.
 
-`countryCode` on a member row is the *resolved* value, and it is emitted so the header tooltip can
-explain why a day is marked for one person and not their neighbour. `MemberProfile.country` is
-`ViewMemberProfilePii`-gated as a profile field; it is read here server-side to run the chain and
-is never emitted as a profile — the two-letter resolved code is the only thing that leaves.
+`countryCode` on a member row is the *resolved* value — the member's own, or the organization's
+where they have none — and it is emitted so the header tooltip can explain why a day is marked
+for one person and not their neighbour. It is not a profile field: `MemberProfile.country` is a
+postal address behind `ViewMemberProfilePii` and this feature never reads it, so nothing here
+discloses where anybody lives.
 
 ### `PUT /api/organizations/{orgId}/settings/country`
 
@@ -112,8 +118,8 @@ Body: `{ "countryCode": "PL" }`, or `{ "countryCode": null }` to clear it (REQ-0
 | `TIME_OFF_CALENDAR_MESSAGES.emptyStateTitle` | — | Nobody to show | yes |
 | `TIME_OFF_CALENDAR_MESSAGES.emptyStateBody` | — | No active member matches this scope. | yes |
 | `TIME_OFF_CALENDAR_MESSAGES.orgCountryHint` | — | Members without a country of their own get this country's holidays. | yes |
-| `HOLIDAY_MESSAGES.countryForbidden` | `PUT /api/organizations/{orgId}/settings/country` | You don't have permission to change the organization country. | yes |
-| `HOLIDAY_MESSAGES.countryCodeInvalid` | `PUT /api/organizations/{orgId}/settings/country` | Country code must be 2 uppercase letters. | no |
+| `HOLIDAY_MESSAGES.countryCodeInvalid` | `PUT /api/organizations/{orgId}/settings/country`, `PUT /api/organizations/{orgId}/members/{memberId}` | Country code must be 2 uppercase letters. | no |
+| `MEMBER_MESSAGES.editForbidden` | `PUT /api/organizations/{orgId}/members/{memberId}` | You don't have permission to edit this member. | no |
 
 `HOLIDAY_MESSAGES.countryCodeInvalid` already ships
 (`packages/validation/src/holiday-messages.ts`) and is reused unchanged; the country field on this
@@ -126,9 +132,11 @@ this table exists to prevent.
 
 | Entity | Field | Type | Description |
 |---|---|---|---|
-| `Organization` | `countryCode` | `String?  @db.Char(2)` | ISO 3166-1 alpha-2, uppercase. The last link of the holiday-country chain (REQ-01-026). Nullable with no default, so every organization that predates the migration keeps today's behaviour exactly. |
+| `Membership` | `countryCode` | `String?  @db.Char(2)` | ISO 3166-1 alpha-2, uppercase. The first link of the holiday-country chain (REQ-01-026), set by an admin or manager on the member's screen. Nullable with no default; `null` means "use the organization's". |
+| `Organization` | `countryCode` | `String?  @db.Char(2)` | ISO 3166-1 alpha-2, uppercase. The second link, and the one that covers every member nobody has stated a country for. Nullable with no default. |
 
-No new table. No column is altered, renamed or dropped; the migration adds one nullable column,
+No new table. No column is altered, renamed or dropped; the migration adds only the nullable
+columns above,
 which is what makes the deploy order in `infra/deploy.sh` irrelevant for this spec and a code
 rollback safe without a database rollback.
 
@@ -136,13 +144,13 @@ rollback safe without a database rollback.
 
 | Export | File | What it is |
 |---|---|---|
-| `resolveMemberHolidayCountry(candidates)` | `packages/validation/src/reports.ts` | The chain of REQ-01-026 and REQ-01-027. Takes the three candidates in order, returns the first that normalizes, else `null`. |
+| `resolveMemberHolidayCountry(membershipCountry, organizationCountry)` | `packages/validation/src/reports.ts` | The chain of REQ-01-026, REQ-01-027 and REQ-01-040. Returns the membership's country when it normalizes, else the organization's when it does, else `null`. Both arguments are required and neither has a default, so a caller that forgets the organization gets `null` rather than a silently wrong country. |
 | `isHolidayApplicableToMember(holiday, member)` | `packages/validation/src/reports.ts` | Already ships and is unchanged. It answers REQ-01-028 and REQ-01-029 given a resolved country. |
 | `TIME_OFF_CALENDAR_MESSAGES` | a new module beside `packages/validation/src/holiday-messages.ts` | New message export, matching the one-file-per-area shape that module uses. |
-| `ViewTimeOffCalendar`, `ManageOrganizationCountry` | `packages/validation/src/roles.ts` | Two new members of `Capability`, and their lowercase-dashed twins `view-time-off-calendar` and `manage-organization-country` in `MemberCapability`, matching every capability that came before them. |
+| `ViewTimeOffCalendar` | `packages/validation/src/roles.ts` | One new member of `Capability`, and its lowercase-dashed twin `view-time-off-calendar` in `MemberCapability`, matching every capability that came before it. Granted to admin, manager and user. Neither country write adds a capability: `ManageHolidays` and `edit-detail` already grant exactly the admin and manager who set them. |
 
 **The call sites that must adopt `resolveMemberHolidayCountry`.** Each resolves a member's country
-from `Account.phoneCountryCode` alone today and must pass the full chain instead, or REQ-01-026 is
+from `Account.phoneCountryCode` today and must read the stated columns instead, or REQ-01-026 is
 true on one screen and false on the others:
 
 | File | Where | What it resolves today |
@@ -153,7 +161,9 @@ true on one screen and false on the others:
 | `apps/api/src/reports/reports.service.ts` | the membership country union behind the Time Off `organization_wide` group | The set of countries any covered member resolves to |
 
 Each reads `account.phoneCountryCode ?? null`; each must call `resolveMemberHolidayCountry`
-instead, with the profile and organization candidates loaded alongside.
+instead, loading `Membership.countryCode` and the organization's country alongside. **No call
+site keeps a phone-country read.** The column stays on `Account` for the phone field that owns
+it, and nothing about holidays consults it again.
 
 ## Validation Rules
 
@@ -167,7 +177,7 @@ instead, with the profile and organization candidates loaded alongside.
 | 6 | `projectIds` | Non-empty when `scope=teams` | `TIME_OFF_CALENDAR_MESSAGES.teamsRequired` | no |
 | 7 | `memberIds` | Non-empty when `scope=people` | `TIME_OFF_CALENDAR_MESSAGES.peopleRequired` | no |
 | 8 | resolved rows | ≤ 100 | `TIME_OFF_CALENDAR_MESSAGES.tooManyMembers` | yes |
-| 9 | `countryCode` (PUT body) | Empty, or exactly 2 uppercase letters | `HOLIDAY_MESSAGES.countryCodeInvalid` | no |
+| 9 | `countryCode` (either PUT body) | Empty, or exactly 2 uppercase letters | `HOLIDAY_MESSAGES.countryCodeInvalid` | no |
 
 The client validates 1–4, 6, 7 and 9 to keep the controls honest before a request is spent; the
 server re-validates all nine, and 5 and 8 exist only on the server because neither is reachable
@@ -206,8 +216,9 @@ upcases a stored candidate such as a `pl` profile country when it resolves the c
 | `calendar-absence-{vacationRequestId}` | Calendar | present for approved and pending, `absent` for rejected and cancelled |
 | `calendar-empty-state` | Calendar | present when no row resolves |
 | `calendar-error-banner` | Calendar | present on any `422` |
-| `org-country-select` | Settings › Holidays | present for admin/manager |
-| `org-country-save` | Settings › Holidays | present for admin, `absent` for manager |
+| `org-country-select` | Settings › Holidays | present for admin and manager |
+| `org-country-save` | Settings › Holidays | present for admin and manager |
+| `member-country-select` | Member detail › About | present for admin and manager |
 
 ## Screens
 
@@ -245,8 +256,15 @@ The member column is `position: sticky; left: 0` so the names survive a horizont
 
 Gains one control above the existing country filter: a `Select` labelled **Organization country**,
 hinted from `TIME_OFF_CALENDAR_MESSAGES.orgCountryHint`. It is the country picker the holiday form
-already uses. For a `manager` it renders read-only with no save
-control (REQ-01-035); for a `user` or `viewer` the page itself is already a 404.
+already uses. Admin and manager both set it (REQ-01-033); for a `user` or `viewer` the page itself
+is already a 404, so there is no read-only rendering to draw.
+
+### `/org/{orgId}/members/{memberId}` — About
+
+Gains one control in the block that already holds the role picker and the job title: a `Select`
+labelled **Country**, with an explicit first option meaning *the organization's country*, which
+is what `null` stores and what a member gets when nobody states one. It saves through the member
+update the screen already submits — no new form, no second save button.
 
 ## UI Description
 
@@ -273,8 +291,8 @@ control (REQ-01-035); for a `user` or `viewer` the page itself is already a 404.
 | 7 | `scope=people` names a member removed after the picker was opened | The row is dropped (REQ-01-011); the remaining rows draw and no error is raised. |
 | 8 | `scope=people` names 100 members and the caller adds one more | `422` `TIME_OFF_CALENDAR_MESSAGES.tooManyMembers`; the previous grid stays on screen. |
 | 9 | Two holidays fall on one date, one global and one `PL` | Both appear in `holidays[]`; a `PL` member carries both ids, everybody else carries the global one. `appliesToAllInView` is answered per holiday, not per date, so the column shades whole on the global one alone (TC-01-INT-13). |
-| 10 | A member's `MemberProfile.country` is `"XX"` and their phone country is `"PL"` | `"XX"` does not normalize, so the chain skips it and resolves `PL` (REQ-01-027). |
-| 11 | A member's profile country is `"pl"` lowercase | Normalizes to `PL` and matches the `PL` holiday (REQ-01-028 is case-insensitive). |
+| 10 | A member's stored `Membership.countryCode` is `"XX"` and the organization's is `"PL"` | `"XX"` does not normalize, so the chain skips it and resolves `PL` (REQ-01-027). A value that shape cannot come from the picker; it can come from a migration or a direct write. |
+| 11 | A member's stored country is `"pl"` lowercase | The write refuses it (Validation Rule 9), so it can only be there from a direct write; the read upcases it and it matches the `PL` holiday (REQ-01-028 is case-insensitive). |
 | 12 | The organization country is set while a calendar is open | The next fetch reflects it; nothing is pushed. The rule is evaluated on read, so no job has to have run for the answer to be right. |
 | 13 | A holiday is deleted between two fetches | The second fetch omits it. Nothing on this screen is cached across a range change. No case of its own: the second fetch is an ordinary read, and the deletion is `organization/03`'s own rule. |
 | 14 | `startDate` equals `endDate` | A one-column grid. Valid, and the `Week` preset is simply not what produced it. |
@@ -283,7 +301,7 @@ control (REQ-01-035); for a `user` or `viewer` the page itself is already a 404.
 | 17 | Two non-cancelled requests overlap for one member | Impossible through the product — spec `user-management/09` refuses an overlapping submission. If such a pair exists in the data, both bands draw stacked and neither is hidden, so the anomaly is visible rather than silently resolved. No case: the state cannot be reached through any route the cases call. |
 | 18 | The caller has no `Account.timezone` | Today's marker falls back to UTC; every other date is a calendar day and is unaffected (REQ-01-017). |
 | 19 | An admin clears the organization country while members rely on it | Those members fall back to `null` on the next read and see only global holidays. No stored value changes; the chain is evaluated on read. |
-| 20 | A `manager` submits a country through the API directly | `403` `HOLIDAY_MESSAGES.countryForbidden` — the read-only rendering is a convenience, the refusal is the gate (REQ-01-035). |
+| 20 | A `user` submits an organization country through the API directly | `404` — `manage-holidays` refuses it the way it refuses a holiday create, and the caller learns nothing about the route (REQ-01-035). |
 
 ## Security
 
@@ -296,10 +314,12 @@ control (REQ-01-035); for a `user` or `viewer` the page itself is already a 404.
   the reserve percentage appear nowhere in the response. The calendar reads
   `VacationRequest.workingDays` and nothing else from the vacation tables, which is what keeps it
   clear of the financial capabilities entirely.
-- **PII stays server-side.** `MemberProfile.country` is read to run the country chain and is never
-  emitted; the two-letter resolved code that is emitted is not the profile field and does not
-  imply an address.
+- **No PII is read or emitted.** The country a member is paid holidays for is a stated field on
+  their membership, not their postal address: `MemberProfile.country` sits behind
+  `ViewMemberProfilePii` and this feature never touches it. The two-letter code the calendar
+  emits is the holiday country and implies nothing about where anybody lives.
 - **The write is narrower than the read.** `ViewHolidays` opens the country field, and
-  `ManageOrganizationCountry` — admin only — is what changes it, because the value moves what
-  Amounts Owed pays for every member without a country of their own.
+  `ManageHolidays` is what changes it, because the value moves what Amounts Owed pays for every
+  member nobody has stated a country for. A member's own country is gated by `edit-detail`, the
+  capability that already governs their role and job title.
 - **No new outbound calls, no new secrets, no new AWS resources.**

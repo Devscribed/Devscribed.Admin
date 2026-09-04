@@ -82,11 +82,14 @@ are kept.
 
 - **Level:** Unit
 - **Covers:** REQ-01-026, REQ-01-027, REQ-01-040
-- **Steps:** Call the helper with each of: profile `PL` + phone `US` + org `BY`; profile `null` +
-  phone `US` + org `BY`; profile `null` + phone `null` + org `BY`; all three `null`; profile `XX`
-  (invalid) + phone `PL`; profile `"pl"` lowercase; profile `""` + phone `PL`.
-- **Expected Result:** `PL`, `US`, `BY`, `null`, `PL`, `PL`, `PL`. An invalid or empty candidate is
-  skipped rather than terminating the chain, and the result is always uppercase.
+- **Steps:** Call the helper with each `(membership, organization)` pair: `('US', 'BY')`;
+  `(null, 'BY')`; `(null, null)`; `('US', null)`; `('XX', 'PL')` where `XX` does not normalize;
+  `('', 'PL')`; `('pl', 'BY')` lowercase; `('US', 'xx')` where the organization's does not
+  normalize.
+- **Expected Result:** `US`, `BY`, `null`, `US`, `PL`, `PL`, `PL`, `US`. The membership wins
+  whenever it normalizes; an unusable membership value falls through to the organization rather
+  than terminating the chain; an unusable organization value with no membership value gives
+  `null`; the result is always uppercase.
 
 ### TC-01-UNIT-02
 
@@ -228,14 +231,15 @@ are kept.
 - **Level:** Integration
 - **Covers:** REQ-01-026
 - **Asserts:** `GET /api/organizations/{orgId}/time-off/calendar` → 200
-- **Steps:** Four members and three holidays on distinct dates — global, `PL`, `US`. Member A has
-  `MemberProfile.country = 'PL'` and `phoneCountryCode = 'US'`; B has only
-  `phoneCountryCode = 'US'`; C has neither and the organization country is `PL`; D has neither and
-  the organization country is cleared first.
-- **Expected Result:** A carries the global and the `PL` holiday — the profile wins over the phone.
-  B carries the global and the `US` one. C carries the global and the `PL` one, by the
-  organization fallback. D carries only the global one. Each member's `countryCode` in the response
-  is `PL`, `US`, `PL`, `null` respectively.
+- **Steps:** Four members and three holidays on distinct dates — global, `PL`, `US`. The
+  organization country is `PL`. Member A is stated `US`; B is stated `PL`; C is stated nothing;
+  D is stated nothing and the organization country is then cleared. Give A a
+  `phoneCountryCode` of `BY` and leave it there for the whole case.
+- **Expected Result:** A carries the global and the `US` holiday — their stated country wins over
+  the organization's, and their `BY` phone country reaches nothing, which is the source this spec
+  drops. B and C both carry the global and the `PL` one, C by the organization fallback. D
+  carries only the global one. Each member's `countryCode` in the response is `US`, `PL`, `PL`,
+  `null` respectively.
 
 ### TC-01-INT-13
 
@@ -255,8 +259,8 @@ are kept.
 - **Covers:** REQ-01-033
 - **Asserts:** `PUT /api/organizations/{orgId}/settings/country` → 200;
   `GET /api/organizations/{orgId}/time-off/calendar` → 200
-- **Steps:** With a `PL` holiday in the window and a member who has no country of their own, read
-  the calendar; set the organization country to `PL` as an admin; read it again.
+- **Steps:** With a `PL` holiday in the window and a member who has no country stated, read the
+  calendar; set the organization country to `PL` as a `manager`; read it again.
 - **Expected Result:** The first read gives that member no `holidayIds` entry for the `PL` day; the
   second does, with no other change to the response. Nothing was written to the membership — the
   chain is evaluated on read (Edge case 12).
@@ -265,12 +269,35 @@ are kept.
 
 - **Level:** Integration
 - **Covers:** REQ-01-035
-- **Asserts:** `PUT /api/organizations/{orgId}/settings/country` → 403
-  HOLIDAY_MESSAGES.countryForbidden
-- **Steps:** As a `manager`, submit a country. Then as a `user`, submit one.
-- **Expected Result:** `403` carrying `countryForbidden` for the manager — they can see the page,
-  so the refusal names the action. `404` for the `user`, who fails the `ViewHolidays` gate first
-  and must not learn the route exists.
+- **Asserts:** `PUT /api/organizations/{orgId}/settings/country` → 200;
+  `PUT /api/organizations/{orgId}/settings/country` → 404
+- **Steps:** As a `manager`, submit a country. Then as a `user`, and then as a `viewer`.
+- **Expected Result:** `200` for the manager — `manage-holidays` grants admin and manager alike.
+  `404` for both the `user` and the `viewer`, byte-identical, so neither learns the route exists.
+
+### TC-01-INT-23
+
+- **Level:** Integration
+- **Covers:** REQ-01-042, REQ-01-043
+- **Asserts:** `PUT /api/organizations/{orgId}/members/{memberId}` → 200;
+  `GET /api/organizations/{orgId}/time-off/calendar` → 200
+- **Steps:** With a `US` holiday and a `PL` holiday in the window and the organization country set
+  to `PL`, state `US` on a member as a `manager`, read the calendar, then submit an empty country
+  for the same member and read again.
+- **Expected Result:** After the first write the member carries the `US` holiday and not the `PL`
+  one; after the second their `Membership.countryCode` is `null` and they carry the `PL` one, by
+  the organization fallback. The member's role and job title are unchanged by both writes.
+
+### TC-01-INT-24
+
+- **Level:** Integration
+- **Covers:** REQ-01-044
+- **Asserts:** `PUT /api/organizations/{orgId}/members/{memberId}` → 403
+  MEMBER_MESSAGES.editForbidden
+- **Steps:** As a `user`, submit a country for another member. Then submit one for themselves.
+- **Expected Result:** `403` carrying `editForbidden` both times — the route's existing refusal,
+  unchanged by the new field, and a member may not state their own holiday country any more than
+  they may set their own role.
 
 ### TC-01-INT-16
 
@@ -451,3 +478,15 @@ are kept.
   cannot use is not shown to them.
 - **Selectors:** `org-country-select`, `org-country-save` (present for admin, absent for manager),
   `calendar-cell-holiday-{membershipId}-{date}`
+
+### TC-01-E2E-08
+
+- **Level:** E2E
+- **Covers:** REQ-01-042
+- **Steps:** As a `manager`, open a member's About tab, set **Country** to Poland, and save. Open
+  the calendar over a month holding a `PL` holiday.
+- **Expected Result:** The country control saves through the form that already carries the role
+  and the job title — one save, one toast. That member's row then carries the `PL` day's per-cell
+  holiday marker, and a member left on the organization's country carries it only if the
+  organization's country is `PL` too.
+- **Selectors:** `member-country-select`, `calendar-cell-holiday-{membershipId}-{date}`
