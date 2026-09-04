@@ -175,6 +175,7 @@ The shipped body gains `countryCode` beside the `role` and `jobTitle` it already
 | `TIME_OFF_CALENDAR_MESSAGES.emptyStateBody` | — | No active member matches this scope. | yes |
 | `TIME_OFF_CALENDAR_MESSAGES.orgCountryHint` | — | Members without a country of their own get this country's holidays. | yes |
 | `TIME_OFF_CALENDAR_MESSAGES.memberCountryDefaultOption` | — | Use the organization's country | yes |
+| `TIME_OFF_CALENDAR_MESSAGES.orgCountryNoneOption` | — | No country — global holidays only | yes |
 | `PROFILE_MESSAGES.country.invalid` | `PUT /api/organizations/{orgId}/settings/country`, `PUT /api/organizations/{orgId}/members/{memberId}` | Enter a valid country | no |
 | `MEMBER_MESSAGES.editForbidden` | `PUT /api/organizations/{orgId}/members/{memberId}` | You do not have permission to edit members | no |
 | `MEMBER_MESSAGES.viewForbidden` | `GET /api/organizations/{orgId}/members/{memberId}` | You do not have permission to view this member | no |
@@ -341,7 +342,9 @@ left.
 ### `/org/{orgId}/settings/holidays`
 
 Gains one control above the existing country filter: a `Select` labelled **Organization country**,
-hinted from `TIME_OFF_CALENDAR_MESSAGES.orgCountryHint`. Its options are `COUNTRY_OPTIONS` from
+hinted from `TIME_OFF_CALENDAR_MESSAGES.orgCountryHint`. Its first option is labelled from
+`TIME_OFF_CALENDAR_MESSAGES.orgCountryNoneOption`, submits `null` and is what REQ-01-034 clears
+through — without it the rule would have no control behind it. Below it, `COUNTRY_OPTIONS` from
 `@devscribed/validation`, which is `COUNTRY_NAMES` — the same 249 assigned codes rule 9's
 `validateCountryCode` tests, so the list offered and the list accepted are one list and cannot
 drift. **Not** the holiday form's picker, whose options come from the web app's own

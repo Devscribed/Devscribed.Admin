@@ -432,9 +432,12 @@ are kept.
 - **Level:** Integration
 - **Covers:** REQ-01-034
 - **Asserts:** `PUT /api/organizations/{orgId}/settings/country` → 200
-- **Steps:** Set the organization country to `PL`, then submit an empty value.
-- **Expected Result:** `200` and `countryCode: null`. A member relying on it falls back to `null`
-  on the next calendar read and keeps only global holidays (Edge case 19).
+- **Steps:** Set the organization country to `PL`, then submit an empty value, then submit a body
+  carrying no `countryCode` key at all.
+- **Expected Result:** `200` and `countryCode: null` after the empty value — a member relying on
+  it falls back to `null` on the next calendar read and keeps only global holidays (Edge case 19).
+  The third write answers `200` and changes nothing, which is the no-op an absent key is: a
+  mistyped key must not drop a country the fallback depends on.
 
 ### TC-01-INT-21
 
@@ -568,11 +571,15 @@ are kept.
 - **Covers:** REQ-01-033
 - **Steps:** Seed a `PL` holiday and a member with no country stated. As a `manager`, open
   Settings › Holidays, set the organization country to Poland, save, then open the calendar.
+  Return to the page, choose the picker's first option — the one meaning no country — and save
+  again.
 - **Expected Result:** The manager's save succeeds — the control is theirs, not drawn read-only —
   and that member's row then carries the `PL` day's per-cell holiday marker, which it did not
   before. The holiday list on the page is unchanged by the save. The marker is asserted here on
   purpose, over TC-01-INT-14's answer to the same write: what this case buys is that a manager
-  reaches the control at all and that one save carries the change to the grid.
+  reaches the control at all and that one save carries the change to the grid. The second save
+  clears the country and the marker goes with it — REQ-01-034 is reachable from the only control
+  that writes this column, which is the half no integration case can observe.
 - **Selectors:** `org-country-select`, `org-country-save`,
   `calendar-cell-holiday-{membershipId}-{date}`
 
