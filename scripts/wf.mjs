@@ -200,6 +200,11 @@ function witnessDefect(f) {
       return w.source ? null : 'witness kind "rule" needs a source (file:line)';
     case 'scenario':
       return null;
+    /* A command and its output. Checkable by anyone who runs it again, which is what rule 2
+       asks for — and the only witness available for a claim about the repository's state
+       rather than about its code. */
+    case 'command':
+      return w.source ? null : 'witness kind "command" needs a source (the command that was run)';
     default:
       return `unknown witness kind "${w.kind}"`;
   }
@@ -808,8 +813,18 @@ function cmdVerdict(args) {
       process.stdout.write(`rejected  ${r.f.rule ?? '(no rule)'} — ${r.why}\n`);
     }
     const detail = classified.rejected.map((r) => r.why).join('; ');
-    halt(run, 'gate-authority', `${stage} produced findings outside its authority: ${detail}`);
-    process.stdout.write(`\nhalted: gate-authority\n`);
+    /* Two different failures reach here and send a reader to different places. A finding
+       naming a target the stage may not address is an authority defect and the question is
+       whether the authority is right. A finding naming no target at all is a malformed
+       verdict and the question is whether the agent wrote its own schema. Saying which
+       costs one word and is the difference between reading AUTHORITY and reading the
+       agent's definition. */
+    const malformed = classified.rejected.every((r) => r.why === 'finding has no target');
+    const reason = malformed ? 'gate-schema' : 'gate-authority';
+    halt(run, reason, malformed
+      ? `${stage} produced findings that name no target, so nothing can be routed: ${detail}`
+      : `${stage} produced findings outside its authority: ${detail}`);
+    process.stdout.write(`\nhalted: ${reason}\n`);
     process.exit(2);
   }
 

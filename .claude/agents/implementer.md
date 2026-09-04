@@ -126,6 +126,10 @@ version ignores in silence and runs everything while your log says you filtered.
 silently falls back to the whole worktree — every unrelated edit on the machine included. A
 verdict about the wrong set of files is worse than no verdict.
 
+**Stage the paths you wrote, by name. Never `git add -A` or `git add .`.** The working tree
+holds files that are not yours and must not enter your commit; a diff carrying them is a diff
+the reviewer blocks on.
+
 **On a retry, add a commit. Never amend, never rebase, never force.** Every gate downstream needs
 a permanent name for the state it judged. Name the commit for the attempt and the findings it
 closes:
