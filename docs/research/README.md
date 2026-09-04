@@ -18,3 +18,4 @@ itself.
 | [2026-08-31](2026-08-31-open-profile-blockers.md) | Appendix to the sharding record: every blocker the checklist-free reviewer raised, in full, by shard model |
 | [2026-09-02](2026-09-02-what-blocked-the-requests-runs.md) | Eleven runs of one spec, 24 blockers classified: where the defects actually lived, and why the stage that found them first did not stop for them |
 | [2026-09-03](2026-09-03-the-refine-loop-grew-the-spec.md) | Two refine rounds that never reached the judge: nine findings by origin, two of them written by the previous repair, and a bundle that grew 105 lines |
+| [2026-09-04](2026-09-04-three-judges-over-one-spec.md) | One spec text judged three times — old judge, new judge, new judge with shards: what each blocked, what sharding recovered and lost, and four hypotheses it killed |
