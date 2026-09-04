@@ -6,7 +6,7 @@
   "branch": "fix/needed-by-upper-bound",
   "baseRef": "a04744ac95195238defa0751e8d577c1534d0ae4",
   "headAtInit": "a04744ac95195238defa0751e8d577c1534d0ae4",
-  "status": "qa",
+  "status": "ready",
   "track": "patch",
   "shapes": {
     "implement": "single",
@@ -16,7 +16,7 @@
   },
   "unrefined": null,
   "createdAt": "2026-09-04T11:13:42.712Z",
-  "updatedAt": "2026-09-04T11:17:51.405Z",
+  "updatedAt": "2026-09-04T11:23:52.012Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -50,8 +50,11 @@
       "lastVerdict": "pass"
     },
     "qa": {
-      "status": "pending",
-      "attempts": 0
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-04T11:17:51.584Z",
+      "endedAt": "2026-09-04T11:23:51.926Z",
+      "lastVerdict": "pass"
     }
   },
   "budget": {
