@@ -31,6 +31,7 @@ export const TIME_OFF_CALENDAR_MESSAGES = {
   emptyStateTitle: 'Nobody to show',
   emptyStateBody: 'No active member matches this scope.',
   orgCountryHint: "Members without a country of their own get this country's holidays.",
+  orgCountryNoneOption: 'No country — global holidays only',
   memberCountryDefaultOption: "Use the organization's country",
 } as const;
 

@@ -27,6 +27,18 @@ import { HolidayModal, type HolidayModalMode } from './HolidayModal';
 import { ALL_COUNTRIES, HOLIDAY_COUNTRY_OPTIONS, holidayCountryLabel } from './country-options';
 import type { HolidayRow, HolidaysResponse } from './types';
 
+/**
+ * The organization country picker's list: the option meaning *no country*, which submits
+ * `null` (REQ-01-034), then the 249 assigned codes Validation Rule 9 accepts. The empty
+ * value is the same one `ALL_COUNTRIES` carries, but it means something else here — not
+ * "applies everywhere", which is the holiday form's reading, but "this organization states
+ * none", so it is labelled from this spec's own export.
+ */
+const ORG_COUNTRY_OPTIONS = [
+  { value: '', label: TIME_OFF_CALENDAR_MESSAGES.orgCountryNoneOption },
+  ...STATED_COUNTRY_OPTIONS,
+];
+
 /** The year tabs: last year, this year, next year — enough to plan and to correct. */
 function yearTabs(current: number): number[] {
   return [current - 1, current, current + 1];
@@ -366,14 +378,16 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
             names a control width — `MultiFilter`'s own 200 is the same literal. */}
         <div style={{ minWidth: 220 }}>
           {/* The list the WRITE accepts, and not the holiday form's: that one is built from
-              the phone list and offers AC, TA and XK, which rule 9 refuses. A stored `null`
-              matches no option and paints the Select's own placeholder — the spec gives this
-              picker no option meaning "no country", and no export holds a label for one. */}
+              the phone list and offers AC, TA and XK, which rule 9 refuses. Above it, the
+              option that submits `null` — what REQ-01-034 clears through, and without it
+              the rule has no control behind it: a single Select is cleared only by picking
+              another option, and an organization that stated a country could never unstate
+              one. It is also what a stored `null` renders as. */}
           <Select
             label="Organization country"
             hint={TIME_OFF_CALENDAR_MESSAGES.orgCountryHint}
-            value={optionFor(STATED_COUNTRY_OPTIONS, orgCountry)}
-            options={STATED_COUNTRY_OPTIONS}
+            value={optionFor(ORG_COUNTRY_OPTIONS, orgCountry)}
+            options={ORG_COUNTRY_OPTIONS}
             onChange={(option) => setOrgCountry(valueOf(option))}
             data-testid="org-country-select"
           />

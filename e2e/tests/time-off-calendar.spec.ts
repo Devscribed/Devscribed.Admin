@@ -441,6 +441,25 @@ test.describe('time-off/01 — Vacation calendar', () => {
     await expect(
       page.getByTestId(`calendar-cell-holiday-${member.id}-2026-09-16`),
     ).toBeVisible();
+
+    // The second save clears it, through the picker's first option — REQ-01-034 reached
+    // from the only control that writes this column, which is the half no integration case
+    // can observe: a single Select is cleared only by picking another option.
+    await clickNav(page, 'Time off', 'settings-tab-holidays');
+    await expect(page.getByTestId('holidays-page')).toBeVisible();
+    await page.getByTestId('org-country-select').click();
+    await page.getByRole('option', { name: 'No country — global holidays only', exact: true }).click();
+    await page.getByTestId('org-country-save').click();
+    await expect(page.getByTestId('org-country-select')).toContainText(
+      'No country — global holidays only',
+    );
+
+    // …and the marker goes with it.
+    await openCalendar(page);
+    await goToSeptember2026(page);
+    await expect(
+      page.getByTestId(`calendar-cell-holiday-${member.id}-2026-09-16`),
+    ).toHaveCount(0);
   });
 
   // TC-01-E2E-08 — the member's own country, saved through the form that already carries
