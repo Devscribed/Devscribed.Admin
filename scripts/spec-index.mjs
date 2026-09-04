@@ -61,7 +61,12 @@ function specFiles(root) {
       const m = f.match(DOC_NAME);
       if (!m) continue;
       if (/\.(contracts|cases|design)\.md$/.test(f)) continue;
-      out.push({ area, file: f, path: `specs/${area}/${f}`, num: m[1] ?? m[2] });
+      /* When the document itself was last written. A document nobody has run has no other
+         clock, and "the newest one" is what somebody who just wrote one is looking for. */
+      out.push({
+        area, file: f, path: `specs/${area}/${f}`, num: m[1] ?? m[2],
+        writtenAt: statIf(join(dir, f))?.mtimeMs ?? 0,
+      });
     }
   }
   return out;
@@ -88,9 +93,26 @@ function frontmatter(root, path) {
 
 const isBlocker = (f) => f?.severity && f.severity !== 'note' && f.severity !== 'info';
 
+/**
+ * How long a run may go without writing anything before it is not running any more.
+ *
+ * Taken from the config rather than picked: it is the longest stage fuse any track declares,
+ * plus a margin for the orchestrator to write the verdict the blown fuse produces. A number
+ * chosen here instead would drift away from the fuses the moment one of them changed.
+ */
+function staleAfter(root) {
+  const MARGIN_MS = 5 * 60_000;
+  const cfg = jsonIf(join(root, '.claude', 'ai-workflow.config.json'));
+  const fuses = Object.values(cfg?.shipConfig ?? {})
+    .flatMap((t) => Object.entries(t?.timeoutMin ?? {}).filter(([k]) => !k.startsWith('$')).map(([, v]) => Number(v)))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  return (fuses.length ? Math.max(...fuses) : 45) * 60_000 + MARGIN_MS;
+}
+
 function shipEntries(root) {
   const base = join(root, '.workflow', 'runs');
   if (!existsSync(base)) return [];
+  const staleAfterMs = staleAfter(root);
   const out = [];
   for (const id of readdirSync(base)) {
     const dir = join(base, id);
@@ -104,7 +126,18 @@ function shipEntries(root) {
     const findings = run?.notes?.filter((n) => n.rule) ?? [];
     const stageRunning = Object.entries(run?.stages ?? {}).find(([, s]) => s.status === 'running')?.[0] ?? null;
     const startedAt = run?.createdAt ? Date.parse(run.createdAt) : statIf(dir)?.birthtimeMs ?? null;
-    const updatedAt = run?.updatedAt ? Date.parse(run.updatedAt) : statIf(dir)?.mtimeMs ?? null;
+
+    /* When something last wrote to this run, from the artefacts rather than from what the run
+       says about itself. `events.jsonl` is appended on every tool call an agent makes, so it is
+       the finest-grained clock there is; `stages/` moves once per attempt; `updatedAt` is only
+       as fresh as the last thing the orchestrator managed to write. */
+    const touched = [
+      run?.updatedAt ? Date.parse(run.updatedAt) : 0,
+      statIf(join(dir, 'events.jsonl'))?.mtimeMs ?? 0,
+      ...(existsSync(stages) ? readdirSync(stages).map((f) => statIf(join(stages, f))?.mtimeMs ?? 0) : []),
+    ];
+    const updatedAt = Math.max(...touched) || statIf(dir)?.mtimeMs || null;
+    const idleMs = updatedAt ? Date.now() - updatedAt : null;
 
     out.push({
       kind: 'ship',
@@ -116,8 +149,14 @@ function shipEntries(root) {
       label: id.replace(/_.*$/, '').replace('T', ' ').replace(/-(\d\d)-(\d\d)$/, ':$1:$2'),
       status: run?.status ?? 'half-created',
       /* A run that never wrote `run.json` is a preflight that died. It is listed rather than
-         hidden, because a directory nobody can account for is worse than a row saying so. */
-      detail: run ? (run.halt?.reason ?? stageRunning) : 'init не завершился',
+         hidden, because a directory nobody can account for is worse than a row saying so — and
+         so is a run that stopped without saying so, which is why the idle one says how long. */
+      detail: run
+        ? (run.halt?.reason
+          ?? (idleMs !== null && idleMs >= staleAfterMs && !['ready', 'halted', 'aborted', 'failed'].includes(run.status)
+            ? `брошен на ${stageRunning ?? run.status} — не двигается ${Math.round(idleMs / 60_000)} мин`
+            : stageRunning))
+        : 'init не завершился',
       branch: run?.branch ?? null,
       startedAt,
       updatedAt,
@@ -125,12 +164,27 @@ function shipEntries(root) {
       costUsd: +costUsd.toFixed(2),
       blockers: findings.filter(isBlocker).length,
       notes: findings.filter((f) => !isBlocker(f)).length,
-      /* A killed run keeps the stage it died in marked `running` forever, so the stage is not
-         evidence of anything. Only the run's own status is: it is what the orchestrator wrote
-         last, and it is written on the way out. And a run with no `run.json` at all is not
-         running — its `init` died — which matters because the board opens on whatever is
-         moving, and a dead directory claiming to move is what it would open on. */
-      running: !!run && !['ready', 'halted', 'aborted', 'failed'].includes(run.status),
+      /* Whether anything is actually working on this run.
+       *
+       * Neither of the two things that look authoritative is. The **stage** stays `running`
+       * forever in a run whose process was killed. The **status** is no better: the
+       * orchestrator writes a terminal one on its way out, so a run that died mid-stage keeps
+       * the stage name as its status and reads as live for as long as the directory exists —
+       * one sat at `pre_implement` for twenty hours and the board opened on it every time.
+       * The lock is not evidence either: the pid it records belongs to `wf init`, which has
+       * already exited by the time the first stage runs.
+       *
+       * The clock is evidence. Nothing legitimately goes a whole stage fuse without writing —
+       * the fuse blows, ship writes an error verdict, and the run moves — so a run whose
+       * newest artefact is older than the longest fuse any track declares is not running,
+       * whatever it says about itself. */
+      running: !!run
+        && !['ready', 'halted', 'aborted', 'failed'].includes(run.status)
+        && idleMs !== null && idleMs < staleAfterMs,
+      idleMs,
+      stale: !!run
+        && !['ready', 'halted', 'aborted', 'failed'].includes(run.status)
+        && (idleMs === null || idleMs >= staleAfterMs),
     });
   }
   return out;
@@ -180,6 +234,7 @@ export function buildIndex(root) {
          answers the wrong question. */
       weight: s.area === 'bugs' ? 'bug' : s.area === 'patches' ? 'patch' : 'spec',
       num: s.num,
+      writtenAt: s.writtenAt,
       title: fm.title,
       dependsOn: fm.dependsOn,
       entries: [],
@@ -205,7 +260,10 @@ export function buildIndex(root) {
     return {
       ...s,
       running: s.entries.some((e) => e.running),
-      lastAt: Math.max(0, ...s.entries.map((e) => e.updatedAt ?? 0)) || null,
+      /* The last time anything happened to this document — a run, or the writing of the
+         document itself. Sorting on a run's clock alone buried a document written a minute
+         ago under thirty that nobody had touched in a month. */
+      lastAt: Math.max(0, s.writtenAt ?? 0, ...s.entries.map((e) => e.updatedAt ?? 0)) || null,
       totals: {
         ship: s.entries.filter((e) => e.kind === 'ship').length,
         refine: s.entries.filter((e) => e.kind === 'refine').length,
@@ -216,7 +274,8 @@ export function buildIndex(root) {
     };
   });
 
-  /* Touched first, and among the untouched the newest spec — which is the one being written. */
+  /* Whatever is moving first, then by the clock: the newest thing to have happened, whether
+     that was a run or somebody writing the document. */
   out.sort((a, b) => (b.running ? 1 : 0) - (a.running ? 1 : 0)
     || (b.lastAt ?? 0) - (a.lastAt ?? 0)
     || b.path.localeCompare(a.path));

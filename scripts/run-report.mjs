@@ -1437,21 +1437,23 @@ function renderIndex() {
       ? '<span class="num"><b>$' + s.totals.costUsd.toFixed(2) + '</b>' + s.entries.length + ' прогон(ов)</span>'
       : '') + '</button>';
 
-  /* Grouped by the weight of the document, which is the track a run against it takes. Inside a
-     weight, what somebody has already run comes first. */
-  const WEIGHTS = [['spec', 'Спеки'], ['bug', 'Баги'], ['patch', 'Патчи']];
-  const group = (w, label) => {
+  /* Grouped by the weight of the document, which is the track a run against it takes. Both the
+     groups and the rows inside them are in clock order — newest first, counting the writing of
+     the document and not only its runs. Somebody who has just written one is looking for it,
+     and it was at the bottom of a list of thirty. */
+  const LABEL = { spec: 'Спеки', bug: 'Баги', patch: 'Патчи' };
+  const groups = [];
+  for (const w of ['spec', 'bug', 'patch']) {
     const mine = IDX.specs.filter((s) => (s.weight || 'spec') === w);
-    if (!mine.length) return '';
-    const hit = mine.filter((s) => s.entries.length);
-    const cold = mine.filter((s) => !s.entries.length);
-    return '<div class="grouphd">' + label + ' · ' + hit.length + ' из ' + mine.length + '</div>'
-      + hit.map(row).join('')
-      + (cold.length ? '<div class="grouphd sub2">пока не запускалось</div>' + cold.map(row).join('') : '');
-  };
+    if (!mine.length) continue;
+    groups.push({ w, mine, at: Math.max(0, ...mine.map((s) => s.lastAt || 0)), live: mine.some((s) => s.running) });
+  }
+  groups.sort((a, b) => (b.live ? 1 : 0) - (a.live ? 1 : 0) || b.at - a.at);
 
   document.getElementById('specList').innerHTML =
-    WEIGHTS.map(([w, label]) => group(w, label)).join('') +
+    groups.map((g) =>
+      '<div class="grouphd">' + LABEL[g.w] + ' · ' + g.mine.filter((s) => s.entries.length).length
+        + ' из ' + g.mine.length + '</div>' + g.mine.map(row).join('')).join('') +
     (IDX.orphans.length
       ? '<div class="grouphd">Прогоны без документа — он переименован или удалён</div>' +
         IDX.orphans.map((e) => '<button class="specrow" data-go="#' + esc(e.id) + '">' +
