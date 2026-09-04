@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { COUNTRY_OPTIONS } from './autofill';
 import {
   TIME_OFF_CALENDAR_MESSAGES,
+  resolveTimeOffCalendarTimezone,
   stepTimeOffCalendarAnchor,
+  timeOffCalendarToday,
   timeOffCalendarWindowRange,
   validateStatedCountryCode,
   validateTimeOffCalendarRange,
@@ -189,5 +191,34 @@ describe('the option list the pickers draw is the list the write accepts', () =>
       expect(COUNTRY_OPTIONS.some((option) => option.code === code)).toBe(false);
       expect(validateStatedCountryCode(code).valid).toBe(false);
     }
+  });
+});
+
+/**
+ * REQ-01-018 — the caller's today, and the three-limbed fallback the endpoint and the
+ * screen both read. One definition: a second one is how the marker and the window a reader
+ * lands on drift a day apart.
+ */
+describe('timeOffCalendarToday / resolveTimeOffCalendarTimezone', () => {
+  const instant = new Date('2026-09-30T23:00:00.000Z');
+
+  it('answers the calendar date of the ZONE, not of the machine', () => {
+    // 25 hours apart: at this instant the two are different days, which is the disagreement
+    // a screen reading the browser's clock introduced.
+    expect(timeOffCalendarToday('Pacific/Kiritimati', instant)).toBe('2026-10-01');
+    expect(timeOffCalendarToday('Pacific/Niue', instant)).toBe('2026-09-30');
+    expect(timeOffCalendarToday('UTC', instant)).toBe('2026-09-30');
+  });
+
+  it('falls back to UTC for all three limbs: absent, empty, and unrecognized', () => {
+    for (const zone of [null, undefined, '', '   ', 'Mars/Olympus']) {
+      expect(resolveTimeOffCalendarTimezone(zone)).toBe('UTC');
+      expect(timeOffCalendarToday(zone, instant)).toBe('2026-09-30');
+    }
+  });
+
+  it('answers the stated zone when the runtime can read it', () => {
+    expect(resolveTimeOffCalendarTimezone('Europe/Warsaw')).toBe('Europe/Warsaw');
+    expect(resolveTimeOffCalendarTimezone('Pacific/Kiritimati')).toBe('Pacific/Kiritimati');
   });
 });

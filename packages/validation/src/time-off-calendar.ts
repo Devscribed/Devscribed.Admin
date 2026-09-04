@@ -13,6 +13,7 @@
 
 import { PROFILE_MESSAGES, validateCountryCode } from './autofill';
 import { validateHolidayCountryCode } from './holidays';
+import { todayInTimeZone } from './requests';
 
 /**
  * §Error Messages, verbatim. The seven above the line are 422 bodies; the four below it
@@ -254,4 +255,41 @@ export function validateStatedCountryCode(
   const assigned = validateCountryCode(shape.value);
   if (!assigned.valid) return { valid: false, error: PROFILE_MESSAGES.country.invalid };
   return { valid: true, value: shape.value };
+}
+
+/**
+ * REQ-01-018's fallback, as its own question: **which zone** is today read in. The caller's
+ * when `Account.timezone` names one the runtime can read, UTC when it is absent, empty or
+ * unrecognized — the third limb being a stale profile value, which must not 500 a read.
+ *
+ * The endpoint answers `range.timezone` with this, so a body can never name a zone it did
+ * not read today in.
+ *
+ * Constructing the formatter is the whole probe: it throws on a zone the runtime does not
+ * know and produces no date, so nothing here restates how a day is formatted — that is
+ * `todayInTimeZone`'s, and it has one implementation.
+ */
+export function resolveTimeOffCalendarTimezone(timezone: string | null | undefined): string {
+  if (!timezone || timezone.trim().length === 0) return 'UTC';
+  try {
+    new Intl.DateTimeFormat(undefined, { timeZone: timezone });
+    return timezone;
+  } catch {
+    return 'UTC';
+  }
+}
+
+/**
+ * REQ-01-018's today, and **the single definition of it**: the endpoint marks `range.today`
+ * with it and the screen's `Today` control lands with it, so the two cannot disagree. A
+ * screen resolving today from the browser's clock opens on a window that does not hold the
+ * caller's today, and the marker then falls in no column at all.
+ *
+ * Formatted through the shipped `todayInTimeZone`, never beside it.
+ */
+export function timeOffCalendarToday(
+  timezone: string | null | undefined,
+  instant: Date = new Date(),
+): string {
+  return todayInTimeZone(resolveTimeOffCalendarTimezone(timezone), instant);
 }

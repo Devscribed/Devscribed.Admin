@@ -63,17 +63,26 @@ export class OrganizationCountryService {
   ): Promise<OrganizationCountryView> {
     const caller = await this.requireCapability(session, 'manage-holidays');
 
+    // REQ-01-034 — **presence decides**, the same rule the member write beside it follows.
+    // A body with no `countryCode` key changes nothing and answers the stored value: `null`
+    // is a meaningful submission ("no country"), an absent key is not a submission at all,
+    // and clearing on an absent key would let a mistyped one drop the country every member
+    // without their own depends on.
+    const body = input ?? {};
+    if (!(typeof body === 'object' && 'countryCode' in body)) {
+      const unchanged = await this.prisma.organization.findUniqueOrThrow({
+        where: { id: caller.organizationId },
+        select: { countryCode: true },
+      });
+      return { countryCode: unchanged.countryCode };
+    }
+
     // Validation Rule 9 — two tests, and both of them strict: `pl` is refused rather than
     // upcased, and `XX` is refused though it has the right shape, because this column is
     // the INPUT to REQ-01-026's resolution and a value that names no country removes
     // holiday pay in silence while the page reads it back as set. The READ
     // (`resolveMemberHolidayCountry`) is the forgiving half.
-    //
-    // An absent `countryCode` key clears the column, which is the opposite of the member
-    // update beside it, and deliberately: this body IS the resource — one field, replaced
-    // whole by a PUT — while the member update carries three fields and must be able to
-    // save a role without stating a country.
-    const result = validateStatedCountryCode((input ?? {}).countryCode);
+    const result = validateStatedCountryCode(body.countryCode);
     if (!result.valid) {
       throw new UnprocessableEntityException({
         error: 'validation_error',

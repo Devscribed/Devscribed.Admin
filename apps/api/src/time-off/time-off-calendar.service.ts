@@ -10,7 +10,8 @@ import {
   isoWeekOf,
   normalizeRole,
   resolveMemberHolidayCountry,
-  todayInTimeZone,
+  resolveTimeOffCalendarTimezone,
+  timeOffCalendarToday,
   validateTimeOffCalendarRange,
   validateTimeOffCalendarScope,
   type TimeOffCalendarScope,
@@ -189,15 +190,16 @@ export class TimeOffCalendarService {
       };
     });
 
-    // REQ-01-018, through the SHIPPED helper the screen also calls, so the day this marks
-    // and the window that screen opens on can never be two different days.
+    // REQ-01-018, through the two shared helpers the screen also reads, so the day this
+    // marks and the window that screen opens on can never be two different days, and the
+    // zone this reports is the one that day was read in.
     const stated = account?.timezone ?? null;
     return {
       range: {
         startDate,
         endDate,
-        today: todayInTimeZone(stated),
-        timezone: this.reportedTimezone(stated),
+        today: timeOffCalendarToday(stated),
+        timezone: resolveTimeOffCalendarTimezone(stated),
       },
       days: calendarDaysBetween(startDate, endDate).map((date) => ({
         date,
@@ -402,22 +404,6 @@ export class TimeOffCalendarService {
   /** A `@db.Date` column comes back as UTC midnight; slicing keeps it a calendar day. */
   private toISODate(value: Date): string {
     return value.toISOString().slice(0, 10);
-  }
-
-  /**
-   * Which zone the response says `today` was read in — a different question from what the
-   * date IS, which is `todayInTimeZone`'s and has one implementation. The two must agree:
-   * a body naming a zone `Intl` cannot read, while `today` had fallen back to UTC, would
-   * contradict itself.
-   */
-  private reportedTimezone(timezone: string | null): string {
-    if (!timezone || timezone.trim().length === 0) return 'UTC';
-    try {
-      new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date());
-      return timezone;
-    } catch {
-      return 'UTC';
-    }
   }
 
 }

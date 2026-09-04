@@ -846,7 +846,7 @@ describe('Vacation calendar (time off spec 01)', () => {
   });
 
   // TC-01-INT-20
-  it('an empty organization country clears the stored value', async () => {
+  it('an empty organization country clears it; a body with no key at all changes nothing', async () => {
     const admin = await signupAdmin('admin@acme.com', 'Acme Inc');
     expect((await setOrgCountry(admin.cookies, admin.organizationId, 'PL')).body).toEqual({
       countryCode: 'PL',
@@ -858,6 +858,24 @@ describe('Vacation calendar (time off spec 01)', () => {
       .send({ countryCode: '' });
     expect(cleared.status).toBe(200);
     expect(cleared.body).toEqual({ countryCode: null });
+
+    // Store one again, then submit a body carrying no `countryCode` key at all — the shape
+    // a mistyped key produces. It is a no-op, not a clear: a mistyped key must not drop the
+    // country every member without one of their own depends on.
+    await setOrgCountry(admin.cookies, admin.organizationId, 'PL');
+    const noKey = await request(server())
+      .put(`/api/organizations/${admin.organizationId}/settings/country`)
+      .set('Cookie', admin.cookies)
+      .send({ country: 'BY' });
+    expect(noKey.status).toBe(200);
+    expect(noKey.body).toEqual({ countryCode: 'PL' });
+    expect((await getOrgCountry(admin.cookies, admin.organizationId)).body).toEqual({
+      countryCode: 'PL',
+    });
+    const stored = await prisma.organization.findUniqueOrThrow({
+      where: { id: admin.organizationId },
+    });
+    expect(stored.countryCode).toBe('PL');
   });
 
   // TC-01-INT-21

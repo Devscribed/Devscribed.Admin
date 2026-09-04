@@ -8,8 +8,8 @@ import {
   TIME_OFF_CALENDAR_UNASSIGNED,
   stepTimeOffCalendarAnchor,
   timeOffBandAccessibleName,
+  timeOffCalendarToday,
   timeOffCalendarWindowRange,
-  todayInTimeZone,
   type TimeOffCalendarScope,
   type TimeOffCalendarWeekStart,
   type TimeOffCalendarWindow,
@@ -136,7 +136,7 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
    * anybody whose browser is not in their own zone, and the `Today` control then landed on
    * a window that does not hold their today with no marker anywhere to say so.
    */
-  const today = (): string => todayInTimeZone(session.account.timezone);
+  const today = (): string => timeOffCalendarToday(session.account.timezone);
 
   const [scope, setScope] = useState<TimeOffCalendarScope>('all');
   const [windowPreset, setWindowPreset] = useState<TimeOffCalendarWindow>('month');
