@@ -6,7 +6,7 @@
   "range": "a08419dc91f20c7f2545ebbbc8f8e9e789f734a2..HEAD",
   "admitted": false,
   "profile": "sharded",
-  "shardDecision": "Read myself, no shards dispatched. The slice offered one shard per member, but this is a delta pass over 283 changed lines in a 1,246-line bundle, and the change is one rule replacing another everywhere it was stated: the country chain went from three links (MemberProfile.country, Account.phoneCountryCode, Organization.countryCode) to two stated ones (Membership.countryCode, Organization.countryCode), and the organization-country write went from admin-only-403 to admin-and-manager-404. Every defect I found is a place the old rule survived in a member the new rule was written in — an acceptance criterion in the main spec against a requirement in the same file, an E2E case in the cases member against a requirement in the main spec and a testid row in the contracts member, a Verification Plan row against a case two hundred lines below it. A shard holding one member cannot see any of them, and the lead would then be re-reading all three members anyway to answer the sixteen whole-bundle criteria. Splitting would have bought parallelism and paid for it in exactly the findings that matter. I read all three members in full, plus specs/time-off/README.md (which the bundle delegates blast radius to under S-48) and the three area READMEs the range touched, and I opened every file a claim rests on.",
+  "shardDecision": "Read myself, no shards dispatched. The slice offered one shard per member, but this is a delta pass over 418 changed lines in a 1,293-line bundle and every defect in it crosses members: a Known Gaps row against the Summary two hundred lines above it, a Verification Plan row against a case in the same file and a requirement in another, a UI Description cell against the shipped members service, a Blast Radius paragraph against a Backward Compatibility item in the area README the bundle delegates to. A shard holding one member sees none of them, and the lead would be re-reading all three members anyway for the sixteen criteria the slice marks whole-bundle. I read all three members in full, plus specs/time-off/README.md, specs/organization/README.md and specs/user-management/README.md, both prior verdicts in .workflow/refine/time-off-01.probe/1 and .../2, and the diff of every commit in the range. I opened every file a claim rests on: apps/api/src/members/members.service.ts, apps/api/src/members/members.controller.ts, apps/api/prisma/schema.prisma, packages/validation/src/index.ts, packages/validation/src/roles.ts, packages/validation/src/holiday-messages.ts, packages/validation/src/reports.ts, apps/api/src/holidays/holidays.service.ts, packages/ds/src/components/reports/ReportControls.tsx. The pass this one follows is round 2, whose nine blockers the commit a64e65a says it repaired; seven are repaired in the text, two are not, and one repair is partial. F1 and F2 are the two the record claims and the document does not carry.",
   "shards": [],
   "read": {
     "specs": [
@@ -15,50 +15,50 @@
       "specs/time-off/01-vacation-calendar.cases.md",
       "specs/time-off/README.md",
       "specs/organization/README.md",
-      "specs/user-management/README.md"
+      "specs/user-management/README.md",
+      "specs/organization/03-holidays.md"
     ],
     "files": [
-      "packages/validation/src/roles.ts",
-      "packages/validation/src/index.ts",
-      "packages/validation/src/holiday-messages.ts",
-      "packages/ds/src/index.ts",
-      "apps/api/src/members/members.controller.ts",
       "apps/api/src/members/members.service.ts",
-      "apps/api/src/holidays/holidays.service.ts",
+      "apps/api/src/members/members.controller.ts",
       "apps/api/prisma/schema.prisma",
+      "packages/validation/src/index.ts",
+      "packages/validation/src/roles.ts",
+      "packages/validation/src/holiday-messages.ts",
+      "packages/validation/src/reports.ts",
+      "apps/api/src/holidays/holidays.service.ts",
+      "packages/ds/src/components/reports/ReportControls.tsx",
       ".claude/skills/spec-review/references/admission-criteria.md",
       ".workflow/refine/time-off-01.probe/1/judge.verdict.json",
-      ".workflow/refine/time-off-01.probe/1/fix.verdict.json"
+      ".workflow/refine/time-off-01.probe/1/fix.verdict.json",
+      ".workflow/refine/time-off-01.probe/2/judge.verdict.json",
+      ".workflow/refine/time-off-01.fix.json"
     ]
   },
   "unreached": [],
-  "priorRoundCheck": {
-    "verified": "Every repair the fixer claims is in the text. R2: contracts:121 now quotes 'Country code must be 2 uppercase letters.', which is packages/validation/src/holiday-messages.ts:20 character for character. R4: no port, host or database name survives in an Observed cell; cases:12-13 read in route/state/observer terms and only the Command column keeps the documented E2E_WEB_PORT/E2E_API_PORT form. R5: contracts:16 names HolidaysService.deleteHoliday, which exists at holidays.service.ts. R1's decision holds — no route carries RequireCapability. R3's decision holds — Validation Rule 9 refuses lowercase and TC-01-INT-21 expects 422 for pl. N1, N2, N3, N5, N6 all carry their repairs.",
-    "disagreement": "Two of the fixer's own repairs were then undone by the commit that followed it, and the fixer's record does not know that. R3's repair left contracts:186-190 saying 'REQ-01-026 still upcases a stored candidate such as a pl profile country' — true when the chain read MemberProfile.country, false now (R6 below). N1's repair added TC-01-INT-23 as scopeInvalid's observer; the later commit added a second case with the same id (N1 below). Neither is the fixer's error, and both ship as defects."
-  },
   "sweeps": {
-    "currency": 14,
-    "conventions": 9,
-    "selfSufficiency": 8,
-    "testability": 36,
+    "currency": 22,
+    "conventions": 14,
+    "selfSufficiency": 9,
+    "testability": 37,
     "dataAndState": 11,
-    "obligations": 30,
-    "contradiction": 44,
+    "obligations": 26,
+    "contradiction": 45,
     "scope": 6
   },
   "criteria": {
     "S-01": "clear",
-    "S-02": "blocked",
+    "S-02": "clear",
     "S-03": "clear",
     "S-04": "clear",
-    "S-05": "clear",
+    "S-05": "blocked",
     "S-06": "clear",
     "S-07": "clear",
     "S-08": "blocked",
-    "S-09": "blocked",
-    "S-10": "blocked",
-    "S-11": "blocked",
-    "S-12": "clear",
+    "S-09": "clear",
+    "S-10": "clear",
+    "S-11": "clear",
+    "S-12": "blocked",
     "S-13": "clear",
     "S-14": "clear",
     "S-15": "clear",
@@ -82,7 +82,7 @@
     "S-33": "clear",
     "S-34": "clear",
     "S-35": "n/a",
-    "S-36": "clear",
+    "S-36": "blocked",
     "S-37": "clear",
     "S-38": "clear",
     "S-39": "clear",
@@ -90,7 +90,7 @@
     "S-41": "clear",
     "S-42": "clear",
     "S-43": "clear",
-    "S-44": "note",
+    "S-44": "clear",
     "S-45": "clear",
     "S-46": "clear",
     "S-47": "clear",
@@ -104,178 +104,110 @@
     "S-55": "clear",
     "S-56": "clear",
     "S-57": "note",
-    "S-58": "blocked"
+    "S-58": "clear"
   },
   "findings": [
     {
-      "id": "R1",
+      "id": "F1",
       "target": "spec",
       "severity": "blocker",
-      "criterion": "S-11",
-      "rule": "spec/contradiction",
-      "file": "specs/time-off/01-vacation-calendar.md",
-      "symbol": "Acceptance Criteria row 8",
-      "line": 417,
-      "claim": "The acceptance criterion for the country chain still describes the three-link rule this commit deleted. It names a profile link, a phone link and 'none of the three', against a requirement forty lines above it that reads two links and drops the phone as a source entirely. The criterion is what a person signs the feature off against, so the implementer is handed one rule to build and a different one to be measured by, and the two cases it names — TC-01-UNIT-01 and TC-01-INT-12 — were both rewritten to the new rule and would fail the criterion as written.",
-      "witness": {
-        "kind": "rule",
-        "detail": "Line 417 — '| 8 | A member's holiday country resolves from their profile, then their phone, then the organization, and is `null` when none of the three is usable | TC-01-UNIT-01, TC-01-INT-12 |'. Against REQ-01-026 at :247-248, 'THE SYSTEM SHALL resolve a member's holiday country as `Membership.countryCode` when it normalizes ... and as `Organization.countryCode` otherwise', whose Decided at :250-254 says `Account.phoneCountryCode` 'is dropped rather than ranked' and that `MemberProfile.country` is never read; against REQ-01-040 at :258-259, which names two candidates, not three; and against the contracts Security section at :317-320, 'this feature never touches it'. TC-01-UNIT-01 (cases :82-95) now calls the helper with `(membership, organization)` pairs and no profile or phone argument exists; TC-01-INT-12 (cases :231-245) gives member A a `phoneCountryCode` of `BY` precisely to assert it reaches nothing.",
-        "source": "specs/time-off/01-vacation-calendar.md:417 against specs/time-off/01-vacation-calendar.md:247"
-      },
-      "suggestedFix": "Restate the criterion as the rule now is: a member's holiday country is the one stated on their membership, falling back to the one stated on the organization, and `null` when neither is usable."
-    },
-    {
-      "id": "R2",
-      "target": "spec",
-      "severity": "blocker",
-      "criterion": "S-11",
-      "rule": "spec/contradiction",
-      "file": "specs/time-off/01-vacation-calendar.md",
-      "symbol": "Acceptance Criteria row 12",
-      "line": 421,
-      "claim": "The acceptance criterion says a manager cannot set the organization country and is told so. This commit gave the manager that write and made the refusal a bare 404 that tells nobody anything. The criterion and the case it names now assert opposite outcomes of the same call: the criterion demands a manager be refused, and TC-01-INT-15 demands a manager get 200.",
-      "witness": {
-        "kind": "rule",
-        "detail": "Line 421 — '| 12 | A manager cannot set the organization country and is told so | TC-01-INT-15 |'. Against REQ-01-033 at :320-321, 'WHEN a caller holding `ManageHolidays` submits an ISO 3166-1 alpha-2 country, THE SYSTEM SHALL store it', and the permission matrix at :78, '| `ManageHolidays` — set the organization country | admin ✅ | manager ✅ |'; against REQ-01-035 at :333, whose refusal is a bare `404` with no message at all; and against TC-01-INT-15 (cases :265-273), 'Expected Result: `200` for the manager — `manage-holidays` grants admin and manager alike.' Verified against the code the matrix claims: packages/validation/src/roles.ts:148 and :188 grant `ManageHolidays` to admin and to manager.",
-        "source": "specs/time-off/01-vacation-calendar.md:421 against specs/time-off/01-vacation-calendar.cases.md:272"
-      },
-      "suggestedFix": "Restate the criterion as what TC-01-INT-15 now observes: a manager sets the organization country, and a user or viewer is answered 404 with nothing that distinguishes the refusal from a route that does not exist."
-    },
-    {
-      "id": "R3",
-      "target": "spec",
-      "severity": "blocker",
-      "criterion": "S-02",
+      "criterion": "S-05",
       "rule": "spec/stale-statement",
-      "file": "specs/time-off/01-vacation-calendar.contracts.md",
-      "symbol": "MEMBER_MESSAGES.editForbidden",
-      "line": 122,
-      "claim": "The Error Messages row added by this commit quotes `MEMBER_MESSAGES.editForbidden` as 'You don't have permission to edit this member.' and marks it New: no. The export that ships says something else. Because the row claims the message already exists and is reused, an implementer following the table either invents a second wording for a message four other flows already emit, or ships a 403 body that this table does not contain — and TC-01-INT-24 asserts the message by name, so the case passes against text the spec never states.",
-      "witness": {
-        "kind": "command",
-        "detail": "sed -n '515p' packages/validation/src/index.ts prints \"  editForbidden: 'You do not have permission to edit members',\" — no apostrophe contraction, 'members' not 'this member', and no full stop. The contracts row at :122 reads '| `MEMBER_MESSAGES.editForbidden` | `PUT /api/organizations/{orgId}/members/{memberId}` | You don't have permission to edit this member. | no |'. The same string is pinned by a shipping unit test at packages/validation/src/members.test.ts:165, and the route emits it unchanged at apps/api/src/members/members.service.ts:399-401 — 'if (!can(caller.role, 'edit-detail')) throw new ForbiddenException({ error: 'forbidden', message: MEMBER_MESSAGES.editForbidden })'. Cited by TC-01-INT-24 at cases :291-297.",
-        "source": "packages/validation/src/index.ts:515"
-      },
-      "suggestedFix": "Quote the string that ships — 'You do not have permission to edit members' — and leave the row New: no."
-    },
-    {
-      "id": "R4",
-      "target": "spec",
-      "severity": "blocker",
-      "criterion": "S-10",
-      "rule": "spec/contradiction",
-      "file": "specs/time-off/01-vacation-calendar.cases.md",
-      "symbol": "TC-01-E2E-07",
-      "line": 468,
-      "claim": "The E2E case and the contracts' UI Description row both still say a manager sees the organization country read-only and that the save control is not drawn for them. This commit moved that write to `ManageHolidays`, which the manager holds, and every other statement in the bundle moved with it — the requirement, the permission matrix, the testid table, the Screens section and the integration case. This one case did not, and it is the one a person watches: it asserts the absence of a control the same bundle's testid table asserts present for that role, on the same screen, by the same id. Whichever way it is implemented, one of the two is a failing test on the first green run.",
-      "witness": {
-        "kind": "rule",
-        "detail": "Cases :476-479 — 'For the manager, `org-country-select` renders the stored value read-only and `org-country-save` is not drawn at all — the control a role cannot use is not shown to them.' and 'Selectors: `org-country-select`, `org-country-save` (present for admin, absent for manager)'. Contracts :277 says the same in prose — '| Permission-limited | ... a `manager` sees the organization country and cannot save it. |'. Against the contracts' own testid table at :219-220, '| `org-country-select` | Settings › Holidays | present for admin and manager |' and '| `org-country-save` | Settings › Holidays | present for admin and manager |'; against contracts :259, 'Admin and manager both set it (REQ-01-033)'; against REQ-01-033 (:320) and the matrix row at :78; and against TC-01-INT-15 (cases :272), which expects `200` for the manager. TC-01-E2E-07 also names REQ-01-035 in its Covers, whose refusal is now a 404 for a user or viewer and no longer describes a manager at all.",
-        "source": "specs/time-off/01-vacation-calendar.cases.md:477 against specs/time-off/01-vacation-calendar.contracts.md:220"
-      },
-      "suggestedFix": "Amend TC-01-E2E-07's Steps, Expected Result and Selectors so the manager saves the country like the admin, and rewrite the contracts' Permission-limited row to match. If the case then covers nothing an admin run does not already cover, say so and drop the manager leg rather than leaving it asserting the old gate."
-    },
-    {
-      "id": "R5",
-      "target": "spec",
-      "severity": "blocker",
-      "criterion": "S-09",
-      "rule": "spec/contradiction",
       "file": "specs/time-off/01-vacation-calendar.md",
       "symbol": "Known Gaps rows 2 and 3",
-      "line": 402,
-      "claim": "Both Known Gaps rows still argue from the superseded chain, and they do not merely describe it — they make the safety claim this spec's own Summary retracts. Row 2 says the first two links 'behave exactly as they do today, so nothing regresses on the day the migration lands'; the first link is a column this spec creates, which is `null` for every row, and the source that behaved as today was the phone country this spec deletes. Row 3 says 'the new chain can only widen it'. The Summary and the area README both say the opposite in bold: it pays fewer holidays than today until somebody states a country. A reader planning the deploy from Known Gaps concludes no action is needed on the day it lands, which is precisely the conclusion the blast radius exists to prevent.",
-      "witness": {
-        "kind": "rule",
-        "detail": "Line 402 — '| `Organization.countryCode` is `null` ... so the third link of the chain does nothing until an admin sets it | The first two links behave exactly as they do today, so nothing regresses on the day the migration lands | ...'. Line 403 — '... the new chain can only widen it | Setting the organization country, which is the whole point of the third link |'. The chain has two links, not three: contracts :135-136 call `Membership.countryCode` 'The first link' and `Organization.countryCode` 'The second link'. Against the Summary at :52-53, 'It moves what Amounts Owed pays in both directions, and pays fewer holidays than today until somebody states a country', and against specs/time-off/README.md:112-116, '**It can pay less than today.** A member whose only country is their phone's resolves to `null` the moment this ships, and stops receiving that country's holiday rows ... it should be done in the same change window as the deploy', and README:148-149, 'The country chain is not a superset of today's rule, and this area says so rather than claiming otherwise.'",
-        "source": "specs/time-off/01-vacation-calendar.md:402 against specs/time-off/01-vacation-calendar.md:52"
-      },
-      "suggestedFix": "Rewrite both rows against the two-link chain. Row 2's honest reason is that both columns land `null` and the chain is evaluated on read, so nothing is stored wrong — not that nothing changes; the gap it names is the window in which members who had a phone country are paid fewer holiday rows, and what closes it is stating a country. Row 3's reason cannot be 'can only widen it'."
-    },
-    {
-      "id": "R6",
-      "target": "spec",
-      "severity": "blocker",
-      "criterion": "S-09",
-      "rule": "spec/contradiction",
-      "file": "specs/time-off/01-vacation-calendar.contracts.md",
-      "symbol": "Validation Rules — Decided",
-      "line": 190,
-      "claim": "The sentence that bounds the lowercase refusal to the write says the read side still upcases a stored profile country. The chain no longer has a profile candidate, and the Security section three sections later says flatly that this feature never touches `MemberProfile.country`. So the document both asserts and denies that REQ-01-026 reads the profile, and the denial is the one the response shape and the PII argument rest on. An implementer reading only the Validation Rules section loads a `ViewMemberProfilePii`-gated column into the resolver, which is the exact read the spec's own Security section promises does not happen.",
-      "witness": {
-        "kind": "rule",
-        "detail": "Contracts :188-190 — 'This bounds the write only — REQ-01-026 still upcases a stored candidate such as a `pl` profile country when it resolves the chain on read.' Against REQ-01-026 (specs/time-off/01-vacation-calendar.md:247-254), which names `Membership.countryCode` and `Organization.countryCode` and says reading `MemberProfile.country` 'would make the holidays somebody is paid a side effect of filling in a contract'; against contracts :95-97, 'It is not a profile field: `MemberProfile.country` is a postal address behind `ViewMemberProfilePii` and this feature never reads it'; and against contracts :317-320, '**No PII is read or emitted.** ... this feature never touches it.' The upcasing claim itself survives — Edge case 11 (:295) and TC-01-UNIT-01's seventh pair both keep it — but its subject is now `Membership.countryCode`.",
-        "source": "specs/time-off/01-vacation-calendar.contracts.md:190 against specs/time-off/01-vacation-calendar.contracts.md:96"
-      },
-      "suggestedFix": "Name the candidate the chain actually has: a stored `pl` on `Membership.countryCode`, which the write refuses and only a migration or a direct write can leave there, exactly as Edge case 11 already puts it."
-    },
-    {
-      "id": "R7",
-      "target": "spec",
-      "severity": "blocker",
-      "criterion": "S-09",
-      "rule": "spec/contradiction",
-      "file": "specs/time-off/01-vacation-calendar.cases.md",
-      "symbol": "Not proven / Reaching the states the cases need",
-      "line": 76,
-      "claim": "The Verification Plan describes a spec that no longer exists, and it does it in the one table whose job is to tell the next agent what has and has not been established. It calls `MemberProfile.country` 'the link this spec puts *first*', names the phone country as a link the probe proved, and states that TC-01-INT-12 seeds a profile country against a phone country — TC-01-INT-12 does neither, and was rewritten in this same commit to prove that the phone country reaches nothing. Worse, no row of 'Reaching the states the cases need' reaches `Membership.countryCode` at all: the row for 'A member with a country' routes through `updateAccountSettingsViaApi` with `phoneCountryCode`, which under this spec's own rules produces a member with no country. Three of the new cases — TC-01-INT-12, TC-01-INT-23 and TC-01-E2E-08 — need a stated membership country, and the plan that exists to prove their states are reachable proves a different state and contradicts the cases while doing it.",
-      "witness": {
-        "kind": "rule",
-        "detail": "Cases :76 — '| The `MemberProfile.country` link of the chain | It is the link this spec puts *first*, and the probe exercised the second and third instead | An integration case seeding a profile country that disagrees with the phone country — TC-01-INT-12 is written for exactly that and is unrun until the code exists |'. Cases :36 — '| A member with `MemberProfile.country` | `setMemberProfile` (`helpers.ts:605`) | yes | **not run** — the probe proved the phone link and the absent link of the chain, not the profile link. |'. Cases :34 — '| A member with a country | `updateAccountSettingsViaApi` (`helpers.ts:1310`) with `phoneCountryCode` | yes | yes |'. Against TC-01-INT-12 as it now reads (cases :231-245): 'Member A is stated `US` ... Give A a `phoneCountryCode` of `BY` ... their `BY` phone country reaches nothing, which is the source this spec drops.' Against REQ-01-026 (main :247-254). The states TC-01-INT-23 (cases :278-289) and TC-01-E2E-08 (cases :482-493) need are a membership country set and cleared through `PUT .../members/{memberId}`, and no row of the table at cases :18-40 covers that route.",
-        "source": "specs/time-off/01-vacation-calendar.cases.md:76 against specs/time-off/01-vacation-calendar.cases.md:239"
-      },
-      "suggestedFix": "Replace the two profile/phone rows with what this spec's cases actually need: a row for stating a member's country through `PUT .../members/{memberId}`, marked not run because the field does not exist yet, and a row for the organization country alongside the one already there. Rewrite the 'Not proven' entry as the membership-country link, and stop attributing a profile-versus-phone seeding to TC-01-INT-12."
-    },
-    {
-      "id": "R8",
-      "target": "spec",
-      "severity": "blocker",
-      "criterion": "S-58",
-      "rule": "spec/incomplete-decision",
-      "file": "specs/time-off/01-vacation-calendar.contracts.md",
-      "symbol": "Routes",
-      "line": 12,
-      "claim": "This spec puts a new field on `Membership` and a `Select` on the member's About tab that shows and edits it, and it specifies only the write. `GET /api/organizations/{orgId}/members/{memberId}` ships today, returns an explicit projection of the membership row, and is the only thing that could tell the screen which country is stored — and the document says nothing about it, neither a rule nor a line placing it out of scope. `member-country-select` is therefore a control the screens draw that no route serves: on first paint it has no value to show, and TC-01-E2E-08 opens that tab and sets the control without ever asserting it reflects what is stored. The same omission applies to the About tab a `user` can already open, whose behaviour with the new field is unstated.",
+      "line": 408,
+      "claim": "Both Known Gaps rows still describe the three-link chain this range deleted, and row 2 makes the safety claim the same document's Summary retracts. Row 2 calls `Organization.countryCode` 'the third link' and says 'the first two links behave exactly as they do today, so nothing regresses on the day the migration lands'; the chain now has two links, the first is a column this spec creates which is `null` on every row, and the source that behaved as it does today — `Account.phoneCountryCode` — is the one this spec deletes. Row 3 says 'the new chain can only widen it' against a Summary that says in the same file that the spec 'pays fewer holidays than today until somebody states a country'. A person planning the deploy from Known Gaps — which is where a reader looks for what to do on the day — concludes no action is needed, which is the opposite of what the Blast Radius exists to tell them. The round-2 verdict raised this as R5 and the repair commit's own message lists it as repaired ('two Known Gaps rows still made the \"nothing regresses\" claim the Summary retracts'); the text does not carry the repair.",
       "witness": {
         "kind": "command",
-        "detail": "The Routes table at contracts :10-12 lists three routes and no GET. The Screens section at contracts :262-267 adds the control — 'a `Select` labelled **Country**, with an explicit first option meaning *the organization's country*, which is what `null` stores' — and the testid table at :221 requires `member-country-select` present for admin and manager. apps/api/src/members/members.controller.ts:38-41 is '@Get('members/:memberId') async detail(...)', and apps/api/src/members/members.service.ts:312-357 builds an explicit `MemberDetail` — id, fullName, email, role, status and named flags — so a column the projection does not list does not appear. Contracts :26-27 says of the PUT only that 'It gains `countryCode` in its body and changes in no other way', which is a statement about the write and leaves the read unaddressed.",
-        "source": "apps/api/src/members/members.service.ts:352"
+        "detail": "sed -n '408,409p' specs/time-off/01-vacation-calendar.md prints both rows verbatim, still reading 'the third link of the chain', 'The first two links behave exactly as they do today, so nothing regresses on the day the migration lands' and 'the new chain can only widen it'. Against REQ-01-026 at :249-250 — 'resolve a member's holiday country as `Membership.countryCode` ... and as `Organization.countryCode` otherwise' — two links, and the Summary at :51-55 — 'this spec drops that source everywhere rather than ranking against it ... and pays fewer holidays than today until somebody states a country'. specs/time-off/README.md:139-144 is headed 'It can pay less than today'. git show a64e65a -- specs/time-off/01-vacation-calendar.md contains no hunk touching either row: `git log -p a08419dc..HEAD -- specs/time-off/01-vacation-calendar.md | grep 'third link\\|first two links\\|can only widen'` returns nothing.",
+        "source": "specs/time-off/01-vacation-calendar.md:408 against specs/time-off/01-vacation-calendar.md:54"
       },
-      "suggestedFix": "One row or one line: the member detail read emits the stored `Membership.countryCode` (raw, not resolved — the resolved value is the calendar's) so the About tab can render it, and say what a caller without `edit-detail` sees. Or place the read out of scope and say how the control gets its initial value instead."
+      "suggestedFix": "Rewrite both rows against the two-link chain. Row 2's true reason is that both columns land `null` and the chain is evaluated on read, so nothing is stored wrong — not that nothing changes; the gap is the window in which members who had a phone country lose their national holiday rows, and what closes it is stating a country. Row 3 cannot say 'can only widen it', and its third link is now the second."
     },
     {
-      "id": "R9",
+      "id": "F2",
+      "target": "spec",
+      "severity": "blocker",
+      "criterion": "S-36",
+      "rule": "spec/untestable-case",
+      "file": "specs/time-off/01-vacation-calendar.cases.md",
+      "symbol": "Reaching the states the cases need / Not proven",
+      "line": 34,
+      "claim": "The Verification Plan is the table that tells the next agent how to reach the states the cases assert, and it names a route to the member country that this spec's own rules make a dead end. 'A member with a country' routes through `updateAccountSettingsViaApi` with `phoneCountryCode` — a member seeded that way resolves to nothing under REQ-01-026, which drops the phone as a source. No row of the table reaches `Membership.countryCode` at all, and three cases need a stated membership country: TC-01-INT-12, TC-01-INT-25 and TC-01-E2E-08. The 'Not proven' row compounds it by describing a different spec: it calls `MemberProfile.country` 'the link this spec puts *first*' — the spec puts the membership column first and REQ-01-026's Decided sentence refuses the profile outright — and says 'TC-01-INT-12 is written for exactly that', a case rewritten in this same range to seed no profile country and to prove that a `BY` phone country reaches nothing. The round-2 verdict raised this as R7 and the repair commit's message lists it as repaired ('the Verification Plan still described a profile link that no longer exists'); the text does not carry the repair.",
+      "witness": {
+        "kind": "command",
+        "detail": "sed -n '34p;36p;76p' specs/time-off/01-vacation-calendar.cases.md prints: '| A member with a country | `updateAccountSettingsViaApi` (`helpers.ts:1310`) with `phoneCountryCode` | yes | yes ...', '| A member with `MemberProfile.country` | `setMemberProfile` (`helpers.ts:605`) | yes | **not run** — the probe proved the phone link and the absent link of the chain, not the profile link ...', and '| The `MemberProfile.country` link of the chain | It is the link this spec puts *first*, and the probe exercised the second and third instead | An integration case seeding a profile country that disagrees with the phone country — TC-01-INT-12 is written for exactly that and is unrun until the code exists |'. Against TC-01-INT-12 (cases :232-245), whose steps are 'Member A is stated `US`; B is stated `PL` ... Give A a `phoneCountryCode` of `BY`' and whose expected result is 'their `BY` phone country reaches nothing, which is the source this spec drops'; and REQ-01-026 (:249-255), '`MemberProfile.country` is a postal address behind a PII capability'. git show a64e65a -- specs/time-off/01-vacation-calendar.cases.md touches only TC-01-UNIT-01, the two renumbered cases, TC-01-INT-27 and TC-01-E2E-07 — no hunk reaches the Verification Plan.",
+        "source": "specs/time-off/01-vacation-calendar.cases.md:34 against specs/time-off/01-vacation-calendar.md:249"
+      },
+      "suggestedFix": "Replace the phone and profile rows with the routes this spec's cases actually need: stating a member's country through `PUT /api/organizations/{orgId}/members/{memberId}`, marked not run because the field does not exist yet, and the organization country beside the row already there. Rewrite the 'Not proven' entry as the membership-country link, and stop attributing a profile-versus-phone seeding to TC-01-INT-12."
+    },
+    {
+      "id": "F3",
       "target": "spec",
       "severity": "blocker",
       "criterion": "S-08",
       "rule": "spec/stale-statement",
       "file": "specs/time-off/README.md",
-      "symbol": "Blast Radius",
-      "line": 93,
-      "claim": "The blast radius the bundle delegates to counts one migration column and two new capabilities. The spec now adds two columns and one capability. Both numbers are the first thing a person reads before approving the deploy, and both are wrong in the direction that understates it: a reviewer checking that the migration is additive is told to look for one column and will not notice that a second landed on `Membership`. The paragraph is also self-contradicting — thirty lines below, the same section closes with 'both columns land `null`'.",
+      "symbol": "Backward Compatibility item 3 / Frontend",
+      "line": 165,
+      "claim": "The area README the bundle delegates blast radius and backward compatibility to now counts the same set twice and gets two answers. A paragraph added in this range says two shipped member routes change shape; forty lines below it, Backward Compatibility item 3 still says 'No existing route, response field or `data-testid` changes', and the Frontend paragraph still says 'No existing screen's markup or test ids change'. Both are zeroes for a set with three members: `GET .../members/{memberId}` gains `countryCode` in its projection (REQ-01-045), `PUT .../members/{memberId}` gains it in its body (REQ-01-042), and the member detail About tab gains `member-country-select`. Item 3 is the row a person reads to decide which suites can be trusted untouched — it names the reports and holidays E2E suites as the enforcement — and the screen that changed is covered by neither.",
+      "witness": {
+        "kind": "command",
+        "detail": "sed -n '108,112p;151p;165,168p' specs/time-off/README.md prints '**Two shipped member routes change shape.** `GET .../members/{memberId}` gains `countryCode` in its explicit projection and `PUT .../members/{memberId}` gains it in its body', then 'No existing screen's markup or test ids change.', then '3. **No existing route, response field or `data-testid` changes.** The calendar's endpoint is new (proven: it answers `404` today), and the country endpoint is new. Enforced by the reports and holidays E2E suites, which are untouched by this spec and must stay green.' The `member-country-select` row is at specs/time-off/01-vacation-calendar.contracts.md:249, 'Member detail › About'. git show a64e65a -- specs/time-off/README.md added the 'Two shipped member routes' paragraph and touched neither item 3 nor the Frontend paragraph.",
+        "source": "specs/time-off/README.md:165 against specs/time-off/README.md:108"
+      },
+      "suggestedFix": "Item 3 and the Frontend paragraph state what actually changes on the existing surfaces — one response field, one request field, one new test id on the member detail screen — and say what enforces it, since the reports and holidays suites do not cover that screen."
+    },
+    {
+      "id": "F4",
+      "target": "spec",
+      "severity": "blocker",
+      "criterion": "S-05",
+      "rule": "spec/stale-statement",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "UI Description — Permission-limited",
+      "line": 305,
+      "claim": "The UI row rewritten in this range justifies drawing no read-only country control with a claim about today's authorization that is false for one of the two screens: 'the pages holding them are already refused to everybody else'. The member detail page is refused to nobody — `MembersService.getDetail` is documented and implemented as viewable by every role, and `view-list` is granted to `user` and `viewer` alike. So a `user` and a `viewer` do open the About tab, and the bundle never says what they see there. The same gap runs through the read: REQ-01-045 states the field only 'WHEN a caller holding `edit-detail` opens a member's detail', while the contracts' own section for that route says the projection simply gains the field and 'everything else it returns is unchanged', and the Routes row names no capability at all — 'capability checked in the service'. An implementer must choose between an unconditional field and one gated on `edit-detail`, and the two produce different response bodies for the majority of this product's roles. This is the half of round-2's R8 that its repair did not answer; R8 asked in as many words to 'say what a caller without `edit-detail` sees'.",
       "witness": {
         "kind": "rule",
-        "detail": "specs/time-off/README.md:93 — '**Database.** One nullable column, `Organization.countryCode`. No new table, no altered column, ...'. README:98 — '**Shared code that breaks on contact.** `packages/validation/src/roles.ts` gains two capabilities and their lowercase-dashed twins.' Against the contracts Data Model at :133-136, which lists two rows, `Membership.countryCode` and `Organization.countryCode`; against the Summary at main :45-48, 'A nullable country column on `Membership` and on `Organization`'; against contracts :150, which declares exactly one new capability — '`ViewTimeOffCalendar` ... One new member of `Capability` ... Neither country write adds a capability'; and against README:124 itself, 'the migration alone changes nothing, because both columns land `null`.'",
-        "source": "specs/time-off/README.md:93 against specs/time-off/01-vacation-calendar.contracts.md:135"
+        "detail": "Contracts :305 — 'Both country pickers are drawn only for the admin and manager who may save them; no role sees either control read-only, because the pages holding them are already refused to everybody else.' Against apps/api/src/members/members.service.ts:305-306, the doc on `getDetail`: '`GET /members/:memberId` (spec 05 requirements 1-4, 11-13). Viewable by every role — the permission matrix only gates the two edit flags, never the read.' `CAPABILITY_MATRIX` in packages/validation/src/index.ts grants `view-list` to `user` (:~700) and `viewer` and `edit-detail` to neither. The unresolved audience is REQ-01-045 (specs/time-off/01-vacation-calendar.md:317-323) against contracts :113 ('The shipped projection gains one field (REQ-01-045). Everything else it returns is unchanged.') and contracts :12, whose Guards cell reads 'capability checked in the service' and whose Errors cell lists only 404, though the shipped route also answers 403 `MEMBER_MESSAGES.viewForbidden` (members.service.ts:313-316).",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:305 against apps/api/src/members/members.service.ts:305"
       },
-      "suggestedFix": "Two nullable columns, `Membership.countryCode` and `Organization.countryCode`; one capability and its lowercase-dashed twin."
+      "suggestedFix": "One repair covering both halves: say that the member detail page is open to every role and that the picker is simply not drawn for a caller without `edit-detail`, and settle the read — either `countryCode` ships in the projection for every caller who may read the member (and REQ-01-045 drops its `edit-detail` clause), or it is gated and the Routes row names the capability that gates it and the status a caller without it gets."
+    },
+    {
+      "id": "F5",
+      "target": "spec",
+      "severity": "blocker",
+      "criterion": "S-12",
+      "rule": "spec/contradiction",
+      "file": "specs/time-off/01-vacation-calendar.md",
+      "symbol": "Roles & Permission Matrix — ViewHolidays",
+      "line": 81,
+      "claim": "The matrix grants `ViewHolidays` for 'read the organization country' and no route exercises it. This range removed `ViewHolidays` from the only row that ever named it — the settings-country PUT, which now reads `ManageHolidays` alone — and added a read route for the member's country while leaving the organization's with none. The consequence is on the screen: the Holidays settings page draws a `Select` labelled Organization country whose value must be the stored `Organization.countryCode`, and nothing in this bundle returns it. `org-country-select` is a control the Screens section draws that no route serves; on first paint it has no value, so an implementer either invents a response field on `organization/03`'s shipping holidays read or adds an unspecified endpoint, and which callers may see the stored country is decided by neither this spec nor the matrix row that claims to govern it.",
+      "witness": {
+        "kind": "rule",
+        "detail": "specs/time-off/01-vacation-calendar.md:81 — '| `ViewHolidays` — read the organization country | ✅ | ✅ | ❌ | ❌ |'. grep across the bundle finds `ViewHolidays` in exactly two places: that row and contracts :349, 'ViewHolidays opens the country field'. The Routes table (contracts :10-13) carries four routes — the calendar GET, the settings-country PUT, and the two member routes — and none reads `Organization.countryCode`; the PUT's Guards cell before this range read '`ViewHolidays` and `ManageOrganizationCountry` checked in the service' and now reads '`ManageHolidays` checked in the service' (git diff a08419dc..HEAD, contracts hunk 1). The control is at contracts :285-288 ('Gains one control above the existing country filter: a `Select` labelled **Organization country**') and :247 ('`org-country-select` | Settings › Holidays | present for admin and manager'), and TC-01-E2E-07 (cases :481-490) opens that page and sets it. `Organization.countryCode` is a column this spec adds (contracts :162), so no shipping route can be carrying it already: apps/api/prisma/schema.prisma's `Organization` model has no country column.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:10 against specs/time-off/01-vacation-calendar.md:81"
+      },
+      "suggestedFix": "Say which read returns the stored `Organization.countryCode` and who may call it — a row in the Routes table for the shipping holidays read gaining the field, gated by `ViewHolidays`, is the shape the matrix already promises — or drop the `ViewHolidays` row from the matrix and say in the Screens section where the picker's initial value comes from."
     },
     {
       "id": "N1",
       "target": "spec",
       "severity": "note",
-      "criterion": null,
-      "rule": "spec/missing-artefact",
-      "file": "specs/time-off/01-vacation-calendar.cases.md",
-      "symbol": "TC-01-INT-23",
-      "line": 278,
-      "claim": "Two different cases carry the id `TC-01-INT-23`. The round before this one added it as scopeInvalid's observer; this commit added a second one, for the member country, two hundred lines above it. This repository has the code reference case ids by name, so the id no longer names a case — an implementer writing `TC-01-INT-23` picks one of two, and a retirement or an amendment recorded against the id is ambiguous. `spec-lint` does not catch it: it counts 36 headings and reports clean, and 36 headings carry 35 distinct ids. Filed as a note because the register has no criterion for a duplicated case id, which is how one gets proposed: **a case id names exactly one case**, checkable by the script that already parses the headings, and cheaper there than in a judge.",
+      "criterion": "S-57",
+      "rule": "spec/divergence",
+      "file": "specs/time-off/01-vacation-calendar.md",
+      "symbol": "REQ-01-026",
+      "line": 247,
+      "claim": "Carried from both earlier rounds and still unconfirmed: on the day this deploys, every member whose only country was their phone's stops receiving their national holiday rows on Amounts Owed until somebody states a country for them or for the organization, and the fix is a manual step somebody has to own. The bundle records this completely and honestly — the Summary, REQ-01-026's Decided sentence, the area README's two directions with the probe's measurement, and Backward Compatibility item 2 — and no rule is missing. The newest spec governs; this is raised only so a person confirms the trade was meant. It is the one thing in this document that costs money if it was not.",
       "witness": {
-        "kind": "command",
-        "detail": "grep -n '^### TC-' specs/time-off/01-vacation-calendar.cases.md | awk '{print $2}' | sort | uniq -c | awk '$1>1' prints '2 TC-01-INT-23'. Line 278 is the member-country case, 'Covers: REQ-01-042, REQ-01-043'; line 374 is the scope case, 'Covers: REQ-01-041'. node scripts/spec-lint.mjs specs/time-off/01-vacation-calendar.md reports 'clean — 44 requirements, 36 cases, 3 routes, 12 messages, 26 testids'.",
-        "source": "specs/time-off/01-vacation-calendar.cases.md:374"
+        "kind": "rule",
+        "detail": "REQ-01-026 at :247-255 and the Summary at :51-55, against specs/time-off/README.md:139-144 ('**It can pay less than today.** A member whose only country is their phone's resolves to `null` the moment this ships ... it should be done in the same change window as the deploy') and :146-152, whose measurement is the probe's: the `PL` day produced one holiday row (320.00) and the global day five (1280.00). Recorded as left for a person in .workflow/refine/time-off-01.fix.json (N4) and raised again as N4 by the round-2 judge.",
+        "source": "specs/time-off/README.md:139"
       },
-      "suggestedFix": "Renumber the member-country case to the next free id and, separately, teach `spec-lint` that a case id is unique."
+      "suggestedFix": "None. Confirm the deploy-day dip is accepted and that setting the organization country in the same change window is an instruction somebody owns."
     },
     {
       "id": "N2",
@@ -283,67 +215,16 @@
       "severity": "note",
       "criterion": null,
       "rule": "spec/missing-artefact",
-      "file": "specs/time-off/01-vacation-calendar.md",
-      "symbol": "frontmatter",
-      "line": 4,
-      "claim": "The frontmatter still describes the spec before this commit. `entities` names only `Organization`, though `Membership` gains a column; `api` names two routes, though the Routes table now carries three; `routes` names two screens, though the member detail About tab gains a control. The frontmatter is what `npm run board` and `npm run specs` index, so the board will not show this spec against the member route or the member entity, and a later spec touching either will not find this one. `spec-lint` reads the Routes table rather than the frontmatter and passes.",
-      "witness": {
-        "kind": "rule",
-        "detail": "Lines 4-8 — 'routes: [\"/org/{orgId}/time-off/calendar\", \"/org/{orgId}/settings/holidays\"]', 'api: [\"GET /api/organizations/{orgId}/time-off/calendar\", \"PUT /api/organizations/{orgId}/settings/country\"]', 'entities: [Organization]'. Against contracts :12, which adds `PUT /api/organizations/{orgId}/members/{memberId}` to the Routes table; contracts :262, which adds the screen `/org/{orgId}/members/{memberId}` — About; and contracts :135, which adds a column to `Membership`.",
-        "source": "specs/time-off/01-vacation-calendar.md:8"
-      },
-      "suggestedFix": "Add `Membership` to `entities`, the member PUT to `api`, and the member detail screen to `routes`."
-    },
-    {
-      "id": "N3",
-      "target": "spec",
-      "severity": "note",
-      "criterion": "S-44",
-      "rule": "spec/missing-artefact",
       "file": "specs/time-off/01-vacation-calendar.cases.md",
-      "symbol": "TC-01-UNIT-01",
-      "line": 82,
-      "claim": "The case's Expected Result claims an outcome none of its eight pairs produces: 'an unusable organization value with no membership value gives `null`'. Every pair with an unusable organization value also has a usable membership value, so a helper that returned the raw unusable organization string in that branch — the backwards implementation of REQ-01-040's second half — passes this case. It is the branch worth pinning, because it is the only one where the chain must reject rather than fall through, and the register marks this criterion note-only.",
-      "witness": {
-        "kind": "rule",
-        "detail": "Cases :86-89 lists `('US', 'BY')`, `(null, 'BY')`, `(null, null)`, `('US', null)`, `('XX', 'PL')`, `('', 'PL')`, `('pl', 'BY')`, `('US', 'xx')` — the only unusable organization value, `'xx'`, is paired with a usable `'US'`. Cases :90-93's expected outputs are `US`, `BY`, `null`, `US`, `PL`, `PL`, `PL`, `US`, none of which observes the sentence at :92-93. REQ-01-040 (main :258-259) is 'IF neither `Membership.countryCode` nor `Organization.countryCode` normalizes ... THEN ... `null`'.",
-        "source": "specs/time-off/01-vacation-calendar.cases.md:92"
-      },
-      "suggestedFix": "One more pair — `(null, 'xx')` expecting `null` — and the sentence is then observed."
-    },
-    {
-      "id": "N4",
-      "target": "spec",
-      "severity": "note",
-      "criterion": "S-57",
-      "rule": "spec/divergence",
-      "file": "specs/time-off/01-vacation-calendar.md",
-      "symbol": "REQ-01-026",
-      "line": 245,
-      "claim": "Last round's N4 asked a person to confirm that Amounts Owed was meant to move. This commit made that question larger and reversed half of it, and it is still unconfirmed. The chain no longer merely adds a fallback: it deletes `Account.phoneCountryCode` as a source at all four call sites, so on the day this deploys, every member whose only country was their phone's stops receiving their national holiday rows until somebody states a country. The bundle records this honestly and completely — the Summary, the area README's two directions, and Backward Compatibility item 2 all say it plainly — and no rule is missing. The newest spec governs. It is raised so a person confirms that a payable which falls on deploy day and is restored by a manual step is the trade that was meant, and that 'set the organization country in the same change window' is an instruction somebody owns.",
-      "witness": {
-        "kind": "rule",
-        "detail": "REQ-01-026's Decided at main :250-254, '`Account.phoneCountryCode` — today's only source — is dropped rather than ranked'. Contracts :164-166, '**No call site keeps a phone-country read.**' The four call sites are listed at contracts :156-161. specs/time-off/README.md:111-115, '**It can pay less than today.** A member whose only country is their phone's resolves to `null` the moment this ships ... setting the organization country is not an optional nicety here, it is the step that restores and then widens what was being paid, and it should be done in the same change window as the deploy.' The measurement behind it is README:117-121: the `PL` day produced one holiday row (320.00) and the global day five (1280.00). Neither `specs/organization/03-holidays.md` nor `specs/reports/01` is edited; the supersession is stated in this bundle and in the three area READMEs.",
-        "source": "specs/time-off/README.md:111"
-      },
-      "suggestedFix": "None. Confirm the deploy-day dip is accepted and that somebody owns setting the organization country in the same window."
-    },
-    {
-      "id": "N5",
-      "target": "spec",
-      "severity": "note",
-      "criterion": null,
-      "rule": "spec/missing-artefact",
-      "file": "specs/time-off/01-vacation-calendar.md",
-      "symbol": "Roles & Permission Matrix",
-      "line": 79,
-      "claim": "The matrix's rows mix two unions without saying so. `ViewTimeOffCalendar`, `ViewHolidays` and `ManageHolidays` are members of `Capability` in `packages/validation/src/roles.ts`; `edit-detail` is a member of `MemberCapability` in `packages/validation/src/index.ts`, read by `can(role, ...)` rather than by a `RequireCapability` decorator. Both exist and both grant admin and manager exactly as the table says, so nothing is wrong — but a table headed 'Capability' whose fourth row is not one costs a reader a lookup, and contracts :150 carries the same mixed pair in one sentence.",
+      "symbol": "TC-01-INT-24 / Acceptance Criteria order",
+      "line": 296,
+      "claim": "Cosmetic leftovers of the renumbering, reported because they are cheap to close and confusing to meet: the old `TC-01-INT-23`/`TC-01-INT-24` pair became `TC-01-INT-25`/`TC-01-INT-26`, so `TC-01-INT-24` now names no case at all (spec-lint counts 37 cases across ids 01-23 and 25-27), and the Acceptance Criteria table carries rows 18 and 19 between rows 11 and 12. Nothing is wrong and no criterion covers either; a reader looking for TC-01-INT-24 simply finds nothing, and the register has no rule about the ordinal order of a table's rows.",
       "witness": {
         "kind": "command",
-        "detail": "grep -n 'ManageHolidays' packages/validation/src/roles.ts gives :81 (the union), :148 (admin) and :188 (manager). grep -n \"'edit-detail'\" packages/validation/src/index.ts gives :532 (the `MemberCapability` union), :665 (admin true), :709 (manager true), :754 and :799 (user and viewer false). apps/api/src/members/members.service.ts:399 reads `can(caller.role, 'edit-detail')`.",
-        "source": "packages/validation/src/index.ts:532"
+        "detail": "grep -o 'TC-01-[A-Z0-9]*-[0-9]*' specs/time-off/01-vacation-calendar.cases.md | sort -u lists TC-01-INT-01 … TC-01-INT-23, TC-01-INT-25, TC-01-INT-26, TC-01-INT-27 — no 24. node scripts/spec-lint.mjs specs/time-off/01-vacation-calendar.md reports '45 requirements, 37 cases, 4 routes, 12 messages, 26 testids' and is clean. The acceptance rows are at specs/time-off/01-vacation-calendar.md:426-429.",
+        "source": "specs/time-off/01-vacation-calendar.cases.md:296"
       },
-      "suggestedFix": "One clause on the `edit-detail` row saying it is the lowercase-dashed `MemberCapability` the member update already checks."
+      "suggestedFix": "Nothing required. If it is touched at all, close the hole at 24 and move rows 18 and 19 below row 17."
     }
   ]
 }
