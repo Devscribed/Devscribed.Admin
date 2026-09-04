@@ -8,6 +8,7 @@ api:
   - "PUT /api/organizations/{orgId}/settings/country"
   - "GET /api/organizations/{orgId}/members/{memberId}"
   - "PUT /api/organizations/{orgId}/members/{memberId}"
+  - "GET /api/organizations/{orgId}/holidays"
 entities: [Organization, Membership]
 tags: [vacation-calendar, wallchart, timeline, time-off, absence, holiday, country-resolution, scope, teams, projects, members, week, month]
 depends-on:
@@ -39,9 +40,8 @@ weekends shade the days nobody works. The visual acceptance target is
 one; a team is a `Project` and its `ProjectMember` rows (spec `user-management/11`), which is
 already the set of people who work together.
 
-**One structural decision shapes the payload:** every absence band carries a `kind`, today the
-constant `"vacation"`. The later time-off policy catalogue lands by giving that field more
-values, not by reshaping this response or this grid.
+**One structural decision shapes the payload:** every absence band carries a `kind` (REQ-01-025),
+today the constant `"vacation"`.
 
 Beyond the request, this spec adds:
 
@@ -54,8 +54,7 @@ Beyond the request, this spec adds:
   drops that source everywhere rather than ranking against it — one question needs one answer.
   **It moves what Amounts Owed pays, in both directions, and pays less than today until somebody
   states a country** — the Blast Radius measures both and names the deploy-day step.
-- **The `ViewTimeOffCalendar` capability.** Neither country write adds one: `ManageHolidays` and
-  `edit-detail` already grant exactly the admin and manager who set them.
+- **The `ViewTimeOffCalendar` capability**, and neither country write adds one of its own.
 
 Blast radius and backward compatibility for this spec are in [README.md](README.md).
 
@@ -303,7 +302,9 @@ WHEN a caller holding `edit-detail` submits an ISO 3166-1 alpha-2 country for a 
 SYSTEM SHALL store it on `Membership.countryCode`.
 
 **Decided:** a field on the member update that already ships — one field does not earn an
-endpoint, and the screen carrying a member's role is where their country belongs.
+endpoint, and the screen carrying a member's role is where their country belongs. It is written
+inside that update's existing transaction and organization-row lock and adds no lock of its own,
+which is what makes it unlike REQ-01-033's unlocked single column.
 
 #### REQ-01-043 — clearing a member's country
 
@@ -332,9 +333,8 @@ WHEN any caller the member detail read already answers opens a member's detail, 
 return that member's stored `Membership.countryCode` on that read.
 
 **Decided:** unconditional — the shipped route is viewable by every role and gates only its two
-edit flags, and a field that appears with a capability is two response bodies for one route. It
-discloses nothing: the holiday country is a stated field, not the postal address behind
-`ViewMemberProfilePii`. The value is the stored one, `null` included, never the resolved one.
+edit flags, and a field that appears with a capability is two response bodies for one route. The
+value is the stored one, `null` included, never the resolved one.
 
 #### REQ-01-046 — reading the organization's country
 

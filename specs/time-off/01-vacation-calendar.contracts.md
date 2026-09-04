@@ -12,6 +12,12 @@ here by id.
 | `PUT /api/organizations/{orgId}/settings/country` | `SessionGuard`, `OrgScopeGuard`; `ManageHolidays` checked in the service | `200` | `404` (no `ManageHolidays`, REQ-01-035; wrong organization) · `422` `HOLIDAY_MESSAGES.countryCodeInvalid` (REQ-01-036) |
 | `GET /api/organizations/{orgId}/members/{memberId}` | `SessionGuard`, `OrgScopeGuard`; no capability gates this read — it answers every role (REQ-01-045) | `200` | `403` `MEMBER_MESSAGES.viewForbidden` (the caller is no longer an active member; shipped, unchanged) · `404` (wrong organization; member not found) |
 | `PUT /api/organizations/{orgId}/members/{memberId}` | `SessionGuard`, `OrgScopeGuard`; `edit-detail` checked in the service | `200` | `403` `MEMBER_MESSAGES.editForbidden` (REQ-01-044) · `400` `HOLIDAY_MESSAGES.countryCodeInvalid` (REQ-01-051) · `404` (wrong organization) |
+| `GET /api/organizations/{orgId}/holidays` | `SessionGuard`, `OrgScopeGuard`; `scope=mine` answers every active member, and any other scope needs `ViewHolidays`, checked in the service | `200` | `404` (no `ViewHolidays` on a scope other than `mine`; wrong organization) |
+
+The last row is the shipped holiday list, unchanged in path, guards, body and status. It is here
+because its `scope=mine` branch answers REQ-01-026's chain after this spec and a phone country
+before it, and a rule that is true on the calendar and false on the holiday list beside it is the
+divergence this table exists to prevent (TC-01-INT-29).
 
 No route here carries `RequireCapability`. `CapabilityGuard` answers every refusal with `403`, and
 the calendar must answer `404` when the caller lacks its capability, so the check runs in the
@@ -90,12 +96,17 @@ literal `none`) · `memberIds[]` (required when `scope=people`).
       ]
     }
   ],
-  "meta": { "scope": "all", "memberCount": 8 }
+  "meta": { "scope": "all", "memberCount": 1 }
 }
 ```
 
 `meta.memberCount` is the number of rows in `members[]` and nothing else; a refused read carries
 no body to count (REQ-01-013).
+
+`holidays[]` carries every holiday dated inside the window and no other, whatever country it
+names. **Decided:** the window, not the organization's whole holiday set — a row the grid draws
+no column for is a row nothing on this screen can place, and `appliesToAllInView` would have to
+be answered for it anyway.
 
 `holidayIds` is the resolution's output, not its input: the server applies REQ-01-026 through
 REQ-01-029 and emits the holidays that reached each member, so the rule has one implementation.
@@ -162,6 +173,7 @@ The shipped body gains `countryCode` beside the `role` and `jobTitle` it already
 | `TIME_OFF_CALENDAR_MESSAGES.emptyStateTitle` | — | Nobody to show | yes |
 | `TIME_OFF_CALENDAR_MESSAGES.emptyStateBody` | — | No active member matches this scope. | yes |
 | `TIME_OFF_CALENDAR_MESSAGES.orgCountryHint` | — | Members without a country of their own get this country's holidays. | yes |
+| `TIME_OFF_CALENDAR_MESSAGES.memberCountryDefaultOption` | — | Use the organization's country | yes |
 | `HOLIDAY_MESSAGES.countryCodeInvalid` | `PUT /api/organizations/{orgId}/settings/country`, `PUT /api/organizations/{orgId}/members/{memberId}` | Country code must be 2 uppercase letters. | no |
 | `MEMBER_MESSAGES.editForbidden` | `PUT /api/organizations/{orgId}/members/{memberId}` | You do not have permission to edit members | no |
 | `MEMBER_MESSAGES.viewForbidden` | `GET /api/organizations/{orgId}/members/{memberId}` | You do not have permission to view this member | no |
@@ -224,6 +236,11 @@ it, and nothing about holidays consults it again.
 | 7 | `memberIds` | Non-empty when `scope=people` | `TIME_OFF_CALENDAR_MESSAGES.peopleRequired` | no |
 | 8 | resolved rows | ≤ 100 | `TIME_OFF_CALENDAR_MESSAGES.tooManyMembers` | yes |
 | 9 | `countryCode` (either PUT body) | Empty, or exactly 2 uppercase letters | `HOLIDAY_MESSAGES.countryCodeInvalid` | no |
+
+**Decided:** the rules are evaluated in the order this table numbers them and the **first**
+failure is the whole answer, so a request that is both inverted and scoped `everyone` is refused
+with `rangeInverted` and nothing else. Rejected: collecting every failure into one body, which
+the calendar's banner draws one message from regardless.
 
 The client validates 1–4, 6, 7 and 9 to keep the controls honest before a request is spent; the
 server re-validates all nine, and 5 and 8 exist only on the server because neither is reachable
@@ -300,8 +317,12 @@ entry ticked — `none` alone is a selection, so REQ-01-009 does not refuse it.
 The filter bar is the design system's `ReportControls`
 (`packages/ds/src/components/reports/ReportControls.tsx`) in its `scope` + children shape — the
 same `<fieldset>` and clipped legend every report screen carries, so the row of controls is
-announced as one group rather than as loose inputs. The range navigation sits in the page header's
-right slot, where the Holidays page puts `+ Add holiday`.
+announced as one group rather than as loose inputs. The six segments inside it — the three
+`calendar-scope-*` and the three `calendar-window-*` — are two `ToggleButton`s, the design
+system's segmented control, which draws its own `--radius-pill` track, gives the chosen segment
+`--shadow-toggle-active`, and takes a `data-testid` per segment. The calendar draws no segmented
+control of its own. The range navigation sits in the page header's right slot, where the Holidays
+page puts `+ Add holiday`.
 
 The member column is `position: sticky; left: 0` so the names survive a horizontal scroll; it is
 264px — a width no token carries, recorded in DS gaps below — and the day columns divide what is
@@ -319,32 +340,41 @@ draw.
 ### `/org/{orgId}/members/{memberId}` — About
 
 Gains one control in the block that already holds the role picker and the job title: a `Select`
-labelled **Country**, with an explicit first option meaning *the organization's country*, which
-is what `null` stores and what a member gets when nobody states one. It saves through the member
+labelled **Country**, whose first option is labelled from
+`TIME_OFF_CALENDAR_MESSAGES.memberCountryDefaultOption` and means *the organization's country* —
+which is what `null` stores and what a member gets when nobody states one. It saves through the member
 update the screen already submits — no new form, no second save button.
 
 ## UI Description
 
 | Surface | Behaviour |
 |---|---|
-| Loading | The grid area holds a skeleton of the header rows plus six member rows; the filter bar stays interactive, so changing scope during a load is not blocked. |
+| Loading | The grid area holds a skeleton of the header rows plus six member rows; the filter bar stays interactive, so changing scope during a load is not blocked. No case: the skeleton lives between two paints, and an assertion on it races the fetch it is waiting for. |
 | Empty (no rows) | `calendar-empty-state` replaces the grid, titled from `TIME_OFF_CALENDAR_MESSAGES.emptyStateTitle`. The filter bar stays. |
 | Empty (no absences) | The full grid draws, every cell blank. No empty state — REQ-01-038. |
 | Refused (422) | `calendar-error-banner` above the grid carries the message; the last good grid stays on screen underneath rather than being cleared. |
 | Permission-limited | A `viewer` never reaches the calendar route and never sees the nav row. The two country pickers are refused differently, because the pages holding them are. Settings › Holidays is already a `404` for a `user` and a `viewer`, so there is nothing to draw there. Member detail is open to every role, so a caller without `edit-detail` opens the About tab and simply does not get the control — the block renders as it does today, with the role and job title read-only beside it. No role sees either country read-only: the field is in the response for everybody (REQ-01-045), and the picker is drawn only for a caller who may save it. |
-| Narrow viewport | Below `--layout-breakpoint-desktop` the grid scrolls horizontally inside its own container; the member column stays pinned and the page body never scrolls sideways. |
-| Keyboard | The three scope buttons and the three window buttons are one roving-tabindex group each. Each absence band is a button carrying its dates, status and working-day count as its accessible name. |
+| Narrow viewport | Below `--layout-breakpoint-desktop` the grid scrolls horizontally inside its own container; the member column stays pinned and the page body never scrolls sideways. No case: the scroll container and the pinned column are CSS on one element, with no behaviour and no second markup behind the breakpoint. |
+| Keyboard | The scope segments and the window segments are one roving-tabindex group each, which is the `ToggleButton` they are drawn with. Each absence band is a button carrying its dates, status and working-day count as its accessible name. No case for the two groups: the tab stop and the arrow keys ship with the component. The band's accessible name is asserted in TC-01-E2E-01. |
 
 ## DS gaps
 
-The mock declares each name below in its own `:root` because `@ds` has none of them. Recording
-them here is what the design-system rule requires; whether they enter `@ds` this release is a
-product call, and until they do the calendar is the only screen that may declare them.
+`@ds` carries none of what the rows below name. Each row says what ships in its place — a name the
+mock declares in its own `:root`, or a literal marked `@literal` where there is no name to declare.
+Recording them here is what the design-system rule requires; whether they enter `@ds` this release
+is a product call, and until they do the calendar is the only screen that may declare them.
 
 | Gap | Where it bites | What ships instead | What closes it |
 |---|---|---|---|
-| No absence-band colour | The approved band's fill and border, the pending band's hatch and dashed border, and the band label — every one of them on the calendar grid, plus the legend's two swatches | `--surface-timeoff-band`, `--border-timeoff-band` and `--text-timeoff-band`, declared once on the calendar page's own root and used through `var(…)` everywhere else, so no component file carries a colour literal. Violet, which none of `--status-success`, `--status-warning`, `--status-error`, `--status-info` or `--color-holiday` uses, so a band reads as a category and not as a claim about how somebody is doing | The three names entering `@ds` as time-off category tokens, and the page's local block deleted in the same change. The policy catalogue of a later spec wants a colour per absence type, and this is the first of that set |
+| No absence-band colour | The approved band's fill and border, the pending band's hatch and dashed border, and the band label — every one of them on the calendar grid, plus the legend's two swatches | `--surface-timeoff-band`, `--border-timeoff-band` and `--text-timeoff-band`, declared once on the calendar page's own root and read through `var(…)` wherever a band, its border, its hatch or its label is drawn, so no colour on this screen is written as a literal. Violet, which none of `--status-success`, `--status-warning`, `--status-error`, `--status-info` or `--color-holiday` uses, so a band reads as a category and not as a claim about how somebody is doing | The three names entering `@ds` as time-off category tokens, and the page's local block deleted in the same change. The policy catalogue of a later spec wants a colour per absence type, and this is the first of that set |
 | No sticky-column width token | The grid's member column, in the header rows and every member row | `--name-col: 264px`, declared beside the three above and referenced by every row's `grid-template-columns` | A layout token in `@ds` for a pinned first column, which the reports tables would take as well |
+| No step below `--space-1` (4px) | The 3px margin on each side of a band, which is what separates two adjacent bands (Edge case 16), and the 3px stripe of the pending hatch in the legend swatch | Both stay as `3px`, each carrying `@literal` and the reason the design-system rule asks for: 4px between two adjacent bands eats the day column they must stay inside | A sub-`--space-1` step in `@ds`, or a band-gap token beside the three colours above |
+
+**Decided:** the band's height is `--space-10`, the legend swatch's corner is `--radius-s`, and
+the two segmented controls are `ToggleButton` with the track, the pill and the shadow that
+component owns — none of the three is written as a number on this page. Rejected: a segmented
+control drawn here, which would put a second shadow colour beside the package's and a second
+keyboard beside its roving tab stop.
 
 ## Edge Cases
 
@@ -365,9 +395,9 @@ product call, and until they do the calendar is the only screen that may declare
 | 13 | A holiday is deleted between two fetches | The second fetch omits it. Nothing on this screen is cached across a range change. No case of its own: the second fetch is an ordinary read, and the deletion is `organization/03`'s own rule. |
 | 14 | `startDate` equals `endDate` | A one-column grid. Valid, and the `Week` preset is simply not what produced it. |
 | 15 | The window crosses a year boundary | Allowed — the 92-day bound is the only limit, and ISO week numbers restart correctly across it (TC-01-INT-16). |
-| 16 | A member has an approved and a pending request that touch but do not overlap | Two bands, adjacent, visually separated by their own 3px margins. No case of its own: the margin is drawn on every band, which TC-01-E2E-01 asserts on two bands already. |
+| 16 | A member has an approved and a pending request that touch but do not overlap | Two bands, adjacent, visually separated by their own 3px margins — the literal recorded in DS gaps above. No case of its own: the margin is a static style every band carries, not a rule this pair reaches, and TC-01-E2E-01 already draws the two treatments that would have to differ for it to matter. |
 | 17 | Two non-cancelled requests overlap for one member | Impossible through the product — spec `user-management/09` refuses an overlapping submission. If such a pair exists in the data, both bands draw stacked and neither is hidden, so the anomaly is visible rather than silently resolved. No case: the state cannot be reached through any route the cases call. |
-| 18 | The caller's `Account.timezone` is `null`, `""`, or a string the server does not recognize | Today's marker falls back to UTC in all three (REQ-01-018); every other date is a calendar day and is unaffected (REQ-01-017). An invited member's timezone is `""` until they set one, so the empty case is the common one. |
+| 18 | The caller's `Account.timezone` is `null`, `""`, or a string the server does not recognize | Today's marker falls back to UTC in all three (REQ-01-018); every other date is a calendar day and is unaffected (REQ-01-017). The stored column is `null` until a member sets one; the account-settings read is what projects that as `""`, which is why both spellings are in this row. |
 | 19 | An admin clears the organization country while members rely on it | Those members fall back to `null` on the next read and see only global holidays. No stored value changes; the chain is evaluated on read. |
 | 20 | A `user` submits an organization country through the API directly | `404` — `manage-holidays` refuses it the way it refuses a holiday create, and the caller learns nothing about the route (REQ-01-035). |
 
@@ -381,11 +411,13 @@ product call, and until they do the calendar is the only screen that may declare
 - **No money leaves this endpoint.** `deductionAmount`, the reserve balance, `monthlySalary` and
   the reserve percentage appear nowhere in the response. The calendar reads
   `VacationRequest.workingDays` and nothing else from the vacation tables, which is what keeps it
-  clear of the financial capabilities entirely.
+  clear of the financial capabilities entirely. TC-01-INT-01 asserts the absence over a whole
+  body.
 - **No PII is read or emitted.** The country a member is paid holidays for is a stated field on
   their membership, not their postal address: `MemberProfile.country` sits behind
   `ViewMemberProfilePii` and this feature never touches it. The two-letter code the calendar
-  emits is the holiday country and implies nothing about where anybody lives.
+  emits is the holiday country and implies nothing about where anybody lives. TC-01-INT-01
+  asserts that too, on the same body.
 - **The write is narrower than the read.** `ViewHolidays` opens the country field, and
   `ManageHolidays` is what changes it, because the value moves what Amounts Owed pays for every
   member nobody has stated a country for. A member's own country is gated by `edit-detail`, the

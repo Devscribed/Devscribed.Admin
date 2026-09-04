@@ -34,7 +34,7 @@ Every cell is what happened.
 | **A member whose country is stated on their membership** | `PUT /api/organizations/{orgId}/members/{memberId}` with `countryCode` | no — the route ships, the field does not | **not run** — the column does not exist yet, so no probe could reach the state. This spec owes `setMemberCountryViaApi` in `e2e/tests/helpers.ts`; TC-01-INT-12, TC-01-INT-25 and TC-01-E2E-08 all reach the state through it. |
 | A member with **no** country | invite and touch nothing | yes | yes |
 | An organization country | `PUT /api/organizations/{orgId}/settings/country`, read back through `GET` on the same path | no — this spec adds both | This spec owes `setOrganizationCountryViaApi` in `e2e/tests/helpers.ts`. |
-| A member with a phone country — **no case of this spec needs this state**; it is the route the probe used to establish what the change moves | `updateAccountSettingsViaApi` (`helpers.ts:1310`) with `phoneCountryCode` | yes | yes — **and `firstDayOfWeek` must be `'Monday'`, capitalized**; `'monday'` answered `400 {"errors":{"firstDayOfWeek":"Invalid first day of week"}}`. An invited member's `timezone` is `""` and the PUT requires a real one. TC-01-INT-12 seeds a phone country only to prove it now reaches nothing. |
+| A member with a phone country — **no case of this spec needs this state**; it is the route the probe used to establish what the change moves | `updateAccountSettingsViaApi` (`helpers.ts:1310`) with `phoneCountryCode` | yes | yes — **and `firstDayOfWeek` must be `'Monday'`, capitalized**; `'monday'` answered `400 {"errors":{"firstDayOfWeek":"Invalid first day of week"}}`. An invited member's stored `timezone` is `null`, which that settings read hands back as `""`, and the PUT requires a real one. TC-01-INT-12 seeds a phone country only to prove it now reaches nothing. |
 | A `viewer` | `setMembershipRole` (`helpers.ts:172`) | yes | not run by the probe; the helper ships and is used by the reports suites. |
 
 ### Access this needs
@@ -136,7 +136,9 @@ are kept.
   Read the calendar with `scope=all` over a month.
 - **Expected Result:** Five rows, ordered by display name case-insensitively ascending. `days[]`
   holds one entry per calendar day of the range with `isWeekend` true exactly on Saturdays and
-  Sundays.
+  Sundays. The body carries no financial field — no `deductionAmount`, no `monthlySalary`, no
+  reserve balance and no reserve percentage — and no `MemberProfile` field, `country` included,
+  so neither money nor an address can reach this screen through the payload.
 
 ### TC-01-INT-02
 
@@ -244,17 +246,23 @@ are kept.
 ### TC-01-INT-12
 
 - **Level:** Integration
-- **Covers:** REQ-01-026
-- **Asserts:** `GET /api/organizations/{orgId}/time-off/calendar` → 200
+- **Covers:** REQ-01-026, REQ-01-027, REQ-01-040
+- **Asserts:** `GET /api/organizations/{orgId}/time-off/calendar` → 200;
+  `GET /api/organizations/{orgId}/time-off/calendar` → 200
 - **Steps:** Four members and three holidays on distinct dates — global, `PL`, `US`. The
   organization country is `PL`. Member A is stated `US`; B is stated `PL`; C is stated nothing;
-  D is stated nothing and the organization country is then cleared. Give A a
-  `phoneCountryCode` of `BY` and leave it there for the whole case.
-- **Expected Result:** A carries the global and the `US` holiday — their stated country wins over
-  the organization's, and their `BY` phone country reaches nothing, which is the source this spec
-  drops. B and C both carry the global and the `PL` one, C by the organization fallback. D
-  carries only the global one. Each member's `countryCode` in the response is `US`, `PL`, `PL`,
-  `null` respectively.
+  D is stated `XX`, which does not normalize. Give A a `phoneCountryCode` of `BY` and leave it
+  there for the whole case. Take a first read. Then clear the organization country and take a
+  second read, changing nothing else.
+- **Expected Result:** In the **first** read A carries the global and the `US` holiday — their
+  stated country wins over the organization's, and their `BY` phone country reaches nothing, which
+  is the source this spec drops. B, C and D each carry the global and the `PL` one: C by the
+  organization fallback, D because `XX` is skipped and the organization's value is read in its
+  place (REQ-01-027). The four `countryCode` values are `US`, `PL`, `PL`, `PL`. In the **second**
+  read A and B are unchanged, and C and D carry only the global holiday with a `countryCode` of
+  `null` — with the organization's value gone the chain has nothing left and resolves `null`
+  (REQ-01-040), which is also what clearing the organization country does to every member relying
+  on it. No membership was written by either read.
 
 ### TC-01-INT-13
 
@@ -356,6 +364,20 @@ are kept.
   holiday again — the restore clears the job title beside it and leaves the country alone, so a
   returning member is paid the holidays they were paid before they left rather than the
   organization's until somebody re-states them.
+
+### TC-01-INT-29
+
+- **Level:** Integration
+- **Covers:** REQ-01-026
+- **Asserts:** `GET /api/organizations/{orgId}/holidays` → 200
+- **Steps:** One `PL` holiday and one global holiday in the same year, and a member whose
+  `Account.phoneCountryCode` is `BY`. State `PL` on that member's membership and read
+  `.../holidays?scope=mine` for that year as them. Then clear the membership country, state `PL`
+  on the organization, and read again.
+- **Expected Result:** Both holidays come back on both reads — the chain reads the stated
+  membership country on the first and the organization's on the second, and the `BY` phone
+  country reaches neither. This is the calendar's own resolution answering on the screen beside
+  it, so a member's holiday country is one answer and not one per screen.
 
 ### TC-01-INT-16
 
@@ -544,7 +566,9 @@ are kept.
   Settings › Holidays, set the organization country to Poland, save, then open the calendar.
 - **Expected Result:** The manager's save succeeds — the control is theirs, not drawn read-only —
   and that member's row then carries the `PL` day's per-cell holiday marker, which it did not
-  before. The holiday list on the page is unchanged by the save.
+  before. The holiday list on the page is unchanged by the save. The marker is asserted here on
+  purpose, over TC-01-INT-14's answer to the same write: what this case buys is that a manager
+  reaches the control at all and that one save carries the change to the grid.
 - **Selectors:** `org-country-select`, `org-country-save`,
   `calendar-cell-holiday-{membershipId}-{date}`
 
@@ -554,9 +578,13 @@ are kept.
 - **Covers:** REQ-01-042
 - **Steps:** As a `manager`, open a member's About tab, set **Country** to Poland, and save. Open
   the calendar over a month holding a `PL` holiday. Then open the same About tab as a `user`.
-- **Expected Result:** The country control saves through the form that already carries the role
+- **Expected Result:** Before the save the picker sits on its first option, carrying
+  `TIME_OFF_CALENDAR_MESSAGES.memberCountryDefaultOption`, which is what a stored `null` renders
+  as. The country control saves through the form that already carries the role
   and the job title — one save, one toast. That member's row then carries the `PL` day's per-cell
   holiday marker, and a member left on the organization's country carries it only if the
-  organization's country is `PL` too. The `user` reaches the tab — the page is refused to nobody —
+  organization's country is `PL` too. The marker is asserted here on purpose, over TC-01-INT-25's
+  answer to the same write: what this case buys is the control being reachable and saveable in the
+  form beside the role. The `user` reaches the tab — the page is refused to nobody —
   and `member-country-select` is `absent` for them: no control, and none drawn read-only.
 - **Selectors:** `member-country-select`, `calendar-cell-holiday-{membershipId}-{date}`

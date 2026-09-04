@@ -10,7 +10,7 @@
       "round": 1,
       "startedAt": "2026-09-04T15:50:45.598Z",
       "head": "bfd7e4c7ecb5a16c7eb25bf4c555f22de4038102",
-      "status": "running",
+      "status": "done",
       "lint": 0,
       "judge": {
         "status": "blocked",
@@ -83,7 +83,19 @@
           "S-57": "note",
           "S-58": "clear"
         }
-      }
+      },
+      "gate": "T2",
+      "blockers": 2,
+      "keys": [
+        "spec/untestable-case:TC-01-INT-12",
+        "spec/contradiction:DS gaps"
+      ],
+      "fix": {
+        "fixed": 5,
+        "decided": 5,
+        "left": 0
+      },
+      "endedAt": "2026-09-04T16:16:52.604Z"
     }
   ],
   "status": "running",
