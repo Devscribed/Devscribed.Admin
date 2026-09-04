@@ -8,8 +8,9 @@ here by id.
 | Route | Guards | Success | Errors |
 |---|---|---|---|
 | `GET /api/organizations/{orgId}/time-off/calendar` | `SessionGuard`, `OrgScopeGuard`; `ViewTimeOffCalendar` checked in the service | `200` | `404` (no capability, REQ-01-002; wrong organization, REQ-01-039) · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeInverted` · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeTooWide` · `422` `TIME_OFF_CALENDAR_MESSAGES.teamsRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.peopleRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.scopeInvalid` · `422` `TIME_OFF_CALENDAR_MESSAGES.tooManyMembers` |
+| `GET /api/organizations/{orgId}/settings/country` | `SessionGuard`, `OrgScopeGuard`; `ViewHolidays` checked in the service | `200` | `404` (no `ViewHolidays`, REQ-01-046; wrong organization) |
 | `PUT /api/organizations/{orgId}/settings/country` | `SessionGuard`, `OrgScopeGuard`; `ManageHolidays` checked in the service | `200` | `404` (no `ManageHolidays`, REQ-01-035; wrong organization) · `422` `HOLIDAY_MESSAGES.countryCodeInvalid` (REQ-01-036) |
-| `GET /api/organizations/{orgId}/members/{memberId}` | `SessionGuard`, `OrgScopeGuard`; capability checked in the service | `200` | `404` (wrong organization; member not found) |
+| `GET /api/organizations/{orgId}/members/{memberId}` | `SessionGuard`, `OrgScopeGuard`; no capability gates this read — it answers every role (REQ-01-045) | `200` | `403` `MEMBER_MESSAGES.viewForbidden` (the caller is no longer an active member; shipped, unchanged) · `404` (wrong organization; member not found) |
 | `PUT /api/organizations/{orgId}/members/{memberId}` | `SessionGuard`, `OrgScopeGuard`; `edit-detail` checked in the service | `200` | `403` `MEMBER_MESSAGES.editForbidden` (REQ-01-044) · `422` `HOLIDAY_MESSAGES.countryCodeInvalid` (REQ-01-036) · `404` (wrong organization) |
 
 No route here carries `RequireCapability`. `CapabilityGuard` answers every refusal with `403`, and
@@ -17,10 +18,10 @@ the calendar must answer `404` when the caller lacks its capability, so the chec
 service instead — the shape `HolidaysService.deleteHoliday` already uses for
 `DELETE /api/organizations/{orgId}/holidays/{holidayId}`.
 
-**Decided:** 404 for the calendar and for the organization-country write. The calendar's refusal
-must be byte-identical to a wrong-organization read (REQ-01-002, REQ-01-039), and
-`manage-holidays` already answers 404 on the holiday create and edit the country control sits
-beside. **The member country is the exception and keeps its route's existing 403** —
+**Decided:** 404 for the calendar and for both halves of the organization country. The calendar's
+refusal must be byte-identical to a wrong-organization read (REQ-01-002, REQ-01-039), and
+`view-holidays` and `manage-holidays` already answer 404 on the holiday list, create and edit the
+country control sits beside. **The member country is the exception and keeps its route's existing 403** —
 `PUT .../members/{memberId}` ships that refusal today for role and job title, and one route does
 not get two refusal shapes because a field was added to it.
 
@@ -100,9 +101,19 @@ for one person and not their neighbour. It is not a profile field: `MemberProfil
 postal address behind `ViewMemberProfilePii` and this feature never reads it, so nothing here
 discloses where anybody lives.
 
+### `GET /api/organizations/{orgId}/settings/country`
+
+The stored value and nothing else — the page needs it to paint the picker, and this is the whole
+of what it needs (REQ-01-046). `null` is an organization for which nobody has stated a country.
+
+```json
+{ "countryCode": "PL" }
+```
+
 ### `PUT /api/organizations/{orgId}/settings/country`
 
-Body: `{ "countryCode": "PL" }`, or `{ "countryCode": null }` to clear it (REQ-01-034).
+Body: `{ "countryCode": "PL" }`, or `{ "countryCode": null }` to clear it (REQ-01-034). The
+response is the body of the `GET` above, carrying the value now stored.
 
 ```json
 { "countryCode": "PL" }
@@ -146,6 +157,7 @@ The shipped body gains `countryCode` beside the `role` and `jobTitle` it already
 | `TIME_OFF_CALENDAR_MESSAGES.orgCountryHint` | — | Members without a country of their own get this country's holidays. | yes |
 | `HOLIDAY_MESSAGES.countryCodeInvalid` | `PUT /api/organizations/{orgId}/settings/country`, `PUT /api/organizations/{orgId}/members/{memberId}` | Country code must be 2 uppercase letters. | no |
 | `MEMBER_MESSAGES.editForbidden` | `PUT /api/organizations/{orgId}/members/{memberId}` | You do not have permission to edit members | no |
+| `MEMBER_MESSAGES.viewForbidden` | `GET /api/organizations/{orgId}/members/{memberId}` | You do not have permission to view this member | no |
 
 `HOLIDAY_MESSAGES.countryCodeInvalid` already ships
 (`packages/validation/src/holiday-messages.ts`) and is reused unchanged; the country field on this
@@ -284,8 +296,10 @@ The member column is `position: sticky; left: 0` so the names survive a horizont
 
 Gains one control above the existing country filter: a `Select` labelled **Organization country**,
 hinted from `TIME_OFF_CALENDAR_MESSAGES.orgCountryHint`. It is the country picker the holiday form
-already uses. Admin and manager both set it (REQ-01-033); for a `user` or `viewer` the page itself
-is already a 404, so there is no read-only rendering to draw.
+already uses. Its value on first paint is `GET .../settings/country` (REQ-01-046), called when the
+page loads beside the holiday list it already fetches. Admin and manager both set it (REQ-01-033);
+for a `user` or `viewer` the page itself is already a 404, so there is no read-only rendering to
+draw.
 
 ### `/org/{orgId}/members/{memberId}` — About
 
@@ -302,7 +316,7 @@ update the screen already submits — no new form, no second save button.
 | Empty (no rows) | `calendar-empty-state` replaces the grid, titled from `TIME_OFF_CALENDAR_MESSAGES.emptyStateTitle`. The filter bar stays. |
 | Empty (no absences) | The full grid draws, every cell blank. No empty state — REQ-01-038. |
 | Refused (422) | `calendar-error-banner` above the grid carries the message; the last good grid stays on screen underneath rather than being cleared. |
-| Permission-limited | A `viewer` never reaches the calendar route and never sees the nav row. Both country pickers are drawn only for the admin and manager who may save them; no role sees either control read-only, because the pages holding them are already refused to everybody else. |
+| Permission-limited | A `viewer` never reaches the calendar route and never sees the nav row. The two country pickers are refused differently, because the pages holding them are. Settings › Holidays is already a `404` for a `user` and a `viewer`, so there is nothing to draw there. Member detail is open to every role, so a caller without `edit-detail` opens the About tab and simply does not get the control — the block renders as it does today, with the role and job title read-only beside it. No role sees either country read-only: the field is in the response for everybody (REQ-01-045), and the picker is drawn only for a caller who may save it. |
 | Narrow viewport | Below `--layout-breakpoint-desktop` the grid scrolls horizontally inside its own container; the member column stays pinned and the page body never scrolls sideways. |
 | Keyboard | The three scope buttons and the three window buttons are one roving-tabindex group each. Each absence band is a button carrying its dates, status and working-day count as its accessible name. |
 

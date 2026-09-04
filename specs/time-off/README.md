@@ -138,17 +138,20 @@ weekly and monthly views read `GET /holidays?scope=mine` (organization/03 §10) 
 markers on days a member did not see before, once the organization country is set. No route, no
 response shape and no test id changes for either.
 
-**Security surface.** One new read endpoint and one new write endpoint, both under
-`/api/organizations/{orgId}/`, both behind `SessionGuard` + `OrgScopeGuard` + a capability. The
-read returns names, job titles, absence dates and a resolved two-letter country — no money, no
-reason for an absence, and no profile field.
+**Security surface.** Three new endpoints — the calendar read, and the read and write of the
+organization country — all under `/api/organizations/{orgId}/`, all behind `SessionGuard` +
+`OrgScopeGuard` + a capability checked in the service. The calendar returns names, job titles,
+absence dates and a resolved two-letter country — no money, no reason for an absence, and no
+profile field; the country pair returns one two-letter code.
 
 **Operations.** No new AWS resources, no new background job, no new secret, no third-party
 dependency. Nothing in this area is scheduled: every rule is evaluated on read, so a failed job
 cannot make the calendar wrong because there is no job.
 
-**Frontend.** One new route and one new sidebar row. The Holidays settings page gains one control.
-No existing screen's markup or test ids change.
+**Frontend.** One new route and one new sidebar row. Two shipped screens each gain one control and
+one test id: the Holidays settings page gains `org-country-select` with its save, and the member
+detail About tab gains `member-country-select`. No existing markup, control or test id is removed,
+renamed or moved.
 
 ## Backward Compatibility
 
@@ -162,9 +165,16 @@ No existing screen's markup or test ids change.
    the exposure is bounded to holiday rows on Amounts Owed and holiday markers, and touches no
    vacation balance, no ledger row and no issued PDF. TC-01-INT-12 pins the new resolution
    including a member whose phone country reaches nothing.
-3. **No existing route, response field or `data-testid` changes.** The calendar's endpoint is new
-   (proven: it answers `404` today), and the country endpoint is new. Enforced by the reports and
-   holidays E2E suites, which are untouched by this spec and must stay green.
+3. **Three shipped surfaces gain something; none loses or changes anything.** `GET .../members/
+   {memberId}` gains the `countryCode` field in its projection, `PUT .../members/{memberId}` gains
+   `countryCode` in its body, and the member detail About tab gains `member-country-select`. Every
+   other route this area names is new — the calendar (proven: it answers `404` today) and both
+   halves of the organization country. The mechanism is additive-only: no status, message, guard,
+   field or test id that ships today is removed, renamed or given a new meaning, so a caller that
+   ignores the new field is a caller nothing changed for. Enforced for the routes the suites cover
+   by the reports and holidays E2E suites, which this area does not touch and which must stay
+   green; the member detail screen is covered by neither, so TC-01-INT-27 and TC-01-E2E-08 are
+   what enforce it there.
 4. **The `Capability` enum only gains members.** No role loses a capability it holds today, and
    `viewer` gains nothing. Enforced by the compile-time exhaustiveness of `ROLE_CAPABILITIES`.
 5. **Vacation math is untouched.** This area writes no `VacationRequest` and no

@@ -4,6 +4,7 @@ title: Vacation Calendar
 routes: ["/org/{orgId}/time-off/calendar", "/org/{orgId}/settings/holidays", "/org/{orgId}/members/{memberId}"]
 api:
   - "GET /api/organizations/{orgId}/time-off/calendar"
+  - "GET /api/organizations/{orgId}/settings/country"
   - "PUT /api/organizations/{orgId}/settings/country"
   - "GET /api/organizations/{orgId}/members/{memberId}"
   - "PUT /api/organizations/{orgId}/members/{memberId}"
@@ -46,8 +47,9 @@ Beyond the request, this spec adds:
 
 - **A nullable country column on `Membership` and on `Organization`, with a picker for each.**
   Holidays are asked to follow the member's country or the company's and neither exists today.
-  The member's rides `PUT .../members/{memberId}`, which already ships and simply gains the
-  field; the organization's gets one new route and a control on the Holidays settings page.
+  The member's rides the member read and write that already ship and simply gain the field; the
+  organization's gets a `GET` and a `PUT` of its own and a control on the Holidays settings page,
+  because a picker with nothing to read is a control an implementer has to invent a source for.
 - **One country-resolution helper, adopted by every call site that resolves a member's country.**
   Holidays `scope=mine` and both reports read `Account.phoneCountryCode` today, and this spec
   drops that source everywhere rather than ranking against it — one question needs one answer.
@@ -182,8 +184,7 @@ IF the inclusive range exceeds 92 days, THEN THE SYSTEM SHALL answer `422` carry
 `TIME_OFF_CALENDAR_MESSAGES.rangeTooWide`.
 
 **Decided:** a quarter — the widest window a per-day column could later be added for without
-changing this contract, and far tighter than reports allow because this response carries a cell
-per member per day.
+changing this contract, and far tighter than reports allow: a cell per member per day.
 
 #### REQ-01-017 — days are calendar days
 
@@ -239,8 +240,7 @@ submission.
 THE SYSTEM SHALL emit `kind: "vacation"` on every band.
 
 **Decided:** the one field this spec adds ahead of its need. The policy catalogue lands by giving
-it more values, so the grid's colour map is keyed by type from the first commit rather than
-retrofitted onto a payload that has none.
+it more values, so the grid's colour map is keyed by type from the first commit.
 
 ### Holidays, and the country they belong to
 
@@ -249,10 +249,9 @@ retrofitted onto a payload that has none.
 THE SYSTEM SHALL resolve a member's holiday country as `Membership.countryCode` when it
 normalizes to a valid ISO 3166-1 alpha-2 value, and as `Organization.countryCode` otherwise.
 
-**Decided:** both links are stated by a person, and nothing is inferred.
-`Account.phoneCountryCode` — today's only source — is dropped rather than ranked: a dial code is
-a contact detail a foreign SIM makes wrong. `MemberProfile.country` is a postal address behind a
-PII capability, and would make the holidays somebody is paid a side effect of a contract.
+**Decided:** both links are stated by a person, and nothing is inferred. `Account.phoneCountryCode`
+— today's only source — is dropped rather than ranked: a dial code is a contact detail a foreign
+SIM makes wrong. `MemberProfile.country` is a postal address behind a PII capability.
 
 #### REQ-01-040 — a member with no country at all
 
@@ -316,11 +315,26 @@ carrying `MEMBER_MESSAGES.editForbidden`.
 
 #### REQ-01-045 — reading a member's country
 
-WHEN a caller holding `edit-detail` opens a member's detail, THE SYSTEM SHALL return that
-member's stored `Membership.countryCode` on the member detail read.
+WHEN any caller the member detail read already answers opens a member's detail, THE SYSTEM SHALL
+return that member's stored `Membership.countryCode` on that read.
 
-**Decided:** the stored value, `null` included, never the resolved one, which would show a country
-nobody had stated. The read's projection is explicit, so a field absent from it cannot be drawn.
+**Decided:** unconditional — the shipped route is viewable by every role and gates only its two
+edit flags, and a field that appears with a capability is two response bodies for one route. It
+discloses nothing: the holiday country is a stated field, not the postal address behind
+`ViewMemberProfilePii`. The value is the stored one, `null` included, never the resolved one.
+
+#### REQ-01-046 — reading the organization's country
+
+WHEN a caller holding `ViewHolidays` reads the organization country, THE SYSTEM SHALL return the
+stored `Organization.countryCode`.
+
+**Decided:** a `GET` beside the `PUT`, the shape `api/organizations/:orgId/settings/signing` ships.
+Without it the picker REQ-01-033 writes through has no value on first paint.
+
+#### REQ-01-047 — the organization country read is refused to everyone else
+
+IF a caller without `ViewHolidays` reads the organization country, THEN THE SYSTEM SHALL answer
+`404`.
 
 #### REQ-01-033 — setting the organization's country
 
@@ -339,9 +353,8 @@ WHEN a caller holding `ManageHolidays` submits an empty country, THE SYSTEM SHAL
 
 IF a caller without `ManageHolidays` submits a country, THEN THE SYSTEM SHALL answer `404`.
 
-**Decided:** `ManageHolidays` rather than a capability of its own, which would be a distinction
-no grant expresses and no case could reach. 404 is what it already answers on the holiday create
-and edit beside it.
+**Decided:** `ManageHolidays` rather than a capability of its own, a distinction no grant expresses
+and no case could reach. 404 is what it answers on the holiday create and edit beside it.
 
 #### REQ-01-036 — an invalid country is refused
 
@@ -405,8 +418,8 @@ Invariants:
 | Gap | Why acceptable now | What closes it |
 |---|---|---|
 | A holiday falling inside an approved vacation is still deducted as a working day, and the band says so | The frozen `workingDays` contract is what specs 07–09 and every issued report rest on; changing it retroactively would move money already reported | A later amendment proposed here: resolve the holiday set at submit time and store which holidays the request counted, leaving every issued report's number untouched |
-| `Organization.countryCode` is `null` for every organization that predates this spec, so the third link of the chain does nothing until an admin sets it | The first two links behave exactly as they do today, so nothing regresses on the day the migration lands | An admin setting the country on the Holidays page; the field is drawn with an explanatory hint rather than left blank and unexplained |
-| A member with no country of their own and no organization country still sees only global holidays | It is the behaviour that ships today, and the new chain can only widen it | Setting the organization country, which is the whole point of the third link |
+| Both country columns are `null` on every row the migration touches, so on the day it lands every member resolves to `null` and receives global holidays only — including the members whose phone country reached a national set the day before | Nothing is stored wrong: the chain is evaluated on read, so stating either country repairs every reader at once. What it costs is a window, not data, and README.md measures that window in both directions | Stating the organization country on the Holidays page, in the same change window as the deploy, which returns every member nobody has stated a country for to a national set. The field is drawn with an explanatory hint rather than left blank and unexplained |
+| A member with no country of their own and no organization country sees global holidays only | It is a state that ships today for anybody whose phone carries no country, and the row above says what to do about it on deploy day | Stating a country on the member, or on the organization — the two links, in that order |
 | The 100-row cap is a flat number, not a measurement | No organization in this product is near it, and the refusal names the fix | A measurement against a real organization, recorded in `docs/research/` |
 
 ## Acceptance Criteria
@@ -424,11 +437,12 @@ Invariants:
 | 9 | A country-scoped holiday marks only the cells of the members it applies to | TC-01-INT-13, TC-01-E2E-04 |
 | 10 | A holiday that applies to everyone in view shades the whole column | TC-01-E2E-04 |
 | 11 | Setting the organization country gives every member nobody has stated a country for that country's holidays | TC-01-INT-14 |
-| 18 | A country stated on a member overrides the organization's, and clearing it returns them to the organization's | TC-01-INT-25 |
-| 19 | The member detail screen shows the country stored on that member, not the one they resolve to | TC-01-INT-27 |
 | 12 | A manager sets the organization country, and a user and a viewer are refused it identically | TC-01-INT-15 |
 | 13 | A range longer than 92 days is refused with the message that names the bound | TC-01-INT-16 |
 | 14 | A scope resolving to more than 100 members is refused rather than truncated | TC-01-INT-17 |
 | 15 | An empty team or people selection is refused rather than drawn as an empty grid | TC-01-INT-06, TC-01-INT-08 |
 | 16 | A month with no absences still draws the full grid | TC-01-E2E-05 |
 | 17 | A calendar read for another organization answers 404 | TC-01-INT-18 |
+| 18 | A country stated on a member overrides the organization's, and clearing it returns them to the organization's | TC-01-INT-25 |
+| 19 | The member detail screen shows the country stored on that member, not the one they resolve to | TC-01-INT-27 |
+| 20 | The Holidays page reads back the organization country it stored, and the roles that cannot see the page cannot read it either | TC-01-INT-24 |

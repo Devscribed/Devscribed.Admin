@@ -31,10 +31,10 @@ Every cell is what happened.
 | A global holiday | `POST /api/organizations/{orgId}/holidays` with `countryCode: null` | yes | yes — `201`, `Company Day` on 2026-09-21 |
 | A country-scoped holiday | the same route with `countryCode: 'PL'` | yes | yes — `201`, `Polish National Day` on 2026-09-16 |
 | A **shared** holiday-seeding helper | `createHolidayViaApi` exists but is **private to `e2e/tests/reports-time-off.spec.ts:38`** | no | This spec owes its promotion to `e2e/tests/helpers.ts`; the probe called the endpoint directly. |
-| A member with a country | `updateAccountSettingsViaApi` (`helpers.ts:1310`) with `phoneCountryCode` | yes | yes — **and `firstDayOfWeek` must be `'Monday'`, capitalized**; `'monday'` answered `400 {"errors":{"firstDayOfWeek":"Invalid first day of week"}}`. An invited member's `timezone` is `""` and the PUT requires a real one. |
+| **A member whose country is stated on their membership** | `PUT /api/organizations/{orgId}/members/{memberId}` with `countryCode` | no — the route ships, the field does not | **not run** — the column does not exist yet, so no probe could reach the state. This spec owes `setMemberCountryViaApi` in `e2e/tests/helpers.ts`; TC-01-INT-12, TC-01-INT-25 and TC-01-E2E-08 all reach the state through it. |
 | A member with **no** country | invite and touch nothing | yes | yes |
-| A member with `MemberProfile.country` | `setMemberProfile` (`helpers.ts:605`) | yes | **not run** — the probe proved the phone link and the absent link of the chain, not the profile link. Known Gaps below. |
-| An organization country | `PUT /api/organizations/{orgId}/settings/country` | no — this spec adds it | This spec owes `setOrganizationCountryViaApi` in `e2e/tests/helpers.ts`. |
+| An organization country | `PUT /api/organizations/{orgId}/settings/country`, read back through `GET` on the same path | no — this spec adds both | This spec owes `setOrganizationCountryViaApi` in `e2e/tests/helpers.ts`. |
+| A member with a phone country — **no case of this spec needs this state**; it is the route the probe used to establish what the change moves | `updateAccountSettingsViaApi` (`helpers.ts:1310`) with `phoneCountryCode` | yes | yes — **and `firstDayOfWeek` must be `'Monday'`, capitalized**; `'monday'` answered `400 {"errors":{"firstDayOfWeek":"Invalid first day of week"}}`. An invited member's `timezone` is `""` and the PUT requires a real one. TC-01-INT-12 seeds a phone country only to prove it now reaches nothing. |
 | A `viewer` | `setMembershipRole` (`helpers.ts:172`) | yes | not run by the probe; the helper ships and is used by the reports suites. |
 
 ### Access this needs
@@ -73,7 +73,8 @@ are kept.
 
 | What | Why it matters | What would close it |
 |---|---|---|
-| The `MemberProfile.country` link of the chain | It is the link this spec puts *first*, and the probe exercised the second and third instead | An integration case seeding a profile country that disagrees with the phone country — TC-01-INT-12 is written for exactly that and is unrun until the code exists |
+| The membership link of the chain — the one this spec puts first | `Membership.countryCode` is a column this spec adds, so nothing the probe could call reaches it; every observation above was taken against a chain that does not have it yet | TC-01-INT-12 and TC-01-INT-25, both unrun until the code exists |
+| The organization link of the chain | `Organization.countryCode` is likewise a column this spec adds | TC-01-INT-14 and TC-01-INT-15, unrun until the code exists |
 | A `cancelled` request drawing nothing | The cancel route ships and was not called | TC-01-INT-09 covers it |
 
 ## Test Cases
@@ -277,6 +278,18 @@ are kept.
 - **Expected Result:** `200` for the manager — `manage-holidays` grants admin and manager alike.
   `404` for both the `user` and the `viewer`, byte-identical, so neither learns the route exists.
 
+### TC-01-INT-24
+
+- **Level:** Integration
+- **Covers:** REQ-01-046, REQ-01-047
+- **Asserts:** `GET /api/organizations/{orgId}/settings/country` → 200;
+  `GET /api/organizations/{orgId}/settings/country` → 404
+- **Steps:** Read the country as an `admin` before anything is stored, set it to `PL` through the
+  `PUT`, and read it again. Then read it as a `manager`, as a `user` and as a `viewer`.
+- **Expected Result:** `{ "countryCode": null }` on the first read and `{ "countryCode": "PL" }` on
+  the second, which is the value the picker paints. `200` for the manager, and `404` for both the
+  `user` and the `viewer` — the same refusal the `PUT` beside it gives them.
+
 ### TC-01-INT-25
 
 - **Level:** Integration
@@ -307,10 +320,13 @@ are kept.
 - **Covers:** REQ-01-045
 - **Asserts:** `GET /api/organizations/{orgId}/members/{memberId}` → 200
 - **Steps:** With the organization country set to `PL`, read a member who has `US` stated, then a
-  member who has nothing stated.
+  member who has nothing stated. Read the first member again as a `user` and as a `viewer`.
 - **Expected Result:** `countryCode` is `"US"` for the first and `null` for the second — the
   **stored** value, never the resolved one. A `null` here is what the picker renders as its default
   option, and a screen that received `"PL"` would show a country nobody had stated for that member.
+  The `user` and the `viewer` receive the identical body, field included: the read is gated by no
+  capability and the field is not conditional on one. What they do not get is the control, which is
+  a rendering decision and is asserted by TC-01-E2E-08.
 
 ### TC-01-INT-16
 
@@ -495,9 +511,10 @@ are kept.
 - **Level:** E2E
 - **Covers:** REQ-01-042
 - **Steps:** As a `manager`, open a member's About tab, set **Country** to Poland, and save. Open
-  the calendar over a month holding a `PL` holiday.
+  the calendar over a month holding a `PL` holiday. Then open the same About tab as a `user`.
 - **Expected Result:** The country control saves through the form that already carries the role
   and the job title — one save, one toast. That member's row then carries the `PL` day's per-cell
   holiday marker, and a member left on the organization's country carries it only if the
-  organization's country is `PL` too.
+  organization's country is `PL` too. The `user` reaches the tab — the page is refused to nobody —
+  and `member-country-select` is `absent` for them: no control, and none drawn read-only.
 - **Selectors:** `member-country-select`, `calendar-cell-holiday-{membershipId}-{date}`
