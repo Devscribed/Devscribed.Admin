@@ -74,7 +74,11 @@ if (!existsSync(join(ROOT, WORKTREE))) {
   const known = git('branch', '--list', branch);
   git('worktree', 'add', '-q', ...(known ? [] : ['-b', branch]), WORKTREE, known ? branch : ref);
 } else {
-  gitIn(WORKTREE, 'switch', branch);
+  /* The worktree outlives any one topic, so a branch that does not exist yet is created here
+     too — at the run's baseRef, for the same reason as above. Switching to it unconditionally
+     worked only for the first topic the worktree ever carried. */
+  const known = git('branch', '--list', branch);
+  gitIn(WORKTREE, 'switch', ...(known ? [branch] : ['-c', branch, ref]));
 }
 
 const moved = [];

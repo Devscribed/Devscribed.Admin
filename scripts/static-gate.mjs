@@ -69,6 +69,44 @@ const add = (f) => findings.push({ id: `S${++seq}`, severity: 'blocker', target:
 const isTest = (p) => /\.(spec|test)\.(ts|tsx|js|mjs)$/.test(p);
 const isSource = (p) => /\.(ts|tsx|js|jsx|mjs|cjs)$/.test(p);
 
+/* ── 0. the work is committed ────────────────────────────────────────────── */
+
+/* Every gate downstream reads `git diff <base>...HEAD`. Work left in the working tree is
+   invisible to all of them, so a run whose implementation was never committed reaches the
+   reviewer as an empty change and the reviewer judges nothing. This is the first rule
+   because a diff with nothing in it makes every rule below vacuous — they all pass, and
+   the run advances on a branch that carries no work. */
+
+/* `base...HEAD`, not `base` — the two-dot form against a working tree counts uncommitted
+   edits as present, which is the very thing this rule exists to catch. Three dots is also
+   exactly what the reviewer and QA read, so the gate asks their question and not a
+   neighbouring one. */
+const carried = git('diff', '--name-only', `${base}...HEAD`, '--', '.', ':(exclude).workflow')
+  .split('\n').filter(Boolean);
+
+if (carried.length === 0) {
+  const uncommitted = git('status', '--short', '--', '.', ':(exclude).workflow')
+    .split('\n').filter(Boolean);
+  add({
+    rule: 'pipeline/work-uncommitted',
+    file: uncommitted[0]?.slice(3) ?? '(nothing on disk either)',
+    claim: uncommitted.length
+      ? `no commit on this branch carries the implementation; ${uncommitted.length} file(s) are modified in the working tree and invisible to every gate that reads the diff`
+      : 'no commit on this branch carries an implementation, and the working tree is empty too',
+    witness: {
+      kind: 'command',
+      detail: `\`git diff --name-only ${base}...HEAD -- . ':(exclude).workflow'\` prints nothing.`
+        + (uncommitted.length
+          ? ` \`git status --short\` shows: ${uncommitted.join(', ')}.`
+          : ' `git status --short` shows nothing either.'),
+      source: `git diff ${base}...HEAD`,
+    },
+    suggestedFix: uncommitted.length
+      ? 'commit the working-tree changes onto this branch in one commit, naming the attempt, then re-run the gate'
+      : 'implement the document; nothing has been written',
+  });
+}
+
 /* ── 1. the contract is not the implementation's to edit ─────────────────── */
 
 for (const file of git('diff', '--name-only', runStart, '--', 'specs').split('\n').filter(Boolean)) {
