@@ -25,6 +25,19 @@ gap** in a stronger form than that gap anticipated: a person at a client is not 
 but a signed-in participant, an `Account` plus a `ClientMembership` bound to a `Client`
 (requests spec 02). That spec owns the person; this one keeps owning `Client` itself.
 
+[`specs/time-off/`](../time-off/README.md) — the screens that read across holidays, vacation
+requests and the reserve at once, starting with the vacation calendar. It consumes `Holiday`
+exactly as spec 03 defines it and adds no holiday field and no holiday route.
+
+**It supersedes spec 03's member-country rule.** That spec resolves a member's country from
+`Account.phoneCountryCode` alone (its §14–15, which explicitly left a richer country model to a
+follow-up); `time-off/01` is that follow-up, and resolves it as `MemberProfile.country`, then
+`Account.phoneCountryCode`, then the new `Organization.countryCode`. Where none is usable the
+answer is still `null`, so a member with only a phone country resolves exactly as they do today.
+The organization country is set on spec 03's own settings page, admin-only. This widens which
+holidays reach members who had no country of their own — including the Amounts Owed row spec 03
+§7 hands to reports/01 — and the measurement is in that area's blast radius.
+
 ## Product decisions
 
 | Decision | Choice | Rationale |

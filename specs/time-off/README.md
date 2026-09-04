@@ -91,7 +91,7 @@ reports needs the calendar to exist.
 
 **Database.** One nullable column, `Organization.countryCode`. No new table, no altered column, no
 new `NOT NULL`, no rename, no drop, no backfill. The migration is additive in the strict sense
-`infra/deploy.sh:27` relies on, so the new-schema-then-new-code order it enforces is safe and the
+`infra/deploy.sh` relies on, so the new-schema-then-new-code order it enforces is safe and the
 reverse — old code against the new schema — is safe too.
 
 **Shared code that breaks on contact.** `packages/validation/src/roles.ts` gains two capabilities
@@ -161,4 +161,4 @@ No existing screen's markup or test ids change.
 | No booking or approving from the calendar | The request form and the review controls already exist on surfaces that own their rules; putting a second copy on a read screen doubles them before the type model is settled | A later spec, most sensibly after the policy catalogue, since what a click on an empty cell should create is a question about types |
 | No blackout dates, minimum notice, or a limit on how much of a team may be away at once | Nothing enforces them today either, and the calendar is what makes the clashes visible enough to be worth a rule | A booking-constraints spec, which wants the calendar in front of it rather than behind it |
 | The organization country has no country-picker parity with `MemberProfile.country`, which is a free-text alpha-2 | Both normalize through the same validator, so a mismatch is refused rather than stored | A shared country `Select` in the design system, which the holiday form and the profile form would both take |
-| A holiday inside an approved vacation is still deducted as a working day | The frozen `workingDays` contract is what specs 07–09 and every issued report rest on | The amendment `organization/03` already names: resolve the holiday set at submit time and store which holidays the request counted |
+| A holiday inside an approved vacation is still deducted as a working day | The frozen `workingDays` contract is what specs 07–09 and every issued report rest on | A later amendment proposed here: resolve the holiday set at submit time and store which holidays the request counted, leaving every issued report's number untouched |

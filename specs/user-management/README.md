@@ -52,6 +52,16 @@ role gains sight of anything it cannot see today; see requests/01 requirements 4
 TC-01-INT-24. Vacation requests remain `VacationRequest` rows: the page unifies, the model does
 not.
 
+[`specs/time-off/`](../time-off/README.md) — the screens that read across this area's vacation
+requests, `organization/03`'s holidays and this area's projects at once. Its first spec is the
+vacation calendar, a row per member and a column per day.
+
+It **reads and never writes**: no `VacationRequest`, no `VacationReserveTransaction`, and no
+recomputed `workingDays` — spec 09 keeps owning the request lifecycle and spec 08 the ledger. Its
+`Teams` scope is spec 11's `Project` and `ProjectMember` with no new entity, which is the answer
+this repository gives to "team" until something needs departments. Nothing in this area changes
+for it; the only schema it touches is one nullable column on `Organization`.
+
 ## Shared Rules
 
 | Rule | Defined in | Referenced by |
