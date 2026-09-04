@@ -130,8 +130,9 @@ of what it needs (REQ-01-046). `null` is an organization for which nobody has st
 
 ### `PUT /api/organizations/{orgId}/settings/country`
 
-Body: `{ "countryCode": "PL" }`, or `{ "countryCode": null }` to clear it (REQ-01-034). The
-response is the body of the `GET` above, carrying the value now stored.
+Body: `{ "countryCode": "PL" }`, or `{ "countryCode": null }` to clear it (REQ-01-034). A body
+with no `countryCode` key changes nothing and answers the stored value unchanged. The response is
+the body of the `GET` above, carrying the value now stored.
 
 ```json
 { "countryCode": "PL" }
@@ -177,6 +178,7 @@ The shipped body gains `countryCode` beside the `role` and `jobTitle` it already
 | `PROFILE_MESSAGES.country.invalid` | `PUT /api/organizations/{orgId}/settings/country`, `PUT /api/organizations/{orgId}/members/{memberId}` | Enter a valid country | no |
 | `MEMBER_MESSAGES.editForbidden` | `PUT /api/organizations/{orgId}/members/{memberId}` | You do not have permission to edit members | no |
 | `MEMBER_MESSAGES.viewForbidden` | `GET /api/organizations/{orgId}/members/{memberId}` | You do not have permission to view this member | no |
+| `HOLIDAY_MESSAGES.toastServerError` | — | Something went wrong. Please try again. | no |
 
 `PROFILE_MESSAGES.country.invalid` already ships (`packages/validation/src/autofill.ts`) beside
 the validator rule 9 uses, and is reused unchanged rather than given a wording of its own. It is
@@ -206,6 +208,10 @@ rollback safe without a database rollback.
 | `TIME_OFF_CALENDAR_MESSAGES` | a new module beside `packages/validation/src/holiday-messages.ts` | New message export, matching the one-file-per-area shape that module uses. |
 | `ViewTimeOffCalendar` | `packages/validation/src/roles.ts` | One new member of `Capability`, granted to admin, manager and user in `ROLE_CAPABILITIES`. Neither country write adds a capability: `ManageHolidays` and `edit-detail` already grant exactly the admin and manager who set them. |
 | `view-time-off-calendar` | `packages/validation/src/index.ts` | The lowercase-dashed twin in `MemberCapability`, and the spelling the calendar's own gate reads through `can(role, …)`. `CAPABILITY_MATRIX` is a boolean per role per capability, so the twin is written into all four role rows: `true` for admin, manager and user, `false` for viewer. |
+| `validateStatedCountryCode(input)` | beside `TIME_OFF_CALENDAR_MESSAGES` | **The only implementation of Validation Rule 9**, and what both country writes call. The uppercase shape first, then membership of the assigned list, both refused with `PROFILE_MESSAGES.country.invalid`. Composed rather than either test alone: the shape alone accepts `XX`, and the list test alone upcases `pl`. |
+| `timeOffCalendarToday(timezone, instant)` | beside `TIME_OFF_CALENDAR_MESSAGES` | REQ-01-018's today, and the single definition of it. The endpoint marks `range.today` with it and the screen's `Today` control lands with it, so the two cannot disagree — a screen resolving today from the browser's clock opens on a window that does not hold the caller's today. |
+| `resolveTimeOffCalendarTimezone(timezone)` | beside `TIME_OFF_CALENDAR_MESSAGES` | The fallback REQ-01-018 states: the caller's zone when `Account.timezone` names a real one, UTC when it is absent, empty or unrecognized. |
+| `COUNTRY_OPTIONS` | `packages/validation/src/autofill.ts` | Already ships and is unchanged. The 249 assigned codes of `COUNTRY_NAMES`, and the option list both country pickers draw, so what a picker offers is exactly what rule 9 accepts. |
 
 **The call sites that must adopt `resolveMemberHolidayCountry`.** Each resolves a member's country
 from `Account.phoneCountryCode` today and must read the stated columns instead, or REQ-01-026 is
@@ -249,7 +255,8 @@ organization country write (REQ-01-036), `400` on the member write (REQ-01-051),
 status that route already refuses an invalid role and an invalid job title with.
 
 **Decided:** rule 9 is two tests, not one — the uppercase shape, and membership of the assigned
-alpha-2 list (`validateCountryCode`, `packages/validation/src/autofill.ts`). It therefore
+alpha-2 list — composed in `validateStatedCountryCode`, which is where the rule lives and what
+both writes call; neither test alone is the rule. It therefore
 refuses `pl` and `XX` alike, and its message says so: `PROFILE_MESSAGES.country.invalid`, which is
 true of both, where `HOLIDAY_MESSAGES.countryCodeInvalid` ("must be 2 uppercase letters") is false
 of `XX`. `pl` is refused rather than upcased because normalizing on the write would give one value
@@ -334,8 +341,13 @@ left.
 ### `/org/{orgId}/settings/holidays`
 
 Gains one control above the existing country filter: a `Select` labelled **Organization country**,
-hinted from `TIME_OFF_CALENDAR_MESSAGES.orgCountryHint`. It is the country picker the holiday form
-already uses. Its value on first paint is `GET .../settings/country` (REQ-01-046), called when the
+hinted from `TIME_OFF_CALENDAR_MESSAGES.orgCountryHint`. Its options are `COUNTRY_OPTIONS` from
+`@devscribed/validation`, which is `COUNTRY_NAMES` — the same 249 assigned codes rule 9's
+`validateCountryCode` tests, so the list offered and the list accepted are one list and cannot
+drift. **Not** the holiday form's picker, whose options come from the web app's own
+phone-derived list and include three codes — `AC`, `TA`, `XK` — that rule 9 refuses; offering a
+value the save then rejects is the disagreement sweep 9 exists to catch, and the phone is not a
+source anywhere in this feature. Its value on first paint is `GET .../settings/country` (REQ-01-046), called when the
 page loads beside the holiday list it already fetches. Admin and manager both set it (REQ-01-033);
 for a `user` or `viewer` the page itself is already a 404, so there is no read-only rendering to
 draw.
@@ -345,7 +357,8 @@ draw.
 Gains one control in the block that already holds the role picker and the job title: a `Select`
 labelled **Country**, whose first option is labelled from
 `TIME_OFF_CALENDAR_MESSAGES.memberCountryDefaultOption` and means *the organization's country* —
-which is what `null` stores and what a member gets when nobody states one. It saves through the member
+which is what `null` stores and what a member gets when nobody states one. Below it, the same
+`COUNTRY_OPTIONS` the organization picker draws, for the same reason. It saves through the member
 update the screen already submits — no new form, no second save button.
 
 ## UI Description
@@ -356,6 +369,7 @@ update the screen already submits — no new form, no second save button.
 | Empty (no rows) | `calendar-empty-state` replaces the grid, titled from `TIME_OFF_CALENDAR_MESSAGES.emptyStateTitle`. The filter bar stays. |
 | Empty (no absences) | The full grid draws, every cell blank. No empty state — REQ-01-038. |
 | Refused (422) | `calendar-error-banner` above the grid carries the message; the last good grid stays on screen underneath rather than being cleared. |
+| Failed for any other reason | The same banner, carrying `HOLIDAY_MESSAGES.toastServerError` — a `500`, a dropped connection or a body that does not parse. The grid underneath is kept for the same reason: the reader loses their place otherwise, and nothing on screen has been shown to be wrong. |
 | Permission-limited | A `viewer` never reaches the calendar route and never sees the nav row. The two country pickers are refused differently, because the pages holding them are. Settings › Holidays is already a `404` for a `user` and a `viewer`, so there is nothing to draw there. Member detail is open to every role, so a caller without `edit-detail` opens the About tab and simply does not get the control — the block renders as it does today, with the role and job title read-only beside it. No role sees either country read-only: the field is in the response for everybody (REQ-01-045), and the picker is drawn only for a caller who may save it. |
 | Narrow viewport | Below `--layout-breakpoint-desktop` the grid scrolls horizontally inside its own container; the member column stays pinned and the page body never scrolls sideways. No case: the scroll container and the pinned column are CSS on one element, with no behaviour and no second markup behind the breakpoint. |
 | Keyboard | The scope segments and the window segments are one roving-tabindex group each, which is the `ToggleButton` they are drawn with. Each absence band is a button carrying its dates, status and working-day count as its accessible name. No case for the two groups: the tab stop and the arrow keys ship with the component. The band's accessible name is asserted in TC-01-E2E-01. |

@@ -77,10 +77,10 @@ holiday rows are spelled in it and in `Capability`, which `RequireCapability` de
 **Decided:** this spec's capability ships in both unions — `ViewTimeOffCalendar` and its twin
 `view-time-off-calendar`, granted to admin, manager and user in each — and page and nav are both
 gated on the **normalized** role: `can(normalizeRole(role), 'view-time-off-calendar')` behind the
-route, `hasCapability(role, 'ViewTimeOffCalendar')` in the sidebar, so a membership still storing
+route, `hasCapability(role, 'ViewTimeOffCalendar')` in the sidebar, so a membership storing
 `member` is read as `user` and holds it on both. Rejected: the raw role, which would refuse that
-member the page while the sidebar drew its row; and `Capability` alone, which would spell this
-gate differently from `view-holidays`.
+member the page while the sidebar drew its row; and `Capability` alone, spelling this gate
+differently from `view-holidays`.
 
 | Capability | admin | manager | user | viewer |
 |---|---|---|---|---|
@@ -144,8 +144,7 @@ IF `scope` is `teams` or `people` and its selection list is empty, THEN THE SYST
 `422` carrying the message for that scope.
 
 **Decided:** an empty selection is ambiguous between "nothing ticked yet" and "everyone", and an
-empty grid would teach the reader their team has nobody in it. The sentinel `none` of REQ-01-007
-is a tick like any other: `projectIds=none` alone is a selection, and is answered, not refused.
+empty grid would say the team has nobody in it. `projectIds=none` alone is a tick, and is answered.
 
 #### REQ-01-041 — an unknown scope is refused
 
@@ -300,9 +299,8 @@ THE SYSTEM SHALL shade Saturday and Sunday columns as non-working days.
 WHEN a caller holding `edit-detail` submits an ISO 3166-1 alpha-2 country for a member, THE
 SYSTEM SHALL store it on `Membership.countryCode`.
 
-**Decided:** a field on the member update that already ships — one field does not earn an endpoint. It is written
-inside that update's existing transaction and organization-row lock and adds no lock of its own,
-which is what makes it unlike REQ-01-033's unlocked single column.
+**Decided:** a field on the member update that already ships — one field does not earn an endpoint,
+and it rides that update's organization-row lock rather than adding one, unlike REQ-01-033.
 
 #### REQ-01-043 — clearing a member's country
 
@@ -355,8 +353,11 @@ store it on `Organization.countryCode`.
 
 #### REQ-01-034 — clearing the organization's country
 
-WHEN a caller holding `ManageHolidays` submits an empty country, THE SYSTEM SHALL store `null` on
-`Organization.countryCode`.
+WHEN a caller holding `ManageHolidays` submits `countryCode` as `null` or empty, THE SYSTEM SHALL
+store `null` on `Organization.countryCode`.
+
+**Decided:** a body with no `countryCode` key changes nothing, as the member write beside it does:
+clearing on an absent key lets a mistyped key drop the country the fallback depends on.
 
 #### REQ-01-035 — the write is refused to everyone else
 
@@ -370,10 +371,8 @@ and no case could reach. 404 is what it answers on the holiday create and edit b
 IF the submitted country is neither empty nor two uppercase letters naming an **assigned** country,
 THEN THE SYSTEM SHALL answer `422` carrying `PROFILE_MESSAGES.country.invalid`.
 
-**Decided:** both writes test the assigned list (`validateCountryCode`) on top of the uppercase
-shape, so `XX` is refused and `pl` still is: storing `XX` stores what REQ-01-026 discards on every
-read. Rejected: the shape alone — right for a holiday's country, a label that reaches nobody, and
-wrong for the input to the resolution, which removes holiday pay in silence.
+**Decided:** both writes test the assigned list on top of the uppercase shape, so `XX` is refused
+and `pl` still is: storing `XX` stores what REQ-01-026 discards on every read.
 
 #### REQ-01-051 — an invalid member country is refused
 
@@ -442,6 +441,7 @@ Invariants:
 | Both country columns are `null` on every row the migration touches, so on the day it lands every member resolves to `null` and receives global holidays only — including the members whose phone country reached a national set the day before | Nothing is stored wrong: the chain is evaluated on read, so stating either country repairs every reader at once. What it costs is a window, not data, and README.md measures that window in both directions | Stating the organization country on the Holidays page, in the same change window as the deploy, which returns every member nobody has stated a country for to a national set. The field is drawn with an explanatory hint rather than left blank and unexplained |
 | A member with no country of their own and no organization country sees global holidays only | It is a state that ships today for anybody whose phone carries no country, and the row above says what to do about it on deploy day | Stating a country on the member, or on the organization — the two links, in that order |
 | The 100-row cap is a flat number, not a measurement | No organization in this product is near it, and the refusal names the fix | A measurement against a real organization, recorded in `docs/research/` |
+| A holiday row carrying `AC`, `TA` or `XK` reaches nobody | Those three are on the holiday form's own picker, which this spec does not own, and are not assigned codes, so no member and no organization can be set to them. The alternative was to accept them on both country writes, which reinstates a stored country every read discards | Those codes entering `COUNTRY_NAMES`, or the holiday create narrowing to the same list — a rule belonging to `organization/03`, not to this spec |
 
 ## Acceptance Criteria
 
