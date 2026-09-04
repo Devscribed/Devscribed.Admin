@@ -1,218 +1,83 @@
 {
   "status": "blocked",
-  "admitted": false,
-  "mode": "full",
   "spec": "specs/requests/03-client-participants.md",
-  "request": "client contacts can be invited to an organization, raise and receive requests, and see nothing else",
+  "request": null,
+  "mode": "full",
+  "admitted": false,
   "profile": "sharded",
-  "shards": [],
-  "note": "spec-slice --profile sharded produced 0 shards and assigned every criterion S-01..S-58 to the judge; all criteria below were answered by this pass directly. Currency was judged against the state the spec was written on (run baseRef de9c5f916fa328734ed5f8f9c77023e8720e35e8), because this branch already carries the spec's own implementation.",
+  "shardDecision": "the shards had already run when I was dispatched — three members, 1,641 lines, one shard per member. I re-read all three files in full for the criteria the slice kept for me (contradiction, scope, obligations, divergence, S-58), and opened every file a shard's claim or dismissal rested on: packages/validation/src/index.ts, packages/validation/src/roles.ts, apps/api/src/clients/clients.service.ts, apps/api/src/clients/client-contacts.service.ts, apps/api/src/auth/login.service.ts, specs/organization/01-clients.md, specs/requests/01-requests.md, specs/user-management/03-user-invitation.md.",
+  "shards": [
+    {
+      "shard": 1,
+      "file": "specs/requests/03-client-participants.md",
+      "enumerated": 31,
+      "claims": 1,
+      "kept": 0,
+      "overturned": [
+        "S-02",
+        "S-43"
+      ],
+      "reason": "S-02 (S1-C1): the claim is that CLIENT_USER_MESSAGES.inviteForbidden does not exist. It does not, but the spec's own Error Messages row marks it New: yes, so the spec never claims it exists today and S-02 has no subject — the keys that do exist in the tree exist because this bundle was already implemented once (git log 771451a), not because the spec quoted them from the code. Demoted to note N1 for the one key whose text really did diverge. S-43: shard 1 cleared it; I block it (R7) — the spec's invariant 1 has a call site it never checked, the staff invitation accept."
+    },
+    {
+      "shard": 2,
+      "file": "specs/requests/03-client-participants.contracts.md",
+      "enumerated": 41,
+      "claims": 3,
+      "kept": 1,
+      "overturned": [
+        "S-02",
+        "S-03"
+      ],
+      "reason": "S-03 (S2-C1) and S-02 (S2-C3) both compare the spec to code that was written to this same spec. The contacts routes do not 'already ship' — this spec's own prose says they are new and the Verification Plan records them as 'not run — the route is new' — so a status the current implementation returns is not the witness S-03 asks for. Kept S2-C2 as R4: the 403 is a defect measured against CLAUDE.md's Auth rule and against organization/01, which is a document, not against the implementation."
+    },
+    {
+      "shard": 3,
+      "file": "specs/requests/03-client-participants.cases.md",
+      "enumerated": 42,
+      "claims": 6,
+      "kept": 2,
+      "overturned": [
+        "S-01",
+        "S-03",
+        "S-36",
+        "S-37"
+      ],
+      "reason": "S3-C1 to S3-C4 are the same 403-vs-404 subject as S2-C2, re-derived from the implementation of this spec; TC-03-INT-12 is reachable and self-consistent under the spec's own Routes table, so S-36/S-37 are not what is wrong with it — R4 carries the substance once, and its repair moves the case with the table. S3-C5 kept verbatim as R6. S3-C6 kept as note N6, which the register marks note-only. S-37 is nonetheless blocked, for a case shard 3 cleared and did not raise: TC-03-INT-04 (R5)."
+    }
+  ],
   "read": {
     "specs": [
       "specs/requests/03-client-participants.md",
       "specs/requests/03-client-participants.contracts.md",
       "specs/requests/03-client-participants.cases.md",
-      "specs/requests/README.md"
+      "specs/requests/01-requests.md",
+      "specs/organization/01-clients.md",
+      "specs/user-management/03-user-invitation.md"
     ],
     "files": [
       "packages/validation/src/index.ts",
       "packages/validation/src/roles.ts",
-      "packages/validation/src/requests.ts",
-      "apps/api/prisma/schema.prisma",
-      "apps/api/src/auth/capability.guard.ts",
       "apps/api/src/auth/login.service.ts",
-      "apps/api/src/members/me.controller.ts",
-      "apps/api/src/members/members.controller.ts",
-      "apps/api/src/members/members.service.ts",
-      "apps/api/src/requests/requests.controller.ts",
-      "apps/api/src/requests/requests.service.ts",
-      "apps/api/src/requests/requests.serializer.ts",
-      "apps/api/src/requests/request-topics.seed.ts",
+      "apps/api/src/clients/clients.service.ts",
+      "apps/api/src/clients/client-contacts.service.ts",
       "apps/api/src/invitations/invitations.controller.ts",
-      "apps/api/src/signup/signup.service.ts",
-      "apps/api/src/mail/mail.service.ts",
-      "apps/web/src/ds.ts",
-      "apps/web/src/layout/Sidebar.tsx",
-      "1_DS for dev/components/forms/Select.d.ts",
-      "e2e/tests/helpers.ts",
       ".claude/skills/spec-review/references/admission-criteria.md"
     ]
   },
-  "findings": [
-    {
-      "id": "R1",
-      "severity": "blocker",
-      "criterion": "S-58",
-      "rule": "spec/incomplete-decision",
-      "file": "specs/requests/03-client-participants.md",
-      "symbol": "REQ-03-035 / Routes",
-      "line": 332,
-      "claim": "the shipping reassign route can act on a request carrying this spec's new addressee kind, and no rule in the bundle says what it does with one",
-      "witness": {
-        "kind": "rule",
-        "detail": "`POST /api/organizations/{orgId}/requests/{requestId}/reassign` ships today: apps/api/src/requests/requests.controller.ts:167 (`@RequireCapability('ViewAllRequests')`), and apps/api/src/requests/requests.service.ts:807-811 writes `assigneeKind` and `assigneeMembershipId` on the locked row and touches no client column. It appears in no row of the Routes table (contracts:35-54). `grep -n \"eassign\" specs/requests/03-client-participants*.md` returns only REQ-03-035 (:332), REQ-03-036's Decided (:343), contracts edge case 5 (:557) and Known Gaps (:396) — none of which states what the route answers, or writes, when the request it locks is addressed to a client. Meanwhile REQ-03-035 (:332) requires a reassignment to write one outbox row per recipient and REQ-03-036's Decided (:343) reasons about the incoming and outgoing addressee of one, so reassignment is a live event of this feature; and the Data Model (contracts:293) says `assigneeClientMembershipId` is 'Required while `assigneeKind` is `client`, null otherwise'.",
-        "source": "specs/requests/03-client-participants.md:332 against apps/api/src/requests/requests.service.ts:807 and specs/requests/03-client-participants.contracts.md:293"
-      },
-      "suggestedFix": "add one rule (and a Routes row) saying what the reassign route does with a client-addressed request — refuse it with a named status and message, or state that it moves the request to a member addressee and clears `assigneeClientMembershipId` in the same transaction — and say who the reassignment notifies when the outgoing addressee is a contact."
-    },
-    {
-      "id": "R2",
-      "severity": "blocker",
-      "criterion": "S-43",
-      "rule": "spec/contradiction",
-      "file": "specs/requests/03-client-participants.md",
-      "symbol": "State Machine invariant 1",
-      "line": 378,
-      "claim": "the unconditional invariant that no account holds both principals has a live violator the spec neither fixes, carves out nor scopes out",
-      "witness": {
-        "kind": "rule",
-        "detail": "Invariant 1 (:378): 'An account never holds an active `Membership` and an active `ClientMembership` at once.' REQ-03-002's table (:76) makes the pair 'removed staff row + active client row' a declared, sign-in-able state. `POST /api/organizations/{orgId}/members/{memberId}/restore` (apps/api/src/members/members.controller.ts:59) sets exactly such a `Membership` back to `status: 'active'` at apps/api/src/members/members.service.ts:248-251 after checking only `can(caller.role,'delete-restore')` (:233) and `target.status !== 'removed'` (:244); it reads no `ClientMembership`. That is a third writer, against REQ-03-002's justification for the `active | active` cell at :74 — 'REQ-03-014 refuses the accept ... REQ-03-042 refuses the invitation and the accept ... and no other writer creates either' — and against contracts:269, which names REQ-03-014 and REQ-03-042 as the two writes where the exclusion is enforced.",
-        "source": "specs/requests/03-client-participants.md:378 against apps/api/src/members/members.service.ts:248 and specs/requests/03-client-participants.md:74"
-      },
-      "suggestedFix": "state what the member-restore route does when the account holds an active `ClientMembership` — a named refusal with its status and message, or an explicit carve-out — so the `active | active` cell REQ-03-002 calls unreachable stays unreachable."
-    },
-    {
-      "id": "R3",
-      "severity": "blocker",
-      "criterion": "S-09",
-      "rule": "spec/contradiction",
-      "file": "specs/requests/03-client-participants.contracts.md",
-      "symbol": "State Machine `none | accept` vs `ClientMembership.accountId`",
-      "line": 244,
-      "claim": "for an account holding a removed contact row in another organization, the accept rule requires a second `ClientMembership` row that the table's own unique constraint forbids",
-      "witness": {
-        "kind": "scenario",
-        "detail": "contracts:244: 'none | accept | A valid token with no existing row writes an active `ClientMembership`', where contracts:250 defines `state` as 'the address's `ClientMembership` at the client the invitation or the removal names'. contracts:269 gives `accountId` as `String @unique`. REQ-03-013 (:143) refuses an invitation only for a row 'of another client **of the organization**'; REQ-03-014 (:153) refuses an accept only for an **active** `Membership` or `ClientMembership`. Reachable sequence: organization A invites, accepts and then removes a contact; organization B invites the same address (REQ-03-013 sees no row of B — passes), the account accepts (REQ-03-014 sees no *active* row — passes), and the accept lands on the `none | accept` row for B's client. Writing the row violates `accountId @unique`; the alternative branch of REQ-03-012 (:138) — 'or return the account's existing row to `active`' — rebinds organization A's row to organization B's client, which REQ-03-013's Decided (:147) forbids for the same-organization case for exactly that reason. Out of Scope (:386) names 'a contact belonging to ... more than one organization' but states no refusal, status or message for it.",
-        "source": "specs/requests/03-client-participants.contracts.md:244 against :269, and specs/requests/03-client-participants.md:138 against :143 and :153"
-      },
-      "suggestedFix": "widen REQ-03-014's accept-time test to any `ClientMembership` of another organization whatever its status (409 `CLIENT_USER_MESSAGES.principalConflict`), or state the answer this accept gives, and say which of REQ-03-012's two branches applies when the existing row belongs to another organization."
-    },
-    {
-      "id": "R4",
-      "severity": "blocker",
-      "criterion": "S-26",
-      "rule": "spec/incomplete-decision",
-      "file": "specs/requests/03-client-participants.contracts.md",
-      "symbol": "GET /api/organizations/{orgId}/request-contacts",
-      "line": 42,
-      "claim": "the new picker route is gated on a role-keyed capability whose answer for the stored role value `member` is not stated, and the repository's two capability helpers disagree about it",
-      "witness": {
-        "kind": "rule",
-        "detail": "contracts:42 gates the new route on `create-request`. The legacy-role paragraph (contracts:20-24) answers the stored value `member` for `manage-clients` and `view-clients` only — 'A membership carrying it holds neither `manage-clients` nor `view-clients` ... so `member` is refused exactly as `user` is' — and `user` is *granted* `create-request`, so that sentence does not answer this route. The two helpers in live use disagree for `member`: `can('member','create-request')` is `false` (packages/validation/src/index.ts:763-765, `CAPABILITY_MATRIX[role]?.[capability] ?? false`, matrix keyed by admin|manager|user|viewer at :620), while `hasCapability('member','CreateRequest')` is `true` (packages/validation/src/roles.ts:27-29 maps `member → user`, :187-189 looks the capability up, and `user` holds `CreateRequest` at :193). Both are load-bearing for request routes today: apps/api/src/requests/requests.service.ts:323 gates create with `can`, apps/api/src/auth/capability.guard.ts:57 gates decorated routes with `hasCapability`. TC-03-INT-36 (cases:349-361) exercises `user`, `admin` and `viewer` only.",
-        "source": "specs/requests/03-client-participants.contracts.md:42 against packages/validation/src/index.ts:763 and packages/validation/src/roles.ts:27"
-      },
-      "suggestedFix": "say in the contracts which answer a membership carrying the stored value `member` gets from the request-contacts route (and from the create route's `create-request` check), naming the helper that decides it, as the paragraph at contracts:20 already does for `manage-clients` and `view-clients`."
-    },
-    {
-      "id": "R5",
-      "severity": "blocker",
-      "criterion": "S-36",
-      "rule": "spec/untestable-case",
-      "file": "specs/requests/03-client-participants.cases.md",
-      "symbol": "TC-03-INT-08",
-      "line": 258,
-      "claim": "the only case covering REQ-03-042 cannot reach the accept-time refusal its steps ask for, because the invitation it would accept is refused at the write",
-      "witness": {
-        "kind": "scenario",
-        "detail": "cases:257-259: 'take an account holding an active `ClientMembership` and, as an admin, invite that same address to staff; then write a staff invitation for an address that is a client contact of another organization and have it accepted.' REQ-03-042 (:157) refuses a staff invitation that is 'written for, or accepted by, an account holding an active `ClientMembership` of **any** organization' with `409`, 'writing neither the invitation nor the `Membership`'. The second step's address is already an active contact, so the write is refused and there is no invitation to accept: both halves of the step land on the same invite-time refusal. The accept-time half — which REQ-03-042's Decided (:163-166) says exists because 'the account may acquire the client principal between the invitation and its acceptance' — is reachable only by writing the staff invitation while the address still holds no principal, letting it accept a client invitation, and only then accepting the staff one. No other case covers REQ-03-042 (cases:248 is its only Covers entry).",
-        "source": "specs/requests/03-client-participants.cases.md:258 against specs/requests/03-client-participants.md:157"
-      },
-      "suggestedFix": "re-order that step — write the staff invitation before the address becomes a contact, have the account accept a client invitation, then accept the staff one — and amend the Expected Result to name the accept-time `409` separately from the invite-time one."
-    },
-    {
-      "id": "N1",
-      "severity": "note",
-      "rule": "spec/scope-gap",
-      "file": "specs/requests/03-client-participants.md",
-      "symbol": "Out of Scope",
-      "line": 384,
-      "claim": "the request asks that client contacts 'raise and receive requests'; the bundle delivers receive and refuses raise",
-      "witness": {
-        "kind": "rule",
-        "detail": "The request reads 'client contacts can be invited to an organization, raise and receive requests, and see nothing else'. REQ-03-027 (:274) answers a client principal `403` `CLIENT_USER_MESSAGES.clientCannotCreate` on the create route; Out of Scope (:384) records 'A client raising a request. REQ-03-027 refuses it; the thread carries anything urgent'; specs/requests/README.md:78 records the same decision at area level — 'Staff ask clients, not the reverse, this release ... Named out of scope rather than half-built.' The decision is written down twice with its reason, so this is reported rather than blocked; it is here so the person who wrote the request confirms the reading before a run is paid for.",
-        "source": "specs/requests/03-client-participants.md:384 against the request line"
-      },
-      "suggestedFix": "no edit needed if the reading is right; if it is not, the missing half is a client-raised request with its own topic audience, route, addressee resolution and notification recipients."
-    },
-    {
-      "id": "N2",
-      "severity": "note",
-      "rule": "spec/incomplete-decision",
-      "file": "specs/requests/03-client-participants.contracts.md",
-      "symbol": "Retry policy",
-      "line": 375,
-      "claim": "the retry rule names a bound it never gives, and no requirement in the bundle ever fires a retry",
-      "witness": {
-        "kind": "rule",
-        "detail": "contracts:375-381: 'a row is retried only from `failed` and only while `attempts` is below its bound'. No number is stated anywhere in the bundle, and no requirement drives a second attempt: REQ-03-037 (:346) calls the notifier once after the commit, REQ-03-041 (:368) keeps every read path independent of delivery, and Known Gaps (:398) leaves the drain to an adapter spec. Nothing is observable either way with the shipped notifier, which is why this is a note and not a blocker.",
-        "source": "specs/requests/03-client-participants.contracts.md:375 against specs/requests/03-client-participants.md:346"
-      },
-      "suggestedFix": "either give the bound, or say plainly that no row is retried in this release and that the retry constraints are what an adapter spec must honour."
-    },
-    {
-      "id": "N3",
-      "severity": "note",
-      "rule": "spec/incomplete-decision",
-      "file": "specs/requests/03-client-participants.contracts.md",
-      "symbol": "GET /api/organizations/{orgId}/requests — amended",
-      "line": 187,
-      "claim": "the amended list response fixes `counts.waitingOnMe` for a client principal and says nothing about `counts.total`",
-      "witness": {
-        "kind": "rule",
-        "detail": "contracts:188-191 states the response 'carries `requests` and `counts` and no `vacation` member' and defines `waitingOnMe` only. The shipping route computes `counts.total` over a membership-keyed scope — apps/api/src/requests/requests.service.ts:205-214, `{ requesterMembershipId: caller.membershipId }` OR `{ assigneeMembershipId: caller.membershipId }` — which resolves to zero rows for a principal that is neither. TC-03-INT-23 (cases:487) asserts `counts.waitingOnMe` and not `total`.",
-        "source": "specs/requests/03-client-participants.contracts.md:191 against apps/api/src/requests/requests.service.ts:205"
-      },
-      "suggestedFix": "one clause saying `counts.total` is the count of the requests the client principal's own scope returns."
-    },
-    {
-      "id": "N4",
-      "severity": "note",
-      "rule": "spec/missing-artefact",
-      "file": "specs/requests/03-client-participants.contracts.md",
-      "symbol": "UI Description",
-      "line": 527,
-      "claim": "two new user-visible strings are described rather than given, so no case can assert either",
-      "witness": {
-        "kind": "rule",
-        "detail": "contracts:527: '`client-contacts-empty-state` with a line saying what a contact is for'. contracts:531: 'the requests empty state, with copy that does not mention scopes or filters they do not have'. Neither names an export, and the Error Messages table (contracts:200-230) carries no row for either; the existing `REQUEST_MESSAGES.emptyMine` ('Nothing is waiting on you.', packages/validation/src/index.ts) would satisfy the second but is not named.",
-        "source": "specs/requests/03-client-participants.contracts.md:527"
-      },
-      "suggestedFix": "name the export and the exact text for the contacts empty state, and say whether the client's requests empty state reuses `REQUEST_MESSAGES.emptyMine`."
-    },
-    {
-      "id": "N5",
-      "severity": "note",
-      "rule": "spec/missing-artefact",
-      "file": "specs/requests/03-client-participants.contracts.md",
-      "symbol": "Edge Cases",
-      "line": 556,
-      "claim": "three edge cases have no case and no line saying they have none",
-      "witness": {
-        "kind": "rule",
-        "detail": "Edge 4 (contracts:556, the client archived while a contact is signed in — TC-03-INT-06 archives before the invitation, never with a live session), edge 6 (contracts:558, the requester unassigned after raising), edge 14 (contracts:566, a recipient's principal removed before delivery, which no case asserts: with the shipped notifier every row is `skipped` for every recipient, so TC-03-INT-24 cannot tell the removal apart).",
-        "source": "specs/requests/03-client-participants.contracts.md:556"
-      },
-      "suggestedFix": "give each an observer, or one line naming the case that already covers it."
-    },
-    {
-      "id": "N6",
-      "severity": "note",
-      "rule": "spec/missing-artefact",
-      "file": "specs/requests/03-client-participants.md",
-      "symbol": "State Machine invariants",
-      "line": 380,
-      "claim": "the lock is stated for a request's status write and for nothing else, including the row two writers of this spec share",
-      "witness": {
-        "kind": "rule",
-        "detail": "Invariant 3 (:380) states the `FOR UPDATE` re-read for every write of a request's status. A `ClientMembership.status` is written by two paths this spec adds — the removal (REQ-03-006, :99) and the accept that returns a removed row to `active` (REQ-03-012, :136) — and neither says what is locked or re-read, nor that they cannot race.",
-        "source": "specs/requests/03-client-participants.md:380 against :99 and :136"
-      },
-      "suggestedFix": "one line: either the lock and what is re-read inside the transaction, or that the two writes cannot race in ordinary use and no lock is added."
-    }
-  ],
+  "sweeps": {
+    "currency": 12,
+    "conventions": 12,
+    "selfSufficiency": 10,
+    "testability": 42,
+    "dataAndState": 35,
+    "obligations": 43,
+    "contradiction": 41,
+    "scope": 2
+  },
   "criteria": {
     "S-01": "clear",
-    "S-02": "clear",
+    "S-02": "note",
     "S-03": "clear",
     "S-04": "clear",
     "S-05": "clear",
@@ -220,15 +85,15 @@
     "S-07": "clear",
     "S-08": "clear",
     "S-09": "blocked",
-    "S-10": "clear",
+    "S-10": "blocked",
     "S-11": "clear",
     "S-12": "clear",
     "S-13": "clear",
     "S-14": "clear",
-    "S-15": "clear",
+    "S-15": "note",
     "S-16": "clear",
     "S-17": "clear",
-    "S-18": "clear",
+    "S-18": "blocked",
     "S-19": "clear",
     "S-20": "clear",
     "S-21": "clear",
@@ -236,7 +101,7 @@
     "S-23": "clear",
     "S-24": "clear",
     "S-25": "clear",
-    "S-26": "blocked",
+    "S-26": "n/a",
     "S-27": "clear",
     "S-28": "clear",
     "S-29": "clear",
@@ -245,41 +110,255 @@
     "S-32": "clear",
     "S-33": "clear",
     "S-34": "clear",
-    "S-35": "clear",
-    "S-36": "blocked",
-    "S-37": "clear",
+    "S-35": "n/a",
+    "S-36": "clear",
+    "S-37": "blocked",
     "S-38": "clear",
-    "S-39": "clear",
-    "S-40": "clear",
-    "S-41": "clear",
+    "S-39": "n/a",
+    "S-40": "blocked",
+    "S-41": "n/a",
     "S-42": "clear",
     "S-43": "blocked",
     "S-44": "note",
-    "S-45": "clear",
+    "S-45": "note",
     "S-46": "note",
     "S-47": "clear",
     "S-48": "clear",
     "S-49": "clear",
-    "S-50": "clear",
+    "S-50": "note",
     "S-51": "clear",
     "S-52": "clear",
     "S-53": "clear",
     "S-54": "n/a",
     "S-55": "clear",
-    "S-56": "note",
+    "S-56": "n/a",
     "S-57": "clear",
     "S-58": "blocked"
   },
-  "criteriaNotes": {
-    "S-01": "Every named symbol exists at the baseline the spec was written on: SessionGuard, OrgScopeGuard, MailService as an abstract DI token (apps/api/src/mail/mail.service.ts:152), normalizeRole/hasCapability/ROLE_CAPABILITIES (roles.ts), can/CAPABILITY_MATRIX (index.ts:620,763), the e2e helpers signupOrg/latestInvitationToken/createBareAccount/inviteAndAcceptViaApi/assignProjectMembersViaApi, and apps/api/test/{clients,requests,session-revocation}.spec.ts.",
-    "S-02": "Every quoted message matches its export character for character (AUTH_MESSAGES.deactivated/invalidCredentials, INVITE_MESSAGES.tokenInvalid, CLIENT_MESSAGES.clientArchived, the fourteen REQUEST_MESSAGES rows, REQUEST_TOPIC_MESSAGES.pickerEmpty).",
-    "S-03": "Statuses match the shipping routes: create 201, messages 201, answer/grant/decline 200 (requests.controller.ts), POST /api/invitations 200 and accept 200 (invitations.controller.ts:21-39), GET /api/me 200-with-null (me.controller.ts:27).",
-    "S-04": "Schema facts hold: Membership.accountId @unique, Invitation.role free-form String with no clientId, Request.assigneeKind with nullable assigneeMembershipId, RequestMessage.authorKind, RequestEvent.actorKind.",
-    "S-05": "'Today the code does X' claims verified: /api/me answers null for an account with no membership; the login membership check precedes the password compare (login.service.ts:34-41); nav-members is drawn unconditionally while every other row asks a capability (Sidebar.tsx:72-105); the two seeded client topics are Access (access, 10) and Other (question, 20) (request-topics.seed.ts:37-38); the list route answers 400 validation_error before it consults a capability (requests.service.ts:168-188).",
-    "S-06": "Select and Toggle are exported by apps/web/src/ds.ts; SelectOption.label is React.ReactNode (1_DS for dev/components/forms/Select.d.ts:3), so the DS-gaps table's 'None' holds.",
-    "S-08": "spec-lint ran clean on this bundle in this round (T0), which settles counts, coverage joins and cited paths.",
-    "S-28": "TC-03-E2E-01..05 each reach something an API test cannot: mail-to-session journey, a nav row that must not be drawn, the shell's redirect after revocation, the modal's audience re-read, and the client's action controls. No existing e2e covers revocation-on-removal.",
-    "S-44": "Tied to R5: the accept-time half of REQ-03-042 has no case that would fail if it were implemented backwards.",
-    "S-54": "No external system: the shipped notifier makes no outbound call and the Access table records no credential."
-  }
+  "findings": [
+    {
+      "id": "R1",
+      "severity": "blocker",
+      "criterion": "S-09",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/03-client-participants.md",
+      "symbol": "REQ-03-019",
+      "line": 202,
+      "claim": "A client principal calling the create route or the grant route is given two answers no implementation can give at once. REQ-03-019 makes 404 the answer on every organization route this spec does not grant a client, and the permission matrix withholds both routes from a client contact ('Raise a request' and 'Mark a request granted' are both a client-column cross); REQ-03-027 and REQ-03-032 make the answer 403 with a named message on exactly those two routes. The Security section restates the 404 as absolute, so it resolves nothing.",
+      "witness": {
+        "kind": "rule",
+        "detail": "REQ-03-019 (behaviour :202-203): 'IF a client principal calls an organization route this spec does not grant them, THEN THE SYSTEM SHALL answer `404`.' REQ-03-027 (behaviour :262-263): 'IF a client principal calls the create route, THEN THE SYSTEM SHALL answer `403` with `CLIENT_USER_MESSAGES.clientCannotCreate`'. REQ-03-032 (behaviour :299-300): 'IF a client principal calls the grant route, THEN THE SYSTEM SHALL answer `403` with `REQUEST_MESSAGES.notYoursToGrant`.' Security (contracts :530-531): 'A client principal is refused with `404`, never `403`, on every organization route this spec does not grant them'. The matrix (contracts :11 and :16) gives the client column a cross for both of those routes, so both fall inside REQ-03-019's antecedent.",
+        "source": "specs/requests/03-client-participants.md:202 against :262 and :299"
+      },
+      "suggestedFix": "Draw REQ-03-019's boundary so the two 403 rules sit outside it — for instance by naming the surface it governs rather than 'a route this spec does not grant them' — and make the Security bullet say the same thing. Which of the two answers wins on the create and grant routes is a person's decision, not this pass's."
+    },
+    {
+      "id": "R2",
+      "severity": "blocker",
+      "criterion": "S-10",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/03-client-participants.md",
+      "symbol": "REQ-03-013",
+      "line": 155,
+      "claim": "REQ-03-013 and validation rule 2 refuse an invitation only when the address is already an active contact of the client named in the path; TC-03-INT-07 asserts 409 CLIENT_USER_MESSAGES.alreadyLinked for an address invited to a different client of the same organization, on the ground that 'the account already holds its one client membership'. No implementation satisfies both: following the rules the second invitation is written and answers 201, following the case it is refused.",
+      "witness": {
+        "kind": "rule",
+        "detail": "REQ-03-013 (behaviour :155-156): 'IF the invited address already holds an active `ClientMembership` of the named client, THEN THE SYSTEM SHALL answer `409` with `CLIENT_USER_MESSAGES.alreadyLinked`.' Validation rule 2 (contracts :342): 'Not already an active contact of this client'. TC-03-INT-07 (cases :241-244): 'Then invite the same address to a **different** client of the same organization. … The second also answers `409`, because the account already holds its one client membership'. The state machine's `active | invite` row (contracts :207) is keyed on the contact's state for one client and does not settle it either.",
+        "source": "specs/requests/03-client-participants.md:155 against specs/requests/03-client-participants.cases.md:241"
+      },
+      "suggestedFix": "State the scope of the refusal once: either 'an active `ClientMembership` of any client of the organization' in REQ-03-013 and in validation rule 2, or a second refusal for the cross-client case with its own message. The `accountId @unique` on `ClientMembership` says the one-membership reading was intended, but naming the winner is a person's call and it has to be made in the document."
+    },
+    {
+      "id": "R3",
+      "severity": "blocker",
+      "criterion": "S-10",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/03-client-participants.contracts.md",
+      "symbol": "Validation Rules — rule 6",
+      "line": 346,
+      "claim": "Validation rule 6 gives one answer for an `assigneeClientMembershipId` that is not 'an active contact of the caller's organization' — 400 with REQUEST_MESSAGES.assigneeInactive. TC-03-INT-32 asserts that a contact of a different organization answers 404. A contact id from another organization fails rule 6's constraint, so the two statements give it two statuses, and the difference is the one that decides whether contact ids are probeable across organizations.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Validation rule 6 (contracts :346): '| 6 | `assigneeClientMembershipId` | An active contact of the caller's organization | `REQUEST_MESSAGES.assigneeInactive` | yes |'. TC-03-INT-32 (cases :565-570): 'then with one naming a contact of a **different organization** … The cross-organization contact answers `404`, identical to an id that does not exist, so contact ids cannot be probed across organizations.' REQ-03-020 (behaviour :209-210) states the requirement without a status, so it settles neither.",
+        "source": "specs/requests/03-client-participants.contracts.md:346 against specs/requests/03-client-participants.cases.md:569"
+      },
+      "suggestedFix": "Split rule 6 into the two facts it is carrying — out of the caller's organization, and inside it but removed — and give each its own status and message, matching whichever answer the person settling R1's 403/404 question chooses here."
+    },
+    {
+      "id": "R4",
+      "severity": "blocker",
+      "criterion": "S-18",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/03-client-participants.contracts.md",
+      "symbol": "Routes — the client-contacts routes",
+      "line": 34,
+      "claim": "The three contacts routes answer a staff caller who lacks the capability 403 with a message that names the resource. That caller is answered 404 by the client's own routes, so the 403 tells a `user` or a `viewer` that a client they may not see exists — which is the leak CLAUDE.md's 404-never-403 rule exists to close, and the answer organization/01 already decided for this surface.",
+      "witness": {
+        "kind": "rule",
+        "detail": "Contracts :34-36 give `GET …/clients/{clientId}/contacts` '`403` `CLIENT_MESSAGES.forbidden`' and both write routes '`403` `CLIENT_USER_MESSAGES.inviteForbidden`'; REQ-03-008 (behaviour :129-130) and TC-03-INT-12 (cases :298-311) assert the same 403. organization/01 :76: 'A `user` calling the detail endpoint receives `404 Not Found`, matching the OrgScopeGuard pattern', and :525-526 'TC-01-INT-03: Create as user — forbidden. POST returns 404 (org-scope-style hiding; matches CLAUDE.md rule).' CLAUDE.md — Auth: 'OrgScopeGuard returns 404, not 403, when the path orgId does not match the session'. The two answers are given for the same caller on two routes of the same client.",
+        "source": "specs/requests/03-client-participants.contracts.md:34 against specs/organization/01-clients.md:76"
+      },
+      "suggestedFix": "Make the capability refusal on all three contacts routes a bare 404, in the Routes table, in REQ-03-008, in the Error Messages table and in TC-03-INT-12's expected result — or, if a 403 is deliberate here, state in this spec the whole new rule for the clients surface and why the existence of a client is no longer hidden from a `user`. Either way the change is a behaviour organization/01 describes, so a person confirms it."
+    },
+    {
+      "id": "R5",
+      "severity": "blocker",
+      "criterion": "S-37",
+      "rule": "spec/untestable-case",
+      "file": "specs/requests/03-client-participants.cases.md",
+      "symbol": "TC-03-INT-04",
+      "line": 208,
+      "claim": "TC-03-INT-04's expected result asserts two things that cannot both hold. If the membership check runs before the password comparison, an account with no principal answers AUTH_MESSAGES.deactivated whatever the password is, so the wrong-password half cannot answer AUTH_MESSAGES.invalidCredentials; and if the two answers differ as the case asserts, then they do tell a caller whether the password was right, which is the property the same sentence claims. The shipping route settles which half is true, and it is not the one the case asserts.",
+      "witness": {
+        "kind": "rule",
+        "detail": "TC-03-INT-04 (cases :207-210): 'The correct password answers `400` with the deactivated message; the wrong one answers `400` with `AUTH_MESSAGES.invalidCredentials`. The membership check runs before the password comparison, so neither answer tells a caller whether the password was right.' apps/api/src/auth/login.service.ts:45-58 resolves the principal and throws `AUTH_MESSAGES.deactivated` when there is none, and only then runs `bcrypt.compare` — so both passwords answer deactivated today, and REQ-03-004 (behaviour :104-105) states no exception for a wrong password.",
+        "source": "specs/requests/03-client-participants.cases.md:208 against apps/api/src/auth/login.service.ts:58"
+      },
+      "suggestedFix": "Drop the invalidCredentials half: both passwords answer the deactivated message, which is what makes the ordering sentence true. If the other reading is wanted, REQ-03-004 has to say so and the indistinguishability claim has to go."
+    },
+    {
+      "id": "R6",
+      "severity": "blocker",
+      "criterion": "S-40",
+      "rule": "spec/untestable-case",
+      "file": "specs/requests/03-client-participants.cases.md",
+      "symbol": "Verification Plan — Bringing it up, Rehearsal",
+      "line": 14,
+      "claim": "The Verification Plan records a literal port pair in three places, which is what this criterion forbids it to record — and what CLAUDE.md forbids a reader to copy, because the suite claims its own pair under CI and steps it until one answers.",
+      "witness": {
+        "kind": "file",
+        "detail": "cases :14 '`cd e2e && E2E_WEB_PORT=3100 E2E_API_PORT=4100 CI=1 PW_WORKERS=1 npx playwright test tests/<file> --reporter=list`', repeated in the rehearsal blocks at :79 and :105. The same cell then says 'The suite claimed its own pair', which is the behaviour the fixed numbers contradict.",
+        "source": "specs/requests/03-client-participants.cases.md:14"
+      },
+      "suggestedFix": "Record the rig as the suite's own claimed pair under `CI=1` and keep the routes, states and observers; delete the three port literals."
+    },
+    {
+      "id": "R7",
+      "severity": "blocker",
+      "criterion": "S-43",
+      "rule": "spec/contradiction",
+      "file": "specs/requests/03-client-participants.md",
+      "symbol": "State Machine — invariant 1",
+      "line": 357,
+      "claim": "The spec states an unconditional invariant — an account never holds an active Membership and an active ClientMembership at once — and checks it against one of the two writers. REQ-03-014 refuses only the accept of a `client` invitation. The already-shipping staff accept is the other writer: an account holding an active ClientMembership that accepts a staff invitation gets a Membership, and nothing in this spec or in user-management/03 refuses it. The product then reaches the cell REQ-03-002's table marks 'Unreachable', so sign-in has no stated answer for a state a user can be in.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "Dana holds an active `ClientMembership` of Acme (REQ-03-012). An admin invites dana@acme.example as a `user` through the staff invitation route (`POST …/invitations`, user-management/03 :98). REQ-03-014 (behaviour :160-162) governs only 'the account accepting a `client` invitation', so the accept proceeds and writes a `Membership`. Invariant 1 (behaviour :357) is now false; REQ-03-002's row (behaviour :88) reads 'active | active | Unreachable — an accept that would write the second row is refused by REQ-03-014, and no other writer creates one', and gives no principal for the next sign-in. Nothing in the bundle names the staff accept, and Out of Scope (behaviour :366-373) does not carve it out.",
+        "source": "specs/requests/03-client-participants.md:357 against :88 and specs/user-management/03-user-invitation.md:98"
+      },
+      "suggestedFix": "One sentence in this spec saying what the staff invitation accept does for an account holding an active ClientMembership — refuse it with CLIENT_USER_MESSAGES.principalConflict, or place it in Out of Scope and give REQ-03-002's active/active row a real outcome. Not a new route."
+    },
+    {
+      "id": "R8",
+      "severity": "blocker",
+      "criterion": "S-58",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/requests/03-client-participants.md",
+      "symbol": "REQ-03-026",
+      "line": 316,
+      "claim": "`POST …/requests/{requestId}/reassign` ships today, this spec counts `reassigned` among the events it must notify on, and this spec gives requests a new addressee kind — but nothing here says what that route does with a request whose addressee is a client contact, or whether the reassign control is drawn on one. The shipping rule draws that control precisely on the state REQ-03-026 creates.",
+      "witness": {
+        "kind": "rule",
+        "detail": "requests/01 :177: 'An admin or manager may reassign an open or answered request to a different **member**.' requests/01 :182-183: the addressee-inactive flag 'draws the reassign banner and the reassign control **on the detail screen**'. This spec REQ-03-026 (behaviour :257-258): 'WHILE the addressee of an open request is a removed client contact, THE SYSTEM SHALL report the request's assignee as inactive and cancel nothing', and Known Gaps (behaviour :381) says such a request is 'flagged but not reassigned', closed by 'A reassign path that accepts a client addressee'. REQ-03-035 (behaviour :316-317) nonetheless lists `reassigned` among the events that write outbox rows. So the control is drawn, the route accepts a member addressee, and the spec never says whether a client-addressed request may be moved to a member under a client-audience topic.",
+        "source": "specs/requests/03-client-participants.md:316 against specs/requests/01-requests.md:177"
+      },
+      "suggestedFix": "One line: what `POST …/reassign` answers for a request whose `assigneeKind` is `client`, and whether the reassign control is drawn on it. Refusing it and saying so in Out of Scope is a complete answer; so is stating that it retargets to a member and what happens to the client-audience topic. No new route either way."
+    },
+    {
+      "id": "N1",
+      "severity": "note",
+      "criterion": "S-02",
+      "rule": "spec/stale-statement",
+      "file": "specs/requests/03-client-participants.contracts.md",
+      "symbol": "CLIENT_USER_MESSAGES.alreadyLinked",
+      "line": 164,
+      "claim": "The Error Messages table marks this export new and quotes 'This person is already a contact of this client'; the tree carries it as 'This person is already a contact of a client in this workspace'. The export postdates the spec — it was written by the run that implemented this bundle — so this is not a stale claim by the spec. It is worth a person's eye because the shipped wording is the one R2's cross-client reading would need, which is what a contradiction resolved downstream instead of in the document looks like.",
+      "witness": {
+        "kind": "command",
+        "detail": "grep -n alreadyLinked packages/validation/src/index.ts → 2289: \"alreadyLinked: 'This person is already a contact of a client in this workspace',\"; contracts :164 quotes 'This person is already a contact of this client'.",
+        "source": "packages/validation/src/index.ts:2289"
+      },
+      "suggestedFix": "Settle R2 first; the message text follows from whichever scope is chosen."
+    },
+    {
+      "id": "N2",
+      "severity": "note",
+      "criterion": "S-15",
+      "rule": "spec/missing-artefact",
+      "file": "specs/requests/03-client-participants.contracts.md",
+      "symbol": "ClientMembership.invitedByMembershipId",
+      "line": 228,
+      "claim": "The column is added with the description 'Audit' and no rule writes it, no response returns it and no case asserts it. Every other column this spec adds has a writer.",
+      "witness": {
+        "kind": "file",
+        "detail": "Contracts :228 '| `invitedByMembershipId` | `String?` FK → `Membership`, **SetNull** | Audit. |'. REQ-03-012 (behaviour :150-151) writes the ClientMembership and names only the active status; TC-03-INT-01 (cases :167-178) asserts the organization and the client; TC-03-INT-10 asserts `removedAt` and `removedByAccountId`. Nothing names this column.",
+        "source": "specs/requests/03-client-participants.contracts.md:228"
+      },
+      "suggestedFix": "Say in REQ-03-012 that the accept copies the invitation's inviter onto the row, or drop the column."
+    },
+    {
+      "id": "N3",
+      "severity": "note",
+      "criterion": "S-44",
+      "rule": "spec/missing-artefact",
+      "file": "specs/requests/03-client-participants.cases.md",
+      "symbol": "TC-03-INT-24",
+      "line": 473,
+      "claim": "REQ-03-035's load-bearing half is 'in the same transaction as the `RequestEvent`', and no case would fail if the outbox rows were written in a second transaction after the commit. TC-03-INT-24 asserts each row carries its event's id, which holds either way; TC-03-INT-26 and TC-03-INT-27 constrain the notifier call, not the write.",
+      "witness": {
+        "kind": "rule",
+        "detail": "REQ-03-035 (behaviour :316-317): 'THE SYSTEM SHALL write one `RequestNotification` row per recipient in the same transaction as the `RequestEvent`.' TC-03-INT-24 (cases :473-476): 'each carrying the id of the event written by the same transaction' — an assertion about the id, which a later write also satisfies.",
+        "source": "specs/requests/03-client-participants.md:316"
+      },
+      "suggestedFix": "Give one case an observation that fails if the write is moved out — a failure injected between the event write and the commit that leaves neither row, for instance."
+    },
+    {
+      "id": "N4",
+      "severity": "note",
+      "criterion": "S-45",
+      "rule": "spec/missing-artefact",
+      "file": "specs/requests/03-client-participants.contracts.md",
+      "symbol": "UI Description",
+      "line": 479,
+      "claim": "Two pieces of screen copy are described but named by no export: the contacts empty state's 'line saying what a contact is for', and the client principal's requests empty state 'with copy that does not mention scopes or filters they do not have'. Both are new strings a screen will otherwise invent.",
+      "witness": {
+        "kind": "file",
+        "detail": "Contracts :479 '| Contacts, empty | `client-contacts-empty-state` with a line saying what a contact is for, and the invite control beside it. |' and :483 '| Client principal, no requests | The requests empty state, with copy that does not mention scopes or filters they do not have. |'. Neither string appears in the Error Messages table, which otherwise carries screen copy (REQUEST_TOPIC_MESSAGES.pickerEmpty, :183).",
+        "source": "specs/requests/03-client-participants.contracts.md:479"
+      },
+      "suggestedFix": "Add the two rows, each naming its export and the screen that shows it."
+    },
+    {
+      "id": "N5",
+      "severity": "note",
+      "criterion": "S-46",
+      "rule": "spec/missing-artefact",
+      "file": "specs/requests/03-client-participants.contracts.md",
+      "symbol": "Edge Cases 4, 6, 14",
+      "line": 508,
+      "claim": "Three edge cases have no case and no line saying they have none and why: 4 (a client archived while a contact is signed in keeps the session and the open requests), 6 (a requester unassigned from the project after raising the request), 14 (a recipient's principal removed before delivery is marked skipped). The UI row 'The catalogue read fails' is unobserved for the same reason.",
+      "witness": {
+        "kind": "file",
+        "detail": "Contracts :508, :510, :518 and :489. Every other edge case has an observer — 1→TC-03-INT-08, 3→TC-03-INT-11, 5→TC-03-INT-34, 12→TC-03-INT-27, 13→TC-03-INT-28, 20→TC-03-E2E-04 — and these three appear in no case's Covers or Expected Result.",
+        "source": "specs/requests/03-client-participants.contracts.md:508"
+      },
+      "suggestedFix": "Either name the case that would catch each, or one line per row saying it has none and why. Edge 14 is unobservable with the shipped notifier, which is a reason and can be the line."
+    },
+    {
+      "id": "N6",
+      "severity": "note",
+      "criterion": "S-50",
+      "rule": "spec/missing-artefact",
+      "file": "specs/requests/03-client-participants.cases.md",
+      "symbol": "request-new-assignee-member",
+      "line": 665,
+      "claim": "TC-03-E2E-04 asserts the id absent after the switch to the client addressee kind and never asserts it present before, so a screen that never draws the member picker passes the case. Kept from shard 3; the register marks this criterion note-only.",
+      "witness": {
+        "kind": "file",
+        "detail": "Cases :664-667 lists '`request-new-assignee-member` (absent after the switch)' and no presence assertion; the contracts row (:377) says 'present when the colleague addressee kind is chosen, absent when the client kind is'.",
+        "source": "specs/requests/03-client-participants.cases.md:665"
+      },
+      "suggestedFix": "Assert the id present before the switch in the same case."
+    }
+  ]
 }

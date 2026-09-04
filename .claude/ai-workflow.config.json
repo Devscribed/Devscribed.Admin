@@ -125,7 +125,7 @@
         "shardAgent": "spec-review-shard",
         "shardModel": "sonnet",
         "shardEffort": "medium",
-        "mergeFamiliesUnderLines": 400
+        "$note": "One shard per member of the bundle, dispatched by the loop before the judge runs. The register's where column says which member answers each criterion; judge criteria never reach a shard."
       }
     },
     "$enforcement": "requireCriteriaMap: a judged verdict carrying no criteria map is a judge error, retried, never recorded as a pass — by the register's own definition a criterion absent from the map was not run. requireJudgeModel: the model the SDK reports at init must be the one asked for; a substitution is recorded and the round is retried. shipRequiresRefine: `wf.mjs init` refuses a spec whose loop ledger is not a pass, or whose bundle changed after the round that judged it; `--accept-unrefined <reason>` overrides and is recorded in run.json.",
@@ -145,6 +145,7 @@
       "spec/ambiguous-requirement",
       "spec/missing-artefact",
       "spec/scope-gap"
-    ]
+    ],
+    "shardTimeoutMin": 20
   }
 }

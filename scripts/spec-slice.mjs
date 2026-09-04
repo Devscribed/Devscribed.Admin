@@ -1,15 +1,21 @@
 /**
- * What one spec-review pass must read, and how it is split.
+ * What one spec-review pass is looking at: an inventory, not a plan.
  *
- * The judge runs this first, so one command hands it both the work and the shape. Everything
- * here is derived — the bundle from the spec path, the criteria families from the register's
- * own section headings, the shard agent and model from the config. Nothing is a decision the
- * judge makes each pass, which is what keeps two passes over one document comparable.
+ * The judge decides how to read a document — whether to split it, along which axis, and into how
+ * many pieces. That decision needs facts it cannot cheaply gather itself: how large each member
+ * of the bundle is, how much of the repository its claims reach into, which criteria are in play
+ * and which of them no single file can settle. Those are what this prints.
  *
- * Families come from the register's headings rather than from a list here, so a criterion added
- * to the register lands in a family without a second edit. Two sections never go to a shard:
- * contradiction, because a shard holds one family and a contradiction lives between two, and
- * scope, because the Summary is the boundary of the whole document.
+ * It prints no division of labour. A computed split is a procedure, and a procedure handed to a
+ * judge is one more place to be wrong: this bundle has three members whatever it contains, while
+ * the reading that actually costs something is the code behind the claims, and nothing here can
+ * see which files those are — the mapping from a route to its controller is in the code, not in
+ * the document.
+ *
+ * One thing here is mechanical and not a preference: the register's `where` column says which
+ * criteria are answerable from one file and which need the whole bundle. That is a property of
+ * the question — a contradiction lives between two regions — so it travels with the criterion
+ * rather than with whoever is reading.
  *
  *   node scripts/spec-slice.mjs <spec> [--since <sha>] [--profile <name>] [--json]
  */
@@ -18,7 +24,7 @@ import { execFileSync } from 'node:child_process';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { REGISTERS } from './criteria.mjs';
+import { readRegister, REGISTERS } from './criteria.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -36,8 +42,7 @@ if (!specRel) {
   console.error('usage: node scripts/spec-slice.mjs <spec> [--since <sha>] [--profile <name>] [--json]');
   process.exit(1);
 }
-const specAbs = join(ROOT, specRel);
-if (!existsSync(specAbs)) {
+if (!existsSync(join(ROOT, specRel))) {
   console.error(`spec not found: ${specRel}`);
   process.exit(1);
 }
@@ -52,23 +57,42 @@ const git = (...a) => {
 
 /* ── the bundle ───────────────────────────────────────────────────────────── */
 
-/**
- * Every member of the bundle: the behaviour file and whatever sits beside it under the same
- * stem. They are one document in three or four files, and a finding against any of them is a
- * finding against this spec.
- */
 const stem = specRel.replace(/\.md$/, '');
-const dir = dirname(specAbs);
+const dir = dirname(join(ROOT, specRel));
 const base = basename(stem);
 const bundle = readdirSync(dir)
-  .filter((f) => f === `${base}.md` || f.startsWith(`${base}.`))
-  .filter((f) => f.endsWith('.md'))
+  .filter((f) => f.endsWith('.md') && (f === `${base}.md` || f.startsWith(`${base}.`)))
   .map((f) => `${dirname(specRel)}/${f}`.replace(/\\/g, '/'))
   .sort((a, b) => (a === specRel ? -1 : b === specRel ? 1 : a.localeCompare(b)));
 
-const lineCount = (rel) => readFileSync(join(ROOT, rel), 'utf8').split('\n').length;
-const files = bundle.map((path) => ({ path, lines: lineCount(path) }));
+const files = bundle.map((path) => ({
+  path,
+  lines: readFileSync(join(ROOT, path), 'utf8').split(/\r?\n/).length,
+}));
 const totalLines = files.reduce((a, f) => a + f.lines, 0);
+
+/* ── the code the bundle reaches into ─────────────────────────────────────── */
+
+/**
+ * Every repository path the bundle cites, grouped by the directory that owns it. This is the
+ * reading that is not in front of the judge: a claim about a status, an export or a column is
+ * settled in the code, and how much code that is decides whether one pass can hold it.
+ *
+ * It is a floor, not a census. A spec names some of what it is about and describes the rest.
+ */
+const REPO_PATH = /\b((?:apps|packages|e2e|scripts|infra)\/[\w./@-]+\.[a-z]{2,4})\b/g;
+const cited = new Map();
+for (const f of files) {
+  for (const m of readFileSync(join(ROOT, f.path), 'utf8').matchAll(REPO_PATH)) {
+    if (!cited.has(m[1])) cited.set(m[1], new Set());
+    cited.get(m[1]).add(f.path);
+  }
+}
+const byDir = new Map();
+for (const p of cited.keys()) {
+  const d = p.split('/').slice(0, 3).join('/');
+  byDir.set(d, (byDir.get(d) ?? 0) + 1);
+}
 
 /* ── the pass ─────────────────────────────────────────────────────────────── */
 
@@ -76,72 +100,27 @@ const since = flag('--since');
 const mode = since ? 'diff' : 'full';
 const changed = since
   ? git('diff', '--numstat', `${since}..HEAD`, '--', ...bundle)
-      .split('\n')
-      .filter(Boolean)
-      .map((l) => {
-        const [a, r, path] = l.split('\t');
-        return { path, lines: (+a || 0) + (+r || 0) };
-      })
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => {
+      const [a, r, path] = l.split('\t');
+      return { path, lines: (+a || 0) + (+r || 0) };
+    })
   : [];
 
-/* ── the families, from the register's own headings ───────────────────────── */
+/* ── the criteria ─────────────────────────────────────────────────────────── */
 
-const HEADING_FAMILY = [
-  { match: /^currency/i, family: 'currency', owner: 'shard',
-    enumerate: 'every statement the spec makes about code that exists today, and the command that settles each' },
-  { match: /^contradiction/i, family: 'contradiction', owner: 'judge',
-    enumerate: 'every rule phrased absolutely, and what each one forbids, across the whole bundle' },
-  { match: /^repository conventions/i, family: 'conventions', owner: 'shard',
-    enumerate: 'every rule the spec states, against the CLAUDE.md convention that governs it' },
-  { match: /^self-sufficiency/i, family: 'selfSufficiency', owner: 'shard',
-    enumerate: 'every rule the implementer must obey, and where this document states it' },
-  { match: /^testability/i, family: 'testability', owner: 'shard',
-    enumerate: 'every case, its route to the state it asserts, and its expected result' },
-  { match: /^scope/i, family: 'scope', owner: 'judge',
-    enumerate: 'the request against the spec, in both directions' },
-  { match: /^obligations/i, family: 'obligations', owner: 'shard',
-    enumerate: 'everything the spec obliges itself to contain, counted' },
-  { match: /^the one note-only/i, family: 'divergence', owner: 'judge',
-    enumerate: 'every behaviour this spec changes that an existing document describes' },
-];
-
-const registerPath = join(ROOT, REGISTERS.spec);
-if (!existsSync(registerPath)) {
-  console.error(`register not found: ${REGISTERS.spec}`);
+const reg = readRegister(ROOT, 'spec');
+if (reg.exists && !reg.ids.size) {
+  console.error(`${reg.path} parsed to zero criteria — the register is unreadable`);
   process.exit(1);
 }
 
-const families = new Map();
-let current = null;
-for (const line of readFileSync(registerPath, 'utf8').split('\n')) {
-  const h = line.match(/^##\s+(.*)$/);
-  if (h) {
-    const title = h[1].replace(/[`*]/g, '').trim();
-    const spec = HEADING_FAMILY.find((f) => f.match.test(title));
-    current = spec ? spec.family : null;
-    if (spec && !families.has(spec.family)) {
-      families.set(spec.family, { family: spec.family, owner: spec.owner, enumerate: spec.enumerate, section: title, ids: [] });
-    }
-    continue;
-  }
-  const row = line.match(/^\|\s*(S-\d+)\s*\|/);
-  if (row && current) families.get(current).ids.push(row[1]);
-}
+const perFile = [...reg.ids].filter((id) => (reg.where.get(id) ?? 'judge') !== 'judge').sort();
+const wholeBundle = [...reg.ids].filter((id) => (reg.where.get(id) ?? 'judge') === 'judge').sort();
+const unplaced = [...reg.ids].filter((id) => !reg.where.has(id)).sort();
 
-const all = [...families.values()].filter((f) => f.ids.length);
-const shardFamilies = all.filter((f) => f.owner === 'shard');
-const judgeFamilies = all.filter((f) => f.owner === 'judge');
-const unassigned = (() => {
-  const seen = new Set(all.flatMap((f) => f.ids));
-  const ids = [];
-  for (const line of readFileSync(registerPath, 'utf8').split('\n')) {
-    const row = line.match(/^\|\s*(S-\d+)\s*\|/);
-    if (row && !seen.has(row[1])) ids.push(row[1]);
-  }
-  return ids;
-})();
-
-/* ── the profile ──────────────────────────────────────────────────────────── */
+/* ── the shape available ──────────────────────────────────────────────────── */
 
 const cfg = (() => {
   try {
@@ -153,28 +132,6 @@ const cfg = (() => {
 const refine = cfg.refine ?? {};
 const profileName = flag('--profile') ?? refine.profile ?? 'solo';
 const profile = refine.profiles?.[profileName] ?? {};
-const sharded = Boolean(profile.shardAgent);
-
-/**
- * A bundle small enough that a shard would spend more time starting than reading gets its
- * families merged in pairs. The threshold is configuration; the pairing is stable so two passes
- * over one document shard the same way.
- */
-const mergeUnder = refine.profiles?.[profileName]?.mergeFamiliesUnderLines ?? 0;
-const groups = [];
-if (sharded) {
-  const merge = mergeUnder > 0 && totalLines < mergeUnder;
-  const step = merge ? 2 : 1;
-  for (let i = 0; i < shardFamilies.length; i += step) {
-    const members = shardFamilies.slice(i, i + step);
-    groups.push({
-      shard: groups.length + 1,
-      families: members.map((m) => m.family),
-      ids: members.flatMap((m) => m.ids),
-      enumerate: members.map((m) => m.enumerate),
-    });
-  }
-}
 
 const result = {
   spec: specRel,
@@ -183,11 +140,16 @@ const result = {
   mode,
   since: since ?? null,
   changed,
-  register: REGISTERS.spec,
-  profile: { name: profileName, sharded, ...profile },
-  groups,
-  judgeFamilies: judgeFamilies.map((f) => ({ family: f.family, ids: f.ids, enumerate: f.enumerate })),
-  unassigned,
+  citedPaths: [...cited.keys()].sort(),
+  citedByDirectory: Object.fromEntries([...byDir.entries()].sort((a, b) => b[1] - a[1])),
+  register: reg.path,
+  criteria: {
+    perFile: perFile.map((id) => ({ id, where: reg.where.get(id), question: reg.question.get(id) })),
+    wholeBundle: wholeBundle.map((id) => ({ id, question: reg.question.get(id) })),
+    unplaced,
+  },
+  shardAgent: profile.shardAgent ?? null,
+  shardModel: profile.shardModel ?? null,
 };
 
 if (asJson) {
@@ -196,40 +158,41 @@ if (asJson) {
 }
 
 console.log(`# Spec slice — ${specRel}`);
-console.log(`# ${mode === 'diff' ? `judging ${since.slice(0, 7)}..HEAD` : 'full pass'} — bundle is ${files.length} file(s), ${totalLines} lines\n`);
+console.log(`# ${mode === 'diff' ? `judging ${since.slice(0, 7)}..HEAD` : 'full pass'}\n`);
 
-console.log('## The bundle — read all of it');
+console.log(`## The bundle — ${files.length} file(s), ${totalLines} lines`);
 for (const f of files) console.log(`  ${String(f.lines).padStart(5)}  ${f.path}`);
 
 if (mode === 'diff') {
   console.log('\n## Changed since the round you are judging');
   if (!changed.length) console.log('  nothing — the repair touched no bundle file, which is itself the finding');
   for (const c of changed) console.log(`  ${String(c.lines).padStart(5)}  ${c.path}`);
-  console.log('  Sweep these lines and the rules they touch. Contradiction is checked against the whole document.');
 }
 
-console.log(`\n## Criteria — from ${REGISTERS.spec}`);
-if (!sharded) {
-  console.log(`Profile ${profileName} runs no shards. Sweep every family yourself, in this order, and set "shards": [].`);
-  for (const f of all) console.log(`  ${f.family.padEnd(16)} ${f.ids.join(' ')}`);
+console.log(`\n## The code its claims reach into — ${cited.size} cited path(s)`);
+for (const [d, n] of [...byDir.entries()].sort((a, b) => b[1] - a[1])) {
+  console.log(`  ${String(n).padStart(4)}  ${d}`);
+}
+console.log('  A floor, not a census: a spec names some of what it is about and describes the rest.');
+
+console.log(`\n## Criteria — from ${reg.path}`);
+console.log(`  ${perFile.length} are answerable from one member of the bundle:`);
+console.log(`    ${perFile.join(' ')}`);
+console.log(`  ${wholeBundle.length} need the whole bundle and cannot be split off:`);
+console.log(`    ${wholeBundle.join(' ')}`);
+if (unplaced.length) console.log(`  the register places nowhere: ${unplaced.join(' ')}`);
+
+console.log('\n## Reading it');
+if (result.shardAgent) {
+  console.log(`  A shard agent is available: "${result.shardAgent}"${result.shardModel ? ` on ${result.shardModel}` : ''}.`);
+  console.log('  Whether to use it, how many, and what each one reads are yours to decide from the');
+  console.log('  numbers above. A shard you dispatch carries its files and the text of its criteria;');
+  console.log('  it reads no register. Send them in one message or they run in series.');
 } else {
-  console.log(`Profile ${profileName} — dispatch subagent_type "${profile.shardAgent}" on ${profile.shardModel ?? 'the default model'}.`);
-  console.log(`${groups.length} shard(s). Dispatch them in ONE message, one Task call each.\n`);
-  for (const g of groups) {
-    console.log(`  shard ${g.shard}: ${g.families.join(' + ')}`);
-    console.log(`    criteria: ${g.ids.join(' ')}`);
-    for (const e of g.enumerate) console.log(`    enumerate: ${e}`);
-  }
-  console.log('\n  Quote each criterion\'s text from the register into the shard\'s prompt. A shard reads no register.');
+  console.log(`  Profile ${profileName} names no shard agent, so this pass is yours alone.`);
 }
+console.log('  Say what you decided, and why, in `shardDecision`.');
 
-console.log('\n## Yours, and no shard\'s');
-for (const f of judgeFamilies) {
-  console.log(`  ${f.family.padEnd(16)} ${f.ids.join(' ')}`);
-  console.log(`    ${f.enumerate}`);
-}
-if (unassigned.length) console.log(`  unassigned      ${unassigned.join(' ')}\n    no family claims these — answer them yourself and say so in the verdict`);
-
-console.log(`\n## Accounting`);
-console.log('The verdict carries a `criteria` map with every id in the register, and `admitted` is true');
-console.log('only when every id the register marks `blocks` reads `clear` or `n/a`.');
+console.log('\n## Accounting');
+console.log('  The verdict carries a `criteria` map with every id in the register, and `admitted` is');
+console.log('  true only when every id the register marks `blocks` reads `clear` or `n/a`.');
