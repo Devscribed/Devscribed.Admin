@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { Button, Checkbox, Input, Modal, Select } from '@/ds';
+import { errorNodeById } from '@/field-error';
 import { useSession } from '@/layout/session-context';
 import {
   REQUEST_MESSAGES,
@@ -455,10 +456,13 @@ export function NewRequestModal({
               label="Title"
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              error={fieldErrors.title}
+              error={
+                fieldErrors.title
+                  ? errorNodeById('request-new-error-title', fieldErrors.title)
+                  : undefined
+              }
               data-testid="request-new-title"
             />
-            {fieldErrors.title && <FieldError field="title" message={fieldErrors.title} />}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column' }}>
