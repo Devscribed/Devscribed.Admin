@@ -20,7 +20,7 @@ import { join } from 'node:path';
 export const GATES = [
   { gate: 'lint', label: 'T0 · spec-lint', agent: null },
   { gate: 'pre_implement', label: 'T1 · pre-implement', agent: 'pre-implementer' },
-  { gate: 'judge', label: 'T2 · the judge', agent: 'spec-review' },
+  { gate: 'judge', label: 'T2 · the judge', agent: 'spec-reviewer-lead' },
   { gate: 'fix', label: 'fix · the fixer', agent: 'spec-fixer-minimal' },
 ];
 
@@ -31,7 +31,7 @@ export const GATES = [
  */
 const LOG_STEMS = {
   pre_implement: () => ['stages/pre_implement'],
-  judge: (l) => [l?.judgeAgent, 'spec-review', 'spec-refiner'].filter(Boolean),
+  judge: (l) => [l?.judgeAgent, 'spec-reviewer-lead', 'spec-reviewer'].filter(Boolean),
   fix: (l) => [l?.fixerAgent, 'spec-fixer-minimal', 'spec-fixer'].filter(Boolean),
 };
 

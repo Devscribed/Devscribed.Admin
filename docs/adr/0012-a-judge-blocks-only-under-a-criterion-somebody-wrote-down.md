@@ -1,5 +1,7 @@
 # 12. A judge blocks only under a criterion somebody wrote down
 
+> **Renamed by [ADR 15](0015-one-core-agent-one-lead-and-the-rules-in-one-place.md).** The agents this record names still exist under the current names; the rules they duplicated now live once, in `.claude/agents/references/`. The decision below is unchanged.
+
 Date: 2026-09-03
 Status: accepted
 

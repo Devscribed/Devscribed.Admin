@@ -31,20 +31,55 @@ npm run wf:log -- --tail 40
 node scripts/wf.mjs release   # drop the lock when the run is done or abandoned
 ```
 
+## Tracks: three weights of document
+
+Not every change earns every stage. A track is a block in `.claude/ai-workflow.config.json`
+under `shipConfig`, resolved from the document's path by its `match`, so nothing has to be
+passed; `--track <name>` overrides it, and `wf` records the choice in `run.json`.
+
+| Track | Document | Does not run | Refine | Branch |
+|---|---|---|---|---|
+| `spec` | `specs/<area>/NN-name.md` + bundle | — | required | `spec/` |
+| `bug` | `specs/bugs/BUG-NNN-*.md` | `pre_implement` | not required | `fix/` |
+| `patch` | `specs/patches/PATCH-NNN-*.md` | `pre_implement`; cheap review | not required | `fix/` |
+
+`npm run config` prints what each track resolves to — the agent, model, shard shape, timeout
+and budget of every stage — and refuses an invalid file. Read it rather than inferring the
+answer from the JSON.
+
+Two consequences worth knowing:
+
+- **No plan means no `handoff.json`.** The implement and review prompts name the document
+  instead, and a review finding addressed to `handoff` routes to `implement` rather than to a
+  stage this track does not run — otherwise the run marches through a skipped stage and spends
+  the replan budget on a finding nobody can act on.
+- **The static gate and QA are on every track.** What a lighter document buys is the stages
+  that read intent, never the ones that check the result. The validator refuses a config that
+  disables either on any track; `--skip` on the command line is how a person opts out for one
+  run, deliberately and visibly.
+- **Budgets belong to the track.** `patch` allows three code attempts, `bug` six, `spec`
+  eight. A patch that needs more was misfiled, and the halt is the signal; raising the number
+  only hides it.
+
+The entry condition for a patch is closed and lives in `.claude/skills/patch/SKILL.md`. It is
+the part of this that decays if it is left to judgement: a track is only cheaper than a spec
+for as long as the things routed to it are actually small.
+
 ## The stages
 
 | Stage | Who | Produces |
 |---|---|---|
 | `preflight` | script | environment checks; refuses to start on `main`, with the lock held, or on a spec no refine loop admitted |
-| `pre_implement` | `pre-implementer-strict` (profile `classic`: `pre-implementer`) | `handoff.json` — the plan, compiled from the spec, with every compile question answered by id |
-| `implement` | `implementer` (profile `orchestrated`: `implement-lead` + `implement-shard`) | code and tests |
+| `pre_implement` | `pre-implementer-strict` (variant `classic`: `pre-implementer`) | `handoff.json` — the plan, compiled from the spec, with every compile question answered by id |
+| `implement` | `implementer` (variant `orchestrated`: `implementer-lead` dispatching `implementer`) | code and tests |
 | `static_gate` | `scripts/static-gate.mjs` | two rules; see below |
-| `review` | `code-reviewer` | verdict against the closed register in `.claude/skills/code-review/references/blocking-criteria.md` |
+| `review` | `code-reviewer-lead` dispatching `code-reviewer-open` or `-sweeps` (variant `solo`: the core alone) | verdict against the closed register in `.claude/skills/code-review/references/blocking-criteria.md` |
 | `qa` | `qa` | unit in full, integration and E2E targeted, plus the spec's acceptance criteria |
 
-Which agent a stage runs is a **profile**, set per stage in `.claude/ai-workflow.config.json` and
-overridable for one run — `--implement-profile`, `--review-profile`, `--plan-profile`. Every
-profile in force is written into `run.json`. `.claude/agents/VARIANTS.md` lists them and says
+Which agent a stage runs is written out under its track, at
+`shipConfig.<track>.stages.<stage>`. Alternatives live in that block's `variants` and are
+selected for one run with `--plan-profile`, `--implement-profile` or `--review-profile`; any
+variant in force is written into `run.json`. `.claude/agents/VARIANTS.md` lists them and says
 what each replaced.
 
 The run ends at **`ready`**, not `merged`: a green branch, and a human opens the PR. `main`
@@ -127,11 +162,33 @@ lose it.
 
 ## Configuration
 
-`.claude/ai-workflow.config.json`. Each stage has an `enabled` flag; skipping `qa` on a
-one-line change is reasonable, skipping `static_gate` is not.
+Everything is in `.claude/ai-workflow.config.json`, and `scripts/ship-config.mjs` is the only
+thing that reads it. The shape is track first:
 
-Limits worth knowing: five code attempts, one replan, two infrastructure retries, and a finding
-auto-contested after surviving two attempts.
+```
+shipConfig.<track>                 match, branchPrefix, requiresRefine
+shipConfig.<track>.stages.<stage>  enabled, agent, model, effort, shard*, and the stage's own keys
+shipConfig.<track>.stages.<stage>.variants.<name>   a partial override of that block
+shipConfig.<track>.convergence     maxCodeAttempts, maxHandoffReplans, infraRetries, autoContestAfter
+shipConfig.<track>.timeoutMin      per stage, in minutes
+breakers, isolation, protectedBranches, refine                shared by every track
+```
+
+Nothing is inherited between tracks. What you read under `patch` is what `patch` runs, and the
+cost — three places to edit when an agent is renamed — is what the validator exists to catch.
+
+**Validate before you run.** `npm run config` parses the file, checks it, and prints what each
+track resolves to; `--track <name>` narrows it and `--json` gives the resolved blocks. It is
+also run automatically at the top of `ship`, by every `wf` command, and as the first row of
+preflight, so a bad edit stops the run before a lock, a branch or a stage exists.
+
+It checks the things that are silent at the point of failure: an unknown key anywhere
+(`shardsize` for `shardSize`), a stage missing from a track or one that is not a stage, an
+`agent` or `shardAgent` with no definition under `.claude/agents/`, a model outside
+opus/sonnet/haiku/fable, a `script` that does not exist, a QA level that is not
+unit/int/e2e, `static_gate` or `qa` disabled, a replan budget on a track with no plan stage, a
+timeout for a stage the track does not run, two tracks claiming one path, and a `match` that is
+not a valid regular expression.
 
 ## One run at a time
 

@@ -171,7 +171,7 @@ gate whose findings are answered with new prose makes work for the next pass.
 npm run refine:loop -- specs/<area>/NN-name.md --request "<the request, in one line>"
 ```
 
-The loop runs three gates — the lint, then `spec-refiner`, and `pre-implement` **last and once**,
+The loop runs three gates — the lint, then `spec-reviewer`, and `pre-implement` **last and once**,
 after the judge's verdict is clean — repairs what the blocking gate finds, commits the round, and
 judges the next round against that commit. Read `.claude/skills/refine/SKILL.md` for how to read the outcome; the important part
 is that **you do not drive the agents and do not decide whether a finding deserves another round.**

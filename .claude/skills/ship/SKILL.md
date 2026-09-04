@@ -1,9 +1,9 @@
 ---
 name: ship
-description: Run a specification or a bug report through the implementation pipeline — pre-implement, implement, static gate, code review, QA. Use when asked to implement a spec, ship a spec, run the pipeline, or fix a bug that already has an investigation report.
+description: Run a specification, a bug report or a patch note through the implementation pipeline — pre-implement, implement, static gate, code review, QA. Use when asked to implement a spec, ship a spec, run the pipeline, fix a bug that already has an investigation report, or ship a patch.
 ---
 
-# Shipping a spec
+# Shipping a document
 
 One command. The orchestrator is `scripts/ship.mjs`, not you:
 
@@ -15,12 +15,32 @@ It runs preflight, spawns each agent stage as a headless `claude -p --agent <nam
 static gate, hands every verdict to `scripts/wf.mjs`, and follows whatever `wf` decides —
 until the run reaches `ready` or halts. The loop is mechanical, so a script runs it.
 
+## Three documents, three tracks
+
+The track decides which stages the document earns, and it is read off the path — there is
+nothing to pass:
+
+| Invoked as | Document | Runs | Branch |
+|---|---|---|---|
+| `/ship <spec>` | `specs/<area>/NN-name.md` | every stage; refused unless refine admitted it | `spec/<slug>` |
+| `/ship bug <report>` | `specs/bugs/BUG-NNN-*.md` | no plan stage — the report carries the cause | `fix/<slug>` |
+| `/ship patch <note>` | `specs/patches/PATCH-NNN-*.md` | no plan stage, review on its cheap profile | `fix/<slug>` |
+
+`bug` and `patch` before the path are how a person says which they mean; the script does not
+need them and `--track <name>` overrides the path when they disagree. **Every track runs the
+static gate and QA.** A lighter document buys speed against the stages that read intent, never
+against the ones that check the result.
+
+If the named document does not exist yet, write it first — `/bug` for a defect, `/patch` for a
+small change of agreed behaviour — and do not ship something else instead.
+
 Useful variants:
 
 ```bash
-node scripts/ship.mjs <spec> --skip qa      # small change, you will run the suites yourself
+node scripts/ship.mjs <doc> --skip qa       # small change, you will run the suites yourself
 node scripts/ship.mjs --resume              # continue the active run
-node scripts/ship.mjs <spec> --dry-run      # print what each stage would run, change nothing
+node scripts/ship.mjs <doc> --dry-run       # print what each stage would run, change nothing
+node scripts/ship.mjs <doc> --track patch   # override the track the path implies
 ```
 
 ## Your part
@@ -31,8 +51,9 @@ deciding whether something deserves another attempt, stop — that decision is w
 
 What you do is the part either side of the run:
 
-- **Before** — make sure the spec exists and the branch is not `main`. `ship` refuses both, but
-  saying so first is faster than reading a refusal.
+- **Before** — make sure the document exists and the branch is not `main`. `ship` refuses both,
+  but saying so first is faster than reading a refusal. Create the branch with the prefix the
+  track names: `spec/` for a spec, `fix/` for a bug or a patch.
 - **After** — read the outcome and explain it.
 
 ## Reading the outcome

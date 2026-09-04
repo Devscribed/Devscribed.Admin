@@ -124,7 +124,7 @@ const jsonIf = (p) => {
 };
 
 const STAGE_ORDER = ['preflight', 'pre_implement', 'implement', 'static_gate', 'review', 'qa'];
-const AGENT_OF = { pre_implement: 'pre-implementer', implement: 'implementer', review: 'code-reviewer', qa: 'qa' };
+const AGENT_OF = { pre_implement: 'pre-implementer', implement: 'implementer', review: 'code-reviewer-lead', qa: 'qa' };
 
 /* ── the journal ──────────────────────────────────────────────────────────── */
 

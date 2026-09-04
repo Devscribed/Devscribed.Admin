@@ -1,5 +1,7 @@
 # 13. A spec is admitted by a judge that shards its reading
 
+> **Renamed by [ADR 15](0015-one-core-agent-one-lead-and-the-rules-in-one-place.md).** The agents this record names still exist under the current names; the rules they duplicated now live once, in `.claude/agents/references/`. The decision below is unchanged.
+
 **Status:** accepted
 **Date:** 2026-09-03
 **Supersedes nothing.** It changes how [0008](0008-a-spec-is-judged-by-a-stranger.md) and
