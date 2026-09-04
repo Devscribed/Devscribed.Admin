@@ -1,0 +1,27 @@
+{
+  "status": "pass",
+  "suites": {
+    "unit": {
+      "passed": 1104,
+      "failed": 0,
+      "files": 23
+    },
+    "int": {
+      "passed": 24,
+      "failed": 0,
+      "files": [
+        "test/requests.spec.ts"
+      ]
+    },
+    "e2e": {
+      "passed": 22,
+      "failed": 0,
+      "files": [
+        "tests/requests.spec.ts",
+        "tests/regressions.spec.ts"
+      ]
+    }
+  },
+  "flaky": [],
+  "findings": []
+}

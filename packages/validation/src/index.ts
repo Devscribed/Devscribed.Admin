@@ -1919,6 +1919,12 @@ export const REQUEST_MESSAGES = {
   clientProjectRequired: 'Choose the project this request belongs to',
   clientProjectMismatch: 'That project does not belong to this client',
   notOnProject: 'You can only ask a client about a project you are assigned to',
+
+  /* ---------------------------------------------------------------- *
+   * PATCH-002 — a needed-by date more than five years out is refused, on creation and
+   * on edit alike. Extended in place exactly as every spec above it.
+   * ---------------------------------------------------------------- */
+  neededByTooFar: 'The date needed cannot be more than five years away',
 } as const;
 
 /**

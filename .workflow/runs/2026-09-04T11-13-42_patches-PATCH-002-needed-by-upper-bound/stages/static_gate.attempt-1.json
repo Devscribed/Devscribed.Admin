@@ -1,0 +1,21 @@
+{
+  "stage": "static_gate",
+  "status": "blocked",
+  "base": "a04744ac95195238defa0751e8d577c1534d0ae4",
+  "findings": [
+    {
+      "id": "S1",
+      "severity": "blocker",
+      "target": "code",
+      "rule": "pipeline/work-uncommitted",
+      "file": "apps/api/test/requests.spec.ts",
+      "claim": "no commit on this branch carries the implementation; 4 file(s) are modified in the working tree and invisible to every gate that reads the diff",
+      "witness": {
+        "kind": "command",
+        "detail": "`git diff --name-only a04744ac95195238defa0751e8d577c1534d0ae4...HEAD -- . ':(exclude).workflow'` prints nothing. `git status --short` shows:  M apps/api/test/requests.spec.ts,  M packages/validation/src/index.ts,  M packages/validation/src/requests.test.ts,  M packages/validation/src/requests.ts.",
+        "source": "git diff a04744ac95195238defa0751e8d577c1534d0ae4...HEAD"
+      },
+      "suggestedFix": "commit the working-tree changes onto this branch in one commit, naming the attempt, then re-run the gate"
+    }
+  ]
+}
