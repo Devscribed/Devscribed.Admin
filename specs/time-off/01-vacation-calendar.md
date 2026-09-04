@@ -75,9 +75,12 @@ belongs only to the lowercase-dashed `MemberCapability` union that `can(role, �
 holiday rows are spelled in it and in `Capability`, which `RequireCapability` decorators name.
 
 **Decided:** this spec's capability ships in both unions — `ViewTimeOffCalendar` and its twin
-`view-time-off-calendar`, granted to admin, manager and user in each — and the calendar's gate
-reads the twin through `can(role, 'view-time-off-calendar')`. Rejected: `Capability` alone, which
-would spell this gate differently from the `view-holidays` gate on the page beside it.
+`view-time-off-calendar`, granted to admin, manager and user in each — and page and nav are both
+gated on the **normalized** role, so a membership still storing `member` is read as `user` and
+holds the capability on both: `can(normalizeRole(role), 'view-time-off-calendar')` behind the
+route, `hasCapability(role, 'ViewTimeOffCalendar')` in the sidebar. Rejected: handing `can()` the
+raw stored role, which normalizes nothing and would refuse that member the page while the sidebar
+drew its row; and `Capability` alone, which would spell this gate differently from `view-holidays`.
 
 | Capability | admin | manager | user | viewer |
 |---|---|---|---|---|
@@ -142,8 +145,7 @@ IF `scope` is `teams` or `people` and its selection list is empty, THEN THE SYST
 
 **Decided:** an empty selection is ambiguous between "nothing ticked yet" and "everyone", and an
 empty grid would teach the reader their team has nobody in it. The sentinel `none` of REQ-01-007
-is a tick like any other: a `projectIds` of `none` alone is a selection, not an empty one, and is
-answered rather than refused.
+is a tick like any other: `projectIds=none` alone is a selection, and is answered, not refused.
 
 #### REQ-01-041 — an unknown scope is refused
 
@@ -190,8 +192,7 @@ IF the inclusive range exceeds 92 days, THEN THE SYSTEM SHALL answer `422` carry
 THE SYSTEM SHALL compare `VacationRequest.startDate`, `VacationRequest.endDate` and `Holiday.date`
 against the raw ISO range, never against a timezone-shifted UTC instant.
 
-**Decided:** all three are Postgres `DATE`, and a `DATE` compared against a `TIMESTAMPTZ` is
-silently truncated — which drops the boundary day for anybody east or west of UTC.
+**Decided:** all three are calendar dates; comparing one against an instant drops a boundary day.
 
 #### REQ-01-018 — today is the caller's today
 
@@ -207,8 +208,12 @@ first to the last day of the displayed calendar month.
 #### REQ-01-049 — moving the window
 
 WHEN the reader moves the range back, forward, or to today, THE SYSTEM SHALL move it to the range
-that control names — one whole window earlier, one whole window later, or the window holding the
-caller's today — and name the new range in the range label.
+that control names — under `Week` and `2 weeks` one preset length earlier or later, under `Month`
+the whole calendar month before or after the displayed one, or the window holding the caller's
+today — and name the new range in the range label.
+
+**Decided:** back and forward reach only ranges the chosen preset itself produces. Rejected:
+shifting by the window's day count, which under `Month` lands on a span that is no calendar month.
 
 ### The absence bands
 
@@ -240,8 +245,7 @@ submission.
 
 THE SYSTEM SHALL emit `kind: "vacation"` on every band.
 
-**Decided:** the one field this spec adds ahead of its need. The policy catalogue lands by giving
-it more values, so the grid's colour map is keyed by type from the first commit.
+**Decided:** the one field added ahead of its need, so the policy catalogue lands by adding values.
 
 ### Holidays, and the country they belong to
 
@@ -288,8 +292,7 @@ only the cells of the members it applies to.
 
 THE SYSTEM SHALL shade Saturday and Sunday columns as non-working days.
 
-**Decided:** a fixed Monday–Friday week, the same one `calculateWorkingDays` counts in spec
-`user-management/09`. A configurable week would disagree with the frozen `workingDays`.
+**Decided:** a fixed Monday–Friday week; a configurable one would disagree with frozen `workingDays`.
 
 ### The countries, and who states them
 
@@ -314,9 +317,8 @@ country for exactly this row.
 WHEN a `removed` membership becomes `active` again, THE SYSTEM SHALL leave
 `Membership.countryCode` at the value stored on it.
 
-**Decided:** kept, though the restore clears the job title beside it. A country is a payroll fact
-about the person, not about the posting they left. Rejected: clearing it, which pays a returning
-member global holidays only until somebody notices.
+**Decided:** kept, though the restore clears the job title beside it — a country is a fact about
+the person. Rejected: clearing it, which pays a returning member global holidays only.
 
 #### REQ-01-044 — the member write is refused to everyone else
 
@@ -351,8 +353,7 @@ IF a caller without `ViewHolidays` reads the organization country, THEN THE SYST
 WHEN a caller holding `ManageHolidays` submits an ISO 3166-1 alpha-2 country, THE SYSTEM SHALL
 store it on `Organization.countryCode`.
 
-**Decided:** two admins writing at once is last-write-wins; no lock and no version check is added,
-because the write is one column with no read-modify-write.
+**Decided:** last-write-wins, with no lock and no version check: one column, no read-modify-write.
 
 #### REQ-01-034 — clearing the organization's country
 

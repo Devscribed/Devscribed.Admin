@@ -114,6 +114,19 @@ are kept.
 - **Expected Result:** true, true, true, false, false, true. A global holiday reaches everyone; a
   country-scoped one reaches nobody without a country; matching is case-insensitive.
 
+### TC-01-UNIT-04
+
+- **Level:** Unit
+- **Covers:** REQ-01-001, REQ-01-003
+- **Steps:** Ask both unions for this spec's capability under the roles a membership can store:
+  `can(normalizeRole('member'), 'view-time-off-calendar')`, `hasCapability('member',
+  'ViewTimeOffCalendar')`, the same two for `'user'`, the same two for `'viewer'`, and finally
+  `can('member', 'view-time-off-calendar')` with the stored value unnormalized.
+- **Expected Result:** true, true, true, true, false, false, false. The stored legacy value
+  normalizes to `user` and holds the capability in both spellings, so the page's gate and the
+  sidebar row answer it alike. The last probe is the reading this spec rejects: it refuses the page
+  to a member whose row the sidebar draws, which is the dead navigation REQ-01-004 forbids.
+
 ### TC-01-INT-01
 
 - **Level:** Integration
@@ -382,8 +395,8 @@ are kept.
 - **Asserts:** `GET /api/organizations/{orgId}/time-off/calendar` → 200
 - **Steps:** At one instant of the run, read the same window three times: as a caller whose
   `Account.timezone` is `Pacific/Kiritimati`, as one whose timezone is `Pacific/Niue`, and as an
-  invited member whose timezone is still empty. The case computes each zone's calendar date for
-  that instant itself.
+  accepted member who has never set a timezone, whose column is therefore `null`. The case computes
+  each zone's calendar date for that instant itself.
 - **Expected Result:** `range.today` is the caller's own calendar date for that instant in the
   first two reads and the UTC date in the third. No date is written into the case as a literal —
   the suite runs on whatever day it runs. The two zones are 25 hours apart, so their answers
@@ -451,14 +464,17 @@ are kept.
 ### TC-01-E2E-02
 
 - **Level:** E2E
-- **Covers:** REQ-01-006, REQ-01-009
+- **Covers:** REQ-01-006, REQ-01-007, REQ-01-009
 - **Steps:** Four members and two projects as in TC-01-INT-05. Open the calendar, click
   `calendar-scope-teams`, tick both projects in `calendar-teams-picker`, close it. Then untick
-  the second project, and finally untick the first as well.
+  the second project, and finally untick the first as well. With nothing ticked, reopen the picker
+  and tick its **Unassigned** entry alone.
 - **Expected Result:** Rows appear for the three assigned members and the row for the unassigned
   member is absent. Unticking the second project drops the member who was only on it. Unticking
   the last one draws `calendar-error-banner` carrying `TIME_OFF_CALENDAR_MESSAGES.teamsRequired`,
-  and the grid underneath keeps its last good rows rather than clearing.
+  and the grid underneath keeps its last good rows rather than clearing. **Unassigned** alone is
+  answered rather than refused: the banner clears and the grid draws the one member on no project
+  and none of the three assigned.
 - **Selectors:** `calendar-scope-teams`, `calendar-teams-picker`, `calendar-member-row-{membershipId}` (present for the three assigned, absent for the unassigned),
   `calendar-error-banner`
 
@@ -468,16 +484,20 @@ are kept.
 - **Covers:** REQ-01-008, REQ-01-019, REQ-01-049
 - **Steps:** Eight members. Open the calendar, click `calendar-scope-people`, pick four of them in
   `calendar-people-picker`, then click `calendar-window-2weeks`, then `calendar-next`, then
-  `calendar-prev` twice, then `calendar-today`, then `calendar-window-week`.
+  `calendar-prev` twice, then `calendar-today`, then `calendar-window-week`, then
+  `calendar-window-month` and `calendar-prev` once more.
 - **Expected Result:** Exactly four rows throughout. The grid holds fourteen day-header cells
   under the fortnight preset and seven under the week preset, starting on the caller's
   `firstDayOfWeek`. `calendar-range-label` names the window at each step; the range after
   `calendar-next` is the fortnight after the one before it and the range after each
   `calendar-prev` the fortnight before, and `calendar-today` lands on the window holding today
-  (REQ-01-049).
+  (REQ-01-049). Under `Month`, `calendar-prev` names the calendar month before the displayed one
+  and the grid holds one day header per day of it, first to last — never a fixed-length span
+  straddling two months.
 - **Selectors:** `calendar-scope-people`, `calendar-people-picker`, `calendar-window-2weeks`,
-  `calendar-window-week`, `calendar-next`, `calendar-prev`, `calendar-today`,
-  `calendar-range-label`, `calendar-member-row-{membershipId}` ×4
+  `calendar-window-week`, `calendar-window-month`, `calendar-next`, `calendar-prev`,
+  `calendar-today`, `calendar-range-label`, `calendar-day-header-{date}`,
+  `calendar-member-row-{membershipId}` ×4
 
 ### TC-01-E2E-04
 

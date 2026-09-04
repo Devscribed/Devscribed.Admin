@@ -7,7 +7,7 @@ here by id.
 
 | Route | Guards | Success | Errors |
 |---|---|---|---|
-| `GET /api/organizations/{orgId}/time-off/calendar` | `SessionGuard`, `OrgScopeGuard`; `can(role, 'view-time-off-calendar')` checked in the service | `200` | `404` (no capability, REQ-01-002; wrong organization, REQ-01-039) · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeInverted` · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeTooWide` · `422` `TIME_OFF_CALENDAR_MESSAGES.teamsRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.peopleRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.scopeInvalid` · `422` `TIME_OFF_CALENDAR_MESSAGES.tooManyMembers` |
+| `GET /api/organizations/{orgId}/time-off/calendar` | `SessionGuard`, `OrgScopeGuard`; `can(normalizeRole(role), 'view-time-off-calendar')` checked in the service | `200` | `404` (no capability, REQ-01-002; wrong organization, REQ-01-039) · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeInverted` · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeTooWide` · `422` `TIME_OFF_CALENDAR_MESSAGES.teamsRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.peopleRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.scopeInvalid` · `422` `TIME_OFF_CALENDAR_MESSAGES.tooManyMembers` |
 | `GET /api/organizations/{orgId}/settings/country` | `SessionGuard`, `OrgScopeGuard`; `ViewHolidays` checked in the service | `200` | `404` (no `ViewHolidays`, REQ-01-046; wrong organization) |
 | `PUT /api/organizations/{orgId}/settings/country` | `SessionGuard`, `OrgScopeGuard`; `ManageHolidays` checked in the service | `200` | `404` (no `ManageHolidays`, REQ-01-035; wrong organization) · `422` `HOLIDAY_MESSAGES.countryCodeInvalid` (REQ-01-036) |
 | `GET /api/organizations/{orgId}/members/{memberId}` | `SessionGuard`, `OrgScopeGuard`; no capability gates this read — it answers every role (REQ-01-045) | `200` | `403` `MEMBER_MESSAGES.viewForbidden` (the caller is no longer an active member; shipped, unchanged) · `404` (wrong organization; member not found) |
@@ -16,7 +16,9 @@ here by id.
 No route here carries `RequireCapability`. `CapabilityGuard` answers every refusal with `403`, and
 the calendar must answer `404` when the caller lacks its capability, so the check runs in the
 service instead — the shape `HolidaysService.requireViewCapability` and `requireManageCapability`
-already use, each answering a bare `NotFoundException`.
+already use, each answering a bare `NotFoundException`. The calendar's check is handed the
+normalized role, so a membership still storing `member` is read as `user`, is answered `200`, and
+is drawn the sidebar row `hasCapability(role, 'ViewTimeOffCalendar')` gates (REQ-01-003).
 
 **Decided:** 404 for the calendar and for both halves of the organization country. The calendar's
 refusal must be byte-identical to a wrong-organization read (REQ-01-002, REQ-01-039), and

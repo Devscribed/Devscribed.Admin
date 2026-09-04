@@ -106,7 +106,7 @@
       "round": 2,
       "startedAt": "2026-09-04T15:29:22.019Z",
       "head": "df2e3aa1e11abfbd2a116ddbf74f61eef596d432",
-      "status": "running",
+      "status": "done",
       "lint": 0,
       "judge": {
         "status": "blocked",
@@ -179,7 +179,19 @@
           "S-57": "clear",
           "S-58": "clear"
         }
-      }
+      },
+      "gate": "T2",
+      "blockers": 2,
+      "keys": [
+        "spec/incomplete-decision:Roles & Permission Matrix — the Decided that settled R1, against REQ-01-003 and the matrix",
+        "spec/ambiguous-requirement:REQ-01-049 — moving the window"
+      ],
+      "fix": {
+        "fixed": 5,
+        "decided": 2,
+        "left": 0
+      },
+      "endedAt": "2026-09-04T15:46:53.067Z"
     }
   ],
   "status": "running",
