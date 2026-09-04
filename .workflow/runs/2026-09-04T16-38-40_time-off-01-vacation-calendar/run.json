@@ -1,12 +1,12 @@
 {
   "runId": "2026-09-04T16-38-40_time-off-01-vacation-calendar",
   "spec": "specs/time-off/01-vacation-calendar.md",
-  "specSha": "4a5b88bb7953f92d7d0e0048719046fa586b5d15e06cca980912ca17a2ee6429",
+  "specSha": "90275255fe579ae59b8cdf89b02f8b43aef6e5b29c2e676f1ccba8dd8f1aa5f9",
   "task": "time-off-01-vacation-calendar",
   "branch": "spec/time-off-vacation-calendar",
   "baseRef": "0d986a177419c5189be5109a4a27c7e8afb02546",
-  "headAtInit": "0d986a177419c5189be5109a4a27c7e8afb02546",
-  "status": "halted",
+  "headAtInit": "40eedaa860c0a7295358b83d658c5c109261a730",
+  "status": "implement",
   "track": "spec",
   "shapes": {
     "pre_implement": "strict",
@@ -17,7 +17,7 @@
   },
   "unrefined": null,
   "createdAt": "2026-09-04T16:38:40.888Z",
-  "updatedAt": "2026-09-04T17:42:57.753Z",
+  "updatedAt": "2026-09-04T18:01:23.571Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -25,30 +25,27 @@
     },
     "pre_implement": {
       "status": "passed",
-      "attempts": 1,
-      "startedAt": "2026-09-04T16:38:41.065Z",
-      "endedAt": "2026-09-04T16:56:53.606Z",
-      "lastVerdict": "pass"
+      "attempts": 2,
+      "startedAt": "2026-09-04T17:49:35.308Z",
+      "lastVerdict": "pass",
+      "endedAt": "2026-09-04T18:01:23.519Z"
     },
     "implement": {
-      "status": "passed",
+      "status": "pending",
       "attempts": 1,
       "startedAt": "2026-09-04T16:56:53.794Z",
-      "endedAt": "2026-09-04T17:29:36.121Z",
       "lastVerdict": "pass"
     },
     "static_gate": {
-      "status": "passed",
+      "status": "pending",
       "attempts": 1,
       "startedAt": "2026-09-04T17:29:36.319Z",
-      "endedAt": "2026-09-04T17:29:40.049Z",
       "lastVerdict": "pass"
     },
     "review": {
-      "status": "blocked",
+      "status": "pending",
       "attempts": 1,
       "startedAt": "2026-09-04T17:29:40.239Z",
-      "endedAt": "2026-09-04T17:42:57.704Z",
       "lastVerdict": "blocked"
     },
     "qa": {
@@ -301,13 +298,59 @@
         "source": "specs/time-off/01-vacation-calendar.mock.html:153"
       },
       "suggestedFix": "add the today marker's 2px inset to the DS gaps table as a fourth row, marked @literal beside the 3px band margin it sits next to"
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "Screens - /org/{orgId}/settings/holidays",
+      "line": 333,
+      "claim": "the settled Validation Rule 9 refuses three codes the picker the spec tells both screens to reuse still offers, so a control offers a value its own save cannot store. Planned, not halted on: the document nowhere states that every option must be storable, so both statements hold and the choice is a plan's to make.",
+      "witness": {
+        "kind": "scenario",
+        "detail": "An admin opens Settings > Holidays, picks 'Ascension Island' in org-country-select and clicks org-country-save. The option exists because HOLIDAY_COUNTRY_OPTIONS (apps/web/app/org/[orgId]/settings/holidays/country-options.ts:17) is built from COUNTRY_OPTIONS (apps/web/src/account-data.ts:58), which is libphonenumber's getCountries(). Rule 9 now tests membership of COUNTRY_NAMES (packages/validation/src/autofill.ts:717), which does not carry AC. Counted: getCountries() returns 245 codes, COUNTRY_NAMES carries 249, and exactly AC, TA and XK are offered but not assigned. Before 40eedaa all three saved; after it all three answer 422 PROFILE_MESSAGES.country.invalid. The same three reach member-country-select, which builds its list from the same array (MemberDetailScreen.tsx:42).",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md (Screens) and Validation Rule 9"
+      },
+      "suggestedFix": "planned in T8 - both country Selects list only options the assigned-list test accepts, while the holiday form's picker and the holiday list's country filter keep the full list. If the document wants to say which list each country control offers, that is one sentence in Screens."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "PUT /api/organizations/{orgId}/settings/country",
+      "line": 130,
+      "claim": "neither the requirements nor the contracts say what an absent countryCode key means on either country write, and the two routes have been given opposite answers by their shipped implementations",
+      "witness": {
+        "kind": "scenario",
+        "detail": "PUT /api/organizations/{orgId}/settings/country with body {} today clears Organization.countryCode (organization-country.service.ts:69 hands undefined to the validator, which normalizes it to null and writes it). PUT /api/organizations/{orgId}/members/{memberId} with no countryCode key deliberately leaves Membership.countryCode alone (members.service.ts:451, the 'countryCode' in input idiom). REQ-01-034 is triggered by 'submits an empty country' and REQ-01-042 by 'submits an ISO 3166-1 alpha-2 country'; neither says what submitting nothing at all does. No case in the bundle sends a body without the key to either route, so nothing observes the difference.",
+        "source": "REQ-01-034, REQ-01-042, REQ-01-043"
+      },
+      "suggestedFix": "planned in T4 and T5 with both rules stated and the reason for the asymmetry - the organization route is a one-field settings resource whose GET and PUT carry the same representation, the member route carries three fields and a caller that ignores the new one must change nothing. A sentence in the contracts would settle it for good."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P3",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/incomplete-decision",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "UI Description",
+      "line": 349,
+      "claim": "the document assigns no message to a calendar read that does not complete, and the screen must say something",
+      "witness": {
+        "kind": "rule",
+        "detail": "The Error Messages table routes seven strings to the endpoint's 422s and gives emptyStateBody, emptyStateTitle, orgCountryHint and memberCountryDefaultOption no route at all; the UI Description's only failure row is 'Refused (422)', and the required-testid table describes calendar-error-banner as 'present on any 422'. A fetch that rejects, or a 500, is described by no row - which is how the first implementation came to draw 'No active member matches this scope.' over a populated grid.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md, Error Messages and UI Description"
+      },
+      "suggestedFix": "planned in T7 with HOLIDAY_MESSAGES.toastServerError, the string the Holidays page this same change edits already uses for a failed read. If the calendar should carry a message of its own, it is a row in the Error Messages table and a line in the UI Description."
     }
   ],
-  "halt": {
-    "reason": "spec-defect",
-    "detail": "review found a defect in the spec: CLAUDE.md — 'Two statements that disagree block, even when you can tell which one is right. Neither the refiner nor the reviewer settles a contradiction by preferring one side; that decision is a person's, and it is made in the document.' (specs/time-off/01-vacation-calendar.md)",
-    "at": "2026-09-04T17:42:57.753Z"
-  },
   "preflight": {
     "at": "2026-09-04T16:38:41.012Z",
     "checks": [
@@ -389,5 +432,27 @@
       "20260903120100_requests_02_request_topics_backfill",
       "20260903130000_requests_03_client_participants"
     ]
-  }
+  },
+  "resumes": [
+    {
+      "at": "2026-09-04T17:49:28.739Z",
+      "stage": "pre_implement",
+      "from": "spec-defect",
+      "detail": "review found a defect in the spec: CLAUDE.md — 'Two statements that disagree block, even when you can tell which one is right. Neither the refiner nor the reviewer settles a contradiction by preferring one side; that decision is a person's, and it is made in the document.' (specs/time-off/01-vacation-calendar.md)",
+      "reason": "The review halted on a contradiction in the spec (F1: REQ-01-036 and edge cases 10/11 against Validation Rule 9, on an unassigned code like XX). Settled in the document at 40eedaa: both country writes test membership of the assigned list on top of the uppercase shape, and both carry PROFILE_MESSAGES.country.invalid. The spec edits since init are mine. Replanning because the handoff was compiled from the rule that changed.",
+      "headAtInit": {
+        "from": "0d986a177419c5189be5109a4a27c7e8afb02546",
+        "to": "40eedaa860c0a7295358b83d658c5c109261a730"
+      },
+      "specEdits": [
+        "specs/time-off/01-vacation-calendar.cases.md",
+        "specs/time-off/01-vacation-calendar.contracts.md",
+        "specs/time-off/01-vacation-calendar.md"
+      ],
+      "specSha": {
+        "from": "4a5b88bb7953f92d7d0e0048719046fa586b5d15e06cca980912ca17a2ee6429",
+        "pendingUntilReplan": "90275255fe579ae59b8cdf89b02f8b43aef6e5b29c2e676f1ccba8dd8f1aa5f9"
+      }
+    }
+  ]
 }
