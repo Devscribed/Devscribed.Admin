@@ -6,14 +6,14 @@
   "branch": "test/flow-check",
   "baseRef": "924502bd85b70eda85b8f467d8485c587ddbb56f",
   "headAtInit": "924502bd85b70eda85b8f467d8485c587ddbb56f",
-  "status": "static_gate",
+  "status": "review",
   "track": "bug",
   "variants": {
     "review": "solo"
   },
   "unrefined": null,
   "createdAt": "2026-09-04T08:48:14.480Z",
-  "updatedAt": "2026-09-04T08:52:22.919Z",
+  "updatedAt": "2026-09-04T08:52:25.051Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -33,8 +33,11 @@
       "lastVerdict": "pass"
     },
     "static_gate": {
-      "status": "pending",
-      "attempts": 0
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-04T08:52:23.060Z",
+      "endedAt": "2026-09-04T08:52:25.000Z",
+      "lastVerdict": "pass"
     },
     "review": {
       "status": "pending",
