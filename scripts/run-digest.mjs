@@ -21,21 +21,47 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CONFIG_REL, STAGES, loadConfig, stageFor, trackNames } from './ship-config.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const RUNS = join(ROOT, '.workflow', 'runs');
 
-/** The files that decide how agents behave, hashed by content so an uncommitted edit counts. */
-const PIPELINE_FILES = [
-  'scripts/ship.mjs',
-  'scripts/wf.mjs',
-  'scripts/static-gate.mjs',
-  '.claude/ai-workflow.config.json',
-  '.claude/agents/pre-implementer.md',
-  '.claude/agents/implementer.md',
-  '.claude/agents/code-reviewer.md',
-  '.claude/agents/qa.md',
-];
+/* One reader of the configuration, and this is how it reaches here. */
+const CFG = loadConfig(ROOT);
+
+/**
+ * The files that decide how agents behave, hashed by content so an uncommitted edit counts.
+ *
+ * The agent half is derived from the configuration, never written out here. A hand-kept copy
+ * went stale the first time an agent was renamed, and because `fingerprint` skipped what it
+ * could not find, two runs governed by different reviewers hashed identically and said so.
+ */
+function pipelineFiles(cfg) {
+  const out = new Set([
+    'scripts/ship.mjs',
+    'scripts/wf.mjs',
+    'scripts/ship-config.mjs',
+    'scripts/review-slice.mjs',
+    'scripts/static-gate.mjs',
+    CONFIG_REL,
+    '.claude/agents/references/verdict-contract.md',
+    '.claude/agents/references/lead-contract.md',
+    '.claude/skills/code-review/SKILL.md',
+    '.claude/skills/code-review/references/blocking-criteria.md',
+  ]);
+  for (const track of trackNames(cfg)) {
+    for (const stage of STAGES) {
+      const block = cfg.shipConfig?.[track]?.stages?.[stage] ?? {};
+      for (const variant of ['default', ...Object.keys(block.variants ?? {})]) {
+        let s;
+        try { s = stageFor(cfg, track, stage, variant); } catch { continue; }
+        for (const agent of [s.agent, s.shardAgent]) if (agent) out.add(`.claude/agents/${agent}.md`);
+        if (s.script) out.add(s.script);
+      }
+    }
+  }
+  return [...out].sort();
+}
 
 const git = (...a) => {
   try {
@@ -45,17 +71,21 @@ const git = (...a) => {
   }
 };
 
-function fingerprint() {
+function fingerprint(cfg) {
   const files = {};
+  const missing = [];
   const all = createHash('sha256');
-  for (const rel of PIPELINE_FILES) {
+  for (const rel of pipelineFiles(cfg)) {
     const p = join(ROOT, rel);
-    if (!existsSync(p)) continue;
+    /* A file that is not there still changes the pipeline, so it goes into the hash under its
+       own name. Skipping it made an absent reviewer definition indistinguishable from one that
+       had not changed. */
+    if (!existsSync(p)) { missing.push(rel); all.update(`missing:${rel}`); continue; }
     const h = createHash('sha256').update(readFileSync(p)).digest('hex').slice(0, 12);
     files[rel] = h;
     all.update(h);
   }
-  return { fingerprint: all.digest('hex').slice(0, 16), files };
+  return { fingerprint: all.digest('hex').slice(0, 16), files, ...(missing.length ? { missing } : {}) };
 }
 
 /** What a call *was*, so a hundred invocations roll up into a handful of rows. */
@@ -146,9 +176,22 @@ function agentReport(dir, stage, attempt) {
   const log = join(dir, 'stages', `${stage}.attempt-${attempt}.log`);
   if (!existsSync(log)) return null;
   const raw = readFileSync(log, 'utf8');
-  const m = raw.match(/^\s*(\{[\s\S]*?\})\s*$/m);
+  /* The SDK path writes one JSON message per line and the cost is on the last of them, the
+     `result`. Taking the first `{…}` block in the file took the `system` init message instead,
+     which carries no cost — so every stage of every run read as $0 and the digest, which exists
+     to answer "what did this cost", answered nothing. The CLI path writes a single object. */
+  const j = (() => {
+    const lines = raw.trim().split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) {
+      try {
+        const v = JSON.parse(lines[i]);
+        if (v?.type === 'result') return v;
+      } catch { /* not a message line */ }
+    }
+    try { return JSON.parse(raw); } catch { return null; }
+  })();
   try {
-    const j = JSON.parse(m ? m[1] : raw);
+    if (!j) return null;
     return {
       sessionId: j.session_id ?? null,
       costUsd: typeof j.total_cost_usd === 'number' ? +j.total_cost_usd.toFixed(2) : null,
@@ -179,18 +222,14 @@ const readJson = (p) => {
 /* The journal only carries `agentType` once an agent has announced itself, so the first
    events of a stage arrive without it and would otherwise be filed under a name that is not
    an agent at all. The config knows which agent owns which stage; it is the authority. */
-const cfgStages = (() => {
+const agentFor = (block) => {
+  if (block.agentType) return block.agentType;
   try {
-    const cfg = JSON.parse(readFileSync(join(ROOT, '.claude', 'ai-workflow.config.json'), 'utf8'));
-    return cfg.shipConfig?.[run.track ?? 'spec']?.stages ?? {};
+    return stageFor(CFG, run.track ?? 'spec', block.stage, run.variants?.[block.stage]).agent ?? block.stage;
   } catch {
-    return {};
+    return block.stage;
   }
-})();
-const agentFor = (block) => block.agentType
-  ?? cfgStages[block.stage]?.variants?.[run.variants?.[block.stage]]?.agent
-  ?? cfgStages[block.stage]?.agent
-  ?? block.stage;
+};
 
 const seen = {};
 const agents = blocks.map((b) => {
@@ -295,7 +334,7 @@ const digest = {
   status: run.status,
   halt: run.halt ?? null,
   budget: run.budget,
-  pipeline: fingerprint(),
+  pipeline: fingerprint(CFG),
   diff: m ? { files: +m[1], added: +(m[2] || 0), removed: +(m[3] || 0) } : null,
   totals,
   byAgent,

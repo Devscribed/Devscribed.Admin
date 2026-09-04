@@ -33,7 +33,6 @@ const ALWAYS_ON = ['static_gate', 'qa'];
 const AGENT_STAGES = ['pre_implement', 'implement', 'review', 'qa'];
 
 const MODELS = ['opus', 'sonnet', 'haiku', 'fable'];
-const EFFORTS = ['low', 'medium', 'high'];
 const QA_LEVELS = ['unit', 'int', 'e2e'];
 
 /* Closed key sets. An unknown key is an error rather than something ignored: `shardsize` for
@@ -44,15 +43,15 @@ const KEYS = {
   track: ['match', 'branchPrefix', 'requiresRefine', 'stages', 'convergence', 'timeoutMin'],
   stage: {
     preflight: ['enabled'],
-    pre_implement: ['enabled', 'agent', 'model', 'effort', 'variants'],
-    implement: ['enabled', 'agent', 'model', 'effort', 'shardAgent', 'shardModel', 'shardEffort', 'maxShards', 'variants'],
+    pre_implement: ['enabled', 'agent', 'model', 'variants'],
+    implement: ['enabled', 'agent', 'model', 'shardAgent', 'shardModel', 'maxShards', 'variants'],
     static_gate: ['enabled', 'script', 'variants'],
-    review: ['enabled', 'agent', 'model', 'effort', 'shardAgent', 'shardModel', 'shardEffort', 'shardSize', 'variants'],
-    qa: ['enabled', 'agent', 'model', 'effort', 'levels', 'skipE2eIfLowerFailed', 'variants'],
+    review: ['enabled', 'agent', 'model', 'shardAgent', 'shardModel', 'shardSize', 'variants'],
+    qa: ['enabled', 'agent', 'model', 'levels', 'skipE2eIfLowerFailed', 'variants'],
   },
   convergence: ['maxCodeAttempts', 'maxHandoffReplans', 'infraRetries', 'autoContestAfter'],
   breakers: ['runTimeoutMin', 'runTokenCap'],
-  isolation: ['concurrentRuns', 'e2eEnv', 'testDatabaseTemplate'],
+  isolation: ['concurrentRuns', 'e2eEnv'],
 };
 
 /** Keys a person writes for themselves. They are documentation and are never read as settings. */
@@ -91,13 +90,18 @@ export const trackNames = (cfg) => settings(cfg.shipConfig);
  * First match wins, in declaration order, so a track written later cannot capture a path an
  * earlier one already claims. `validate` refuses a config where two tracks claim the same one.
  */
-export function trackFor(cfg, docPath, override = null) {
+export function trackFor(cfg, docPath, override = null, root = HERE) {
   const names = trackNames(cfg);
   if (override) {
     if (!cfg.shipConfig?.[override]) throw new Error(`no track "${override}" — have ${names.join(', ')}`);
     return { name: override, ...cfg.shipConfig[override] };
   }
-  const path = String(docPath ?? '').replace(/\\/g, '/');
+  /* Repo-relative, forward slashes. A `match` is anchored at `specs/`, so an absolute path —
+     which is what a model pastes and what a shell completes — matched no track at all. */
+  const path = String(docPath ?? '')
+    .replace(/\\/g, '/')
+    .replace(`${resolve(root).replace(/\\/g, '/')}/`, '')
+    .replace(/^\.\//, '');
   const hit = names.find((n) => new RegExp(cfg.shipConfig[n].match).test(path));
   if (!hit) throw new Error(`no track matches ${path} — have ${names.join(', ')}`);
   return { name: hit, ...cfg.shipConfig[hit] };
@@ -244,19 +248,17 @@ export function validate(cfg, root = HERE) {
           if (!sh.script) p.push(`${w}: "script" is missing`);
           else if (!existsSync(join(root, sh.script))) p.push(`${w}.script: no file at ${sh.script}`);
         }
-        if (sh.effort !== undefined && !EFFORTS.includes(sh.effort)) {
-          p.push(`${w}.effort: "${sh.effort}" is not one of ${EFFORTS.join(', ')}`);
-        }
         if (sh.shardAgent !== undefined) {
           if (!agentExists(sh.shardAgent)) p.push(`${w}.shardAgent: no definition at .claude/agents/${sh.shardAgent}.md`);
           if (!sh.shardModel) p.push(`${w}: "shardModel" is missing, and "shardAgent" is set`);
           else if (!MODELS.includes(sh.shardModel)) p.push(`${w}.shardModel: "${sh.shardModel}" is not one of ${MODELS.join(', ')}`);
-          if (sh.shardEffort !== undefined && !EFFORTS.includes(sh.shardEffort)) {
-            p.push(`${w}.shardEffort: "${sh.shardEffort}" is not one of ${EFFORTS.join(', ')}`);
-          }
         }
-        if (sh.shardModel !== undefined && sh.shardAgent === undefined) {
-          p.push(`${w}.shardModel: set without a "shardAgent", so nothing reads it`);
+        /* A shard setting with nobody to apply it to is a variant that forgot to unset one key,
+           and it reads as "this shape splits" to whoever edits the file next. */
+        if (sh.shardAgent === undefined) {
+          for (const k of ['shardModel', 'shardSize', 'maxShards']) {
+            if (sh[k] !== undefined) p.push(`${w}.${k}: set without a "shardAgent", so nothing reads it`);
+          }
         }
         if (sh.shardSize !== undefined) posInt(sh.shardSize, `${w}.shardSize`);
         if (sh.maxShards !== undefined) posInt(sh.maxShards, `${w}.maxShards`);
@@ -316,8 +318,15 @@ export function validate(cfg, root = HERE) {
     }
   } else p.push('breakers: missing, or not an object');
 
-  if (cfg.isolation && typeof cfg.isolation === 'object') closed(cfg.isolation, KEYS.isolation, 'isolation');
-  else p.push('isolation: missing, or not an object');
+  if (cfg.isolation && typeof cfg.isolation === 'object') {
+    closed(cfg.isolation, KEYS.isolation, 'isolation');
+    /* The lock in `wf` allows one run and nothing reads this number. Refusing any other value
+       keeps it a stated invariant rather than a setting that looks adjustable and is not. */
+    if (cfg.isolation.concurrentRuns !== 1) {
+      p.push('isolation.concurrentRuns: must be 1 — the run lock allows one, and ports, both '
+        + 'databases and the mail sink are shared. Raising it here changes nothing.');
+    }
+  } else p.push('isolation: missing, or not an object');
 
   if (!Array.isArray(cfg.protectedBranches) || !cfg.protectedBranches.length) {
     p.push('protectedBranches: expected a non-empty array');

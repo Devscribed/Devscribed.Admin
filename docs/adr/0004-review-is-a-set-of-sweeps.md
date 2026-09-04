@@ -1,6 +1,8 @@
 # 0004 — A review is a set of sweeps, and clearing an item costs what raising one costs
 
 > **Renamed by [ADR 15](0015-one-core-agent-one-lead-and-the-rules-in-one-place.md).** The agents this record names still exist under the current names; the rules they duplicated now live once, in `.claude/agents/references/`. The decision below is unchanged.
+>
+> **The count has grown.** Nine sweeps were decided here; the predicate and call-site sweeps were added afterwards and `SKILL.md` now carries eleven. The rule that a sweep enumerates before it judges, and that clearing costs what raising costs, is what this record decided and is unchanged.
 
 **Decided** 2026-08-30.
 

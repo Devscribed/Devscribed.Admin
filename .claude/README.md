@@ -28,7 +28,7 @@ It is written for a person deciding what to change. The runbook for *operating* 
 | What a lead is, and what it never does | `agents/references/lead-contract.md` | every `*-lead` |
 | Which code defects may stop a run | `skills/code-review/references/blocking-criteria.md` | the code reviewers |
 | Which spec defects may stop admission | `skills/spec-review/references/admission-criteria.md` | the spec reviewer's lead, quoted to its children |
-| The nine review sweeps | `skills/code-review/SKILL.md` | `code-reviewer-sweeps` |
+| The review sweeps | `skills/code-review/SKILL.md` | `code-reviewer-sweeps` |
 | Identity, scope, method, output | the agent's own file | that agent, and its lead |
 
 If you are about to write a rule about *what may block* into an agent file, or a rule about
@@ -118,6 +118,22 @@ run, two tracks claiming one path, a `match` that is not a valid regular express
 
 This is what makes the config safe to write out per track: renaming an agent means three edits,
 and missing one is refused loudly rather than found by a stage twenty minutes in.
+
+### `npm run pipeline` — the question after that one
+
+The validator answers "would every stage start". `npm run pipeline` answers the ones that come
+after it, which all have the same shape: two places name one thing and only one was edited.
+
+- an agent definition whose `name:` no longer matches its filename;
+- a lead that dispatches a `subagent_type` nobody defines;
+- the `SubagentStart` / `SubagentStop` matchers in `settings.json`, a second list of agent names;
+- **a setting the config accepts and no script reads** — the worst of them, because
+  `npm run config` prints it back and a person believes it took effect. `effort` and
+  `shardEffort` were exactly that, and the printer reported a reasoning effort nothing applied;
+- an agent bound by a contract in `agents/references/` that does not read it;
+- the E2E port ladder, kept in both `scripts/ports.mjs` and `e2e/environment.ts`.
+
+Run it after renaming an agent, adding a setting, or moving a rule between files.
 
 ## Skills: what a person invokes
 

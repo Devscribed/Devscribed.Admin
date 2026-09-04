@@ -1,0 +1,32 @@
+{
+  "status": "pass",
+  "suites": {
+    "unit": {
+      "passed": 1098,
+      "failed": 0,
+      "ms": 1120
+    },
+    "int": {
+      "passed": 31,
+      "failed": 0,
+      "ms": 16723,
+      "files": [
+        "test/envelopes.spec.ts"
+      ]
+    },
+    "e2e": {
+      "skipped": true,
+      "reason": "diff touches no route, no data-testid and no observable behaviour: a local binding rename inside EnvelopesService.update(), never exported. No e2e spec references this symbol."
+    }
+  },
+  "flaky": [],
+  "findings": [],
+  "notes": [
+    "Ran npx tsc --noEmit -p tsconfig.json from apps/api: exit 0, no diagnostics -- this is the spec's stated acceptance criterion.",
+    "Diff scope confirmed as one file, apps/api/src/documents/envelopes.service.ts, 2 insertions/2 deletions: the local `list` binding in update() renamed to `submittedSigners`, matching Acceptance Criteria ('the binding is renamed, the type check passes, and no other file changed').",
+    "Read the surrounding scope (lines 700-760): no naming collision with the outer `submitted` (fieldValues) binding or the service's own list() method; declaration and one .forEach use, not exported.",
+    "No live TC-* is declared by the spec (Regression Test: none, by design -- 'a rename with no observable behaviour has nothing an assertion could catch'), so no test-existence check applies.",
+    "No visual/E2E walkthrough performed: the spec's own Blast Radius ('one file, one local binding, no exported symbol') and surface (ui field in frontmatter is a fixture artifact -- the change itself has no UI, route or data-testid) bound this to nothing observable from any side.",
+    "Carrying forward the implementer's note (spec/dangling-reference, severity note): the document's Fix Approach defers to 'the binding the prompt names', which the prompt never names. Not re-raised as a QA finding since it does not affect the outcome -- the document's other sections fully bound an unambiguous, non-observable change -- but the underlying document is a fixture per its own Known Gaps and not expected to be corrected."
+  ]
+}

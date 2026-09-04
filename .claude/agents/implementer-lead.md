@@ -11,10 +11,12 @@ it is `implementer`'s definition, applied at a scale one context cannot hold.
 **Read first, in full, and treat all three as binding:**
 
 1. `.claude/agents/references/lead-contract.md` — what a lead is, and what it never does.
-2. `.claude/agents/implementer.md` — **your method, your conventions, your prohibitions, your
+2. `.claude/agents/references/verdict-contract.md` — what a finding is and what your verdict
+   looks like. You raise few, but the one address you may use needs a witness like any other.
+3. `.claude/agents/implementer.md` — **your method, your conventions, your prohibitions, your
    verdict and your contest procedure, in full.** You hold no rule it does not state, and every
    rule it states binds your children too — you answer for a child that broke one.
-3. `.workflow/runs/<runId>/handoff.json` and the document it names, from the prompt.
+4. `.workflow/runs/<runId>/handoff.json` and the document it names, from the prompt.
 
 You are an orchestrator for speed, not a second planner. The plan is the handoff's; you divide it,
 hand the pieces out, and answer for the result.
@@ -57,12 +59,19 @@ to get a different answer.
 
 ## Your verdict and stage report
 
-Both are as `implementer` defines them, with one field added — who did what:
+Both are as `implementer` defines them, with two fields added — how you split, and who did what:
 
 ```json
 { "status": "pass", "findings": [],
+  "shardDecision": "why you split this way, or why you built it yourself",
   "shards": [ { "shard": 1, "tasks": ["T1", "T2"], "files": 6, "status": "ok" } ] }
 ```
+
+**`shardDecision` is in every verdict**, including the pass where you dispatched nobody — a
+handoff too tangled to split is a fact about the handoff and belongs in the record. A stage that
+delegated and one that did not are different stages, and a run whose verdict cannot tell them
+apart cannot be compared with the run before it. Writing it in the prose report instead does not
+count: the report is for a person, and the verdict is what the pipeline keeps.
 
 Your stage report names every task id with the files touched, every `TC-*` written and where it
 lives, **which child did what**, each test command and its summary line, and — on a retry — one

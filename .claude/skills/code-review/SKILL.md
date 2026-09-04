@@ -111,6 +111,16 @@ before the assertion runs, or state made global in a suite that runs in parallel
 `@ts-ignore`, `as any`, `eslint-disable`, a relaxed assertion, a deleted case — or a test
 asserts the opposite of the spec.
 
+## 9. Boundary sweep
+
+**Enumerate** every pair that must agree across a file boundary: a caller and its port, a
+constant and its consumer, a message and its table, a selector and its test, a client rule and
+its server re-check, a documented value and the code that reads it.
+
+**For each**, whether they agree.
+
+**Blocks when** they do not.
+
 ## 10. Predicate sweep
 
 **Enumerate** every guard that holds an invariant up: the `where` of a conditional write, an
@@ -141,16 +151,6 @@ redaction, an idempotency key.
 rest.** Look for what hides it: an optional parameter only one caller passes, a fallback
 default that stands in when the real value is absent, a wrapper applied at one entry point of
 three. A mechanism with a graceful default fails silently at every site that forgot it.
-
-## 9. Boundary sweep
-
-**Enumerate** every pair that must agree across a file boundary: a caller and its port, a
-constant and its consumer, a message and its table, a selector and its test, a client rule and
-its server re-check, a documented value and the code that reads it.
-
-**For each**, whether they agree.
-
-**Blocks when** they do not.
 
 ## Clearing an item
 

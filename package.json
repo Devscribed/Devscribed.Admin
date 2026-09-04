@@ -25,6 +25,7 @@
     "watch": "node scripts/run-watch.mjs",
     "specs": "node scripts/spec-index.mjs",
     "config": "node scripts/ship-config.mjs",
+    "pipeline": "node scripts/pipeline-check.mjs",
     "wf": "node scripts/wf.mjs",
     "wf:status": "node scripts/wf.mjs status",
     "wf:log": "node scripts/wf.mjs log",

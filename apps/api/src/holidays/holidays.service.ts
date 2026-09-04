@@ -112,7 +112,7 @@ export class HolidaysService {
       }
     }
 
-    const rows = await this.prisma.holiday.findMany({
+    const holidays = await this.prisma.holiday.findMany({
       where: {
         organizationId: caller.organizationId,
         date: { gte: start, lt: end },
@@ -121,7 +121,7 @@ export class HolidaysService {
       orderBy: { date: 'asc' },
     });
 
-    return { holidays: rows.map((row) => this.toSummary(row)) };
+    return { holidays: holidays.map((row) => this.toSummary(row)) };
   }
 
   /**

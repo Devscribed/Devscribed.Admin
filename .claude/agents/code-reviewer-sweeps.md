@@ -69,8 +69,8 @@ rule is the finding rather than the answer to it.
 
 **Sweeps 5 and 9 belong to whoever holds the whole change.** As a child you do not run them: 5
 asks what the document requires and the diff lacks, and 9 asks which pairs disagree across a file
-boundary — both are questions about the change, not about a file. As the stage you run all nine,
-and 5 and 9 are run from the document's own lists rather than from the diff.
+boundary — both are questions about the change, not about a file. As the stage you run all
+eleven, and 5 and 9 are run from the document's own lists rather than from the diff.
 
 ## What you cannot see, and must not guess at
 
@@ -92,7 +92,8 @@ your sweep tables come first, then the JSON:
 ```json
 { "status": "blocked",
   "reviewedUpTo": "<the sha of HEAD you reviewed>",
-  "sweeps": { "1": 3, "2": 7, "3": 0, "4": 5, "5": 12, "6": 4, "7": 1, "8": 6 },
+  "sweeps": { "1": 3, "2": 7, "3": 0, "4": 5, "5": 12, "6": 4,
+              "7": 1, "8": 6, "9": 18, "10": 9, "11": 2 },
   "covered": { "scope": 15, "read": ["apps/api/src/…"], "unreached": [] },
   "findings": [ { "…": "…", "sweep": 1 } ] }
 ```

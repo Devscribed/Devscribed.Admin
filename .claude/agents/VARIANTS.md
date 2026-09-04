@@ -24,6 +24,29 @@ What the files are and which document owns which rule is in [`.claude/README.md`
 `npm run config` prints what each track resolves to and every variant it could run instead. It
 is the answer to "what actually runs", not this table.
 
+## Every name that used to exist, and what it is now
+
+No shape was withdrawn. Each row below is a rename or a split, and every method either agent
+had is still selectable under the name on the right — which is what the rule in `CLAUDE.md`
+asks of this page. The old files are not kept beside the new ones: keeping a second copy of a
+definition is the duplication that made the rules drift in the first place, and the text of any
+of them is a `git log --diff-filter=D --` away.
+
+| Was | Is now | What changed |
+|---|---|---|
+| `spec-refiner` | `spec-reviewer` | renamed. The name said the agent improves a document; the work is deciding whether it may enter development. Three defects of the old shape are listed below. |
+| `spec-review` | `spec-reviewer` | renamed only, to the one convention. |
+| `spec-review-shard` | `spec-reviewer` | the child and the stage agent became one definition — a core runs as either. |
+| `code-reviewer` | `code-reviewer-open` + `code-reviewer-sweeps` | split into the two methods it carried at once. Both are selectable; neither lost a rule. |
+| `review-shard` | `code-reviewer-sweeps` | the child and the stage agent became one definition. |
+| `review-shard-open` | `code-reviewer-open` | the same, for the open method. |
+| `implement-lead` | `implementer-lead` | renamed only. |
+| `implement-shard` | `implementer` | the child and the stage agent became one definition. |
+
+What every one of them stopped carrying is the same thing: the finding shape, the address
+table, the witness rule and the verdict destination, which are now stated once in
+`references/verdict-contract.md`, and the lead's own obligations, in `references/lead-contract.md`.
+
 ## Switching
 
 **For every run**, edit the stage block under its track in `.claude/ai-workflow.config.json`,

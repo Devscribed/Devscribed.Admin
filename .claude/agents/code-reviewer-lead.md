@@ -33,15 +33,28 @@ You start cold every pass. Earlier verdicts come with the slice as **claims to c
 conclusions you hold. On any pass after the first, begin by checking each earlier blocker against
 its witness and saying whether it is closed.
 
-## Dispatch, then do your own part
+## Delegate when the reading earns it
 
-Divide the slice into groups of the size the slice gives, balanced by changed lines, disjoint,
-and dispatch them **in one message with one `Agent` call per group**. Give each child its file
-list, the base sha, the document path and its shard number.
+**Delegate when the slice is more than one pass should hold, and read it yourself when it is
+not.** The child agent and its model are configuration and are not yours to pick; whether to
+split, and along which axis, is yours. A one-file slice dispatched to one child is a round trip
+that measures nothing.
 
-While they run, do the three things a child cannot:
+**Say what you decided and why, in `shardDecision`** — every pass, including the passes that
+delegated nothing. A pass that split and a pass that did not are different passes, and a verdict
+that cannot tell them apart cannot be compared with the one before it.
+
+When you do delegate: divide the slice into groups of the size the slice gives, balanced by
+changed lines, disjoint, and dispatch them **in one message with one `Agent` call per group**.
+Give each child its file list, the base sha, the document path and its shard number.
+
+Whether you delegated or not, the three things a child cannot do are yours, and you do them
+while any children run:
 
 **The requirement sweep** — run it from the document's requirement list, not from the diff.
+Report it every pass, including when the document has no requirement list and the enumeration is
+therefore empty: `"sweep5": { "requirements": 0, "artefacts": 0, "missing": [] }` is a sweep that
+ran, and an absent `sweep5` is a sweep that did not.
 Enumerate every numbered requirement and every artefact the document names — files, directories,
 endpoints, columns, environment variables, error messages, test ids, selectors — and against each
 put the command whose output proves it exists, in the place the document puts it. Walk the
@@ -68,7 +81,8 @@ the accounting for the whole slice:
 ```json
 { "status": "blocked",
   "reviewedUpTo": "<the sha of HEAD you reviewed>",
-  "covered": { "slice": 75, "read": ["apps/api/src/…"], "unreached": [] },
+  "covered": { "scope": 75, "read": ["apps/api/src/…"], "unreached": [] },
+  "shardDecision": "one file, 6 changed lines — read it myself, dispatched nothing",
   "shards": [ { "shard": 1, "findings": 3, "kept": 2 } ],
   "sweep5": { "requirements": 24, "artefacts": 61, "missing": [] },
   "sweep9": { "pairs": 18, "disagreeing": [] },
@@ -76,5 +90,5 @@ the accounting for the whole slice:
 ```
 
 `read` is the union of what the children read and what you opened yourself; `shards` records what
-each returned and how much of it you kept. `read + unreached` must equal `slice`, and a `pass`
-with a non-empty `unreached` is not a pass.
+each returned and how much of it you kept, and is `[]` on a pass that delegated nothing. `read +
+unreached` must equal `scope`, and a `pass` with a non-empty `unreached` is not a pass.

@@ -39,7 +39,7 @@
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, appendFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync, appendFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -55,15 +55,27 @@ const VALUE_FLAGS = new Set(['branch', 'skip', 'permission-mode', 'from', 'carry
 const flag = (n) => argv.includes(`--${n}`);
 const opt = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 ? argv[i + 1] : d; };
 
-/** The first bare argument, skipping the values that belong to value-taking flags. */
-const specArg = (() => {
+/**
+ * The bare arguments, skipping the values that belong to value-taking flags.
+ *
+ * `/ship patch <note>` and `/ship bug <report>` are how a person names the weight of what they
+ * are shipping, and the skill and the README both write the command that way. Taking the word
+ * as the track rather than refusing it as a document path is the difference between the command
+ * a person typed working and a message about a track that does not match.
+ */
+const bare = (() => {
+  const out = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a.startsWith('--')) { if (VALUE_FLAGS.has(a.slice(2))) i++; continue; }
-    return a;
+    out.push(a);
   }
-  return undefined;
+  return out;
 })();
+
+const TRACK_WORDS = new Set(['spec', 'bug', 'patch']);
+const bareTrack = bare.length > 1 && TRACK_WORDS.has(bare[0]) ? bare[0] : null;
+const specArg = bareTrack ? bare[1] : bare[0];
 
 const skip = new Set((opt('skip', '') || '').split(',').filter(Boolean));
 const dryRun = flag('dry-run');
@@ -124,7 +136,10 @@ const TRACK = (() => {
   if (!doc) return {};
   /* A resumed run keeps the track it was started with, including one that came from `--track`
      and disagrees with the path. Re-deriving it would resume a different pipeline. */
-  try { return trackFor(cfg, doc, opt('track', null) ?? (specArg ? null : active?.track ?? null)); }
+  try {
+    return trackFor(cfg, doc,
+      opt('track', null) ?? bareTrack ?? (specArg ? null : active?.track ?? null), ROOT);
+  }
   catch (e) { process.stderr.write(`ship: ${e.message}\n`); process.exit(1); }
 })();
 
@@ -213,7 +228,9 @@ function promptFor(stage, run, verdictPath) {
          reviewer that cannot find its inputs judges the diff against its own assumptions. */
       const against = existsSync(join(ROOT, '.workflow/runs', run.id, 'handoff.json'))
         ? 'the spec and the handoff' : 'the spec';
-      const slice = `node scripts/review-slice.mjs --variant ${STAGE.review?.variant ?? 'default'}`;
+      /* Name the run. Without it the slice falls back to the newest directory under
+         .workflow/runs, which is this run only until somebody starts another one. */
+      const slice = `node scripts/review-slice.mjs ${run.id} --variant ${STAGE.review?.variant ?? 'default'}`;
       const ledger = `\n\n## Your worklist\n\nRun \`${slice}\` first. It splits the diff into what must be read this `
         + `pass and what an earlier pass settled, and it decides the second by comparing each file against the commit that pass `
         + `actually saw. You may not write a verdict while the worklist is non-empty; if the fuse runs out first, report the `
@@ -244,11 +261,23 @@ Run \`${slice}\`. It is derived from the commit each earlier verdict names as ju
 
 You may not write a verdict while the worklist is non-empty. A review that only re-checks the fix and reports clean has not reviewed this diff.${back}`;
     }
-    case 'qa':
-      return `${head}\nRun unit in full, then the integration and E2E suites the diff touches — never either one whole; `
-        + `both already run on the deploy gate. Run E2E with \`CI=1\`, targeted. `
+    case 'qa': {
+      /* The levels are the track's, not this sentence's. Writing them out here made
+         `shipConfig.<track>.stages.qa.levels` a setting a person could change with no effect. */
+      const levels = STAGE.qa?.levels ?? ['unit', 'int', 'e2e'];
+      const how = {
+        unit: 'unit in full',
+        int: 'the integration suites the diff touches',
+        e2e: 'the E2E suites the diff touches, with `CI=1`',
+      };
+      const order = levels.map((l) => how[l] ?? l).join(', then ');
+      const cheapFirst = STAGE.qa?.skipE2eIfLowerFailed && levels.includes('e2e') && levels.length > 1
+        ? ' If a cheaper level fails, stop there and report it — an E2E run buys nothing on a change that already failed below it.'
+        : '';
+      return `${head}\nRun ${order} — never a whole suite; both already run on the deploy gate.${cheapFirst} `
         + `Then walk every area of functionality the change touches, from every side that can reach it. `
         + `Then check the spec's acceptance criteria.${back}`;
+    }
     default:
       throw new Error(`no prompt for stage ${stage}`);
   }
@@ -382,7 +411,17 @@ async function runAgentStage(stage, run) {
   }
 
   note(`verdict written after ${secs}s`);
-  return readVerdict(abs, `${agent} wrote a verdict that is not valid JSON`);
+  const verdict = readVerdict(abs, `${agent} wrote a verdict that is not valid JSON`);
+
+  /* Whether to delegate is the lead's call, so working alone is a legitimate answer. What is
+     not optional is saying which way it went: a stage that split and one that did not are
+     different stages, and a run whose record cannot tell them apart cannot be compared with
+     the run before it. The same check guards the refine judge. */
+  if (STAGE[stage]?.shardAgent && !(verdict.shards ?? []).length && !verdict.shardDecision) {
+    note(`${agent} reported no split — neither "shards" nor "shardDecision" is in the verdict, `
+      + 'so what this stage actually ran is only in its prose report');
+  }
+  return verdict;
 }
 
 function runViaCLI({ stage, agent, model, prompt, resume, timeoutMin, stem }) {
@@ -502,6 +541,55 @@ function runGateStage(run) {
 
 /* ── the loop ────────────────────────────────────────────────────────────── */
 
+/**
+ * What the run has spent, from the agents' own reports on disk.
+ *
+ * Read from the stage logs rather than kept in memory, so a `--resume` inherits the spend of
+ * the invocation before it: the fuses are about the run, not about this process.
+ */
+function spentSoFar(run) {
+  let tokens = 0;
+  let usd = 0;
+  const dir = join(run.dir, 'stages');
+  if (!existsSync(dir)) return { tokens, usd };
+  for (const f of readdirSync(dir)) {
+    if (!f.endsWith('.log')) continue;
+    const lines = readFileSync(join(dir, f), 'utf8').trim().split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) {
+      let v;
+      try { v = JSON.parse(lines[i]); } catch { continue; }
+      if (v?.type !== 'result') continue;
+      const u = v.usage ?? {};
+      tokens += (u.input_tokens ?? 0) + (u.output_tokens ?? 0)
+        + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
+      usd += v.total_cost_usd ?? 0;
+      break;
+    }
+  }
+  return { tokens, usd };
+}
+
+/** The breaker this run has tripped, as the sentence a person would want, or null. */
+function breakerBlown(run) {
+  const b = cfg.breakers ?? {};
+  const startedAt = run.createdAt ? Date.parse(run.createdAt) : null;
+  if (b.runTimeoutMin && startedAt) {
+    const min = Math.round((Date.now() - startedAt) / 60_000);
+    if (min > b.runTimeoutMin) {
+      return `the run has been going ${min} minutes, past the ${b.runTimeoutMin}-minute breaker `
+        + '(breakers.runTimeoutMin)';
+    }
+  }
+  if (b.runTokenCap) {
+    const { tokens, usd } = spentSoFar(run);
+    if (tokens > b.runTokenCap) {
+      return `the run has spent ${(tokens / 1e6).toFixed(1)}M tokens ($${usd.toFixed(2)}), past the `
+        + `${(b.runTokenCap / 1e6).toFixed(0)}M breaker (breakers.runTokenCap)`;
+    }
+  }
+  return null;
+}
+
 async function main() {
   const branch = opt('branch');
   if (branch) {
@@ -557,6 +645,18 @@ async function main() {
   for (let guard = 0; guard < 40; guard++) {
     const run = runState();
     if (!run) { say('no active run'); process.exit(1); }
+
+    /* The whole-run fuses, checked before a stage is dispatched rather than after — the point
+       of a breaker is the agent that does not start. Both are read from `breakers`, and both
+       were configuration nothing consulted until now. */
+    const blown = breakerBlown(run);
+    if (blown) {
+      step(`halted — breaker`);
+      note(blown);
+      wf('abort', '--reason', blown);
+      wf('status');
+      process.exit(2);
+    }
 
     if (run.status === 'ready') {
       step('ready');
