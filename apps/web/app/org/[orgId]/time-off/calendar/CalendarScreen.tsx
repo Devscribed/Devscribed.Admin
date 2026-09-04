@@ -235,11 +235,11 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
         }
       } catch (err) {
         if ((err as Error)?.name === 'AbortError') return;
-        // A read that never happened is NOT a fact about the reader's data: the empty-state
-        // line ("No active member matches this scope.") is the answer to a successful read
-        // of nothing, and drawing it here would tell an admin whose organization is full of
-        // active members that none of them matches. The shipped generic failure message
-        // claims nothing about the rows.
+        // A read that never happened is NOT a fact about the reader's data:
+        // `emptyStateBody` is the answer to a SUCCESSFUL read of nothing, and drawing it
+        // here would tell an admin whose organization is full of active members that none
+        // of them matches their scope. The shipped generic failure message claims nothing
+        // about the rows.
         setError(HOLIDAY_MESSAGES.toastServerError);
       }
       if (signal.aborted) return;
