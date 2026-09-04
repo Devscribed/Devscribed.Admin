@@ -76,11 +76,11 @@ holiday rows are spelled in it and in `Capability`, which `RequireCapability` de
 
 **Decided:** this spec's capability ships in both unions — `ViewTimeOffCalendar` and its twin
 `view-time-off-calendar`, granted to admin, manager and user in each — and page and nav are both
-gated on the **normalized** role, so a membership still storing `member` is read as `user` and
-holds the capability on both: `can(normalizeRole(role), 'view-time-off-calendar')` behind the
-route, `hasCapability(role, 'ViewTimeOffCalendar')` in the sidebar. Rejected: handing `can()` the
-raw stored role, which normalizes nothing and would refuse that member the page while the sidebar
-drew its row; and `Capability` alone, which would spell this gate differently from `view-holidays`.
+gated on the **normalized** role: `can(normalizeRole(role), 'view-time-off-calendar')` behind the
+route, `hasCapability(role, 'ViewTimeOffCalendar')` in the sidebar, so a membership still storing
+`member` is read as `user` and holds it on both. Rejected: the raw role, which would refuse that
+member the page while the sidebar drew its row; and `Capability` alone, which would spell this
+gate differently from `view-holidays`.
 
 | Capability | admin | manager | user | viewer |
 |---|---|---|---|---|
@@ -254,9 +254,8 @@ THE SYSTEM SHALL emit `kind: "vacation"` on every band.
 THE SYSTEM SHALL resolve a member's holiday country as `Membership.countryCode` when it
 normalizes to a valid ISO 3166-1 alpha-2 value, and as `Organization.countryCode` otherwise.
 
-**Decided:** both links are stated by a person, and nothing is inferred. `Account.phoneCountryCode`
-— today's only source — is dropped rather than ranked: a dial code is a contact detail a foreign
-SIM makes wrong. `MemberProfile.country` is a postal address behind a PII capability.
+**Decided:** both links are stated by a person. The phone country is dropped rather than ranked — a
+dial code is a contact detail a foreign SIM makes wrong — and `MemberProfile.country` is PII.
 
 #### REQ-01-040 — a member with no country at all
 
@@ -301,8 +300,7 @@ THE SYSTEM SHALL shade Saturday and Sunday columns as non-working days.
 WHEN a caller holding `edit-detail` submits an ISO 3166-1 alpha-2 country for a member, THE
 SYSTEM SHALL store it on `Membership.countryCode`.
 
-**Decided:** a field on the member update that already ships — one field does not earn an
-endpoint, and the screen carrying a member's role is where their country belongs. It is written
+**Decided:** a field on the member update that already ships — one field does not earn an endpoint. It is written
 inside that update's existing transaction and organization-row lock and adds no lock of its own,
 which is what makes it unlike REQ-01-033's unlocked single column.
 
@@ -332,9 +330,8 @@ carrying `MEMBER_MESSAGES.editForbidden`.
 WHEN any caller the member detail read already answers opens a member's detail, THE SYSTEM SHALL
 return that member's stored `Membership.countryCode` on that read.
 
-**Decided:** unconditional — the shipped route is viewable by every role and gates only its two
-edit flags, and a field that appears with a capability is two response bodies for one route. The
-value is the stored one, `null` included, never the resolved one.
+**Decided:** unconditional — the route answers every role and gates only its edit flags, and a field
+that appears with a capability is two response bodies for one route. The value is the stored one.
 
 #### REQ-01-046 — reading the organization's country
 
@@ -370,17 +367,20 @@ and no case could reach. 404 is what it answers on the holiday create and edit b
 
 #### REQ-01-036 — an invalid organization country is refused
 
-IF the submitted country is neither empty nor a valid alpha-2 value, THEN THE SYSTEM SHALL answer
-`422` carrying `HOLIDAY_MESSAGES.countryCodeInvalid` on the organization country write.
+IF the submitted country is neither empty nor two uppercase letters naming an **assigned** country,
+THEN THE SYSTEM SHALL answer `422` carrying `PROFILE_MESSAGES.country.invalid`.
+
+**Decided:** both writes test the assigned list (`validateCountryCode`) on top of the uppercase
+shape, so `XX` is refused and `pl` still is: storing `XX` stores what REQ-01-026 discards on every
+read. Rejected: the shape alone — right for a holiday's country, a label that reaches nobody, and
+wrong for the input to the resolution, which removes holiday pay in silence.
 
 #### REQ-01-051 — an invalid member country is refused
 
-IF the submitted country is neither empty nor a valid alpha-2 value, THEN THE SYSTEM SHALL answer
-`400` carrying `HOLIDAY_MESSAGES.countryCodeInvalid` on the member write.
+IF the submitted country is neither empty nor two uppercase letters naming an **assigned** country,
+THEN THE SYSTEM SHALL answer `400` carrying `PROFILE_MESSAGES.country.invalid` on the member write.
 
-**Decided:** the member write keeps the `400` its role and its job title are already refused with,
-because one form that refuses one of its fields in a second status is a client branching per
-field. Rejected: `422` on both, which buys the new route's neighbour a second validation shape.
+**Decided:** the `400` its role and job title already answer, not a second status per field.
 
 ### States
 

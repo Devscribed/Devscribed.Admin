@@ -9,9 +9,9 @@ here by id.
 |---|---|---|---|
 | `GET /api/organizations/{orgId}/time-off/calendar` | `SessionGuard`, `OrgScopeGuard`; `can(normalizeRole(role), 'view-time-off-calendar')` checked in the service | `200` | `404` (no capability, REQ-01-002; wrong organization, REQ-01-039) · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeInverted` · `422` `TIME_OFF_CALENDAR_MESSAGES.rangeTooWide` · `422` `TIME_OFF_CALENDAR_MESSAGES.teamsRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.peopleRequired` · `422` `TIME_OFF_CALENDAR_MESSAGES.scopeInvalid` · `422` `TIME_OFF_CALENDAR_MESSAGES.tooManyMembers` |
 | `GET /api/organizations/{orgId}/settings/country` | `SessionGuard`, `OrgScopeGuard`; `ViewHolidays` checked in the service | `200` | `404` (no `ViewHolidays`, REQ-01-046; wrong organization) |
-| `PUT /api/organizations/{orgId}/settings/country` | `SessionGuard`, `OrgScopeGuard`; `ManageHolidays` checked in the service | `200` | `404` (no `ManageHolidays`, REQ-01-035; wrong organization) · `422` `HOLIDAY_MESSAGES.countryCodeInvalid` (REQ-01-036) |
+| `PUT /api/organizations/{orgId}/settings/country` | `SessionGuard`, `OrgScopeGuard`; `ManageHolidays` checked in the service | `200` | `404` (no `ManageHolidays`, REQ-01-035; wrong organization) · `422` `PROFILE_MESSAGES.country.invalid` (REQ-01-036) |
 | `GET /api/organizations/{orgId}/members/{memberId}` | `SessionGuard`, `OrgScopeGuard`; no capability gates this read — it answers every role (REQ-01-045) | `200` | `403` `MEMBER_MESSAGES.viewForbidden` (the caller is no longer an active member; shipped, unchanged) · `404` (wrong organization; member not found) |
-| `PUT /api/organizations/{orgId}/members/{memberId}` | `SessionGuard`, `OrgScopeGuard`; `edit-detail` checked in the service | `200` | `403` `MEMBER_MESSAGES.editForbidden` (REQ-01-044) · `400` `HOLIDAY_MESSAGES.countryCodeInvalid` (REQ-01-051) · `404` (wrong organization) |
+| `PUT /api/organizations/{orgId}/members/{memberId}` | `SessionGuard`, `OrgScopeGuard`; `edit-detail` checked in the service | `200` | `403` `MEMBER_MESSAGES.editForbidden` (REQ-01-044) · `400` `PROFILE_MESSAGES.country.invalid` (REQ-01-051) · `404` (wrong organization) |
 | `GET /api/organizations/{orgId}/holidays` | `SessionGuard`, `OrgScopeGuard`; `scope=mine` answers every active member, and any other scope needs `ViewHolidays`, checked in the service | `200` | `404` (no `ViewHolidays` on a scope other than `mine`; wrong organization) |
 
 The last row is the shipped holiday list, unchanged in path, guards, body and status. It is here
@@ -174,14 +174,14 @@ The shipped body gains `countryCode` beside the `role` and `jobTitle` it already
 | `TIME_OFF_CALENDAR_MESSAGES.emptyStateBody` | — | No active member matches this scope. | yes |
 | `TIME_OFF_CALENDAR_MESSAGES.orgCountryHint` | — | Members without a country of their own get this country's holidays. | yes |
 | `TIME_OFF_CALENDAR_MESSAGES.memberCountryDefaultOption` | — | Use the organization's country | yes |
-| `HOLIDAY_MESSAGES.countryCodeInvalid` | `PUT /api/organizations/{orgId}/settings/country`, `PUT /api/organizations/{orgId}/members/{memberId}` | Country code must be 2 uppercase letters. | no |
+| `PROFILE_MESSAGES.country.invalid` | `PUT /api/organizations/{orgId}/settings/country`, `PUT /api/organizations/{orgId}/members/{memberId}` | Enter a valid country | no |
 | `MEMBER_MESSAGES.editForbidden` | `PUT /api/organizations/{orgId}/members/{memberId}` | You do not have permission to edit members | no |
 | `MEMBER_MESSAGES.viewForbidden` | `GET /api/organizations/{orgId}/members/{memberId}` | You do not have permission to view this member | no |
 
-`HOLIDAY_MESSAGES.countryCodeInvalid` already ships
-(`packages/validation/src/holiday-messages.ts`) and is reused unchanged; the country field on this
-page is the same value the holiday rows carry, so a second wording for one rule would be the drift
-this table exists to prevent.
+`PROFILE_MESSAGES.country.invalid` already ships (`packages/validation/src/autofill.ts`) beside
+the validator rule 9 uses, and is reused unchanged rather than given a wording of its own. It is
+the message these two writes need and `HOLIDAY_MESSAGES.countryCodeInvalid` is not: "Country code
+must be 2 uppercase letters." is true of `XX`, which rule 9 refuses.
 
 ## Data Model
 
@@ -235,7 +235,7 @@ it, and nothing about holidays consults it again.
 | 6 | `projectIds` | Non-empty when `scope=teams` | `TIME_OFF_CALENDAR_MESSAGES.teamsRequired` | no |
 | 7 | `memberIds` | Non-empty when `scope=people` | `TIME_OFF_CALENDAR_MESSAGES.peopleRequired` | no |
 | 8 | resolved rows | ≤ 100 | `TIME_OFF_CALENDAR_MESSAGES.tooManyMembers` | yes |
-| 9 | `countryCode` (either PUT body) | Empty, or exactly 2 uppercase letters | `HOLIDAY_MESSAGES.countryCodeInvalid` | no |
+| 9 | `countryCode` (either PUT body) | Empty, or exactly 2 uppercase letters naming an assigned country | `PROFILE_MESSAGES.country.invalid` | no |
 
 **Decided:** the rules are evaluated in the order this table numbers them and the **first**
 failure is the whole answer, so a request that is both inverted and scoped `everyone` is refused
@@ -248,10 +248,13 @@ from a control the screen draws. Rule 9 carries one message and two statuses: `4
 organization country write (REQ-01-036), `400` on the member write (REQ-01-051), which is the
 status that route already refuses an invalid role and an invalid job title with.
 
-**Decided:** rule 9 refuses `pl` rather than upcasing it, which is what the holiday rows' country
-validator already does and what keeps the stored value the one their uniqueness index compares.
-Normalizing on the write was rejected: it would give one value two behaviours, on the holiday
-form and on the country field beside it. The read is deliberately more forgiving than the write —
+**Decided:** rule 9 is two tests, not one — the uppercase shape, and membership of the assigned
+alpha-2 list (`validateCountryCode`, `packages/validation/src/autofill.ts`). It therefore
+refuses `pl` and `XX` alike, and its message says so: `PROFILE_MESSAGES.country.invalid`, which is
+true of both, where `HOLIDAY_MESSAGES.countryCodeInvalid` ("must be 2 uppercase letters") is false
+of `XX`. `pl` is refused rather than upcased because normalizing on the write would give one value
+two behaviours, on the holiday form and on the country field beside it. The read is deliberately
+more forgiving than the write —
 REQ-01-026 upcases whatever it finds in either column — because a lowercase value can still reach
 a column through a migration or a direct write, and a holiday silently not applying is worse than
 a value quietly accepted.
@@ -368,7 +371,7 @@ is a product call, and until they do the calendar is the only screen that may de
 |---|---|---|---|
 | No absence-band colour | The approved band's fill and border, the pending band's hatch and dashed border, and the band label — every one of them on the calendar grid, plus the legend's two swatches | `--surface-timeoff-band`, `--border-timeoff-band` and `--text-timeoff-band`, declared once on the calendar page's own root and read through `var(…)` wherever a band, its border, its hatch or its label is drawn, so no colour on this screen is written as a literal. Violet, which none of `--status-success`, `--status-warning`, `--status-error`, `--status-info` or `--color-holiday` uses, so a band reads as a category and not as a claim about how somebody is doing | The three names entering `@ds` as time-off category tokens, and the page's local block deleted in the same change. The policy catalogue of a later spec wants a colour per absence type, and this is the first of that set |
 | No sticky-column width token | The grid's member column, in the header rows and every member row | `--name-col: 264px`, declared beside the three above and referenced by every row's `grid-template-columns` | A layout token in `@ds` for a pinned first column, which the reports tables would take as well |
-| No step below `--space-1` (4px) | The 3px margin on each side of a band, which is what separates two adjacent bands (Edge case 16), and the 3px stripe of the pending hatch in the legend swatch | Both stay as `3px`, each carrying `@literal` and the reason the design-system rule asks for: 4px between two adjacent bands eats the day column they must stay inside | A sub-`--space-1` step in `@ds`, or a band-gap token beside the three colours above |
+| No step below `--space-1` (4px) | The 3px margin on each side of a band, which is what separates two adjacent bands (Edge case 16), the 3px stripe of the pending hatch in the legend swatch, and the 2px inset that marks today's column | All three stay as literals, each carrying `@literal` and the reason the design-system rule asks for: 4px between two adjacent bands eats the day column they must stay inside, and a 4px today marker reads as a border rather than a marker | A sub-`--space-1` step in `@ds`, or a band-gap token beside the three colours above |
 
 **Decided:** the band's height is `--space-10`, the legend swatch's corner is `--radius-s`, and
 the two segmented controls are `ToggleButton` with the track, the pill and the shadow that
@@ -389,7 +392,7 @@ keyboard beside its roving tab stop.
 | 7 | `scope=people` names a member removed after the picker was opened | The row is dropped (REQ-01-011); the remaining rows draw and no error is raised. |
 | 8 | `scope=people` names 100 members and the caller adds one more | `422` `TIME_OFF_CALENDAR_MESSAGES.tooManyMembers`; the previous grid stays on screen. |
 | 9 | Two holidays fall on one date, one global and one `PL` | Both appear in `holidays[]`; a `PL` member carries both ids, everybody else carries the global one. `appliesToAllInView` is answered per holiday, not per date, so the column shades whole on the global one alone (TC-01-INT-13). |
-| 10 | A member's stored `Membership.countryCode` is `"XX"` and the organization's is `"PL"` | `"XX"` does not normalize, so the chain skips it and resolves `PL` (REQ-01-027). A value that shape cannot come from the picker; it can come from a migration or a direct write. |
+| 10 | A member's stored `Membership.countryCode` is `"XX"` and the organization's is `"PL"` | `"XX"` names no assigned country, so the chain skips it and resolves `PL` (REQ-01-027). It cannot come from the picker and it cannot come from the write either — rule 9 refuses it (REQ-01-051) — so it is there from a migration or a direct database write, which is the case this row exists for. |
 | 11 | A member's stored country is `"pl"` lowercase | The write refuses it (Validation Rule 9), so it can only be there from a direct write; the read upcases it and it matches the `PL` holiday (REQ-01-028 is case-insensitive). |
 | 12 | The organization country is set while a calendar is open | The next fetch reflects it; nothing is pushed. The rule is evaluated on read, so no job has to have run for the answer to be right. |
 | 13 | A holiday is deleted between two fetches | The second fetch omits it. Nothing on this screen is cached across a range change. No case of its own: the second fetch is an ordinary read, and the deletion is `organization/03`'s own rule. |

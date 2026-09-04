@@ -316,17 +316,18 @@ are kept.
 - **Covers:** REQ-01-042, REQ-01-043, REQ-01-051
 - **Asserts:** `PUT /api/organizations/{orgId}/members/{memberId}` → 200;
   `PUT /api/organizations/{orgId}/members/{memberId}` → 400
-  HOLIDAY_MESSAGES.countryCodeInvalid;
+  PROFILE_MESSAGES.country.invalid;
   `GET /api/organizations/{orgId}/time-off/calendar` → 200
 - **Steps:** With a `US` holiday and a `PL` holiday in the window and the organization country set
   to `PL`, state `US` on a member as a `manager`, read the calendar, then submit an empty country
-  for the same member and read again. Finally submit `pl` for that member.
+  for the same member and read again. Finally submit `pl` for that member, then `XX`.
 - **Expected Result:** After the first write the member carries the `US` holiday and not the `PL`
   one; after the second their `Membership.countryCode` is `null` and they carry the `PL` one, by
   the organization fallback. The member's role and job title are unchanged by every write. The
-  third write is refused with `400` carrying `countryCodeInvalid` — the status this route already
-  refuses an invalid role and an invalid job title with, not the `422` the organization country
-  write answers — and the stored country stays `null`.
+  last two writes are both refused with `400` carrying `country.invalid` — the status this route
+  already refuses an invalid role and an invalid job title with, not the `422` the organization
+  country write answers — and the stored country stays `null`. `XX` is the one that matters: it is
+  the right shape, and storing it would leave a country the read discards.
 
 ### TC-01-INT-26
 
@@ -440,11 +441,14 @@ are kept.
 - **Level:** Integration
 - **Covers:** REQ-01-036
 - **Asserts:** `PUT /api/organizations/{orgId}/settings/country` → 422
-  HOLIDAY_MESSAGES.countryCodeInvalid
-- **Steps:** Submit `POL`, then `1`, then `pl`, then `PL`.
-- **Expected Result:** `422` carrying `countryCodeInvalid` for the first three — lowercase is
-  refused rather than upcased, so the stored value is the one the holiday rows compare. `200` for
-  `PL`, stored as `PL`.
+  PROFILE_MESSAGES.country.invalid
+- **Steps:** Submit `POL`, then `1`, then `pl`, then `XX`, then `PL`. Read the country back after
+  the `XX` attempt.
+- **Expected Result:** `422` carrying `country.invalid` for the first four. Lowercase is refused
+  rather than upcased, so the stored value is the one the holiday rows compare. **`XX` is refused
+  though it is two uppercase letters** — it names no assigned country, and a stored `XX` would be
+  discarded by REQ-01-026 on every read while the page showed it as set. The read-back after it
+  still answers the value from before the attempt. `200` for `PL`, stored as `PL`.
 
 ### TC-01-INT-22
 
