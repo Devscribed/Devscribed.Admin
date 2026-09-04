@@ -6,7 +6,7 @@
   "branch": "fix/needed-by-upper-bound",
   "baseRef": "a04744ac95195238defa0751e8d577c1534d0ae4",
   "headAtInit": "a04744ac95195238defa0751e8d577c1534d0ae4",
-  "status": "static_gate",
+  "status": "implement",
   "track": "patch",
   "shapes": {
     "implement": "single",
@@ -16,7 +16,7 @@
   },
   "unrefined": null,
   "createdAt": "2026-09-04T11:13:42.712Z",
-  "updatedAt": "2026-09-04T11:16:28.400Z",
+  "updatedAt": "2026-09-04T11:16:31.747Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -29,15 +29,18 @@
       "lastVerdict": "skipped"
     },
     "implement": {
-      "status": "passed",
+      "status": "pending",
       "attempts": 1,
       "startedAt": "2026-09-04T11:13:43.016Z",
       "endedAt": "2026-09-04T11:16:28.350Z",
       "lastVerdict": "pass"
     },
     "static_gate": {
-      "status": "pending",
-      "attempts": 0
+      "status": "blocked",
+      "attempts": 1,
+      "startedAt": "2026-09-04T11:16:28.566Z",
+      "endedAt": "2026-09-04T11:16:31.696Z",
+      "lastVerdict": "blocked"
     },
     "review": {
       "status": "pending",
@@ -49,11 +52,13 @@
     }
   },
   "budget": {
-    "codeAttempts": 0,
+    "codeAttempts": 1,
     "handoffReplans": 0,
     "infra": 0
   },
-  "findingHistory": {},
+  "findingHistory": {
+    "pipeline/work-uncommitted@apps/api/test/requests.spec.ts#-": 1
+  },
   "carriedFindings": [],
   "carriedFrom": null,
   "contested": [],
