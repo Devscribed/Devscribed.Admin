@@ -730,8 +730,8 @@ export class EnvelopesService {
 
     const signerUpdates: { id: string; name: string; email: string; order: number }[] = [];
     if (dto?.signers !== undefined) {
-      const list = Array.isArray(dto.signers) ? dto.signers : [];
-      list.forEach((raw, index) => {
+      const submittedSigners = Array.isArray(dto.signers) ? dto.signers : [];
+      submittedSigners.forEach((raw, index) => {
         const signer = envelope.signers.find((s) => s.id === raw?.id);
         if (!signer) {
           errors[`signers[${index}].id`] = 'Unknown signer';
