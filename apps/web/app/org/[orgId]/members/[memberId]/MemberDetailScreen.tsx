@@ -28,20 +28,23 @@ import {
   type Role,
 } from '@devscribed/validation';
 import { optionFor, valueOf } from '@/select';
-import { HOLIDAY_COUNTRY_OPTIONS } from '../../settings/holidays/country-options';
+import { STATED_COUNTRY_OPTIONS } from '@/stated-country-options';
 import { useSession } from '@/layout/session-context';
 import { ContractDetails } from '@/members/ContractDetails';
 import { RoleSelect } from './RoleSelect';
 import { VacationPanel } from './VacationPanel';
 
 /**
- * The Country picker's list. The holiday form's own option list, with its "All countries"
- * head swapped for this field's meaning: an empty value here is not "everywhere", it is
- * "use the organization's country" (REQ-01-043).
+ * The Country picker's list: the default option, then the same `COUNTRY_OPTIONS` the
+ * organization picker draws — the 249 assigned codes Validation Rule 9 accepts, so the list
+ * offered and the list the save accepts are one list (§Screens).
+ *
+ * The empty value is not "everywhere", as it is on the holiday form; it is "use the
+ * organization's country" (REQ-01-043), which is what `null` stores.
  */
 const MEMBER_COUNTRY_OPTIONS = [
   { value: '', label: TIME_OFF_CALENDAR_MESSAGES.memberCountryDefaultOption },
-  ...HOLIDAY_COUNTRY_OPTIONS.filter((option) => option.value.length > 0),
+  ...STATED_COUNTRY_OPTIONS,
 ];
 
 interface MemberDetail {

@@ -1118,8 +1118,11 @@
   background: var(--surface-sunken);
 }
 
+/* A fraction of the track it sits in, never a new number of pixels: the name placeholder
+   reads as a name rather than as a filled column, and the spec's DS gaps table closes the
+   set of literals this screen may carry at three. */
 .time-off-calendar-skeleton .time-off-calendar-who .time-off-calendar-shimmer {
-  max-width: 160px;
+  max-width: 60%;
 }
 
 /* @literal 3px — the band's side margin, which is what separates two adjacent bands

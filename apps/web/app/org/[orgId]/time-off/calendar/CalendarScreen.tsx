@@ -8,8 +8,8 @@ import {
   TIME_OFF_CALENDAR_UNASSIGNED,
   stepTimeOffCalendarAnchor,
   timeOffBandAccessibleName,
-  timeOffCalendarToday,
   timeOffCalendarWindowRange,
+  todayInTimeZone,
   type TimeOffCalendarScope,
   type TimeOffCalendarWeekStart,
   type TimeOffCalendarWindow,
@@ -66,8 +66,13 @@ const WINDOW_SEGMENTS = [
  * a reader who cannot see it is told the grid is loading rather than empty. The filter bar
  * above stays interactive, which is why this replaces the grid and not the page.
  */
-function GridSkeleton({ columns }: { columns: string }) {
+function GridSkeleton() {
   const days = Array.from({ length: 14 });
+  // Its OWN template, not the data-derived one: this draws only while `loading && !data`,
+  // when `days[]` is empty and that template declares a single day column — fourteen cells
+  // would then create thirteen implicit auto tracks and a placeholder sized `width: 100%`
+  // inside one resolves against no definite width.
+  const columns = `var(--name-col) repeat(${days.length}, minmax(0, 1fr))`;
   return (
     <div className="time-off-calendar-scroll" role="status" aria-label="Loading the calendar">
       <div className="time-off-calendar-grid time-off-calendar-skeleton" aria-hidden>
@@ -131,7 +136,7 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
    * anybody whose browser is not in their own zone, and the `Today` control then landed on
    * a window that does not hold their today with no marker anywhere to say so.
    */
-  const today = (): string => timeOffCalendarToday(session.account.timezone);
+  const today = (): string => todayInTimeZone(session.account.timezone);
 
   const [scope, setScope] = useState<TimeOffCalendarScope>('all');
   const [windowPreset, setWindowPreset] = useState<TimeOffCalendarWindow>('month');
@@ -227,11 +232,13 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
         } else {
           const body = await response.json().catch(() => null);
           const fields = body?.fields as Record<string, string> | undefined;
-          // The endpoint answers with the first failure and nothing else, so the banner
-          // draws the one message that arrived. A refusal that carries no message at all
-          // (a 404 after a capability was revoked mid-session) falls back to the generic
-          // one below rather than to an empty banner.
-          setError(fields ? Object.values(fields)[0] : (body?.message ?? HOLIDAY_MESSAGES.toastServerError));
+          // TWO branches and no third. A 422 carrying `fields` draws the first of them,
+          // which is one of the seven messages this endpoint can answer with; EVERY other
+          // outcome draws the generic one. The response's own `message` is never chained
+          // between them: on a 404 or a 500 that is Nest's own words — "Not Found",
+          // "Internal server error" — which no export of packages/validation holds and no
+          // row of the Error Messages table carries.
+          setError(fields ? Object.values(fields)[0] : HOLIDAY_MESSAGES.toastServerError);
         }
       } catch (err) {
         if ((err as Error)?.name === 'AbortError') return;
@@ -385,7 +392,7 @@ export function CalendarScreen({ orgId }: { orgId: string }) {
       )}
 
       {loading && !data ? (
-        <GridSkeleton columns={gridColumns} />
+        <GridSkeleton />
       ) : data && !hasRows ? (
         <div className="time-off-calendar-empty" data-testid="calendar-empty-state">
           <div className="time-off-calendar-empty-title">

@@ -22,6 +22,7 @@ import { useSession } from '@/layout/session-context';
 import { optionFor, valueOf } from '@/select';
 import { useToast } from '@/toast';
 import { HOLIDAY_MESSAGES, TIME_OFF_CALENDAR_MESSAGES, can, type Role } from '@devscribed/validation';
+import { STATED_COUNTRY_OPTIONS } from '@/stated-country-options';
 import { HolidayModal, type HolidayModalMode } from './HolidayModal';
 import { ALL_COUNTRIES, HOLIDAY_COUNTRY_OPTIONS, holidayCountryLabel } from './country-options';
 import type { HolidayRow, HolidaysResponse } from './types';
@@ -172,11 +173,14 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
         const body = (await response.json()) as { countryCode: string | null };
         setOrgCountry(body.countryCode ?? ALL_COUNTRIES);
       } else {
+        // The same closed set the calendar's banner draws from: the 422's own field
+        // message when it carries one, else the generic. Never `body.message`, which on a
+        // 404 or a 500 is Nest's own words and is in no table of this spec.
         const body = await response.json().catch(() => null);
         const fields = body?.fields as Record<string, string> | undefined;
         showToast(
           'toast-server-error',
-          fields?.countryCode ?? body?.message ?? HOLIDAY_MESSAGES.toastServerError,
+          fields?.countryCode ?? HOLIDAY_MESSAGES.toastServerError,
           'error',
         );
       }
@@ -361,11 +365,15 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
             column that measured differently would read as two unrelated controls. No token
             names a control width — `MultiFilter`'s own 200 is the same literal. */}
         <div style={{ minWidth: 220 }}>
+          {/* The list the WRITE accepts, and not the holiday form's: that one is built from
+              the phone list and offers AC, TA and XK, which rule 9 refuses. A stored `null`
+              matches no option and paints the Select's own placeholder — the spec gives this
+              picker no option meaning "no country", and no export holds a label for one. */}
           <Select
             label="Organization country"
             hint={TIME_OFF_CALENDAR_MESSAGES.orgCountryHint}
-            value={optionFor(HOLIDAY_COUNTRY_OPTIONS, orgCountry)}
-            options={HOLIDAY_COUNTRY_OPTIONS}
+            value={optionFor(STATED_COUNTRY_OPTIONS, orgCountry)}
+            options={STATED_COUNTRY_OPTIONS}
             onChange={(option) => setOrgCountry(valueOf(option))}
             data-testid="org-country-select"
           />

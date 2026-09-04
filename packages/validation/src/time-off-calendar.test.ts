@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { COUNTRY_OPTIONS } from './autofill';
 import {
   TIME_OFF_CALENDAR_MESSAGES,
-  resolveTimeOffCalendarTimezone,
   stepTimeOffCalendarAnchor,
-  timeOffCalendarToday,
   timeOffCalendarWindowRange,
   validateStatedCountryCode,
   validateTimeOffCalendarRange,
@@ -172,22 +171,23 @@ describe('validateStatedCountryCode — Validation Rule 9', () => {
   });
 });
 
-/** REQ-01-018 — the caller's today, and the fallback for a zone nobody can read. */
-describe('timeOffCalendarToday', () => {
-  const instant = new Date('2026-09-30T23:00:00.000Z');
-
-  it('answers the calendar date of the ZONE, not of the machine', () => {
-    // 25 hours apart: at this instant they are two different days, which is exactly the
-    // disagreement a screen reading the browser's clock introduced.
-    expect(timeOffCalendarToday('Pacific/Kiritimati', instant)).toBe('2026-10-01');
-    expect(timeOffCalendarToday('Pacific/Niue', instant)).toBe('2026-09-30');
-    expect(timeOffCalendarToday('UTC', instant)).toBe('2026-09-30');
+/**
+ * §Screens — the list the two pickers offer IS the list rule 9 accepts. Asserted here
+ * rather than on a screen because it is a property of the two exports, and it is the whole
+ * of what stops the pickers drifting from the write again.
+ */
+describe('the option list the pickers draw is the list the write accepts', () => {
+  it('accepts every option COUNTRY_OPTIONS offers', () => {
+    const refused = COUNTRY_OPTIONS.filter(
+      (option) => !validateStatedCountryCode(option.code).valid,
+    );
+    expect(refused).toEqual([]);
   });
 
-  it('falls back to UTC for a null, empty or unrecognized zone', () => {
-    for (const zone of [null, undefined, '', '   ', 'Mars/Olympus']) {
-      expect(resolveTimeOffCalendarTimezone(zone)).toBe('UTC');
-      expect(timeOffCalendarToday(zone, instant)).toBe('2026-09-30');
+  it('does not offer the three codes the phone-derived list carries and rule 9 refuses', () => {
+    for (const code of ['AC', 'TA', 'XK']) {
+      expect(COUNTRY_OPTIONS.some((option) => option.code === code)).toBe(false);
+      expect(validateStatedCountryCode(code).valid).toBe(false);
     }
   });
 });
