@@ -6,7 +6,7 @@
   "branch": "spec/time-off-vacation-calendar",
   "baseRef": "0d986a177419c5189be5109a4a27c7e8afb02546",
   "headAtInit": "0d986a177419c5189be5109a4a27c7e8afb02546",
-  "status": "static_gate",
+  "status": "review",
   "track": "spec",
   "shapes": {
     "pre_implement": "strict",
@@ -17,7 +17,7 @@
   },
   "unrefined": null,
   "createdAt": "2026-09-04T16:38:40.888Z",
-  "updatedAt": "2026-09-04T17:29:36.171Z",
+  "updatedAt": "2026-09-04T17:29:40.098Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -38,8 +38,11 @@
       "lastVerdict": "pass"
     },
     "static_gate": {
-      "status": "pending",
-      "attempts": 0
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-04T17:29:36.319Z",
+      "endedAt": "2026-09-04T17:29:40.049Z",
+      "lastVerdict": "pass"
     },
     "review": {
       "status": "pending",
