@@ -1339,6 +1339,89 @@ export async function updateAccountSettingsViaApi(
 }
 
 /**
+ * Seeds a holiday straight through the API — a precondition for every suite that draws a
+ * holiday marker. It lived privately inside `reports-time-off.spec.ts`; time off spec 01
+ * needs it in three files, so it is shared rather than copied a third time. Requires
+ * `request`'s cookie jar to be authenticated as an admin or manager.
+ */
+export async function createHolidayViaApi(
+  request: APIRequestContext,
+  organizationId: string,
+  body: { name: string; date: string; paidHours?: number; countryCode?: string | null },
+): Promise<{ id: string; date: string; name: string }> {
+  const response = await request.post(`${API}/api/organizations/${organizationId}/holidays`, {
+    data: { paidHours: 8, countryCode: null, ...body },
+  });
+  if (response.status() !== 201) {
+    throw new Error(
+      `Precondition failed: could not seed holiday ${body.name} ` +
+        `(${response.status()} ${await response.text()})`,
+    );
+  }
+  return (await response.json()).holiday;
+}
+
+/**
+ * States a member's holiday country on their MEMBERSHIP — time off spec 01 REQ-01-042,
+ * and the first link of the chain REQ-01-026 resolves. It rides the member update, which
+ * validates the whole body, so the member's current role and job title are read first and
+ * only the country is swapped. Requires an admin/manager cookie jar.
+ */
+export async function setMemberCountryViaApi(
+  request: APIRequestContext,
+  organizationId: string,
+  memberId: string,
+  countryCode: string | null,
+): Promise<void> {
+  const current = await request.get(
+    `${API}/api/organizations/${organizationId}/members/${memberId}`,
+  );
+  if (!current.ok()) {
+    throw new Error(
+      `Precondition failed: could not read member ${memberId} (${current.status()})`,
+    );
+  }
+  const detail = await current.json();
+  const response = await request.put(
+    `${API}/api/organizations/${organizationId}/members/${memberId}`,
+    {
+      data: {
+        role: detail.role,
+        jobTitle: detail.jobTitle ?? '',
+        countryCode: countryCode ?? '',
+      },
+    },
+  );
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not set country for member ${memberId} ` +
+        `(${response.status()} ${await response.text()})`,
+    );
+  }
+}
+
+/**
+ * States the organization's holiday country — the chain's second link (REQ-01-033), which
+ * covers every member nobody has stated one for. Requires an admin/manager cookie jar.
+ */
+export async function setOrganizationCountryViaApi(
+  request: APIRequestContext,
+  organizationId: string,
+  countryCode: string | null,
+): Promise<void> {
+  const response = await request.put(
+    `${API}/api/organizations/${organizationId}/settings/country`,
+    { data: { countryCode } },
+  );
+  if (!response.ok()) {
+    throw new Error(
+      `Precondition failed: could not set the organization country ` +
+        `(${response.status()} ${await response.text()})`,
+    );
+  }
+}
+
+/**
  * Soft-deletes a member straight through the API — a precondition (e.g. for
  * TC-02-E2E-04's "removed member tries to log in"), not the thing under test.
  * Requires `request`'s cookie jar to be authenticated as an admin/manager.

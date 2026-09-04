@@ -14,6 +14,7 @@ import {
   getAvailableRoles,
   getAvatarInitials,
   isValidRole,
+  validateHolidayCountryCode,
   validateJobTitle,
   visibleMembers,
   type MembershipStatus,
@@ -57,6 +58,14 @@ export interface MemberDetail {
   status: MembershipStatus;
   joinedAt: string;
   jobTitle: string | null;
+  /**
+   * Time off spec 01 REQ-01-045 — the country **stored** on this membership, `null`
+   * included; never the value they resolve to. `null` is what the picker's default option
+   * renders, and a screen handed the resolved value would show a country nobody stated
+   * for this member. Unconditional: this read is gated by no capability and the field is
+   * not conditional on one.
+   */
+  countryCode: string | null;
   timezone: string | null;
   avatarInitials: string;
   isLastAdmin: boolean;
@@ -78,6 +87,12 @@ export interface MemberDetail {
 export interface MemberDetailUpdateInput {
   role: string;
   jobTitle: string;
+  /**
+   * Time off spec 01 REQ-01-042 / REQ-01-043 — the member's holiday country. **Presence
+   * decides**: a body without the key changes nothing, so every caller that predates this
+   * field keeps working unchanged. `null` and `''` both store `null`.
+   */
+  countryCode?: unknown;
 }
 
 interface CallerMembership {
@@ -357,6 +372,7 @@ export class MembersService {
       status: targetStatus,
       joinedAt: target.joinedAt.toISOString(),
       jobTitle: target.jobTitle,
+      countryCode: target.countryCode,
       timezone: target.account.timezone,
       avatarInitials: getAvatarInitials(target.account.firstName, target.account.lastName),
       isLastAdmin,
@@ -426,6 +442,22 @@ export class MembersService {
         throw new BadRequestException({ errors: { jobTitle: jobTitleResult.error } });
       }
 
+      // Time off spec 01 REQ-01-042 / REQ-01-043 / REQ-01-051. The key's presence — not
+      // its value — decides whether the column is touched, because `null` is a meaningful
+      // submission ("use the organization's country") and an absent key is not a
+      // submission at all. `400`, the status this route already refuses an invalid role
+      // and an invalid job title with, in the `{ errors }` shape it already uses for the
+      // job title; not the `422` the organization country write answers.
+      const wantsCountry = input !== null && typeof input === 'object' && 'countryCode' in input;
+      let countryCode: string | null = null;
+      if (wantsCountry) {
+        const result = validateHolidayCountryCode(input.countryCode);
+        if (!result.valid) {
+          throw new BadRequestException({ errors: { countryCode: result.error } });
+        }
+        countryCode = result.value;
+      }
+
       const currentRole = target.role as Role;
       if (newRole !== currentRole && !canChangeRole(caller.role, currentRole, newRole)) {
         throw new ForbiddenException({
@@ -456,7 +488,14 @@ export class MembersService {
 
       await tx.membership.update({
         where: { id: target.id },
-        data: { role: newRole, jobTitle: jobTitleResult.value.length > 0 ? jobTitleResult.value : null },
+        data: {
+          role: newRole,
+          jobTitle: jobTitleResult.value.length > 0 ? jobTitleResult.value : null,
+          // Written by the same statement as the role and the job title, inside the
+          // transaction and the organization-row lock this route already holds — no lock
+          // of its own (REQ-01-042).
+          ...(wantsCountry ? { countryCode } : {}),
+        },
       });
 
       return { success: true };

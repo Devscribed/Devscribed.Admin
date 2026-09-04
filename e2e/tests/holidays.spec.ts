@@ -3,10 +3,13 @@ import { HOLIDAY_MESSAGES } from '@devscribed/validation';
 import {
   API,
   VALID,
+  createHolidayViaApi,
+  findMember,
   inviteAndAcceptViaApi,
   login,
   openNavSection,
   seedReserveCredit,
+  setMemberCountryViaApi,
   setMembershipRole,
   signupOrg,
   uniqueEmail,
@@ -36,54 +39,6 @@ async function addMember(
   await inviteAndAcceptViaApi(request, email, role, { firstName, lastName: 'Tester' });
   await login(request, adminEmail);
   return email;
-}
-
-/** Seeds a holiday through the API — a precondition, not the thing under test. */
-async function createHolidayViaApi(
-  request: APIRequestContext,
-  orgId: string,
-  body: { date: string; name: string; paidHours?: number; countryCode?: string | null },
-): Promise<{ id: string; date: string; name: string }> {
-  const response = await request.post(`${API}/api/organizations/${orgId}/holidays`, {
-    data: { paidHours: 8, countryCode: null, ...body },
-  });
-  if (response.status() !== 201) {
-    throw new Error(
-      `Precondition failed: could not create holiday "${body.name}" ` +
-        `(${response.status()} ${await response.text()})`,
-    );
-  }
-  return (await response.json()).holiday;
-}
-
-/**
- * Sets the signed-in account's country (spec requirement 14's source). `PUT
- * /api/account/settings` replaces the record, so the current payload is read first
- * and only `phoneCountryCode` is swapped.
- */
-async function setOwnCountryViaApi(request: APIRequestContext, countryCode: string) {
-  const current = await request.get(`${API}/api/account/settings`);
-  if (!current.ok()) {
-    throw new Error(`Precondition failed: could not read account settings (${current.status()})`);
-  }
-  const settings = await current.json();
-  const response = await request.put(`${API}/api/account/settings`, {
-    data: {
-      firstName: settings.firstName,
-      lastName: settings.lastName,
-      phoneCountryCode: countryCode,
-      phoneNumber: settings.phoneNumber ?? '',
-      // An invited member's timezone is often the empty string rather than null, and
-      // the settings validator requires one — so this needs a truthiness check, not `??`.
-      timezone: settings.timezone || 'Europe/Berlin',
-      firstDayOfWeek: settings.firstDayOfWeek || 'Monday',
-    },
-  });
-  if (!response.ok()) {
-    throw new Error(
-      `Precondition failed: could not set country (${response.status()} ${await response.text()})`,
-    );
-  }
 }
 
 /**
@@ -305,8 +260,11 @@ test.describe('organization/03 — Holidays', () => {
     });
 
     const memberEmail = await addMember(request, adminEmail, 'user', 'Alex');
-    await login(request, memberEmail);
-    await setOwnCountryViaApi(request, 'BY');
+    // Time off spec 01 REQ-01-026 — the holiday country is stated on the MEMBERSHIP now,
+    // by an admin, and a phone country reaches no holiday at all.
+    await login(request, adminEmail);
+    const member = await findMember(request, org.organizationId, memberEmail);
+    await setMemberCountryViaApi(request, org.organizationId, member.id, 'BY');
 
     await signInUi(page, memberEmail);
 

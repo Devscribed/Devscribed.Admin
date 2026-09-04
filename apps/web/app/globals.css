@@ -852,3 +852,294 @@
     transform: scale(0.8);
   }
 }
+
+/*
+ * The vacation calendar (time off spec 01). Here rather than inline because of what
+ * inline styles cannot express — the pinned member column, the scroll container below the
+ * desktop breakpoint, and the hatch that draws a pending band — and because this is where
+ * the spec's three DS gaps are declared, once, and read through `var()` everywhere below.
+ *
+ * `--surface-timeoff-band`, `--border-timeoff-band` and `--text-timeoff-band`: the design
+ * system carries no absence-band colour. Violet, which none of the status colours and none
+ * of `--color-holiday` uses, so a band reads as a category and not as a claim about how
+ * somebody is doing. `--name-col`: no token carries a pinned first column's width. All
+ * four close by entering `@devscribed/ds` and this block losing them in the same change.
+ */
+.time-off-calendar {
+  --surface-timeoff-band: oklch(0.9 0.06 285);
+  --border-timeoff-band: oklch(0.55 0.14 285);
+  --text-timeoff-band: oklch(0.38 0.12 285);
+  --name-col: 264px;
+}
+
+.time-off-calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.time-off-calendar-range {
+  font-weight: var(--font-weight-medium);
+  margin-left: var(--space-3);
+  color: var(--text-primary);
+}
+
+.time-off-calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  margin-bottom: var(--space-5);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.time-off-calendar-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.time-off-calendar-swatch {
+  width: var(--space-8);
+  height: var(--space-4);
+  border-radius: var(--radius-s);
+  display: inline-block;
+}
+
+.time-off-calendar-swatch-approved {
+  background: var(--surface-timeoff-band);
+  border: 1px solid var(--border-timeoff-band);
+}
+
+/* @literal 3px — the hatch's stripe. The scale's smallest step is --space-1 at 4px, and a
+   4px stripe inside a swatch this size draws two bars rather than a hatch. */
+.time-off-calendar-swatch-pending {
+  border: 1px dashed var(--border-timeoff-band);
+  background: repeating-linear-gradient(
+    135deg,
+    var(--surface-timeoff-band) 0 3px,
+    transparent 3px 6px
+  );
+}
+
+.time-off-calendar-swatch-holiday {
+  background: var(--surface-holiday);
+  border: 1px solid var(--border-holiday);
+}
+
+.time-off-calendar-swatch-weekend {
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-default);
+}
+
+.time-off-calendar-banner {
+  margin-bottom: var(--space-5);
+}
+
+.time-off-calendar-empty {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-l);
+  background: var(--surface-page);
+  padding: var(--space-10) var(--space-8);
+  text-align: center;
+  color: var(--text-tertiary);
+}
+
+.time-off-calendar-empty-title {
+  font-size: var(--headline-6-size);
+  font-weight: var(--headline-6-weight);
+  color: var(--text-primary);
+  margin-bottom: var(--space-3);
+}
+
+/* The grid is wider than the page on a narrow viewport, and it scrolls inside its own
+   container rather than taking the page body sideways with it. */
+.time-off-calendar-scroll {
+  overflow-x: auto;
+}
+
+.time-off-calendar-grid {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-l);
+  background: var(--surface-page);
+  overflow: hidden;
+}
+
+@media (max-width: 1199px) {
+  /* One step below --layout-breakpoint-desktop (1200px): below it the day columns stop
+     dividing the page and take their own minimum, and the container above scrolls. */
+  .time-off-calendar-grid {
+    min-width: max-content;
+  }
+}
+
+.time-off-calendar-row {
+  display: grid;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border-subtle);
+  position: relative;
+}
+
+.time-off-calendar-row:last-child {
+  border-bottom: 0;
+}
+
+.time-off-calendar-head {
+  border-bottom: 1px solid var(--border-default);
+}
+
+/* The names survive a horizontal scroll — the whole reason the grid scrolls rather than
+   the page. `position: sticky` on a cell is the one thing an inline style cannot do here,
+   because it needs the `left: 0` and the stacking order together. */
+.time-off-calendar-who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-6);
+  border-right: 1px solid var(--border-default);
+  min-width: 0;
+  background: var(--surface-page);
+  position: sticky;
+  left: 0;
+  z-index: 3;
+}
+
+.time-off-calendar-corner {
+  align-items: flex-end;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.time-off-calendar-who-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.time-off-calendar-who-text b {
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.time-off-calendar-who-text i {
+  font-style: normal;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.time-off-calendar-week {
+  grid-row: 1;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  padding: var(--space-3) 0 var(--space-1);
+  text-align: center;
+  border-left: 1px solid var(--border-subtle);
+  font-weight: var(--font-weight-medium);
+}
+
+.time-off-calendar-day {
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2) 0 var(--space-3);
+  border-left: 1px solid var(--border-subtle);
+  position: relative;
+}
+
+.time-off-calendar-day em {
+  font-style: normal;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.time-off-calendar-day b {
+  font-size: var(--font-size-s);
+  font-weight: var(--font-weight-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The holiday's name in the column header, on a whole-column holiday only. It is the only
+   text in a day header that is not a date, so it takes the smallest step and wraps. */
+.time-off-calendar-day-holiday {
+  font-style: normal;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: var(--line-height-label);
+}
+
+.time-off-calendar-cell {
+  grid-row: 1;
+  height: var(--space-12);
+  border-left: 1px solid var(--border-subtle);
+}
+
+.time-off-calendar-day.is-weekend,
+.time-off-calendar-cell.is-weekend {
+  background: var(--surface-sunken);
+}
+
+.time-off-calendar-day.is-holiday,
+.time-off-calendar-cell.is-holiday {
+  background: var(--surface-holiday);
+}
+
+.time-off-calendar-day.is-today b {
+  color: var(--action-primary);
+  font-weight: var(--font-weight-bold);
+}
+
+.time-off-calendar-cell.is-today {
+  box-shadow: inset 2px 0 0 0 var(--action-primary);
+}
+
+/* @literal 3px — the band's side margin, which is what separates two adjacent bands
+   (Edge case 16). The scale's smallest step is --space-1 at 4px, and 4px each side eats
+   the day column the band has to stay inside. */
+.time-off-calendar-band {
+  grid-row: 1;
+  align-self: center;
+  height: var(--space-10);
+  margin: 0 3px;
+  border-radius: var(--radius-s);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  font-family: var(--font-family-base);
+  color: var(--text-timeoff-band);
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: pointer;
+  padding: 0;
+}
+
+.time-off-calendar-band.is-approved {
+  background: var(--surface-timeoff-band);
+  border: 1px solid var(--border-timeoff-band);
+}
+
+/* Hatched and dashed rather than a second fill: a pending band has to be told apart from
+   an approved one at a glance and without colour alone. */
+.time-off-calendar-band.is-pending {
+  border: 1px dashed var(--border-timeoff-band);
+  background-color: var(--surface-page);
+  background-image: repeating-linear-gradient(
+    135deg,
+    var(--surface-timeoff-band) 0 var(--space-1),
+    transparent var(--space-1) var(--space-4)
+  );
+}

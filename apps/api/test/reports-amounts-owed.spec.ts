@@ -84,6 +84,8 @@ describe('Reports · Amounts Owed (spec reports/01)', () => {
       firstName?: string;
       lastName?: string;
       phoneCountryCode?: string | null;
+      /** Time off spec 01 REQ-01-026 — the holiday country, now on the MEMBERSHIP. */
+      countryCode?: string | null;
       timezone?: string;
     },
   ): Promise<Signed> => {
@@ -107,6 +109,7 @@ describe('Reports · Amounts Owed (spec reports/01)', () => {
         organizationId,
         role: opts.role,
         status: 'active',
+        countryCode: opts.countryCode ?? null,
       },
     });
     const cookies = (await login(opts.email, password)).headers[
@@ -578,6 +581,7 @@ describe('Reports · Amounts Owed (spec reports/01)', () => {
       firstName: 'Anna',
       lastName: 'Ivanovna',
       phoneCountryCode: 'BY',
+      countryCode: 'BY',
     });
     await seedFinancials(admin, by.membershipId, { clientHourlyRate: 50 });
     await seedHoliday(admin, {
@@ -612,6 +616,7 @@ describe('Reports · Amounts Owed (spec reports/01)', () => {
       firstName: 'Uma',
       lastName: 'Stone',
       phoneCountryCode: 'US',
+      countryCode: 'US',
     });
     await seedFinancials(admin, us.membershipId, { clientHourlyRate: 50 });
     await seedHoliday(admin, {

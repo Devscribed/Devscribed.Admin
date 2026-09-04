@@ -648,7 +648,15 @@ export type MemberCapability =
   | 'view-my-time-off'
   | 'view-time-and-activity-billed'
   | 'view-time-and-activity-spent'
-  | 'export-reports';
+  | 'export-reports'
+  /**
+   * Time off spec 01 addition — the vacation calendar (REQ-01-001). Duplicated as
+   * `ViewTimeOffCalendar` in `Capability` (PascalCase, packages/validation/src/roles.ts):
+   * this spelling is what the endpoint's service gate and the page's gate read through
+   * `can(normalizeRole(role), ...)`, the other is what the sidebar row reads. Admin,
+   * manager and user; a viewer is refused both the route and the row.
+   */
+  | 'view-time-off-calendar';
 
 /**
  * Pure lookup against spec 04's Roles & Permission Matrix (TC-04-UNIT-05), widened by
@@ -701,6 +709,7 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'view-time-and-activity-billed': true,
     'view-time-and-activity-spent': true,
     'export-reports': true,
+    'view-time-off-calendar': true,
   },
   manager: {
     'view-list': true,
@@ -746,6 +755,7 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'view-time-and-activity-billed': true,
     'view-time-and-activity-spent': false,
     'export-reports': true,
+    'view-time-off-calendar': true,
   },
   user: {
     'view-list': true,
@@ -791,6 +801,7 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'view-time-and-activity-billed': false,
     'view-time-and-activity-spent': false,
     'export-reports': true,
+    'view-time-off-calendar': true,
   },
   viewer: {
     'view-list': true,
@@ -836,6 +847,8 @@ const CAPABILITY_MATRIX: Record<Role, Record<MemberCapability, boolean>> = {
     'view-time-and-activity-billed': false,
     'view-time-and-activity-spent': false,
     'export-reports': false,
+    // Time off spec 01 REQ-01-002 — refused the calendar, and REQ-01-004 draws them no row.
+    'view-time-off-calendar': false,
   },
 };
 
@@ -3762,6 +3775,12 @@ export * from './request-topics';
 
 export * from './reports-messages';
 export * from './reports';
+
+/* ------------------------------------------------------------------ *
+ * Time off area — specs/time-off
+ * ------------------------------------------------------------------ */
+
+export * from './time-off-calendar';
 
 /* ------------------------------------------------------------------ *
  * Hiring — specs 01 (vacancies), 02 (booking page), 03 (candidate database),

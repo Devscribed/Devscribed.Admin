@@ -9,6 +9,7 @@ import {
 import {
   HOLIDAY_MESSAGES,
   can,
+  resolveMemberHolidayCountry,
   validateHolidayCountryCode,
   validateHolidayDate,
   validateHolidayName,
@@ -24,6 +25,8 @@ interface CallerMembership {
   role: Role;
   organizationId: string;
   accountId: string;
+  /** Time off spec 01 REQ-01-026 — the first link of the holiday-country chain. */
+  countryCode: string | null;
 }
 
 /** One row of the holidays list (spec org/03 GET .../holidays 200 contract). */
@@ -74,10 +77,11 @@ export class HolidaysService {
    *
    * `scope=mine` is the Time Tracking calendar's read and needs no capability — a
    * `user` and a `viewer` must see the markers on their own calendar. It ignores
-   * `country` and resolves the caller's own (requirement 14: `Account.phoneCountryCode`
-   * if present, else null), returning rows scoped to that country plus every global
-   * row. `scope=all` (the default) requires `view-holidays` and applies `country`,
-   * which still includes global rows (TC-03-INT-13).
+   * `country` and resolves the caller's own through the chain time off spec 01
+   * REQ-01-026 states — `Membership.countryCode`, else `Organization.countryCode`, else
+   * none — returning rows scoped to that country plus every global row. `scope=all` (the
+   * default) requires `view-holidays` and applies `country`, which still includes global
+   * rows (TC-03-INT-13).
    */
   async listHolidays(
     session: SessionPayload,
@@ -96,11 +100,11 @@ export class HolidaysService {
 
     let countryFilter: Prisma.HolidayWhereInput = {};
     if (scope === 'mine') {
-      const account = await this.prisma.account.findUnique({
-        where: { id: caller.accountId },
-        select: { phoneCountryCode: true },
+      const organization = await this.prisma.organization.findUnique({
+        where: { id: caller.organizationId },
+        select: { countryCode: true },
       });
-      const mine = this.normalizeResolvedCountry(account?.phoneCountryCode);
+      const mine = resolveMemberHolidayCountry(caller.countryCode, organization?.countryCode ?? null);
       countryFilter = mine
         ? { OR: [{ countryCode: mine }, { countryCode: null }] }
         : { countryCode: null };
@@ -234,6 +238,7 @@ export class HolidaysService {
       role: caller.role as Role,
       organizationId: caller.organizationId,
       accountId: caller.accountId,
+      countryCode: caller.countryCode,
     };
   }
 
@@ -371,16 +376,6 @@ export class HolidaysService {
       }
     }
     return new Date().getUTCFullYear();
-  }
-
-  /**
-   * `Account.phoneCountryCode` is validated elsewhere and may hold a legacy or blank
-   * value; only a clean alpha-2 resolves a member's country (requirement 14), and
-   * anything else means "no country" — global holidays only.
-   */
-  private normalizeResolvedCountry(value: string | null | undefined): string | null {
-    const result = validateHolidayCountryCode(value ?? null);
-    return result.valid ? result.value : null;
   }
 
   private toSummary(row: {

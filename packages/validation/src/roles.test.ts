@@ -83,6 +83,8 @@ describe('ROLE_CAPABILITIES matrix', () => {
         'ViewTimeAndActivityBilled',
         'ViewTimeAndActivitySpent',
         'ExportReports',
+        // Time off spec 01: the vacation calendar.
+        'ViewTimeOffCalendar',
       ],
       manager: [
         'ViewDocumentTemplates',
@@ -119,6 +121,8 @@ describe('ROLE_CAPABILITIES matrix', () => {
         'ViewMyTimeOff',
         'ViewTimeAndActivityBilled',
         'ExportReports',
+        // Time off spec 01: the same row as an admin.
+        'ViewTimeOffCalendar',
       ],
       // Spec 03's "user (own)" column is not a row here — see `canReadProfile` below.
       // Requests spec 01 is the first spec to put anything in these two rows: everybody
@@ -131,6 +135,8 @@ describe('ROLE_CAPABILITIES matrix', () => {
         'ViewMyTimeAndActivity',
         'ViewMyTimeOff',
         'ExportReports',
+        // Time off spec 01: a user opens the calendar; who is away is not privileged.
+        'ViewTimeOffCalendar',
       ],
       // Spec reports/01 also gives a viewer their own time-off calendar; no export.
       viewer: ['ViewOwnRequests', 'ViewMyTimeOff'],
@@ -197,6 +203,7 @@ describe('capabilitiesFor', () => {
       'ViewTimeAndActivityBilled',
       'ViewTimeAndActivitySpent',
       'ExportReports',
+      'ViewTimeOffCalendar',
     ]);
     expect(capabilitiesFor('manager')).toEqual([
       'ViewDocumentTemplates',
@@ -224,6 +231,7 @@ describe('capabilitiesFor', () => {
       'ViewMyTimeOff',
       'ViewTimeAndActivityBilled',
       'ExportReports',
+      'ViewTimeOffCalendar',
     ]);
     // `member` normalizes to `user`, and `null` to `viewer` — both rows are non-empty
     // since requests spec 01, so each is asserted against the role it normalizes to
@@ -236,6 +244,7 @@ describe('capabilitiesFor', () => {
       'ViewMyTimeAndActivity',
       'ViewMyTimeOff',
       'ExportReports',
+      'ViewTimeOffCalendar',
     ]);
     expect(capabilitiesFor(null)).toEqual(capabilitiesFor('viewer'));
     expect(capabilitiesFor(null)).toEqual(['ViewOwnRequests', 'ViewMyTimeOff']);
@@ -509,5 +518,30 @@ describe('TC-03-UNIT-02 — the principal kind is asked first', () => {
     expect(hasCapability(null, 'ViewOwnRequests')).toBe(true);
     expect(can(null as unknown as Role, 'view-own-requests')).toBe(false);
     expect(can(undefined as unknown as Role, 'view-own-requests')).toBe(false);
+  });
+});
+
+/**
+ * Time off spec 01 — the calendar's capability, asked of both unions under every role a
+ * `Membership.role` column can hold today.
+ */
+describe('TC-01-UNIT-04: ViewTimeOffCalendar / view-time-off-calendar', () => {
+  it('answers a legacy `member` and a `user` alike, in both spellings', () => {
+    expect(can(normalizeRole('member'), 'view-time-off-calendar')).toBe(true);
+    expect(hasCapability('member', 'ViewTimeOffCalendar')).toBe(true);
+    expect(can(normalizeRole('user'), 'view-time-off-calendar')).toBe(true);
+    expect(hasCapability('user', 'ViewTimeOffCalendar')).toBe(true);
+  });
+
+  it('refuses a viewer in both spellings', () => {
+    expect(can(normalizeRole('viewer'), 'view-time-off-calendar')).toBe(false);
+    expect(hasCapability('viewer', 'ViewTimeOffCalendar')).toBe(false);
+  });
+
+  it('is false for the UNNORMALIZED stored value, which is why the gate normalizes', () => {
+    // The reading this spec rejects: `CAPABILITY_MATRIX` has no `member` row, so `can()`
+    // falls through to false and refuses the page to a member whose sidebar row is drawn
+    // — the dead navigation REQ-01-004 forbids.
+    expect(can('member' as unknown as Role, 'view-time-off-calendar')).toBe(false);
   });
 });

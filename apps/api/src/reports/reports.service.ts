@@ -18,6 +18,7 @@ import {
   coerceQueryBoolean,
   intersectReportColumns,
   isHolidayApplicableToMember,
+  resolveMemberHolidayCountry,
   isZeroTotal,
   pdfReportFilename,
   resolveRateAtDate,
@@ -64,7 +65,14 @@ interface Caller {
   organizationId: string;
   organizationName: string;
   timezone: string;
+  /**
+   * The caller's RESOLVED holiday country — time off spec 01 REQ-01-026's chain, never
+   * `Account.phoneCountryCode`, which a foreign SIM makes wrong and which this product no
+   * longer resolves a holiday from anywhere.
+   */
   countryCode: string | null;
+  /** The organization's stated country — the chain's second link, for every other row. */
+  organizationCountryCode: string | null;
   displayName: string;
 }
 
@@ -530,9 +538,9 @@ export class ReportsService {
       where: { accountId: session.accountId },
       include: {
         account: {
-          select: { timezone: true, phoneCountryCode: true, firstName: true, lastName: true },
+          select: { timezone: true, firstName: true, lastName: true },
         },
-        organization: { select: { name: true } },
+        organization: { select: { name: true, countryCode: true } },
       },
     });
     if (
@@ -549,7 +557,11 @@ export class ReportsService {
       organizationId: membership.organizationId,
       organizationName: membership.organization.name,
       timezone: membership.account.timezone ?? 'UTC',
-      countryCode: membership.account.phoneCountryCode ?? null,
+      countryCode: resolveMemberHolidayCountry(
+        membership.countryCode,
+        membership.organization.countryCode,
+      ),
+      organizationCountryCode: membership.organization.countryCode,
       displayName: `${membership.account.firstName} ${membership.account.lastName}`.trim(),
     };
   }
@@ -1036,7 +1048,7 @@ export class ReportsService {
       },
       include: {
         account: {
-          select: { firstName: true, lastName: true, phoneCountryCode: true },
+          select: { firstName: true, lastName: true },
         },
       },
     });
@@ -1044,7 +1056,10 @@ export class ReportsService {
     return memberships.map((m) => ({
       id: m.id,
       displayName: `${m.account.firstName} ${m.account.lastName}`.trim(),
-      countryCode: m.account.phoneCountryCode ?? null,
+      // Time off spec 01 REQ-01-026 — the country stated on the membership, else the
+      // organization's. This is the roster a country-scoped holiday is paid to, so the
+      // source it resolves from is what decides who receives that row.
+      countryCode: resolveMemberHolidayCountry(m.countryCode, caller.organizationCountryCode),
     }));
   }
 
@@ -1876,12 +1891,17 @@ export class ReportsService {
         ? memberships
         : await this.prisma.membership.findMany({
             where: { organizationId: caller.organizationId, status: 'active' },
-            include: { account: { select: { phoneCountryCode: true } } },
+            select: { id: true, countryCode: true },
           }).then((rows) =>
             rows.map((r) => ({
               id: r.id,
               displayName: '',
-              countryCode: r.account.phoneCountryCode ?? null,
+              // The same chain every other reader uses (REQ-01-026); the union of what
+              // these resolve to is what the organization-wide holiday group covers.
+              countryCode: resolveMemberHolidayCountry(
+                r.countryCode,
+                caller.organizationCountryCode,
+              ),
             })),
           );
 

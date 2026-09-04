@@ -35,6 +35,10 @@ import { ClientsController } from './clients/clients.controller';
 import { ClientsService } from './clients/clients.service';
 import { HolidaysController } from './holidays/holidays.controller';
 import { HolidaysService } from './holidays/holidays.service';
+import { TimeOffCalendarController } from './time-off/time-off-calendar.controller';
+import { TimeOffCalendarService } from './time-off/time-off-calendar.service';
+import { OrganizationCountryController } from './organizations/organization-country.controller';
+import { OrganizationCountryService } from './organizations/organization-country.service';
 import { ReportsModule } from './reports/reports.module';
 import { ProjectsController } from './projects/projects.controller';
 import { ProjectsService } from './projects/projects.service';
@@ -209,6 +213,11 @@ const calendarProvider = {
     // on the read side, and the contact is a principal rather than part of the record.
     ClientContactsController,
     HolidaysController,
+    // Time off spec 01 — the vacation calendar's one read, and the organization country
+    // the holiday chain falls back to. Flat here beside HolidaysController, which is the
+    // resource both of them are about.
+    TimeOffCalendarController,
+    OrganizationCountryController,
     TimeTrackingController,
     AccrualController,
     // Spec 03's contract details. Flat here rather than in `DocumentsModule`: the
@@ -269,6 +278,8 @@ const calendarProvider = {
     ClientsService,
     ClientContactsService,
     HolidaysService,
+    TimeOffCalendarService,
+    OrganizationCountryService,
     TimeTrackingService,
     AccrualService,
     SigningSettingsService,

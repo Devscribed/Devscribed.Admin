@@ -114,7 +114,13 @@ export type Capability =
   | 'ViewMyTimeOff'
   | 'ViewTimeAndActivityBilled'
   | 'ViewTimeAndActivitySpent'
-  | 'ExportReports';
+  | 'ExportReports'
+  // Time off spec 01 — the vacation calendar. Duplicated as `view-time-off-calendar` in
+  // the lowercase-dashed `MemberCapability` union: this set is what the sidebar row reads
+  // through `hasCapability(role, ...)`, the other is what the page's gate and the
+  // endpoint's read through `can(normalizeRole(role), ...)`, and both must answer alike
+  // or the rail draws a row onto a 404.
+  | 'ViewTimeOffCalendar';
 
 /**
  * Permission matrix from spec 01 and spec 02, "Roles & Permission Matrix".
@@ -163,6 +169,9 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     'ViewTimeAndActivityBilled',
     'ViewTimeAndActivitySpent',
     'ExportReports',
+    // Time off spec 01's matrix — the calendar is admin, manager and user; a viewer is
+    // refused it, because reports/01 already settles what a viewer sees of time off.
+    'ViewTimeOffCalendar',
   ],
   manager: [
     'ViewDocumentTemplates',
@@ -208,6 +217,8 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     'ViewMyTimeOff',
     'ViewTimeAndActivityBilled',
     'ExportReports',
+    // Time off spec 01's matrix — same row as admin.
+    'ViewTimeOffCalendar',
   ],
   // Requests spec 01 is the first spec to put anything in these two rows. A member
   // reading and editing *their own* contract details is still authorized below by
@@ -222,6 +233,9 @@ export const ROLE_CAPABILITIES: Record<NormalizedRole, readonly Capability[]> = 
     'ViewMyTimeAndActivity',
     'ViewMyTimeOff',
     'ExportReports',
+    // Time off spec 01's matrix — a user opens the calendar and sees every member it is
+    // scoped to; who is away is not a privileged fact inside one organization.
+    'ViewTimeOffCalendar',
   ],
   // Being asked something is not a privilege: a `viewer` sees the requests they raised
   // or that are addressed to them, and may not raise one. Reports/01 adds "My Time Off"

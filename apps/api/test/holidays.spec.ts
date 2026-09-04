@@ -54,7 +54,18 @@ describe('Holidays (spec organization/03)', () => {
 
   const createMember = async (
     organizationId: string,
-    opts: { email: string; role: string; phoneCountryCode?: string | null; timezone?: string },
+    opts: {
+      email: string;
+      role: string;
+      phoneCountryCode?: string | null;
+      /**
+       * Time off spec 01 REQ-01-026 — the member's holiday country is now stated on the
+       * MEMBERSHIP. The phone country beside it is left where a case has one, so the case
+       * also witnesses that it reaches nothing.
+       */
+      countryCode?: string | null;
+      timezone?: string;
+    },
   ): Promise<Signed> => {
     const password = 'Passw0rd';
     const passwordHash = await bcrypt.hash(password, TEST_BCRYPT_ROUNDS);
@@ -74,6 +85,7 @@ describe('Holidays (spec organization/03)', () => {
         organizationId,
         role: opts.role,
         status: 'active',
+        countryCode: opts.countryCode ?? null,
       },
     });
     const cookies = (await login(opts.email, password)).headers[
@@ -400,6 +412,7 @@ describe('Holidays (spec organization/03)', () => {
       email: 'by@acme.com',
       role: 'user',
       phoneCountryCode: 'BY',
+      countryCode: 'BY',
     });
     const mine = await listHolidays(
       belarusian.cookies,

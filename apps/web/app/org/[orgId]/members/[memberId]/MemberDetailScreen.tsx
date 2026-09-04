@@ -14,6 +14,7 @@ import {
   MailOutlineIcon,
   PageTabs,
   Preloader,
+  Select,
   TextInput,
   TimeOutlineIcon,
 } from '@devscribed/ds';
@@ -21,14 +22,27 @@ import { useToast } from '@/toast';
 import {
   MEMBER_MESSAGES,
   MESSAGES,
+  TIME_OFF_CALENDAR_MESSAGES,
   canReadProfile,
   validateJobTitle,
   type Role,
 } from '@devscribed/validation';
+import { optionFor, valueOf } from '@/select';
+import { HOLIDAY_COUNTRY_OPTIONS } from '../../settings/holidays/country-options';
 import { useSession } from '@/layout/session-context';
 import { ContractDetails } from '@/members/ContractDetails';
 import { RoleSelect } from './RoleSelect';
 import { VacationPanel } from './VacationPanel';
+
+/**
+ * The Country picker's list. The holiday form's own option list, with its "All countries"
+ * head swapped for this field's meaning: an empty value here is not "everywhere", it is
+ * "use the organization's country" (REQ-01-043).
+ */
+const MEMBER_COUNTRY_OPTIONS = [
+  { value: '', label: TIME_OFF_CALENDAR_MESSAGES.memberCountryDefaultOption },
+  ...HOLIDAY_COUNTRY_OPTIONS.filter((option) => option.value.length > 0),
+];
 
 interface MemberDetail {
   id: string;
@@ -38,6 +52,10 @@ interface MemberDetail {
   status: 'active' | 'removed';
   joinedAt: string;
   jobTitle: string | null;
+  /** Time off spec 01 REQ-01-045 — the country STORED on this membership, `null` when
+   * nobody has stated one, which is what the picker's first option renders. Never the
+   * value they resolve to. */
+  countryCode: string | null;
   /** Nullable — `Account.timezone` is only auto-detected at signup (spec 01) and has
    * no back-fill for older/seeded accounts. */
   timezone: string | null;
@@ -119,6 +137,8 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
   const [state, setState] = useState<ScreenState>({ kind: 'loading' });
   const [role, setRole] = useState<Role | null>(null);
   const [jobTitle, setJobTitle] = useState('');
+  /** `''` is what a stored `null` renders as, and what stores `null` (REQ-01-043). */
+  const [countryCode, setCountryCode] = useState('');
   const [jobTitleErr, setJobTitleErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -151,6 +171,7 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
       setState({ kind: 'ready', detail: result.detail });
       setRole(result.detail.role);
       setJobTitle(result.detail.jobTitle ?? '');
+      setCountryCode(result.detail.countryCode ?? '');
       setJobTitleErr(null);
     } else {
       setState({ kind: 'error', message: result.message });
@@ -167,8 +188,11 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
     if (!detail) return false;
     const roleChanged = detail.canEditRole && role !== null && role !== detail.role;
     const jobTitleChanged = detail.canEditJobTitle && jobTitle !== (detail.jobTitle ?? '');
-    return roleChanged || jobTitleChanged;
-  }, [detail, role, jobTitle]);
+    // Without this a country-only change leaves the Save button disabled and the change
+    // unsaveable — the button is an in-flight/no-op guard and never a validation gate.
+    const countryChanged = detail.canEditJobTitle && countryCode !== (detail.countryCode ?? '');
+    return roleChanged || jobTitleChanged || countryChanged;
+  }, [detail, role, jobTitle, countryCode]);
 
   function handleJobTitleChange(value: string) {
     setJobTitle(value);
@@ -183,7 +207,9 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ role: role ?? detail.role, jobTitle }),
+        // One save, one body: the country rides the update this screen already submits
+        // (REQ-01-042) rather than getting a form and a button of its own.
+        body: JSON.stringify({ role: role ?? detail.role, jobTitle, countryCode }),
       });
 
       if (response.ok) {
@@ -196,6 +222,7 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
           setState({ kind: 'ready', detail: result.detail });
           setRole(result.detail.role);
           setJobTitle(result.detail.jobTitle ?? '');
+          setCountryCode(result.detail.countryCode ?? '');
         }
         setJobTitleErr(null);
         setSaving(false);
@@ -206,6 +233,10 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
       const body = await response.json().catch(() => null);
       if (body?.errors?.jobTitle) {
         setJobTitleErr(body.errors.jobTitle);
+      } else if (body?.errors?.countryCode) {
+        // Only reachable from a hand-made request — the picker cannot produce a value the
+        // server refuses — so it is a toast rather than a field error under the control.
+        showToast('toast-member-save-error', body.errors.countryCode, 'error');
       } else {
         showToast('toast-member-save-error', body?.message ?? MESSAGES.generic, 'error');
       }
@@ -293,6 +324,21 @@ export function MemberDetailScreen({ orgId, memberId }: { orgId: string; memberI
                       </div>
                     )}
                   </div>
+                )}
+
+                {/* Time off spec 01 §Screens — drawn only for a caller who may save it
+                    (`canEditJobTitle` is the shipped flag for "active target and the
+                    caller holds edit-detail"), never read-only. The first option means
+                    "use the organization's country", which is what `null` stores. */}
+                {detail.canEditJobTitle && (
+                  <Select
+                    label="Country"
+                    options={MEMBER_COUNTRY_OPTIONS}
+                    value={optionFor(MEMBER_COUNTRY_OPTIONS, countryCode)}
+                    onChange={(option) => setCountryCode(valueOf(option))}
+                    isDisabled={saving}
+                    data-testid="member-country-select"
+                  />
                 )}
 
                 {detail.canEditJobTitle && (

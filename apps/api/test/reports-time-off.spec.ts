@@ -83,6 +83,8 @@ describe('Reports · Time Off (spec reports/01)', () => {
       firstName?: string;
       lastName?: string;
       phoneCountryCode?: string | null;
+      /** Time off spec 01 REQ-01-026 — the holiday country, now on the MEMBERSHIP. */
+      countryCode?: string | null;
       timezone?: string;
     },
   ): Promise<Signed> => {
@@ -106,6 +108,7 @@ describe('Reports · Time Off (spec reports/01)', () => {
         organizationId,
         role: opts.role,
         status: 'active',
+        countryCode: opts.countryCode ?? null,
       },
     });
     const cookies = (await login(opts.email, password)).headers[
@@ -413,6 +416,7 @@ describe('Reports · Time Off (spec reports/01)', () => {
       firstName: 'Vera',
       lastName: 'Ipso',
       phoneCountryCode: 'BY',
+      countryCode: 'BY',
     });
     await seedHoliday(admin, { date: '2026-07-03', name: 'BY Day', countryCode: 'BY' });
     await seedHoliday(admin, { date: '2026-07-04', name: 'US Day', countryCode: 'US' });

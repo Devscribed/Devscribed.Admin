@@ -15,6 +15,7 @@
  */
 
 import { REPORTS_MESSAGES } from './reports-messages';
+import { validateCountryCode } from './autofill';
 import { zonedWallClockToUtc } from './index';
 export { REPORTS_MESSAGES } from './reports-messages';
 
@@ -486,8 +487,43 @@ export interface HolidayInput {
 export interface HolidayMemberInput {
   membershipId: string;
   displayName: string;
-  /** Member's country per spec org/03 §14–15 (nullable). */
+  /**
+   * The member's **resolved** holiday country, as {@link resolveMemberHolidayCountry}
+   * answers it (time off spec 01 REQ-01-026): the country stated on their membership,
+   * else the one stated on the organization, else `null`. Never a phone country.
+   */
   countryCode: string | null;
+}
+
+/**
+ * Time off spec 01 REQ-01-026, REQ-01-027 and REQ-01-040 — a member's holiday country,
+ * resolved from the two columns a person states and from nothing else.
+ *
+ * The membership's value wins whenever it normalizes to a real ISO 3166-1 alpha-2 code;
+ * one that does not — `''`, `'XX'`, a legacy value — is **skipped** rather than fatal, and
+ * the organization's is read in its place. With neither usable the answer is `null`, which
+ * is a member who receives global holidays only, not a member who receives the raw
+ * unusable string.
+ *
+ * Both arguments are required and neither has a default: a call site that forgets the
+ * organization's country must fail to compile rather than silently resolve half the chain.
+ *
+ * The read is deliberately more forgiving than the write. `validateCountryCode` upcases
+ * (`'pl'` → `'PL'`) and tests membership of the assigned alpha-2 list, while the write
+ * (`validateHolidayCountryCode`) refuses a lowercase value outright — because a lowercase
+ * or unassigned value can still reach a column through a migration or a direct write, and a
+ * holiday silently not applying is worse than a value quietly accepted (§Validation Rules).
+ */
+export function resolveMemberHolidayCountry(
+  membershipCountry: string | null | undefined,
+  organizationCountry: string | null | undefined,
+): string | null {
+  for (const candidate of [membershipCountry, organizationCountry]) {
+    if (candidate === null || candidate === undefined || candidate.trim().length === 0) continue;
+    const result = validateCountryCode(candidate);
+    if (result.valid && result.value.length > 0) return result.value;
+  }
+  return null;
 }
 
 export interface AmountRow {

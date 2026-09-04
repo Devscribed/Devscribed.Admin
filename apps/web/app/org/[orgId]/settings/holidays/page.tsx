@@ -21,7 +21,7 @@ import { PageHeader } from '@/layout/PageHeader';
 import { useSession } from '@/layout/session-context';
 import { optionFor, valueOf } from '@/select';
 import { useToast } from '@/toast';
-import { HOLIDAY_MESSAGES, can, type Role } from '@devscribed/validation';
+import { HOLIDAY_MESSAGES, TIME_OFF_CALENDAR_MESSAGES, can, type Role } from '@devscribed/validation';
 import { HolidayModal, type HolidayModalMode } from './HolidayModal';
 import { ALL_COUNTRIES, HOLIDAY_COUNTRY_OPTIONS, holidayCountryLabel } from './country-options';
 import type { HolidayRow, HolidaysResponse } from './types';
@@ -92,6 +92,12 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
+  // Time off spec 01 REQ-01-046 — the organization's holiday country, the second link of
+  // the chain. Read beside the holiday list the page already fetches, so the picker paints
+  // with a value rather than with an invented one.
+  const [orgCountry, setOrgCountry] = useState<string>(ALL_COUNTRIES);
+  const [savingCountry, setSavingCountry] = useState(false);
+
   const [modalMode, setModalMode] = useState<HolidayModalMode | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<HolidayRow | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -131,6 +137,52 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
     },
     [orgId, year, country, router],
   );
+
+  useEffect(() => {
+    if (!authorized) return undefined;
+    let cancelled = false;
+    void (async () => {
+      const response = await fetch(`/api/organizations/${orgId}/settings/country`, {
+        credentials: 'same-origin',
+      });
+      if (!response.ok || cancelled) return;
+      const body = (await response.json()) as { countryCode: string | null };
+      if (cancelled) return;
+      setOrgCountry(body.countryCode ?? ALL_COUNTRIES);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authorized, orgId]);
+
+  async function handleSaveCountry(): Promise<void> {
+    if (savingCountry) return;
+    setSavingCountry(true);
+    try {
+      const response = await fetch(`/api/organizations/${orgId}/settings/country`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ countryCode: orgCountry.length > 0 ? orgCountry : null }),
+      });
+      if (response.ok) {
+        const body = (await response.json()) as { countryCode: string | null };
+        setOrgCountry(body.countryCode ?? ALL_COUNTRIES);
+        showToast('toast-org-country-saved', HOLIDAY_MESSAGES.toastUpdated);
+      } else {
+        const body = await response.json().catch(() => null);
+        const fields = body?.fields as Record<string, string> | undefined;
+        showToast(
+          'toast-server-error',
+          fields?.countryCode ?? body?.message ?? HOLIDAY_MESSAGES.toastServerError,
+          'error',
+        );
+      }
+    } catch {
+      showToast('toast-server-error', HOLIDAY_MESSAGES.toastServerError, 'error');
+    }
+    setSavingCountry(false);
+  }
 
   useEffect(() => {
     if (!authorized) return undefined;
@@ -289,6 +341,39 @@ export default function HolidaysPage({ params }: { params: Promise<{ orgId: stri
         label="Holiday year"
         style={{ marginBottom: 'var(--space-5)' }}
       />
+
+      {/* Time off spec 01 §Screens — the organization country, ABOVE the list's own country
+          filter and clearly not it: this one is what every member without a country of
+          their own is paid holidays for. Admin and manager both set it; a user and a
+          viewer never reach this page at all, so there is no read-only rendering to draw. */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-end',
+          gap: 'var(--space-3)',
+          marginBottom: 'var(--space-6)',
+          flexWrap: 'wrap',
+        }}
+      >
+        <div style={{ minWidth: 220 }}>
+          <Select
+            label="Organization country"
+            hint={TIME_OFF_CALENDAR_MESSAGES.orgCountryHint}
+            value={optionFor(HOLIDAY_COUNTRY_OPTIONS, orgCountry)}
+            options={HOLIDAY_COUNTRY_OPTIONS}
+            onChange={(option) => setOrgCountry(valueOf(option))}
+            data-testid="org-country-select"
+          />
+        </div>
+        <Button
+          onClick={() => void handleSaveCountry()}
+          preloader={savingCountry}
+          disabled={savingCountry}
+          data-testid="org-country-save"
+        >
+          Save country
+        </Button>
+      </div>
 
       <div
         style={{

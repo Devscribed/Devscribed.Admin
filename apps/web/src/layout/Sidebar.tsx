@@ -151,6 +151,15 @@ function navigation(orgId: string, session: NavSession, badgeCount: number): Sid
   }
 
   const timeOff: SidebarSubItem[] = [];
+  // Time off spec 01 REQ-01-003 — above Holidays, and omitted rather than disabled for a
+  // role that cannot open it (REQ-01-004): the route answers them 404.
+  if (hasCapability(role, 'ViewTimeOffCalendar')) {
+    timeOff.push({
+      label: 'Calendar',
+      href: at('/time-off/calendar'),
+      testId: 'nav-time-off-calendar',
+    });
+  }
   if (hasCapability(role, 'ViewHolidays')) {
     timeOff.push({
       label: 'Holidays',

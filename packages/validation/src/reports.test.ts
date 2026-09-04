@@ -9,6 +9,7 @@ import {
   isHolidayApplicableToMember,
   isZeroTotal,
   pdfReportFilename,
+  resolveMemberHolidayCountry,
   resolveRateAtDate,
   validateBillableFilter,
   validateCuidList,
@@ -336,6 +337,50 @@ describe('TC-01-UNIT-16: buildHolidayRow (spec requirement 18)', () => {
 
   it('isHolidayApplicableToMember: country-scoped holiday needs a member country', () => {
     expect(isHolidayApplicableToMember({ countryCode: 'BY' }, { countryCode: null })).toBe(false);
+  });
+});
+
+/**
+ * Time off spec 01 — the holiday-country chain, and the predicate it feeds. The chain
+ * replaces `Account.phoneCountryCode` as the source everywhere; these are the branches
+ * that decide who is paid a country-scoped holiday.
+ */
+describe('TC-01-UNIT-01: resolveMemberHolidayCountry', () => {
+  const cases: Array<[string | null, string | null, string | null]> = [
+    ['US', 'BY', 'US'],
+    [null, 'BY', 'BY'],
+    [null, null, null],
+    ['US', null, 'US'],
+    // `XX` is two letters and no country: skipped, and the organization's is read in its
+    // place rather than the chain terminating on it (REQ-01-027).
+    ['XX', 'PL', 'PL'],
+    ['', 'PL', 'PL'],
+    // The read upcases what it finds, which the write refuses to store in the first place.
+    ['pl', 'BY', 'PL'],
+    ['US', 'xx', 'US'],
+    // The branch that matters most: with nothing usable left the chain REJECTS rather
+    // than handing back the raw unusable string (REQ-01-040).
+    [null, 'xx', null],
+    ['XX', 'YY', null],
+  ];
+
+  for (const [membership, organization, expected] of cases) {
+    it(`(${JSON.stringify(membership)}, ${JSON.stringify(organization)}) -> ${JSON.stringify(expected)}`, () => {
+      expect(resolveMemberHolidayCountry(membership, organization)).toBe(expected);
+    });
+  }
+});
+
+describe('TC-01-UNIT-03: which holidays reach a member, given a resolved country', () => {
+  it('a global holiday reaches everyone, a country-scoped one only its own', () => {
+    expect(isHolidayApplicableToMember({ countryCode: null }, { countryCode: 'PL' })).toBe(true);
+    expect(isHolidayApplicableToMember({ countryCode: null }, { countryCode: null })).toBe(true);
+    expect(isHolidayApplicableToMember({ countryCode: 'PL' }, { countryCode: 'PL' })).toBe(true);
+    expect(isHolidayApplicableToMember({ countryCode: 'PL' }, { countryCode: 'US' })).toBe(false);
+    // REQ-01-029 — a country-scoped holiday reaches nobody without a country.
+    expect(isHolidayApplicableToMember({ countryCode: 'PL' }, { countryCode: null })).toBe(false);
+    // REQ-01-028 is case-insensitive, which is what makes a stored `pl` still match.
+    expect(isHolidayApplicableToMember({ countryCode: 'PL' }, { countryCode: 'pl' })).toBe(true);
   });
 });
 
