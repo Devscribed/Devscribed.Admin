@@ -6,7 +6,7 @@
   "branch": "fix/new-request-title-error-twice",
   "baseRef": "a04744ac95195238defa0751e8d577c1534d0ae4",
   "headAtInit": "a04744ac95195238defa0751e8d577c1534d0ae4",
-  "status": "review",
+  "status": "qa",
   "track": "bug",
   "shapes": {
     "implement": "single",
@@ -16,7 +16,7 @@
   },
   "unrefined": null,
   "createdAt": "2026-09-04T11:24:45.297Z",
-  "updatedAt": "2026-09-04T11:27:15.359Z",
+  "updatedAt": "2026-09-04T11:27:45.771Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -43,8 +43,11 @@
       "lastVerdict": "pass"
     },
     "review": {
-      "status": "pending",
-      "attempts": 0
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-04T11:27:15.489Z",
+      "endedAt": "2026-09-04T11:27:45.719Z",
+      "lastVerdict": "pass"
     },
     "qa": {
       "status": "pending",
