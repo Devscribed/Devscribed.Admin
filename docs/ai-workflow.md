@@ -190,6 +190,16 @@ unit/int/e2e, `static_gate` or `qa` disabled, a replan budget on a track with no
 timeout for a stage the track does not run, two tracks claiming one path, and a `match` that is
 not a valid regular expression.
 
+**And the question after that one.** `npm run pipeline` checks the parts that name each other:
+an agent whose `name:` and filename disagree, a lead dispatching a `subagent_type` nobody
+defines, the `SubagentStart`/`SubagentStop` matchers in `settings.json`, a contract in
+`.claude/agents/references/` an agent bound by it no longer reads, the E2E port ladder that
+`scripts/ports.mjs` and `e2e/environment.ts` each keep, **and any setting the config accepts
+that no script reads**. The last is the one worth the script: a dead key is printed back by
+`npm run config`, so a person who sets it believes it took effect. `effort` and `shardEffort`
+were dead for the life of the config, and the printer reported a reasoning effort the SDK was
+never given.
+
 ## One run at a time
 
 `concurrentRuns` is 1 and `init` takes a lock. Worktrees isolate files and nothing else — two

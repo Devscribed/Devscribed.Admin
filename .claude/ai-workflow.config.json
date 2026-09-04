@@ -16,7 +16,6 @@
           "enabled": true,
           "agent": "pre-implementer-strict",
           "model": "opus",
-          "effort": "high",
           "variants": {
             "classic": {
               "agent": "pre-implementer"
@@ -33,7 +32,6 @@
               "agent": "implementer-lead",
               "shardAgent": "implementer",
               "shardModel": "sonnet",
-              "shardEffort": "medium",
               "maxShards": 4
             }
           }
@@ -49,7 +47,6 @@
           "model": "opus",
           "shardAgent": "code-reviewer-open",
           "shardModel": "opus",
-          "shardEffort": "medium",
           "shardSize": 15,
           "variants": {
             "sweeps": {
@@ -60,7 +57,8 @@
               "$comment": "One reviewer, synchronous, over the whole slice. Same definition the children run; no lead, no split. The safe shape for a small diff, and the way to A/B a lead against the agent it dispatches.",
               "agent": "code-reviewer-open",
               "shardAgent": null,
-              "shardModel": null
+              "shardModel": null,
+              "shardSize": null
             }
           }
         },
@@ -113,7 +111,6 @@
               "agent": "implementer-lead",
               "shardAgent": "implementer",
               "shardModel": "sonnet",
-              "shardEffort": "medium",
               "maxShards": 4
             }
           }
@@ -129,7 +126,6 @@
           "model": "opus",
           "shardAgent": "code-reviewer-open",
           "shardModel": "opus",
-          "shardEffort": "medium",
           "shardSize": 15,
           "variants": {
             "sweeps": {
@@ -140,7 +136,8 @@
               "$comment": "One reviewer, synchronous, over the whole slice. Same definition the children run; no lead, no split. The safe shape for a small diff, and the way to A/B a lead against the agent it dispatches.",
               "agent": "code-reviewer-open",
               "shardAgent": null,
-              "shardModel": null
+              "shardModel": null,
+              "shardSize": null
             }
           }
         },
@@ -199,7 +196,6 @@
           "model": "opus",
           "shardAgent": "code-reviewer-sweeps",
           "shardModel": "sonnet",
-          "shardEffort": "medium",
           "shardSize": 15,
           "variants": {
             "open": {
@@ -210,7 +206,8 @@
               "$comment": "One reviewer, synchronous, over the whole slice. Same definition the children run; no lead, no split. The safe shape for a small diff, and the way to A/B a lead against the agent it dispatches.",
               "agent": "code-reviewer-sweeps",
               "shardAgent": null,
-              "shardModel": null
+              "shardModel": null,
+              "shardSize": null
             }
           }
         },
@@ -241,17 +238,16 @@
     }
   },
   "breakers": {
-    "$comment": "Whole-run fuses, the same for every track.",
+    "$comment": "Whole-run fuses, the same for every track, enforced by scripts/ship.mjs before each stage is dispatched. runTokenCap counts every token the agents report - input, output and both cache figures - summed over the stage logs, so it survives a --resume. The observed range is 1.6M for a patch run and 155M for the largest spec run; the cap sits above that and catches a runaway, not a long run.",
     "runTimeoutMin": 180,
-    "runTokenCap": 3000000
+    "runTokenCap": 250000000
   },
   "isolation": {
-    "$comment": "Worktrees isolate files and nothing else. Ports, both databases, the mail sink and .local-storage are shared, so runs are serialised until those are per-run too.",
+    "$comment": "Worktrees isolate files and nothing else. Ports, both databases, the mail sink and .local-storage are shared, so runs are serialised until those are per-run too: concurrentRuns is the lock's invariant and the validator refuses any other value.",
     "concurrentRuns": 1,
     "e2eEnv": {
       "CI": "1"
-    },
-    "testDatabaseTemplate": "postgresql://devscribed:devscribed@localhost:5433/devscribed_test_${runId}"
+    }
   },
   "protectedBranches": [
     "main"
@@ -275,7 +271,6 @@
         "fixerModel": "opus",
         "shardAgent": "spec-reviewer",
         "shardModel": "sonnet",
-        "shardEffort": "medium",
         "$note": "One shard per member of the bundle, dispatched by the loop before the judge runs. The register's where column says which member answers each criterion; judge criteria never reach a shard."
       }
     },
@@ -295,7 +290,6 @@
       "spec/ambiguous-requirement",
       "spec/missing-artefact",
       "spec/scope-gap"
-    ],
-    "shardTimeoutMin": 20
+    ]
   }
 }

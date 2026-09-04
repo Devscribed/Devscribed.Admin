@@ -818,7 +818,11 @@ function cmdVerdict(args) {
     join(runDir(run.runId), 'stages', `${stage}.attempt-${run.stages[stage].attempts || 1}.json`),
     `${JSON.stringify(verdict, null, 2)}\n`,
   );
-  run.stages[stage].lastVerdict = verdict.status ?? (classified.blockers.length ? 'blocked' : 'pass');
+  /* A stage the track does not carry passes without running. Recording that as a plain `pass`
+     tells a reader it ran, which is the one thing status must never say. */
+  run.stages[stage].lastVerdict = verdict.skipped
+    ? 'skipped'
+    : verdict.status ?? (classified.blockers.length ? 'blocked' : 'pass');
 
   for (const f of classified.blockers) process.stdout.write(`blocker   [${f.target}] ${findingKey(f)}\n`);
   for (const n of classified.notes) {
@@ -861,6 +865,10 @@ function cmdStatus(args) {
   process.stdout.write(`status  ${run.status}${run.halt ? ` — ${run.halt.reason}` : ''}\n\n`);
   for (const s of STAGES) {
     const st = run.stages[s];
+    if (st.lastVerdict === 'skipped') {
+      process.stdout.write(`  --  ${s.padEnd(15)} skipped — not a stage of the ${run.track ?? 'spec'} track\n`);
+      continue;
+    }
     process.stdout.write(`  ${mark[st.status] ?? '  '}  ${s.padEnd(15)} ${String(st.attempts).padStart(2)} attempt(s)  ${st.lastVerdict ?? ''}\n`);
   }
   process.stdout.write(`\nbudget  code ${run.budget.codeAttempts}/${budget.maxCodeAttempts}`);

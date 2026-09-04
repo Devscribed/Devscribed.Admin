@@ -32,6 +32,8 @@ npm run bug    -- <what is broken> # /bug
 npm run patch  -- <the rule that changes>  # /patch
 npm run ship   -- <document path>  # /ship — the skill, which checks the branch and reads the outcome
 npm run ship:run -- <document path># scripts/ship.mjs alone, no model either side
+npm run config                     # what each track resolves to, and whether the config is valid
+npm run pipeline                   # the pipeline's parts still agree with each other
 npm run board                      # the board: specs → what was run against one → that run
 npm run watch                      # the same, without opening anything
 npm run specs                      # the same index, printed
@@ -223,13 +225,22 @@ missing stage, `static_gate` or `qa` switched off. `npm run config` prints what 
 resolves to; `ship`, every `wf` command and preflight run the same check first, so a bad edit
 stops a run before a lock or a branch exists.
 
+`npm run pipeline` answers the question after that one — the parts that name each other still
+agree. An agent whose `name:` and filename disagree, a lead dispatching a `subagent_type`
+nobody defines, a hook matcher that stopped matching, a contract an agent no longer reads, the
+port ladder kept in two files, **and any setting the config accepts that no script reads** —
+which is the one that costs most, because the printer reports it back and a person believes it
+took effect.
+
 **Which agent a stage runs is a variant, not a constant.** Alternatives live in that stage
 block's `variants` and are selected for one run — `--profile` for refine,
 `--implement-profile`, `--review-profile`, `--plan-profile` for ship. So one run goes parallel on
 sonnet shards and the next goes synchronous on one opus agent, with no edit between them, and
-every variant in force is written into the ledger or `run.json`. Every agent a new one replaced
-is kept and still selectable: [.claude/agents/VARIANTS.md](.claude/agents/VARIANTS.md) lists them
-and says what each changed.
+every variant in force is written into the ledger or `run.json`. **No shape a new agent replaced
+is withdrawn** — every method stays selectable, and
+[.claude/agents/VARIANTS.md](.claude/agents/VARIANTS.md) maps every name that used to exist to
+the one that carries it now. What is not kept is a second copy of a definition: two files
+stating one rule is how the rules drifted.
 
 **While a run is in flight, its branch carries the spec's work and nothing else.** The reviewer
 diffs `baseRef...HEAD`, so anything else committed there is handed to it as part of the change

@@ -41,7 +41,15 @@ function logCost(path) {
 
 /* ── the specs themselves ─────────────────────────────────────────────────── */
 
-/** `specs/requests/02-request-topics.md` — the head of a bundle, not its members. */
+/**
+ * `specs/requests/02-request-topics.md` — the head of a bundle, not its members — and the
+ * lighter documents beside it, `specs/bugs/BUG-NNN-*.md` and `specs/patches/PATCH-NNN-*.md`.
+ *
+ * The lighter two are named by prefix rather than by a leading number, and a bundle-shaped
+ * pattern alone left every bug and patch run filed under "no document" on the board.
+ */
+const DOC_NAME = /^(?:(\d+)|(?:BUG|PATCH)-(\d+))-.+\.md$/;
+
 function specFiles(root) {
   const base = join(root, 'specs');
   if (!existsSync(base)) return [];
@@ -50,9 +58,10 @@ function specFiles(root) {
     const dir = join(base, area);
     if (!statIf(dir)?.isDirectory()) continue;
     for (const f of readdirSync(dir)) {
-      if (!/^\d+-.+\.md$/.test(f)) continue;
+      const m = f.match(DOC_NAME);
+      if (!m) continue;
       if (/\.(contracts|cases|design)\.md$/.test(f)) continue;
-      out.push({ area, file: f, path: `specs/${area}/${f}`, num: f.match(/^(\d+)/)[1] });
+      out.push({ area, file: f, path: `specs/${area}/${f}`, num: m[1] ?? m[2] });
     }
   }
   return out;
@@ -101,6 +110,9 @@ function shipEntries(root) {
       kind: 'ship',
       id,
       spec: run?.spec ?? null,
+      /* Which pipeline the document earned. A run started before tracks existed carries none,
+         and `spec` is what it ran. */
+      track: run?.track ?? (run ? 'spec' : null),
       label: id.replace(/_.*$/, '').replace('T', ' ').replace(/-(\d\d)-(\d\d)$/, ':$1:$2'),
       status: run?.status ?? 'half-created',
       /* A run that never wrote `run.json` is a preflight that died. It is listed rather than
@@ -218,7 +230,8 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import
       if (!s.entries.length) continue;
       console.log(`\n${s.path}  ${s.title ?? ''}`);
       for (const e of s.entries) {
-        console.log(`  ${e.running ? '●' : '○'} ${e.kind.padEnd(6)} ${e.id.padEnd(46)} ${String(e.status).padEnd(12)} ${e.detail ?? ''}`);
+        const kind = e.kind === 'ship' && e.track && e.track !== 'spec' ? `ship:${e.track}` : e.kind;
+        console.log(`  ${e.running ? '●' : '○'} ${kind.padEnd(10)} ${e.id.padEnd(46)} ${String(e.status).padEnd(12)} ${e.detail ?? ''}`);
       }
     }
     if (index.orphans.length) {

@@ -3,6 +3,10 @@
 > reads and both judges work from. It carries these ids unchanged, a sharpened `S-12`, a new
 > `S-58`, and the admission rule that says when a spec is let into development. This page is
 > kept as the record of what the register said before that, and is edited by nobody.
+>
+> The agent it names, `spec-refiner`, was renamed `spec-reviewer` and its sharded shape
+> `spec-reviewer-lead`; the severity and witness rules it defers to are now in
+> `.claude/agents/references/verdict-contract.md`. Nothing live reads this page.
 
 # Blocking criteria — the closed register for `spec-refiner`
 

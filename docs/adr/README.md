@@ -28,6 +28,7 @@ likely to be re-litigated.
 | [0013](0013-a-spec-is-admitted-by-a-judge-that-shards-its-reading.md)  | A spec is admitted by a judge that shards its reading, and the pipeline refuses one nothing admitted | current                  |
 | [0014](0014-a-document-earns-its-pipeline-by-its-weight.md)            | A document earns its pipeline by its weight: the config is keyed by track, validated before a run, with the gates on all three | current                  |
 | [0015](0015-one-core-agent-one-lead-and-the-rules-in-one-place.md)     | One core agent and one lead per family, with the rules every judge obeys written once outside them | current, renames 0002/0004/0008/0012/0013 |
+| [0016](0016-a-setting-nothing-reads-is-a-defect.md)                    | A setting nothing reads is a defect, and `npm run pipeline` says so | current                  |
 
 Measurements that led to these, including the hypotheses that did not survive, are in
 [docs/research/](../research/).
