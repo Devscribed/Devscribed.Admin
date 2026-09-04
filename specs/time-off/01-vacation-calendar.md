@@ -47,12 +47,13 @@ Beyond the request, this spec adds:
 
 - **A nullable country column on `Membership` and on `Organization`, with a picker for each.**
   Holidays are asked to follow the member's country or the company's and neither exists today.
-  The member's rides the member read and write that already ship and simply gain the field; the
-  organization's gets a `GET` and a `PUT` of its own and a control on the Holidays settings page,
-  because a picker with nothing to read is a control an implementer has to invent a source for.
+  The member's rides the member read and write that already ship; the organization's gets a `GET`
+  and a `PUT` of its own, because a picker with nothing to read has no source but an invented one.
 - **One country-resolution helper, adopted by every call site that resolves a member's country.**
   Holidays `scope=mine` and both reports read `Account.phoneCountryCode` today, and this spec
   drops that source everywhere rather than ranking against it — one question needs one answer.
+  **It moves what Amounts Owed pays, in both directions, and pays less than today until somebody
+  states a country** — the Blast Radius measures both and names the deploy-day step.
 - **The `ViewTimeOffCalendar` capability.** Neither country write adds one: `ManageHolidays` and
   `edit-detail` already grant exactly the admin and manager who set them.
 
