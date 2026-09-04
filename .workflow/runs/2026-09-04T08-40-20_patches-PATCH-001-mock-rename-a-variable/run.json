@@ -6,12 +6,12 @@
   "branch": "test/flow-check",
   "baseRef": "d26d6dedb2a44395cb98047e79e61e86af0daf13",
   "headAtInit": "d26d6dedb2a44395cb98047e79e61e86af0daf13",
-  "status": "review",
+  "status": "qa",
   "track": "patch",
   "variants": {},
   "unrefined": null,
   "createdAt": "2026-09-04T08:40:20.850Z",
-  "updatedAt": "2026-09-04T08:42:31.105Z",
+  "updatedAt": "2026-09-04T08:43:58.924Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -38,8 +38,11 @@
       "lastVerdict": "pass"
     },
     "review": {
-      "status": "pending",
-      "attempts": 0
+      "status": "passed",
+      "attempts": 1,
+      "startedAt": "2026-09-04T08:42:31.250Z",
+      "endedAt": "2026-09-04T08:43:58.873Z",
+      "lastVerdict": "pass"
     },
     "qa": {
       "status": "pending",
