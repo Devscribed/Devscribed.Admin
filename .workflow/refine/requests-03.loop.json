@@ -82,8 +82,25 @@
           "S-57": "clear",
           "S-58": "blocked"
         }
-      }
+      },
+      "gate": "T2",
+      "blockers": 8,
+      "keys": [
+        "spec/contradiction:REQ-03-019",
+        "spec/contradiction:REQ-03-013",
+        "spec/contradiction:Validation Rules — rule 6",
+        "spec/contradiction:Routes — the client-contacts routes",
+        "spec/untestable-case:TC-03-INT-04",
+        "spec/untestable-case:Verification Plan — Bringing it up, Rehearsal",
+        "spec/contradiction:State Machine — invariant 1",
+        "spec/incomplete-decision:REQ-03-026"
+      ]
     }
   ],
-  "status": "running"
+  "status": "blocked",
+  "outcome": {
+    "reason": "verdict-only",
+    "detail": "stopped before the fixer, as asked.",
+    "at": "2026-09-04T08:02:27.493Z"
+  }
 }
