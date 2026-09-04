@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { use, useCallback, useEffect, useState } from 'react';
-import { Badge, Button, Card, InfoBanner } from '@/ds';
+import { Badge, Button, Card, InfoBanner, TextArea } from '@devscribed/ds';
 import { useSession } from '@/layout/session-context';
 import { usePendingRequests } from '@/layout/requests-badge-context';
 import {
@@ -60,7 +60,6 @@ export default function RequestDetailPage({
   const [messageError, setMessageError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [composerFocus, setComposerFocus] = useState(false);
   const [declineOpen, setDeclineOpen] = useState(false);
   const [reassignOpen, setReassignOpen] = useState(false);
 
@@ -168,7 +167,7 @@ export default function RequestDetailPage({
         <Link href={`/org/${orgId}/requests`} style={backLink}>
           &larr; Requests
         </Link>
-        <div style={{ marginTop: 'var(--sp-8)', color: 'var(--text-faint)' }}>
+        <div style={{ marginTop: 'var(--space-6)', color: 'var(--text-tertiary)' }}>
           This request does not exist.
         </div>
       </div>
@@ -220,13 +219,13 @@ export default function RequestDetailPage({
 
       <div style={{ maxWidth: 820, margin: '0 auto', width: '100%' }}>
         <Card>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-5)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
               <span
                 style={{
-                  fontFamily: 'var(--font-display)',
-                  fontSize: 'var(--fs-14)',
-                  color: 'var(--text-muted)',
+                  fontFamily: 'var(--font-family-base)',
+                  fontSize: 'var(--font-size-s)',
+                  color: 'var(--text-secondary)',
                 }}
               >
                 #{request.number}
@@ -234,16 +233,16 @@ export default function RequestDetailPage({
               <span
                 data-testid="request-detail-title"
                 style={{
-                  fontFamily: 'var(--font-display)',
+                  fontFamily: 'var(--font-family-base)',
                   fontWeight: 600,
-                  fontSize: 'var(--fs-21)',
-                  color: 'var(--text)',
+                  fontSize: 'var(--headline-5-size)',
+                  color: 'var(--text-primary)',
                 }}
               >
                 {request.title}
               </span>
               <span style={{ marginLeft: 'auto' }}>
-                <Badge tone={tone} data-testid="request-detail-status">
+                <Badge status={tone} data-testid="request-detail-status">
                   {status.closure ? `${status.label} · ${status.closure}` : status.label}
                 </Badge>
               </span>
@@ -253,9 +252,9 @@ export default function RequestDetailPage({
               style={{
                 display: 'flex',
                 flexWrap: 'wrap',
-                gap: 'var(--sp-2) var(--sp-5)',
-                fontSize: 'var(--fs-13)',
-                color: 'var(--text-muted)',
+                gap: 'var(--space-1) var(--space-4)',
+                fontSize: 'var(--font-size-xs)',
+                color: 'var(--text-secondary)',
               }}
             >
               {/* The About line: the snapshot name with a muted archived marker where
@@ -265,7 +264,7 @@ export default function RequestDetailPage({
                 <span data-testid="request-detail-topic">
                   {request.topic.name}
                   {request.topic.status === 'archived' && (
-                    <span style={{ color: 'var(--text-faint)' }}> (archived)</span>
+                    <span style={{ color: 'var(--text-tertiary)' }}> (archived)</span>
                   )}
                 </span>
               ) : (
@@ -295,9 +294,9 @@ export default function RequestDetailPage({
             {request.description && (
               <div
                 style={{
-                  fontFamily: 'var(--font-text)',
-                  fontSize: 'var(--fs-15)',
-                  color: 'var(--text)',
+                  fontFamily: 'var(--font-family-base)',
+                  fontSize: 'var(--font-size-base)',
+                  color: 'var(--text-primary)',
                   whiteSpace: 'pre-wrap',
                 }}
               >
@@ -307,7 +306,7 @@ export default function RequestDetailPage({
 
             {request.assignee.inactive && (
               <div data-testid="request-detail-assignee-inactive-banner">
-                <InfoBanner tone="warning">
+                <InfoBanner variant="warning">
                   {request.assignee.kind === 'client'
                     ? // A removed contact's requests are flagged and not reassigned: this
                       // release has no reassign path that accepts a client addressee, so
@@ -322,11 +321,9 @@ export default function RequestDetailPage({
             )}
 
             {(showAnswer || showGrant || showDecline || showCancel || showReassign) && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--sp-3)' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
                 {showAnswer && (
                   <Button
-                    variant="secondary"
-                    size="sm"
                     disabled={busy}
                     onClick={() => void act('answer')}
                     data-testid="request-detail-answer-btn"
@@ -337,7 +334,6 @@ export default function RequestDetailPage({
                 {showGrant && (
                   <Button
                     variant="primary"
-                    size="sm"
                     disabled={busy}
                     onClick={() => void act('grant')}
                     data-testid="request-detail-grant-btn"
@@ -347,8 +343,6 @@ export default function RequestDetailPage({
                 )}
                 {showDecline && (
                   <Button
-                    variant="secondary"
-                    size="sm"
                     disabled={busy}
                     onClick={() => setDeclineOpen(true)}
                     data-testid="request-detail-decline-btn"
@@ -358,8 +352,7 @@ export default function RequestDetailPage({
                 )}
                 {showCancel && (
                   <Button
-                    variant="danger"
-                    size="sm"
+                    variant="delete"
                     disabled={busy}
                     onClick={() => void act('cancel')}
                     data-testid="request-detail-cancel-btn"
@@ -369,8 +362,6 @@ export default function RequestDetailPage({
                 )}
                 {showReassign && (
                   <Button
-                    variant="ghost"
-                    size="sm"
                     disabled={busy}
                     onClick={() => setReassignOpen(true)}
                     data-testid="request-detail-reassign-btn"
@@ -384,9 +375,9 @@ export default function RequestDetailPage({
             {actionError && (
               <div
                 style={{
-                  fontFamily: 'var(--font-text)',
-                  fontSize: 'var(--fs-13)',
-                  color: 'var(--error-500)',
+                  fontFamily: 'var(--font-family-base)',
+                  fontSize: 'var(--font-size-xs)',
+                  color: 'var(--status-error)',
                 }}
               >
                 {actionError}
@@ -395,63 +386,33 @@ export default function RequestDetailPage({
           </div>
         </Card>
 
-        <div style={{ marginTop: 'var(--sp-8)' }}>
+        <div style={{ marginTop: 'var(--space-6)' }}>
           <Card>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-6)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
               <div style={sectionLabel}>Conversation</div>
               <RequestThread messages={detail.messages} />
 
               {showComposer && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-4)' }}>
-                  {/* @ds ships no textarea; the token-carrying native element, as elsewhere. */}
-                  <textarea
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+                  {/* The system's own multi-line field: its border, focus ring, error
+                      treatment and message slot replace the hand-drawn box, and the DS-gaps
+                      row this stood on is closed. */}
+                  <TextArea
                     value={message}
-                    rows={3}
                     placeholder="Write a message…"
                     onChange={(event) => {
                       setMessage(event.target.value);
                       setMessageError(null);
                     }}
-                    onFocus={() => setComposerFocus(true)}
-                    onBlur={() => setComposerFocus(false)}
                     data-testid="request-detail-composer"
-                    style={{
-                      width: '100%',
-                      border: `var(--border-crisp) solid ${
-                        messageError
-                          ? 'var(--error-500)'
-                          : composerFocus
-                            ? 'var(--accent)'
-                            : 'var(--border-strong)'
-                      }`,
-                      borderRadius: 'var(--radius-lg)',
-                      padding: 'var(--sp-4) var(--sp-6)',
-                      fontFamily: 'var(--font-text)',
-                      fontSize: 'var(--fs-15)',
-                      color: 'var(--text)',
-                      background: 'var(--bg-field)',
-                      outline: 'none',
-                      boxShadow: composerFocus ? 'var(--shadow-glow-accent)' : 'none',
-                      transition: 'border-color .15s, box-shadow .15s',
-                      resize: 'vertical',
-                    }}
+                    error={messageError ?? undefined}
+                    errorId="request-detail-composer-error"
                   />
-                  {messageError && (
-                    <div
-                      style={{
-                        fontFamily: 'var(--font-text)',
-                        fontSize: 'var(--fs-12)',
-                        color: 'var(--error-500)',
-                      }}
-                    >
-                      {messageError}
-                    </div>
-                  )}
                   <div>
                     <Button
                       variant="primary"
-                      size="sm"
-                      loading={busy}
+                      preloader={busy}
+                      disabled={busy}
                       onClick={() => void sendMessage()}
                       data-testid="request-detail-composer-submit"
                     >
@@ -464,9 +425,9 @@ export default function RequestDetailPage({
           </Card>
         </div>
 
-        <div style={{ marginTop: 'var(--sp-8)' }}>
+        <div style={{ marginTop: 'var(--space-6)' }}>
           <Card>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-5)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
               <div style={sectionLabel}>History</div>
               <RequestHistory events={detail.events} />
             </div>
@@ -502,17 +463,16 @@ export default function RequestDetailPage({
 
 const backLink = {
   display: 'inline-block',
-  marginBottom: 'var(--sp-6)',
-  fontFamily: 'var(--font-display)',
-  fontSize: 'var(--fs-14)',
-  color: 'var(--text-muted)',
+  marginBottom: 'var(--space-5)',
+  fontFamily: 'var(--font-family-base)',
+  fontSize: 'var(--font-size-s)',
+  color: 'var(--text-secondary)',
   textDecoration: 'none',
 } as const;
 
 const sectionLabel = {
-  fontFamily: 'var(--font-display)',
-  fontSize: 'var(--fs-11)',
-  letterSpacing: 'var(--ls-wider)',
+  fontFamily: 'var(--font-family-base)',
+  fontSize: 'var(--font-size-xs)',
   textTransform: 'uppercase',
-  color: 'var(--text-muted)',
+  color: 'var(--text-secondary)',
 } as const;

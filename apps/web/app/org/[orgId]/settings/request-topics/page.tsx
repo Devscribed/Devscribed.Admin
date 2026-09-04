@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { use, useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, InfoBanner } from '@/ds';
+import { Button, InfoBanner, ToggleButton } from '@devscribed/ds';
 import { useSession } from '@/layout/session-context';
 import {
   REQUEST_MESSAGES,
@@ -31,7 +31,7 @@ const AUDIENCES: readonly { value: Audience; label: string; testId: string }[] =
  * Settings › Holidays already uses. The routes behind it refuse independently.
  *
  * **Ordering** is the up and down controls the spec's DS gaps table commits to, and no
- * drag handle: the `@ds` barrel exports no drag or sortable primitive, and a pointer-only
+ * drag handle: the design system exports no drag or sortable primitive, and a pointer-only
  * handle is unreachable from the keyboard. Each press issues exactly one `PATCH` of that
  * row's `sortOrder` and no other row's — up sends the row above's minus one, down sends
  * the row below's plus one — so the moved row lands past the neighbour it moved over. The
@@ -39,8 +39,9 @@ const AUDIENCES: readonly { value: Audience; label: string; testId: string }[] =
  * two tie and the name tiebreak decides: that one press may leave the list as it was, and
  * every other press reorders it.
  *
- * **The audience switch** is two `Button`s carrying `aria-pressed`, the second DS gap the
- * spec's table commits to; `@ds` ships no segmented control.
+ * **The audience switch** is `ToggleButton`, the system's segmented control. The spec's DS
+ * gaps table recorded it as missing and it has since shipped, so the two `aria-pressed`
+ * buttons that stood in for it are gone.
  */
 export default function RequestTopicsPage({ params }: { params: Promise<{ orgId: string }> }) {
   const { orgId } = use(params);
@@ -173,24 +174,24 @@ export default function RequestTopicsPage({ params }: { params: Promise<{ orgId:
           display: 'flex',
           alignItems: 'flex-start',
           justifyContent: 'space-between',
-          gap: 'var(--sp-6)',
+          gap: 'var(--space-5)',
           flexWrap: 'wrap',
-          marginBottom: 'var(--sp-8)',
+          marginBottom: 'var(--space-6)',
         }}
       >
         <div>
           <h1
             style={{
-              fontFamily: 'var(--font-display)',
+              fontFamily: 'var(--font-family-base)',
               fontWeight: 600,
-              fontSize: 'var(--fs-27)',
-              margin: '0 0 var(--sp-2)',
-              color: 'var(--text)',
+              fontSize: 'var(--headline-4-size)',
+              margin: '0 0 var(--space-1)',
+              color: 'var(--text-primary)',
             }}
           >
             Request topics
           </h1>
-          <div style={{ fontSize: 'var(--fs-14)', color: 'var(--text-sub)' }}>
+          <div style={{ fontSize: 'var(--font-size-s)', color: 'var(--text-secondary)' }}>
             The words people pick from when they raise a request.
           </div>
         </div>
@@ -203,26 +204,20 @@ export default function RequestTopicsPage({ params }: { params: Promise<{ orgId:
         </Button>
       </div>
 
-      {/* DS gap: `@ds` ships no segmented control, so the audience switch is two
-          `Button`s carrying an aria-pressed state and tokens only. */}
-      <div
-        role="group"
-        aria-label="Audience"
-        style={{ display: 'flex', gap: 'var(--sp-3)', marginBottom: 'var(--sp-8)' }}
-      >
-        {AUDIENCES.map((option) => (
-          <Button
-            key={option.value}
-            variant={audience === option.value ? 'primary' : 'secondary'}
-            size="sm"
-            aria-pressed={audience === option.value}
-            onClick={() => setAudience(option.value)}
-            data-testid={option.testId}
-          >
-            {option.label}
-          </Button>
-        ))}
-      </div>
+      {/* The DS gap this screen recorded is closed: the system ships the segmented control
+          now, so the switch is one `role="radiogroup"` with one tab stop rather than two
+          buttons a reader is told are two separate actions. */}
+      <ToggleButton
+        label="Audience"
+        options={AUDIENCES.map((option) => ({
+          value: option.value,
+          label: option.label,
+          testId: option.testId,
+        }))}
+        selectedValue={audience}
+        onChange={(value) => setAudience(value as Audience)}
+        style={{ marginBottom: 'var(--space-6)' }}
+      />
 
       {/* Carries whatever the server said — `statusUnchanged`, `manageForbidden` or the
           generic copy — so a refused press says why it was refused rather than looking
@@ -231,20 +226,18 @@ export default function RequestTopicsPage({ params }: { params: Promise<{ orgId:
           No `data-testid` on the banner or its retry control: the spec's testid table
           names none for either, and an id the spec does not name is not mine to add. */}
       {error !== null && (
-        <div style={{ marginBottom: 'var(--sp-6)' }}>
-          <InfoBanner tone="error" role="alert">
+        <div style={{ marginBottom: 'var(--space-5)' }}>
+          <InfoBanner variant="error" role="alert">
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                gap: 'var(--sp-4)',
+                gap: 'var(--space-3)',
               }}
             >
               <span>{error}</span>
               <Button
-                variant="secondary"
-                size="sm"
                 onClick={() => void load()}
               >
                 Retry
@@ -260,20 +253,20 @@ export default function RequestTopicsPage({ params }: { params: Promise<{ orgId:
         <>
           <div
             style={{
-              background: 'var(--bg-panel)',
-              border: 'var(--border-hair) solid var(--border)',
-              borderRadius: 'var(--radius-2xl)',
+              background: 'var(--surface-card)',
+              border: 'var(--border-width-hairline) solid var(--border-default)',
+              borderRadius: 'var(--radius-xl)',
               overflow: 'hidden',
             }}
           >
             {active.length === 0 ? (
               <div
                 style={{
-                  padding: 'var(--sp-10) var(--sp-8)',
+                  padding: 'var(--space-7) var(--space-6)',
                   textAlign: 'center',
-                  fontFamily: 'var(--font-text)',
-                  fontSize: 'var(--fs-14)',
-                  color: 'var(--text-faint)',
+                  fontFamily: 'var(--font-family-base)',
+                  fontSize: 'var(--font-size-s)',
+                  color: 'var(--text-tertiary)',
                 }}
               >
                 No active topics in this audience. Add one to start.
@@ -299,24 +292,23 @@ export default function RequestTopicsPage({ params }: { params: Promise<{ orgId:
           </div>
 
           {archived.length > 0 && (
-            <div style={{ marginTop: 'var(--sp-10)' }}>
+            <div style={{ marginTop: 'var(--space-7)' }}>
               <div
                 style={{
-                  fontFamily: 'var(--font-display)',
-                  fontSize: 'var(--fs-11)',
-                  letterSpacing: 'var(--ls-wider)',
+                  fontFamily: 'var(--font-family-base)',
+                  fontSize: 'var(--font-size-xs)',
                   textTransform: 'uppercase',
-                  color: 'var(--text-muted)',
-                  marginBottom: 'var(--sp-5)',
+                  color: 'var(--text-secondary)',
+                  marginBottom: 'var(--space-4)',
                 }}
               >
                 Archived
               </div>
               <div
                 style={{
-                  background: 'var(--bg-panel)',
-                  border: 'var(--border-hair) solid var(--border)',
-                  borderRadius: 'var(--radius-2xl)',
+                  background: 'var(--surface-card)',
+                  border: 'var(--border-width-hairline) solid var(--border-default)',
+                  borderRadius: 'var(--radius-xl)',
                   overflow: 'hidden',
                 }}
               >
@@ -385,17 +377,15 @@ function TopicRow({
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 'var(--sp-5)',
-        padding: 'var(--sp-4) var(--sp-6)',
+        gap: 'var(--space-4)',
+        padding: 'var(--space-3) var(--space-5)',
         minHeight: 56,
-        borderTop: 'var(--border-hair) solid var(--divider)',
+        borderTop: 'var(--border-width-hairline) solid var(--border-subtle)',
       }}
     >
-      <div style={{ display: 'flex', gap: 'var(--sp-2)', width: 84 }}>
+      <div style={{ display: 'flex', gap: 'var(--space-1)', width: 84 }}>
         {canMoveUp && (
           <Button
-            variant="secondary"
-            size="sm"
             disabled={busy}
             onClick={onUp}
             aria-label={`Move ${topic.name} up`}
@@ -406,8 +396,6 @@ function TopicRow({
         )}
         {canMoveDown && (
           <Button
-            variant="secondary"
-            size="sm"
             disabled={busy}
             onClick={onDown}
             aria-label={`Move ${topic.name} down`}
@@ -421,10 +409,10 @@ function TopicRow({
       <div
         style={{
           flex: 1,
-          fontFamily: 'var(--font-display)',
+          fontFamily: 'var(--font-family-base)',
           fontWeight: 500,
-          fontSize: 'var(--fs-15)',
-          color: 'var(--text)',
+          fontSize: 'var(--font-size-base)',
+          color: 'var(--text-primary)',
           minWidth: 0,
         }}
       >
@@ -434,20 +422,18 @@ function TopicRow({
       <div
         style={{
           width: 96,
-          fontFamily: 'var(--font-text)',
-          fontSize: 'var(--fs-13)',
-          color: 'var(--text-muted)',
+          fontFamily: 'var(--font-family-base)',
+          fontSize: 'var(--font-size-xs)',
+          color: 'var(--text-secondary)',
         }}
       >
         {topic.type}
       </div>
 
-      <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+      <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
         {!isArchived && (
           <>
             <Button
-              variant="secondary"
-              size="sm"
               disabled={busy}
               onClick={onRename}
               data-testid={`request-topic-row-${topic.id}-rename-btn`}
@@ -455,8 +441,6 @@ function TopicRow({
               Rename
             </Button>
             <Button
-              variant="secondary"
-              size="sm"
               disabled={busy}
               onClick={onArchive}
               data-testid={`request-topic-row-${topic.id}-archive-btn`}
@@ -467,8 +451,6 @@ function TopicRow({
         )}
         {isArchived && (
           <Button
-            variant="secondary"
-            size="sm"
             disabled={busy}
             onClick={onRestore}
             data-testid={`request-topic-row-${topic.id}-restore-btn`}
@@ -489,9 +471,9 @@ function TopicsSkeleton() {
     // the rows' place, which it is.
     <div
       style={{
-        background: 'var(--bg-panel)',
-        border: 'var(--border-hair) solid var(--border)',
-        borderRadius: 'var(--radius-2xl)',
+        background: 'var(--surface-card)',
+        border: 'var(--border-width-hairline) solid var(--border-default)',
+        borderRadius: 'var(--radius-xl)',
         overflow: 'hidden',
       }}
     >
@@ -501,26 +483,26 @@ function TopicsSkeleton() {
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 'var(--sp-5)',
-            padding: 'var(--sp-4) var(--sp-6)',
+            gap: 'var(--space-4)',
+            padding: 'var(--space-3) var(--space-5)',
             minHeight: 56,
-            borderTop: 'var(--border-hair) solid var(--divider)',
+            borderTop: 'var(--border-width-hairline) solid var(--border-subtle)',
           }}
         >
           <div
             style={{
               width: 84,
               height: 16,
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--bg-sunken)',
+              borderRadius: 'var(--radius-m)',
+              background: 'var(--surface-sunken)',
             }}
           />
           <div
             style={{
               flex: 1,
               height: 16,
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--bg-sunken)',
+              borderRadius: 'var(--radius-m)',
+              background: 'var(--surface-sunken)',
             }}
           />
         </div>

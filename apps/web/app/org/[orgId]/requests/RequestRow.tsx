@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Badge, Card } from '@/ds';
+import { Badge, Card } from '@devscribed/ds';
 import { REQUEST_STATUS_LABELS } from '@devscribed/validation';
 import type { RequestRowData } from './types';
 
@@ -90,30 +90,30 @@ export function RequestRow({ orgId, request }: { orgId: string; request: Request
         href={`/org/${orgId}/requests/${request.id}`}
         style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', minWidth: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', minWidth: 0 }}>
             <span
               style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: 'var(--fs-13)',
-                color: 'var(--text-muted)',
+                fontFamily: 'var(--font-family-base)',
+                fontSize: 'var(--font-size-xs)',
+                color: 'var(--text-secondary)',
               }}
             >
               #{request.number}
             </span>
             <span
               style={{
-                fontFamily: 'var(--font-display)',
+                fontFamily: 'var(--font-family-base)',
                 fontWeight: 600,
-                fontSize: 'var(--fs-15)',
-                color: 'var(--text)',
+                fontSize: 'var(--font-size-base)',
+                color: 'var(--text-primary)',
                 minWidth: 0,
               }}
             >
               {request.title}
             </span>
             <span style={{ marginLeft: 'auto' }}>
-              <Badge tone={tone} data-testid={`request-row-${request.id}-status`}>
+              <Badge status={tone} data-testid={`request-row-${request.id}-status`}>
                 {status.closure ? `${status.label} · ${status.closure}` : status.label}
               </Badge>
             </span>
@@ -124,9 +124,9 @@ export function RequestRow({ orgId, request }: { orgId: string; request: Request
               display: 'flex',
               flexWrap: 'wrap',
               alignItems: 'center',
-              gap: 'var(--sp-2) var(--sp-4)',
-              fontSize: 'var(--fs-13)',
-              color: 'var(--text-muted)',
+              gap: 'var(--space-1) var(--space-3)',
+              fontSize: 'var(--font-size-xs)',
+              color: 'var(--text-secondary)',
             }}
           >
             {/* The About cell. A request raised under a topic shows its snapshot name
@@ -138,7 +138,7 @@ export function RequestRow({ orgId, request }: { orgId: string; request: Request
               <span data-testid={`request-row-${request.id}-topic`}>
                 {request.topic.name}
                 {request.topic.status === 'archived' && (
-                  <span style={{ color: 'var(--text-faint)' }}> (archived)</span>
+                  <span style={{ color: 'var(--text-tertiary)' }}> (archived)</span>
                 )}
               </span>
             ) : (
@@ -151,8 +151,8 @@ export function RequestRow({ orgId, request }: { orgId: string; request: Request
             {request.neededBy && <span>needed by {formatShortDate(request.neededBy)}</span>}
             {request.blocking && (
               <Badge
-                tone="warning"
-                outline
+                status="warning"
+                outlined
                 data-testid={`request-row-${request.id}-blocking-flag`}
               >
                 Blocked
@@ -160,8 +160,8 @@ export function RequestRow({ orgId, request }: { orgId: string; request: Request
             )}
             {request.overdue && (
               <Badge
-                tone="inactive"
-                outline
+                status="inactive"
+                outlined
                 data-testid={`request-row-${request.id}-overdue-flag`}
               >
                 Overdue

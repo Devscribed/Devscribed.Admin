@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { Button, Input, Modal, Select } from '@/ds';
+import { Button, FormActions, Modal, Select, TextInput } from '@devscribed/ds';
+import { optionFor, valueOf } from '@/select';
 import { focusByTestId } from '@/field-error';
 import {
   REQUEST_MESSAGES,
@@ -31,23 +32,20 @@ const FIELD_INPUT_TESTID: Record<Field, string> = {
   type: 'request-topic-type',
 };
 
-/** Inline error carrying the id the spec names for the name field. */
-function NameError({ message }: { message: string }) {
-  return (
-    <div
-      id="request-topic-error-name"
-      data-testid="request-topic-error-name"
-      style={{
-        fontFamily: 'var(--font-text)',
-        fontSize: 'var(--fs-12)',
-        color: 'var(--error-500)',
-        marginTop: 'var(--sp-2)',
-      }}
-    >
-      {message}
-    </div>
-  );
-}
+/**
+ * Module constants rather than array literals in the markup: `value` takes the *option* a
+ * stored value stands for, and `optionFor` finds it by identity of value — a list rebuilt
+ * on every render is a new set of objects each time.
+ */
+const AUDIENCE_OPTIONS = [
+  { value: 'staff', label: 'Staff' },
+  { value: 'client', label: 'Client' },
+];
+
+const TYPE_OPTIONS = [
+  { value: 'access', label: 'Access' },
+  { value: 'question', label: 'Question' },
+];
 
 /**
  * Add / rename a request topic (requests spec 02 §Screens).
@@ -166,96 +164,77 @@ export function RequestTopicModal({
       open={open}
       title={title}
       onClose={handleClose}
-      width={480}
       data-testid="request-topic-modal"
-      actions={
-        <>
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            onClick={handleClose}
-            disabled={submitting}
-            style={{ flex: 1 }}
-          >
-            Cancel
-          </Button>
-          {/* Disabled only for the duration of the call — never for validation. */}
-          <Button
-            type="submit"
-            form="request-topic-form"
-            variant="primary"
-            size="lg"
-            loading={submitting}
-            data-testid="request-topic-submit"
-            style={{ flex: 1 }}
-          >
-            {isRename ? 'Save' : 'Add topic'}
-          </Button>
-        </>
-      }
     >
       <form
         id="request-topic-form"
         onSubmit={submit}
         noValidate
-        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-6)' }}
+        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}
       >
-        <div>
-          <Input
-            label="Name"
-            value={name}
-            onChange={(event: { target: { value: string } }) => setName(event.target.value)}
-            data-testid="request-topic-name"
-            error={errors.name}
-          />
-          {errors.name && <NameError message={errors.name} />}
-        </div>
+        {/* `errorId` keeps `request-topic-error-name` on the node the cases address —
+            it is the field's own message slot now rather than a sibling this file draws. */}
+        <TextInput
+          label="Name"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          data-testid="request-topic-name"
+          error={errors.name}
+          errorId="request-topic-error-name"
+        />
 
         {/* Neither control is drawn on a rename: both fields are immutable, and a
             control that cannot act is not drawn (REQ-02-004). */}
         {!isRename && (
           <>
-            <div>
-              <Select
-                label="Audience"
-                value={audience}
-                options={[
-                  { value: 'staff', label: 'Staff' },
-                  { value: 'client', label: 'Client' },
-                ]}
-                onChange={setAudience}
-                error={errors.audience}
-                data-testid="request-topic-audience"
-              />
-            </div>
-            <div>
-              <Select
-                label="Kind"
-                value={type}
-                options={[
-                  { value: 'access', label: 'Access' },
-                  { value: 'question', label: 'Question' },
-                ]}
-                onChange={setType}
-                error={errors.type}
-                data-testid="request-topic-type"
-              />
-            </div>
+            <Select
+              label="Audience"
+              value={optionFor(AUDIENCE_OPTIONS, audience)}
+              options={AUDIENCE_OPTIONS}
+              onChange={(option) => setAudience(valueOf(option))}
+              error={errors.audience != null}
+              errorMessage={errors.audience}
+              data-testid="request-topic-audience"
+            />
+            <Select
+              label="Kind"
+              value={optionFor(TYPE_OPTIONS, type)}
+              options={TYPE_OPTIONS}
+              onChange={(option) => setType(valueOf(option))}
+              error={errors.type != null}
+              errorMessage={errors.type}
+              data-testid="request-topic-type"
+            />
           </>
         )}
 
         {formError && (
           <div
             style={{
-              fontFamily: 'var(--font-text)',
-              fontSize: 'var(--fs-13)',
-              color: 'var(--error-500)',
+              fontFamily: 'var(--font-family-base)',
+              fontSize: 'var(--font-size-xs)',
+              color: 'var(--status-error)',
             }}
           >
             {formError}
           </div>
         )}
+
+        <FormActions>
+          <Button type="button" onClick={handleClose} disabled={submitting}>
+            Cancel
+          </Button>
+          {/* Disabled only for the duration of the call — never for validation. */}
+          <Button
+            type="submit"
+            variant="primary"
+            preloader={submitting}
+            disabled={submitting}
+            data-testid="request-topic-submit"
+          >
+            {isRename ? 'Save' : 'Add topic'}
+          </Button>
+        </FormActions>
       </form>
     </Modal>
   );

@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
-import { Button, Checkbox, Input, Modal, Select } from '@/ds';
-import { errorNodeById } from '@/field-error';
+import { Button, Checkbox, FormActions, Modal, Select, TextArea, TextInput } from '@devscribed/ds';
+import { optionFor, valueOf } from '@/select';
 import { useSession } from '@/layout/session-context';
 import {
   REQUEST_MESSAGES,
@@ -29,8 +29,8 @@ interface TopicOption {
 
 /**
  * Requests spec 03 — one offer in the contact picker: a person, and the client they work
- * for. The option label renders both, which the design system's `Select` already types as
- * a `ReactNode`, so the two-line option needs no new primitive.
+ * for. The client's name is the option's `hint`, which the design system draws as the
+ * row's second line, so the two-line option needs no new primitive.
  */
 interface ContactOption {
   id: string;
@@ -49,12 +49,11 @@ const ASSIGNEE_KIND_OPTIONS: { value: AssigneeKind; label: string }[] = [
 
 const microLabel: CSSProperties = {
   display: 'block',
-  fontFamily: 'var(--font-display)',
-  fontSize: 'var(--fs-11)',
-  letterSpacing: 'var(--ls-wider)',
+  fontFamily: 'var(--font-family-base)',
+  fontSize: 'var(--font-size-xs)',
   textTransform: 'uppercase',
-  color: 'var(--text-muted)',
-  marginBottom: 'var(--sp-4)',
+  color: 'var(--text-secondary)',
+  marginBottom: 'var(--space-3)',
 };
 
 /**
@@ -92,10 +91,10 @@ function FieldError({ field, message }: { field: string; message: string }) {
       id={`request-new-error-${field}`}
       data-testid={testId}
       style={{
-        fontFamily: 'var(--font-text)',
-        fontSize: 'var(--fs-12)',
-        color: 'var(--error-500)',
-        marginTop: 'var(--sp-2)',
+        fontFamily: 'var(--font-family-base)',
+        fontSize: 'var(--font-size-xs)',
+        color: 'var(--status-error)',
+        marginTop: 'var(--space-1)',
       }}
     >
       {message}
@@ -113,9 +112,9 @@ function FieldError({ field, message }: { field: string; message: string }) {
  * project now chooses the contact rather than the reverse, and Needed by opens seeded with
  * today and bounded by `requestNeededByMax`.
  *
- * Two `@ds` gaps are filled here with token-carrying native elements, exactly as the
- * vacation modals already do: there is no textarea primitive and no date primitive. Both
- * are recorded in the spec's DS-gaps table; neither gets a style of its own.
+ * One DS gap is still filled here with a token-carrying native element: there is no date
+ * primitive. The textarea gap the spec's table also recorded is closed — the system ships
+ * `TextArea` — so `Description` is the system's field like every other one on this form.
  */
 export function NewRequestModal({
   orgId,
@@ -157,7 +156,6 @@ export function NewRequestModal({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [descriptionFocus, setDescriptionFocus] = useState(false);
   const [dateFocus, setDateFocus] = useState(false);
 
   const assigneeKindRef = useRef<HTMLDivElement>(null);
@@ -297,16 +295,25 @@ export function NewRequestModal({
     setFieldErrors({});
   }
 
+  /**
+   * `[role="combobox"]` rather than `button`: the system's `Select` is a `tabIndex=0` box
+   * carrying that role, and its only `<button>` is the clear-all a multi-select draws. A
+   * selector looking for a button finds nothing here and fails silently — the form would
+   * report its errors and move focus nowhere.
+   */
+  const comboboxIn = (wrapper: HTMLDivElement | null): HTMLElement | null =>
+    wrapper?.querySelector<HTMLElement>('[role="combobox"]') ?? null;
+
   function focusFirstInvalid(errors: Record<string, string>): void {
     const first = FIELD_ORDER.find((field) => errors[field]);
     const target: Record<string, HTMLElement | null> = {
-      topicId: topicRef.current?.querySelector('button') ?? null,
+      topicId: comboboxIn(topicRef.current),
       title: titleRef.current?.querySelector('input') ?? null,
       description: descriptionRef.current,
-      projectId: projectRef.current?.querySelector('button') ?? null,
-      assigneeMembershipId: assigneeRef.current?.querySelector('button') ?? null,
-      assigneeClientMembershipId: assigneeRef.current?.querySelector('button') ?? null,
-      priority: priorityRef.current?.querySelector('button') ?? null,
+      projectId: comboboxIn(projectRef.current),
+      assigneeMembershipId: comboboxIn(assigneeRef.current),
+      assigneeClientMembershipId: comboboxIn(assigneeRef.current),
+      priority: comboboxIn(priorityRef.current),
       neededBy: neededByRef.current,
     };
     if (first) target[first]?.focus();
@@ -322,7 +329,7 @@ export function NewRequestModal({
     if (assigneeKind === '') {
       setFieldErrors({ assigneeKind: REQUEST_MESSAGES.assigneeInvalid });
       setFormError(null);
-      (assigneeKindRef.current?.querySelector('button') as HTMLElement | null)?.focus();
+      comboboxIn(assigneeKindRef.current)?.focus();
       return;
     }
 
@@ -416,6 +423,33 @@ export function NewRequestModal({
       ? "No contacts on this project's client"
       : 'Choose a contact';
 
+  /**
+   * `Select` deals in options rather than in the values behind them, and `value` is matched
+   * against the very option objects in `options` — so each list is built once here and both
+   * props read the same array. Built inline in the markup they would be a fresh set of
+   * objects on every render, and nothing would ever match.
+   */
+  const topicOptions = (topics ?? []).map((topic) => ({ value: topic.id, label: topic.name }));
+  const projectSelectOptions = projectOptions.map((project) => ({
+    value: project.id,
+    label: project.name,
+  }));
+  // The client's name is the option's `hint` — the system's own second line on a row —
+  // rather than a `ReactNode` label, which `SelectOption.label` no longer accepts.
+  const contactSelectOptions = contactOptions.map((contact) => ({
+    value: contact.id,
+    label: contact.displayName,
+    hint: contact.clientName,
+  }));
+  const memberSelectOptions = members.map((member) => ({
+    value: member.id,
+    label: member.fullName,
+  }));
+  const priorityOptions = REQUEST_PRIORITIES.map((value) => ({
+    value,
+    label: value.charAt(0).toUpperCase() + value.slice(1),
+  }));
+
   return (
     <Modal
       open={open}
@@ -423,40 +457,10 @@ export function NewRequestModal({
       onClose={() => {
         if (!saving) onClose();
       }}
-      width={520}
       data-testid="request-new-modal"
-      actions={
-        <>
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            onClick={onClose}
-            disabled={saving}
-            style={{ flex: 1 }}
-          >
-            Cancel
-          </Button>
-          {/* Disabled only while the request is in flight — never for validation. Not
-              drawn at all when the catalogue offers nothing (REQ-02-017). */}
-          {!pickerEmpty && (
-            <Button
-              type="submit"
-              form="request-new-form"
-              variant="primary"
-              size="lg"
-              loading={saving}
-              data-testid="request-new-submit"
-              style={{ flex: 1 }}
-            >
-              {saving ? 'Creating' : 'Create request'}
-            </Button>
-          )}
-        </>
-      }
     >
       <form id="request-new-form" onSubmit={submit} noValidate>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-6)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
           {/* The addressee kind, first — PATCH-003. Everything below reads from it, so it
               is asked before anything it feeds. A labelled `Select` like every other
               field of this modal — a segmented control among them would read as a view
@@ -464,16 +468,15 @@ export function NewRequestModal({
           <div ref={assigneeKindRef}>
             <Select
               label="To"
-              value={assigneeKind}
+              value={optionFor(ASSIGNEE_KIND_OPTIONS, assigneeKind)}
               placeholder="Choose a recipient"
               options={ASSIGNEE_KIND_OPTIONS}
-              onChange={chooseAssigneeKind}
-              error={fieldErrors.assigneeKind}
+              onChange={(option) => chooseAssigneeKind(valueOf(option))}
+              error={fieldErrors.assigneeKind != null}
+              errorMessage={fieldErrors.assigneeKind}
+              errorId="request-new-error-assignee-kind"
               data-testid="request-new-assignee-kind"
             />
-            {fieldErrors.assigneeKind && (
-              <FieldError field="assigneeKind" message={fieldErrors.assigneeKind} />
-            )}
           </div>
 
           {/* About — the only classifier a caller supplies. When the addressee's audience
@@ -485,9 +488,9 @@ export function NewRequestModal({
             <div
               data-testid="request-new-topic-empty"
               style={{
-                fontFamily: 'var(--font-text)',
-                fontSize: 'var(--fs-14)',
-                color: 'var(--text-muted)',
+                fontFamily: 'var(--font-family-base)',
+                fontSize: 'var(--font-size-s)',
+                color: 'var(--text-secondary)',
               }}
             >
               {REQUEST_TOPIC_MESSAGES.pickerEmpty}
@@ -496,152 +499,91 @@ export function NewRequestModal({
             <div ref={topicRef}>
               <Select
                 label="About"
-                value={topicId}
+                value={optionFor(topicOptions, topicId)}
                 placeholder="Choose a topic"
-                disabled={fieldsDisabled}
-                options={(topics ?? []).map((topic) => ({
-                  value: topic.id,
-                  label: topic.name,
-                }))}
-                onChange={setTopicId}
-                error={fieldErrors.topicId}
+                isDisabled={fieldsDisabled}
+                options={topicOptions}
+                onChange={(option) => setTopicId(valueOf(option))}
+                error={fieldErrors.topicId != null}
+                errorMessage={fieldErrors.topicId}
+                errorId="request-new-error-topic"
                 data-testid="request-new-topic"
               />
-              {fieldErrors.topicId && (
-                <FieldError field="topicId" message={fieldErrors.topicId} />
-              )}
             </div>
           )}
 
           <div ref={titleRef}>
-            <Input
+            <TextInput
               label="Title"
               value={title}
               disabled={fieldsDisabled}
               onChange={(event) => setTitle(event.target.value)}
-              error={
-                fieldErrors.title
-                  ? errorNodeById('request-new-error-title', fieldErrors.title)
-                  : undefined
-              }
+              error={fieldErrors.title}
+              errorId="request-new-error-title"
               data-testid="request-new-title"
             />
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <label htmlFor="request-new-description" style={microLabel}>
-              Description
-            </label>
-            {/* @ds ships no textarea; this is the token-carrying native element the
-                vacation reject modal already uses. Recorded in the spec's DS gaps. */}
-            <textarea
-              id="request-new-description"
-              ref={descriptionRef}
-              value={description}
-              rows={4}
-              disabled={fieldsDisabled}
-              onChange={(event) => setDescription(event.target.value)}
-              onFocus={() => setDescriptionFocus(true)}
-              onBlur={() => setDescriptionFocus(false)}
-              data-testid="request-new-description"
-              style={{
-                width: '100%',
-                border: `var(--border-crisp) solid ${
-                  fieldErrors.description
-                    ? 'var(--error-500)'
-                    : descriptionFocus
-                      ? 'var(--accent)'
-                      : 'var(--border-strong)'
-                }`,
-                borderRadius: 'var(--radius-lg)',
-                padding: 'var(--sp-4) var(--sp-6)',
-                fontFamily: 'var(--font-text)',
-                fontSize: 'var(--fs-15)',
-                color: 'var(--text)',
-                background: 'var(--bg-field)',
-                outline: 'none',
-                boxShadow: descriptionFocus ? 'var(--shadow-glow-accent)' : 'none',
-                transition: 'border-color .15s, box-shadow .15s',
-                resize: 'vertical',
-                cursor: fieldsDisabled ? 'not-allowed' : 'text',
-                opacity: fieldsDisabled ? 0.55 : 1,
-              }}
-            />
-            {fieldErrors.description && (
-              <FieldError field="description" message={fieldErrors.description} />
-            )}
-          </div>
+          {/* The system ships the multi-line field now, so the hand-drawn box and the
+              focus flag that painted it are gone; the DS-gaps row this recorded is closed. */}
+          <TextArea
+            id="request-new-description"
+            ref={descriptionRef}
+            label="Description"
+            value={description}
+            disabled={fieldsDisabled}
+            onChange={(event) => setDescription(event.target.value)}
+            data-testid="request-new-description"
+            error={fieldErrors.description}
+            errorId="request-new-error-description"
+          />
 
           <div ref={projectRef}>
             <Select
               label="Project"
-              value={projectId}
+              value={optionFor(projectSelectOptions, projectId)}
               placeholder={assigneeKind === 'client' ? 'Choose a project' : 'Any'}
-              disabled={fieldsDisabled}
-              options={projectOptions.map((project) => ({
-                value: project.id,
-                label: project.name,
-              }))}
-              onChange={(value) => {
-                setProjectId(value);
+              isDisabled={fieldsDisabled}
+              options={projectSelectOptions}
+              onChange={(option) => {
+                setProjectId(valueOf(option));
                 // PATCH-003 — the project chooses the contact now, so a contact chosen
                 // under the previous project does not survive a change of project.
                 setAssigneeClientMembershipId('');
               }}
-              error={fieldErrors.projectId}
+              error={fieldErrors.projectId != null}
+              errorMessage={fieldErrors.projectId}
+              errorId="request-new-error-projectId"
               data-testid="request-new-project"
             />
-            {fieldErrors.projectId && (
-              <FieldError field="projectId" message={fieldErrors.projectId} />
-            )}
           </div>
 
           <div ref={assigneeRef}>
             {assigneeKind === 'client' ? (
               <Select
                 label="For"
-                value={assigneeClientMembershipId}
+                value={optionFor(contactSelectOptions, assigneeClientMembershipId)}
                 placeholder={clientForPlaceholder}
-                disabled={fieldsDisabled}
-                options={contactOptions.map((contact) => ({
-                  value: contact.id,
-                  // A `ReactNode` label: the person's name over their client's, which the
-                  // design system's `Select` already accepts.
-                  label: (
-                    <span style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span>{contact.displayName}</span>
-                      <span style={{ fontSize: 'var(--fs-12)', color: 'var(--text-muted)' }}>
-                        {contact.clientName}
-                      </span>
-                    </span>
-                  ),
-                }))}
-                onChange={setAssigneeClientMembershipId}
-                error={fieldErrors.assigneeClientMembershipId}
+                isDisabled={fieldsDisabled}
+                options={contactSelectOptions}
+                onChange={(option) => setAssigneeClientMembershipId(valueOf(option))}
+                error={fieldErrors.assigneeClientMembershipId != null}
+                errorMessage={fieldErrors.assigneeClientMembershipId}
+                errorId="request-new-error-assignee"
                 data-testid="request-new-assignee-client"
               />
             ) : (
               <Select
                 label="For"
-                value={assigneeMembershipId}
+                value={optionFor(memberSelectOptions, assigneeMembershipId)}
                 placeholder="Choose a person"
-                disabled={fieldsDisabled}
-                options={members.map((member) => ({ value: member.id, label: member.fullName }))}
-                onChange={setAssigneeMembershipId}
-                error={fieldErrors.assigneeMembershipId}
+                isDisabled={fieldsDisabled}
+                options={memberSelectOptions}
+                onChange={(option) => setAssigneeMembershipId(valueOf(option))}
+                error={fieldErrors.assigneeMembershipId != null}
+                errorMessage={fieldErrors.assigneeMembershipId}
+                errorId="request-new-error-assignee"
                 data-testid="request-new-assignee-member"
-              />
-            )}
-            {(fieldErrors.assigneeMembershipId || fieldErrors.assigneeClientMembershipId) && (
-              <FieldError
-                field={
-                  assigneeKind === 'client' ? 'assigneeClientMembershipId' : 'assigneeMembershipId'
-                }
-                message={
-                  (assigneeKind === 'client'
-                    ? fieldErrors.assigneeClientMembershipId
-                    : fieldErrors.assigneeMembershipId) as string
-                }
               />
             )}
           </div>
@@ -649,24 +591,24 @@ export function NewRequestModal({
           <div ref={priorityRef}>
             <Select
               label="Priority"
-              value={priority}
-              options={REQUEST_PRIORITIES.map((value) => ({
-                value,
-                label: value.charAt(0).toUpperCase() + value.slice(1),
-              }))}
-              onChange={setPriority}
-              error={fieldErrors.priority}
+              value={optionFor(priorityOptions, priority)}
+              options={priorityOptions}
+              onChange={(option) => setPriority(valueOf(option))}
+              error={fieldErrors.priority != null}
+              errorMessage={fieldErrors.priority}
+              errorId="request-new-error-priority"
               data-testid="request-new-priority"
             />
-            {fieldErrors.priority && <FieldError field="priority" message={fieldErrors.priority} />}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <label htmlFor="request-new-needed-by" style={microLabel}>
               Needed by
             </label>
-            {/* @ds ships no date field either — same precedent, same DS-gaps row. Seeded
-                with today and bounded by `requestNeededByMax` (PATCH-003, PATCH-002). */}
+            {/* The system ships no date field, which is the one DS-gaps row this modal
+                still stands on. The native control, painted in the system's own control
+                tokens. Seeded with today and bounded by `requestNeededByMax` (PATCH-003,
+                PATCH-002). */}
             <input
               id="request-new-needed-by"
               ref={neededByRef}
@@ -679,24 +621,25 @@ export function NewRequestModal({
               onBlur={() => setDateFocus(false)}
               data-testid="request-new-needed-by"
               style={{
-                height: 'var(--field-h-lg)',
+                height: 'var(--control-height)',
                 width: '100%',
-                border: `var(--border-crisp) solid ${
+                border: `var(--border-width-control) solid ${
                   fieldErrors.neededBy
-                    ? 'var(--error-500)'
+                    ? 'var(--status-error)'
                     : dateFocus
-                      ? 'var(--accent)'
-                      : 'var(--border-strong)'
+                      ? 'var(--action-primary)'
+                      : 'var(--border-default)'
                 }`,
-                borderRadius: 'var(--radius-lg)',
-                padding: '0 var(--sp-6)',
-                fontFamily: 'var(--font-text)',
-                fontSize: 'var(--fs-15)',
-                color: 'var(--text)',
-                background: 'var(--bg-field)',
+                borderRadius: 'var(--radius-l)',
+                padding: '0 var(--space-4)',
+                fontFamily: 'var(--font-family-base)',
+                fontSize: 'var(--font-size-s)',
+                color: 'var(--text-primary)',
+                background: 'var(--surface-card)',
                 outline: 'none',
-                boxShadow: dateFocus ? 'var(--shadow-glow-accent)' : 'none',
-                transition: 'border-color .15s, box-shadow .15s',
+                boxShadow: dateFocus ? 'var(--shadow-focus-input)' : 'none',
+                transition: 'var(--transition-border-focus)',
+                boxSizing: 'border-box',
               }}
             />
             {fieldErrors.neededBy && <FieldError field="neededBy" message={fieldErrors.neededBy} />}
@@ -704,7 +647,7 @@ export function NewRequestModal({
 
           <Checkbox
             checked={blocking}
-            onChange={setBlocking}
+            onChange={(event) => setBlocking(event.target.checked)}
             label="Work is stopped until this is done"
             data-testid="request-new-blocking"
           />
@@ -712,14 +655,33 @@ export function NewRequestModal({
           {formError && (
             <div
               style={{
-                fontFamily: 'var(--font-text)',
-                fontSize: 'var(--fs-13)',
-                color: 'var(--error-500)',
+                fontFamily: 'var(--font-family-base)',
+                fontSize: 'var(--font-size-xs)',
+                color: 'var(--status-error)',
               }}
             >
               {formError}
             </div>
           )}
+
+          <FormActions>
+            <Button type="button" onClick={onClose} disabled={saving}>
+              Cancel
+            </Button>
+            {/* Disabled only while the request is in flight — never for validation. Not
+                drawn at all when the catalogue offers nothing (REQ-02-017). */}
+            {!pickerEmpty && (
+              <Button
+                type="submit"
+                variant="primary"
+                preloader={saving}
+                disabled={saving}
+                data-testid="request-new-submit"
+              >
+                {saving ? 'Creating' : 'Create request'}
+              </Button>
+            )}
+          </FormActions>
         </div>
       </form>
     </Modal>

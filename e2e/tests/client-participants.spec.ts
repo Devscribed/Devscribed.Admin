@@ -11,6 +11,7 @@ import {
   latestInvitationToken,
   listRequestTopicsViaApi,
   login,
+  openNavSection,
   signupOrg,
   uniqueEmail,
 } from './helpers';
@@ -250,6 +251,8 @@ test.describe('Client participants (requests spec 03)', () => {
     await inviteAndAcceptContact(request, organizationId, clientId, contactEmail);
 
     await signInUi(page, contactEmail, 'requests');
+    // A contact's one group is `People`, and a closed group holds none of its rows.
+    await openNavSection(page, 'People');
     await expect(page.getByTestId('sidebar-requests-link')).toBeVisible();
     await expect(page.getByTestId('nav-members')).toHaveCount(0);
     await expect(page.getByTestId('nav-projects')).toHaveCount(0);
@@ -277,7 +280,9 @@ test.describe('Client participants (requests spec 03)', () => {
     await expect(page.getByTestId('requests-page')).toBeVisible();
 
     await switchUi(page, adminEmail, 'members');
+    await openNavSection(page, 'People');
     await expect(page.getByTestId('nav-members')).toBeVisible();
+    await openNavSection(page, 'Project management');
     await expect(page.getByTestId('nav-projects')).toBeVisible();
     await expect(page.getByTestId('nav-clients')).toBeVisible();
   });
@@ -345,7 +350,11 @@ test.describe('Client participants (requests spec 03)', () => {
         ).toHaveCount(0);
 
         await contactPage.reload();
-        await contactPage.waitForURL('**/login');
+        // `**/login**`, not `**/login`: the contact was on a deep link, and the shell now
+        // bounces a signed-out visitor to the login screen carrying `?next` so signing in
+        // returns them where they were headed (`app-shell.spec.ts`). The bare glob is
+        // matched against the whole URL and a query string defeats it.
+        await contactPage.waitForURL('**/login**');
         await expect(contactPage.getByTestId('request-detail-page')).toHaveCount(0);
         await expect(contactPage.getByTestId('requests-page')).toHaveCount(0);
       } finally {

@@ -51,20 +51,20 @@ export function RequestHistory({ events }: { events: RequestEventData[] }) {
   return (
     <div
       data-testid="request-detail-history"
-      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-3)' }}
+      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}
     >
       {events.map((event) => (
         <div
           key={event.id}
           style={{
             display: 'flex',
-            gap: 'var(--sp-4)',
-            fontFamily: 'var(--font-text)',
-            fontSize: 'var(--fs-13)',
-            color: 'var(--text-sub)',
+            gap: 'var(--space-3)',
+            fontFamily: 'var(--font-family-base)',
+            fontSize: 'var(--font-size-xs)',
+            color: 'var(--text-secondary)',
           }}
         >
-          <span style={{ color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>
+          <span style={{ color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
             {formatMoment(event.createdAt)}
           </span>
           <span>{describe(event)}</span>

@@ -11,6 +11,7 @@ import {
   removeMember,
   seedReserveCredit,
   setMembershipRole,
+  openNavSection,
   requestTopicIdViaApi,
   signupOrg,
   submitVacationRequestViaApi,
@@ -166,9 +167,15 @@ async function patchRequestViaApi(
   }
 }
 
-/** Clicks the sidebar Requests row and lands on the page. */
+/**
+ * Clicks the sidebar Requests row and lands on the page.
+ *
+ * The row lives inside the rail's `Time off` group, and a closed group holds none of its
+ * rows in the document — so the section is opened before the row is addressed.
+ */
 async function openRequestsPage(page: Page): Promise<void> {
   await expect(async () => {
+    await openNavSection(page, 'Time off');
     await page.getByTestId('sidebar-requests-link').click();
     await page.waitForURL('**/requests', { timeout: 2000 });
   }).toPass({ timeout: 15000 });
@@ -353,6 +360,9 @@ test.describe('requests/01 — Requests', () => {
     });
 
     await signInUi(page, viewerEmail);
+    // The row sits inside the rail's `Time off` group, and a closed group holds none of
+    // its rows in the document — so the section is thrown before the row is read.
+    await openNavSection(page, 'Time off');
     await expect(page.getByTestId('sidebar-requests-link')).toBeVisible();
     await openRequestsPage(page);
 
@@ -591,6 +601,7 @@ test.describe('requests/01 — Requests', () => {
 
     for (const email of [adminEmail, managerEmail, userEmail, viewerEmail]) {
       await switchUi(page, email);
+      await openNavSection(page, 'Time off');
       await expect(page.getByTestId('sidebar-requests-link')).toHaveCount(1);
     }
   });
@@ -608,6 +619,9 @@ test.describe('requests/01 — Requests', () => {
     const firstCount = badgeFetch(page, org.organizationId);
     await signInUi(page, adminEmail);
     await firstCount;
+    // The row sits inside the rail's `Time off` group, and a closed group holds none of
+    // its rows in the document — so the section is thrown before the row is read.
+    await openNavSection(page, 'Time off');
     await expect(page.getByTestId('sidebar-requests-link')).toBeVisible();
     await expect(page.getByTestId('sidebar-requests-badge')).toHaveCount(0);
 
@@ -622,6 +636,7 @@ test.describe('requests/01 — Requests', () => {
     });
 
     await page.reload();
+    await openNavSection(page, 'Time off');
     await expect(page.getByTestId('sidebar-requests-badge')).toHaveText('2');
 
     // Only the requester grants — the badge empties because the work is done, not
@@ -633,6 +648,7 @@ test.describe('requests/01 — Requests', () => {
     const finalCount = badgeFetch(page, org.organizationId);
     await page.reload();
     await finalCount;
+    await openNavSection(page, 'Time off');
     await expect(page.getByTestId('sidebar-requests-link')).toBeVisible();
     // The list is opened as a second anchor: its rows come from a response issued after
     // the count response above had already arrived, so the badge has been given its

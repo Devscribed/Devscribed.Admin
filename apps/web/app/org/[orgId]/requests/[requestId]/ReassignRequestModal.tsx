@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
-import { Button, Modal, Select } from '@/ds';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Button, FormActions, Modal, Select } from '@devscribed/ds';
+import { optionFor, valueOf } from '@/select';
 import { REQUEST_MESSAGES } from '@devscribed/validation';
 
 interface MemberOption {
@@ -36,6 +37,11 @@ export function ReassignRequestModal({
   const [assigneeMembershipId, setAssigneeMembershipId] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const memberOptions = useMemo(
+    () => members.map((member) => ({ value: member.id, label: member.fullName })),
+    [members],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -108,56 +114,38 @@ export function ReassignRequestModal({
       onClose={() => {
         if (!saving) onClose();
       }}
-      width={440}
-      actions={
-        <>
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            onClick={onClose}
-            disabled={saving}
-            style={{ flex: 1 }}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            form="request-reassign-form"
-            variant="primary"
-            size="lg"
-            loading={saving}
-            style={{ flex: 1 }}
-          >
-            {saving ? 'Reassigning' : 'Reassign'}
-          </Button>
-        </>
-      }
     >
-      <form id="request-reassign-form" onSubmit={submit} noValidate>
+      <form
+        id="request-reassign-form"
+        onSubmit={submit}
+        noValidate
+        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}
+      >
+        {/* `Select` deals in options, not in the values behind them, so the stored id is
+            crossed both ways — `optionFor` on the way in, `valueOf` on the way out. The
+            refusal is the control's own now: `error` paints it and `errorMessage` says it,
+            in place of the message node this form drew underneath. */}
         <Select
           label="For"
-          value={assigneeMembershipId}
+          value={optionFor(memberOptions, assigneeMembershipId)}
           placeholder="Choose a person"
-          options={members.map((member) => ({ value: member.id, label: member.fullName }))}
-          onChange={(value) => {
-            setAssigneeMembershipId(value);
+          options={memberOptions}
+          onChange={(option) => {
+            setAssigneeMembershipId(valueOf(option));
             setError(null);
           }}
-          error={error ?? undefined}
+          error={error != null}
+          errorMessage={error ?? undefined}
         />
-        {error && (
-          <div
-            style={{
-              fontFamily: 'var(--font-text)',
-              fontSize: 'var(--fs-12)',
-              color: 'var(--error-500)',
-              marginTop: 'var(--sp-2)',
-            }}
-          >
-            {error}
-          </div>
-        )}
+
+        <FormActions>
+          <Button type="button" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" preloader={saving} disabled={saving}>
+            {saving ? 'Reassigning' : 'Reassign'}
+          </Button>
+        </FormActions>
       </form>
     </Modal>
   );

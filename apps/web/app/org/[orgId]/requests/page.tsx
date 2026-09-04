@@ -3,12 +3,22 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { use, useCallback, useEffect, useState } from 'react';
-import { Badge, Button, Card, SearchField, Select, Tabs } from '@/ds';
+import {
+  Avatar,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  PageTabs,
+  Preloader,
+  SearchInput,
+  Select,
+} from '@devscribed/ds';
+import { optionFor, valueOf } from '@/select';
 import { PageHeader } from '@/layout/PageHeader';
 import { useSession } from '@/layout/session-context';
 import { usePendingRequests } from '@/layout/requests-badge-context';
 import { useToast } from '@/toast';
-import { optionFor, valueOf } from '@/select';
 import {
   REQUEST_MESSAGES,
   REQUEST_STATUS_LABELS,
@@ -71,6 +81,12 @@ const TYPE_OPTIONS: { value: RequestTypeQuery; label: string }[] = [
   { value: 'access', label: 'Access' },
   { value: 'question', label: 'Question' },
   { value: 'vacation', label: 'Vacation' },
+];
+
+/** The scope strip. `PageTabs` draws each tab, so only it can carry the test ids. */
+const SCOPE_TABS = [
+  { value: 'mine', label: 'Mine', testId: 'requests-scope-mine' },
+  { value: 'all', label: 'All', testId: 'requests-scope-all' },
 ];
 
 /** Vacation status → DS `Badge` tone + label — spec 09's map, reused unchanged. */
@@ -376,6 +392,19 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
   const emptyMessage =
     data && data.counts.total > 0 ? REQUEST_MESSAGES.emptyFiltered : REQUEST_MESSAGES.emptyMine;
 
+  // Built once here so `value` and `options` are handed the same option objects: `optionFor`
+  // finds the chosen one by its value, and a list rebuilt inside the markup is a new set of
+  // objects on every render. The `Any …` entry is a real option for the empty value, not a
+  // placeholder — the reader who chooses it must see it chosen.
+  const topicFilterOptions = [
+    { value: '', label: 'Any topic' },
+    ...topics.map((topic) => ({ value: topic.id, label: topic.label })),
+  ];
+  const projectFilterOptions = [
+    { value: '', label: 'Any project' },
+    ...projects.map((project) => ({ value: project.id, label: project.name })),
+  ];
+
   return (
     <div data-testid="requests-page">
       <PageHeader
@@ -403,51 +432,50 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
             display: 'flex',
             flexWrap: 'wrap',
             alignItems: 'flex-end',
-            gap: 'var(--sp-5)',
-            marginBottom: 'var(--sp-8)',
+            gap: 'var(--space-4)',
+            marginBottom: 'var(--space-6)',
           }}
         >
           {/* The scope control is not drawn at all for a caller who cannot use it. */}
           {canScopeAll && (
             <div data-testid="requests-scope-toggle">
-              <Tabs
-                items={[
-                  { value: 'mine', label: 'Mine' },
-                  { value: 'all', label: 'All' },
-                ]}
-                value={scope}
+              <PageTabs
+                label="Scope"
+                tabs={SCOPE_TABS}
+                active={scope}
                 onChange={(value) => setScope(value === 'all' ? 'all' : 'mine')}
               />
             </div>
           )}
 
+          {/* Every filter crosses the option/value boundary the same way: `optionFor` finds
+              the option a stored value stands for, `valueOf` takes the value back out. Bound
+              to the bare value these drew the value itself — a string is a legal option whose
+              label is itself — so `open` would render where the list says `Open`. */}
           <div style={{ minWidth: 170 }}>
             <Select
-              value={type}
+              value={optionFor(TYPE_OPTIONS, type)}
               options={TYPE_OPTIONS}
-              onChange={(value) => setType(parseRequestTypeQuery(value) ?? 'all')}
+              onChange={(option) => setType(parseRequestTypeQuery(valueOf(option)) ?? 'all')}
               data-testid="requests-type-filter"
             />
           </div>
 
           <div style={{ minWidth: 170 }}>
             <Select
-              value={topicId}
+              value={optionFor(topicFilterOptions, topicId)}
               placeholder="Any topic"
-              options={[
-                { value: '', label: 'Any topic' },
-                ...topics.map((topic) => ({ value: topic.id, label: topic.label })),
-              ]}
-              onChange={setTopicId}
+              options={topicFilterOptions}
+              onChange={(option) => setTopicId(valueOf(option))}
               data-testid="requests-topic-filter"
             />
           </div>
 
           <div style={{ minWidth: 170 }}>
             <Select
-              value={statusSelection(status)}
+              value={optionFor(STATUS_OPTIONS, statusSelection(status))}
               options={STATUS_OPTIONS}
-              onChange={(value) => setStatus(parseRequestStatusQuery(value) ?? 'all')}
+              onChange={(option) => setStatus(parseRequestStatusQuery(valueOf(option)) ?? 'all')}
               data-testid="requests-status-filter"
             />
           </div>
@@ -455,22 +483,21 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
           {canListProjects && (
             <div style={{ minWidth: 170 }}>
               <Select
-                value={projectId}
+                value={optionFor(projectFilterOptions, projectId)}
                 placeholder="Any project"
-                options={[
-                  { value: '', label: 'Any project' },
-                  ...projects.map((project) => ({ value: project.id, label: project.name })),
-                ]}
-                onChange={setProjectId}
+                options={projectFilterOptions}
+                onChange={(option) => setProjectId(valueOf(option))}
               />
             </div>
           )}
 
           <div style={{ minWidth: 200, flex: 1 }}>
-            <SearchField
+            <SearchInput
+              outlined
               value={q}
               placeholder="Search titles"
               onChange={(event) => setQ(event.target.value)}
+              onClear={() => setQ('')}
             />
           </div>
         </div>
@@ -482,21 +509,19 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 'var(--sp-5)',
-              padding: 'var(--sp-5)',
-              marginBottom: 'var(--sp-6)',
-              border: 'var(--border-hair) solid var(--error-500)',
-              borderRadius: 'var(--radius-lg)',
-              fontFamily: 'var(--font-text)',
-              fontSize: 'var(--fs-14)',
-              color: 'var(--text)',
+              gap: 'var(--space-4)',
+              padding: 'var(--space-4)',
+              marginBottom: 'var(--space-5)',
+              border: 'var(--border-width-hairline) solid var(--status-error)',
+              borderRadius: 'var(--radius-l)',
+              fontFamily: 'var(--font-family-base)',
+              fontSize: 'var(--font-size-s)',
+              color: 'var(--text-primary)',
             }}
           >
             <span>{REQUEST_MESSAGES.genericError}</span>
             <span style={{ marginLeft: 'auto' }}>
               <Button
-                variant="secondary"
-                size="sm"
                 onClick={() => void load()}
                 data-testid="requests-error-retry-btn"
               >
@@ -506,27 +531,18 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
           </div>
         )}
 
+        {/* The system's own loading and empty surfaces: the hand-drawn skeleton and the
+            centred empty block this screen carried are `Preloader` and `EmptyState`. */}
         {loading && data === null ? (
-          <RequestsSkeleton />
+          <Preloader data-testid="requests-loading" />
         ) : (
           <>
             {showEmpty ? (
-              <div
-                data-testid="requests-empty-state"
-                style={{
-                  padding: 'var(--sp-12) var(--sp-8)',
-                  textAlign: 'center',
-                  fontFamily: 'var(--font-display)',
-                  fontSize: 'var(--fs-16)',
-                  color: 'var(--text-faint)',
-                }}
-              >
+              <EmptyState data-testid="requests-empty-state">
                 <div>{emptyMessage}</div>
                 {filtersActive && (
-                  <div style={{ marginTop: 'var(--sp-6)' }}>
+                  <div style={{ marginTop: 'var(--space-5)' }}>
                     <Button
-                      variant="secondary"
-                      size="sm"
                       onClick={() => {
                         setStatus('all');
                         setType('all');
@@ -539,9 +555,9 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
                     </Button>
                   </div>
                 )}
-              </div>
+              </EmptyState>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-5)' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
                 {requests.map((request) => (
                   <RequestRow key={request.id} orgId={orgId} request={request} />
                 ))}
@@ -549,20 +565,19 @@ export default function RequestsPage({ params }: { params: Promise<{ orgId: stri
             )}
 
             {vacation && (
-              <div data-testid="requests-vacation-section" style={{ marginTop: 'var(--sp-10)' }}>
+              <div data-testid="requests-vacation-section" style={{ marginTop: 'var(--space-7)' }}>
                 <div
                   style={{
-                    fontFamily: 'var(--font-display)',
-                    fontSize: 'var(--fs-11)',
-                    letterSpacing: 'var(--ls-wider)',
+                    fontFamily: 'var(--font-family-base)',
+                    fontSize: 'var(--font-size-xs)',
                     textTransform: 'uppercase',
-                    color: 'var(--text-muted)',
-                    marginBottom: 'var(--sp-5)',
+                    color: 'var(--text-secondary)',
+                    marginBottom: 'var(--space-4)',
                   }}
                 >
                   Vacation
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-6)' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
                   {vacation.requests.map((vacationRequest) => (
                     <VacationCard
                       key={vacationRequest.id}

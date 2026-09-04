@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
-import { Button, Input, Modal } from '@/ds';
+import { Button, FormActions, Modal, TextInput } from '@devscribed/ds';
 import {
   CLIENT_MESSAGES,
   CLIENT_USER_MESSAGES,
@@ -110,67 +110,30 @@ export function InviteContactModal({
       onClose={() => {
         if (!submitting) onClose();
       }}
-      width={480}
       data-testid="client-contact-invite-modal"
-      actions={
-        <>
-          <Button
-            type="button"
-            variant="secondary"
-            size="lg"
-            onClick={onClose}
-            disabled={submitting}
-            style={{ flex: 1 }}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            form="client-contact-invite-form"
-            variant="primary"
-            size="lg"
-            loading={submitting}
-            data-testid="client-contact-invite-submit"
-            style={{ flex: 1 }}
-          >
-            {submitting ? 'Sending' : 'Send invitation'}
-          </Button>
-        </>
-      }
     >
       <form id="client-contact-invite-form" onSubmit={submit} noValidate>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-5)' }}>
-          <div>
-            <Input
-              label="Email"
-              value={email}
-              onChange={(event) => {
-                setEmail(event.target.value);
-                if (emailError) setEmailError(null);
-              }}
-              error={emailError ?? undefined}
-              data-testid="client-contact-invite-email"
-            />
-            {emailError && (
-              <div
-                data-testid="client-contact-invite-error-email"
-                style={{
-                  fontFamily: 'var(--font-text)',
-                  fontSize: 'var(--fs-12)',
-                  color: 'var(--error-500)',
-                  marginTop: 'var(--sp-2)',
-                }}
-              >
-                {emailError}
-              </div>
-            )}
-          </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-7)' }}>
+          {/* The field carries its own message now — `errorId` keeps the id the cases
+              address, so the node the test reads is the control's rather than this
+              screen's copy of it underneath. */}
+          <TextInput
+            label="Email"
+            value={email}
+            onChange={(event) => {
+              setEmail(event.target.value);
+              if (emailError) setEmailError(null);
+            }}
+            error={emailError ?? undefined}
+            errorId="client-contact-invite-error-email"
+            data-testid="client-contact-invite-email"
+          />
 
           <div
             style={{
-              fontFamily: 'var(--font-text)',
-              fontSize: 'var(--fs-13)',
-              color: 'var(--text-muted)',
+              fontFamily: 'var(--font-family-base)',
+              fontSize: 'var(--font-size-xs)',
+              color: 'var(--text-secondary)',
             }}
           >
             They will be emailed an invitation. Once they accept, requests can be addressed
@@ -180,14 +143,29 @@ export function InviteContactModal({
           {formError && (
             <div
               style={{
-                fontFamily: 'var(--font-text)',
-                fontSize: 'var(--fs-13)',
-                color: 'var(--error-500)',
+                fontFamily: 'var(--font-family-base)',
+                fontSize: 'var(--font-size-xs)',
+                color: 'var(--status-error)',
               }}
             >
               {formError}
             </div>
           )}
+
+          <FormActions>
+            <Button type="button" onClick={onClose} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              preloader={submitting}
+              disabled={submitting}
+              data-testid="client-contact-invite-submit"
+            >
+              {submitting ? 'Sending' : 'Send invitation'}
+            </Button>
+          </FormActions>
         </div>
       </form>
     </Modal>

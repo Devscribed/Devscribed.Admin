@@ -21,23 +21,23 @@ export function RequestThread({ messages }: { messages: RequestMessageData[] }) 
   return (
     <div
       data-testid="request-detail-thread"
-      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-5)' }}
+      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}
     >
       {messages.length === 0 ? (
-        <div style={{ fontSize: 'var(--fs-13)', color: 'var(--text-faint)' }}>
+        <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)' }}>
           No messages yet.
         </div>
       ) : (
         messages.map((message) => (
           <div
             key={message.id}
-            style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-2)' }}
+            style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}
           >
             <div
               style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: 'var(--fs-13)',
-                color: 'var(--text-muted)',
+                fontFamily: 'var(--font-family-base)',
+                fontSize: 'var(--font-size-xs)',
+                color: 'var(--text-secondary)',
               }}
             >
               {message.author.displayName ?? 'Former member'} &middot;{' '}
@@ -45,9 +45,9 @@ export function RequestThread({ messages }: { messages: RequestMessageData[] }) 
             </div>
             <div
               style={{
-                fontFamily: 'var(--font-text)',
-                fontSize: 'var(--fs-15)',
-                color: 'var(--text)',
+                fontFamily: 'var(--font-family-base)',
+                fontSize: 'var(--font-size-base)',
+                color: 'var(--text-primary)',
                 whiteSpace: 'pre-wrap',
               }}
             >

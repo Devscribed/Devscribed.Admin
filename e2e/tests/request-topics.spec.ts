@@ -7,6 +7,7 @@ import {
   inviteAndAcceptViaApi,
   listRequestTopicsViaApi,
   login,
+  openNavSection,
   requestTopicIdViaApi,
   signupOrg,
   uniqueEmail,
@@ -83,7 +84,9 @@ test.describe('requests/02 — Request topics & vocabulary', () => {
 
     await signInUi(page, adminEmail);
 
-    // The navigation row is the way in — no typed address.
+    // The navigation row is the way in — no typed address. It sits in the rail's
+    // `Organization` group, which is opened first: a closed group holds no rows.
+    await openNavSection(page, 'Organization');
     await page.getByTestId('settings-tab-request-topics').click();
     await expect(page.getByTestId('request-topics-page')).toBeVisible();
 

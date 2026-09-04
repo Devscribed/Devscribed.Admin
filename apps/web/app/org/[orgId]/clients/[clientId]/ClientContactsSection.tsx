@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Badge, Button, InfoBanner } from '@/ds';
+import { Badge, Button, InfoBanner } from '@devscribed/ds';
 import { useToast } from '@/toast';
 import { CLIENT_MESSAGES } from '@devscribed/validation';
 import type { ClientContactRow, ClientContactStatus, ClientContactsResponse } from '../types';
@@ -9,11 +9,11 @@ import { InviteContactModal } from './InviteContactModal';
 
 const STATUS_META: Record<
   ClientContactStatus,
-  { tone: 'active' | 'inactive' | 'warning'; label: string }
+  { status: 'active' | 'inactive' | 'warning'; label: string }
 > = {
-  active: { tone: 'active', label: 'Active' },
-  invited: { tone: 'warning', label: 'Invited' },
-  removed: { tone: 'inactive', label: 'Removed' },
+  active: { status: 'active', label: 'Active' },
+  invited: { status: 'warning', label: 'Invited' },
+  removed: { status: 'inactive', label: 'Removed' },
 };
 
 const DATE_FMT = new Intl.DateTimeFormat('en-US', { day: '2-digit', month: 'short' });
@@ -94,22 +94,22 @@ export function ClientContactsSection({
   return (
     <div
       data-testid="client-contacts-section"
-      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-4)' }}
+      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}
     >
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 'var(--sp-4)',
+          gap: 'var(--space-3)',
         }}
       >
         <h2
           style={{
-            fontFamily: 'var(--font-display)',
+            fontFamily: 'var(--font-family-base)',
             fontWeight: 600,
-            fontSize: 'var(--fs-16)',
-            color: 'var(--text)',
+            fontSize: 'var(--font-size-base)',
+            color: 'var(--text-primary)',
             margin: 0,
           }}
         >
@@ -121,8 +121,6 @@ export function ClientContactsSection({
             add the first contact is looking. */}
         {!clientArchived && !isEmpty && (
           <Button
-            variant="secondary"
-            size="sm"
             onClick={() => setInviteOpen(true)}
             data-testid="client-contact-invite-btn"
           >
@@ -134,17 +132,17 @@ export function ClientContactsSection({
       {state.kind === 'loading' && <ContactsSkeleton />}
 
       {state.kind === 'error' && (
-        <InfoBanner tone="error" role="alert">
+        <InfoBanner variant="error" role="alert">
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              gap: 'var(--sp-4)',
+              gap: 'var(--space-3)',
             }}
           >
             <span>{CLIENT_MESSAGES.errorLoad}</span>
-            <Button variant="secondary" size="sm" onClick={() => void load()}>
+            <Button onClick={() => void load()}>
               Retry
             </Button>
           </div>
@@ -158,12 +156,12 @@ export function ClientContactsSection({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 'var(--sp-5)',
-            border: 'var(--border-hair) solid var(--divider)',
-            borderRadius: 'var(--radius-lg)',
-            padding: 'var(--sp-8)',
-            color: 'var(--text-faint)',
-            fontSize: 'var(--fs-14)',
+            gap: 'var(--space-4)',
+            border: 'var(--border-width-hairline) solid var(--border-subtle)',
+            borderRadius: 'var(--radius-l)',
+            padding: 'var(--space-6)',
+            color: 'var(--text-tertiary)',
+            fontSize: 'var(--font-size-s)',
           }}
         >
           <span>
@@ -172,8 +170,6 @@ export function ClientContactsSection({
           </span>
           {!clientArchived && (
             <Button
-              variant="secondary"
-              size="sm"
               onClick={() => setInviteOpen(true)}
               data-testid="client-contact-invite-btn"
             >
@@ -186,8 +182,8 @@ export function ClientContactsSection({
       {state.kind === 'ready' && contacts.length > 0 && (
         <div
           style={{
-            border: 'var(--border-hair) solid var(--divider)',
-            borderRadius: 'var(--radius-lg)',
+            border: 'var(--border-width-hairline) solid var(--border-subtle)',
+            borderRadius: 'var(--radius-l)',
             overflow: 'hidden',
           }}
         >
@@ -198,19 +194,19 @@ export function ClientContactsSection({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 'var(--sp-5)',
-                padding: 'var(--sp-5) var(--sp-6)',
-                borderTop: index === 0 ? 'none' : 'var(--border-hair) solid var(--divider)',
+                gap: 'var(--space-4)',
+                padding: 'var(--space-4) var(--space-5)',
+                borderTop: index === 0 ? 'none' : 'var(--border-width-hairline) solid var(--border-subtle)',
               }}
             >
               <span
                 style={{
                   flex: 1,
                   minWidth: 0,
-                  fontFamily: 'var(--font-display)',
+                  fontFamily: 'var(--font-family-base)',
                   fontWeight: 500,
-                  fontSize: 'var(--fs-14)',
-                  color: 'var(--text)',
+                  fontSize: 'var(--font-size-s)',
+                  color: 'var(--text-primary)',
                 }}
               >
                 {contact.displayName ?? contact.email}
@@ -219,8 +215,8 @@ export function ClientContactsSection({
                 style={{
                   flex: 1,
                   minWidth: 0,
-                  fontSize: 'var(--fs-13)',
-                  color: 'var(--text-muted)',
+                  fontSize: 'var(--font-size-xs)',
+                  color: 'var(--text-secondary)',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
@@ -228,10 +224,10 @@ export function ClientContactsSection({
               >
                 {contact.email}
               </span>
-              <Badge tone={STATUS_META[contact.status].tone}>
+              <Badge status={STATUS_META[contact.status].status}>
                 {STATUS_META[contact.status].label}
               </Badge>
-              <span style={{ fontSize: 'var(--fs-13)', color: 'var(--text-faint)' }}>
+              <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--text-tertiary)' }}>
                 {contact.joinedAt
                   ? `joined ${DATE_FMT.format(new Date(contact.joinedAt))}`
                   : contact.invitedAt
@@ -242,10 +238,8 @@ export function ClientContactsSection({
                   and an invited one has no principal yet. */}
               {contact.status === 'active' && (
                 <Button
-                  variant="secondary"
-                  size="sm"
-                  loading={removingId === contact.id}
-                  disabled={removingId !== null && removingId !== contact.id}
+                  preloader={removingId === contact.id}
+                  disabled={removingId !== null}
                   onClick={() => void remove(contact)}
                   data-testid={`client-contact-row-${contact.id}-remove-btn`}
                 >
@@ -274,10 +268,10 @@ function ContactsSkeleton() {
     width: w,
     height: h,
     borderRadius: radius,
-    background: 'var(--bg-sunken)',
+    background: 'var(--surface-sunken)',
   });
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-4)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
       <div style={block('100%', 46)} />
       <div style={block('100%', 46)} />
     </div>
