@@ -199,6 +199,10 @@ test.describe('requests/02 — Request topics & vocabulary', () => {
     await expect(page.getByTestId('request-new-type')).toHaveCount(0);
     await expect(page.getByTestId('request-new-access-kind')).toHaveCount(0);
 
+    // PATCH-003 — the addressee kind is no longer defaulted, and everything below it is
+    // disabled until it is chosen.
+    await chooseOption(page, 'request-new-assignee-kind', 'Colleague');
+
     await page.getByTestId('request-new-title').fill('Claude seat for the new hire');
     await chooseOption(page, 'request-new-assignee-member', 'Pat Owner');
 
@@ -249,8 +253,10 @@ test.describe('requests/02 — Request topics & vocabulary', () => {
     await page.goto(`/org/${org.organizationId}/requests`);
     await expect(page.getByTestId('requests-page')).toBeVisible();
 
-    // The picker no longer offers it: it reads `status=active`.
+    // The picker no longer offers it: it reads `status=active`. PATCH-003 — the
+    // addressee kind is chosen first, since the picker is disabled until it is.
     await page.getByTestId('requests-new-btn').click();
+    await chooseOption(page, 'request-new-assignee-kind', 'Colleague');
     await page.getByTestId('request-new-topic').click();
     await expect(page.getByRole('option', { name: 'VPN', exact: true })).toHaveCount(0);
     await expect(page.getByRole('option', { name: 'Claude', exact: true })).toBeVisible();
@@ -388,6 +394,10 @@ test.describe('requests/02 — Request topics & vocabulary', () => {
 
     await page.getByTestId('requests-new-btn').click();
     await expect(page.getByTestId('request-new-modal')).toBeVisible();
+
+    // PATCH-003 — the staff catalogue is not read, and the empty-catalogue substitution
+    // not evaluated, until the addressee kind that reads it is chosen.
+    await chooseOption(page, 'request-new-assignee-kind', 'Colleague');
     await expect(page.getByTestId('request-new-topic-empty')).toHaveText(COPY.pickerEmpty);
     await expect(page.getByTestId('request-new-topic')).toHaveCount(0);
     await expect(page.getByTestId('request-new-submit')).toHaveCount(0);

@@ -6,6 +6,7 @@ import {
   acceptInvitationViaApi,
   archiveRequestTopicViaApi,
   assignProjectMembersViaApi,
+  createProjectViaApi,
   findMember,
   latestInvitationToken,
   listRequestTopicsViaApi,
@@ -382,6 +383,11 @@ test.describe('Client participants (requests spec 03)', () => {
     await page.goto(`/org/${organizationId}/requests`);
     await page.getByTestId('requests-new-btn').click();
 
+    // PATCH-003 — the addressee kind is asked first; everything below it is disabled
+    // until it is chosen.
+    await page.getByTestId('request-new-assignee-kind').click();
+    await page.getByRole('option', { name: 'Colleague' }).click();
+
     // The staff catalogue before the switch: a seeded staff topic is on offer.
     await page.getByTestId('request-new-topic').click();
     await expect(page.getByRole('option', { name: 'VPN' })).toBeVisible();
@@ -401,17 +407,19 @@ test.describe('Client participants (requests spec 03)', () => {
 
     await page.getByTestId('request-new-title').fill('Warehouse access, please');
 
-    // Submitting with no contact chosen shows the addressee error and leaves the submit
-    // control enabled — a submit control is never disabled for validation.
+    // Submitting with no project or contact chosen shows the addressee error and leaves
+    // the submit control enabled — a submit control is never disabled for validation.
     await page.getByTestId('request-new-submit').click();
     await expect(page.getByTestId('request-new-error-assignee')).toBeVisible();
     await expect(page.getByTestId('request-new-submit')).toBeEnabled();
 
-    await page.getByTestId('request-new-assignee-client').click();
-    await page.getByRole('option', { name: /Dana Stone/ }).click();
-
+    // PATCH-003 — the project chooses the contact now, so it is picked first; the
+    // contact picker offers nothing until it is.
     await page.getByTestId('request-new-project').click();
     await page.getByRole('option', { name: 'Acme Modal Redesign' }).click();
+
+    await page.getByTestId('request-new-assignee-client').click();
+    await page.getByRole('option', { name: /Dana Stone/ }).click();
 
     await page.getByTestId('request-new-submit').click();
     await expect(page.getByTestId('request-new-modal')).toBeHidden();
@@ -516,5 +524,89 @@ test.describe('Client participants (requests spec 03)', () => {
     await expect(page.getByTestId('request-detail-thread')).toContainText(
       'We cannot open that system.',
     );
+  });
+
+  // TC-03-E2E-06 (PATCH-003) — the addressee kind is first and gates the rest of the
+  // form, and the project chooses the contact rather than the reverse.
+  test('asks the addressee kind first and lets the chosen project narrow the contact', async ({
+    page,
+    request,
+  }) => {
+    const adminEmail = uniqueEmail('c03order');
+    const { organizationId } = await signupOrg(request, {
+      orgName: 'Order Inc',
+      email: adminEmail,
+    });
+    const clientId = await createClientViaApi(request, organizationId, 'Acme Order');
+    const clientProjectId = await createClientProjectViaApi(
+      request,
+      organizationId,
+      'Acme Order Redesign',
+      clientId,
+    );
+    const admin = await findMember(request, organizationId, adminEmail);
+    await assignProjectMembersViaApi(request, organizationId, clientProjectId, [admin.id]);
+    // A project with no client, so `Project` for the client kind must not offer it.
+    const clientless = await createProjectViaApi(request, organizationId, 'No client here');
+
+    const contactEmail = uniqueEmail('c03ordercontact');
+    await inviteAndAcceptContact(request, organizationId, clientId, contactEmail);
+    await login(request, adminEmail);
+
+    await signInUi(page, adminEmail, 'members');
+    await page.goto(`/org/${organizationId}/requests`);
+    await page.getByTestId('requests-new-btn').click();
+    await expect(page.getByTestId('request-new-modal')).toBeVisible();
+
+    // Step 2 — `To` precedes `About` in document order.
+    const order = await page
+      .locator('[data-testid="request-new-assignee-kind"], [data-testid="request-new-topic"]')
+      .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-testid')));
+    expect(order.indexOf('request-new-assignee-kind')).toBeLessThan(
+      order.indexOf('request-new-topic'),
+    );
+
+    // Step 3 — everything About reads from is disabled; Priority and Needed by are not.
+    await expect(page.getByTestId('request-new-topic')).toBeDisabled();
+    await expect(page.getByTestId('request-new-title')).toBeDisabled();
+    await expect(page.getByTestId('request-new-description')).toBeDisabled();
+    await expect(page.getByTestId('request-new-project')).toBeDisabled();
+    await expect(page.getByTestId('request-new-assignee-member')).toBeDisabled();
+    await expect(page.getByTestId('request-new-submit')).toBeEnabled();
+    await expect(page.getByTestId('request-new-priority')).toBeEnabled();
+    await expect(page.getByTestId('request-new-needed-by')).toBeEnabled();
+
+    // Step 4 — submitting with no kind chosen shows the one error there is to show.
+    await page.getByTestId('request-new-submit').click();
+    await expect(page.getByTestId('request-new-error-assignee-kind')).toBeVisible();
+    await expect(page.getByTestId('request-new-modal')).toContainText(
+      'Choose who this request is for',
+    );
+    await expect(page.getByTestId('request-new-assignee-kind')).toBeFocused();
+    await expect(page.getByTestId('request-new-submit')).toBeEnabled();
+
+    // Step 5 — choosing Client enables the five gated controls.
+    await page.getByTestId('request-new-assignee-kind').click();
+    await page.getByRole('option', { name: 'Client' }).click();
+    await expect(page.getByTestId('request-new-topic')).toBeEnabled();
+    await expect(page.getByTestId('request-new-title')).toBeEnabled();
+    await expect(page.getByTestId('request-new-description')).toBeEnabled();
+    await expect(page.getByTestId('request-new-project')).toBeEnabled();
+    await expect(page.getByTestId('request-new-assignee-client')).toBeEnabled();
+
+    // Step 6 — the contact picker offers nothing before a project is chosen.
+    await page.getByTestId('request-new-assignee-client').click();
+    await expect(page.getByRole('option')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+
+    // Step 7 — the project picker offers the client's project, not the clientless one.
+    await page.getByTestId('request-new-project').click();
+    await expect(page.getByRole('option', { name: 'Acme Order Redesign' })).toBeVisible();
+    await expect(page.getByRole('option', { name: clientless.name })).toHaveCount(0);
+    await page.getByRole('option', { name: 'Acme Order Redesign' }).click();
+
+    // Step 8 — choosing that project offers the client's active contact.
+    await page.getByTestId('request-new-assignee-client').click();
+    await expect(page.getByRole('option', { name: /Dana Stone/ })).toBeVisible();
   });
 });

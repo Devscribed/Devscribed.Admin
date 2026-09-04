@@ -8,6 +8,7 @@ import {
   REQUEST_MESSAGES,
   REQUEST_PRIORITIES,
   REQUEST_TOPIC_MESSAGES,
+  requestNeededByMax,
   todayInTimeZone,
   validateNewRequest,
 } from '@devscribed/validation';
@@ -38,7 +39,7 @@ interface ContactOption {
   clientName: string;
 }
 
-/** Which kind of addressee the request is for. */
+/** Which kind of addressee the request is for. Starts unset — PATCH-003. */
 type AssigneeKind = 'member' | 'client';
 
 const ASSIGNEE_KIND_OPTIONS: { value: AssigneeKind; label: string }[] = [
@@ -59,7 +60,9 @@ const microLabel: CSSProperties = {
 /**
  * The order errors are reported in, which is also the order the first invalid field is
  * looked for in. Clicking an invalid form shows every error and moves focus to the first
- * one (AC-10); the submit control is never disabled for validation.
+ * one (AC-10); the submit control is never disabled for validation. The addressee kind
+ * itself is not in this list — PATCH-003 checks it before any of these run, since every
+ * field below it is disabled until it is answered.
  */
 const FIELD_ORDER = [
   'topicId',
@@ -72,7 +75,7 @@ const FIELD_ORDER = [
   'neededBy',
 ] as const;
 
-/** Inline field error. Only the four the specs name carry a test id. */
+/** Inline field error. Only the fields the specs name carry a test id. */
 function FieldError({ field, message }: { field: string; message: string }) {
   const testId =
     field === 'title'
@@ -81,7 +84,9 @@ function FieldError({ field, message }: { field: string; message: string }) {
         ? 'request-new-error-topic'
         : field === 'assigneeMembershipId' || field === 'assigneeClientMembershipId'
           ? 'request-new-error-assignee'
-          : undefined;
+          : field === 'assigneeKind'
+            ? 'request-new-error-assignee-kind'
+            : undefined;
   return (
     <div
       id={`request-new-error-${field}`}
@@ -102,6 +107,11 @@ function FieldError({ field, message }: { field: string; message: string }) {
  * New request (requests spec 01 requirements 1–15). The client validates rules 1–7 for
  * immediate feedback and the server re-validates every one of them, including the two it
  * cannot check — an active membership and an available project.
+ *
+ * PATCH-003 — the addressee kind is asked first and starts unset, everything that reads
+ * from it (About, Title, Description, Project, For) is disabled until it is answered, the
+ * project now chooses the contact rather than the reverse, and Needed by opens seeded with
+ * today and bounded by `requestNeededByMax`.
  *
  * Two `@ds` gaps are filled here with token-carrying native elements, exactly as the
  * vacation modals already do: there is no textarea primitive and no date primitive. Both
@@ -127,7 +137,9 @@ export function NewRequestModal({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [projectId, setProjectId] = useState('');
-  const [assigneeKind, setAssigneeKind] = useState<AssigneeKind>('member');
+  // Unset until the caller answers it — PATCH-003. Nothing else in the form is read or
+  // enabled before this is chosen.
+  const [assigneeKind, setAssigneeKind] = useState<AssigneeKind | ''>('');
   const [assigneeMembershipId, setAssigneeMembershipId] = useState('');
   const [assigneeClientMembershipId, setAssigneeClientMembershipId] = useState('');
   const [priority, setPriority] = useState('normal');
@@ -148,6 +160,7 @@ export function NewRequestModal({
   const [descriptionFocus, setDescriptionFocus] = useState(false);
   const [dateFocus, setDateFocus] = useState(false);
 
+  const assigneeKindRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLDivElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const assigneeRef = useRef<HTMLDivElement>(null);
@@ -156,19 +169,20 @@ export function NewRequestModal({
   const topicRef = useRef<HTMLDivElement>(null);
   const neededByRef = useRef<HTMLInputElement | null>(null);
 
-  // Re-seed clean whenever the modal opens, and load the addressee choices.
+  // Re-seed clean whenever the modal opens, and load the addressee choices. Needed by is
+  // seeded with today (PATCH-003) rather than left empty.
   useEffect(() => {
     if (!open) return;
     setTopicId('');
     setTitle('');
     setDescription('');
     setProjectId('');
-    setAssigneeKind('member');
+    setAssigneeKind('');
     setAssigneeMembershipId('');
     setAssigneeClientMembershipId('');
     setPriority('normal');
     setBlocking(false);
-    setNeededBy('');
+    setNeededBy(today);
     setFieldErrors({});
     setFormError(null);
     setSaving(false);
@@ -192,15 +206,16 @@ export function NewRequestModal({
     return () => {
       cancelled = true;
     };
-  }, [open, orgId]);
+  }, [open, orgId, today]);
 
   /* The picker's own read: the addressee's audience, and active only — `staff` for a
      colleague and `client` for a client contact, re-issued when the kind is switched
      (REQ-03-024). Neither an archived topic nor one of the other audience is ever offered
      here. The list's topic FILTER reads the same route with `status=all`, which is a
-     different question and deliberately a second read (REQ-02-031). */
+     different question and deliberately a second read (REQ-02-031). PATCH-003 — while no
+     kind is chosen yet, no read is issued at all. */
   useEffect(() => {
-    if (!open) return;
+    if (!open || assigneeKind === '') return;
     if (topicsByAudience[assigneeKind] !== null) return;
     const audience = assigneeKind === 'client' ? 'client' : 'staff';
     let cancelled = false;
@@ -234,7 +249,9 @@ export function NewRequestModal({
      It is the requester's own route, guarded by `create-request`: the client book's
      contacts route is a manager's read and a `user` is answered 404 by it. Read on the
      open cycle rather than once, so a contact invited or removed elsewhere in the same
-     session is not offered stale. */
+     session is not offered stale. PATCH-003 narrows which of these are OFFERED to the
+     selected project's client, client-side, over this same read — see `contactOptions`
+     below. */
   useEffect(() => {
     if (!open || assigneeKind !== 'client') return;
     let cancelled = false;
@@ -266,9 +283,10 @@ export function NewRequestModal({
   }, [open, orgId, assigneeKind]);
 
   /**
-   * Switching the addressee kind clears the chosen topic — a topic of the other audience
-   * is one the server will refuse — and leaves the title, description, priority,
-   * needed-by and blocking values exactly where they are.
+   * Switching the addressee kind clears the chosen topic and project — a topic of the
+   * other audience and a project chosen under the other kind's rules are both ones the
+   * server will refuse — and leaves the title, description, priority, needed-by and
+   * blocking values exactly where they are.
    */
   function chooseAssigneeKind(value: string): void {
     const kind: AssigneeKind = value === 'client' ? 'client' : 'member';
@@ -297,6 +315,16 @@ export function NewRequestModal({
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();
     if (saving) return;
+
+    // PATCH-003 — the addressee kind is checked before anything that depends on it is
+    // even read: every other field is disabled while it is unset, so this is the only
+    // error a submission with no kind chosen can raise.
+    if (assigneeKind === '') {
+      setFieldErrors({ assigneeKind: REQUEST_MESSAGES.assigneeInvalid });
+      setFormError(null);
+      (assigneeKindRef.current?.querySelector('button') as HTMLElement | null)?.focus();
+      return;
+    }
 
     // Neither `type` nor `accessKind` is sent: the kind is set by the topic, and the
     // route refuses a body carrying either name (REQ-02-021, REQ-02-022).
@@ -358,22 +386,35 @@ export function NewRequestModal({
     setSaving(false);
   }
 
+  // While no addressee kind is chosen, every field below it is disabled — PATCH-003.
+  const fieldsDisabled = assigneeKind === '';
+
   // Only once the read has actually come back: a picker that has not been filled yet is
   // not an empty catalogue. Evaluated PER AUDIENCE, so switching to a kind whose
   // catalogue is empty replaces the picker and withdraws the submit control, and
-  // switching back restores both (REQ-03-024, edge case 20).
-  const topics = topicsByAudience[assigneeKind];
+  // switching back restores both (REQ-03-024, edge case 20). While no kind is chosen the
+  // catalogue is never read (PATCH-003), so this never reports empty for an unset kind.
+  const topics = assigneeKind === '' ? null : topicsByAudience[assigneeKind];
   const pickerEmpty = topics !== null && topics.length === 0;
 
-  // A client-addressed request names a project of the addressee's client, so the control
-  // offers only those. The narrowing is a convenience; the server decides (REQ-03-022).
-  const chosenContact = contacts.find((contact) => contact.id === assigneeClientMembershipId);
+  // PATCH-003 — a client-addressed request offers only projects that belong to a client;
+  // the narrowing to the addressee's own client moved to `For`, below.
   const projectOptions =
-    assigneeKind === 'client'
-      ? projects.filter(
-          (project) => chosenContact !== undefined && project.clientId === chosenContact.clientId,
-        )
-      : projects;
+    assigneeKind === 'client' ? projects.filter((project) => project.clientId !== null) : projects;
+
+  // PATCH-003 — the project chooses the contact, not the reverse: `For` offers only the
+  // active contacts of the selected project's client, and nothing until a project is
+  // chosen.
+  const selectedProject = projects.find((project) => project.id === projectId);
+  const contactOptions =
+    assigneeKind === 'client' && selectedProject
+      ? contacts.filter((contact) => contact.clientId === selectedProject.clientId)
+      : [];
+  const clientForPlaceholder = !projectId
+    ? 'Choose a project first'
+    : contactOptions.length === 0
+      ? "No contacts on this project's client"
+      : 'Choose a contact';
 
   return (
     <Modal
@@ -416,10 +457,30 @@ export function NewRequestModal({
     >
       <form id="request-new-form" onSubmit={submit} noValidate>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-6)' }}>
+          {/* The addressee kind, first — PATCH-003. Everything below reads from it, so it
+              is asked before anything it feeds. A labelled `Select` like every other
+              field of this modal — a segmented control among them would read as a view
+              switch rather than a field. */}
+          <div ref={assigneeKindRef}>
+            <Select
+              label="To"
+              value={assigneeKind}
+              placeholder="Choose a recipient"
+              options={ASSIGNEE_KIND_OPTIONS}
+              onChange={chooseAssigneeKind}
+              error={fieldErrors.assigneeKind}
+              data-testid="request-new-assignee-kind"
+            />
+            {fieldErrors.assigneeKind && (
+              <FieldError field="assigneeKind" message={fieldErrors.assigneeKind} />
+            )}
+          </div>
+
           {/* About — the only classifier a caller supplies. When the addressee's audience
               has no active topic the picker is replaced by the empty-catalogue copy and
               no submit control is drawn at all: the form says why it cannot be used,
-              instead of failing when it is used (REQ-02-017). */}
+              instead of failing when it is used (REQ-02-017). Not evaluated at all while
+              no addressee kind is chosen (PATCH-003). */}
           {pickerEmpty ? (
             <div
               data-testid="request-new-topic-empty"
@@ -437,6 +498,7 @@ export function NewRequestModal({
                 label="About"
                 value={topicId}
                 placeholder="Choose a topic"
+                disabled={fieldsDisabled}
                 options={(topics ?? []).map((topic) => ({
                   value: topic.id,
                   label: topic.name,
@@ -455,6 +517,7 @@ export function NewRequestModal({
             <Input
               label="Title"
               value={title}
+              disabled={fieldsDisabled}
               onChange={(event) => setTitle(event.target.value)}
               error={
                 fieldErrors.title
@@ -476,6 +539,7 @@ export function NewRequestModal({
               ref={descriptionRef}
               value={description}
               rows={4}
+              disabled={fieldsDisabled}
               onChange={(event) => setDescription(event.target.value)}
               onFocus={() => setDescriptionFocus(true)}
               onBlur={() => setDescriptionFocus(false)}
@@ -499,6 +563,8 @@ export function NewRequestModal({
                 boxShadow: descriptionFocus ? 'var(--shadow-glow-accent)' : 'none',
                 transition: 'border-color .15s, box-shadow .15s',
                 resize: 'vertical',
+                cursor: fieldsDisabled ? 'not-allowed' : 'text',
+                opacity: fieldsDisabled ? 0.55 : 1,
               }}
             />
             {fieldErrors.description && (
@@ -511,11 +577,17 @@ export function NewRequestModal({
               label="Project"
               value={projectId}
               placeholder={assigneeKind === 'client' ? 'Choose a project' : 'Any'}
+              disabled={fieldsDisabled}
               options={projectOptions.map((project) => ({
                 value: project.id,
                 label: project.name,
               }))}
-              onChange={setProjectId}
+              onChange={(value) => {
+                setProjectId(value);
+                // PATCH-003 — the project chooses the contact now, so a contact chosen
+                // under the previous project does not survive a change of project.
+                setAssigneeClientMembershipId('');
+              }}
               error={fieldErrors.projectId}
               data-testid="request-new-project"
             />
@@ -524,26 +596,14 @@ export function NewRequestModal({
             )}
           </div>
 
-          {/* The addressee kind, above the addressee itself. A labelled `Select` like
-              every other field of this modal — a segmented control among them would read
-              as a view switch rather than a field. */}
-          <div>
-            <Select
-              label="To"
-              value={assigneeKind}
-              options={ASSIGNEE_KIND_OPTIONS}
-              onChange={chooseAssigneeKind}
-              data-testid="request-new-assignee-kind"
-            />
-          </div>
-
           <div ref={assigneeRef}>
             {assigneeKind === 'client' ? (
               <Select
                 label="For"
                 value={assigneeClientMembershipId}
-                placeholder="Choose a contact"
-                options={contacts.map((contact) => ({
+                placeholder={clientForPlaceholder}
+                disabled={fieldsDisabled}
+                options={contactOptions.map((contact) => ({
                   value: contact.id,
                   // A `ReactNode` label: the person's name over their client's, which the
                   // design system's `Select` already accepts.
@@ -556,12 +616,7 @@ export function NewRequestModal({
                     </span>
                   ),
                 }))}
-                onChange={(value) => {
-                  setAssigneeClientMembershipId(value);
-                  // A project of the previous contact's client is one the server would
-                  // refuse, so the choice does not survive a change of addressee.
-                  setProjectId('');
-                }}
+                onChange={setAssigneeClientMembershipId}
                 error={fieldErrors.assigneeClientMembershipId}
                 data-testid="request-new-assignee-client"
               />
@@ -570,6 +625,7 @@ export function NewRequestModal({
                 label="For"
                 value={assigneeMembershipId}
                 placeholder="Choose a person"
+                disabled={fieldsDisabled}
                 options={members.map((member) => ({ value: member.id, label: member.fullName }))}
                 onChange={setAssigneeMembershipId}
                 error={fieldErrors.assigneeMembershipId}
@@ -609,13 +665,15 @@ export function NewRequestModal({
             <label htmlFor="request-new-needed-by" style={microLabel}>
               Needed by
             </label>
-            {/* @ds ships no date field either — same precedent, same DS-gaps row. */}
+            {/* @ds ships no date field either — same precedent, same DS-gaps row. Seeded
+                with today and bounded by `requestNeededByMax` (PATCH-003, PATCH-002). */}
             <input
               id="request-new-needed-by"
               ref={neededByRef}
               type="date"
               value={neededBy}
               min={today}
+              max={requestNeededByMax(today)}
               onChange={(event) => setNeededBy(event.target.value)}
               onFocus={() => setDateFocus(true)}
               onBlur={() => setDateFocus(false)}

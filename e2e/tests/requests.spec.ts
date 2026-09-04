@@ -91,6 +91,14 @@ function daysFromToday(offset: number): string {
   return ymd(date);
 }
 
+/** PATCH-003 — the ceiling `request-new-needed-by` renders: `years` after today. */
+function yearsFromToday(years: number): string {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setFullYear(date.getFullYear() + years);
+  return ymd(date);
+}
+
 interface SeededRequest {
   id: string;
   number: number;
@@ -215,6 +223,18 @@ test.describe('requests/01 — Requests', () => {
     // The two retired controls are gone entirely; About is the only classifier.
     await expect(page.getByTestId('request-new-type')).toHaveCount(0);
     await expect(page.getByTestId('request-new-access-kind')).toHaveCount(0);
+
+    // TC-01-E2E-01, extended (PATCH-003) — Needed by opens seeded with today and bounded
+    // five years out, before anything is touched.
+    await expect(page.getByTestId('request-new-needed-by')).toHaveValue(ymd(new Date()));
+    await expect(page.getByTestId('request-new-needed-by')).toHaveAttribute('min', ymd(new Date()));
+    await expect(page.getByTestId('request-new-needed-by')).toHaveAttribute(
+      'max',
+      yearsFromToday(5),
+    );
+
+    // The addressee kind is no longer defaulted — PATCH-003 asks it first, above About.
+    await chooseOption(page, 'request-new-assignee-kind', 'Colleague');
     await chooseOption(page, 'request-new-topic', 'Claude');
     await page.getByTestId('request-new-title').fill('Claude seat for the new hire');
     await page.getByTestId('request-new-description').fill('We need one more seat.');
@@ -290,6 +310,19 @@ test.describe('requests/01 — Requests', () => {
 
     // The submit control is enabled before the click — validation never disables it.
     await expect(page.getByTestId('request-new-submit')).toBeEnabled();
+
+    // PATCH-003 — submitted with no addressee kind chosen, the unset kind is the only
+    // error: everything it feeds is disabled, so nothing beneath it is even validated.
+    await page.getByTestId('request-new-submit').click();
+    await expect(page.getByTestId('request-new-error-assignee-kind')).toBeVisible();
+    await expect(page.getByTestId('request-new-modal')).toContainText(
+      'Choose who this request is for',
+    );
+    await expect(page.getByTestId('request-new-assignee-kind')).toBeFocused();
+    await expect(page.getByTestId('request-new-submit')).toBeEnabled();
+
+    // Once a kind is chosen, its dependents are enabled and validated normally.
+    await chooseOption(page, 'request-new-assignee-kind', 'Colleague');
     await page.getByTestId('request-new-submit').click();
 
     // Every error at once, and the topic is now the first field in reading order, so it
