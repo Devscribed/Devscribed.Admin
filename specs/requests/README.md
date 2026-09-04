@@ -319,3 +319,34 @@ Follow-ups this area owes, per [specs/bugs](../bugs/README.md).
   drawn once, so the E2E case selects the tagged node and passes over the duplicate. The
   report proposes the missing UI Description row and a DS-gaps row for the `errorId` the
   design system does not offer; both go into spec 02 before the fix.
+- **[BUG-010](../bugs/BUG-010-new-request-title-error-drawn-twice.md)** — `SPEC-GAP`. The same
+  defect as BUG-007, in the New request modal's Title field: the message is handed to the `@ds`
+  `Input`, which renders it, and drawn again beside the control to carry
+  `request-new-error-title`. Spec 01's UI Description row states that every field error is
+  *rendered*, never that it is drawn once, so `TC-01-E2E-02` selects the tagged node and passes
+  over the duplicate. The report proposes the missing UI Description row and a DS-gaps row into
+  spec 01, and the two fixes share one helper in `apps/web/src/field-error.tsx` — whichever
+  ships first writes it. They are the complete set: no third file in the app passes a raw string
+  to an `@ds` `Input`'s `error` and renders the message again.
+
+## Open patch notes
+
+Behaviour these specs described that a later document has changed, per
+[specs/patches](../patches/README.md).
+
+- **[PATCH-002](../patches/PATCH-002-needed-by-upper-bound.md)** — supersedes requirement 8 of
+  spec 01. `neededBy` gains an upper bound of five years after today, on creation and on edit
+  alike, with `REQUEST_MESSAGES.neededByTooFar`. The lower bound and its creation-only scope are
+  unchanged, and no stored row is re-validated.
+- **[PATCH-003](../patches/PATCH-003-new-request-addressee-first.md)** — supersedes spec 03's
+  two sentences about the New request modal's field order and its project narrowing. `To` moves
+  to the top and starts unset, with `About`, `Title`, `Description`, `Project` and `For`
+  disabled until it is answered; the project now chooses the contact rather than the contact
+  choosing the project; and `Needed by` opens seeded with today and bounded by PATCH-002's
+  ceiling. The server rules REQ-03-021, REQ-03-022 and REQ-03-023 are untouched — the picker's
+  direction changed, not what the route accepts.
+
+PATCH-003 carries `depends-on: ["PATCH-002"]` — it reads `requestNeededByMax` from
+`packages/validation`, so 002 merges first. Nothing else in this area declares a dependency:
+BUG-010 and PATCH-003 both change `NewRequestModal.tsx`, which is a merge order rather than a
+dependency, and either may go first.
