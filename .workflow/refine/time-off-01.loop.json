@@ -184,6 +184,11 @@
       }
     }
   ],
-  "status": "running",
-  "request": "A vacation calendar based on holidays and vacation requests, viewable for the whole organization, for several teams, or for specific people, drawn as a horizontal timeline where each row is a member and each column is a day. Holidays follow a country a manager states on the member, falling back to a country stated on the organization; the phone country code is not a source."
+  "status": "pass",
+  "request": "A vacation calendar based on holidays and vacation requests, viewable for the whole organization, for several teams, or for specific people, drawn as a horizontal timeline where each row is a member and each column is a day. Holidays follow a country a manager states on the member, falling back to a country stated on the organization; the phone country code is not a source.",
+  "outcome": {
+    "reason": "pass",
+    "detail": "1 note(s) for the person with the spec; none of them stops anything.",
+    "at": "2026-09-04T16:35:43.796Z"
+  }
 }
