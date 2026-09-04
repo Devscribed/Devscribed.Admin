@@ -1,113 +1,136 @@
-# pre_implement — round 3 (replan against the settled spec)
+# pre_implement — round 4 (replan against the amended spec and two unbuilt rules)
 
-Spec: `specs/time-off/01-vacation-calendar.md` @ `34dc8740…` (was `90275255…` at round 2)
-Settlement commit: `a83e79f` — *"the pickers draw the list the write accepts"*.
+Spec: `specs/time-off/01-vacation-calendar.md` @ `34dc8740…` — **unchanged** since round 3; the
+amendment landed in the bundle, not in the requirements file.
+Settlement commit: `30b415e` — *"give the organization picker the option that clears it"*
+(`01-vacation-calendar.cases.md`, `01-vacation-calendar.contracts.md`).
 
-The plan on disk was compiled from the round-2 document. Three things moved in `a83e79f`, and two
-of the three findings that sent this back are consequences of them. What follows answers each
-finding by name, then records what changed in `handoff.json`.
+Three findings sent this back. One is a document change I compile against; the other two are
+rules **this plan already carried in round 3** and the diff did not implement. That difference
+decides how round 4 is written: F3 gets a new instruction, F1 and F2 get their existing
+instruction restated at the exact line the implementer must edit, with the shipped code quoted
+back so the divergence is not something anyone has to re-derive.
 
 ---
 
 ## The three findings
 
-### 1. L1 — the picker offered three codes the write refuses (`spec`, blocker)
+### 1. F1 — the organization country PUT clears on an absent `countryCode` key (`code`, blocker)
 
-**Fixed upstream, and the plan now compiles against the fix.** The document no longer has two
-halves that disagree: §Screens pins **both** stated-country pickers to `COUNTRY_OPTIONS` from
-`@devscribed/validation` — `COUNTRY_NAMES`, the same 249 assigned codes `validateCountryCode`
-tests (contracts:214, :344, :360) — so the list a picker offers and the list rule 9 accepts are
-one list. `AC`, `TA` and `XK` leave the feature with the phone-derived list they came in on, and
-the holiday row that may still carry one of them is now a Known Gap naming what closes it and
-where that rule belongs (spec:444).
+**Confirmed on disk, unchanged since the round that planned against it.**
+`apps/api/src/organizations/organization-country.service.ts:76` reads
+`validateStatedCountryCode((input ?? {}).countryCode)`; `undefined` normalizes to
+`{ valid: true, value: null }` (`packages/validation/src/time-off-calendar.ts:250`, doc comment at
+:247 — *"Empty, `null` and `undefined` all normalize to `null`"*), and `:84` writes
+`countryCode: result.value`. A body of `{}` on an organization holding `PL` answers
+`200 {"countryCode":null}`.
 
-Verified against the code, not the prose:
+The document settled the opposite twice, in `a83e79f`: `spec:359`
+(*"a body with no `countryCode` key changes nothing, as the member write beside it does"*) and
+`contracts:133-134`. The member write already implements it — `members.service.ts:454`
+`const wantsCountry = input !== null && typeof input === 'object' && 'countryCode' in input`, with
+the column spread only `...(wantsCountry ? { countryCode } : {})` at `:500`.
 
-- `packages/validation/src/autofill.ts:970` exports `COUNTRY_OPTIONS` as
-  `readonly { code, name }[]`, sorted by name, built from `COUNTRY_NAMES`; the package root
-  re-exports it at `packages/validation/src/index.ts:3750`; `autofill.test.ts:803` pins the
-  length at 249.
-- The name is taken **twice**: `apps/web/src/account-data.ts:58` exports a `COUNTRY_OPTIONS` of
-  its own from libphonenumber's `getCountries()`, and that is the one
-  `settings/holidays/country-options.ts:1` imports today. A wrong import here compiles, renders,
-  and only fails when somebody picks Kosovo — so T8 maps the package's list **once**, in a new
-  `apps/web/src/stated-country-options.ts`, and both screens import that.
-- The design system's `Select` takes `{ value, label }` while the package exports
-  `{ code, name }`; the mapping is the whole of the new module.
-- A stored `null` needs no option of its own: `optionFor` returns `undefined` for a value no
-  option matches (`apps/web/src/select.ts:51`) and `Select` paints its placeholder.
+Round 3's T4 already said this. What round 4 adds is the shape of the *false* branch, which the
+earlier text left to inference and which is where a second wrong implementation would land: no
+`prisma.organization.update`, **no `organization_country_set` log line** (nothing was set), and the
+answer is the stored value read back through the same `select` the `GET` uses. It also names two
+edits that are not behaviour: the comment at `:72-75` argues the reversed reading *as a decision*
+and must go, and the interface doc at `:23-26` is true but incomplete. And one prohibition, because
+it is the cheapest wrong fix available: **do not** make `validateStatedCountryCode` refuse
+`undefined`. Its normalization is what the member write relies on for a *present* key carrying
+`null`, and it is asserted in the unit suite. Presence is the route's question; both routes now
+answer it the same way.
 
-T8 was rewritten end to end (its round-2 instruction — *filter the phone list* — is explicitly
-superseded, not merely appended to), its `files` gained the new module, and `reuse`,
-`buildFromZero`, `premises`, `shippingSurfaces` and `risks` were moved with it.
+### 2. F2 — `timeOffCalendarToday` and `resolveTimeOffCalendarTimezone` exist nowhere (`code`, blocker)
 
-One consequence is recorded as a **note**, not planned around: with the org picker's options
-pinned to the assigned list and no `packages/validation` export holding a label for a "no
-country" option, **the organization country cannot be cleared from the screen**. It is still
-cleared through the endpoint, which is where REQ-01-034 lives and where all three of its cases
-(TC-01-INT-12, TC-01-INT-21, TC-01-INT-24) exercise it. Inventing a label here would put a
-user-facing string outside `packages/validation` and outside the spec's closed Error Messages
-table; that is a person's call, in the document.
+**Confirmed.** `git grep -n 'timeOffCalendarToday\|resolveTimeOffCalendarTimezone' -- specs apps
+packages e2e` returns `contracts.md:213` and `:214` and nothing else. Commit `c75a6bb` deleted both
+from `packages/validation/src/time-off-calendar.ts`, which now ends at `:257` with
+`validateStatedCountryCode`; the endpoint restated one of them privately as
+`time-off-calendar.service.ts:410 reportedTimezone`, and the screen calls the shipped
+`todayInTimeZone` directly (`CalendarScreen.tsx:139`).
 
-### 2. S1-2 — the banner drew the framework's own words (`code`, blocker)
+The two copies agree today, so nothing observable separates them — which is why this is planned as
+a placement rule rather than a behaviour change:
 
-**Planned, in T7 (b), as a rule with no third branch.** The fallback chain on
-`CalendarScreen.tsx:234` is one term too long: `fields ? first : (body?.message ?? generic)`
-never reaches the generic term, because Nest populates `message` on every error — a revoked
-capability draws `Not Found`, a 500 draws `Internal server error`, and neither is an export of
-`packages/validation` or a row of the contracts' Error Messages table.
+- `resolveTimeOffCalendarTimezone(timezone)` answers **which zone** (`'UTC'` for null, blank or a
+  string `Intl.DateTimeFormat` throws on; the stated value otherwise). `range.timezone` reads it.
+- `timeOffCalendarToday(timezone, instant)` answers **which day**, in one line, by delegating:
+  `todayInTimeZone(resolveTimeOffCalendarTimezone(timezone), instant)`.
+  `packages/validation/src/requests.ts:639-652` already ships the `en-CA` formatting and already
+  falls back to the UTC date in its `catch`, so a second `Intl.DateTimeFormat('en-CA', …)` anywhere
+  in this diff is the drift the named export exists to prevent.
 
-The plan now states the whole chain literally — `fields ? Object.values(fields)[0] :
-HOLIDAY_MESSAGES.toastServerError` — and names the two rows the document added for it:
-`HOLIDAY_MESSAGES.toastServerError` in §Error Messages (contracts:181) and its own §UI
-Description state, *"Failed for any other reason"* (contracts:372). The same shape is planned for
-the organization country save in T8, whose `handleSaveCountry` carries the identical
-`body?.message` term (`settings/holidays/page.tsx:179`) and is a surface this run edits.
+T3 loses `reportedTimezone` and its comment; T7's `today()` calls the named helper; T9 brings the
+deleted unit assertions back. The reviewer's second consequence is real and is planned with it:
+`packages/validation/src/requests.test.ts:236-241` covers `null` and `''` only, so edge case 18's
+third limb — *a string the server does not recognize* (`contracts:420`) — is asserted nowhere in
+the repository at present.
 
-### 3. S1-1 — `max-width: 160px` in the loading skeleton (`code`, blocker)
+### 3. F3 — nothing in the product could clear the organization country (`spec`, blocker)
 
-**Planned, in T7 (c).** The spec's DS gaps table closes the set of literals this screen may carry
-at three — the 3px band margin, the 3px hatch stripe, the 2px today inset — each with `@literal`
-and a reason. `globals.css:1122` is a fourth, it names no token, carries no comment and is
-recorded in no row; the two declarations beside it in the same rule are `var(--space-4)` and
-`var(--radius-s)`.
+**Settled in the document, and the plan compiles against the settlement.** `contracts:344-348` now
+gives `org-country-select` a first option labelled from
+`TIME_OFF_CALENDAR_MESSAGES.orgCountryNoneOption`, submitting `null`; `contracts:178` adds the
+message row (`No country — global holidays only`, an em dash, `New: yes`); `TC-01-E2E-07` clears it
+from the screen and watches the marker go; `TC-01-INT-20` picks up the absent-key no-op.
 
-The plan says the skeleton is measured from tokens and from the track it sits in, that the
-name-column placeholder carries **no** `max-width` of its own, and that a shorter placeholder is
-expressed as a fraction of its track rather than as a new number of pixels. It also says the
-alternative — amending the DS gaps table — is a spec edit this run does not make.
+Verified against the code rather than the prose:
 
-T7 (d) folds in the review's own note on the same block: the skeleton renders only under
-`loading && !data`, where the data-derived template declares one day column while fourteen cells
-are placed into it, so it gets a template of its own.
+- `apps/web/src/stated-country-options.ts:22` maps `COUNTRY_OPTIONS` once, 249 assigned codes, no
+  empty value — so before this amendment a stored `PL` could not be unset from any screen.
+- `MEMBER_COUNTRY_OPTIONS` (`MemberDetailScreen.tsx:45-47`) is the shape to mirror: one head over
+  the shared list. The two heads are **different sentences for different states**, so the head is
+  built beside each control and not inside the shared module.
+- `ALL_COUNTRIES` (`settings/holidays/country-options.ts:6`) is the holiday *filter's* "everywhere"
+  and is deliberately not reused for this control's state — T8 says so, because reaching for it is
+  the obvious shortcut and it would put a filter's meaning on a stored column.
+- `handleSaveCountry` already submits `{ countryCode: null }` for an empty value
+  (`page.tsx:166`), so REQ-01-034's clearing branch needs no new transport.
+- `page.tsx:369-371` carries a comment stating the gap as justification; it was true of the round-3
+  document and is false of this one, so it is named for deletion.
+
+No DS gap: `Select` has no clear affordance (`packages/ds/src/components/forms/Select.tsx:23-63`
+carries no `isClearable`), which is exactly why the spec settled on an option rather than a control.
 
 ---
 
-## What else moved with the document
+## The trap in the amended case, and why it is a note
 
-- **T4 reverses round 2.** REQ-01-034's Decided (spec:359) and the PUT contract (contracts:134)
-  now both say a body with no `countryCode` key changes nothing. The validator cannot express
-  that — `validateStatedCountryCode(undefined)` answers `{ valid: true, value: null }` — so the
-  route tests the key itself (`'countryCode' in body`), the idiom the member write already uses.
-  Round 2 planned the opposite and said so in the code; the document has now decided, and the two
-  writes agree.
-- **T2** records the three helpers §Shared code gained (`validateStatedCountryCode`,
-  `timeOffCalendarToday`, `resolveTimeOffCalendarTimezone`) and requires the today helper to
-  format **through** the shipped `todayInTimeZone` (`requests.ts:639`) rather than restate its
-  fallback — one definition of REQ-01-018.
-- **T9** picks up three case-level notes: `calendar-scope-all` is asserted (it is the one id of
-  the 26 no case touches), a window's expected first day is computed in the **account's** zone and
-  never from the runner's UTC clock, and every `describe` carries the TC id it serves.
-- **T10** picks up the leftover fixture seeds at `reports-amounts-owed.spec.ts:651` and `:658`.
+`TC-01-INT-20`'s steps now read: set `PL`, submit an empty value, **then** submit a body with no
+`countryCode` key. Taken in that order the third write cannot fail: the column is already `null`
+after the second, so `200 {"countryCode":null}` comes back whether the route no-ops or clears — the
+same vacuity the reviewer noted of the case as it stands today.
 
-Deliberately **not** planned: the `minWidth: 220` on the organization-country control. The
-identical literal already ships on the country filter directly below it in the same file, so the
-new control matches its neighbour rather than inventing a measurement; that a control width has
-no token and no DS-gaps row is a note for the document's owner, recorded on this verdict.
+This is not a contradiction and not a rule the plan may not compile: the Expected Result says the
+third write *"changes nothing"*, and "nothing" is only observable against a country that was there
+to lose — which the case's own sentence describes (*"a mistyped key must not drop a country the
+fallback depends on"*). T9 therefore keeps every step the case names and re-sets `PL` before the
+keyless body, then reads the value back. Recorded as a note, not a blocker: nothing is decided here
+that the document did not decide, and the repair is one extra write inside a case the document
+already numbers.
+
+---
+
+## What changed in `handoff.json`
+
+| Task | Round-4 instruction |
+|---|---|
+| T2 | Both helpers written in `packages/validation/src/time-off-calendar.ts` and re-exported from the root; `timeOffCalendarToday` **must delegate** to `todayInTimeZone`. `TIME_OFF_CALENDAR_MESSAGES` gains a twelfth row, `orgCountryNoneOption`, em dash included — round 2's "exactly the eleven rows" superseded. |
+| T3 | `range.today` / `range.timezone` from the two helpers; private `reportedTimezone` deleted; round 1's "via `Intl` … the `currentYearIn` idiom" superseded. |
+| T4 | Key-presence test first, in the member write's exact idiom; the false branch writes nothing and logs nothing; two comments corrected; the validator explicitly left alone. |
+| T7 | `today()` calls `timeOffCalendarToday`. |
+| T8 | `ORG_COUNTRY_OPTIONS` at module scope in the holidays page, head + shared list, empty string not `ALL_COUNTRIES`; round 3's "nothing above it" superseded; the stale comment deleted. |
+| T9 | `TC-01-INT-20` re-sets `PL` before the keyless write; `TC-01-E2E-07` clears from the screen naming the option through the message export; the `TC-01-UNIT-02` block regains the today helper with all three fallback limbs; the message-text block gains the new row. |
+
+Also: one `messages` row (the new export and the control that draws it), four `premises` (the
+delegation target, the member write's idiom, the two absent helpers, `Select`'s missing clear), two
+`risks` (two empty-valued heads with different meanings; the invisible no-op).
+`node scripts/handoff-coverage.mjs` → pass, sections 8/8.
 
 ## Coverage
 
-`node scripts/handoff-coverage.mjs` — pass, sections 8/8. Checked by hand as well: 50/50
-requirements assigned, 41/41 live cases claimed, every `##` heading answered in `sections`. Every
-path cited anywhere in `handoff.json` exists except `apps/web/src/stated-country-options.ts`,
-which is the one file this replan adds and which `buildFromZero` names.
+All seventeen checklist ids answered in the verdict. `H-13` and `H-14` are `n/a`: this spec has no
+External Contracts section and no double — its dependencies are all first-party routes in this
+repository.

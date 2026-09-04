@@ -5,8 +5,8 @@
   "task": "time-off-01-vacation-calendar",
   "branch": "spec/time-off-vacation-calendar",
   "baseRef": "0d986a177419c5189be5109a4a27c7e8afb02546",
-  "headAtInit": "a83e79fb83100e4c5bd4b7b6bf79b8abc61ce0d8",
-  "status": "halted",
+  "headAtInit": "30b415ebe25b11477cb42fb2ecaaa44394665721",
+  "status": "implement",
   "track": "spec",
   "shapes": {
     "pre_implement": "strict",
@@ -17,7 +17,7 @@
   },
   "unrefined": null,
   "createdAt": "2026-09-04T16:38:40.888Z",
-  "updatedAt": "2026-09-04T19:06:11.487Z",
+  "updatedAt": "2026-09-04T19:17:26.841Z",
   "stages": {
     "preflight": {
       "status": "passed",
@@ -25,31 +25,28 @@
     },
     "pre_implement": {
       "status": "passed",
-      "attempts": 3,
-      "startedAt": "2026-09-04T18:33:18.045Z",
+      "attempts": 4,
+      "startedAt": "2026-09-04T19:07:43.164Z",
       "lastVerdict": "pass",
-      "endedAt": "2026-09-04T18:43:43.210Z"
+      "endedAt": "2026-09-04T19:17:26.789Z"
     },
     "implement": {
-      "status": "passed",
+      "status": "pending",
       "attempts": 3,
       "startedAt": "2026-09-04T18:43:43.487Z",
-      "lastVerdict": "pass",
-      "endedAt": "2026-09-04T18:53:14.964Z"
+      "lastVerdict": "pass"
     },
     "static_gate": {
-      "status": "passed",
+      "status": "pending",
       "attempts": 3,
       "startedAt": "2026-09-04T18:53:15.206Z",
-      "lastVerdict": "pass",
-      "endedAt": "2026-09-04T18:53:18.980Z"
+      "lastVerdict": "pass"
     },
     "review": {
-      "status": "blocked",
+      "status": "pending",
       "attempts": 3,
       "startedAt": "2026-09-04T18:53:19.225Z",
-      "lastVerdict": "blocked",
-      "endedAt": "2026-09-04T19:06:11.430Z"
+      "lastVerdict": "blocked"
     },
     "qa": {
       "status": "pending",
@@ -714,6 +711,54 @@
         "source": "specs/time-off/01-vacation-calendar.contracts.md:370"
       },
       "suggestedFix": "Record a control-width DS gap once, or take the width from a token — not a comment beside each occurrence."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P1",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/untestable-case",
+      "file": "specs/time-off/01-vacation-calendar.cases.md",
+      "symbol": "TC-01-INT-20",
+      "claim": "the order of the amended steps cannot observe the absent-key no-op the case was amended to cover, so the third assertion passes under the implementation REQ-01-034 forbids",
+      "witness": {
+        "kind": "scenario",
+        "detail": "The steps read: 'Set the organization country to PL, then submit an empty value, then submit a body carrying no countryCode key at all' (cases.md:435-436). After the second write the column is null, so the third write answers 200 {\"countryCode\":null} both when the route no-ops on an absent key and when it clears on one - the shipped organization-country.service.ts:76 clears, and this case as ordered would still pass against it. The Expected Result nevertheless reads 'The third write answers 200 and changes nothing ... a mistyped key must not drop a country the fallback depends on' (cases.md:439-441), and 'changes nothing' is only observable against a stored country.",
+        "source": "specs/time-off/01-vacation-calendar.cases.md:435"
+      },
+      "suggestedFix": "Planned around without editing the document: T9 keeps every step the case names and re-sets PL before the keyless body, asserting 200 {\"countryCode\":\"PL\"} and a GET that still answers PL. A note rather than a blocker because nothing here is undecided - the rule is settled at spec:359 and contracts:133-134, and only the order of one case's writes is weaker than the outcome it states."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P2",
+      "target": "spec",
+      "severity": "note",
+      "rule": "spec/missing-artefact",
+      "file": "specs/time-off/01-vacation-calendar.contracts.md",
+      "symbol": "Edge case 18 / REQ-01-018",
+      "claim": "no numbered case covers REQ-01-018 at unit level, and edge case 18's third limb - an unrecognized zone - is asserted by no case at any level",
+      "witness": {
+        "kind": "rule",
+        "detail": "Edge case 18 (contracts:420) states the fallback for three inputs: null, empty, and 'a string the server does not recognize'. The only case covering REQ-01-018 is TC-01-INT-19 (cases.md:414-429), whose three readers are Pacific/Kiritimati, Pacific/Niue and an account whose column is null - the unrecognized limb is in no step. The unit cases cover REQ-01-014/015/016/019 (TC-01-UNIT-02), REQ-01-026/027/040 (TC-01-UNIT-01), REQ-01-028/029 (TC-01-UNIT-03) and REQ-01-001/003 (TC-01-UNIT-04); none names REQ-01-018, so the helpers the contracts require (contracts:213-214) have no case of their own.",
+        "source": "specs/time-off/01-vacation-calendar.contracts.md:420"
+      },
+      "suggestedFix": "Planned, not blocked: T9 puts the helper assertions - including the unrecognized zone - in the describe block carrying TC-01-UNIT-02, which is the convention round 3 set for a rule whose exports the spec names but numbers no case for (rule 9's country tests sit under TC-01-UNIT-01 the same way). A blocker here would be growing the spec, not refining it; a person adding a numbered unit case for REQ-01-018 is the cleaner close."
+    },
+    {
+      "stage": "pre_implement",
+      "id": "P3",
+      "target": "self",
+      "severity": "note",
+      "rule": "spec/incomplete-decision",
+      "file": ".workflow/runs/2026-09-04T16-38-40_time-off-01-vacation-calendar/handoff.json",
+      "symbol": "T2, T4",
+      "claim": "two of the three findings that sent this back were already stated in the plan the implementer worked from, so the plan's round-3 wording did not carry them into the diff",
+      "witness": {
+        "kind": "rule",
+        "detail": "T4's round-3 text already read 'AN ABSENT countryCode KEY CHANGES NOTHING ... test the key itself', and T2's already read 'all three are exports of packages/validation/src/time-off-calendar.ts ... Do not restate the en-CA formatting a second time'. The shipped code does neither (organization-country.service.ts:76; the helpers absent, with time-off-calendar.service.ts:410 restating the fallback). Both instructions were written as rules about the whole change rather than as edits at a named line.",
+        "source": ".workflow/runs/2026-09-04T16-38-40_time-off-01-vacation-calendar/handoff.json"
+      },
+      "suggestedFix": "Round 4 restates both at the point of edit - the file, the line, the shipped expression quoted back, the branch that must exist and what it must not do (no update, no log line) - and names the cheapest wrong fix so it is refused rather than discovered: do not make validateStatedCountryCode refuse undefined."
     }
   ],
   "preflight": {
@@ -837,11 +882,21 @@
         "from": "90275255fe579ae59b8cdf89b02f8b43aef6e5b29c2e676f1ccba8dd8f1aa5f9",
         "pendingUntilReplan": "34dc87400a393a2db712b80ed4a757f137ac9992f46ef2056dcb4a4899fafdc0"
       }
+    },
+    {
+      "at": "2026-09-04T19:07:34.131Z",
+      "stage": "pre_implement",
+      "from": "spec-defect",
+      "detail": "review found a defect in the spec: REQ-01-034 vs contracts §Screens — the document requires the organization country to be clearable and, as amended this pass, gives the only control that writes it no option that clears (specs/time-off/01-vacation-calendar.contracts.md)",
+      "reason": "Review pass 3 halted on REQ-01-034 against the amended Screens section: the organization picker had no option that clears. Settled at HEAD — the picker gains a first option meaning no country, labelled from TIME_OFF_CALENDAR_MESSAGES.orgCountryNoneOption, and TC-01-E2E-07 clears it from the screen. Spec edits since init are mine.",
+      "headAtInit": {
+        "from": "a83e79fb83100e4c5bd4b7b6bf79b8abc61ce0d8",
+        "to": "30b415ebe25b11477cb42fb2ecaaa44394665721"
+      },
+      "specEdits": [
+        "specs/time-off/01-vacation-calendar.cases.md",
+        "specs/time-off/01-vacation-calendar.contracts.md"
+      ]
     }
-  ],
-  "halt": {
-    "reason": "spec-defect",
-    "detail": "review found a defect in the spec: REQ-01-034 vs contracts §Screens — the document requires the organization country to be clearable and, as amended this pass, gives the only control that writes it no option that clears (specs/time-off/01-vacation-calendar.contracts.md)",
-    "at": "2026-09-04T19:06:11.486Z"
-  }
+  ]
 }
